@@ -15,13 +15,12 @@ class HostModelView(DefaultModelView):
        'hostname',
        'source_name',
        'available_on_source',
-       'last_update_on_source',
     )
 
     column_exclude_list = (
         'available_on_target',
-        'available_on_source',
         'last_update_on_target',
+        'source_id',
         'log'
     )
 
@@ -33,7 +32,6 @@ class HostModelView(DefaultModelView):
     form_widget_args = {
         'available_on_source': {'disabled': True},
         'last_seen_on_source': {'disabled': True},
-        'last_update_on_source': {'disabled': True},
         'available_on_target': {'disabled': True},
         'last_update_on_target': {'disabled': True},
         'disable_on_target': {'disabled': True},
