@@ -7,7 +7,7 @@ import click
 import requests
 from mongoengine.errors import DoesNotExist
 from application import app, log
-from application.models.host import Host
+from application.models.host import Host, HostError
 from application.helpers.get_source import get_source_by_name
 
 
@@ -58,9 +58,13 @@ class DataGeter():
             except DoesNotExist:
                 host = Host()
                 host.set_hostname(hostname)
-                host.set_source(self.source_id, self.source_name)
                 host.add_log("Inital Add")
-            host.set_source_update()
+            try:
+                host.set_source(self.source_id, self.source_name)
+                host.set_source_update()
+            except HostError as error_obj:
+                host.add_log(f"Update Error {error_obj}")
+
             host.save()
         for host in Host.objects(source_id=self.source_id, available_on_source=True):
             if host.hostname not in found_hosts:

@@ -1,10 +1,19 @@
 """
 Host Model
 """
-# pylint: disable=no-member
+# pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 import datetime
 from application import db, app
 
+class HostError(Exception):
+    """
+    Errors related to host updates or creation
+    """
+
+class Label(db.EmbeddedDocument):
+    """ Label Object (CMK Style)"""
+    key = db.StringField()
+    value = db.StringField()
 
 class Host(db.Document):
     """
@@ -26,6 +35,9 @@ class Host(db.Document):
     source_id = db.StringField()
     source_name = db.StringField()
 
+
+    labels = db.ListField(db.EmbeddedDocumentField(Label))
+
     log = db.ListField(db.StringField())
 
 
@@ -33,6 +45,19 @@ class Host(db.Document):
         'strict': False,
     }
 
+
+    def add_labels(self,label_dict):
+        """
+        Add new Label to hosts in case
+        not yet existing
+        """
+        labels = []
+        for key, value in label_dict.items():
+            label = Label()
+            label.key = key
+            label.value = value
+            labels.append(label)
+        self.labels = labels
 
     def add_log(self, entry):
         """
@@ -53,6 +78,8 @@ class Host(db.Document):
         """
         Set Source Information
         """
+        if self.source_id and self.source_id != source_id:
+            raise HostError(f"Host {self.hostname} already importet by source {self.source_name}")
         self.source_id = source_id
         self.source_name = source_name
 

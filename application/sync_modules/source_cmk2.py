@@ -6,7 +6,7 @@ import click
 import requests
 from mongoengine.errors import DoesNotExist
 from application import app, log
-from application.models.host import Host
+from application.models.host import Host, HostError
 from application.helpers.get_source import get_source_by_name
 
 class CmkException(Exception):
@@ -27,14 +27,15 @@ class DataGeter():
         self.source_id = str(config['_id'])
         self.source_name = config['name']
 
-    def request(self):
+    def request(self, url=False):
         """
         Handle Request to CMK
         """
         address = self.config['address']
         username = self.config['username']
         password = self.config['password']
-        url = f'{address}/check_mk/api/1.0/domain-types/host_config/collections/all'
+        if not url:
+            url = f'{address}/check_mk/api/1.0/domain-types/host_config/collections/all'
         headers = {
             'Authorization': f"Bearer {username} {password}"
         }
@@ -48,6 +49,7 @@ class DataGeter():
         found_hosts = []
         for hostdata in self.request()['value']:
             hostname = hostdata['title']
+            host_details = self.request(hostdata['href'])
 
             found_hosts.append(hostname)
             try:
@@ -56,10 +58,18 @@ class DataGeter():
             except DoesNotExist:
                 host = Host()
                 host.set_hostname(hostname)
-                host.set_source(self.source_id, self.source_name)
                 host.add_log("Inital Add")
-            host.set_source_update()
+
+            try:
+                host.set_source(self.source_id, self.source_name)
+                attributes = host_details['extensions']['attributes']
+                if 'labels' in attributes:
+                    host.add_labels(attributes['labels'])
+                host.set_source_update()
+            except HostError as error_obj:
+                host.add_log(f"Update Error {error_obj}")
             host.save()
+
         for host in Host.objects(source_id=self.source_id, available_on_source=True):
             if host.hostname not in found_hosts:
                 host.set_source_not_found()
