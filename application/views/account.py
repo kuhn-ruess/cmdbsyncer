@@ -1,11 +1,11 @@
 """
-Source Model View
+Account Model View
 """
 from application.views.default import DefaultModelView
 
-class SourceModelView(DefaultModelView):
+class AccountModelView(DefaultModelView):
     """
-    Source Model
+    Account Model
     """
     column_filters = (
        'name',

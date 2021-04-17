@@ -43,15 +43,11 @@ from application.sync_modules import *
 from application.models.host import Host
 from application.views.host import HostModelView
 
-from application.models.target import Target
-from application.views.target import TargetModelView
-
-from application.models.source import Source
-from application.views.source import SourceModelView
+from application.models.account import Account
+from application.views.account import AccountModelView
 
 admin = Admin(app, name="CMDB Sync", template_mode='bootstrap4')
 
 admin.add_view(HostModelView(Host, name="Hosts"))
 
-admin.add_view(TargetModelView(Target, name="Targets", category="Config"))
-admin.add_view(SourceModelView(Source, name="Sources", category="Config"))
+admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))

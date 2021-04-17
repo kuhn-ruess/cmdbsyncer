@@ -7,7 +7,7 @@ import requests
 from mongoengine.errors import DoesNotExist
 from application import app, log
 from application.models.host import Host, HostError
-from application.helpers.get_source import get_source_by_name
+from application.helpers.get_account import get_account_by_name
 
 class CmkException(Exception):
     """Cmk Errors"""
@@ -24,8 +24,8 @@ class DataGeter():
         """
         self.log = log
         self.config = config
-        self.source_id = str(config['_id'])
-        self.source_name = config['name']
+        self.account_id = str(config['_id'])
+        self.account_name = config['name']
 
     def request(self, url=False):
         """
@@ -61,7 +61,7 @@ class DataGeter():
                 host.add_log("Inital Add")
 
             try:
-                host.set_source(self.source_id, self.source_name)
+                host.set_account(self.account_id, self.account_name)
                 attributes = host_details['extensions']['attributes']
                 if 'labels' in attributes:
                     host.add_labels(attributes['labels'])
@@ -70,18 +70,18 @@ class DataGeter():
                 host.add_log(f"Update Error {error_obj}")
             host.save()
 
-        for host in Host.objects(source_id=self.source_id, available_on_source=True):
+        for host in Host.objects(account_id=self.account_id, available_on_source=True):
             if host.hostname not in found_hosts:
                 host.set_source_not_found()
                 host.save()
 
 
 @app.cli.command('import_cmk-v1')
-@click.argument("source")
-def get_cmk_data(source):
+@click.argument("account")
+def get_cmk_data(account):
     """Get All hosts from CMK and add them to db"""
     try:
-        if source_config := get_source_by_name(source):
+        if source_config := get_account_by_name(account):
             getter = DataGeter(source_config)
             getter.run()
         else:

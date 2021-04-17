@@ -32,8 +32,8 @@ class Host(db.Document):
     disable_on_target = db.BooleanField(default=False)
     last_update_on_target = db.DateTimeField()
 
-    source_id = db.StringField()
-    source_name = db.StringField()
+    account_id = db.StringField()
+    account_name = db.StringField()
 
 
     labels = db.ListField(db.EmbeddedDocumentField(Label))
@@ -74,14 +74,14 @@ class Host(db.Document):
         """
         self.hostname = hostname
 
-    def set_source(self, source_id, source_name):
+    def set_account(self, account_id, account_name):
         """
-        Set Source Information
+        Set account Information
         """
-        if self.source_id and self.source_id != source_id:
+        if self.account_id and self.account_id != account_id:
             raise HostError(f"Host {self.hostname} already importet by source {self.source_name}")
-        self.source_id = source_id
-        self.source_name = source_name
+        self.account_id = account_id
+        self.account_name = account_name
 
     def set_source_update(self):
         """

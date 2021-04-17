@@ -13,14 +13,14 @@ class HostModelView(DefaultModelView):
     """
     column_filters = (
        'hostname',
-       'source_name',
+       'account_name',
        'available_on_source',
     )
 
     column_exclude_list = (
         'available_on_target',
         'last_update_on_target',
-        'source_id',
+        'account_id',
         'log'
     )
 
@@ -35,8 +35,8 @@ class HostModelView(DefaultModelView):
         'available_on_target': {'disabled': True},
         'last_update_on_target': {'disabled': True},
         'disable_on_target': {'disabled': True},
-        'source_id': {'disabled': True},
-        'source_name': {'disabled': True},
+        'account_id': {'disabled': True},
+        'account_name': {'disabled': True},
     }
 
     @action('force_update', 'Force Update')
