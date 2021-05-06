@@ -37,6 +37,7 @@ class HostModelView(DefaultModelView):
         'disable_on_target': {'disabled': True},
         'account_id': {'disabled': True},
         'account_name': {'disabled': True},
+        'labels': {'disabled': True},
     }
 
     @action('force_update', 'Force Update')

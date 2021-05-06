@@ -59,6 +59,13 @@ class Host(db.Document):
             labels.append(label)
         self.labels = labels
 
+    def get_labels(self):
+        """
+        Return Labels
+        in Dict Format
+        """
+        return dict({x.key:x.value for x in self.labels})
+
     def add_log(self, entry):
         """
         Add a new Entry to the Host log
@@ -86,7 +93,6 @@ class Host(db.Document):
     def set_source_update(self):
         """
         Called all the time when found on
-        import source
         """
         self.available_on_source = True
         self.last_seen_on_source = datetime.datetime.now()

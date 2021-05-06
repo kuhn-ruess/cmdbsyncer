@@ -75,7 +75,7 @@ class DataGeter():
 @app.cli.command('import_cmk-v1')
 @click.argument("account")
 def get_cmk_data(account):
-    """Get All hosts from CMK and add them to db"""
+    """Get All hosts from a CMK 1.x Installation and add them to local db"""
     if source_config := get_account_by_name(account):
         getter = DataGeter(source_config)
         getter.run()

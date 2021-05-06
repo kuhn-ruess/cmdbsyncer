@@ -1,0 +1,65 @@
+{% extends 'admin/master.html' %}
+{% import 'admin/lib.html' as lib with context %}
+{% import 'admin/actions.html' as actionslib with context %}
+
+{% block body %}
+    {% block breadcrums %}
+      <nav area-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item">
+            Click Upload File to start to upload
+          </li>
+        </ol>
+      </nav>
+      Make sure to upload a CSV File, seperated with ;
+      <br>
+      As Table headers use: Produktbezeichnung;Gutscheincode
+    {% endblock %}
+
+    {% block file_list_table %}
+    {% endblock %}
+
+    {% block toolbar %}
+    <div class="btn-toolbar">
+        {% if admin_view.can_upload %}
+        <div class="btn-group">
+            {%- if admin_view.upload_modal -%}
+              {{ lib.add_modal_button(url=get_dir_url('.upload', path=dir_path, modal=True),
+                                      btn_class="btn btn-secondary",
+                                      content=_gettext('Upload File')) }}
+            {% else %}
+              <a class="btn btn-secondary" href="{{ get_dir_url('.upload', path=dir_path) }}">{{ _gettext('Upload File') }}</a>
+            {%- endif -%}
+        </div>
+        {% endif %}
+        {% if admin_view.can_mkdir %}
+        <div class="mx-1">
+            {%- if admin_view.mkdir_modal -%}
+              {{ lib.add_modal_button(url=get_dir_url('.mkdir', path=dir_path, modal=True),
+                                      btn_class="btn btn-secondary",
+                                      content=_gettext('Create Directory')) }}
+            {% else %}
+              <a class="btn btn-secondary" href="{{ get_dir_url('.mkdir', path=dir_path) }}">{{ _gettext('Create Directory') }}</a>
+            {%- endif -%}
+        </div>
+        {% endif %}
+    </div>
+    {% endblock %}
+
+    {% block actions %}
+    {{ actionslib.form(actions, get_url('.action_view')) }}
+    {% endblock %}
+
+    {%- if admin_view.rename_modal or admin_view.mkdir_modal
+           or admin_view.upload_modal or admin_view.edit_modal -%}
+        {{ lib.add_modal_window() }}
+    {%- endif -%}
+{% endblock %}
+
+{% block tail %}
+    {{ super() }}
+    {{ actionslib.script(_gettext('Please select at least one file.'),
+                         actions,
+                         actions_confirmation) }}
+  <script src="{{ admin_static.url(filename='admin/js/bs4_modal.js', v='1.0.0') }}"></script>
+{% endblock %}

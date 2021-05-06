@@ -1,0 +1,70 @@
+{% extends "bootstrap/base.html" %}
+
+{% block title %}Admin{% endblock %}
+
+{% block navbar %}
+<nav id="top-nav" class="navbar navbar-expand-lg sticky-top navbar-dark bg-dark">
+  <a class="navbar-brand" href="/admin">Backend</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      {% if not current_user.is_authenticated %}
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.request_password') }}">Request new Password</a></li>
+      {% endif %}
+    </ul>
+  </div>
+</nav>
+
+{% endblock %}
+
+{% block styles %}
+   {{super()}}
+   <link rel="stylesheet" href="{{url_for('static', filename="css/main.css")}}">
+{% endblock %}
+
+{% block scripts %}
+    {{super()}}
+    <script src="/static/js/main.js"></script>
+{% endblock %}
+
+
+
+{% block content %}
+<div class="main-container container">
+    {% for catergory, message in get_flashed_messages(with_categories=true) %}
+    <div class="alert alert-{{ catergory }} alert-dismissable">
+        <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+        {{ message }}
+    </div>
+    {% endfor %}
+
+    {% block page_content %}{% endblock %}
+<hr>
+<footer class="page-footer font-small pt-4 mt-4">
+
+  <!-- Footer Links -->
+  <div class="container-fluid text-center text-md-left">
+    <div class="row">
+      <div class="col-md-12">
+        <ul id="nav-footer" class="nav justify-content-center">
+        </ul>
+
+      </div>
+      <!-- Grid column -->
+
+    </div>
+  </div>
+  <!-- Footer Links -->
+
+  <!-- Copyright -->
+  <div class="footer-copyright text-center py-3">© 2021 Bastian Kuhn
+  </div>
+  <!-- Copyright -->
+
+</footer>
+
+</div>
+{% endblock %}
