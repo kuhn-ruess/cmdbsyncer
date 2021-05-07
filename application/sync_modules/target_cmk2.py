@@ -2,13 +2,13 @@
 """
 Add Hosts into CMK Version 2 Installations
 """
-import json
 import click
 import requests
 from application import app, log
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.helpers.get_action import GetAction
+from application.helpers.get_label import GetLabel
 
 class CmkException(Exception):
     """Cmk Errors"""
@@ -27,6 +27,7 @@ class UpdateCMKv2():
         self.account_id = str(config['_id'])
         self.account_name = config['name']
         self.action_helper = GetAction()
+        self.label_helper = GetLabel()
 
     def request(self, params, method='GET', data=None, additional_header=None):
         """
@@ -71,19 +72,15 @@ class UpdateCMKv2():
             host_etag = headers['ETag']
 
             # compare Labels
-            db_labels = db_host.get_labels()
             cmk_labels = cmk_host['extensions']['attributes'].get('labels', {})
 
-            applied_labels = {}
+            db_labels = db_host.get_labels()
+            applied_labels = self.label_helper.filter_labels(db_labels)
 
 
-            next_actions = self.action_helper.get_action(db_labels)
-            print(next_actions)
+            next_actions = self.action_helper.get_action(applied_labels)
             if 'ignore' in next_actions:
-                print('in')
                 continue
-            print('after')
-
 
             if applied_labels != cmk_labels:
                 need_update = True

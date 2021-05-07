@@ -13,7 +13,7 @@ class GetAction(): # pylint: disable=too-few-public-methods
 
     def __init__(self):
         """
-        Prepare lable handling
+        Prepare Rules
         """
         self.rules = [x.to_mongo() for x in ActionRule.objects(enabled=True)]
 
@@ -29,17 +29,16 @@ class GetAction(): # pylint: disable=too-few-public-methods
         for label, value in labels.items():
             if label != needed_field:
                 continue
-            match = False
             if match_type == 'equal':
                 if value == needed_value:
-                    match = True
+                    return True
             elif match_type == 'not_equal':
                 if value != needed_value:
-                    match = True
+                    return True
             elif match_type == "in":
                 if needed_value in value:
-                    match = True
-            return match
+                    return True
+        return False
 
 
     def _check_rule_match(self, labels):

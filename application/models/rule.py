@@ -22,7 +22,7 @@ action_outcome_types = [
 ]
 
 
-class Condition(db.EmbeddedDocument):
+class ActionCondition(db.EmbeddedDocument):
     """
     Condition
     """
@@ -44,7 +44,7 @@ class ActionRule(db.Document):
 
     name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(Condition))
+    conditions = db.ListField(db.EmbeddedDocumentField(ActionCondition))
     outcome = db.ListField(db.EmbeddedDocumentField(ActionOutcome))
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
@@ -54,16 +54,25 @@ class ActionRule(db.Document):
     }
 
 label_outcome_types = [
-    ('add', 'Add matching Labels')
+    ('add', 'Add matching Labels'),
+    ('remove', 'Dismiss matching Labels'),
+    ('strip', 'Strip Spaces End/Begin'),
+    ('lower', 'Make label lowercase'),
+    ('replace', 'Replace whitespaces with _'),
 ]
+
+class LabelCondition(db.EmbeddedDocument):
+    """
+    Condition
+    """
+    type = db.StringField(choices=condition_types)
+    value = db.StringField(required=True)
 
 class LabelRule(db.Document):
     """
     Rule to filter Labels
     """
     name = db.StringField(required=True, unique=True)
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(Condition))
-    outcome = db.StringField(choices=label_outcome_types)
-    last_match = db.BooleanField(default=False)
+    conditions = db.ListField(db.EmbeddedDocumentField(LabelCondition))
+    outcome = db.ListField(db.StringField(choices=label_outcome_types))
     enabled = db.BooleanField()
