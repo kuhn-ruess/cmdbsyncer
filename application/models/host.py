@@ -71,6 +71,8 @@ class Host(db.Document):
         """
         labels = []
         for key, value in label_dict.items():
+            if not value:
+                continue
             label = Label()
             label.key = key
             label.value = value
