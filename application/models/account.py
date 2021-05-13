@@ -24,6 +24,9 @@ class Account(db.Document):
     username = db.StringField()
     password = db.StringField()
 
+    database = db.StringField()
+    port = db.IntField()
+
 
     enabled = db.BooleanField()
 

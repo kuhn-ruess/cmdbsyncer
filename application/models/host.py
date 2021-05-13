@@ -3,6 +3,7 @@ Host Model
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 import datetime
+from mongoengine.errors import DoesNotExist
 from application import db, app
 
 class HostError(Exception):
@@ -46,6 +47,23 @@ class Host(db.Document):
     }
 
 
+    @staticmethod
+    def get_host(hostname):
+        """
+        Return existing Host or
+        create a object and return it
+        """
+        try:
+            return Host.objects.get(hostname=hostname)
+        except DoesNotExist:
+            pass
+
+        new_host = Host()
+        new_host.hostname = hostname
+        return new_host
+
+
+
     def add_labels(self,label_dict):
         """
         Add new Label to hosts in case
@@ -74,13 +92,6 @@ class Host(db.Document):
         date = datetime.datetime.now().strftime(app.config['TIME_STAMP_FORMAT'])
         self.log = [f"{date} {entry}"] + entries
 
-
-    def set_hostname(self, hostname):
-        """
-        Set Hostname
-        """
-        self.hostname = hostname
-
     def set_account(self, account_id, account_name):
         """
         Set account Information
@@ -89,6 +100,7 @@ class Host(db.Document):
             raise HostError(f"Host {self.hostname} already importet by source {self.source_name}")
         self.account_id = account_id
         self.account_name = account_name
+        self.set_source_update()
 
     def set_source_update(self):
         """
