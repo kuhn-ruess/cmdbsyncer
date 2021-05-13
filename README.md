@@ -6,6 +6,9 @@ which can be accessed in some way. The System is Plugin-based and so flexible. P
 
 Documentation will follow.
 
+## First Steps
+ * cp application/config.py.example to application/config.py
+
 ## Requirements
  * python 3.8
   * MongoDB

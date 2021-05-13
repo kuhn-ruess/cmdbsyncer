@@ -1,4 +1,5 @@
 application/plugins/*
+application/config.py
 
 *.swp
 src/
