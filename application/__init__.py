@@ -38,6 +38,7 @@ source_register = [
 ]
 
 from application.sync_modules import *
+from application.plugins import *
 
 
 from application.models.host import Host
