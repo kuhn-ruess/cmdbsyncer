@@ -47,7 +47,7 @@ from application.views.host import HostModelView
 from application.models.account import Account
 from application.views.account import AccountModelView
 
-from application.models.rule import ActionRule, LabelRule
+from application.models.rule import ActionRule, LabelRule, HostRule
 from application.views.rule import RuleModelView
 
 admin = Admin(app, name="CMDB Sync", template_mode='bootstrap4')
@@ -56,5 +56,6 @@ admin.add_view(HostModelView(Host, name="Hosts"))
 
 admin.add_view(RuleModelView(ActionRule, name="Action Rules", category="Rules"))
 admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
+admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
 
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))

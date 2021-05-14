@@ -87,3 +87,31 @@ class LabelRule(db.Document):
     conditions = db.ListField(db.EmbeddedDocumentField(LabelCondition))
     outcome = db.ListField(db.StringField(choices=label_outcome_types))
     enabled = db.BooleanField()
+
+class HostCondition(db.EmbeddedDocument):
+    """
+    Host Condition
+    """
+    match = db.StringField(choices=condition_types)
+    hostname = db.StringField(required=True)
+    meta = {
+        'strict': False,
+    }
+
+class HostParams(db.EmbeddedDocument):
+    """
+    Custom Params
+    """
+    name = db.StringField()
+    value = db.StringField()
+    trigger = db.BooleanField()
+
+
+class HostRule(db.Document):
+    """
+    Host Rule to add custom Parameters for importers or exporters
+    """
+    name = db.StringField(required=True, unique=True)
+    conditions = db.ListField(db.EmbeddedDocumentField(HostCondition))
+    params = db.ListField(db.EmbeddedDocumentField(HostParams))
+    enabled = db.BooleanField()
