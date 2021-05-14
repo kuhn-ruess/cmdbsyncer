@@ -119,10 +119,23 @@ class Host(db.Document):
         self.available_on_source = False
         self.add_log("Not found on Source anymore")
 
+    def need_sync(self, hours=24):
+        """
+        Check if the host needs to be synced
+        from the source
+        """
+        if not self.available_on_source:
+            return True
+        timediff = datetime.datetime.now() - self.last_seen_on_source
+        if divmod(timediff.total_seconds(), 3600)[0] > hours:
+            return True
+        return False
+
 
     def need_update(self, hours=24*7):
         """
-        Does the the host need an update
+        Check if we need to Update this host
+        on the target
         """
         if not self.last_update_on_target:
             return True
