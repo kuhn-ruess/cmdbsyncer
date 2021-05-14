@@ -22,13 +22,24 @@ action_outcome_types = [
 ]
 
 
+tag_condition_types = [
+    ('equal', "Tag is Equal"),
+    ('swith', "Tag starts with"),
+    ('ewith', "Tag ends with"),
+
+]
+
 class ActionCondition(db.EmbeddedDocument):
     """
     Condition
     """
+    tag_match = db.StringField(choices=tag_condition_types)
     tag = db.StringField(required=True)
-    type = db.StringField(choices=condition_types)
+    value_match = db.StringField(choices=condition_types)
     value = db.StringField(required=True)
+    meta = {
+        'strict': False,
+    }
 
 class ActionOutcome(db.EmbeddedDocument):
     """

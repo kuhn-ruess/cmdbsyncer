@@ -22,20 +22,28 @@ class GetAction(): # pylint: disable=too-few-public-methods
         """
         Check if on of the given labels match the rule
         """
-        needed_field = condition['tag']
+        needed_tag = condition['tag']
+        tag_match = condition['tag_match']
         needed_value = condition['value']
-        match_type = condition['type']
+        value_match = condition['value_match']
 
-        for label, value in labels.items():
-            if label != needed_field:
-                continue
-            if match_type == 'equal':
+        for tag, value in labels.items():
+            if tag_match == 'swith':
+                if not tag.startswith(needed_tag):
+                    continue
+            elif tag_match == 'ewith':
+                if not tag.endswith(needed_tag):
+                    continue
+            else:
+                if tag != needed_tag:
+                    continue
+            if value_match == 'equal':
                 if value == needed_value:
                     return True
-            elif match_type == 'not_equal':
+            elif value_match == 'not_equal':
                 if value != needed_value:
                     return True
-            elif match_type == "in":
+            elif value_match == "in":
                 if needed_value in value:
                     return True
         return False
