@@ -28,6 +28,7 @@ class GetHostParams(): # pylint: disable=too-few-public-methods
                 'bool': param['trigger'],
                 'value': param['value'],
             }
+        return outcome
 
 
     def _check_rule_match(self, hostname):
@@ -39,13 +40,13 @@ class GetHostParams(): # pylint: disable=too-few-public-methods
                 cond_hostname = condtion['hostname']
                 if condtion['match'] == 'equal':
                     if cond_hostname == hostname:
-                        return self._convert_params(condtion['params'])
+                        return self._convert_params(rule['params'])
                 elif condtion['match'] == 'not_equal':
                     if cond_hostname != hostname:
-                        return self._convert_params(condtion['params'])
+                        return self._convert_params(rule['params'])
                 elif condtion['match'] == 'in':
                     if cond_hostname in hostname:
-                        return self._convert_params(condtion['params'])
+                        return self._convert_params(rule['params'])
         return {}
 
 
