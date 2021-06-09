@@ -57,7 +57,7 @@ class DataGeter():
                 host.add_log('Found in Source')
             except DoesNotExist:
                 host = Host()
-                host.set_hostname(hostname)
+                host.hostname = hostname
                 host.add_log("Inital Add")
 
             try:
@@ -70,7 +70,7 @@ class DataGeter():
                 host.add_log(f"Update Error {error_obj}")
             host.save()
 
-        for host in Host.objects(account_id=self.account_id, available_on_source=True):
+        for host in Host.objects(source_account_id=self.account_id, available=True):
             if host.hostname not in found_hosts:
                 host.set_source_not_found()
                 host.save()

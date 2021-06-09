@@ -13,30 +13,24 @@ class HostModelView(DefaultModelView):
     """
     column_filters = (
        'hostname',
-       'account_name',
-       'available_on_source',
+       'source_account_name',
+       'available',
     )
 
     column_exclude_list = (
-        'available_on_target',
-        'last_update_on_target',
-        'account_id',
+        'source_account_id',
         'log'
     )
 
     column_editable_list = (
-        'force_update_on_target',
-        'disable_on_target',
+        'force_update',
     )
 
     form_widget_args = {
-        'available_on_source': {'disabled': True},
-        'last_seen_on_source': {'disabled': True},
-        'available_on_target': {'disabled': True},
-        'last_update_on_target': {'disabled': True},
-        'disable_on_target': {'disabled': True},
-        'account_id': {'disabled': True},
-        'account_name': {'disabled': True},
+        'available': {'disabled': True},
+        'last_seen': {'disabled': True},
+        'source_account_id': {'disabled': True},
+        'source_account_name': {'disabled': True},
         'labels': {'disabled': True},
     }
 
@@ -47,7 +41,7 @@ class HostModelView(DefaultModelView):
         """
         for host_id in ids:
             host = Host.objects.get(id=host_id)
-            host.force_update_on_target = True
+            host.force_update = True
             host.save()
         flash("Updated {} hosts".format(len(ids)))
         return self.index_view()

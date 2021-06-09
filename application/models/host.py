@@ -16,6 +16,15 @@ class Label(db.EmbeddedDocument):
     key = db.StringField()
     value = db.StringField()
 
+class Target(db.EmbeddedDocument):
+    """
+    Target Stats
+    """
+    target_account_id = db.StringField()
+    target_account_name = db.StringField()
+    last_update = db.DateTimeField()
+
+
 class Host(db.Document):
     """
     Host
@@ -23,21 +32,15 @@ class Host(db.Document):
 
 
     hostname = db.StringField(required=True, unique=True)
-
-    force_update_on_target = db.BooleanField(default=False)
-
-
-    available_on_source = db.BooleanField()
-    last_seen_on_source = db.DateTimeField()
-
-    disable_on_target = db.BooleanField(default=False)
-    last_update_on_target = db.DateTimeField()
-
-    account_id = db.StringField()
-    account_name = db.StringField()
-
-
     labels = db.ListField(db.EmbeddedDocumentField(Label))
+
+    force_update = db.BooleanField(default=False)
+
+    source_account_id = db.StringField()
+    source_account_name = db.StringField()
+
+    available = db.BooleanField()
+    last_seen = db.DateTimeField()
 
     log = db.ListField(db.StringField())
 
@@ -98,25 +101,25 @@ class Host(db.Document):
         """
         Set account Information
         """
-        if self.account_id and self.account_id != account_id:
+        if self.source_account_id and self.source_account_id != account_id:
             raise HostError(f"Host {self.hostname} already importet by source {self.source_name}")
-        self.account_id = account_id
-        self.account_name = account_name
-        self.set_source_update()
+        self.source_account_id = account_id
+        self.source_account_name = account_name
+
 
     def set_source_update(self):
         """
         Called all the time when found on
         """
-        self.available_on_source = True
-        self.last_seen_on_source = datetime.datetime.now()
+        self.available = True
+        self.last_seen = datetime.datetime.now()
 
     def set_source_not_found(self):
         """
         When not found anymore on source,
         this will be set
         """
-        self.available_on_source = False
+        self.available = False
         self.add_log("Not found on Source anymore")
 
     def need_sync(self, hours=24):
@@ -124,9 +127,9 @@ class Host(db.Document):
         Check if the host needs to be synced
         from the source
         """
-        if not self.available_on_source:
+        if not self.available:
             return True
-        timediff = datetime.datetime.now() - self.last_seen_on_source
+        timediff = datetime.datetime.now() - self.last_seen
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False
@@ -137,10 +140,12 @@ class Host(db.Document):
         Check if we need to Update this host
         on the target
         """
+        # @TODO refactor need_update handling
+        return True
         if not self.last_update_on_target:
             return True
-        if self.force_update_on_target:
-            self.force_update_on_target = False
+        if self.force_update:
+            self.force_update = False
             self.save()
             return True
         timediff = datetime.datetime.now() - self.last_update_on_target
