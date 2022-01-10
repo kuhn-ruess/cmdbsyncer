@@ -1,0 +1,21 @@
+version: "3.3"
+
+services:
+
+  mongo:
+    image: mongo:4.4
+    volumes:
+      - data_db:/data/db
+
+  api:
+    build:
+      context: .
+    depends_on:
+      - mongo
+    ports:
+      - 8080:9090
+    environment:
+      config: base
+
+volumes:
+  data_db:

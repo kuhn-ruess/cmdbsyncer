@@ -1,0 +1,10 @@
+version: "3.3"
+
+services:
+
+  api:
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      config: prod
