@@ -67,10 +67,9 @@ class Host(db.Document):
 
 
 
-    def add_labels(self,label_dict):
+    def set_labels(self,label_dict):
         """
-        Add new Label to hosts in case
-        not yet existing
+        Overwrites the Labels on this object
         """
         labels = []
         for key, value in label_dict.items():

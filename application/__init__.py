@@ -26,8 +26,6 @@ try:
         """db init in uwsgi"""
         db.init_app(app)
 except ImportError:
-    print("   \033[91mWARNING: STANDALONE MODE - NOT FOR PROD\033[0m")
-    print(" * HINT: uwsgi modul not loaded")
     db = MongoEngine(app)
 
 log = Log()

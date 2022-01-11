@@ -1,4 +1,5 @@
 application/plugins/*.py
+!application/plugins/example_*.py
 application/config.py
 
 *.swp
