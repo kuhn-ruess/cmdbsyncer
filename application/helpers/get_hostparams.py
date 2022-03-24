@@ -15,7 +15,7 @@ class GetHostParams(): # pylint: disable=too-few-public-methods
         """
         Prepare Rules
         """
-        self.rules = [x.to_mongo() for x in HostRule.objects(enabled=True)]
+        self.rules = [x.to_mongo() for x in HostRule.objects(enabled=True).order_by('sort_field')]
 
     @staticmethod
     def _convert_params(params):

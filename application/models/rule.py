@@ -8,6 +8,7 @@ from application import db
 rule_types = [
     ('all', "All conditions must mach"),
     ('any', "Any condition can mach"),
+    ('anyway', "Match without any condition"),
 ]
 
 condition_types = [
@@ -18,6 +19,7 @@ condition_types = [
 
 action_outcome_types = [
     ("move_folder", "Move Host to given Folder"),
+    ("source_folder", "Add this Folder as basefolder for the on specified to for move"),
     ("ignore", "Ignore this host"),
 ]
 
@@ -59,6 +61,7 @@ class ActionRule(db.Document):
     outcome = db.ListField(db.EmbeddedDocumentField(ActionOutcome))
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
+    sort_field = db.IntField()
 
     meta = {
         'strict': False,
@@ -87,6 +90,7 @@ class LabelRule(db.Document):
     conditions = db.ListField(db.EmbeddedDocumentField(LabelCondition))
     outcome = db.ListField(db.StringField(choices=label_outcome_types))
     enabled = db.BooleanField()
+    sort_field = db.IntField()
 
 class HostCondition(db.EmbeddedDocument):
     """
@@ -115,3 +119,4 @@ class HostRule(db.Document):
     conditions = db.ListField(db.EmbeddedDocumentField(HostCondition))
     params = db.ListField(db.EmbeddedDocumentField(HostParams))
     enabled = db.BooleanField()
+    sort_field = db.IntField()

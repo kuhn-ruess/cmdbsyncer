@@ -15,7 +15,7 @@ class GetAction(): # pylint: disable=too-few-public-methods
         """
         Prepare Rules
         """
-        self.rules = [x.to_mongo() for x in ActionRule.objects(enabled=True)]
+        self.rules = [x.to_mongo() for x in ActionRule.objects(enabled=True).order_by('sort_field')]
 
     @staticmethod
     def _check_label_match(condition, labels):
@@ -66,17 +66,19 @@ class GetAction(): # pylint: disable=too-few-public-methods
                         negativ_match = True
                 if not negativ_match:
                     match = True
+            elif rule['condition_typ'] == 'anyway':
+                match = True
 
-                # Rule matches, get outcome
-                if match:
-                    for outcome in rule['outcome']:
-                        # We add only the outcome of the
-                        # first matching rule
-                        if outcome['type'] not in outcomes:
-                            outcomes[outcome['type']] = outcome['param']
-                    # If rule has matched, and option is set, we are done
-                    if rule['last_match']:
-                        return outcomes
+            # Rule matches, get outcome
+            if match:
+                for outcome in rule['outcome']:
+                    # We add only the outcome of the
+                    # first matching rule type
+                    if outcome['type'] not in outcomes:
+                        outcomes[outcome['type']] = outcome['param']
+                # If rule has matched, and option is set, we are done
+                if rule['last_match']:
+                    return outcomes
 
         return outcomes
 

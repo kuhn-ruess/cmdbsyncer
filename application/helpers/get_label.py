@@ -15,7 +15,7 @@ class GetLabel():# pylint: disable=too-few-public-methods
         """
         Prepare Rules
         """
-        self.rules = [x.to_mongo() for x in LabelRule.objects(enabled=True)]
+        self.rules = [x.to_mongo() for x in LabelRule.objects(enabled=True).order_by('sort_field')]
 
     @staticmethod
     def _check_label_match(condition, label):

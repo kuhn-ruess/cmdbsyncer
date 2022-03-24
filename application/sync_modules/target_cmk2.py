@@ -53,8 +53,13 @@ class UpdateCMKv2():
         elif method == 'delete':
             response = requests.delete(url, headers=headers, verify=False)
 
+        error_whitelist = [
+            'Path already exists',
+        ]
+
         if response.status_code != 200:
-            print(response.text)
+            if response.json()['title'] not in error_whitelist:
+                print(response.text)
             raise CmkException(response.json()['title'])
         return response.json(), response.headers
 
@@ -72,7 +77,17 @@ class UpdateCMKv2():
 
             folder = False
             if 'move_folder' in next_actions:
-                folder = next_actions['move_folder']
+                # Get the Folder where we move to
+                folder = next_actions['move_folder'].lower()
+                # Add leading / if missing
+                if not folder.startswith('/'):
+                    folder = "/" + folder
+                # if we have a source folder, add him on front
+                if 'source_folder' in next_actions:
+                    folder = next_actions['source_folder'].lower() + folder
+                    if not folder.startswith('/'):
+                        folder = "/" + folder
+                self.create_folder(folder)
             # Check if Host Exists
             url = f"objects/host_config/{db_host.hostname}"
             try:
@@ -83,6 +98,41 @@ class UpdateCMKv2():
             else:
                 host_etag = headers['ETag']
                 self.update_host(db_host, cmk_host, host_etag, folder, labels)
+
+    def _create_folder(self, parent, subfolder):
+        """ Helper to create tree of folders """
+        url = "domain-types/folder_config/collections/all"
+        body = {
+            "name": subfolder,
+            "title": subfolder.capitalize(),
+            "parent": parent,
+        }
+        try:
+            self.request(url, method="POST", data=body)
+        except CmkException:
+            # We ignore an existing folder
+            pass
+
+
+    def create_folder(self, folder):
+        """ Create given folder if not yet exsisting """
+        folder_parts = folder.split('/')[1:]
+        if len(folder_parts) == 1:
+            if folder_parts[0] == '':
+                # we are in page root
+                return
+            parent = '/'
+            subfolder = folder_parts[0]
+            self._create_folder(parent, subfolder)
+        else:
+            next_parent = '/'
+            for sub_folder in folder_parts:
+                self._create_folder(next_parent, sub_folder)
+                if next_parent == '/':
+                    next_parent += sub_folder
+                else:
+                    next_parent  += '/' + sub_folder
+
 
     def create_host(self, db_host, folder, labels):
         """
@@ -119,21 +169,19 @@ class UpdateCMKv2():
 
         if folder:
             # Check if we really need to move
-            for link in cmk_host['links']:
-                if link['rel'] == 'urn:com.checkmk:rels/folder_config':
-                    current_folder = link['href'].split('~')[-1]
-                    if current_folder != folder[1:]:
-                        update_url = f"/objects/host_config/{db_host.hostname}/actions/move/invoke"
-                        update_body = {
-                            'target_folder': folder
-                        }
-                        _, header = self.request(update_url, method="POST",
-                                     data=update_body,
-                                     additional_header=update_headers)
-                        # Need to update the header after last request
-                        update_headers = {
-                            'if-match': header['ETag'],
-                        }
+            current_folder = cmk_host['extensions']['folder']
+            if current_folder != folder[1:]:
+                update_url = f"/objects/host_config/{db_host.hostname}/actions/move/invoke"
+                update_body = {
+                    'target_folder': folder
+                }
+                _, header = self.request(update_url, method="POST",
+                             data=update_body,
+                             additional_header=update_headers)
+                # Need to update the header after last request
+                update_headers = {
+                    'if-match': header['ETag'],
+                }
 
         if db_host.need_update():
             # Triggert after Time,
