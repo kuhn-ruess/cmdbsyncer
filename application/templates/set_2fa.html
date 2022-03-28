@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block page_content %}
+<form method="POST">
+<div class="row justify-content-center">
+    <div class="col-lg-12">
+      <div class="jumbotron text-center p-4">
+        <h2>Login Security</h2>
+        <h4>Setup and Authenticate 2FA</h4>
+      </div>
+    </div>
+    <div class="col-lg-5">
+        <div>
+          <h5>Instructions</h5>
+          <ul>
+            <li>Copy the Secret</li>
+            <li>Enter the Secret in your Authenticator App (LastPass, Enppass, Keepass etc.)</li>
+            <li>Save it</li>
+            <li>Enter a generated Code on this Page</li>
+            <li>Click "Verify and set"</li>
+          </ul>
+        </div>
+        <div class="form-group">
+          <label for="secret">Secret Token</label>
+          <input type="text" class="form-control" name="secret" id="secret" value="{{ form.secret }}" readonly>
+        </div>
+        <div class="text-center">
+          <button type="button" class="btn btn-primary" onclick="copySecret()">Copy Secret</button>
+        </div>
+    </div>
+    <div class="col-lg-7">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      {% for category, message in messages %}
+      <div class="alert alert-{{ category }}" role="alert">
+        {{ message }}
+      </div>
+      {% endfor %}
+      {% endif %}
+      {% endwith %}
+        <div class="form-group">
+          <label for="otp">Generated OTP</label>
+          <input type="number" class="form-control" id="otp" name="otp" required>
+        </div>
+        <div class="text-center">
+          <button type="submit" class="btn btn-primary"> Verify and set</button>
+        </div>
+    </div>
+</div>
+</form>
+<script>
+  function copySecret() {
+    /* Get the text field */
+    var copyText = document.getElementById("secret");
+
+    /* Select the text field */
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); /*For mobile devices*/
+
+    /* Copy the text inside the text field */
+    document.execCommand("copy");
+  }
+</script>
+{% endblock %}

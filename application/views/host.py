@@ -2,6 +2,7 @@
 Host Model View
 """
 # pylint: disable=too-few-public-methods
+from flask_login import current_user
 from flask_admin.actions import action
 from flask import flash
 from application.views.default import DefaultModelView
@@ -45,3 +46,7 @@ class HostModelView(DefaultModelView):
             host.save()
         flash("Updated {} hosts".format(len(ids)))
         return self.index_view()
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('host')

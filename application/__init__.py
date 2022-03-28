@@ -5,6 +5,10 @@
 import os
 from flask import Flask
 from flask_admin import Admin
+from flask_admin.menu import MenuLink
+from flask_login import LoginManager
+from flask_mail import Mail
+from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 from application.modules.log import Log
 
@@ -30,6 +34,13 @@ except ImportError:
 
 log = Log()
 
+mail = Mail(app)
+bootstrap = Bootstrap(app)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'auth.login'
+login_manager.login_message = False
 
 source_register = [
    (lambda: False, "Not set")
@@ -37,7 +48,13 @@ source_register = [
 
 from application.sync_modules import *
 from application.plugins import *
+from application.helpers.add_user import *
 
+from application.views.default import IndexView
+
+
+from application.auth.views import AUTH
+app.register_blueprint(AUTH)
 
 from application.models.host import Host
 from application.views.host import HostModelView
@@ -48,7 +65,7 @@ from application.views.account import AccountModelView
 from application.models.rule import ActionRule, LabelRule, HostRule
 from application.views.rule import RuleModelView
 
-admin = Admin(app, name="CMDB Sync", template_mode='bootstrap4')
+admin = Admin(app, name="CMDB Sync", template_mode='bootstrap4', index_view=IndexView())
 
 admin.add_view(HostModelView(Host, name="Hosts"))
 
@@ -57,3 +74,6 @@ admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
 admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
 
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
+admin.add_link(MenuLink(name='Change Password', category='Profil', url="/change-password"))
+admin.add_link(MenuLink(name='Set 2FA Code', category='Profil', url="/set-2fa"))
+admin.add_link(MenuLink(name='Logout', category='Profil', url="/logout"))

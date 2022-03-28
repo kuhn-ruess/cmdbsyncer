@@ -9,6 +9,7 @@ class BaseConfig():
     MONGODB_DB = "cmdb-api"
     TIME_STAMP_FORMAT = "%d.%m.%Y %H:%M"
     HOST_LOG_LENGTH = 30
+    ADMIN_SESSION_HOURS = 2
 
 
 class ProductionConfig(BaseConfig):
