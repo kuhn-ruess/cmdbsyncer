@@ -81,7 +81,8 @@ class DataGeter():
 def get_cmk_data(account):
     """Get All hosts from a CMK 2.x Installation and add them to local db"""
     try:
-        if source_config := get_account_by_name(account):
+        source_config = get_account_by_name(account)
+        if source_config:
             getter = DataGeter(source_config)
             getter.run()
         else:

@@ -208,7 +208,8 @@ class UpdateCMKv2():
 def get_cmk_data(account):
     """Add hosts to a CMK 2.x Insallation"""
     try:
-        if target_config := get_account_by_name(account):
+        target_config = get_account_by_name(account)
+        if target_config:
             job = UpdateCMKv2(target_config)
             job.run()
         else:
