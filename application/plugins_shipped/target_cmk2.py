@@ -10,6 +10,7 @@ from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.helpers.get_action import GetAction
 from application.helpers.get_label import GetLabel
+from application.helpers.get_hostparams import GetHostParams
 
 class CmkException(Exception):
     """Cmk Errors"""
@@ -29,6 +30,7 @@ class UpdateCMKv2():
         self.account_name = config['name']
         self.action_helper = GetAction()
         self.label_helper = GetLabel()
+        self.params_helper = GetHostParams('export')
 
     def request(self, params, method='GET', data=None, additional_header=None):
         """
@@ -88,6 +90,13 @@ class UpdateCMKv2():
 
             db_labels = db_host.get_labels()
             labels = self.label_helper.filter_labels(db_labels)
+
+            host_params = self.params_helper.get_params(db_host.hostname)
+
+            if host_params.get('ignore_hosts'):
+                continue
+            if host_params.get('custom_labels'):
+                labels.update(host_params['custom_labels'])
 
             next_actions = self.action_helper.get_action(labels)
             if 'ignore' in next_actions:
@@ -238,6 +247,7 @@ class UpdateCMKv2():
                          data=update_body,
                          additional_header=update_headers)
             print(f"Update Host {db_host.hostname}")
+            db_host.set_target_update()
 
 
 @app.cli.command('export_to_cmk-v2')

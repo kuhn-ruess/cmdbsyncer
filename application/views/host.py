@@ -30,6 +30,7 @@ class HostModelView(DefaultModelView):
     form_widget_args = {
         'available': {'disabled': True},
         'last_seen': {'disabled': True},
+        'last_update_on_target': {'disabled': True},
         'source_account_id': {'disabled': True},
         'source_account_name': {'disabled': True},
         'labels': {'disabled': True},

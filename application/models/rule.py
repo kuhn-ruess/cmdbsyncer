@@ -15,12 +15,20 @@ condition_types = [
     ('equal', "Equal"),
     ('not_equal', "Not equal"),
     ('in', "Contains"),
+    ('ewith', "Endswith"),
+    ('swith', "Startswith"),
 ]
 
 action_outcome_types = [
     ("move_folder", "Move Host to given Folder"),
     ("source_folder", "Add this Folder as basefolder for the on specified to for move"),
     ("ignore", "Ignore this host"),
+]
+
+
+host_params_types = [
+    ('ignore_hosts', "Ignore matching Hosts"),
+    ('add_custom_label', "Add Custom Label (use name and value)"),
 ]
 
 
@@ -106,9 +114,12 @@ class HostParams(db.EmbeddedDocument):
     """
     Custom Params
     """
+    type = db.StringField(choices=host_params_types)
     name = db.StringField()
     value = db.StringField()
-    trigger = db.BooleanField()
+    meta = {
+        'strict': False
+    }
 
 
 class HostRule(db.Document):
@@ -119,4 +130,8 @@ class HostRule(db.Document):
     conditions = db.ListField(db.EmbeddedDocumentField(HostCondition))
     params = db.ListField(db.EmbeddedDocumentField(HostParams))
     enabled = db.BooleanField()
+    target = db.StringField(choices=[('import', 'Import'),('export', 'Export')])
     sort_field = db.IntField()
+    meta = {
+        'strict': False
+    }

@@ -41,6 +41,7 @@ class Host(db.Document):
 
     available = db.BooleanField()
     last_seen = db.DateTimeField()
+    last_update_on_target = db.DateTimeField()
 
     log = db.ListField(db.StringField())
 
@@ -121,6 +122,13 @@ class Host(db.Document):
         self.available = False
         self.add_log("Not found on Source anymore")
 
+    def set_target_update(self):
+        """
+        Update last time of host export
+        """
+        self.last_update_on_target = datetime.datetime.now()
+        self.save()
+
     def need_sync(self, hours=24):
         """
         Check if the host needs to be synced
@@ -128,7 +136,7 @@ class Host(db.Document):
         """
         if not self.available:
             return True
-        timediff = datetime.datetime.now() - self.last_seen
+        timediff = datetime.datetime.now() - self.last_update_on_target
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False
@@ -139,8 +147,6 @@ class Host(db.Document):
         Check if we need to Update this host
         on the target
         """
-        # @TODO refactor need_update handling
-        return True
         if not self.last_update_on_target:
             return True
         if self.force_update:

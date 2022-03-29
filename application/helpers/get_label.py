@@ -35,6 +35,12 @@ class GetLabel():# pylint: disable=too-few-public-methods
         elif match_type == "in":
             if needed_value.lower() in label:
                 return True
+        elif match_type == 'swith':
+            if label.startswit(needed_value):
+                return True
+        elif match_type == 'ewith':
+            if label.endswith(needed_value):
+                return True
         return False
 
 
