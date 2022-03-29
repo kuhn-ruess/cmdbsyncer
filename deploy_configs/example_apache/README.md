@@ -1,0 +1,1 @@
+This Example config can be used with Apache and UWSGI. This is normaly the case if you install this API on a monitoring Server. Please make sure to also edit the application/config.py in order to set the BASE_PREFIX to the url you choosen in the Apache Settings. In the Example it would be /hostapi/ 
