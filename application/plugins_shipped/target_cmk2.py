@@ -53,6 +53,8 @@ class UpdateCMKv2():
             response = requests.put(url, json=data, headers=headers, verify=False)
         elif method == 'delete':
             response = requests.delete(url, headers=headers, verify=False)
+            # Checkmk gives no json response here, so we directly return
+            return True, response.headers
 
         error_whitelist = [
             'Path already exists',
@@ -65,8 +67,11 @@ class UpdateCMKv2():
             raise CmkException(response.json()['title'])
         return response.json(), response.headers
 
-    def run(self): #pylint: disable=too-many-locals
+    def run(self): #pylint: disable=too-many-locals, too-many-branches
         """Run Actual Job"""
+        # In Order to delete Hosts from Checkmk, we collect the ones we sync
+        synced_hosts = []
+
         # Get all current folders in order that we later now,
         # which we need to create
         url = "domain-types/folder_config/collections/all"
@@ -75,7 +80,6 @@ class UpdateCMKv2():
         existing_folders = []
         for folder in api_folders[0]['value']:
             existing_folders.append(folder['extensions']['path'])
-
 
 
         ## Start SYNC of Hosts into CMK
@@ -88,6 +92,9 @@ class UpdateCMKv2():
             next_actions = self.action_helper.get_action(labels)
             if 'ignore' in next_actions:
                 continue
+            synced_hosts.append(db_host.hostname)
+            labels['cmdb_syncer'] = self.account_id
+
 
             folder = False
             if 'move_folder' in next_actions:
@@ -114,6 +121,20 @@ class UpdateCMKv2():
             else:
                 host_etag = headers['ETag']
                 self.update_host(db_host, cmk_host, host_etag, folder, labels)
+
+        ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
+        # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
+        url = "domain-types/host_config/collections/all"
+        api_hosts = self.request(url, method="GET")
+        for host in api_hosts[0]['value']:
+            host_labels = host['extensions']['attributes'].get('labels',{})
+            if host_labels.get('cmdb_syncer') == self.account_id:
+                if host['id'] not in synced_hosts:
+                    # Delete host
+                    url = f"objects/host_config/{host['id']}"
+                    self.request(url, method="DELETE")
+                    print(f"Deleted host {host['id']}")
+
 
     def _create_folder(self, parent, subfolder):
         """ Helper to create tree of folders """
