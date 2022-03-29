@@ -25,6 +25,7 @@ def seed_user(email):
     passwd = ''.join(secrets.choice(alphabet) for i in range(20))
     user.set_password(passwd)
     user.global_admin = True
+    user.tfa_secret = None
     user.disable = False
     user.save()
     print(f"User passwort set to: {passwd}")

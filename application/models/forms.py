@@ -46,7 +46,7 @@ def validate_password(form, field):
 class LoginForm(FlaskForm):
     login_email = StringField("E-Mail", [InputRequired(), Email()])
     password = PasswordField("Password", [InputRequired()])
-    otp = IntegerField("OTP")
+    otp = StringField("OTP")
     login_submit   = SubmitField("Login")
 
 class RequestPasswordForm(FlaskForm):
