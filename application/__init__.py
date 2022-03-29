@@ -46,9 +46,8 @@ source_register = [
    (lambda: False, "Not set")
 ]
 
-from application.sync_modules import *
+from application.plugins_shipped import *
 from application.plugins import *
-from application.helpers.add_user import *
 
 from application.views.default import IndexView
 

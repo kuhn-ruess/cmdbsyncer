@@ -2,6 +2,7 @@
 """
 Add Hosts into CMK Version 2 Installations
 """
+#pylint: disable=too-many-arguments
 import click
 import requests
 from application import app, log
@@ -55,6 +56,7 @@ class UpdateCMKv2():
 
         error_whitelist = [
             'Path already exists',
+            'Not Found',
         ]
 
         if response.status_code != 200:
@@ -65,6 +67,18 @@ class UpdateCMKv2():
 
     def run(self): #pylint: disable=too-many-locals
         """Run Actual Job"""
+        # Get all current folders in order that we later now,
+        # which we need to create
+        url = "domain-types/folder_config/collections/all"
+        url += "?parent=/&recursive=true&show_hosts=false"
+        api_folders = self.request(url, method="GET")
+        existing_folders = []
+        for folder in api_folders[0]['value']:
+            existing_folders.append(folder['extensions']['path'])
+
+
+
+        ## Start SYNC of Hosts into CMK
         for db_host in Host.objects():
             # Actions
 
@@ -87,7 +101,9 @@ class UpdateCMKv2():
                     folder = next_actions['source_folder'].lower() + folder
                     if not folder.startswith('/'):
                         folder = "/" + folder
-                self.create_folder(folder)
+                if folder not in existing_folders:
+                    self.create_folder(folder)
+                    existing_folders.append(folder)
             # Check if Host Exists
             url = f"objects/host_config/{db_host.hostname}"
             try:
