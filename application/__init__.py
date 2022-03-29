@@ -62,6 +62,9 @@ from application.views.host import HostModelView
 from application.models.account import Account
 from application.views.account import AccountModelView
 
+from application.models.user import User
+from application.views.user import UserView
+
 from application.models.rule import ActionRule, LabelRule, HostRule
 from application.views.rule import RuleModelView
 
@@ -74,8 +77,9 @@ admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
 admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
 
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
+admin.add_view(UserView(User, category='Config'))
 admin.add_link(MenuLink(name='Change Password', category='Profil',
-                        url=f"{app.config['BASE_PREFIX']}chnage-password"))
+                        url=f"{app.config['BASE_PREFIX']}change-password"))
 admin.add_link(MenuLink(name='Set 2FA Code', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}set-2fa"))
 admin.add_link(MenuLink(name='Logout', category='Profil',

@@ -12,6 +12,7 @@ roles = [
   ('rule', "Rule Management"),
   ('host', "Host Management"),
   ('account', "Account Management"),
+  ('user', "User Management"),
 ]
 
 class User(db.Document, UserMixin):
