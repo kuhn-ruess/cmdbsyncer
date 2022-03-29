@@ -3,7 +3,7 @@
 # pylint: disable=wrong-import-position
 # pylint: disable=ungrouped-imports
 import os
-from flask import Flask
+from flask import Flask, url_for
 from flask_admin import Admin
 from flask_admin.menu import MenuLink
 from flask_login import LoginManager
@@ -31,6 +31,7 @@ try:
         db.init_app(app)
 except ImportError:
     db = MongoEngine(app)
+
 
 log = Log()
 
@@ -73,6 +74,9 @@ admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
 admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
 
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
-admin.add_link(MenuLink(name='Change Password', category='Profil', url="/change-password"))
-admin.add_link(MenuLink(name='Set 2FA Code', category='Profil', url="/set-2fa"))
-admin.add_link(MenuLink(name='Logout', category='Profil', url="/logout"))
+admin.add_link(MenuLink(name='Change Password', category='Profil',
+                        url=f"{app.config['BASE_PREFIX']}chnage-password"))
+admin.add_link(MenuLink(name='Set 2FA Code', category='Profil',
+                        url=f"{app.config['BASE_PREFIX']}set-2fa"))
+admin.add_link(MenuLink(name='Logout', category='Profil',
+                        url=f"{app.config['BASE_PREFIX']}logout"))

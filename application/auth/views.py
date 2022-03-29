@@ -32,7 +32,7 @@ def login():
     """
     if current_user.is_authenticated:
         flash('Already Logged in')
-        return redirect("/admin")
+        return redirect(url_for("admin.index"))
 
     login_form = LoginForm(request.form)
 
@@ -79,7 +79,7 @@ def login():
         existing_user.save()
         if existing_user.force_password_change:
             return redirect(url_for("auth.change_password"))
-        return redirect("/admin")
+        return redirect(url_for("admin.index"))
 
     return render_template('login.html', **context)
 
@@ -106,7 +106,7 @@ def set_2fa():
             flash("New 2FA Secret Set", "success")
             current_user.tfa_secret = secret
             current_user.save()
-            return redirect("/admin")
+            return redirect(url_for("admin.index"))
         flash("You have supplied an invalid 2FA token!", "danger")
 
     return render_template("set_2fa.html", form=form)
@@ -119,7 +119,7 @@ def logout():
     """
     session.clear()
     logout_user()
-    return redirect("/admin")
+    return redirect(url_for("admin.index"))
 
 
 @AUTH.route('/change-password', methods=['GET', 'POST'])
@@ -135,7 +135,7 @@ def change_password():
         current_user.lastLogin = datetime.now()
         current_user.force_password_change = False
         current_user.save()
-        return redirect('/admin')
+        return redirect(url_for("admin.index"))
     if form.errors:
         for _, message in form.errors.items():
             flash(message[0], 'danger')
@@ -157,7 +157,7 @@ def request_password():
             send_email(existing_user.email, "New Password", 'email/resetpassword',
                        user=existing_user, token=token)
         flash("New Password will be sent", 'info')
-        return redirect("/admin")
+        return redirect(url_for("admin.index"))
 
     return render_template('formular.html', form=form)
 
@@ -184,7 +184,7 @@ def reset_password(token):
     user_id = get_userid(token)
     if not user_id:
         flash("Invalid Link", "danger")
-        return redirect("/admin")
+        return redirect(url_for("admin.index"))
 
     user_result = User.objects(id=user_id)
     if user_result:
@@ -205,7 +205,7 @@ def reset_password(token):
             )
         )
         flash("Password Changed", 'success')
-        return redirect("/admin")
+        return redirect(url_for("admin.index"))
     if form.errors:
         for _, message in form.errors.items():
             flash(message[0], 'danger')

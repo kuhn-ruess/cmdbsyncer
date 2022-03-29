@@ -28,4 +28,4 @@ class IndexView(AdminIndexView):
                 and not current_user.force_password_change
 
     def inaccessible_callback(self, name, **kwargs):
-        return redirect(url_for('auth.login', next='/admin'))
+        return redirect(url_for('auth.login', next=url_for('admin.index')))

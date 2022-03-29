@@ -10,6 +10,7 @@ class BaseConfig():
     TIME_STAMP_FORMAT = "%d.%m.%Y %H:%M"
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
+    BASE_PREFIX = '/'
 
 
 class ProductionConfig(BaseConfig):
