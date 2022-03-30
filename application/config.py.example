@@ -12,6 +12,19 @@ class BaseConfig():
     ADMIN_SESSION_HOURS = 2
     BASE_PREFIX = '/'
 
+    # Minimum length for user Passwords (not applied to admin panel)
+    PASSWD_MIN_PASSWD_LENGTH = 9
+    # Password needs special signs
+    PASSWD_SPECIAL_CHARS = True
+    # Password need numbers
+    PASSWD_SPECIAL_DIGITS = True
+    # There must be uppercase letters
+    PASSWD_SEPCIAL_UPPER = True
+    # There musst lowercase letters
+    PASSWD_SEPCIAL_LOWER = True
+    # How many of the PASSWD_SEPCIAL prefixt  options must apply
+    PASSWD_SPECIAL_NEEDED = 3
+
 
 class ProductionConfig(BaseConfig):
     """
