@@ -136,7 +136,7 @@ class Host(db.Document):
         """
         if not self.available:
             return True
-        timediff = datetime.datetime.now() - self.last_update_on_target
+        timediff = datetime.datetime.now() - self.last_seen
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False
