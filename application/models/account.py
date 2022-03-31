@@ -7,9 +7,17 @@ from application import db
 account_types = [
     ('cmkv1', "Checkmk Version 1.x"),
     ('cmkv2', "Checkmk Version 2.x"),
-    ('database', "Database"),
+    ('custom', "Custom Entries, like DBs"),
     ('restapi', "Rest API"),
 ]
+
+
+class CustomEntry(db.EmbeddedDocument):
+    """
+    Custom Attributes for Setup
+    """
+    name = db.StringField()
+    value = db.StringField()
 
 class Account(db.Document):
     """
@@ -24,8 +32,7 @@ class Account(db.Document):
     username = db.StringField()
     password = db.StringField()
 
-    database = db.StringField()
-    port = db.IntField()
+    custom_fields = db.ListField(db.EmbeddedDocumentField(CustomEntry))
 
 
     enabled = db.BooleanField()
