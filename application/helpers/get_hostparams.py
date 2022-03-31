@@ -4,6 +4,7 @@ Get Host Params
 """
 
 from application.models.rule import HostRule
+from application.helpers.match import match
 
 
 class GetHostParams(): # pylint: disable=too-few-public-methods
@@ -42,21 +43,8 @@ class GetHostParams(): # pylint: disable=too-few-public-methods
         for rule in self.rules:
             for condtion in rule['conditions']:
                 cond_hostname = condtion['hostname']
-                if condtion['match'] == 'equal':
-                    if cond_hostname == hostname:
-                        return self._convert_params(rule['params'])
-                elif condtion['match'] == 'not_equal':
-                    if cond_hostname != hostname:
-                        return self._convert_params(rule['params'])
-                elif condtion['match'] == 'in':
-                    if cond_hostname in hostname:
-                        return self._convert_params(rule['params'])
-                elif condtion['match'] == 'swith':
-                    if hostname.startswith(cond_hostname):
-                        return self._convert_params(rule['params'])
-                elif condtion['match'] == 'ewith':
-                    if hostname.endswith(cond_hostname):
-                        return self._convert_params(rule['params'])
+                if match(hostname, cond_hostname, condtion['match'], condtion['match_negate']):
+                    return self._convert_params(rule['params'])
         return {}
 
 

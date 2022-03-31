@@ -4,7 +4,7 @@ Get Action
 """
 
 from application.models.rule import ActionRule
-
+from application.helpers.match import match
 
 class GetAction(): # pylint: disable=too-few-public-methods
     """
@@ -24,27 +24,19 @@ class GetAction(): # pylint: disable=too-few-public-methods
         """
         needed_tag = condition['tag']
         tag_match = condition['tag_match']
+        tag_match_negate = condition['tag_match_negate']
+
         needed_value = condition['value']
         value_match = condition['value_match']
+        value_match_negate = condition['value_match_negate']
+
+        # Wee need to find out if tag AND tag value match
 
         for tag, value in labels.items():
-            if tag_match == 'swith':
-                if not tag.startswith(needed_tag):
-                    continue
-            elif tag_match == 'ewith':
-                if not tag.endswith(needed_tag):
-                    continue
-            else:
-                if tag != needed_tag:
-                    continue
-            if value_match == 'equal':
-                if value == needed_value:
-                    return True
-            elif value_match == 'not_equal':
-                if value != needed_value:
-                    return True
-            elif value_match == "in":
-                if needed_value in value:
+            # Check if Tag matchs
+            if match(tag, needed_tag, tag_match, tag_match_negate):
+                # Tag Match, see if Value Match
+                if match(value, needed_value, value_match, value_match_negate):
                     return True
         return False
 
@@ -55,22 +47,22 @@ class GetAction(): # pylint: disable=too-few-public-methods
         """
         outcomes = {}
         for rule in self.rules:
-            match = False
+            rule_hit = False
             if rule['condition_typ'] == 'any':
                 for condtion in rule['conditions']:
-                    match = self._check_label_match(condtion, labels)
+                    rule_hit = self._check_label_match(condtion, labels)
             elif rule['condition_typ'] == 'all':
                 negativ_match = False
                 for condtion in rule['conditions']:
                     if not self._check_label_match(condtion, labels):
                         negativ_match = True
                 if not negativ_match:
-                    match = True
+                    rule_hit = True
             elif rule['condition_typ'] == 'anyway':
-                match = True
+                rule_hit = True
 
             # Rule matches, get outcome
-            if match:
+            if rule_hit:
                 for outcome in rule['outcome']:
                     # We add only the outcome of the
                     # first matching rule type

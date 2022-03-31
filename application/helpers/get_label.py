@@ -4,6 +4,7 @@ Get Label
 """
 
 from application.models.rule import LabelRule
+from application.helpers.match import match
 
 
 class GetLabel():# pylint: disable=too-few-public-methods
@@ -23,24 +24,11 @@ class GetLabel():# pylint: disable=too-few-public-methods
         Check if on of the given labels match the rule
         """
         needed_value = condition['value']
-        match_type = condition['type']
-
+        condition_match = condition['match']
+        negate = condition['match_negate']
         label = label.lower()
-        if match_type == 'equal':
-            if label == needed_value.lower():
-                return True
-        elif match_type == 'not_equal':
-            if label != needed_value.lower():
-                return True
-        elif match_type == "in":
-            if needed_value.lower() in label:
-                return True
-        elif match_type == 'swith':
-            if label.startswit(needed_value):
-                return True
-        elif match_type == 'ewith':
-            if label.endswith(needed_value):
-                return True
+        if match(label, needed_value, condition_match, negate):
+            return True
         return False
 
 
@@ -60,10 +48,13 @@ class GetLabel():# pylint: disable=too-few-public-methods
                         if not 'remove' in outcome and 'add' in outcome:
                             if 'strip' in outcome:
                                 label = label.strip()
+                                value = value.strip()
                             if 'lower' in outcome:
                                 label = label.lower()
+                                value = value.lower()
                             if 'replace' in outcome:
                                 label = label.replace(' ', '_')
+                                value = value.replace(' ', '_')
                             matches[label] = value
                         break
                 # Break out the rules if condition had a hit

@@ -13,7 +13,6 @@ rule_types = [
 
 condition_types = [
     ('equal', "Equal"),
-    ('not_equal', "Not equal"),
     ('in', "Contains"),
     ('ewith', "Endswith"),
     ('swith', "Startswith"),
@@ -32,19 +31,14 @@ host_params_types = [
 ]
 
 
-tag_condition_types = [
-    ('equal', "Tag is Equal"),
-    ('swith', "Tag starts with"),
-    ('ewith', "Tag ends with"),
-
-]
-
 class ActionCondition(db.EmbeddedDocument):
     """
     Condition
     """
-    tag_match = db.StringField(choices=tag_condition_types)
+    tag_match_negate = db.BooleanField()
+    tag_match = db.StringField(choices=condition_types)
     tag = db.StringField(required=True)
+    value_match_negate = db.BooleanField()
     value_match = db.StringField(choices=condition_types)
     value = db.StringField(required=True)
     meta = {
@@ -87,8 +81,13 @@ class LabelCondition(db.EmbeddedDocument):
     """
     Condition
     """
-    type = db.StringField(choices=condition_types)
+    match_negate = db.BooleanField()
+    match = db.StringField(choices=condition_types)
     value = db.StringField(required=True)
+    meta = {
+        'strict': False,
+    }
+
 
 class LabelRule(db.Document):
     """
@@ -104,6 +103,7 @@ class HostCondition(db.EmbeddedDocument):
     """
     Host Condition
     """
+    match_negate = db.BooleanField()
     match = db.StringField(choices=condition_types)
     hostname = db.StringField(required=True)
     meta = {
