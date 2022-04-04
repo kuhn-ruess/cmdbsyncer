@@ -26,6 +26,9 @@ class BaseConfig():
     PASSWD_SPECIAL_NEEDED = 3
 
 
+    DISABLE_SSL_ERRORS = False
+
+
 class ProductionConfig(BaseConfig):
     """
     Production Configuration.

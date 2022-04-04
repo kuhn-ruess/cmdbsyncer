@@ -9,6 +9,12 @@ from application import app, log
 from application.models.host import Host, HostError
 from application.helpers.get_account import get_account_by_name
 
+
+if app.config.get("DISABLE_SSL_ERRORS"):
+    from urllib3.exceptions import InsecureRequestWarning
+    from urllib3 import disable_warnings
+    disable_warnings(InsecureRequestWarning)
+
 class CmkException(Exception):
     """Cmk Errors"""
 
