@@ -83,6 +83,8 @@ class LabelCondition(db.EmbeddedDocument):
     """
     match_negate = db.BooleanField()
     match = db.StringField(choices=condition_types)
+    match_on = db.StringField(choices=[('label_name', 'Label Name'),
+                                       ('label_value', 'Label Value')])
     value = db.StringField(required=True)
     meta = {
         'strict': False,

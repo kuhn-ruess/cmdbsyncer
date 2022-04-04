@@ -19,15 +19,20 @@ class GetLabel():# pylint: disable=too-few-public-methods
         self.rules = [x.to_mongo() for x in LabelRule.objects(enabled=True).order_by('sort_field')]
 
     @staticmethod
-    def _check_label_match(condition, label):
+    def _check_label_match(condition, label, value):
         """
         Check if on of the given labels match the rule
         """
+        if condition['match_on'] == 'label_name':
+            match_on = label
+        elif condition['match_on'] == 'label_value':
+            match_on = value
+
         needed_value = condition['value']
         condition_match = condition['match']
         negate = condition['match_negate']
         label = label.lower()
-        if match(label, needed_value, condition_match, negate):
+        if match(match_on.lower(), needed_value.lower(), condition_match, negate):
             return True
         return False
 
@@ -42,7 +47,7 @@ class GetLabel():# pylint: disable=too-few-public-methods
             for rule in self.rules:
                 hit = False
                 for condition in rule['conditions']:
-                    if self._check_label_match(condition, label):
+                    if self._check_label_match(condition, label, value):
                         hit = True
                         outcome = rule['outcome']
                         if not 'remove' in outcome and 'add' in outcome:
