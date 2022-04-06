@@ -103,7 +103,7 @@ class UpdateCMKv2():
             if host_params.get('custom_labels'):
                 labels.update(host_params['custom_labels'])
 
-            next_actions = self.action_helper.get_action(labels)
+            next_actions = self.action_helper.get_action(db_host.hostname, labels)
             if 'ignore' in next_actions:
                 continue
             synced_hosts.append(db_host.hostname)

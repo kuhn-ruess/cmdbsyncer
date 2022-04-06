@@ -6,8 +6,8 @@ from application import db
 
 
 rule_types = [
-    ('all', "All conditions must mach"),
-    ('any', "Any condition can mach"),
+    ('all', "All conditions must match"),
+    ('any', "Any condition can match"),
     ('anyway', "Match without any condition"),
 ]
 
@@ -20,7 +20,7 @@ condition_types = [
 
 action_outcome_types = [
     ("move_folder", "Move Host to given Folder"),
-    ("source_folder", "Add this Folder as basefolder for the on specified to for move"),
+    ("source_folder", "Add this Folder as basefolder before the specifed in 'Move host to given Folder'"),
     ("ignore", "Ignore this host"),
 ]
 
@@ -35,12 +35,19 @@ class ActionCondition(db.EmbeddedDocument):
     """
     Condition
     """
-    tag_match_negate = db.BooleanField()
+    match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Tag")])
+
+    hostname_match = db.StringField(choices=condition_types)
+    hostname_match_negate = db.BooleanField()
+    hostname = db.StringField()
+
     tag_match = db.StringField(choices=condition_types)
-    tag = db.StringField(required=True)
-    value_match_negate = db.BooleanField()
+    tag_match_negate = db.BooleanField()
+    tag = db.StringField()
+
     value_match = db.StringField(choices=condition_types)
-    value = db.StringField(required=True)
+    value_match_negate = db.BooleanField()
+    value = db.StringField()
     meta = {
         'strict': False,
     }

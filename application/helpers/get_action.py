@@ -40,22 +40,43 @@ class GetAction(): # pylint: disable=too-few-public-methods
                     return True
         return False
 
+    @staticmethod
+    def _check_hostname_match(condition, hostname):
+        """
+        Check if Condition Matchs to Hostname
+        """
+        needed = condition['hostname'].lower()
+        host_match = condition['hostname_match'].lower()
+        negate = condition['hostname_match_negate']
 
-    def _check_rule_match(self, labels):
+        if match(hostname.lower(), needed, host_match, negate):
+            return True
+        return False
+
+
+    def _check_rule_match(self, hostname, labels):
         """
         Return True if rule matches
         """
+        #pylint: disable=too-many-branches
         outcomes = {}
         for rule in self.rules:
             rule_hit = False
             if rule['condition_typ'] == 'any':
                 for condtion in rule['conditions']:
-                    rule_hit = self._check_label_match(condtion, labels)
+                    if condtion['match_type'] == 'tag':
+                        rule_hit = self._check_label_match(condtion, labels)
+                    else:
+                        rule_hit = self._check_hostname_match(condtion, hostname)
             elif rule['condition_typ'] == 'all':
                 negativ_match = False
                 for condtion in rule['conditions']:
-                    if not self._check_label_match(condtion, labels):
-                        negativ_match = True
+                    if condtion['match_type'] == 'tag':
+                        if not self._check_label_match(condtion, labels):
+                            negativ_match = True
+                    else:
+                        if not self._check_hostname_match(condtion, hostname):
+                            negativ_match = True
                 if not negativ_match:
                     rule_hit = True
             elif rule['condition_typ'] == 'anyway':
@@ -75,8 +96,8 @@ class GetAction(): # pylint: disable=too-few-public-methods
         return outcomes
 
 
-    def get_action(self, labels):
+    def get_action(self, hostname, labels):
         """
         Return next Action for this Host
         """
-        return self._check_rule_match(labels)
+        return self._check_rule_match(hostname, labels)
