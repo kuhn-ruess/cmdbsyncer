@@ -28,9 +28,9 @@ class PrintMatches():
             next_actions = self.action_helper.get_action(db_host.hostname, applied_labels)
             if not next_actions or 'ignore' in next_actions:
                 continue
+            print(f'Next Action: {next_actions}')
             print(f"Labels for {db_host.hostname}")
             pprint.pprint(applied_labels)
-            print(f'Next Action: {next_actions}')
 
 
 @app.cli.command('debug_print')

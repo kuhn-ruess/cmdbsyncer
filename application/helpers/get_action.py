@@ -93,6 +93,19 @@ class GetAction(): # pylint: disable=too-few-public-methods
                 if rule['last_match']:
                     return outcomes
 
+            # Handle Special Options for Rules
+            if 'value_as_folder' in outcomes:
+                search_tag = outcomes['value_as_folder']
+                for tag, value in labels.items():
+                    if search_tag == value:
+                        outcomes['move_folder'] = tag
+
+            if 'tag_as_folder' in outcomes:
+                search_value = outcomes['tag_as_folder']
+                for tag, value in labels.items():
+                    if search_value == tag:
+                        outcomes['move_folder'] = value
+
         return outcomes
 
 

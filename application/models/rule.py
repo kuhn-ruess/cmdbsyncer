@@ -20,6 +20,8 @@ condition_types = [
 
 action_outcome_types = [
     ("move_folder", "Move Host to given Folder"),
+    ('tag_as_folder', "Use Value of given Tag as Foldername"),
+    ("value_as_folder", "Use Tag of given Value as Foldername"),
     ("source_folder", "Add this Folder as basefolder before the specifed in 'Move host to given Folder'"),
     ("ignore", "Ignore this host"),
 ]
