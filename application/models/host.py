@@ -43,6 +43,10 @@ class Host(db.Document):
     last_seen = db.DateTimeField()
     last_update_on_target = db.DateTimeField()
 
+    folder = db.StringField()
+
+    export_problem = False
+
     log = db.ListField(db.StringField())
 
 
@@ -65,6 +69,32 @@ class Host(db.Document):
         new_host = Host()
         new_host.hostname = hostname
         return new_host
+
+
+    def set_export_problem(self, message):
+        """
+        Mark Host as Export problem
+        """
+        self.export_problem = True
+        self.add_log(message)
+        self.save()
+
+    def lock_to_folder(self, folder_name):
+        """
+        Lock System to given Folder
+        """
+        if not folder_name:
+            self.folder = None
+        else:
+            self.folder = folder_name
+        self.save()
+
+
+    def get_folder(self):
+        """ Returns Folder if System is locked to one, else False """
+        if self.folder:
+            return self.folder
+        return False
 
 
 

@@ -2,7 +2,7 @@
 """
 Add Hosts into CMK Version 2 Installations
 """
-#pylint: disable=too-many-arguments
+#pylint: disable=too-many-arguments, too-many-statements
 import click
 import requests
 from application import app, log
@@ -11,6 +11,7 @@ from application.helpers.get_account import get_account_by_name
 from application.helpers.get_action import GetAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
+from application.helpers import poolfolder
 
 if app.config.get("DISABLE_SSL_ERRORS"):
     from urllib3.exceptions import InsecureRequestWarning
@@ -74,6 +75,13 @@ class UpdateCMKv2():
             raise CmkException(response.json()['title'])
         return response.json(), response.headers
 
+    @staticmethod
+    def format_foldername(folder):
+        """ Format Foldername in a CMK Format """
+        if not folder.startswith('/'):
+            return "/" + folder.lower()
+        return folder.lower()
+
     def run(self): #pylint: disable=too-many-locals, too-many-branches
         """Run Actual Job"""
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
@@ -109,19 +117,39 @@ class UpdateCMKv2():
             synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id
 
-
             folder = False
+            # Folder Pool
+            if "folder_pool" in next_actions:
+                if db_host.get_folder():
+                    folder = db_host.get_folder()
+                else:
+                    # Find new Pool Folder
+                    folder = poolfolder.get_folder()
+                    if not folder:
+                        db_host.set_export_problem("No Free Folder Pool Seat")
+                        continue
+                    db_host.lock_to_folder(folder)
+
+                if folder:
+                    folder = self.format_foldername(folder)
+                    if folder not in existing_folders:
+                        self.create_folder(folder)
+                        existing_folders.append(folder)
+
             if 'move_folder' in next_actions:
+                # Cleanup Folder Pool:
+                # If we have a rule, who points the server to an folder,
+                # we clean his seat from this folder
+                if db_host.get_folder():
+                    poolfolder.remove_seat(db_host.get_folder())
+                    db_host.lock_to_folder(False)
+
                 # Get the Folder where we move to
-                folder = next_actions['move_folder'].lower()
-                # Add leading / if missing
-                if not folder.startswith('/'):
-                    folder = "/" + folder
+                folder = self.format_foldername(next_actions['move_folder'])
                 # if we have a source folder, add him on front
                 if 'source_folder' in next_actions:
                     folder = next_actions['source_folder'].lower() + folder
-                    if not folder.startswith('/'):
-                        folder = "/" + folder
+                    folder = self.format_foldername(folder)
                 if folder not in existing_folders:
                     self.create_folder(folder)
                     existing_folders.append(folder)
@@ -135,6 +163,10 @@ class UpdateCMKv2():
             else:
                 host_etag = headers['ETag']
                 self.update_host(db_host, cmk_host, host_etag, folder, labels)
+
+            # Everthing worked, so reset problems;
+            db_host.export_problem = False
+            db_host.save()
 
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
@@ -233,6 +265,7 @@ class UpdateCMKv2():
                 update_headers = {
                     'if-match': header['ETag'],
                 }
+                print(f"Moved Host {db_host.hostname} to {folder}")
 
         if db_host.need_update():
             # Triggert after Time,
