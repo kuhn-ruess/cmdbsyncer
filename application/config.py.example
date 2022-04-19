@@ -24,6 +24,8 @@ class BaseConfig():
     PASSWD_SEPCIAL_LOWER = True
     # How many of the PASSWD_SEPCIAL prefixt  options must apply
     PASSWD_SPECIAL_NEEDED = 3
+    
+    BOOTSTRAP_SERVE_LOCAL = True
 
 
     DISABLE_SSL_ERRORS = False
