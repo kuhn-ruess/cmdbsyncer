@@ -5,18 +5,80 @@ Host Model View
 from flask_login import current_user
 from flask_admin.actions import action
 from flask import flash
+from flask import Markup
+from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 from application.views.default import DefaultModelView
 from application.models.host import Host
+
+
+class FilterLabelValue(BaseMongoEngineFilter):
+    """
+    Filter for Label Value
+    """
+
+    def apply(self, query, value):
+        return query.filter(labels__value__icontains=value)
+
+    def operation(self):
+        return "contains"
+
+class FilterLabelKey(BaseMongoEngineFilter):
+    """
+    Filter for Label Key
+    """
+
+    def apply(self, query, value):
+        return query.filter(labels__key=value)
+
+    def operation(self):
+        return "contains"
 
 class HostModelView(DefaultModelView):
     """
     Host Model
     """
+    can_edit = False
+    can_view_details = True
+    column_details_list = [
+        'hostname', 'labels', 'log',
+        'last_seen', 'source_account_name'
+    ]
     column_filters = (
        'hostname',
        'source_account_name',
        'available',
+       FilterLabelKey(
+        Host,
+        "Label Key"
+       ),
+       FilterLabelValue(
+        Host,
+        "Label Value"
+       ),
     )
+
+
+    def format_log(v, c, m, p):
+        """ Format Log view"""
+        html = "<ul>"
+        for entry in m.log:
+            html+=f"<li>{entry}</li>"
+        html += "</ul>"
+        return Markup(html)
+
+    def format_labels(v, c, m, p):
+        """ Format Log view"""
+        html = "<table>"
+        for entry in m.labels:
+            html += f"<tr><th>{entry.key}</th><td>{entry.value}</td></tr>"
+        html += "</table>"
+        return Markup(html)
+
+
+    column_formatters = {
+        'log': format_log,
+        'labels': format_labels,
+    }
 
     column_exclude_list = (
         'source_account_id',
@@ -27,14 +89,6 @@ class HostModelView(DefaultModelView):
         'force_update',
     )
 
-    form_widget_args = {
-        'available': {'disabled': True},
-        'last_seen': {'disabled': True},
-        'last_update_on_target': {'disabled': True},
-        'source_account_id': {'disabled': True},
-        'source_account_name': {'disabled': True},
-        'labels': {'disabled': True},
-    }
 
     @action('force_update', 'Force Update')
     def action_update(self, ids):
