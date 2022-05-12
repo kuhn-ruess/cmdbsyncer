@@ -86,6 +86,7 @@ label_outcome_types = [
     ('lower', 'Make label lowercase'),
     ('replace', 'Replace whitespaces with _'),
     ('replace_slash', 'Replace Slahses with / (usefull if using tags/values as folder)'),
+    ('replace_special', 'Replace chars like { and } which will not work as foldername')
 ]
 
 class LabelCondition(db.EmbeddedDocument):

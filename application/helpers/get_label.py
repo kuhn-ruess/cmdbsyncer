@@ -63,6 +63,10 @@ class GetLabel():# pylint: disable=too-few-public-methods
                             if 'replace_slash' in outcome:
                                 label = label.replace('/', '-')
                                 value = value.replace('/', '-')
+                            if 'replace_special' in outcome:
+                                for what in ['{', '}']:
+                                    label = label.replace(what, '')
+                                    value = value.replace(what, '')
                             matches[label] = value
                         break
                 # Break out the rules if condition had a hit
