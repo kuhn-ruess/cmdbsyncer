@@ -85,6 +85,7 @@ label_outcome_types = [
     ('strip', 'Strip Spaces End/Begin'),
     ('lower', 'Make label lowercase'),
     ('replace', 'Replace whitespaces with _'),
+    ('replace_slash', 'Replace Slahses with / (usefull if using tags/values as folder)'),
 ]
 
 class LabelCondition(db.EmbeddedDocument):
