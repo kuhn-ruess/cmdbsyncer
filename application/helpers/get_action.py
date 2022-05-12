@@ -5,7 +5,7 @@ Get Action
 
 from application.models.rule import ActionRule
 from application.helpers.match import match
-from application.helpers.debug import debug
+from application.helpers.debug import debug as print_debug
 
 class GetAction(): # pylint: disable=too-few-public-methods
     """
@@ -64,7 +64,7 @@ class GetAction(): # pylint: disable=too-few-public-methods
         outcomes = {}
         # In this loop we collect all possible rule outcomes which lead to the
         # actions which happens to the host
-        debug(self.debug, f"Debug Rules for {hostname}")
+        print_debug(self.debug, f"Debug Rules for {hostname}")
         for rule in self.rules:
             rule_hit = False
             if rule['condition_typ'] == 'any':
@@ -89,34 +89,38 @@ class GetAction(): # pylint: disable=too-few-public-methods
 
             # Rule matches, get outcome
             if rule_hit:
-                debug(self.debug, f"-- Rule id {rule['_id']} hit")
+                print_debug(self.debug, f"-- Rule id {rule['_id']} hit")
                 for outcome in rule['outcome']:
                     # We add only the outcome of the
                     # first matching rule type
                     if outcome['type'] not in outcomes:
-                        debug(self.debug, f"--- Added Outcome {outcome['type']} = {outcome['param']}")
+                        print_debug(self.debug,
+                                    f"--- Added Outcome {outcome['type']} = {outcome['param']}")
                         outcomes[outcome['type']] = outcome['param']
                 # If rule has matched, and option is set, we are done
                 if rule['last_match']:
-                    debug(self.debug, f"--- Rule id {rule['_id']} was last_match")
-                    return outcomes
+                    print_debug(self.debug, f"--- Rule id {rule['_id']} was last_match")
+                    break
 
-            # Handle Special Options for Rules
-            if 'value_as_folder' in outcomes:
-                debug(self.debug, "-- value as folder matched, overwrite move_folder if tag is found")
-                search_tag = outcomes['value_as_folder']
-                for tag, value in labels.items():
-                    if search_tag == value:
-                        debug(self.debug, f"--- Found tag, overwrite folder with: {tag}")
-                        outcomes['move_folder'] = tag
+        # All Rules are checked, now see if we have special options:
+        # Handle Special Options for Rules
+        if 'value_as_folder' in outcomes:
+            print_debug(self.debug,
+                        "-- value as folder matched, overwrite move_folder if tag is found")
+            search_tag = outcomes['value_as_folder']
+            for tag, value in labels.items():
+                if search_tag == value:
+                    print_debug(self.debug, f"--- Found tag, overwrite folder with: {tag}")
+                    outcomes['move_folder'] = tag
 
-            if 'tag_as_folder' in outcomes:
-                debug(self.debug, "-- tag as folder matched, overwrite move_folder if value is found")
-                search_value = outcomes['tag_as_folder']
-                for tag, value in labels.items():
-                    if search_value == tag:
-                        debug(self.debug, f"--- Found value, overwrite folder with: {value}")
-                        outcomes['move_folder'] = value
+        if 'tag_as_folder' in outcomes:
+            print_debug(self.debug,
+                        "-- tag as folder matched, overwrite move_folder if value is found")
+            search_value = outcomes['tag_as_folder']
+            for tag, value in labels.items():
+                if search_value == tag:
+                    print_debug(self.debug, f"--- Found value, overwrite folder with: {value}")
+                    outcomes['move_folder'] = value
 
         return outcomes
 
