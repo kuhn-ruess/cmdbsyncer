@@ -155,7 +155,7 @@ class UpdateCMKv2():
                     self.create_folder(folder)
                     existing_folders.append(folder)
 
-            print(f"{ColorCodes.OKBLUE}   * {ColorCodes.ENDC} Folder is: {folder}")
+            print(f"{ColorCodes.OKBLUE}  ** {ColorCodes.ENDC} Folder is: {folder}")
             # Check if Host Exists
             url = f"objects/host_config/{db_host.hostname}"
             try:
@@ -182,7 +182,7 @@ class UpdateCMKv2():
                     # Delete host
                     url = f"objects/host_config/{host['id']}"
                     self.request(url, method="DELETE")
-                    print(f"{ColorCodes.WARNING}   * {ColorCodes.ENDC}Deleted host {host['id']}")
+                    print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Deleted host {host['id']}")
 
 
     def _create_folder(self, parent, subfolder):
@@ -234,7 +234,7 @@ class UpdateCMKv2():
         }
 
         self.request(url, method="POST", data=body)
-        print(f"{ColorCodes.WARNING}   * {ColorCodes.ENDC}Created Host {db_host.hostname}")
+        print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Created Host {db_host.hostname}")
 
     def update_host(self, db_host, cmk_host, host_etag, folder, labels):
         """
@@ -268,7 +268,7 @@ class UpdateCMKv2():
                 update_headers = {
                     'if-match': header['ETag'],
                 }
-                print(f"{ColorCodes.WARNING}   * {ColorCodes.ENDC}Moved Host {db_host.hostname} to {folder}")
+                print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Moved Host {db_host.hostname} to {folder}")
 
         if db_host.need_update():
             # Triggert after Time,
@@ -287,7 +287,7 @@ class UpdateCMKv2():
             self.request(update_url, method="PUT",
                          data=update_body,
                          additional_header=update_headers)
-            print(f"{ColorCodes.WARNING}   * {ColorCodes.ENDC}Update Host {db_host.hostname}")
+            print(f"{ColorCodes.WARNING} ** {ColorCodes.ENDC}Update Host {db_host.hostname}")
             db_host.set_target_update()
 
 
