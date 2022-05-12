@@ -10,6 +10,7 @@ from application.models.host import Host
 from application.helpers.get_action import GetAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
+from application.helpers.debug import ColorCodes
 
 
 
@@ -17,7 +18,8 @@ from application.helpers.get_hostparams import GetHostParams
 @click.argument("hostname")
 def get_cmk_data(hostname):
     """Show Rule Engine Outcome for given Host"""
-    action_helper = GetAction()
+    print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
+    action_helper = GetAction(debug=True)
     label_helper = GetLabel()
     params_helper_export = GetHostParams('export')
     params_helper_import = GetHostParams('import')
@@ -29,15 +31,15 @@ def get_cmk_data(hostname):
     params_import = params_helper_import.get_params(hostname)
     actions = action_helper.get_action(db_host.hostname, labels)
 
-
-    print("Debug Rules for {hostname}")
-    print("- Labels in DB")
+    print()
+    print(f"{ColorCodes.HEADER} ***** Final Outcomes ***** {ColorCodes.ENDC}")
+    print(f"{ColorCodes.UNDERLINE} Labels in DB {ColorCodes.ENDC}")
     pprint(db_labels)
-    print("Labels after Filter")
+    print(f"{ColorCodes.UNDERLINE}Labels after Filter {ColorCodes.ENDC}")
     pprint(labels)
-    print("Host Rule Parameters for Export")
+    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Export {ColorCodes.ENDC}")
     pprint(params_export)
-    print("Host Rule Parameters for Import")
+    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Impor {ColorCodes.ENDC}t")
     pprint(params_import)
-    print("Actions based on Action Rules")
+    print(f"{ColorCodes.UNDERLINE}Actions based on Action Rules {ColorCodes.ENDC}")
     pprint(actions)
