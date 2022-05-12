@@ -12,6 +12,7 @@ from application.helpers.get_action import GetAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
 from application.helpers import poolfolder
+from application.helpers.debug import ColorCodes
 
 if app.config.get("DISABLE_SSL_ERRORS"):
     from urllib3.exceptions import InsecureRequestWarning
@@ -100,7 +101,7 @@ class UpdateCMKv2():
         ## Start SYNC of Hosts into CMK
         for db_host in Host.objects():
             # Actions
-
+            print(f"{ColorCodes.OKBLUE} * {ColorCodes.ENDC} Handle: {db_host.hostname}")
             db_labels = db_host.get_labels()
             labels = self.label_helper.filter_labels(db_labels)
 
@@ -153,6 +154,8 @@ class UpdateCMKv2():
                 if folder not in existing_folders:
                     self.create_folder(folder)
                     existing_folders.append(folder)
+
+            print(f"{ColorCodes.OKBLUE}   * {ColorCodes.ENDC} Folder is: {folder}")
             # Check if Host Exists
             url = f"objects/host_config/{db_host.hostname}"
             try:
@@ -179,7 +182,7 @@ class UpdateCMKv2():
                     # Delete host
                     url = f"objects/host_config/{host['id']}"
                     self.request(url, method="DELETE")
-                    print(f"Deleted host {host['id']}")
+                    print(f"{ColorCodes.WARNING}   * {ColorCodes.ENDC}Deleted host {host['id']}")
 
 
     def _create_folder(self, parent, subfolder):
@@ -231,7 +234,7 @@ class UpdateCMKv2():
         }
 
         self.request(url, method="POST", data=body)
-        print(f"Created Host {db_host.hostname}")
+        print(f"{ColorCodes.WARNING}   * {ColorCodes.ENDC}Created Host {db_host.hostname}")
 
     def update_host(self, db_host, cmk_host, host_etag, folder, labels):
         """
@@ -265,7 +268,7 @@ class UpdateCMKv2():
                 update_headers = {
                     'if-match': header['ETag'],
                 }
-                print(f"Moved Host {db_host.hostname} to {folder}")
+                print(f"{ColorCodes.WARNING}   * {ColorCodes.ENDC}Moved Host {db_host.hostname} to {folder}")
 
         if db_host.need_update():
             # Triggert after Time,
@@ -284,7 +287,7 @@ class UpdateCMKv2():
             self.request(update_url, method="PUT",
                          data=update_body,
                          additional_header=update_headers)
-            print(f"Update Host {db_host.hostname}")
+            print(f"{ColorCodes.WARNING}   * {ColorCodes.ENDC}Update Host {db_host.hostname}")
             db_host.set_target_update()
 
 
@@ -298,6 +301,6 @@ def get_cmk_data(account):
             job = UpdateCMKv2(target_config)
             job.run()
         else:
-            print("Target not found")
+            print("{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
-        print(f'CMK Connection Error: {error_obj}')
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
