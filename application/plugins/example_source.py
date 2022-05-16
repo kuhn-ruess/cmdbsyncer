@@ -6,6 +6,7 @@ import click
 from application import app
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
+from application.helpers.debug import ColorCodes
 
 
 @app.cli.command('example_import') # Here you set the Job Name
@@ -29,11 +30,12 @@ def example_import(account):
     account_name = source_config['name']
 
 
-    print(f"Started with account {account_name}")
+    print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
+          f"{ColorCodes.UNDERLINE}{account_name}{ColorCodes.ENDC}")
 
 
     # This is the Hardcoded Example Host List,
-    # with the Labels already as dict. 
+    # with the Labels already as dict.
     hosts = [
       ('srvlx001', {'state': 'prod', 'type': 'application'}),
       ('srvlx002', {'state':'prod', 'type': 'database'}),
@@ -45,9 +47,10 @@ def example_import(account):
 
 
     for hostname, labels in hosts:
-        print(f" ** Update {hostname}")
+        print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
         # Iterate over you hosts, example a API Response.
         # if you get label data from your source, map it to a Dictionary
+
 
 
         # With this you get an reference to the object
@@ -55,6 +58,19 @@ def example_import(account):
         # checking if the Object already exists
         host_obj = Host.get_host(hostname)
 
+        # If the sync complicated, you can use this function
+        # to delay the resync for an object to the given time in hours
+        if not host_obj.need_sync(12):
+            continue
+
+        # If you wan't you can compare what you get from the Source
+        # with what we have in the local DB
+        if host_obj.get_labels() == labels:
+            continue
+
+        # Tell the System we found this one in our source
+        host_obj.set_source_update()
+        # Use host_obj.set_source_not_found() to mark that the host is gone if needed
 
         # For reference we set from which source account we get
         # this information. So we can prevent to sync the same object
@@ -65,6 +81,10 @@ def example_import(account):
 
         # Overwrite all the Labels with them from our source
         host_obj.set_labels(labels)
+
+
+        # If you wan't, you cann add logs to the object:
+        # host_obj.add_log("My Message")
 
         # Save the Changes
         host_obj.save()
