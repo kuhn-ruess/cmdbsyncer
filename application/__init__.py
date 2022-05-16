@@ -76,8 +76,8 @@ admin = Admin(app, name="CMDB Sync", template_mode='bootstrap4', index_view=Inde
 admin.add_view(HostModelView(Host, name="Hosts"))
 
 admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
-admin.add_view(RuleModelView(ActionRule, name="Action Rules", category="Rules"))
 admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
+admin.add_view(RuleModelView(ActionRule, name="Action Rules", category="Rules"))
 
 admin.add_view(FolderPoolModelView(FolderPool, name="Folder Pools", category="Config"))
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
