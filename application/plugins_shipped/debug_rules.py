@@ -26,7 +26,7 @@ def get_cmk_data(hostname):
 
     db_host = Host.objects.get(hostname=hostname)
     db_labels = db_host.get_labels()
-    labels = label_helper.filter_labels(db_labels)
+    labels, extra_actions = label_helper.filter_labels(db_labels)
     params_export = params_helper_export.get_params(hostname)
     if params_export.get('custom_labels'):
         labels.update(params_export['custom_labels'])
@@ -39,9 +39,11 @@ def get_cmk_data(hostname):
     pprint(db_labels)
     print(f"{ColorCodes.UNDERLINE}Labels after Filter {ColorCodes.ENDC}")
     pprint(labels)
+    print(f"{ColorCodes.UNDERLINE}Extra Actions for {db_host.hostname} {ColorCodes.ENDC}")
+    print(extra_actions)
     print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Export {ColorCodes.ENDC}")
     pprint(params_export)
-    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Impor {ColorCodes.ENDC}t")
+    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Import {ColorCodes.ENDC}")
     pprint(params_import)
     print(f"{ColorCodes.UNDERLINE}Actions based on Action Rules {ColorCodes.ENDC}")
     pprint(actions)

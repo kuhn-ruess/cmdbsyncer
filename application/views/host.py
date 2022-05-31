@@ -2,6 +2,7 @@
 Host Model View
 """
 # pylint: disable=too-few-public-methods
+import re
 from flask_login import current_user
 from flask_admin.actions import action
 from flask import flash
@@ -21,6 +22,18 @@ class FilterLabelValue(BaseMongoEngineFilter):
 
     def operation(self):
         return "contains"
+
+class FilterHostnameRegex(BaseMongoEngineFilter):
+    """
+    Filter Value with Regex
+    """
+
+    def apply(self, query, value):
+        regex = re.compile(value)
+        return query.filter(hostname=regex)
+
+    def operation(self):
+        return "regex"
 
 class FilterLabelKey(BaseMongoEngineFilter):
     """
@@ -45,6 +58,10 @@ class HostModelView(DefaultModelView):
     ]
     column_filters = (
        'hostname',
+       FilterHostnameRegex(
+        Host,
+        "Hostname Regex",
+       ),
        'source_account_name',
        'available',
        FilterLabelKey(

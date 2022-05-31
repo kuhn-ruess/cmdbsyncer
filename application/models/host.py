@@ -24,7 +24,6 @@ class Target(db.EmbeddedDocument):
     target_account_name = db.StringField()
     last_update = db.DateTimeField()
 
-
 class Host(db.Document):
     """
     Host
@@ -96,7 +95,20 @@ class Host(db.Document):
             return self.folder
         return False
 
-
+    def replace_label(self, key, value):
+        """
+        Replace given Label name with value
+        """
+        hit = False
+        for label in self.labels:
+            if label.key == key:
+                label.value = value
+                hit = True
+        if not hit:
+            label = Label()
+            label.key = key
+            label.value = value
+            self.labels.append(label)
 
     def set_labels(self,label_dict):
         """

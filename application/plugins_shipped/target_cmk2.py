@@ -103,7 +103,7 @@ class UpdateCMKv2():
             # Actions
             print(f"{ColorCodes.OKBLUE} * {ColorCodes.ENDC} Handle: {db_host.hostname}")
             db_labels = db_host.get_labels()
-            labels = self.label_helper.filter_labels(db_labels)
+            labels, extra_actions = self.label_helper.filter_labels(db_labels)
 
             host_params = self.params_helper.get_params(db_host.hostname)
 
@@ -158,14 +158,20 @@ class UpdateCMKv2():
             print(f"{ColorCodes.OKBLUE}  ** {ColorCodes.ENDC} Folder is: {folder}")
             # Check if Host Exists
             url = f"objects/host_config/{db_host.hostname}"
+            additional_attributes = {}
+            for action, value in extra_actions.items():
+                if action.startswith('attribute_'):
+                    attribute = action.split("_")[-1]
+                    additional_attributes[attribute] = value
+
             try:
                 cmk_host, headers = self.request(url, "GET")
             except CmkException as error:
                 if str(error) == "Not Found":
-                    self.create_host(db_host, folder, labels)
+                    self.create_host(db_host, folder, labels, additional_attributes)
             else:
                 host_etag = headers['ETag']
-                self.update_host(db_host, cmk_host, host_etag, folder, labels)
+                self.update_host(db_host, cmk_host, host_etag, folder, labels, additional_attributes)
 
             # Everthing worked, so reset problems;
             db_host.export_problem = False
@@ -220,7 +226,7 @@ class UpdateCMKv2():
                     next_parent  += '/' + sub_folder
 
 
-    def create_host(self, db_host, folder, labels):
+    def create_host(self, db_host, folder, labels, additional_attributes=None):
         """
         Create the not yet existing host in CMK
         """
@@ -232,11 +238,13 @@ class UpdateCMKv2():
                 'labels' : labels,
             }
         }
+        if additional_attributes:
+            body['attributes'].update(additional_attributes)
 
         self.request(url, method="POST", data=body)
         print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Created Host {db_host.hostname}")
 
-    def update_host(self, db_host, cmk_host, host_etag, folder, labels):
+    def update_host(self, db_host, cmk_host, host_etag, folder, labels, additional_attributes=None):
         """
         Update a Existing Host in Checkmk
         """
@@ -283,6 +291,8 @@ class UpdateCMKv2():
                     'labels' : labels,
                 }
             }
+            if additional_attributes:
+                update_body['update_attributes'].update(additional_attributes)
 
             self.request(update_url, method="PUT",
                          data=update_body,

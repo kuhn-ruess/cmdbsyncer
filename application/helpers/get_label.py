@@ -43,12 +43,14 @@ class GetLabel():# pylint: disable=too-few-public-methods
         """
         matches = {}
         # pylint: disable=too-many-nested-blocks
+        additional_actions = {}
         for label, value in labels.items():
             for rule in self.rules:
                 hit = False
                 for condition in rule['conditions']:
                     if self._check_label_match(condition, label, value):
                         hit = True
+                        add = True
                         outcome = rule['outcome']
                         if not 'remove' in outcome and 'add' in outcome:
                             if 'strip' in outcome:
@@ -67,10 +69,16 @@ class GetLabel():# pylint: disable=too-few-public-methods
                                 for what in ['{', '}']:
                                     label = label.replace(what, '')
                                     value = value.replace(what, '')
-                            matches[label] = value
+                            if 'use_value_as_attribute' in outcome:
+                                additional_actions[f'attribute_{label}'] = value
+                                # Don't add as additional label
+                                add = False
+
+                            if add:
+                                matches[label] = value
                         break
                 # Break out the rules if condition had a hit
                 # we go on with next label then
                 if hit:
                     break
-        return matches
+        return matches, additional_actions

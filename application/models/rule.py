@@ -86,18 +86,19 @@ label_outcome_types = [
     ('lower', 'Make label lowercase'),
     ('replace', 'Replace whitespaces with _'),
     ('replace_slash', 'Replace Slahses with / (usefull if using tags/values as folder)'),
-    ('replace_special', 'Replace chars like { and } which will not work as foldername')
+    ('replace_special', 'Replace chars like { and } which will not work as foldername'),
+    ('use_value_as_attribute', 'Use Label Value as Host Attribute. Key needs to be valid'),
 ]
 
 class LabelCondition(db.EmbeddedDocument):
     """
     Condition
     """
-    match_negate = db.BooleanField()
-    match = db.StringField(choices=condition_types)
     match_on = db.StringField(choices=[('label_name', 'Label Name'),
                                        ('label_value', 'Label Value')])
+    match = db.StringField(choices=condition_types)
     value = db.StringField(required=True)
+    match_negate = db.BooleanField()
     meta = {
         'strict': False,
     }
