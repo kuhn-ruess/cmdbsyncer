@@ -76,12 +76,6 @@ class UpdateCMKv2():
             raise CmkException(response.json()['title'])
         return response.json(), response.headers
 
-    @staticmethod
-    def format_foldername(folder):
-        """ Format Foldername in a CMK Format """
-        if not folder.startswith('/'):
-            return "/" + folder.lower()
-        return folder.lower()
 
     def run(self): #pylint: disable=too-many-locals, too-many-branches
         """Run Actual Job"""
@@ -96,6 +90,7 @@ class UpdateCMKv2():
         existing_folders = []
         for folder in api_folders[0]['value']:
             existing_folders.append(folder['extensions']['path'])
+
 
 
         ## Start SYNC of Hosts into CMK
@@ -118,7 +113,7 @@ class UpdateCMKv2():
             synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id
 
-            folder = False
+            folder = '/'
             # Folder Pool
             if "folder_pool" in next_actions:
                 if db_host.get_folder():
@@ -131,11 +126,9 @@ class UpdateCMKv2():
                         continue
                     db_host.lock_to_folder(folder)
 
-                if folder:
-                    folder = self.format_foldername(folder)
-                    if folder not in existing_folders:
-                        self.create_folder(folder)
-                        existing_folders.append(folder)
+                if folder not in existing_folders:
+                    self.create_folder(folder)
+                    existing_folders.append(folder)
 
             if 'move_folder' in next_actions:
                 # Cleanup Folder Pool:
@@ -146,14 +139,12 @@ class UpdateCMKv2():
                     db_host.lock_to_folder(False)
 
                 # Get the Folder where we move to
-                folder = self.format_foldername(next_actions['move_folder'])
-                # if we have a source folder, add him on front
-                if 'source_folder' in next_actions:
-                    folder = next_actions['source_folder'].lower() + folder
-                    folder = self.format_foldername(folder)
-                if folder not in existing_folders:
-                    self.create_folder(folder)
-                    existing_folders.append(folder)
+                folder = next_actions['move_folder']
+
+            if folder not in existing_folders:
+                # We may need to create them later
+                self.create_folder(folder)
+                existing_folders.append(folder)
 
             print(f"{ColorCodes.OKBLUE}  ** {ColorCodes.ENDC} Folder is: {folder}")
             # Check if Host Exists
@@ -194,6 +185,8 @@ class UpdateCMKv2():
     def _create_folder(self, parent, subfolder):
         """ Helper to create tree of folders """
         url = "domain-types/folder_config/collections/all"
+        if not subfolder:
+            return
         body = {
             "name": subfolder,
             "title": subfolder.capitalize(),
@@ -261,22 +254,27 @@ class UpdateCMKv2():
             need_update = True
 
 
-        if folder:
-            # Check if we really need to move
-            current_folder = cmk_host['extensions']['folder']
-            if current_folder != folder[1:]:
-                update_url = f"/objects/host_config/{db_host.hostname}/actions/move/invoke"
-                update_body = {
-                    'target_folder': folder
-                }
-                _, header = self.request(update_url, method="POST",
-                             data=update_body,
-                             additional_header=update_headers)
-                # Need to update the header after last request
-                update_headers = {
-                    'if-match': header['ETag'],
-                }
-                print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Moved Host {db_host.hostname} to {folder}")
+        current_folder = cmk_host['extensions']['folder']
+        # Hack slash in front, quick solution before redesign
+        if not current_folder.startswith('/'):
+            current_folder = "/" + current_folder
+        # Check if we really need to move
+        move_folder = folder
+        if not folder.endswith('/'):
+            move_folder = folder + '/'
+        if current_folder != move_folder:
+            update_url = f"/objects/host_config/{db_host.hostname}/actions/move/invoke"
+            update_body = {
+                'target_folder': folder
+            }
+            _, header = self.request(update_url, method="POST",
+                         data=update_body,
+                         additional_header=update_headers)
+            # Need to update the header after last request
+            update_headers = {
+                'if-match': header['ETag'],
+            }
+            print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Moved Host {db_host.hostname} to {folder}")
 
         if db_host.need_update():
             # Triggert after Time,

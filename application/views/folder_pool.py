@@ -20,3 +20,13 @@ class FolderPoolModelView(DefaultModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('rule')
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Make Sure Folder are saved correct
+        """
+
+        if not  model.folder_name.startswith('/'):
+            model.folder_name = "/" + model.folder_name
+
+        return super().on_model_change(form, model, is_created)

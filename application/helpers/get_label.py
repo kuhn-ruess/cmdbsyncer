@@ -66,9 +66,9 @@ class GetLabel():# pylint: disable=too-few-public-methods
                                 label = label.replace('/', '-')
                                 value = value.replace('/', '-')
                             if 'replace_special' in outcome:
-                                for what in ['{', '}']:
-                                    label = label.replace(what, '')
-                                    value = value.replace(what, '')
+                                for what, to in [('{','('), ('}', ')'), ('ü', 'ue'), ('&', '')]:
+                                    label = label.replace(what, to)
+                                    value = value.replace(what, to)
                             if 'use_value_as_attribute' in outcome:
                                 additional_actions[f'attribute_{label}'] = value
                                 # Don't add as additional label

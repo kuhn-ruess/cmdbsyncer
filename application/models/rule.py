@@ -16,13 +16,15 @@ condition_types = [
     ('in', "Contains"),
     ('ewith', "Endswith"),
     ('swith', "Startswith"),
+    ('ignore', "Match All"),
 ]
 
 action_outcome_types = [
     ("move_folder", "Move Host to given Folder"),
-    ('tag_as_folder', "Use Value of given Tag as Foldername"),
-    ("value_as_folder", "Use Tag of given Value as Foldername"),
+    ('value_as_folder', "Use Value of given Tag as Foldername"),
+    ("tag_as_folder", "Use Tag of given Value as Foldername"),
     ("source_folder", "Add this Folder as basefolder before the specifed in 'Move host to given Folder'"),
+    ("tag_as_source_folder", "Use Value of given Tag as basefolder"),
     ("ignore", "Ignore this host"),
     ("folder_pool", "Assign to at first time random folder pool (Host will be locked into this pool)"),
 ]
@@ -41,16 +43,16 @@ class ActionCondition(db.EmbeddedDocument):
     match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Tag")])
 
     hostname_match = db.StringField(choices=condition_types)
-    hostname_match_negate = db.BooleanField()
     hostname = db.StringField()
+    hostname_match_negate = db.BooleanField()
 
     tag_match = db.StringField(choices=condition_types)
-    tag_match_negate = db.BooleanField()
     tag = db.StringField()
+    tag_match_negate = db.BooleanField()
 
     value_match = db.StringField(choices=condition_types)
-    value_match_negate = db.BooleanField()
     value = db.StringField()
+    value_match_negate = db.BooleanField()
     meta = {
         'strict': False,
     }
@@ -118,9 +120,9 @@ class HostCondition(db.EmbeddedDocument):
     """
     Host Condition
     """
-    match_negate = db.BooleanField()
     match = db.StringField(choices=condition_types)
     hostname = db.StringField(required=True)
+    match_negate = db.BooleanField()
     meta = {
         'strict': False,
     }

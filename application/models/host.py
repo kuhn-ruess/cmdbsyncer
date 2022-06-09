@@ -110,7 +110,7 @@ class Host(db.Document):
             label.value = value
             self.labels.append(label)
 
-    def set_labels(self,label_dict):
+    def set_labels(self, label_dict):
         """
         Overwrites the Labels on this object
         """
