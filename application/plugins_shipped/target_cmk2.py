@@ -189,7 +189,7 @@ class UpdateCMKv2():
             return
         body = {
             "name": subfolder,
-            "title": subfolder.capitalize(),
+            "title": subfolder,
             "parent": parent,
         }
         try:
