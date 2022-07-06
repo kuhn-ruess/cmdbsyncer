@@ -260,8 +260,9 @@ class UpdateCMKv2():
             current_folder = "/" + current_folder
         # Check if we really need to move
         move_folder = folder
-        if not folder.endswith('/'):
-            move_folder = folder + '/'
+        # Commented out because of Issue #7
+        #if not folder.endswith('/'):
+        #    move_folder = folder + '/'
         if current_folder != move_folder:
             update_url = f"/objects/host_config/{db_host.hostname}/actions/move/invoke"
             update_body = {
