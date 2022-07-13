@@ -28,8 +28,6 @@ class Host(db.Document):
     """
     Host
     """
-
-
     hostname = db.StringField(required=True, unique=True)
     labels = db.ListField(db.EmbeddedDocumentField(Label))
 
