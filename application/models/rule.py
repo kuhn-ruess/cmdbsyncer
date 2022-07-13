@@ -20,13 +20,13 @@ condition_types = [
 ]
 
 action_outcome_types = [
-    ("move_folder", "Move Host to given Folder"),
-    ('value_as_folder', "Use Value of given Tag as Foldername"),
-    ("tag_as_folder", "Use Tag of given Value as Foldername"),
-    ("source_folder", "Obsolete: Migrate to 'Move Host to given Folder' Rule"),
+    ("move_folder", "Move Host to specified Folder"),
+    ('value_as_folder', "Use Value of given Tag as Folder"),
+    ("tag_as_folder", "Use Tag of given Value as Folder"),
+    ("source_folder", "Obsolete: Migrate to 'Move Host to specified Folder' Rule"),
     ("tag_as_source_folder", "Obsolte: Migrate to 'Use Tag of given Value as Foldername' Rule"),
     ("ignore", "Ignore this host"),
-    ("folder_pool", "Assign to at first time random folder pool (Host will be locked into this pool)"),
+    ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
 ]
 
 
