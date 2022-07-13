@@ -31,7 +31,7 @@ def get_cmk_data(hostname):
     if params_export.get('custom_labels'):
         labels.update(params_export['custom_labels'])
     params_import = params_helper_import.get_params(hostname)
-    actions = action_helper.get_action(db_host.hostname, labels)
+    actions = action_helper.get_action(db_host, labels)
 
     print()
     print(f"{ColorCodes.HEADER} ***** Final Outcomes ***** {ColorCodes.ENDC}")

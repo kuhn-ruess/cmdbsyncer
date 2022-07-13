@@ -25,7 +25,7 @@ class PrintMatches():
         for db_host in Host.objects():
             db_labels = db_host.get_labels()
             applied_labels, extra_actions = self.label_helper.filter_labels(db_labels)
-            next_actions = self.action_helper.get_action(db_host.hostname, applied_labels)
+            next_actions = self.action_helper.get_action(db_host, applied_labels)
             if not next_actions or 'ignore' in next_actions:
                 continue
             print(f'Next Action: {next_actions}')
