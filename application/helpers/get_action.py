@@ -83,6 +83,7 @@ class GetAction(): # pylint: disable=too-few-public-methods
         # In this loop we collect all possible rule outcomes which lead to the
         # actions which happens to the host
         print_debug(self.debug, f"Debug Rules for {ColorCodes.UNDERLINE}{hostname}{ColorCodes.ENDC}")
+        found_poolfolder_rule = False
         for rule in self.rules:
             rule_hit = False
             if rule['condition_typ'] == 'any':
@@ -113,6 +114,8 @@ class GetAction(): # pylint: disable=too-few-public-methods
 
             # Rule matches, get outcome
             if rule_hit:
+
+                # Cleanup Poolfolder if needed
                 for outcome in rule['outcome']:
                     # We add only the outcome of the
                     # first matching rule type
@@ -130,6 +133,7 @@ class GetAction(): # pylint: disable=too-few-public-methods
                         outcomes['move_folder'] += self.format_foldername(outcome['param'])
 
                     if outcome['type'] == 'folder_pool':
+                        found_poolfolder_rule = True
                         if db_host.get_folder():
                             outcomes['move_folder'] += db_host.get_folder()
                         else:
@@ -177,6 +181,13 @@ class GetAction(): # pylint: disable=too-few-public-methods
                 if rule['last_match']:
                     print_debug(self.debug, f"--- {ColorCodes.FAIL}Rule id {rule['_id']} was last_match{ColorCodes.ENDC}")
                     break
+        # Cleanup Pool folder since no match
+        # to a poolfolder rule anymore
+        if not found_poolfolder_rule:
+            if db_host.get_folder():
+                old_folder = db_host.get_folder()
+                db_host.lock_to_folder(False)
+                poolfolder.remove_seat(old_folder)
 
         return outcomes
 

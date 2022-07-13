@@ -51,29 +51,32 @@ class UpdateCMKv2():
         }
         if additional_header:
             headers.update(additional_header)
+        try:
+            method = method.lower()
+            if method == 'get':
+                response = requests.get(url, headers=headers, verify=False)
+            elif method == 'post':
+                response = requests.post(url, json=data, headers=headers, verify=False)
+            elif method == 'put':
+                response = requests.put(url, json=data, headers=headers, verify=False)
+            elif method == 'delete':
+                response = requests.delete(url, headers=headers, verify=False)
+                # Checkmk gives no json response here, so we directly return
+                return True, response.headers
 
-        method = method.lower()
-        if method == 'get':
-            response = requests.get(url, headers=headers, verify=False)
-        elif method == 'post':
-            response = requests.post(url, json=data, headers=headers, verify=False)
-        elif method == 'put':
-            response = requests.put(url, json=data, headers=headers, verify=False)
-        elif method == 'delete':
-            response = requests.delete(url, headers=headers, verify=False)
-            # Checkmk gives no json response here, so we directly return
-            return True, response.headers
+            error_whitelist = [
+                'Path already exists',
+                'Not Found',
+            ]
 
-        error_whitelist = [
-            'Path already exists',
-            'Not Found',
-        ]
+            if response.status_code != 200:
+                if response.json()['title'] not in error_whitelist:
+                    print(response.text)
+                raise CmkException(response.json()['title'])
+            return response.json(), response.headers
+        except (ConnectionResetError, requests.exceptions.ProxyError):
+            raise Exception("Cant connect to cmk site")
 
-        if response.status_code != 200:
-            if response.json()['title'] not in error_whitelist:
-                print(response.text)
-            raise CmkException(response.json()['title'])
-        return response.json(), response.headers
 
 
     def run(self): #pylint: disable=too-many-locals, too-many-branches
@@ -83,6 +86,7 @@ class UpdateCMKv2():
 
         # Get all current folders in order that we later now,
         # which we need to create
+        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}CACHE: Read all folders from cmk")
         url = "domain-types/folder_config/collections/all"
         url += "?parent=/&recursive=true&show_hosts=false"
         api_folders = self.request(url, method="GET")
@@ -92,10 +96,25 @@ class UpdateCMKv2():
 
 
 
+        # Get ALL hosts in order to compare them
+        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}CACHE: Read all hosts from cmk")
+        url = "domain-types/host_config/collections/all"
+        api_hosts = self.request(url, method="GET")
+        cmk_hosts = {}
+        for host in api_hosts[0]['value']:
+            cmk_hosts[host['title']] = host
+
+
+
         ## Start SYNC of Hosts into CMK
-        for db_host in Host.objects():
+        db_objects = Host.objects(available=True)
+        total = len(db_objects)
+        counter = 0
+        for db_host in db_objects:
             # Actions
-            print(f"{ColorCodes.OKBLUE} * {ColorCodes.ENDC} Handle: {db_host.hostname}")
+            counter += 1
+            process = 100.0 * counter / total
+            print(f"{ColorCodes.OKBLUE} * {ColorCodes.ENDC} {process:3.0f}%  Handle: {db_host.hostname}")
             db_labels = db_host.get_labels()
             labels, extra_actions = self.label_helper.filter_labels(db_labels)
 
@@ -125,22 +144,27 @@ class UpdateCMKv2():
 
             print(f"{ColorCodes.OKBLUE}  ** {ColorCodes.ENDC} Folder is: {folder}")
             # Check if Host Exists
-            url = f"objects/host_config/{db_host.hostname}"
+
             additional_attributes = {}
             for action, value in extra_actions.items():
                 if action.startswith('attribute_'):
                     attribute = action.split("_")[-1]
                     additional_attributes[attribute] = value
 
-            try:
-                cmk_host, headers = self.request(url, "GET")
-            except CmkException as error:
-                if str(error) == "Not Found":
-                    self.create_host(db_host, folder, labels, additional_attributes)
+            if db_host.hostname not in cmk_hosts:
+                # Create since missing
+                print(f"{ColorCodes.OKCYAN}  *** {ColorCodes.ENDC} Create in CMK")
+                self.create_host(db_host, folder, labels, additional_attributes)
             else:
-                host_etag = headers['ETag']
-                self.update_host(db_host, cmk_host, host_etag,
-                                 folder, labels, additional_attributes)
+                cmk_host = cmk_hosts[db_host.hostname]
+                # Update if needed
+                self.update_host(db_host, cmk_host, folder,
+                                labels, additional_attributes)
+
+
+
+
+
 
             # Everthing worked, so reset problems;
             db_host.export_problem = False
@@ -148,17 +172,18 @@ class UpdateCMKv2():
 
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
+        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}CACHE: Read all hosts from cmk for cleanup")
         url = "domain-types/host_config/collections/all"
         api_hosts = self.request(url, method="GET")
-        for host in api_hosts[0]['value']:
-            host_labels = host['extensions']['attributes'].get('labels',{})
+        for host_data in api_hosts[0]['value']:
+            host = host_data['title']
+            host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
-                if host['id'] not in synced_hosts:
+                if host not in synced_hosts:
                     # Delete host
-                    url = f"objects/host_config/{host['id']}"
+                    url = f"objects/host_config/{host}"
                     self.request(url, method="DELETE")
-                    print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Deleted host {host['id']}")
-
+                    print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Deleted host {host}")
 
     def _create_folder(self, parent, subfolder):
         """ Helper to create tree of folders """
@@ -215,15 +240,21 @@ class UpdateCMKv2():
         self.request(url, method="POST", data=body)
         print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Created Host {db_host.hostname}")
 
-    def update_host(self, db_host, cmk_host, host_etag, folder, labels, additional_attributes=None):
+
+    def get_etag(self, db_host):
+        """
+        Return ETAG of host
+        """
+        print(f"{ColorCodes.OKCYAN}  *** {ColorCodes.ENDC} Read Hostdata CMK")
+        url = f"objects/host_config/{db_host.hostname}"
+        cmk_host, headers = self.request(url, "GET")
+        return headers['ETag']
+
+    def update_host(self, db_host, cmk_host, folder, labels, additional_attributes=None):
         """
         Update a Existing Host in Checkmk
         """
         need_update = False
-
-        update_headers = {
-            'if-match': host_etag,
-        }
 
         # compare Labels
         cmk_labels = cmk_host['extensions']['attributes'].get('labels', {})
@@ -241,7 +272,13 @@ class UpdateCMKv2():
         # Commented out because of Issue #7
         #if not folder.endswith('/'):
         #    move_folder = folder + '/'
+
+        etag = False
         if current_folder != move_folder:
+            etag = self.get_etag(db_host)
+            update_headers = {
+                'if-match': etag
+            }
             update_url = f"/objects/host_config/{db_host.hostname}/actions/move/invoke"
             update_body = {
                 'target_folder': folder
@@ -250,8 +287,9 @@ class UpdateCMKv2():
                          data=update_body,
                          additional_header=update_headers)
             # Need to update the header after last request
+            etag = header['Etag']
             update_headers = {
-                'if-match': header['ETag'],
+                'if-match': etag,
             }
             print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Moved Host {db_host.hostname} to {folder}")
 
@@ -262,6 +300,13 @@ class UpdateCMKv2():
             need_update = True
 
         if need_update:
+            # First reed to get the ETag
+            if not etag:
+                etag = self.get_etag(db_host)
+
+            update_headers = {
+                'if-match': etag,
+            }
             update_url = f"objects/host_config/{db_host.hostname}"
             update_body = {
                 'update_attributes': {
@@ -274,7 +319,7 @@ class UpdateCMKv2():
             self.request(update_url, method="PUT",
                          data=update_body,
                          additional_header=update_headers)
-            print(f"{ColorCodes.WARNING} ** {ColorCodes.ENDC}Update Host {db_host.hostname}")
+            print(f"{ColorCodes.WARNING} *** {ColorCodes.ENDC}Update Host {db_host.hostname}")
             db_host.set_target_update()
 
 

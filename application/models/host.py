@@ -81,13 +81,13 @@ class Host(db.Document):
     def lock_to_folder(self, folder_name):
         """
         Lock System to given Folder
+        Or remove it folder is False
         """
         if not folder_name:
             self.folder = None
         else:
             self.folder = folder_name
         self.save()
-
 
     def get_folder(self):
         """ Returns Folder if System is locked to one, else False """

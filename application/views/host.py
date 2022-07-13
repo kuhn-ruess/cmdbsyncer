@@ -53,7 +53,7 @@ class HostModelView(DefaultModelView):
     can_edit = False
     can_view_details = True
     column_details_list = [
-        'hostname', 'labels', 'log',
+        'hostname', 'folder', 'labels', 'log',
         'last_seen', 'source_account_name'
     ]
     column_filters = (

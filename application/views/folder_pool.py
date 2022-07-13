@@ -8,11 +8,14 @@ class FolderPoolModelView(DefaultModelView):
     """
     Account Model
     """
+    column_default_sort = "folder_name"
+
     column_filters = (
        'folder_name',
        'folder_seats',
        'enabled',
     )
+
     form_widget_args = {
         'folder_seats_taken': {'disabled': True},
     }

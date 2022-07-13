@@ -8,7 +8,7 @@ from application.models.folder_pool import FolderPool
 
 def get_folder():
     """ Try to find a free Pool Folder """
-    for folder in FolderPool.objects():
+    for folder in FolderPool.objects().order_by('folder_name'):
         if folder.has_free_seat():
             folder.folder_seats_taken += 1
             folder.save()
