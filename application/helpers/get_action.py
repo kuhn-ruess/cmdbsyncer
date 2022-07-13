@@ -7,6 +7,7 @@ from application.models.rule import ActionRule
 from application.helpers.match import match
 from application.helpers.debug import debug as print_debug
 from application.helpers.debug import ColorCodes
+from application.helpers import poolfolder
 
 class GetAction(): # pylint: disable=too-few-public-methods
     """
@@ -66,17 +67,18 @@ class GetAction(): # pylint: disable=too-few-public-methods
         return False
 
 
-    def _check_rule_match(self, hostname, labels):
+    def _check_rule_match(self, db_host, labels):
         """
         Return True if rule matches
         """
+
+        hostname = db_host.hostname
         #pylint: disable=too-many-branches
         outcomes = {}
 
         # List of outcomes to return without need of any handling here
         outcomes_to_return = [
             'ignore',
-            'folder_pool',
         ]
         # In this loop we collect all possible rule outcomes which lead to the
         # actions which happens to the host
@@ -118,10 +120,26 @@ class GetAction(): # pylint: disable=too-few-public-methods
 
                     # Prepare empty string to add later on subfolder if needed
                     # We delete it anyway at the end, if it's stays empty
+
+                    if outcome['type'] in ['source_folder', 'tag_as_source_folder']:
+                        raise Exception(f"Please Migrate Rule {rule['_id']} in order to use normale Folder Outcomes")
+
                     outcomes.setdefault('move_folder',"")
 
                     if outcome['type'] == 'move_folder':
                         outcomes['move_folder'] += self.format_foldername(outcome['param'])
+
+                    if outcome['type'] == 'folder_pool':
+                        if db_host.get_folder():
+                            outcomes['move_folder'] += db_host.get_folder()
+                        else:
+                            # Find new Pool Folder
+                            folder = poolfolder.get_folder()
+                            if not folder:
+                                raise Exception(f"No Pool Folder left for {hostname}")
+                            folder = self.format_foldername(folder)
+                            db_host.lock_to_folder(folder)
+                            outcomes['move_folder'] += folder
 
                     if outcome['type'] not in outcomes and \
                         outcome['type'] in outcomes_to_return:
@@ -150,20 +168,6 @@ class GetAction(): # pylint: disable=too-few-public-methods
                                 print_debug(self.debug, f"------ {ColorCodes.OKGREEN}Found value{ColorCodes.ENDC}, add folder: '{tag}'")
                                 outcomes['move_folder'] += self.format_foldername(tag)
 
-                    if outcome['type'] == 'tag_as_source_folder':
-                        search_tag = outcome['param']
-                        print_debug(self.debug,
-                                    f"---- tag_as_source_folder matched, search tag '{search_tag}'")
-                        for tag, value in labels.items():
-                            if search_tag == tag:
-                                print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found tag{ColorCodes.ENDC}, add folder with: '{value}'")
-                                outcomes['move_folder'] = self.format_foldername(tag) + outcomes['move_folder']
-
-                    if outcome['type'] == 'source_folder':
-                        print_debug(self.debug,
-                                    f"----- {ColorCodes.OKGREEN}source_folder matched{ColorCodes.ENDC}, add in front '{outcome['param']}' to move_folder")
-                        outcomes['move_folder'] = self.format_foldername(outcome['param']) +  outcomes['move_folder']
-
                     # Cleanup in case not folder rule applies,
                     # we have nothing to return to the plugins
                     if not outcomes['move_folder']:
@@ -177,8 +181,8 @@ class GetAction(): # pylint: disable=too-few-public-methods
         return outcomes
 
 
-    def get_action(self, hostname, labels):
+    def get_action(self, db_host, labels):
         """
         Return next Action for this Host
         """
-        return self._check_rule_match(hostname, labels)
+        return self._check_rule_match(db_host, labels)

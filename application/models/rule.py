@@ -23,8 +23,8 @@ action_outcome_types = [
     ("move_folder", "Move Host to given Folder"),
     ('value_as_folder', "Use Value of given Tag as Foldername"),
     ("tag_as_folder", "Use Tag of given Value as Foldername"),
-    ("source_folder", "Add this Folder as basefolder before the specifed in 'Move host to given Folder'"),
-    ("tag_as_source_folder", "Use Value of given Tag as basefolder"),
+    ("source_folder", "Obsolete: Migrate to 'Move Host to given Folder' Rule"),
+    ("tag_as_source_folder", "Obsolte: Migrate to 'Use Tag of given Value as Foldername' Rule"),
     ("ignore", "Ignore this host"),
     ("folder_pool", "Assign to at first time random folder pool (Host will be locked into this pool)"),
 ]

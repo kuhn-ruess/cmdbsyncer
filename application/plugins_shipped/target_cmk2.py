@@ -11,7 +11,6 @@ from application.helpers.get_account import get_account_by_name
 from application.helpers.get_action import GetAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
-from application.helpers import poolfolder
 from application.helpers.debug import ColorCodes
 
 if app.config.get("DISABLE_SSL_ERRORS"):
@@ -107,37 +106,15 @@ class UpdateCMKv2():
             if host_params.get('custom_labels'):
                 labels.update(host_params['custom_labels'])
 
-            next_actions = self.action_helper.get_action(db_host.hostname, labels)
+            next_actions = self.action_helper.get_action(db_host, labels)
             if 'ignore' in next_actions:
                 continue
             synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id
 
             folder = '/'
-            # Folder Pool
-            if "folder_pool" in next_actions:
-                if db_host.get_folder():
-                    folder = db_host.get_folder()
-                else:
-                    # Find new Pool Folder
-                    folder = poolfolder.get_folder()
-                    if not folder:
-                        db_host.set_export_problem("No Free Folder Pool Seat")
-                        continue
-                    db_host.lock_to_folder(folder)
-
-                if folder not in existing_folders:
-                    self.create_folder(folder)
-                    existing_folders.append(folder)
 
             if 'move_folder' in next_actions:
-                # Cleanup Folder Pool:
-                # If we have a rule, who points the server to an folder,
-                # we clean his seat from this folder
-                if db_host.get_folder():
-                    poolfolder.remove_seat(db_host.get_folder())
-                    db_host.lock_to_folder(False)
-
                 # Get the Folder where we move to
                 folder = next_actions['move_folder']
 
@@ -162,7 +139,8 @@ class UpdateCMKv2():
                     self.create_host(db_host, folder, labels, additional_attributes)
             else:
                 host_etag = headers['ETag']
-                self.update_host(db_host, cmk_host, host_etag, folder, labels, additional_attributes)
+                self.update_host(db_host, cmk_host, host_etag,
+                                 folder, labels, additional_attributes)
 
             # Everthing worked, so reset problems;
             db_host.export_problem = False
