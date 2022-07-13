@@ -65,7 +65,7 @@ class UpdateCMKv2():
                 return True, response.headers
 
             error_whitelist = [
-                'Path already exists',
+                #'Path already exists',
                 'Not Found',
             ]
 
@@ -80,7 +80,7 @@ class UpdateCMKv2():
 
 
     def run(self): #pylint: disable=too-many-locals, too-many-branches
-        """Run Actual Job"""
+        """Run Job"""
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
         synced_hosts = []
 
@@ -102,7 +102,7 @@ class UpdateCMKv2():
         api_hosts = self.request(url, method="GET")
         cmk_hosts = {}
         for host in api_hosts[0]['value']:
-            cmk_hosts[host['title']] = host
+            cmk_hosts[host['id']] = host
 
 
 
@@ -114,7 +114,7 @@ class UpdateCMKv2():
             # Actions
             counter += 1
             process = 100.0 * counter / total
-            print(f"{ColorCodes.OKBLUE} * {ColorCodes.ENDC} {process:3.0f}%  Handle: {db_host.hostname}")
+            print(f"\n{ColorCodes.HEADER}({process:.0f}%) {db_host.hostname}{ColorCodes.ENDC}")
             db_labels = db_host.get_labels()
             labels, extra_actions = self.label_helper.filter_labels(db_labels)
 
@@ -142,7 +142,7 @@ class UpdateCMKv2():
                 self.create_folder(folder)
                 existing_folders.append(folder)
 
-            print(f"{ColorCodes.OKBLUE}  ** {ColorCodes.ENDC} Folder is: {folder}")
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Folder is: {folder}")
             # Check if Host Exists
 
             additional_attributes = {}
@@ -153,7 +153,7 @@ class UpdateCMKv2():
 
             if db_host.hostname not in cmk_hosts:
                 # Create since missing
-                print(f"{ColorCodes.OKCYAN}  *** {ColorCodes.ENDC} Create in CMK")
+                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Need to created in Checkmk")
                 self.create_host(db_host, folder, labels, additional_attributes)
             else:
                 cmk_host = cmk_hosts[db_host.hostname]
@@ -176,14 +176,14 @@ class UpdateCMKv2():
         url = "domain-types/host_config/collections/all"
         api_hosts = self.request(url, method="GET")
         for host_data in api_hosts[0]['value']:
-            host = host_data['title']
+            host = host_data['id']
             host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
                 if host not in synced_hosts:
                     # Delete host
                     url = f"objects/host_config/{host}"
                     self.request(url, method="DELETE")
-                    print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Deleted host {host}")
+                    print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Deleted host {host}")
 
     def _create_folder(self, parent, subfolder):
         """ Helper to create tree of folders """
@@ -238,14 +238,14 @@ class UpdateCMKv2():
             body['attributes'].update(additional_attributes)
 
         self.request(url, method="POST", data=body)
-        print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Created Host {db_host.hostname}")
+        print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Created Host {db_host.hostname}")
 
 
     def get_etag(self, db_host):
         """
         Return ETAG of host
         """
-        print(f"{ColorCodes.OKCYAN}  *** {ColorCodes.ENDC} Read Hostdata CMK")
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Read ETAG in CMK")
         url = f"objects/host_config/{db_host.hostname}"
         cmk_host, headers = self.request(url, "GET")
         return headers['ETag']
@@ -291,7 +291,7 @@ class UpdateCMKv2():
             update_headers = {
                 'if-match': etag,
             }
-            print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Moved Host {db_host.hostname} to {folder}")
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Moved Host to {folder}")
 
         if db_host.need_update():
             # Triggert after Time,
@@ -319,7 +319,7 @@ class UpdateCMKv2():
             self.request(update_url, method="PUT",
                          data=update_body,
                          additional_header=update_headers)
-            print(f"{ColorCodes.WARNING} *** {ColorCodes.ENDC}Update Host {db_host.hostname}")
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Updated Host in Checkmk")
             db_host.set_target_update()
 
 
