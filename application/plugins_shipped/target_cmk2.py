@@ -107,6 +107,7 @@ class UpdateCMKv2():
 
 
         ## Start SYNC of Hosts into CMK
+        print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
         db_objects = Host.objects(available=True)
         total = len(db_objects)
         counter = 0
@@ -182,6 +183,7 @@ class UpdateCMKv2():
 
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
+        print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Check if we need to cleanup hosts")
         for host, host_data in cmk_hosts.items():
             host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
@@ -190,6 +192,7 @@ class UpdateCMKv2():
                     url = f"objects/host_config/{host}"
                     self.request(url, method="DELETE")
                     print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Deleted host {host}")
+        print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Cleanup Done")
 
     def _create_folder(self, parent, subfolder):
         """ Helper to create tree of folders """
