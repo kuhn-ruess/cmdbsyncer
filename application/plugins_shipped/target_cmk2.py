@@ -155,7 +155,17 @@ class UpdateCMKv2():
                 # Create since missing
                 print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Need to created in Checkmk")
                 self.create_host(db_host, folder, labels, additional_attributes)
-            else:
+                # Add Host information to the dict, for later cleanup.
+                # So no need to query all the hosta again
+                cmk_hosts[db_host.hostname] = {'extensions': {
+                                                    'attributes':{
+                                                           'labels': {
+                                                                'cmdb_syncer': self.account_id
+                                                                }
+                                                            }
+                                                    }
+                                                }
+            else :
                 cmk_host = cmk_hosts[db_host.hostname]
                 # Update if needed
                 self.update_host(db_host, cmk_host, folder,
@@ -172,11 +182,7 @@ class UpdateCMKv2():
 
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
-        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}CACHE: Read all hosts from cmk for cleanup")
-        url = "domain-types/host_config/collections/all"
-        api_hosts = self.request(url, method="GET")
-        for host_data in api_hosts[0]['value']:
-            host = host_data['id']
+        for host, host_data in cmk_hosts.items():
             host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
                 if host not in synced_hosts:
@@ -247,7 +253,7 @@ class UpdateCMKv2():
         """
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Read ETAG in CMK")
         url = f"objects/host_config/{db_host.hostname}"
-        cmk_host, headers = self.request(url, "GET")
+        _, headers = self.request(url, "GET")
         return headers['ETag']
 
     def update_host(self, db_host, cmk_host, folder, labels, additional_attributes=None):
