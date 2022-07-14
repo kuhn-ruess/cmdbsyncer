@@ -1,6 +1,6 @@
 
 """
-Maintanance Module
+Maintenance Module
 """
 #pylint: disable=too-many-arguments
 import datetime
@@ -12,10 +12,10 @@ from application.helpers.poolfolder import remove_seat
 
 
 
-@app.cli.command('maintanance')
+@app.cli.command('maintenance')
 @click.argument("days")
-def maintanance(days):
-    """Run Maintanance Tasks"""
+def maintenance(days):
+    """Run maintenance tasks"""
     print(f"{ColorCodes.HEADER} ***** Run Tasks ***** {ColorCodes.ENDC}")
     print(f"{ColorCodes.UNDERLINE}Cleanup Hosts not found anymore{ColorCodes.ENDC}")
     now = datetime.datetime.now()
