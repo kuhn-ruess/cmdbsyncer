@@ -90,10 +90,13 @@ class GetAction(): # pylint: disable=too-few-public-methods
                 print_debug(self.debug,
                             f"--- Rule ANY can match (RuleID: {ColorCodes.OKBLUE}{rule['_id']}{ColorCodes.ENDC})")
                 for condtion in rule['conditions']:
+                    local_hit = False
                     if condtion['match_type'] == 'tag':
-                        rule_hit = self._check_label_match(condtion, labels)
+                        local_hit = self._check_label_match(condtion, labels)
                     else:
-                        rule_hit = self._check_hostname_match(condtion, hostname)
+                        local_hit = self._check_hostname_match(condtion, hostname)
+                    if local_hit:
+                        rule_hit = True
             elif rule['condition_typ'] == 'all':
                 print_debug(self.debug,
                             f"--- Rule ALL must match (RuleID: {ColorCodes.OKBLUE}{rule['_id']}{ColorCodes.ENDC})")
