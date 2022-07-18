@@ -152,7 +152,7 @@ class Host(db.Document):
         self.source_account_name = account_name
 
 
-    @deprecated
+    #@deprecated
     def set_source_update(self):
         """
         Replaced by set_import_sync()
@@ -194,7 +194,7 @@ class Host(db.Document):
         self.last_update_on_target = datetime.datetime.now()
         self.save()
 
-    @deprecated
+    #@deprecated
     def need_sync(self, hours=24):
         """
         Replace by: Need Import Sync
