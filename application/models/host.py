@@ -214,7 +214,12 @@ class Host(db.Document):
         """
         if not self.available:
             return True
-        timediff = datetime.datetime.now() - self.last_import_sync
+
+        last_sync = self.last_import_sync
+        # deprecated
+        if not last_sync:
+            last_sync = self.last_seen
+        timediff = datetime.datetime.now() - last_sync
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False
