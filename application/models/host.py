@@ -37,8 +37,13 @@ class Host(db.Document):
     source_account_name = db.StringField()
 
     available = db.BooleanField()
-    last_seen = db.DateTimeField()
+
+    last_seen = db.DateTimeField() # @deprecated
     last_update_on_target = db.DateTimeField()
+
+    last_import_seen = db.DateTimeField()
+    last_import_sync = db.DateTimeField()
+
 
     folder = db.StringField()
 
@@ -147,12 +152,33 @@ class Host(db.Document):
         self.source_account_name = account_name
 
 
+    #@deprecated
     def set_source_update(self):
         """
-        Called all the time when found on
+        Replaced by set_import_sync()
         """
+        print("Deprecated: Please migrate 'set_source_update() 1to1 to set_import_seen. Also note new set_import_sync whicht you can use to differ in more detail")
         self.available = True
         self.last_seen = datetime.datetime.now()
+        # Prepare Field already for the future:
+        self.last_import_sync = datetime.datetime.now()
+
+    def set_import_sync(self):
+        """
+        Called always when we Update data
+        to this object on import
+        """
+        self.available = True
+        self.last_import_sync = datetime.datetime.now()
+
+    def set_import_seen(self):
+        """
+        Call when seen on the import source,
+        even if no update happens
+        """
+        self.available = True
+        self.last_import_seen = datetime.datetime.now()
+
 
     def set_source_not_found(self):
         """
@@ -164,19 +190,38 @@ class Host(db.Document):
 
     def set_target_update(self):
         """
-        Update last time of host export
+        Mark that host was updated on Target
         """
         self.last_update_on_target = datetime.datetime.now()
         self.save()
 
+    #@deprecated support
     def need_sync(self, hours=24):
+        """
+        Replace by: Need Import Sync
+        just need sync can be missleading
+        """
+        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync")
+        if not self.available:
+            return True
+        timediff = datetime.datetime.now() - self.last_seen
+        if divmod(timediff.total_seconds(), 3600)[0] > hours:
+            return True
+        return False
+
+    def need_import_sync(self, hours=24):
         """
         Check if the host needs to be synced
         from the source
         """
         if not self.available:
             return True
-        timediff = datetime.datetime.now() - self.last_seen
+
+        last_sync = self.last_import_sync
+        # deprecated support
+        if not last_sync:
+            last_sync = self.last_seen
+        timediff = datetime.datetime.now() - last_sync
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False

@@ -53,8 +53,9 @@ class HostModelView(DefaultModelView):
     can_edit = False
     can_view_details = True
     column_details_list = [
-        'hostname', 'folder', 'labels', 'log',
-        'last_seen', 'source_account_name'
+        'hostname', 'folder', 'available', 'force_update', 'labels', 'log',
+        'last_import_seen', 'last_import_sync', 'last_update_on_target', "export_problem",
+        'source_account_name',
     ]
     column_filters = (
        'hostname',
