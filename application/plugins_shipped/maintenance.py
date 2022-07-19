@@ -21,7 +21,7 @@ def maintenance(days):
     now = datetime.datetime.now()
     delta = datetime.timedelta(int(days))
     timedelta = now - delta
-    for host in Host.objects(available=False, last_seen__lte=timedelta):
+    for host in Host.objects(available=False, last_import_seen=timedelta):
         print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Deleted host {host.hostname}")
         if host.get_folder():
             folder = host.get_folder()

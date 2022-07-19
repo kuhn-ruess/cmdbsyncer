@@ -157,6 +157,7 @@ class Host(db.Document):
         """
         Replaced by set_import_sync()
         """
+        print("Deprecated: Please migrate 'set_source_update() 1to1 to set_import_seen. Also note new set_import_sync whicht you can use to differ in more detail")
         self.available = True
         self.last_seen = datetime.datetime.now()
         # Prepare Field already for the future:
@@ -189,17 +190,18 @@ class Host(db.Document):
 
     def set_target_update(self):
         """
-        Update last time of host export
+        Mark that host was updated on Target
         """
         self.last_update_on_target = datetime.datetime.now()
         self.save()
 
-    #@deprecated
+    #@deprecated support
     def need_sync(self, hours=24):
         """
         Replace by: Need Import Sync
         just need sync can be missleading
         """
+        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync")
         if not self.available:
             return True
         timediff = datetime.datetime.now() - self.last_seen
@@ -216,16 +218,13 @@ class Host(db.Document):
             return True
 
         last_sync = self.last_import_sync
-        # deprecated
+        # deprecated support
         if not last_sync:
             last_sync = self.last_seen
         timediff = datetime.datetime.now() - last_sync
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False
-
-
-
 
 
     def need_update(self, hours=24*7):
