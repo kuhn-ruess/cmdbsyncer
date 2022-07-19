@@ -263,15 +263,6 @@ class UpdateCMKv2():
         """
         Update a Existing Host in Checkmk
         """
-        need_update = False
-
-        # compare Labels
-        cmk_labels = cmk_host['extensions']['attributes'].get('labels', {})
-
-        if labels != cmk_labels:
-            need_update = True
-
-
         current_folder = cmk_host['extensions']['folder']
         # Hack slash in front, quick solution before redesign
         if not current_folder.startswith('/'):
@@ -302,14 +293,12 @@ class UpdateCMKv2():
             }
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Moved Host to {folder}")
 
-        if db_host.need_update():
-            # Triggert after Time,
-            # Or if force_update is checked in
-            # the Admin Panel
-            need_update = True
 
-        if need_update:
-            # First reed to get the ETag
+        # compare Labels
+        cmk_labels = cmk_host['extensions']['attributes'].get('labels', {})
+
+        if labels != cmk_labels:
+            # We may already got the Etag by the folder move action
             if not etag:
                 etag = self.get_etag(db_host)
 
