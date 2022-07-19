@@ -128,6 +128,7 @@ class UpdateCMKv2():
 
             next_actions = self.action_helper.get_action(db_host, labels)
             if 'ignore' in next_actions:
+                print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Host ignored by rules")
                 continue
             synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id
