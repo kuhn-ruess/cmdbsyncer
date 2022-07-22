@@ -29,3 +29,16 @@ def maintenance(days):
             print(f"{ColorCodes.WARNING}  *** {ColorCodes.ENDC}Seat in Pool {folder} free now")
         host.delete()
 
+@app.cli.command('delete-all-hosts')
+def delete_all_hosts():
+    """
+    Deletes All hosts from DB
+    """
+    print(f"{ColorCodes.HEADER} ***** Delete Hosts ***** {ColorCodes.ENDC}")
+    answer = input(" - Enter 'y' and hit enter to procceed: ")
+    if answer.lower() in ['y', 'z']:
+        print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Start deletion")
+        for host in Host.objects():
+            host.delete()
+    else:
+        print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")
