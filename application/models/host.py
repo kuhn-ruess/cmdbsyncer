@@ -39,7 +39,9 @@ class Host(db.Document):
     available = db.BooleanField()
 
     last_seen = db.DateTimeField() # @deprecated
-    last_update_on_target = db.DateTimeField()
+    last_update_on_target = db.DateTimeField() # @deprecated
+
+    last_export = db.DateTimeField()
 
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
@@ -188,11 +190,21 @@ class Host(db.Document):
         self.available = False
         self.add_log("Not found on Source anymore")
 
+    #@deprecated support
     def set_target_update(self):
         """
         Mark that host was updated on Target
         """
+        print("Deprecated: Please migrate 'set_target_update() 1to1 to set_export_sync()")
         self.last_update_on_target = datetime.datetime.now()
+        self.last_export = datetime.datetime.now()
+        self.save()
+
+    def set_export_sync(self):
+        """
+        Mark that host was updated on Export Target
+        """
+        self.last_export = datetime.datetime.now()
         self.save()
 
     #@deprecated support
@@ -201,7 +213,7 @@ class Host(db.Document):
         Replace by: Need Import Sync
         just need sync can be missleading
         """
-        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync")
+        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync()")
         if not self.available:
             return True
         timediff = datetime.datetime.now() - self.last_seen
@@ -212,7 +224,7 @@ class Host(db.Document):
     def need_import_sync(self, hours=24):
         """
         Check if the host needs to be synced
-        from the source
+        from the import source
         """
         if not self.available:
             return True
@@ -232,13 +244,18 @@ class Host(db.Document):
         Check if we need to Update this host
         on the target
         """
-        if not self.last_update_on_target:
+        # deprecated support
+        last_export = self.last_export
+        if not last_export:
+            last_export = self.last_update_on_target
+
+        if not last_export:
             return True
         if self.force_update:
             self.force_update = False
             self.save()
             return True
-        timediff = datetime.datetime.now() - self.last_update_on_target
+        timediff = datetime.datetime.now() - self.last_export
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False
