@@ -46,6 +46,9 @@ class Host(db.Document):
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
 
+    last_import_seen = db.DateTimeField()
+    last_import_sync = db.DateTimeField()
+
 
     folder = db.StringField()
 
@@ -200,6 +203,7 @@ class Host(db.Document):
         self.last_export = datetime.datetime.now()
         self.save()
 
+
     def set_export_sync(self):
         """
         Mark that host was updated on Export Target
@@ -213,10 +217,28 @@ class Host(db.Document):
         Replace by: Need Import Sync
         just need sync can be missleading
         """
-        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync()")
+        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync")
         if not self.available:
             return True
         timediff = datetime.datetime.now() - self.last_seen
+        if divmod(timediff.total_seconds(), 3600)[0] > hours:
+            return True
+        return False
+
+    def need_import_sync(self, hours=24):
+        """
+        Check if the host needs to be synced
+        from the source
+        """
+        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync()")
+        if not self.available:
+            return True
+
+        last_sync = self.last_import_sync
+        # deprecated support
+        if not last_sync:
+            last_sync = self.last_seen
+        timediff = datetime.datetime.now() - last_sync
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False
