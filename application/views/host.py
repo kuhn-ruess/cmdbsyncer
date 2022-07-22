@@ -5,9 +5,11 @@ Host Model View
 import re
 from flask_login import current_user
 from flask_admin.actions import action
+from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
+
 from flask import flash
 from flask import Markup
-from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
+
 from application.views.default import DefaultModelView
 from application.models.host import Host
 
@@ -54,7 +56,7 @@ class HostModelView(DefaultModelView):
     can_view_details = True
     column_details_list = [
         'hostname', 'folder', 'available', 'force_update', 'labels', 'log',
-        'last_import_seen', 'last_import_sync', 'last_update_on_target', "export_problem",
+        'last_import_seen', 'last_import_sync', 'last_export', "export_problem",
         'source_account_name',
     ]
     column_filters = (
@@ -75,17 +77,20 @@ class HostModelView(DefaultModelView):
        ),
     )
 
-
+    @staticmethod
     def format_log(v, c, m, p):
         """ Format Log view"""
+        # pylint: disable=invalid-name, unused-argument
         html = "<ul>"
         for entry in m.log:
             html+=f"<li>{entry}</li>"
         html += "</ul>"
         return Markup(html)
 
+    @staticmethod
     def format_labels(v, c, m, p):
         """ Format Log view"""
+        # pylint: disable=invalid-name, unused-argument
         html = "<table>"
         for entry in m.labels:
             html += f"<tr><th>{entry.key}</th><td>{entry.value}</td></tr>"
@@ -122,4 +127,5 @@ class HostModelView(DefaultModelView):
 
     def is_accessible(self):
         """ Overwrite """
+        #pylint: disable=no-self-use
         return current_user.is_authenticated and current_user.has_right('host')

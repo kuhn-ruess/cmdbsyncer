@@ -60,7 +60,7 @@ def example_import(account):
 
         # If the sync complicated, you can use this function
         # to delay the resync for an object to the given time in hours
-        if not host_obj.need_sync(12):
+        if not host_obj.need_import_sync(12):
             continue
 
         # If you wan't you can compare what you get from the Source
@@ -69,7 +69,12 @@ def example_import(account):
             continue
 
         # Tell the System we found this one in our source
-        host_obj.set_source_update()
+        host_obj.set_import_seen()
+        # Advanced, you not only seen the host, you did more time consuming sync
+        host_obj.set_import_sync()
+        #host_obj.need_import_sync() # Use that to check if you want to to that sync
+
+
         # Use host_obj.set_source_not_found() to mark that the host is gone if needed
 
         # For reference we set from which source account we get

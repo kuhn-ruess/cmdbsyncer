@@ -1,8 +1,7 @@
-
 """
 Add Hosts into CMK Version 2 Installations
 """
-#pylint: disable=too-many-arguments, too-many-statements
+#pylint: disable=too-many-arguments, too-many-statements, consider-using-get
 import click
 import requests
 from application import app, log
@@ -75,7 +74,7 @@ class UpdateCMKv2():
                 raise CmkException(response.json()['title'])
             return response.json(), response.headers
         except (ConnectionResetError, requests.exceptions.ProxyError):
-            raise Exception("Cant connect to cmk site")
+            raise Exception("Cant connect to cmk site") # pylint: disable=raise-missing-from
 
 
 
@@ -128,6 +127,7 @@ class UpdateCMKv2():
 
             next_actions = self.action_helper.get_action(db_host, labels)
             if 'ignore' in next_actions:
+                print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Host ignored by rules")
                 continue
             synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id
@@ -174,11 +174,6 @@ class UpdateCMKv2():
 
 
 
-
-
-
-            # Everthing worked, so reset problems;
-            db_host.export_problem = False
             db_host.save()
 
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
@@ -263,15 +258,6 @@ class UpdateCMKv2():
         """
         Update a Existing Host in Checkmk
         """
-        need_update = False
-
-        # compare Labels
-        cmk_labels = cmk_host['extensions']['attributes'].get('labels', {})
-
-        if labels != cmk_labels:
-            need_update = True
-
-
         current_folder = cmk_host['extensions']['folder']
         # Hack slash in front, quick solution before redesign
         if not current_folder.startswith('/'):
@@ -302,14 +288,12 @@ class UpdateCMKv2():
             }
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Moved Host to {folder}")
 
-        if db_host.need_update():
-            # Triggert after Time,
-            # Or if force_update is checked in
-            # the Admin Panel
-            need_update = True
 
-        if need_update:
-            # First reed to get the ETag
+        # compare Labels
+        cmk_labels = cmk_host['extensions']['attributes'].get('labels', {})
+
+        if labels != cmk_labels:
+            # We may already got the Etag by the folder move action
             if not etag:
                 etag = self.get_etag(db_host)
 
@@ -329,7 +313,7 @@ class UpdateCMKv2():
                          data=update_body,
                          additional_header=update_headers)
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Updated Host in Checkmk")
-            db_host.set_target_update()
+            db_host.set_export_sync()
 
 
 @app.cli.command('export_to_cmk-v2')
