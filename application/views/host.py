@@ -48,6 +48,24 @@ class FilterLabelKey(BaseMongoEngineFilter):
     def operation(self):
         return "contains"
 
+def format_log(v, c, m, p):
+    """ Format Log view"""
+    # pylint: disable=invalid-name, unused-argument
+    html = "<ul>"
+    for entry in m.log:
+        html+=f"<li>{entry}</li>"
+    html += "</ul>"
+    return Markup(html)
+
+def format_labels(v, c, m, p):
+    """ Format Log view"""
+    # pylint: disable=invalid-name, unused-argument
+    html = "<table>"
+    for entry in m.labels:
+        html += f"<tr><th>{entry.key}</th><td>{entry.value}</td></tr>"
+    html += "</table>"
+    return Markup(html)
+
 class HostModelView(DefaultModelView):
     """
     Host Model
@@ -77,25 +95,6 @@ class HostModelView(DefaultModelView):
        ),
     )
 
-    @staticmethod
-    def format_log(v, c, m, p):
-        """ Format Log view"""
-        # pylint: disable=invalid-name, unused-argument
-        html = "<ul>"
-        for entry in m.log:
-            html+=f"<li>{entry}</li>"
-        html += "</ul>"
-        return Markup(html)
-
-    @staticmethod
-    def format_labels(v, c, m, p):
-        """ Format Log view"""
-        # pylint: disable=invalid-name, unused-argument
-        html = "<table>"
-        for entry in m.labels:
-            html += f"<tr><th>{entry.key}</th><td>{entry.value}</td></tr>"
-        html += "</table>"
-        return Markup(html)
 
 
     column_formatters = {

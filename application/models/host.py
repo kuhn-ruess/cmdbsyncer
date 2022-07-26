@@ -30,6 +30,7 @@ class Host(db.Document):
     """
     hostname = db.StringField(required=True, unique=True)
     labels = db.ListField(db.EmbeddedDocumentField(Label))
+    invenentory = db.DictField()
 
     force_update = db.BooleanField(default=False)
 
@@ -138,6 +139,13 @@ class Host(db.Document):
         in Dict Format
         """
         return dict({x.key:x.value for x in self.labels})
+
+    def get_inventory(self):
+        """
+        Return Hosts Inventory Data.
+        Used eg. for Ansible
+        """
+        return self.invenentory
 
     def add_log(self, entry):
         """
