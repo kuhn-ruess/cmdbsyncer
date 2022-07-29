@@ -65,6 +65,9 @@ class GetLabel():# pylint: disable=too-few-public-methods
                             if 'replace_slash' in outcome:
                                 label = label.replace('/', '-')
                                 value = value.replace('/', '-')
+                            if 'replace_hyphen' in outcome:
+                                label = label.replace('-', '_')
+                                value = value.replace('-', '_')
                             if 'replace_special' in outcome:
                                 for what, to in [('{','('), ('}', ')'), ('ü', 'ue'), ('&', '')]:
                                     label = label.replace(what, to)
