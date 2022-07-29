@@ -88,6 +88,7 @@ label_outcome_types = [
     ('lower', 'Make label lowercase'),
     ('replace', 'Replace whitespaces with _'),
     ('replace_slash', 'Replace Slahses with / (usefull if using tags/values as folder)'),
+    ('replace_hyphen', 'Replace Hyphens with underscores'),
     ('replace_special', 'Replace chars like { and } which will not work as foldername'),
     ('use_value_as_attribute', 'Use Label Value as Host Attribute. Key needs to be valid'),
 ]
