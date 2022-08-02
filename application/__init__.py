@@ -74,7 +74,7 @@ from application.views.rule import RuleModelView
 from application.models.folder_pool import FolderPool
 from application.views.folder_pool import FolderPoolModelView
 
-admin = Admin(app, name="CMDB Syncer 1.3.2", template_mode='bootstrap4', index_view=IndexView())
+admin = Admin(app, name="CMDB Syncer 1.3.3", template_mode='bootstrap4', index_view=IndexView())
 
 admin.add_view(HostModelView(Host, name="Hosts"))
 
