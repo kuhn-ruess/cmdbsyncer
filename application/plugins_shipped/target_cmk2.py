@@ -262,14 +262,16 @@ class UpdateCMKv2():
         # Hack slash in front, quick solution before redesign
         if not current_folder.startswith('/'):
             current_folder = "/" + current_folder
-        # Check if we really need to move
-        move_folder = folder
-        # Commented out because of Issue #7
-        #if not folder.endswith('/'):
-        #    move_folder = folder + '/'
+
+        # 2022-08-03 Problem with CMK:
+        # Sometimes we have the / at the end,
+        # sometimes not. This should solve this
+        if current_folder.endswith('/'):
+            current_folder = current_folder[:-1]
 
         etag = False
-        if current_folder != move_folder:
+        # Check if we really need to move
+        if current_folder != folder:
             etag = self.get_etag(db_host)
             update_headers = {
                 'if-match': etag
