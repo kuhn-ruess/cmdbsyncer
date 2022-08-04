@@ -21,5 +21,10 @@ class GetAnsibleAction(Action): # pylint: disable=too-few-public-methods
         self.debug = debug
 
     def add_outcomes(self, rule, outcomes):
-        print(f"{rule}, {outcomes}")
+        for outcome in rule['outcome']:
+            if outcome['type'] == "ignore":
+                outcomes['ignore'] = True
+            elif outcome['type'] == 'var':
+                outcomes.setdefault('vars', {})
+                outcomes['vars'][outcome['param']] = outcome['value']
         return outcomes
