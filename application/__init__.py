@@ -13,7 +13,7 @@ from flask_mongoengine import MongoEngine
 from application.modules.log import Log
 
 
-VERSION = '1.3.2'
+VERSION = '1.3.3'
 
 
 app = Flask(__name__)
@@ -71,6 +71,9 @@ from application.views.user import UserView
 from application.models.rule import ActionRule, LabelRule, HostRule
 from application.views.rule import RuleModelView
 
+
+from application.models.ansible_rule import AnsibleRule
+
 from application.models.folder_pool import FolderPool
 from application.views.folder_pool import FolderPoolModelView
 
@@ -81,6 +84,7 @@ admin.add_view(HostModelView(Host, name="Hosts"))
 admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
 admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
 admin.add_view(RuleModelView(ActionRule, name="Action Rules", category="Rules"))
+admin.add_view(RuleModelView(AnsibleRule, name="Ansible Rules", category="Rules"))
 
 admin.add_view(FolderPoolModelView(FolderPool, name="Folder Pools", category="Config"))
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))

@@ -7,7 +7,7 @@ import requests
 from application import app, log
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
-from application.helpers.get_action import GetAction
+from application.helpers.get_cmk_action import GetCmkAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
 from application.helpers.debug import ColorCodes
@@ -33,7 +33,7 @@ class UpdateCMKv2():
         self.config = config
         self.account_id = str(config['_id'])
         self.account_name = config['name']
-        self.action_helper = GetAction()
+        self.action_helper = GetCmkAction()
         self.label_helper = GetLabel()
         self.params_helper = GetHostParams('export')
 

@@ -5,7 +5,7 @@ Just print Matching Hosts
 import pprint
 from application import app
 from application.models.host import Host
-from application.helpers.get_action import GetAction
+from application.helpers.get_cmk_action import GetCmkAction
 from application.helpers.get_label import GetLabel
 
 class PrintMatches():
@@ -17,7 +17,7 @@ class PrintMatches():
         """
         Inital
         """
-        self.action_helper = GetAction()
+        self.action_helper = GetCmkAction()
         self.label_helper = GetLabel()
 
     def run(self):
