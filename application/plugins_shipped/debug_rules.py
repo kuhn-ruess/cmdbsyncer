@@ -7,7 +7,7 @@ from pprint import pprint
 import click
 from application import app
 from application.models.host import Host
-from application.helpers.get_action import GetAction
+from application.helpers.get_cmk_action import GetCmkAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
 from application.helpers.debug import ColorCodes
@@ -19,7 +19,7 @@ from application.helpers.debug import ColorCodes
 def get_cmk_data(hostname):
     """Show Rule Engine Outcome for given Host"""
     print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
-    action_helper = GetAction(debug=True)
+    action_helper = GetCmkAction(debug=True)
     label_helper = GetLabel()
     params_helper_export = GetHostParams('export')
     params_helper_import = GetHostParams('import')
