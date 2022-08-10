@@ -57,12 +57,12 @@ class Action(): # pylint: disable=too-few-public-methods
         #pylint: disable=too-many-branches
         print_debug(self.debug, "Debug Rules for "\
                                 f"{ColorCodes.UNDERLINE}{hostname}{ColorCodes.ENDC}")
-        rule_hit = False
         outcomes = {}
         for rule in self.rules:
+            rule_hit = False
             if rule['condition_typ'] == 'any':
                 print_debug(self.debug,
-                            "--- Rule ANY can match "\
+                            "- Rule Type: ANY can match "\
                            f"(RuleID: {ColorCodes.OKBLUE}{rule['_id']}{ColorCodes.ENDC})")
                 for condtion in rule['conditions']:
                     local_hit = False
@@ -74,7 +74,7 @@ class Action(): # pylint: disable=too-few-public-methods
                         rule_hit = True
             elif rule['condition_typ'] == 'all':
                 print_debug(self.debug,
-                            "--- Rule ALL must match "\
+                            "- Rule Type: ALL must match "\
                             f"(RuleID: {ColorCodes.OKBLUE}{rule['_id']}{ColorCodes.ENDC})")
                 negativ_match = False
                 for condtion in rule['conditions']:
@@ -88,10 +88,12 @@ class Action(): # pylint: disable=too-few-public-methods
                     rule_hit = True
             elif rule['condition_typ'] == 'anyway':
                 print_debug(self.debug,
-                            "--- Rule HIT cause 'Any condition can match' "\
+                            "- Rule Typ: Match without condition' "\
                             f"(RuleID: {ColorCodes.OKBLUE}{rule['_id']}{ColorCodes.ENDC})")
                 rule_hit = True
             if rule_hit:
+                print_debug(self.debug,
+                            f"-- {ColorCodes.OKCYAN}Rule Hit{ColorCodes.ENDC}")
                 outcomes = self.add_outcomes(rule, outcomes)
 
             # If rule has matched, and option is set, we are done
