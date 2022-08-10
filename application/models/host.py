@@ -30,7 +30,7 @@ class Host(db.Document):
     """
     hostname = db.StringField(required=True, unique=True)
     labels = db.ListField(db.EmbeddedDocumentField(Label))
-    invenentory = db.DictField()
+    inventory = db.DictField()
 
     force_update = db.BooleanField(default=False)
 
@@ -38,9 +38,6 @@ class Host(db.Document):
     source_account_name = db.StringField()
 
     available = db.BooleanField()
-
-    last_seen = db.DateTimeField() # @deprecated
-    last_update_on_target = db.DateTimeField() # @deprecated
 
     last_export = db.DateTimeField()
 
@@ -64,7 +61,7 @@ class Host(db.Document):
 
 
     @staticmethod
-    def get_host(hostname):
+    def get_host(hostname, create=True):
         """
         Return existing Host or
         create a object and return it
@@ -74,9 +71,11 @@ class Host(db.Document):
         except DoesNotExist:
             pass
 
-        new_host = Host()
-        new_host.hostname = hostname
-        return new_host
+        if create:
+            new_host = Host()
+            new_host.hostname = hostname
+            return new_host
+        return False
 
 
     def set_export_problem(self, message):
@@ -145,7 +144,7 @@ class Host(db.Document):
         Return Hosts Inventory Data.
         Used eg. for Ansible
         """
-        return self.invenentory
+        return self.inventory
 
     def add_log(self, entry):
         """
@@ -164,17 +163,6 @@ class Host(db.Document):
         self.source_account_id = account_id
         self.source_account_name = account_name
 
-
-    #@deprecated
-    def set_source_update(self):
-        """
-        Replaced by set_import_sync()
-        """
-        print("Deprecated: Please migrate 'set_source_update() 1to1 to set_import_seen. Also note new set_import_sync whicht you can use to differ in more detail")
-        self.available = True
-        self.last_seen = datetime.datetime.now()
-        # Prepare Field already for the future:
-        self.last_import_sync = datetime.datetime.now()
 
     def set_import_sync(self):
         """
@@ -201,55 +189,12 @@ class Host(db.Document):
         self.available = False
         self.add_log("Not found on Source anymore")
 
-    #@deprecated support
-    def set_target_update(self):
-        """
-        Mark that host was updated on Target
-        """
-        print("Deprecated: Please migrate 'set_target_update() 1to1 to set_export_sync()")
-        self.last_update_on_target = datetime.datetime.now()
-        self.last_export = datetime.datetime.now()
-        self.save()
-
-
     def set_export_sync(self):
         """
         Mark that host was updated on Export Target
         """
         self.last_export = datetime.datetime.now()
         self.save()
-
-    #@deprecated support
-    def need_sync(self, hours=24):
-        """
-        Replace by: Need Import Sync
-        just need sync can be missleading
-        """
-        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync")
-        if not self.available:
-            return True
-        timediff = datetime.datetime.now() - self.last_seen
-        if divmod(timediff.total_seconds(), 3600)[0] > hours:
-            return True
-        return False
-
-    def need_import_sync(self, hours=24):
-        """
-        Check if the host needs to be synced
-        from the source
-        """
-        print("Deprecated: Please migrate 'need_sync() 1to1 to need_import_sync()")
-        if not self.available:
-            return True
-
-        last_sync = self.last_import_sync
-        # deprecated support
-        if not last_sync:
-            last_sync = self.last_seen
-        timediff = datetime.datetime.now() - last_sync
-        if divmod(timediff.total_seconds(), 3600)[0] > hours:
-            return True
-        return False
 
     def need_import_sync(self, hours=24):
         """
@@ -260,9 +205,6 @@ class Host(db.Document):
             return True
 
         last_sync = self.last_import_sync
-        # deprecated support
-        if not last_sync:
-            last_sync = self.last_seen
         timediff = datetime.datetime.now() - last_sync
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
@@ -274,11 +216,7 @@ class Host(db.Document):
         Check if we need to Update this host
         on the target
         """
-        # deprecated support
         last_export = self.last_export
-        if not last_export:
-            last_export = self.last_update_on_target
-
         if not last_export:
             return True
         if self.force_update:

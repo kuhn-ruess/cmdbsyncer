@@ -58,11 +58,20 @@ def format_log(v, c, m, p):
     return Markup(html)
 
 def format_labels(v, c, m, p):
-    """ Format Log view"""
+    """ Format Labels view"""
     # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for entry in m.labels:
         html += f"<tr><th>{entry.key}</th><td>{entry.value}</td></tr>"
+    html += "</table>"
+    return Markup(html)
+
+def format_inventory(v, c, m, p):
+    """ Format Inventory view"""
+    # pylint: disable=invalid-name, unused-argument
+    html = "<table>"
+    for key, value in m.inventory.items():
+        html += f"<tr><th>{key}</th><td>{value}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -73,7 +82,7 @@ class HostModelView(DefaultModelView):
     can_edit = False
     can_view_details = True
     column_details_list = [
-        'hostname', 'folder', 'available', 'force_update', 'labels', 'log',
+        'hostname', 'folder', 'available', 'force_update', 'labels', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'last_export', "export_problem",
         'source_account_name',
     ]
@@ -100,11 +109,14 @@ class HostModelView(DefaultModelView):
     column_formatters = {
         'log': format_log,
         'labels': format_labels,
+        'inventory': format_inventory,
     }
 
     column_exclude_list = (
         'source_account_id',
-        'log'
+        'inventory',
+        'log',
+        'folder',
     )
 
     column_editable_list = (

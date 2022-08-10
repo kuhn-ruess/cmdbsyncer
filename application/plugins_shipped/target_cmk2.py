@@ -3,80 +3,32 @@ Add Hosts into CMK Version 2 Installations
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get
 import click
-import requests
-from application import app, log
+from application import app
 from application.models.host import Host
+from application.modules.cmk2 import CMK2, CmkException
 from application.helpers.get_account import get_account_by_name
 from application.helpers.get_cmk_action import GetCmkAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
 from application.helpers.debug import ColorCodes
 
-if app.config.get("DISABLE_SSL_ERRORS"):
-    from urllib3.exceptions import InsecureRequestWarning
-    from urllib3 import disable_warnings
-    disable_warnings(InsecureRequestWarning)
 
-class CmkException(Exception):
-    """Cmk Errors"""
+class UpdateCMKv2(CMK2):
+    """
+    Update Functions
+    """
 
-class UpdateCMKv2():
-    """
-    Get Data from CMK
-    """
 
     def __init__(self, config):
         """
         Inital
         """
-        self.log = log
-        self.config = config
+        super().__init__(config)
         self.account_id = str(config['_id'])
-        self.account_name = config['name']
         self.action_helper = GetCmkAction()
+        self.account_name = config['name']
         self.label_helper = GetLabel()
         self.params_helper = GetHostParams('export')
-
-    def request(self, params, method='GET', data=None, additional_header=None):
-        """
-        Handle Request to CMK
-        """
-        address = self.config['address']
-        username = self.config['username']
-        password = self.config['password']
-        url = f'{address}/check_mk/api/1.0/{params}'
-        headers = {
-            'Authorization': f"Bearer {username} {password}"
-        }
-        if additional_header:
-            headers.update(additional_header)
-        try:
-            method = method.lower()
-            if method == 'get':
-                response = requests.get(url, headers=headers, verify=False)
-            elif method == 'post':
-                response = requests.post(url, json=data, headers=headers, verify=False)
-            elif method == 'put':
-                response = requests.put(url, json=data, headers=headers, verify=False)
-            elif method == 'delete':
-                response = requests.delete(url, headers=headers, verify=False)
-                # Checkmk gives no json response here, so we directly return
-                return True, response.headers
-
-            error_whitelist = [
-                #'Path already exists',
-                'Not Found',
-            ]
-
-            if response.status_code != 200:
-                if response.json()['title'] not in error_whitelist:
-                    print(response.text)
-                raise CmkException(response.json()['title'])
-            return response.json(), response.headers
-        except (ConnectionResetError, requests.exceptions.ProxyError):
-            raise Exception("Cant connect to cmk site") # pylint: disable=raise-missing-from
-
-
 
     def run(self): #pylint: disable=too-many-locals, too-many-branches
         """Run Job"""
