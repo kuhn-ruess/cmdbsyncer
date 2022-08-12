@@ -53,6 +53,8 @@ class ActionCondition(db.EmbeddedDocument):
     value_match = db.StringField(choices=condition_types)
     value = db.StringField()
     value_match_negate = db.BooleanField()
+
+
     meta = {
         'strict': False,
     }
@@ -72,7 +74,11 @@ class ActionRule(db.Document):
     name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(ActionCondition))
+    render_conditions = db.StringField()
+
     outcome = db.ListField(db.EmbeddedDocumentField(ActionOutcome))
+    render_outcome = db.StringField()
+
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     sort_field = db.IntField()

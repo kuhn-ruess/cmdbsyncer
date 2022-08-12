@@ -56,7 +56,10 @@ class AnsibleRule(db.Document):
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(AnsibleCondition))
+    render_conditions = db.StringField()
     outcome = db.ListField(db.EmbeddedDocumentField(AnsibleOutcome))
+    render_outcome = db.StringField()
+
     last_match = db.BooleanField(default=False)
 
 
