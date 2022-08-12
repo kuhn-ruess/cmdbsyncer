@@ -7,7 +7,7 @@ from markupsafe import Markup
 
 
 def _render_custom_data(_view, _context, model, name):
-    html = "<table>"
+    html = "<table width=100%>"
     for entry in model.custom_fields:
         html += f"<tr><td>{entry.name}</td><td>{entry.value}</td></tr>"
     html += "</table>"
