@@ -76,7 +76,7 @@ class RuleModelView(DefaultModelView):
         'render_conditions': _render_conditions,
     }
 
-    form_overwrites = {
+    form_overrides = {
         'render_outcome': HiddenField,
         'render_conditions': HiddenField,
     }

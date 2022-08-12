@@ -96,11 +96,11 @@ class Action(): # pylint: disable=too-few-public-methods
                             f"-- {ColorCodes.OKCYAN}Rule Hit{ColorCodes.ENDC}")
                 outcomes = self.add_outcomes(rule, outcomes)
 
-            # If rule has matched, and option is set, we are done
-            if rule['last_match']:
-                print_debug(self.debug, f"--- {ColorCodes.FAIL}Rule id "\
-                                         "{rule['_id']} was last_match{ColorCodes.ENDC}")
-                break
+                # If rule has matched, and option is set, we are done
+                if rule['last_match']:
+                    print_debug(self.debug, f"--- {ColorCodes.FAIL}Rule id "\
+                                             f"{rule['_id']} was last_match{ColorCodes.ENDC}")
+                    break
 
         return outcomes
 
