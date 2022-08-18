@@ -4,6 +4,7 @@ Host Model View
 # pylint: disable=too-few-public-methods
 import re
 from flask_login import current_user
+from flask_admin.model.template import LinkRowAction
 from flask_admin.actions import action
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 
@@ -122,6 +123,8 @@ class HostModelView(DefaultModelView):
     column_editable_list = (
         'force_update',
     )
+
+    #column_extra_row_actions = [LinkRowAction('fa fa-heartbeat', '/debug_rules?hostid={row_id}')]
 
 
     @action('force_update', 'Force Update')
