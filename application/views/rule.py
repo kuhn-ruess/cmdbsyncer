@@ -14,7 +14,7 @@ def _render_outcome(_view, _context, model, name):
             value = entry.param
             if hasattr(entry, 'value'):
                 value +=f":{entry.value}"
-        html += f"<tr><td>{idx}</td><td>{entry.type}</td><td>{value}</td></tr>"
+        html += f"<tr><td>{idx}</td><td>{entry.type}</td><td><b>{value}</b></td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -22,22 +22,22 @@ def _render_conditions(_view, _context, model, name):
     html = "<table width=100%>"
     for idx, entry in enumerate(model.conditions):
         if entry.match_type == 'host':
-            html += f"<tr><td>{idx} Host</td><td>{entry.hostname_match}</td>"\
-                    f"<td>{entry.hostname}</td><td>{entry.hostname_match_negate}</td></tr>"
+            html += f"<tr><td>{idx}</td> <td>Host</td><td>{entry.hostname_match}</td>"\
+                    f"<td><b>{entry.hostname}</b></td><td>Negate: <b>{entry.hostname_match_negate}</b></td></tr>"
         else:
-            html += f"<tr><td>{idx} Label</td><td colspan=3>"\
-                "<table>"\
+            html += f"<tr><td>{idx}</td> <td>Label</td><td>"\
+                "<table width=100%>"\
                 "<tr>"\
-                "<td>Tag</td>"\
-                f"<td><b>{entry.tag_match}</b></td>"\
-                f"<td>{entry.tag}</td>"\
-                f"<td><b>{entry.tag_match_negate}</b></td>"\
+                "<td>Key</td>"\
+                f"<td>{entry.tag_match}</td>"\
+                f"<td><b>{entry.tag}</b></td>"\
+                f"<td>Negate: <b>{entry.tag_match_negate}</b></td>"\
                 "</tr>"\
                 "<tr>"\
                 "<td>Value</td>"\
-                f"<td><b>{entry.value_match}</b></td>"\
-                f"<td>{entry.value}</td>"\
-                f"<td><b>{entry.value_match_negate}</b></td>"\
+                f"<td>{entry.value_match}</td>"\
+                f"<td><b>{entry.value}</b></td>"\
+                f"<td>Negate: <b>{entry.value_match_negate}</b></td>"\
                 "</tr>"\
                 "</table>"\
                 "</td></tr>"

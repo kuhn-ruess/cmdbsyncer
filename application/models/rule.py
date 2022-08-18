@@ -14,7 +14,7 @@ rule_types = [
 condition_types = [
     ('equal', "String Equal"),
     ('in', "String Contains"),
-    ('in_list', "In list (commas)"),
+    ('in_list', "String in list (comma seperated)"),
     ('ewith', "String Endswith"),
     ('swith', "String Startswith"),
     ('ignore', "Match All"),
