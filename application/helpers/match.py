@@ -18,6 +18,9 @@ def match(value, needle, condition, negate=False):
         elif condition == 'in':
             if needle not in value:
                 return True
+        elif condition == 'in_list':
+            if needle not in [x.strip() for x in value.split(',')]:
+                return True
         elif condition == 'swith':
             if not value.startswith(needle):
                 return True
@@ -25,11 +28,15 @@ def match(value, needle, condition, negate=False):
             if not value.endswith(needle):
                 return True
         return False
+
     if condition == 'equal':
         if value == needle:
             return True
     elif condition == 'in':
         if needle in value:
+            return True
+    elif condition == 'in_list':
+        if needle in [x.strip() for x in value.split(',')]:
             return True
     elif condition == 'swith':
         if value.startswith(needle):
