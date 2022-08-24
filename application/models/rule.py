@@ -119,6 +119,7 @@ class LabelRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     conditions = db.ListField(db.EmbeddedDocumentField(LabelCondition))
+    render_label_conditions = db.StringField()
     outcome = db.ListField(db.StringField(choices=label_outcome_types))
     enabled = db.BooleanField()
     sort_field = db.IntField()
@@ -152,7 +153,9 @@ class HostRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     conditions = db.ListField(db.EmbeddedDocumentField(HostCondition))
+    render_host_conditions = db.StringField()
     params = db.ListField(db.EmbeddedDocumentField(HostParams))
+    render_host_params = db.StringField()
     enabled = db.BooleanField()
     target = db.StringField(choices=[('import', 'Import'),('export', 'Export')])
     sort_field = db.IntField()
