@@ -12,13 +12,13 @@ rule_types = [
 ]
 
 condition_types = [
-    ('equal', "String Equal"),
-    ('in', "String Contains"),
-    ('in_list', "String in list (comma seperated)"),
-    ('ewith', "String Endswith"),
-    ('swith', "String Startswith"),
+    ('equal', "String Equal (x == y)"),
+    ('in', "String Contains (in)"),
+    ('in_list', "String in list (comma seperated) (x in [y,y,y])"),
+    ('ewith', "String Endswith (x.endswith(y)"),
+    ('swith', "String Startswith (x.startswith(y)"),
     ('regex', "Regex Match (can cause performance problems)"),
-    ('ignore', "Match All"),
+    ('ignore', "Match All (*)"),
 ]
 
 action_outcome_types = [
