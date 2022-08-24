@@ -17,6 +17,7 @@ condition_types = [
     ('in_list', "String in list (comma seperated)"),
     ('ewith', "String Endswith"),
     ('swith', "String Startswith"),
+    ('regex', "Regex Match (can cause performance problems)"),
     ('ignore', "Match All"),
 ]
 

@@ -2,6 +2,7 @@
 """
 Helper To match condtions
 """
+import re
 
 
 def match(value, needle, condition, negate=False):
@@ -19,7 +20,7 @@ def match(value, needle, condition, negate=False):
             if needle not in value:
                 return True
         elif condition == 'in_list':
-            if needle not in [x.strip() for x in value.split(',')]:
+            if value not in [x.strip() for x in needle.split(',')]:
                 return True
         elif condition == 'swith':
             if not value.startswith(needle):
@@ -27,6 +28,11 @@ def match(value, needle, condition, negate=False):
         elif condition == 'ewith':
             if not value.endswith(needle):
                 return True
+        elif condition == 'regex':
+            pattern = re.compile(needle) #@TODO Cache
+            if not pattern.match(value):
+                return True
+
         return False
 
     if condition == 'equal':
@@ -36,12 +42,16 @@ def match(value, needle, condition, negate=False):
         if needle in value:
             return True
     elif condition == 'in_list':
-        if needle in [x.strip() for x in value.split(',')]:
+        if value in [x.strip() for x in needle.split(',')]:
             return True
     elif condition == 'swith':
         if value.startswith(needle):
             return True
     elif condition == 'ewith':
         if value.endswith(needle):
+            return True
+    elif condition == 'regex':
+        pattern = re.compile(needle) #@TODO Cache
+        if pattern.match(value):
             return True
     return False
