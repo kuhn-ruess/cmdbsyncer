@@ -82,6 +82,8 @@ class HostModelView(DefaultModelView):
     """
     can_edit = False
     can_view_details = True
+
+
     column_details_list = [
         'hostname', 'folder', 'available', 'force_update', 'labels', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'last_export', "export_problem",
@@ -104,6 +106,10 @@ class HostModelView(DefaultModelView):
         "Label Value"
        ),
     )
+
+    page_size = 25
+    can_set_page_size = True
+
 
 
 
