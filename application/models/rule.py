@@ -32,7 +32,7 @@ action_outcome_types = [
 
 host_params_types = [
     ('ignore_hosts', "Ignore matching Hosts"),
-    ('add_custom_label', "Add Custom Label (use name and value)"),
+    ('add_custom_label', "Add Custom Label"),
 ]
 
 
@@ -99,12 +99,13 @@ label_outcome_types = [
     ('use_value_as_attribute', 'Use Label Value as Host Attribute. Key needs to be valid'),
 ]
 
+label_choices =[('label_name', 'Label Name'), ('label_value', 'Label Value')]
+
 class LabelCondition(db.EmbeddedDocument):
     """
     Condition
     """
-    match_on = db.StringField(choices=[('label_name', 'Label Name'),
-                                       ('label_value', 'Label Value')])
+    match_on = db.StringField(choices=label_choices)
     match = db.StringField(choices=condition_types)
     value = db.StringField(required=True)
     match_negate = db.BooleanField()

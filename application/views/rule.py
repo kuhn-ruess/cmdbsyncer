@@ -3,10 +3,29 @@ Rule Model View
 """
 from wtforms import HiddenField
 from flask_login import current_user
-from application.views.default import DefaultModelView
 from markupsafe import Markup
+from application.views.default import DefaultModelView
+from application.models.rule import label_choices, label_outcome_types, \
+                                    host_params_types, action_outcome_types
+from application.models.ansible_rule import ansible_outcome_types
 
-def _render_outcome(_view, _context, model, name):
+condition_types={
+    'equal': "is equal",
+    'in': "contains",
+    'in_list': "found in list",
+    'ewith': "endswith",
+    'swith': "startswith",
+    'regex': "regex match",
+    'ignore': "always match",
+}
+
+action_outcome_types = dict(action_outcome_types)
+action_outcome_types.update(dict(ansible_outcome_types))
+
+def _render_outcome(_view, _context, model, _name):
+    """
+    Render General outcomes
+    """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcome):
         value = ""
@@ -14,22 +33,35 @@ def _render_outcome(_view, _context, model, name):
             value = entry.param
             if hasattr(entry, 'value'):
                 value +=f":{entry.value}"
-        html += f"<tr><td>{idx}</td><td>{entry.type}</td><td><b>{value}</b></td></tr>"
+        html += f"<tr><td>{idx}</td><td>{action_outcome_types[entry.type]}</td>"\
+                f"<td><b>{value}</b></td></tr>"
     html += "</table>"
     return Markup(html)
 
-def _render_host_conditions(_view, _context, model, name):
+def _render_host_conditions(_view, _context, model, _name):
+    """
+    Condition for Host Params
+    """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.conditions):
-        html += f"<tr><td>{idx}</td> <td>{entry.match}</td>"\
-                f"<td><b>{entry.hostname}</b></td><td>Negate: <b>{entry.match_negate}</b></td></tr>"
+        html += f"<tr><td>{idx}</td>"\
+                f"<td><b>Hostname</b></td><td>{condition_types[entry.match]}</td>"\
+                f"<td><b>{entry.hostname}</b></td><td>Negate:<b>{entry.match_negate}</b></td></tr>"
     html += "</table>"
     return Markup(html)
 
-def _render_label_conditions(_view, _context, model, name):
+
+label_choices = dict(label_choices)
+
+def _render_label_conditions(_view, _context, model, _name):
+    """
+    Render all Condtions who based on labels only
+    """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.conditions):
         html += "<tr>"\
+                f"<td>{idx}</td>"\
+                f"<td><b>{label_choices[entry.match_on]}</b></td>"\
                 f"<td>{entry.match}</td>"\
                 f"<td><b>{entry.value}</b></td>"\
                 f"<td>Negate: <b>{entry.match_negate}</b></td>"\
@@ -37,32 +69,54 @@ def _render_label_conditions(_view, _context, model, name):
     html += "</table>"
     return Markup(html)
 
-def _render_host_params(_view, _context, model, name):
+
+label_outcome_types = dict(label_outcome_types)
+
+def _render_label_outcomes(_view, _context, model, _name):
+    """
+    Render Outcomes for label rule
+    """
+    html = "<table width=100%>"
+    for idx, entry in enumerate(model.outcome):
+        html += f"<tr><td>{idx}</td> <td>{label_outcome_types[entry]}</td></tr>"
+    html += "</table>"
+    return Markup(html)
+
+host_params_types = dict(host_params_types)
+def _render_host_params(_view, _context, model, _name):
+    """
+    Render Params of host
+    """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.params):
-        html += f"<tr><td>{idx}</td> <td>{entry.type}</td>"\
+        html += f"<tr><td>{idx}</td> <td>{host_params_types[entry.type]}</td>"\
                 f"<td><b>{entry.name}</b></td><td><b>{entry.value}</b></td></tr>"
     html += "</table>"
     return Markup(html)
 
-def _render_conditions(_view, _context, model, name):
+def _render_conditions(_view, _context, model, _name):
+    """
+    Render full condition set which contains host or labels
+    """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.conditions):
         if entry.match_type == 'host':
-            html += f"<tr><td>{idx}</td> <td>Host</td><td>{entry.hostname_match}</td>"\
-                    f"<td><b>{entry.hostname}</b></td><td>Negate: <b>{entry.hostname_match_negate}</b></td></tr>"
+            html += f"<tr><td>{idx}</td> <td><b>Hostname</b></td>"\
+                    f"<td>{condition_types[entry.hostname_match]}</td>"\
+                    f"<td><b>{entry.hostname}</b></td>"\
+                    f"<td>Negate: <b>{entry.hostname_match_negate}</b></td></tr>"
         else:
-            html += f"<tr><td>{idx}</td> <td>Label</td><td>"\
+            html += f"<tr><td>{idx}</td><td><b>Label</b></td><td>"\
                 "<table width=100%>"\
                 "<tr>"\
-                "<td>Key</td>"\
-                f"<td>{entry.tag_match}</td>"\
+                "<td><b>Key</b></td>"\
+                f"<td>{condition_types[entry.tag_match]}</td>"\
                 f"<td><b>{entry.tag}</b></td>"\
                 f"<td>Negate: <b>{entry.tag_match_negate}</b></td>"\
                 "</tr>"\
                 "<tr>"\
-                "<td>Value</td>"\
-                f"<td>{entry.value_match}</td>"\
+                "<td><b>Value</b></td>"\
+                f"<td>{condition_types[entry.value_match]}</td>"\
                 f"<td><b>{entry.value}</b></td>"\
                 f"<td>Negate: <b>{entry.value_match_negate}</b></td>"\
                 "</tr>"\
@@ -71,6 +125,8 @@ def _render_conditions(_view, _context, model, name):
     html += "</table>"
     return Markup(html)
 
+
+#pylint: disable=too-few-public-methods, no-self-use
 class RuleModelView(DefaultModelView):
     """
     Rule Model
@@ -104,6 +160,7 @@ class RuleModelView(DefaultModelView):
         'render_host_conditions': _render_host_conditions,
         'render_label_conditions': _render_label_conditions,
         'render_host_params': _render_host_params,
+        'outcome': _render_label_outcomes,
     }
 
     form_overrides = {

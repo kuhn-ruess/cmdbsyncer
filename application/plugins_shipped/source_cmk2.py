@@ -6,6 +6,7 @@ import click
 import requests
 from mongoengine.errors import DoesNotExist
 from application import app, log
+from application.plugins_shipped.target_cmk2 import cli_cmk
 from application.models.host import Host, HostError
 from application.helpers.get_account import get_account_by_name
 
@@ -82,7 +83,7 @@ class DataGeter():
                 host.save()
 
 
-@app.cli.command('import_cmk2')
+@cli_cmk.command('import_v2')
 @click.argument("account")
 def get_cmk_data(account):
     """Get All hosts from a CMK 2.x Installation and add them to local db"""
