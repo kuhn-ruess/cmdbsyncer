@@ -2,7 +2,9 @@
 Add Hosts into CMK Version 2 Installations
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get
+from pprint import pprint
 import click
+from mongoengine.errors import DoesNotExist
 from application import app
 from application.models.host import Host
 from application.modules.cmk2 import CMK2, CmkException
@@ -270,7 +272,7 @@ class UpdateCMKv2(CMK2):
             db_host.set_export_sync()
 
 
-@app.cli.command('export_to_cmk-v2')
+@app.cli.command('cmk_hosts_export')
 @click.argument("account")
 def get_cmk_data(account):
     """Add hosts to a CMK 2.x Insallation"""
@@ -283,3 +285,74 @@ def get_cmk_data(account):
             print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+
+@app.cli.command('cmk_debug_host')
+@click.argument("hostname")
+def debug_cmk_rules(hostname):
+    """Show Rule Engine Outcome for given Host"""
+    print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
+    action_helper = GetCmkAction(debug=True)
+    label_helper = GetLabel()
+    params_helper_export = GetHostParams('export')
+    params_helper_import = GetHostParams('import')
+
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        print("Host not found")
+        return
+    db_labels = db_host.get_labels()
+    labels, extra_actions = label_helper.filter_labels(db_labels)
+    params_export = params_helper_export.get_params(hostname)
+    if params_export.get('custom_labels'):
+        labels.update(params_export['custom_labels'])
+    params_import = params_helper_import.get_params(hostname)
+    actions = action_helper.get_action(db_host, labels)
+
+    print()
+    print(f"{ColorCodes.HEADER} ***** Final Outcomes ***** {ColorCodes.ENDC}")
+    print(f"{ColorCodes.UNDERLINE} Labels in DB {ColorCodes.ENDC}")
+    pprint(db_labels)
+    print(f"{ColorCodes.UNDERLINE}Labels after Filter {ColorCodes.ENDC}")
+    pprint(labels)
+    print(f"{ColorCodes.UNDERLINE}Extra Actions for {db_host.hostname} {ColorCodes.ENDC}")
+    print(extra_actions)
+    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Export {ColorCodes.ENDC}")
+    pprint(params_export)
+    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Import {ColorCodes.ENDC}")
+    pprint(params_import)
+    print(f"{ColorCodes.UNDERLINE}Actions based on Action Rules {ColorCodes.ENDC}")
+    pprint(actions)
+
+class PrintMatches():
+    """
+    Print Mataches
+    """
+
+    def __init__(self):
+        """
+        Inital
+        """
+        self.action_helper = GetCmkAction()
+        self.label_helper = GetLabel()
+
+    def run(self):
+        """Run Actual Job"""
+        for db_host in Host.objects():
+            db_labels = db_host.get_labels()
+            applied_labels, extra_actions = self.label_helper.filter_labels(db_labels)
+            next_actions = self.action_helper.get_action(db_host, applied_labels)
+            if not next_actions or 'ignore' in next_actions:
+                continue
+            print(f'Next Action: {next_actions}')
+            print(f"Extra Actions for {db_host.hostname}")
+            print(extra_actions)
+            print(f"Labels for {db_host.hostname}")
+            pprint.pprint(applied_labels)
+
+
+@app.cli.command('cmk_debug_print_all')
+def get_cmk_data():
+    """Print List of all Hosts and their Labels"""
+    job = PrintMatches()
+    job.run()
