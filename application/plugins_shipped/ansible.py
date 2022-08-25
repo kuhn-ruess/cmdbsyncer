@@ -6,7 +6,7 @@ Ansible Inventory Modul
 import json
 from pprint import pprint
 import click
-
+from mongoengine.errors import DoesNotExist
 
 from application import app
 from application.models.host import Host
@@ -16,8 +16,9 @@ from application.helpers.get_label import GetLabel
 from application.helpers.get_account import get_account_by_name
 from application.helpers.debug import ColorCodes
 
-
-from mongoengine.errors import DoesNotExist
+@app.cli.group(name='ansible')
+def cli_ansible():
+    """Ansible related commands"""
 
 def get_rule_helper():
     """
@@ -27,11 +28,11 @@ def get_rule_helper():
     return helper
 
 
-@app.cli.command('cmk_hosts_inventory')
+@cli_ansible.command('cmk_hosts_inventory')
 @click.argument('account')
 def run_cmk2_inventory(account):
     """
-    Run Inventory on checkmk to query information like sitenames for hosts
+    Query CMK with Version  2.1p9 for Inventory Data
     """
     inventory_target = [
         'site', 'inventory_failed','is_offline','tag_agent',
@@ -63,15 +64,19 @@ def run_cmk2_inventory(account):
 
 
 
-@app.cli.command('ansible_debug_host')
+@cli_ansible.command('debug_host')
 @click.argument("host")
 def debug_ansible_rules(host):
     """
-    Debug Ansible Rules for Host
+    Print matching rules and Inventory Outcome for Host
     """
     action_helper = GetAnsibleAction(debug=True)
     label_helper = GetLabel()
-    db_host = Host.objects.get(hostname=host)
+    try:
+        db_host = Host.objects.get(hostname=host)
+    except DoesNotExist:
+        print("Host not found")
+        return
     labels, _ = label_helper.filter_labels(db_host.get_labels())
     ansible_rules = action_helper.get_action(db_host, labels)
     inventory = {}
@@ -92,7 +97,7 @@ def debug_ansible_rules(host):
 
 
 
-@app.cli.command('ansible_source')
+@cli_ansible.command('source')
 @click.option("--list", is_flag=True)
 @click.option("--host")
 def maintenance(list, host): #pylint: disable=redefined-builtin

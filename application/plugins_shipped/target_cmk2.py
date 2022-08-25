@@ -14,6 +14,9 @@ from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
 from application.helpers.debug import ColorCodes
 
+@app.cli.group(name='checkmk')
+def cli_cmk():
+    """Checkmk commands"""
 
 class UpdateCMKv2(CMK2):
     """
@@ -272,9 +275,9 @@ class UpdateCMKv2(CMK2):
             db_host.set_export_sync()
 
 
-@app.cli.command('cmk_hosts_export')
+@cli_cmk.command('hosts_export')
 @click.argument("account")
-def get_cmk_data(account):
+def cmk_host_export(account):
     """Add hosts to a CMK 2.x Insallation"""
     try:
         target_config = get_account_by_name(account)
@@ -286,7 +289,7 @@ def get_cmk_data(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
 
-@app.cli.command('cmk_debug_host')
+@cli_cmk.command('debug_host')
 @click.argument("hostname")
 def debug_cmk_rules(hostname):
     """Show Rule Engine Outcome for given Host"""
@@ -324,35 +327,21 @@ def debug_cmk_rules(hostname):
     print(f"{ColorCodes.UNDERLINE}Actions based on Action Rules {ColorCodes.ENDC}")
     pprint(actions)
 
-class PrintMatches():
-    """
-    Print Mataches
-    """
 
-    def __init__(self):
-        """
-        Inital
-        """
-        self.action_helper = GetCmkAction()
-        self.label_helper = GetLabel()
-
-    def run(self):
-        """Run Actual Job"""
-        for db_host in Host.objects():
-            db_labels = db_host.get_labels()
-            applied_labels, extra_actions = self.label_helper.filter_labels(db_labels)
-            next_actions = self.action_helper.get_action(db_host, applied_labels)
-            if not next_actions or 'ignore' in next_actions:
-                continue
-            print(f'Next Action: {next_actions}')
-            print(f"Extra Actions for {db_host.hostname}")
-            print(extra_actions)
-            print(f"Labels for {db_host.hostname}")
-            pprint.pprint(applied_labels)
-
-
-@app.cli.command('cmk_debug_print_all')
+@cli_cmk.command('print_all')
 def get_cmk_data():
     """Print List of all Hosts and their Labels"""
-    job = PrintMatches()
-    job.run()
+    action_helper = GetCmkAction()
+    label_helper = GetLabel()
+
+    for db_host in Host.objects():
+        db_labels = db_host.get_labels()
+        applied_labels, extra_actions = label_helper.filter_labels(db_labels)
+        next_actions = action_helper.get_action(db_host, applied_labels)
+        if not next_actions or 'ignore' in next_actions:
+            continue
+        print(f'Next Action: {next_actions}')
+        print(f"Extra Actions for {db_host.hostname}")
+        print(extra_actions)
+        print(f"Labels for {db_host.hostname}")
+        pprint(applied_labels)

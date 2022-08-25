@@ -13,7 +13,7 @@ from flask_mongoengine import MongoEngine
 from application.modules.log import Log
 
 
-VERSION = '1.4.0-dev'
+VERSION = '2.0.0-beta1'
 
 
 app = Flask(__name__)
@@ -77,7 +77,8 @@ from application.models.ansible_rule import AnsibleRule
 from application.models.folder_pool import FolderPool
 from application.views.folder_pool import FolderPoolModelView
 
-admin = Admin(app, name=f"CMDB Syncer {VERSION}", template_mode='bootstrap4', index_view=IndexView())
+admin = Admin(app, name=f"CMDB Syncer {VERSION}",
+                   template_mode='bootstrap4', index_view=IndexView())
 
 admin.add_view(HostModelView(Host, name="Hosts"))
 
