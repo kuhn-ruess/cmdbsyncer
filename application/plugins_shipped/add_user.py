@@ -10,7 +10,7 @@ from application import app
 from application.models.user import User
 
 
-@app.cli.command('create_user')
+@app.cli.command('sys_create_user')
 @click.argument("email")
 def seed_user(email):
     """Generate new user"""

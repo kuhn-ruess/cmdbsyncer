@@ -12,7 +12,7 @@ from application.helpers.poolfolder import remove_seat
 
 
 
-@app.cli.command('maintenance')
+@app.cli.command('sys_maintenance')
 @click.argument("days")
 def maintenance(days):
     """Run maintenance tasks"""
@@ -29,7 +29,7 @@ def maintenance(days):
             print(f"{ColorCodes.WARNING}  *** {ColorCodes.ENDC}Seat in Pool {folder} free now")
         host.delete()
 
-@app.cli.command('delete-all-hosts')
+@app.cli.command('sys_delete_all_hosts')
 def delete_all_hosts():
     """
     Deletes All hosts from DB

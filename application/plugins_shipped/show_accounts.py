@@ -6,7 +6,7 @@ from application import app
 from application.models.account import Account
 
 
-@app.cli.command('show_accounts')
+@app.cli.command('sys_show_accounts')
 def show_accounts():
     """Print list of all active accounts"""
 

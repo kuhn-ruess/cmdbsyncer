@@ -82,7 +82,7 @@ class DataGeter():
                 host.save()
 
 
-@app.cli.command('import_cmk-v2')
+@app.cli.command('import_cmk2')
 @click.argument("account")
 def get_cmk_data(account):
     """Get All hosts from a CMK 2.x Installation and add them to local db"""
