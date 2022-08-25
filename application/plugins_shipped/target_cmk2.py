@@ -280,6 +280,6 @@ def get_cmk_data(account):
             job = UpdateCMKv2(target_config)
             job.run()
         else:
-            print("{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
+            print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')

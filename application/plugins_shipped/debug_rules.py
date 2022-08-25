@@ -5,6 +5,7 @@ Debug Rule Outcome for given Host
 #pylint: disable=too-many-arguments
 from pprint import pprint
 import click
+from mongoengine.errors import DoesNotExist
 from application import app
 from application.models.host import Host
 from application.helpers.get_cmk_action import GetCmkAction
@@ -24,7 +25,11 @@ def get_cmk_data(hostname):
     params_helper_export = GetHostParams('export')
     params_helper_import = GetHostParams('import')
 
-    db_host = Host.objects.get(hostname=hostname)
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        print("Host not found")
+        return
     db_labels = db_host.get_labels()
     labels, extra_actions = label_helper.filter_labels(db_labels)
     params_export = params_helper_export.get_params(hostname)
