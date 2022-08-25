@@ -33,7 +33,7 @@ def run_cmk2_inventory(account):
     """
     Run Inventory on checkmk to query information like sitenames for hosts
     """
-    inventory = [
+    inventory_target = [
         'site', 'inventory_failed','is_offline','tag_agent',
     ]
     config = get_account_by_name(account)
@@ -50,8 +50,8 @@ def run_cmk2_inventory(account):
         attributes = host['extensions']['effective_attributes']
         host_inventory = {}
         for attribute in attributes:
-            if attribute in inventory:
-                host_inventory[attribute] = attributes[attribute]
+            if attribute in inventory_target:
+                host_inventory[f"cmk_{attribute}"] = attributes[attribute]
 
         db_host = Host.get_host(hostname, False)
         if db_host:
@@ -74,6 +74,11 @@ def debug_ansible_rules(host):
     db_host = Host.objects.get(hostname=host)
     labels, _ = label_helper.filter_labels(db_host.get_labels())
     ansible_rules = action_helper.get_action(db_host, labels)
+    inventory = {}
+    if ansible_rules.get('vars'):
+        inventory = ansible_rules['vars']
+    inventory.update(db_host.get_inventory())
+
     print()
     print(f"{ColorCodes.HEADER} ***** Final Outcomes ***** {ColorCodes.ENDC}")
     print(f"{ColorCodes.UNDERLINE} Labels in DB {ColorCodes.ENDC}")
@@ -82,6 +87,8 @@ def debug_ansible_rules(host):
     pprint(labels)
     print(f"{ColorCodes.UNDERLINE}Outcomes based on Ansible Rules {ColorCodes.ENDC}")
     pprint(ansible_rules)
+    print(f"{ColorCodes.UNDERLINE}Complete Inventory Variables {ColorCodes.ENDC}")
+    pprint(inventory)
 
 
 
@@ -108,9 +115,10 @@ def maintenance(list, host): #pylint: disable=redefined-builtin
             ansible_rules = action_helper.get_action(db_host, labels)
             if ansible_rules.get('ignore'):
                 continue
-            inventory = db_host.get_inventory()
+            inventory = {}
             if ansible_rules.get('vars'):
-                inventory.update(ansible_rules['vars'])
+                inventory = ansible_rules['vars']
+            inventory.update(db_host.get_inventory())
             data['_meta']['hostvars'][hostname] = inventory
             data['all']['hosts'].append(hostname)
         print(json.dumps(data))
