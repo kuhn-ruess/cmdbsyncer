@@ -1,0 +1,1 @@
+cp *.py /var/www/cmdb_syncer/application/plugins/
