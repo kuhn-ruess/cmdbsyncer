@@ -1,1 +1,1 @@
-cp *.py /var/www/cmdb_syncer/application/plugins/
+cp *.py /var/www/cmdb-syncer/application/plugins/
