@@ -1,0 +1,14 @@
+version: "3.7"
+
+services:
+
+  api:
+    build: 
+      dockerfile: Dockerfile.local
+    environment:
+      config: compose
+      FLASK_DEBUG: 1
+    ports:
+      - 5003:5003
+    volumes:
+      - ./:/srv

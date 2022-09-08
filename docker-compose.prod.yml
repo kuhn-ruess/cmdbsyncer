@@ -7,4 +7,4 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      config: prod
+      config: compose

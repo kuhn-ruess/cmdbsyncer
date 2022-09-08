@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
 import os
-if 'env' not in os.environ:
-    os.environ['env'] = 'devel'
+if 'config' not in os.environ:
+    os.environ['config'] = 'devel'
 from application import app

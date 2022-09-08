@@ -1,0 +1,30 @@
+FROM python:3.9.13-alpine3.16
+WORKDIR /srv
+
+
+RUN apk add --no-cache python3 \
+    uwsgi \
+    ca-certificates \
+    gcc \
+    git \
+    g++ \
+    linux-headers \
+    libxml2-dev \
+    libxslt-dev \
+    python3-dev \
+    uwsgi-python3 \
+    jpeg-dev \
+    tzdata
+
+ENV TZ=Europe/Berlin
+RUN ln -sf /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+ARG config
+ENV config=$config
+
+CMD [ "flask", "run", "--host", "0.0.0.0", "--port", "5003" ]]
+
+EXPOSE 5003

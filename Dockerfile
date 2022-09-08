@@ -24,7 +24,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 
 ARG config
-ENV env=$config
+ENV config=$config
 
 COPY . /srv/
 COPY  ./application/config-docker.py /srv/application/config.py
