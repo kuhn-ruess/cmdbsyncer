@@ -74,10 +74,10 @@ class ActionRule(db.Document):
     name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(ActionCondition))
-    render_conditions = db.StringField()
+    render_conditions = db.StringField() # Helper for Preview
 
     outcome = db.ListField(db.EmbeddedDocumentField(ActionOutcome))
-    render_outcome = db.StringField()
+    render_outcome = db.StringField() # Helper for Preview
 
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
@@ -120,7 +120,7 @@ class LabelRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     conditions = db.ListField(db.EmbeddedDocumentField(LabelCondition))
-    render_label_conditions = db.StringField()
+    render_label_conditions = db.StringField() # Heler for previer
     outcome = db.ListField(db.StringField(choices=label_outcome_types))
     enabled = db.BooleanField()
     sort_field = db.IntField()
@@ -154,7 +154,7 @@ class HostRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     conditions = db.ListField(db.EmbeddedDocumentField(HostCondition))
-    render_host_conditions = db.StringField()
+    render_host_conditions = db.StringField() # Helper for preview
     params = db.ListField(db.EmbeddedDocumentField(HostParams))
     render_host_params = db.StringField()
     enabled = db.BooleanField()

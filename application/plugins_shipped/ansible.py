@@ -10,10 +10,8 @@ from mongoengine.errors import DoesNotExist
 
 from application import app
 from application.models.host import Host
-from application.modules.cmk2 import CMK2
 from application.helpers.get_ansible_action import GetAnsibleAction
 from application.helpers.get_label import GetLabel
-from application.helpers.get_account import get_account_by_name
 from application.helpers.debug import ColorCodes
 
 @app.cli.group(name='ansible')
@@ -26,42 +24,6 @@ def get_rule_helper():
     """
     helper = GetAnsibleAction()
     return helper
-
-
-@cli_ansible.command('cmk_hosts_inventory')
-@click.argument('account')
-def run_cmk2_inventory(account):
-    """
-    Query CMK with Version  2.1p9 for Inventory Data
-    """
-    inventory_target = [
-        'site', 'inventory_failed','is_offline','tag_agent',
-    ]
-    config = get_account_by_name(account)
-    cmk = CMK2(config)
-
-    print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
-          f"{ColorCodes.UNDERLINE}{account}{ColorCodes.ENDC}")
-
-
-    url = "domain-types/host_config/collections/all?effective_attributes=true"
-    api_hosts = cmk.request(url, method="GET")
-    for host in api_hosts[0]['value']:
-        hostname = host['id']
-        attributes = host['extensions']['effective_attributes']
-        host_inventory = {}
-        for attribute in attributes:
-            if attribute in inventory_target:
-                host_inventory[f"cmk_{attribute}"] = attributes[attribute]
-
-        db_host = Host.get_host(hostname, False)
-        if db_host:
-            db_host.inventory = host_inventory
-            db_host.save()
-            print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
-        else:
-            print(f" {ColorCodes.FAIL}* {ColorCodes.ENDC} Hot in Syncer: {hostname}")
-
 
 
 @cli_ansible.command('debug_host')

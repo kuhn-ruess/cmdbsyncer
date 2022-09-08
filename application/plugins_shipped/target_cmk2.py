@@ -5,18 +5,14 @@ Add Hosts into CMK Version 2 Installations
 from pprint import pprint
 import click
 from mongoengine.errors import DoesNotExist
-from application import app
 from application.models.host import Host
-from application.modules.cmk2 import CMK2, CmkException
+from application.modules.cmk2 import CMK2, CmkException, cli_cmk
 from application.helpers.get_account import get_account_by_name
 from application.helpers.get_cmk_action import GetCmkAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_hostparams import GetHostParams
 from application.helpers.debug import ColorCodes
 
-@app.cli.group(name='checkmk')
-def cli_cmk():
-    """Checkmk commands"""
 
 #   .-- Class Update CMKv2
 class UpdateCMKv2(CMK2):
@@ -224,7 +220,7 @@ class UpdateCMKv2(CMK2):
         # 2022-08-03 Problem with CMK:
         # Sometimes we have the / at the end,
         # sometimes not. This should solve this
-        if current_folder.endswith('/'):
+        if current_folder.endswith('/') and current_folder != '/':
             current_folder = current_folder[:-1]
 
         etag = False

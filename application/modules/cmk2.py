@@ -1,6 +1,12 @@
+"""
+Central Request Modul to CMK 2.x
+"""
 import requests
-
 from application import app, log
+
+@app.cli.group(name='checkmk')
+def cli_cmk():
+    """Checkmk commands"""
 
 if app.config.get("DISABLE_SSL_ERRORS"):
     from urllib3.exceptions import InsecureRequestWarning
@@ -10,6 +16,7 @@ if app.config.get("DISABLE_SSL_ERRORS"):
 class CmkException(Exception):
     """Cmk Errors"""
 
+#pylint: disable=too-few-public-methods
 class CMK2():
     """
     Get Data from CMK

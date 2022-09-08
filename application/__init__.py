@@ -29,7 +29,6 @@ else:
     app.config.from_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
 
-
 try:
     db = MongoEngine()
     from uwsgidecorators import postfork
@@ -59,8 +58,7 @@ source_register = [
 from application.plugins_shipped import *
 from application.plugins import *
 
-from application.views.default import IndexView
-
+from application.views.default import IndexView, DefaultModelView
 
 from application.auth.views import AUTH
 app.register_blueprint(AUTH)
@@ -77,6 +75,8 @@ from application.views.user import UserView
 from application.models.rule import ActionRule, LabelRule, HostRule
 from application.views.rule import RuleModelView
 
+from application.models.cmk_ruleset_rules import CmkRulesetRule
+from application.models.cmk_group_rules import CmkGroupRule
 
 from application.models.ansible_rule import AnsibleRule
 
@@ -90,7 +90,10 @@ admin.add_view(HostModelView(Host, name="Hosts"))
 
 admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
 admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
-admin.add_view(RuleModelView(ActionRule, name="Checkmk Rules", category="Rules"))
+admin.add_sub_category(name="Checkmk Rules", parent_name="Rules")
+admin.add_view(RuleModelView(ActionRule, name="Host Rules", category="Checkmk Rules"))
+admin.add_view(DefaultModelView(CmkRulesetRule, name="Ruleset Rules", category="Checkmk Rules"))
+admin.add_view(DefaultModelView(CmkGroupRule, name="Group Rules", category="Checkmk Rules"))
 admin.add_view(RuleModelView(AnsibleRule, name="Ansible Rules", category="Rules"))
 
 admin.add_view(FolderPoolModelView(FolderPool, name="Folder Pools", category="Config"))
