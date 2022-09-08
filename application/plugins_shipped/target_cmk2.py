@@ -18,6 +18,7 @@ from application.helpers.debug import ColorCodes
 def cli_cmk():
     """Checkmk commands"""
 
+#   .-- Class Update CMKv2
 class UpdateCMKv2(CMK2):
     """
     Update Functions
@@ -274,8 +275,9 @@ class UpdateCMKv2(CMK2):
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Updated Host in Checkmk")
             db_host.set_export_sync()
 
-
-@cli_cmk.command('hosts_export')
+#.
+#   .-- Command: Export Hosts
+@cli_cmk.command('export_hosts')
 @click.argument("account")
 def cmk_host_export(account):
     """Add hosts to a CMK 2.x Insallation"""
@@ -288,7 +290,8 @@ def cmk_host_export(account):
             print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-
+#.
+#   .-- Command: Host Debug
 @cli_cmk.command('debug_host')
 @click.argument("hostname")
 def debug_cmk_rules(hostname):
@@ -326,8 +329,8 @@ def debug_cmk_rules(hostname):
     pprint(params_import)
     print(f"{ColorCodes.UNDERLINE}Actions based on Action Rules {ColorCodes.ENDC}")
     pprint(actions)
-
-
+#.
+#   .-- Command: Print All
 @cli_cmk.command('print_all')
 def get_cmk_data():
     """Print List of all Hosts and their Labels"""
@@ -345,3 +348,4 @@ def get_cmk_data():
         print(extra_actions)
         print(f"Labels for {db_host.hostname}")
         pprint(applied_labels)
+#.
