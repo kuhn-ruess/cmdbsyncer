@@ -224,7 +224,7 @@ class UpdateCMKv2(CMK2):
         # 2022-08-03 Problem with CMK:
         # Sometimes we have the / at the end,
         # sometimes not. This should solve this
-        if current_folder.endswith('/'):
+        if current_folder.endswith('/') and current_folder != '/':
             current_folder = current_folder[:-1]
 
         etag = False
