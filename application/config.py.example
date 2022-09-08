@@ -35,3 +35,10 @@ class ProductionConfig(BaseConfig):
     """
     Production Configuration.
     """
+
+class ComposeConfig(BaseConfig):
+    """
+    Config to run in docker_compose
+    """
+    MONGODB_HOST = 'mongo'
+    MONGODB_PORT = 27017

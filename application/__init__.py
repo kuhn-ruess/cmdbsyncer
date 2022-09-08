@@ -17,9 +17,15 @@ VERSION = '2.0.0-beta1'
 
 
 app = Flask(__name__)
-if os.environ.get('env') == "prod":
+env = os.environ.get('config')
+if env == "prod":
     app.config.from_object('application.config.ProductionConfig')
+    print("Loaded Prod Config")
+elif env == "compose":
+    app.config.from_object('application.config.ComposeConfig')
+    print("Loaded Compose Config")
 else:
+    print(f"Loaded Fallback Config: {env}")
     app.config.from_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
 
