@@ -15,8 +15,13 @@ Main Goal is the complete Organization of the Hosts based on CMDB Systems
   - Management of the complete Host lifetime in Checkmk
 - Simple Plugin API to integrate own Data Sources, or even own Targets (Target must not be Checkmk, also Checkmk can be the source instead of a CMDB).
 - Integrated options to prevent to many Updates in Checkmk (e.g. Updates only on Label Change). For Rule changes, the Update can be forced.
+- Controll Ansible to install Agents based on Syncer Rules or Data of his inventory rules.
 
-Main Focus is Checkmk 1.x and Checkmk 2.x, but in theory it will work with all systems.
+# Currenlty supported Plattforms
+- Checkmk 1.x  (read)
+- Checkmk 2.x (read and write)
+- Ansible (Inventory Source)
+- Any Source like DBs, Rest API with simple Plugin API
 
 For a quick test, best use Docker Compose. All regarding Documentation can be found in the [WIKI](https://github.com/Bastian-Kuhn/cmdb-syncer/wiki)
 
