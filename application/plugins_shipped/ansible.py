@@ -15,6 +15,7 @@ from application.helpers.get_ansible_action import GetAnsibleAction
 from application.helpers.get_label import GetLabel
 from application.helpers.get_account import get_account_by_name
 from application.helpers.debug import ColorCodes
+from application.plugins_shipped.target_cmk2 import cli_cmk
 
 @app.cli.group(name='ansible')
 def cli_ansible():
@@ -28,7 +29,7 @@ def get_rule_helper():
     return helper
 
 
-@cli_ansible.command('cmk_hosts_inventory')
+@cli_cmk.command('hosts_inventory')
 @click.argument('account')
 def run_cmk2_inventory(account):
     """
