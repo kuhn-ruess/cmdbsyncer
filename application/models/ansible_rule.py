@@ -3,7 +3,7 @@ Ansible Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
-from application.models.rule import condition_types, rule_types
+from application.models.rule import rule_types, ActionCondition
 
 
 ansible_outcome_types = [
@@ -24,28 +24,6 @@ class AnsibleOutcome(db.EmbeddedDocument):
     }
 
 
-class AnsibleCondition(db.EmbeddedDocument):
-    """
-    Condition
-    """
-    match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Tag")])
-
-    hostname_match = db.StringField(choices=condition_types)
-    hostname = db.StringField()
-    hostname_match_negate = db.BooleanField()
-
-    tag_match = db.StringField(choices=condition_types)
-    tag = db.StringField()
-    tag_match_negate = db.BooleanField()
-
-    value_match = db.StringField(choices=condition_types)
-    value = db.StringField()
-    value_match_negate = db.BooleanField()
-    meta = {
-        'strict': False,
-    }
-
-
 class AnsibleRule(db.Document):
     """
     Ansible Rule
@@ -55,10 +33,10 @@ class AnsibleRule(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(AnsibleCondition))
-    render_conditions = db.StringField()
+    conditions = db.ListField(db.EmbeddedDocumentField(ActionCondition))
+    render_conditions = db.StringField() # Helper for preview
     outcome = db.ListField(db.EmbeddedDocumentField(AnsibleOutcome))
-    render_outcome = db.StringField()
+    render_outcome = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
 
