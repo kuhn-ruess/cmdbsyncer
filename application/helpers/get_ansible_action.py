@@ -26,7 +26,12 @@ class GetAnsibleAction(Action): # pylint: disable=too-few-public-methods
                 outcomes['ignore'] = True
             elif outcome['type'] == 'var':
                 outcomes.setdefault('vars', {})
-                outcomes['vars'][outcome['param']] = outcome['value']
+                value = outcome['value']
+                if value.lower() == 'true':
+                    value = True
+                elif value.lower() == 'false':
+                    value = False
+                outcomes['vars'][outcome['param']] = value
         return outcomes
 
 
@@ -46,5 +51,10 @@ class GetAnsibleCustomVars(Action):
     def add_outcomes(self, rule, outcomes):
         for outcome in rule['outcome']:
             if outcome['type'] == 'var':
-                outcomes[outcome['param']] = outcome['value']
+                value = outcome['value']
+                if value.lower() == 'true':
+                    value = True
+                elif value.lower() == 'false':
+                    value = False
+                outcomes[outcome['param']] = value
         return outcomes
