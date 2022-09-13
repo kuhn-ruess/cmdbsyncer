@@ -13,3 +13,9 @@ cp-stop:
 
 cp-down:
 	docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer down --rmi local --remove-orphans
+logs:
+	docker logs -f cmdb_syncer_api_1
+
+
+shell:
+	docker exec -it cmdb_syncer_api_1 sh
