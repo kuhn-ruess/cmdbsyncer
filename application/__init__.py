@@ -20,14 +20,15 @@ app = Flask(__name__)
 env = os.environ.get('config')
 if env == "prod":
     app.config.from_object('application.config.ProductionConfig')
-    print("Loaded Prod Config")
 elif env == "compose":
     app.config.from_object('application.config.ComposeConfig')
-    print("Loaded Compose Config")
 else:
-    print(f"Loaded Fallback Config: {env}")
     app.config.from_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
+
+if app.config['DEBUG']:
+    print(f"Loaded Config: {env}")
+
 
 try:
     db = MongoEngine()
