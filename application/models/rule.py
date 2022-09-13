@@ -18,6 +18,7 @@ condition_types = [
     ('ewith', "String Endswith (x.endswith(y)"),
     ('swith', "String Startswith (x.startswith(y)"),
     ('regex', "Regex Match (can cause performance problems)"),
+    ('bool', "Match Bool, True or False bool(value)"),
     ('ignore', "Match All (*)"),
 ]
 

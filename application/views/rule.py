@@ -16,6 +16,7 @@ condition_types={
     'ewith': "endswith",
     'swith': "startswith",
     'regex': "regex match",
+    'bool': "Boolean",
     'ignore': "always match",
 }
 

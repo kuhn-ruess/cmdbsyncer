@@ -5,6 +5,19 @@ Helper To match condtions
 import re
 
 
+# pylint: disable=inconsistent-return-statements
+def make_bool(value):
+    """
+    Make Bool from given object
+    """
+    if isinstance(value, bool):
+        return value
+    if value.lower() == 'false':
+        return False
+    if value.lower() == 'true':
+        return True
+
+
 def match(value, needle, condition, negate=False):
     """
     Check for Match for given params
@@ -12,6 +25,13 @@ def match(value, needle, condition, negate=False):
     # pylint: disable=too-many-branches, too-many-return-statements
     if condition == 'ignore':
         return True
+    if condition == 'bool':
+        value = make_bool(value)
+        needle = make_bool(needle)
+    if not isinstance(value, bool):
+        value = value.lower()
+    if not isinstance(needle, bool):
+        needle = needle.lower()
     if negate:
         if condition == 'equal':
             if value != needle:
@@ -31,6 +51,9 @@ def match(value, needle, condition, negate=False):
         elif condition == 'regex':
             pattern = re.compile(needle) #@TODO Cache
             if not pattern.match(value):
+                return True
+        elif condition == 'bool':
+            if needle != value:
                 return True
 
         return False
@@ -53,5 +76,8 @@ def match(value, needle, condition, negate=False):
     elif condition == 'regex':
         pattern = re.compile(needle) #@TODO Cache
         if pattern.match(value):
+            return True
+    elif condition == 'bool':
+        if needle == value:
             return True
     return False

@@ -33,7 +33,7 @@ class Action(): # pylint: disable=too-few-public-methods
             # Check if Tag matchs
             if match(tag, needed_tag, tag_match, tag_match_negate):
                 # Tag Match, see if Value Match
-                if match(value.lower(), needed_value.lower(), value_match, value_match_negate):
+                if match(value, needed_value, value_match, value_match_negate):
                     return True
         return False
 
