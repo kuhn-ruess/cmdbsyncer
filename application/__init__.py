@@ -79,7 +79,7 @@ from application.views.rule import RuleModelView
 from application.models.cmk_ruleset_rules import CmkRulesetRule
 from application.models.cmk_group_rules import CmkGroupRule
 
-from application.models.ansible_rule import AnsibleRule
+from application.models.ansible_rule import AnsibleRule, AnsibleCustomVariables
 
 from application.models.folder_pool import FolderPool
 from application.views.folder_pool import FolderPoolModelView
@@ -91,13 +91,18 @@ admin.add_view(HostModelView(Host, name="Hosts"))
 
 admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
 admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
+
 admin.add_sub_category(name="Checkmk Rules", parent_name="Rules")
 admin.add_view(RuleModelView(ActionRule, name="Host Rules", category="Checkmk Rules"))
 admin.add_view(DefaultModelView(CmkRulesetRule, name="Ruleset Rules", category="Checkmk Rules"))
 admin.add_view(DefaultModelView(CmkGroupRule, name="Group Rules", category="Checkmk Rules"))
-admin.add_view(RuleModelView(AnsibleRule, name="Ansible Rules", category="Rules"))
+admin.add_view(FolderPoolModelView(FolderPool, name="Folder Pools", category="Checkmk Rules"))
 
-admin.add_view(FolderPoolModelView(FolderPool, name="Folder Pools", category="Config"))
+admin.add_sub_category(name="Ansible Rules", parent_name="Rules")
+admin.add_view(RuleModelView(AnsibleRule, name="Host Rules", category="Ansible Rules"))
+admin.add_view(RuleModelView(AnsibleCustomVariables,\
+                                    name="Custom Variables", category="Ansible Rules"))
+
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
 admin.add_view(UserView(User, category='Config'))
 admin.add_link(MenuLink(name='Change Password', category='Profil',
