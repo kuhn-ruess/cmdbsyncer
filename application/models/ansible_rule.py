@@ -5,12 +5,10 @@ Ansible Rule
 from application import db
 from application.models.rule import rule_types, ActionCondition
 
-
 ansible_outcome_types = [
-  ('ignore', "Ignore for Ansible"),
+  ('ignore', "Ignore"),
   ('var', "Set Variable"),
 ]
-
 
 class AnsibleOutcome(db.EmbeddedDocument):
     """
@@ -48,3 +46,23 @@ class AnsibleRule(db.Document):
     meta = {
         'strict': False,
     }
+
+class AnsibleCustomVariables(db.Document):
+    """
+    Define Rule based Custom Ansible Variables
+    """
+
+    name = db.StringField(required=True, unique=True)
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(db.EmbeddedDocumentField(ActionCondition))
+    render_conditions = db.StringField() # Helper for preview
+
+    outcome = db.ListField(db.EmbeddedDocumentField(AnsibleOutcome))
+    render_outcome = db.StringField() # Helper for preview
+
+    last_match = db.BooleanField(default=False)
+
+
+    enabled = db.BooleanField()
+    sort_field = db.IntField()

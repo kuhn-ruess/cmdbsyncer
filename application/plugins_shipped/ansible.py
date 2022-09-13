@@ -10,7 +10,7 @@ from mongoengine.errors import DoesNotExist
 
 from application import app
 from application.models.host import Host
-from application.helpers.get_ansible_action import GetAnsibleAction
+from application.helpers.get_ansible_action import GetAnsibleAction, GetAnsibleCustomVars
 from application.helpers.get_label import GetLabel
 from application.helpers.debug import ColorCodes
 
@@ -33,6 +33,7 @@ def debug_ansible_rules(host):
     Print matching rules and Inventory Outcome for Host
     """
     action_helper = GetAnsibleAction(debug=True)
+    custom_label_helper = GetAnsibleCustomVars(debug=True)
     label_helper = GetLabel()
     try:
         db_host = Host.objects.get(hostname=host)
@@ -45,6 +46,8 @@ def debug_ansible_rules(host):
     if ansible_rules.get('vars'):
         inventory = ansible_rules['vars']
     inventory.update(db_host.get_inventory())
+    custom_vars = custom_label_helper.get_action(db_host, inventory)
+    inventory.update(custom_vars)
 
     print()
     print(f"{ColorCodes.HEADER} ***** Final Outcomes ***** {ColorCodes.ENDC}")
@@ -54,6 +57,8 @@ def debug_ansible_rules(host):
     pprint(labels)
     print(f"{ColorCodes.UNDERLINE}Outcomes based on Ansible Rules {ColorCodes.ENDC}")
     pprint(ansible_rules)
+    print(f"{ColorCodes.UNDERLINE}Outcomes based on Custom Variables {ColorCodes.ENDC}")
+    pprint(custom_vars)
     print(f"{ColorCodes.UNDERLINE}Complete Inventory Variables {ColorCodes.ENDC}")
     pprint(inventory)
 
@@ -66,6 +71,7 @@ def maintenance(list, host): #pylint: disable=redefined-builtin
     """Inventory Source for Ansible"""
     action_helper = GetAnsibleAction()
     label_helper = GetLabel()
+    custom_label_helper = GetAnsibleCustomVars()
     #pylint: disable=no-else-return
     if list:
         data = {
@@ -86,6 +92,8 @@ def maintenance(list, host): #pylint: disable=redefined-builtin
             if ansible_rules.get('vars'):
                 inventory = ansible_rules['vars']
             inventory.update(db_host.get_inventory())
+            custom_vars = custom_label_helper.get_action(db_host, inventory)
+            inventory.update(custom_vars)
             data['_meta']['hostvars'][hostname] = inventory
             data['all']['hosts'].append(hostname)
         print(json.dumps(data))
