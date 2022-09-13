@@ -1,6 +1,6 @@
 application/plugins/*.py
 !application/plugins/example_*.py
-application/config.py
+application/config.local.py
 
 *.swp
 src/
