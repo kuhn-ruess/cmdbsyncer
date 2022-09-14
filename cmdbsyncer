@@ -2,7 +2,10 @@
 """
 CMDB Syncer CLI Interface
 """
-from application import app
+import os
+if 'config' not in os.environ:
+    os.environ['config'] = 'prod'
 
+from application import app
 if __name__ == '__main__':
     app.cli()
