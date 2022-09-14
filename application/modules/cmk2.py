@@ -45,7 +45,7 @@ class CMK2():
         try:
             method = method.lower()
             if method == 'get':
-                response = requests.get(url, headers=headers, verify=False)
+                response = requests.get(url, headers=headers, params=data, verify=False)
             elif method == 'post':
                 response = requests.post(url, json=data, headers=headers, verify=False)
             elif method == 'put':
