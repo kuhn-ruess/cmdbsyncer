@@ -20,7 +20,6 @@
     headers:
       Authorization: "Bearer {{ cmk_user }} {{ cmk_password }}"
       Accept: "application/octet-stream"
-  register: checkmk_agent_download_state
   when: cmk_install_agent | bool
   register: checkmk_agent_download_state
   ignore_errors: yes
