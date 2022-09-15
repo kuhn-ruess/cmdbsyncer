@@ -1,0 +1,6 @@
+---
+# This Playbook is suplied with information by the cmdb_syncer
+# See Docu there about how to use
+- hosts: all
+  roles:
+    - cmk_host_agent

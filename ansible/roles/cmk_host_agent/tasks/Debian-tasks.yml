@@ -1,0 +1,34 @@
+---
+- name: "Cleanup files"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/bin/check_mk_agent
+    - /usr/bin/check_mk_agent_cache
+    - /usr/bin/cmk-update-agent
+    - /usr/lib/check_mk_agent/
+    - /var/lib/check_mk_agent/
+  when: cmk_delete_manual_files | bool
+
+- name: "Download Checkmk Agent."
+  ansible.builtin.uri:
+    url: "https://{{ cmk_server }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=linux_deb&host_name={{ inventory_hostname }}"
+    dest: "{{ cmk_linux_tmp }}/cmk_agent.deb"
+    method: GET
+    validate_certs: no
+    headers:
+      Authorization: "Bearer {{ cmk_user }} {{ cmk_password }}"
+      Accept: "application/octet-stream"
+  when: cmk_install_agent | bool
+  register: checkmk_agent_download_state
+  ignore_errors: yes
+
+- name: "Install Checkmk Agent"
+  become: true
+  ansible.builtin.apt:
+    deb: "{{ cmk_linux_tmp }}/cmk_agent.deb"
+    state: present
+  when: cmk_install_agent and checkmk_agent_download_state.status == 200
+
+- include_tasks: "Linux-tasks.yml"
