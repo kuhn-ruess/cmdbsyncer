@@ -1,0 +1,7 @@
+---
+cmk_install_agent: False
+cmk_register_tls: False
+cmk_register_bakery: False
+cmk_delete_manual_files: False
+cmk_linux_tmp: /tmp
+cmk_agent_receiver_port: 8000

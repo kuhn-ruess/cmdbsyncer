@@ -2,10 +2,16 @@
 """
 CMDB Syncer CLI Interface
 """
-import os
+import os, sys
 if 'config' not in os.environ:
     os.environ['config'] = 'prod'
 
-from application import app
+try:
+    from application import app
+except Exception as exp:
+    print("Cannot Load Application. Is the Virtual Environment loaded?")
+    print(exp)
+    sys.exit(1)
+
 if __name__ == '__main__':
     app.cli()

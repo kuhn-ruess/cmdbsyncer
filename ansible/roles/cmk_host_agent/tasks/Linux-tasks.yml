@@ -1,0 +1,19 @@
+---
+- name: "Register Agent for TLS."
+  become: true
+  ansible.builtin.shell: |
+    cmk-agent-ctl register -H {{ inventory_hostname }} \
+    -s {{ cmk_server }}:{{ cmk_agent_receiver_port }}  -i {{ cmk_site }} \
+    -U {{ cmk_user }} -P {{ cmk_password }} --trust-cert
+  when: cmk_register_tls | bool
+  ignore_errors: yes
+
+- name: "Register Agent for Bakery."
+  become: true
+  ansible.builtin.shell: |
+    cmk-update-agent register -H {{ inventory_hostname }} \
+    -s {{ cmk_server }} -i {{ cmk_site }} -p https \
+    -U {{ cmk_user }} -S {{ cmk_password }}
+  when: cmk_register_bakery | bool
+  ignore_errors: yes
+
