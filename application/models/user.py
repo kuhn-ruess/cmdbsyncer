@@ -5,7 +5,7 @@ from datetime import datetime
 from flask import current_app
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+from authlib.jose import jwt, JoseError
 from application import db
 
 roles = [
@@ -60,11 +60,18 @@ class User(db.Document, UserMixin):
         """
         Token generator
         """
-        token_data = {'userid': str(self.id)}
-        if custom_values:
-            token_data.update(custom_values)
-        ser = Serializer(current_app.config['SECRET_KEY'], expiration)
-        return ser.dumps(token_data)
+        # @TODO Expire Token
+        header = {
+              'alg': 'HS256'
+        }
+        key = current_app.config['SECRET_KEY']
+        data = {
+            'userid': str(self.id)
+        }
+        data.update(**kwargs)
+
+        return jwt.encode(header=header, payload=data, key=key)
+
 
     def is_admin(self):
         """

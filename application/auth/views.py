@@ -8,7 +8,7 @@ import pyotp
 from flask import request, render_template, current_app, \
      flash, redirect, session, Blueprint, url_for
 from flask_login import current_user, login_user, logout_user, login_required
-from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+from authlib.jose import jwt, JoseError
 
 from application import login_manager
 from application.models.user import User
@@ -165,13 +165,11 @@ def get_userid(token): #pylint: disable=inconsistent-return-statements
     """
     Helper to read Userid from token
     """
-    ser = Serializer(
-        current_app.config['SECRET_KEY'],
-        current_app.config.get('USER_SESSION_SECONDS') or 28800
-    )
+    key = current_app.config['SECRET_KEY'],
+    timeout = current_app.config.get('USER_SESSION_SECONDS') or 28800
     try:
-        data = ser.loads(token)
-    except: #pylint: disable=bare-except
+        data = jwt.decode(token, key)
+    except JoseError:
         return False
 
     if data.get('userid'):
