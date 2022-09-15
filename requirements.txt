@@ -2,6 +2,7 @@ Flask-Admin==1.6.0
 Flask-Bootstrap4==4.0.2
 Flask-Login==0.6.2
 flask-mongoengine==1.0.0
+Flask==2.1.2
 Flask-Mail==0.9.1
 requests==2.28.1
 Authlib==1.1.0
