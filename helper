@@ -1,0 +1,36 @@
+#!/bin/bash
+# Simple Helper
+# .local.
+
+
+case "$1" in
+"dcup")
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml build
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer up --force-recreate -d
+    ;;
+"dcstart")
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer start
+    ;;
+"dcstop")
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer stop
+    ;;
+"dcdown")
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer down --rmi local --remove-orphans
+    ;;
+"dclogs")
+    echo "Start Container Logs"
+    docker logs -f cmdb_syncer_api_1
+    ;;
+"dcshell")
+    echo "Start Container Shell"
+    docker exec -it cmdb_syncer_api_1 sh
+    ;;
+"bve")
+    python3.8 -m venv ENV
+    ;;
+*)
+    echo "Simple Helper for CMDB Syncer Jobs."
+    echo "For Docker Compose: dcup, dcdown, dcstart, dcstop, dclogs and dcshell are the options"
+    echo "Create a venv with bve"
+    ;;
+esac
