@@ -14,7 +14,9 @@ RUN apk add --no-cache python3 \
     python3-dev \
     uwsgi-python3 \
     jpeg-dev \
-    tzdata
+    tzdata \
+    libffi-dev \
+    openssl-dev
 
 ENV TZ=Europe/Berlin
 RUN ln -sf /usr/share/zoneinfo/Europe/Berlin /etc/localtime

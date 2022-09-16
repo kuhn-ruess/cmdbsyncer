@@ -6,8 +6,8 @@ from application import db
 from application.models.rule import rule_types, ActionCondition
 
 ansible_outcome_types = [
-  ('ignore', "Ignore"),
   ('var', "Set Variable"),
+  ('ignore', "Ignore"),
 ]
 
 class AnsibleOutcome(db.EmbeddedDocument):
