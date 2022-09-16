@@ -14,7 +14,9 @@ RUN apk add --no-cache python3 \
     libxslt-dev \
     python3-dev \
     uwsgi-python3 \
-    tzdata
+    tzdata \
+    libffi-dev \
+    openssl-dev
 
 ENV TZ=Etc/Universal
 RUN ln -sf /usr/share/zoneinfo/Ect/Universal /etc/localtime

@@ -19,11 +19,11 @@ case "$1" in
     ;;
 "dclogs")
     echo "Start Container Logs"
-    docker logs -f cmdb_syncer_api_1
+    docker logs -f cmdb_syncer-api-1
     ;;
 "dcshell")
     echo "Start Container Shell"
-    docker exec -it cmdb_syncer_api_1 sh
+    docker exec -it cmdb_syncer-api-1 sh
     ;;
 "bve")
     python3.8 -m venv ENV

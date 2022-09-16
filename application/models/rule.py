@@ -26,14 +26,14 @@ action_outcome_types = [
     ("move_folder", "Move Host to specified Folder"),
     ('value_as_folder', "Use Value of given Tag as Folder"),
     ("tag_as_folder", "Use Tag of given Value as Folder"),
-    ("ignore", "Ignore this host"),
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
+    ("ignore", "Ignore this host"),
 ]
 
 
 host_params_types = [
-    ('ignore_hosts', "Ignore matching Hosts"),
     ('add_custom_label', "Add Custom Label"),
+    ('ignore_hosts', "Ignore matching Hosts"),
 ]
 
 
