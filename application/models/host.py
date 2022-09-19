@@ -115,7 +115,7 @@ class Host(db.Document):
         if not hit:
             label = Label()
             label.key = key
-            label.value = value
+            label.value = str(value)
             self.labels.append(label)
 
     def set_labels(self, label_dict):
@@ -128,7 +128,7 @@ class Host(db.Document):
                 continue
             label = Label()
             label.key = key
-            label.value = value
+            label.value = str(value)
             labels.append(label)
         self.labels = labels
 
