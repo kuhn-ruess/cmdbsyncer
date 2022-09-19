@@ -8,3 +8,4 @@ requests==2.28.1
 Authlib==1.1.0
 pyotp==2.7.0
 email-validator==1.2.1
+uWSGI==2.0.20

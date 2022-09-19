@@ -1,6 +1,7 @@
 application/plugins/*.py
 !application/plugins/example_*.py
 application/config.local.py
+nogit_*
 
 *.swp
 src/
