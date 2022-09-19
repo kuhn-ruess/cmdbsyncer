@@ -14,6 +14,7 @@ from application.helpers.debug import ColorCodes
 from application.helpers.poolfolder import remove_seat
 from application.models.account import Account
 from application.models.user import User
+from application.models.folder_pool import FolderPool
 
 
 
@@ -53,6 +54,22 @@ def delete_all_hosts():
         print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Start deletion")
         for host in Host.objects():
             host.delete()
+    else:
+        print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")
+
+@cli_sys.command('reset_folder_pools')
+def delete_all_hosts():
+    """
+    Reset Folder Pools Usage
+    """
+    print(f"{ColorCodes.HEADER} ***** Restet Pools (make sure to delete hosts from cmk after and resync) ***** {ColorCodes.ENDC}")
+    answer = input(" - Enter 'y' and hit enter to procceed: ")
+    if answer.lower() in ['y', 'z']:
+        print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Start reset")
+        for pool in FolderPool.objects():
+            print(f"      - {pool.folder_name}")
+            pool.folder_seats_taken = 0
+            pool.save()
     else:
         print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")
 
