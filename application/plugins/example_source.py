@@ -1,4 +1,4 @@
-#!/usr/bin/env python38
+#!/usr/bin/env python3
 """
 Example to Import Data into the System
 """

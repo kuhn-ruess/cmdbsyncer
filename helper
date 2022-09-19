@@ -26,7 +26,7 @@ case "$1" in
     docker exec -it cmdb_syncer-api-1 sh
     ;;
 "bve")
-    python3.8 -m venv ENV
+    python3 -m venv ENV
     ;;
 *)
     echo "Simple Helper for CMDB Syncer Jobs."
