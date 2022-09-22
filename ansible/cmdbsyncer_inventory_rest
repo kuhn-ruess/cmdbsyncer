@@ -1,0 +1,22 @@
+#!/bin/bash
+#START SETTINGS
+API="http://localhost:5003/api/v1/ansible"
+SECRET="Test123"
+#END SETTINGS
+case "$1" in
+"--all")
+    curl -X 'GET' $API/ \
+         -H 'accept: application/json' \
+         -H "x-login-token: $SECRET"
+    ;;
+"--host")
+    curl -X 'GET' ${API}/{$2} \
+         -H 'accept: application/json' \
+         -H "x-login-token: $SECRET"
+    ;;
+*)
+    echo "This is a Ansible Inventory Source"
+    echo "Please configure API and SECRET"
+    ;;
+esac
+
