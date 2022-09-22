@@ -29,6 +29,7 @@ class BaseConfig():
 
 
     DISABLE_SSL_ERRORS = True
+    SWAGGER_ENABLED = True
     DEBUG = True
 
 class ProductionConfig(BaseConfig):

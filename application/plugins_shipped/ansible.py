@@ -36,6 +36,7 @@ def debug_ansible_rules(host):
     custom_label_helper = GetAnsibleCustomVars(debug=True)
     label_helper = GetLabel()
     try:
+        #pylint: disable=no-member
         db_host = Host.objects.get(hostname=host)
     except DoesNotExist:
         print("Host not found")
@@ -62,56 +63,69 @@ def debug_ansible_rules(host):
     print(f"{ColorCodes.UNDERLINE}Complete Inventory Variables {ColorCodes.ENDC}")
     pprint(inventory)
 
+def get_full_inventory():
+    """
+    Get information for ansible
+    """
+    action_helper = GetAnsibleAction()
+    label_helper = GetLabel()
+    custom_label_helper = GetAnsibleCustomVars()
+    data = {
+        '_meta': {
+            'hostvars' : {}
+        },
+        'all': {
+            'hosts' : []
+        },
+    }
+    #pylint: disable=no-member
+    for db_host in Host.objects():
+        hostname = db_host.hostname
+        labels, _ = label_helper.filter_labels(db_host.get_labels())
+        ansible_rules = action_helper.get_action(db_host, labels)
+        if ansible_rules.get('ignore'):
+            continue
+        inventory = {}
+        if ansible_rules.get('vars'):
+            inventory = ansible_rules['vars']
+        inventory.update(db_host.get_inventory())
+        custom_vars = custom_label_helper.get_action(db_host, inventory)
+        inventory.update(custom_vars)
+        data['_meta']['hostvars'][hostname] = inventory
+        data['all']['hosts'].append(hostname)
+    return data
 
+def get_host_inventory(hostname):
+    """
+    Get Inventory for single host
+    """
+    action_helper = GetAnsibleAction()
+    label_helper = GetLabel()
+    try:
+        #pylint: disable=no-member
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        return False
+    labels, _ = label_helper.filter_labels(db_host.get_labels())
+    ansible_rules = action_helper.get_action(db_host, labels)
+    if ansible_rules.get('ignore'):
+        return False
+    inventory = db_host.get_inventory()
+    if ansible_rules.get('vars'):
+        inventory.update(ansible_rules['vars'])
+    return inventory
 
 @cli_ansible.command('source')
 @click.option("--list", is_flag=True)
 @click.option("--host")
-def maintenance(list, host): #pylint: disable=redefined-builtin
+def source(list, host): #pylint: disable=redefined-builtin
     """Inventory Source for Ansible"""
-    action_helper = GetAnsibleAction()
-    label_helper = GetLabel()
-    custom_label_helper = GetAnsibleCustomVars()
     #pylint: disable=no-else-return
     if list:
-        data = {
-            '_meta': {
-                'hostvars' : {}
-            },
-            'all': {
-                'hosts' : []
-            },
-        }
-        for db_host in Host.objects():
-            hostname = db_host.hostname
-            labels, _ = label_helper.filter_labels(db_host.get_labels())
-            ansible_rules = action_helper.get_action(db_host, labels)
-            if ansible_rules.get('ignore'):
-                continue
-            inventory = {}
-            if ansible_rules.get('vars'):
-                inventory = ansible_rules['vars']
-            inventory.update(db_host.get_inventory())
-            custom_vars = custom_label_helper.get_action(db_host, inventory)
-            inventory.update(custom_vars)
-            data['_meta']['hostvars'][hostname] = inventory
-            data['all']['hosts'].append(hostname)
-        print(json.dumps(data))
+        print(json.dumps(get_full_inventory()))
         return True
-
     elif host:
-        try:
-            db_host = Host.objects.get(hostname=host)
-        except DoesNotExist:
-            return False
-        labels, _ = label_helper.filter_labels(db_host.get_labels())
-        ansible_rules = action_helper.get_action(db_host, labels)
-        if ansible_rules.get('ignore'):
-            return False
-        inventory = db_host.get_inventory()
-        if ansible_rules.get('vars'):
-            inventory.update(ansible_rules['vars'])
-        print(json.dumps(inventory))
+        print(json.dumps(get_host_inventory(host)))
         return True
     print("Params missing")
     return False
