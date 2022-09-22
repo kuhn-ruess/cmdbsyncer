@@ -84,6 +84,9 @@ from application.models.ansible_rule import AnsibleRule, AnsibleCustomVariables
 from application.models.folder_pool import FolderPool
 from application.views.folder_pool import FolderPoolModelView
 
+from application.api.views import API_BP as api
+app.register_blueprint(api, url_prefix="/api/v1")
+
 admin = Admin(app, name=f"CMDB Syncer {VERSION}",
                    template_mode='bootstrap4', index_view=IndexView())
 
