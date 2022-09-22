@@ -8,6 +8,7 @@ Playbooks which are used for the CMDB Syncer automation
 
 ### Distributed Monitoring, Agent Download from API
 Set Reverse Proxy in Apache:
+This solves the Problem of Checkmk Distributed Backery, where the API not is part of
 ```
 SSLProxyEngine On
 SSLProxyCheckPeerCN off
