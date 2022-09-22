@@ -90,6 +90,7 @@ def export_cmk_groups(account, test_run):
                         'alias' : group_alias,
                         'name' : group_name,
                     })
+                print(f"{ColorCodes.OKBLUE}  *{ColorCodes.ENDC} Added {group_alias}")
 
             if entries:
                 data = {
@@ -111,7 +112,7 @@ def export_cmk_groups(account, test_run):
                         # Checkmk is not deleting objects if the still referenced
                         url = f"objects/contact_group_config/{group_alias}"
                         cmk.request(url, method="DELETE")
-                        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Groups Deleted in Checkmk")
+                        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Group {group_alias} deleted")
 
 
 
