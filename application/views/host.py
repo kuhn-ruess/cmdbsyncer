@@ -44,7 +44,7 @@ class FilterLabelKey(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        return query.filter(labels__key_icontains=value)
+        return query.filter(labels__key__icontains=value)
 
     def operation(self):
         return "contains"
