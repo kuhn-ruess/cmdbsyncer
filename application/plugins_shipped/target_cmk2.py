@@ -242,7 +242,7 @@ class UpdateCMKv2(CMK2):
             update_headers = {
                 'if-match': etag,
             }
-            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Moved Host to {folder}")
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Moved Host from {current_folder}")
 
 
         # compare Labels
