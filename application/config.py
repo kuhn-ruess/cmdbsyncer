@@ -28,7 +28,7 @@ class BaseConfig():
     BOOTSTRAP_SERVE_LOCAL = True
 
 
-    DISABLE_SSL_ERRORS = False
+    DISABLE_SSL_ERRORS = True
     DEBUG = True
 
 class ProductionConfig(BaseConfig):

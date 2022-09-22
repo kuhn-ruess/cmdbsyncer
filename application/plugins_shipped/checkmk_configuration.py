@@ -186,5 +186,5 @@ def run_cmk2_inventory(account):
             db_host.save()
             print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
         else:
-            print(f" {ColorCodes.FAIL}* {ColorCodes.ENDC} Hot in Syncer: {hostname}")
+            print(f" {ColorCodes.FAIL}* {ColorCodes.ENDC} Not in Syncer: {hostname}")
 #.
