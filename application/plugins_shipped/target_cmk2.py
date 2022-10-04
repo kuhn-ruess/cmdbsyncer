@@ -97,7 +97,6 @@ class UpdateCMKv2(CMK2):
                 self.create_folder(folder)
                 existing_folders.append(folder)
 
-            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Folder is: {folder}")
             # Check if Host Exists
 
             additional_attributes = {}
@@ -226,6 +225,7 @@ class UpdateCMKv2(CMK2):
         etag = False
         # Check if we really need to move
         if current_folder != folder:
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} New Folder is: {folder}")
             etag = self.get_etag(db_host)
             update_headers = {
                 'if-match': etag
