@@ -41,6 +41,9 @@ def debug_ansible_rules(host):
     except DoesNotExist:
         print("Host not found")
         return
+    if not db_host.available:
+        print("Host not  marked as available")
+        return
     labels, _ = label_helper.filter_labels(db_host.get_labels())
     ansible_rules = action_helper.get_action(db_host, labels)
     inventory = {}
@@ -79,7 +82,7 @@ def get_full_inventory():
         },
     }
     #pylint: disable=no-member
-    for db_host in Host.objects():
+    for db_host in Host.objects(available=True):
         hostname = db_host.hostname
         labels, _ = label_helper.filter_labels(db_host.get_labels())
         ansible_rules = action_helper.get_action(db_host, labels)
@@ -103,7 +106,7 @@ def get_host_inventory(hostname):
     label_helper = GetLabel()
     try:
         #pylint: disable=no-member
-        db_host = Host.objects.get(hostname=hostname)
+        db_host = Host.objects.get(hostname=hostname, available=True)
     except DoesNotExist:
         return False
     labels, _ = label_helper.filter_labels(db_host.get_labels())

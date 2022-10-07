@@ -23,7 +23,7 @@ def compare_csv(csv_path, delimiter, hostname_field):
     Check which Hosts in CSV are not in DB
     """
     #pylint: disable=no-member, consider-using-generator
-    host_list = list([x.hostname for x in Host.objects()])
+    host_list = list([x.hostname for x in Host.objects(available=True)])
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
