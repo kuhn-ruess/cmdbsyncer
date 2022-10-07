@@ -74,9 +74,6 @@ class GetLabel():# pylint: disable=too-few-public-methods
                                     value = value.replace(what, to)
                             if 'use_value_as_attribute' in outcome:
                                 additional_actions[f'attribute_{label}'] = value
-                                # Don't add as additional label
-                                add = False
-
                             if add:
                                 matches[label] = value
                         break

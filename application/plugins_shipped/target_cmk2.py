@@ -225,7 +225,7 @@ class UpdateCMKv2(CMK2):
         etag = False
         # Check if we really need to move
         if current_folder != folder:
-            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} New Folder is: {folder}")
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Host Moved to Folder: {folder}")
             etag = self.get_etag(db_host)
             update_headers = {
                 'if-match': etag
