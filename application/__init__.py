@@ -13,7 +13,7 @@ from flask_mongoengine import MongoEngine
 from application.modules.log import Log
 
 
-VERSION = '2.1.0-dev'
+VERSION = '2.1.1-dev'
 
 
 app = Flask(__name__)
