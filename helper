@@ -24,7 +24,7 @@ case "$1" in
     ;;
 "dcshell")
     echo "Start Container Shell"
-    docker exec -it $APPLICATION
+    docker exec -it $APPLICATION sh
     ;;
 "bve")
     python3 -m venv ENV

@@ -29,6 +29,7 @@ class Host(db.Document):
     Host
     """
     hostname = db.StringField(required=True, unique=True)
+    sync_id = db.StringField()
     labels = db.ListField(db.EmbeddedDocumentField(Label))
     inventory = db.DictField()
 

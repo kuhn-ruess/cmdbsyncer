@@ -28,6 +28,7 @@ class CMK2():
         """
         self.log = log
         self.config = config
+        self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 
     def request(self, params, method='GET', data=None, additional_header=None):
         """
@@ -44,14 +45,19 @@ class CMK2():
             headers.update(additional_header)
         try:
             method = method.lower()
+            #pylint: disable=missing-timeout
             if method == 'get':
-                response = requests.get(url, headers=headers, params=data, verify=False)
+                response = requests.get(url,
+                                        headers=headers,
+                                        params=data,
+                                        verify=self.verify,
+                                       )
             elif method == 'post':
-                response = requests.post(url, json=data, headers=headers, verify=False)
+                response = requests.post(url, json=data, headers=headers, verify=self.verify)
             elif method == 'put':
-                response = requests.put(url, json=data, headers=headers, verify=False)
+                response = requests.put(url, json=data, headers=headers, verify=self.verify)
             elif method == 'delete':
-                response = requests.delete(url, headers=headers, verify=False)
+                response = requests.delete(url, headers=headers, verify=self.verify)
                 # Checkmk gives no json response here, so we directly return
                 return True, response.headers
 

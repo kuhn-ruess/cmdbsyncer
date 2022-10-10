@@ -121,6 +121,7 @@ class HostModelView(DefaultModelView):
 
     column_exclude_list = (
         'source_account_id',
+        'sync_id',
         'inventory',
         'log',
         'folder',
