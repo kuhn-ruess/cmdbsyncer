@@ -1,29 +1,30 @@
 #!/bin/bash
 # Simple Helper
 # .local.
-
+CONTAINER=cmdb_syncer
+APPLICATION=cmdb_syncer-api-1
 
 case "$1" in
 "dcup")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml build
-    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer up --force-recreate -d
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER up --force-recreate -d
     ;;
 "dcstart")
-    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer start
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER start
     ;;
 "dcstop")
-    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer stop
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER stop
     ;;
 "dcdown")
-    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p cmdb_syncer down --rmi local --remove-orphans
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER down --rmi local --remove-orphans
     ;;
 "dclogs")
     echo "Start Container Logs"
-    docker logs -f cmdb_syncer-api-1
+    docker logs -f $APPLICATION
     ;;
 "dcshell")
     echo "Start Container Shell"
-    docker exec -it cmdb_syncer-api-1 sh
+    docker exec -it $APPLICATION
     ;;
 "bve")
     python3 -m venv ENV

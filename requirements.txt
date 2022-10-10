@@ -11,3 +11,4 @@ Werkzeug <= 2.1.2
 email-validator==1.2.1
 uWSGI==2.0.20
 flask-restx==0.5.1
+flask-restx==0.5.1
