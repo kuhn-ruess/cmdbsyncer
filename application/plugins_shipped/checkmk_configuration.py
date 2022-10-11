@@ -174,16 +174,16 @@ def run_cmk2_inventory(account):
         service_state = service['extensions']['state']
         service_output = service['extensions']['plugin_output']
         status_inventory.setdefault(host_name, {})
-        status_inventory[host_name][f"service_{service_description}_state"] = service_state
-        status_inventory[host_name][f"service_{service_description}_output"] = service_output
+        status_inventory[host_name][f"cmk_svc_{service_description}_state"] = service_state
+        status_inventory[host_name][f"cmk_svc_{service_description}_output"] = service_output
 
     print(f"{ColorCodes.UNDERLINE}Write to DB{ColorCodes.ENDC}")
 
-    for hostname, host_data in config_inventory.items():
-        host_data.update(status_inventory.get(hostname, {}))
+    for hostname in config_inventory:
         db_host = Host.get_host(hostname, False)
         if db_host:
-            db_host.inventory = host_data
+            db_host.update_inventory('cmk_', config_inventory[hostname])
+            db_host.update_inventory('cmk_svc)', status_inventory.get(hostname, {}))
             db_host.save()
             print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
         else:

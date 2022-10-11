@@ -53,10 +53,10 @@ def debug_ansible_rules(host):
     labels, _ = label_helper.filter_labels(db_host.get_labels())
     inventory = {}
     inventory.update(db_host.get_inventory())
+    labels.update(inventory)
     custom_vars = custom_variable_helper.get_action(db_host, labels)
     special_vars = custom_var_var_helper.get_action(db_host, custom_vars)
     inventory.update(custom_vars)
-    inventory = clean_vars(special_vars, inventory)
 
 
     print()
@@ -70,6 +70,9 @@ def debug_ansible_rules(host):
     if special_vars.get('ignore'):
         print("!! This System would be ignored")
     print(f"{ColorCodes.UNDERLINE}Complete Ansible Inventory Variables{ColorCodes.ENDC}")
+    pprint(inventory)
+    print(f"{ColorCodes.UNDERLINE}Ansible Inventory Variables after Filter{ColorCodes.ENDC}")
+    inventory = clean_vars(special_vars, inventory)
     pprint(inventory)
 
 def get_full_inventory():
@@ -93,6 +96,7 @@ def get_full_inventory():
         labels, _ = label_helper.filter_labels(db_host.get_labels())
         inventory = {}
         inventory.update(db_host.get_inventory())
+        labels.update(inventory)
         custom_vars = custom_label_helper.get_action(db_host, labels)
         if custom_vars.get('ignore'):
             continue

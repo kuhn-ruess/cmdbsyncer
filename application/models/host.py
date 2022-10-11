@@ -140,11 +140,24 @@ class Host(db.Document):
         """
         return dict({x.key:x.value for x in self.labels})
 
-    def get_inventory(self):
+
+    def update_inventory(self, key, new_data):
+        """
+        Overwrite given Values only
+        """
+        for name in [x for x in self.inventory.keys()]:
+            if name.startswith(key):
+                del self.inventory[name]
+        self.inventory.update(new_data)
+
+    def get_inventory(self, filter=False):
         """
         Return Hosts Inventory Data.
         Used eg. for Ansible
         """
+        if filter:
+            return {key: value for key, value in self.inventory.items() if key.startswith(filter)}
+
         return self.inventory
 
     def add_log(self, entry):
