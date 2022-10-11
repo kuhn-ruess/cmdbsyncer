@@ -21,32 +21,6 @@ class AnsibleOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-
-class AnsibleRule(db.Document):
-    """
-    Ansible Rule
-    """
-
-
-    name = db.StringField(required=True, unique=True)
-
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(ActionCondition))
-    render_conditions = db.StringField() # Helper for preview
-    outcome = db.ListField(db.EmbeddedDocumentField(AnsibleOutcome))
-    render_outcome = db.StringField() # Helper for preview
-
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField()
-
-
-    meta = {
-        'strict': False,
-    }
-
 class AnsibleCustomVariables(db.Document):
     """
     Define Rule based Custom Ansible Variables

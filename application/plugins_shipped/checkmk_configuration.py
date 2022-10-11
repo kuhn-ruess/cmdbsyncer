@@ -121,7 +121,7 @@ def export_cmk_groups(account, test_run):
 
 #.
 #   .-- Command: Host Inventory
-@cli_cmk.command('hosts_inventory')
+@cli_cmk.command('inventory_hosts')
 @click.argument('account')
 #pylint: disable=too-many-locals
 def run_cmk2_inventory(account):

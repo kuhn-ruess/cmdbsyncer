@@ -28,7 +28,6 @@ class Action(): # pylint: disable=too-few-public-methods
         value_match_negate = condition['value_match_negate']
 
         # Wee need to find out if tag AND tag value match
-
         for tag, value in labels.items():
             # Check if Tag matchs
             if match(tag, needed_tag, tag_match, tag_match_negate):
