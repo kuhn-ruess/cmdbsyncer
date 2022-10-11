@@ -62,7 +62,7 @@ class Action(): # pylint: disable=too-few-public-methods
             if rule['condition_typ'] == 'any':
                 print_debug(self.debug,
                             "- Rule Type: ANY can match "\
-                           f"(RuleID: {ColorCodes.OKBLUE}{rule['_id']}{ColorCodes.ENDC})")
+                           f"(RuleID: {ColorCodes.OKBLUE}{rule['name'][:20]} ({rule['_id']}){ColorCodes.ENDC})")
                 for condtion in rule['conditions']:
                     local_hit = False
                     if condtion['match_type'] == 'tag':
@@ -74,12 +74,12 @@ class Action(): # pylint: disable=too-few-public-methods
             elif rule['condition_typ'] == 'all':
                 print_debug(self.debug,
                             "- Rule Type: ALL must match "\
-                            f"(RuleID: {ColorCodes.OKBLUE}{rule['_id']}{ColorCodes.ENDC})")
+                            f"(RuleID: {ColorCodes.OKBLUE}{rule['name'][:20]} ({rule['_id']}){ColorCodes.ENDC})")
                 negativ_match = False
                 for condtion in rule['conditions']:
                     if condtion['match_type'] == 'tag':
                         if not self._check_label_match(condtion, labels):
-                            negativ_match = True
+                            print(f"TAG MATCH FALSE")
                     else:
                         if not self._check_hostname_match(condtion, hostname):
                             negativ_match = True
@@ -88,7 +88,7 @@ class Action(): # pylint: disable=too-few-public-methods
             elif rule['condition_typ'] == 'anyway':
                 print_debug(self.debug,
                             "- Rule Typ: Match without condition' "\
-                            f"(RuleID: {ColorCodes.OKBLUE}{rule['_id']}{ColorCodes.ENDC})")
+                            f"(RuleID: {ColorCodes.OKBLUE}{rule['name'][:20]} ({rule['_id']}){ColorCodes.ENDC})")
                 rule_hit = True
             if rule_hit:
                 print_debug(self.debug,
