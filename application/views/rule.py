@@ -7,7 +7,7 @@ from markupsafe import Markup
 from application.views.default import DefaultModelView
 from application.models.rule import label_choices, label_outcome_types, \
                                     host_params_types, action_outcome_types
-from application.models.ansible_rule import ansible_outcome_types
+from application.models.ansible_rule import ansible_outcome_types, ansible_outcome_rule_types
 
 condition_types={
     'equal': "is equal",
@@ -22,6 +22,7 @@ condition_types={
 
 action_outcome_types = dict(action_outcome_types)
 action_outcome_types.update(dict(ansible_outcome_types))
+action_outcome_types.update(dict(ansible_outcome_rule_types))
 
 def _render_outcome(_view, _context, model, _name):
     """

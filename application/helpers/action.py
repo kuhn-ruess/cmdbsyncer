@@ -79,7 +79,7 @@ class Action(): # pylint: disable=too-few-public-methods
                 for condtion in rule['conditions']:
                     if condtion['match_type'] == 'tag':
                         if not self._check_label_match(condtion, labels):
-                            print(f"TAG MATCH FALSE")
+                            negativ_match = True
                     else:
                         if not self._check_hostname_match(condtion, hostname):
                             negativ_match = True
