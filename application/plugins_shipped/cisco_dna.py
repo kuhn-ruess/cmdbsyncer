@@ -89,8 +89,8 @@ class CiscoDNA():
             db_host = Host.objects.get(sync_id=sync_id)
             inventory = {}
             for attribute in inventory_attributes:
-                inventory[f'cisco-dna_port_{attribute}'] = device[attribute]
-            db_host.inventory = inventory
+                inventory[f'cisco_dna_port_{attribute}'] = device[attribute]
+            db_host.inventory.update_inventory('cisco_dna_port', inventory)
             db_host.sync_id = device['id']
             db_host.set_import_seen()
             db_host.set_account(self.account_id, self.account_name)
@@ -125,8 +125,8 @@ class CiscoDNA():
             db_host = Host.get_host(hostname)
             inventory = {}
             for attribute in inventory_attributes:
-                inventory[f'cisco-dna_{attribute}'] = device[attribute]
-            db_host.inventory = inventory
+                inventory[f'cisco_dna_{attribute}'] = device[attribute]
+            db_host.inventory.update_inventory('cisco_dna_', inventory)
             db_host.sync_id = device['id']
             db_host.set_import_seen()
             db_host.set_account(self.account_id, self.account_name)
