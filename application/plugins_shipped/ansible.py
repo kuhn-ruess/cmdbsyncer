@@ -39,10 +39,7 @@ def debug_ansible_rules(host):
     labels, _ = label_helper.filter_labels(db_host.get_labels())
     inventory = {}
     inventory.update(db_host.get_inventory())
-    custom_vars = custom_label_helper.get_action(db_host, inventory)
-    # Second run to see if we have outcomes based on first outcomes
-    custom_vars2 = custom_label_helper.get_action(db_host, custom_vars)
-    custom_vars.update(custom_vars2)
+    custom_vars = custom_label_helper.get_action(db_host, labels)
     inventory.update(custom_vars)
 
     print()
@@ -74,10 +71,7 @@ def get_full_inventory():
         labels, _ = label_helper.filter_labels(db_host.get_labels())
         inventory = {}
         inventory.update(db_host.get_inventory())
-        custom_vars = custom_label_helper.get_action(db_host, inventory)
-        # Second run to see if we have outcomes based on first outcomes
-        custom_vars2 = custom_label_helper.get_action(db_host, custom_vars)
-        custom_vars.update(custom_vars2)
+        custom_vars = custom_label_helper.get_action(db_host, labels)
         if custom_vars.get('ignore'):
             continue
         inventory.update(custom_vars)
