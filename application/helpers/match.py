@@ -30,6 +30,7 @@ def match(value, needle, condition, negate=False):
     if condition == 'bool':
         value = make_bool(value)
         needle = make_bool(needle)
+
     if not isinstance(value, bool) and value:
         value = value.lower()
     if not isinstance(needle, bool) and needle:

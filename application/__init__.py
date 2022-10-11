@@ -79,7 +79,7 @@ from application.views.rule import RuleModelView
 #from application.models.cmk_ruleset_rules import CmkRulesetRule
 from application.models.cmk_group_rules import CmkGroupRule
 
-from application.models.ansible_rule import AnsibleRule, AnsibleCustomVariables
+from application.models.ansible_rule import AnsibleCustomVariables
 
 from application.models.folder_pool import FolderPool
 from application.views.folder_pool import FolderPoolModelView
@@ -102,7 +102,6 @@ admin.add_view(DefaultModelView(CmkGroupRule, name="Group Rules", category="Chec
 admin.add_view(FolderPoolModelView(FolderPool, name="Folder Pools", category="Checkmk Rules"))
 
 admin.add_sub_category(name="Ansible Rules", parent_name="Rules")
-admin.add_view(RuleModelView(AnsibleRule, name="Host Rules", category="Ansible Rules"))
 admin.add_view(RuleModelView(AnsibleCustomVariables,\
                                     name="Custom Variables", category="Ansible Rules"))
 

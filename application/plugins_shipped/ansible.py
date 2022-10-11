@@ -10,20 +10,13 @@ from mongoengine.errors import DoesNotExist
 
 from application import app
 from application.models.host import Host
-from application.helpers.get_ansible_action import GetAnsibleAction, GetAnsibleCustomVars
+from application.helpers.get_ansible_action import GetAnsibleCustomVars
 from application.helpers.get_label import GetLabel
 from application.helpers.debug import ColorCodes
 
 @app.cli.group(name='ansible')
 def cli_ansible():
     """Ansible related commands"""
-
-def get_rule_helper():
-    """
-    Return object with Rule Helper
-    """
-    helper = GetAnsibleAction()
-    return helper
 
 
 @cli_ansible.command('debug_host')
@@ -32,7 +25,6 @@ def debug_ansible_rules(host):
     """
     Print matching rules and Inventory Outcome for Host
     """
-    action_helper = GetAnsibleAction(debug=True)
     custom_label_helper = GetAnsibleCustomVars(debug=True)
     label_helper = GetLabel()
     try:
@@ -45,32 +37,27 @@ def debug_ansible_rules(host):
         print("Host not  marked as available")
         return
     labels, _ = label_helper.filter_labels(db_host.get_labels())
-    ansible_rules = action_helper.get_action(db_host, labels)
     inventory = {}
-    if ansible_rules.get('vars'):
-        inventory = ansible_rules['vars']
     inventory.update(db_host.get_inventory())
     custom_vars = custom_label_helper.get_action(db_host, inventory)
+    # Second run to see if we have outcomes based on first outcomes
+    custom_vars2 = custom_label_helper.get_action(db_host, custom_vars)
+    custom_vars.update(custom_vars2)
     inventory.update(custom_vars)
 
     print()
     print(f"{ColorCodes.HEADER} ***** Final Outcomes ***** {ColorCodes.ENDC}")
-    print(f"{ColorCodes.UNDERLINE} Labels in DB {ColorCodes.ENDC}")
-    pprint(db_host.get_labels())
-    print(f"{ColorCodes.UNDERLINE}Labels after Filter {ColorCodes.ENDC}")
-    pprint(labels)
-    print(f"{ColorCodes.UNDERLINE}Outcomes based on Ansible Rules {ColorCodes.ENDC}")
-    pprint(ansible_rules)
-    print(f"{ColorCodes.UNDERLINE}Outcomes based on Custom Variables {ColorCodes.ENDC}")
+    print(f"{ColorCodes.UNDERLINE}Custom Variables{ColorCodes.ENDC}")
     pprint(custom_vars)
-    print(f"{ColorCodes.UNDERLINE}Complete Inventory Variables {ColorCodes.ENDC}")
+    if custom_vars.get('ignore'):
+        print("!! This System would be ignored")
+    print(f"{ColorCodes.UNDERLINE}Complete Ansible Inventory Variables{ColorCodes.ENDC}")
     pprint(inventory)
 
 def get_full_inventory():
     """
     Get information for ansible
     """
-    action_helper = GetAnsibleAction()
     label_helper = GetLabel()
     custom_label_helper = GetAnsibleCustomVars()
     data = {
@@ -85,14 +72,14 @@ def get_full_inventory():
     for db_host in Host.objects(available=True):
         hostname = db_host.hostname
         labels, _ = label_helper.filter_labels(db_host.get_labels())
-        ansible_rules = action_helper.get_action(db_host, labels)
-        if ansible_rules.get('ignore'):
-            continue
         inventory = {}
-        if ansible_rules.get('vars'):
-            inventory = ansible_rules['vars']
         inventory.update(db_host.get_inventory())
         custom_vars = custom_label_helper.get_action(db_host, inventory)
+        # Second run to see if we have outcomes based on first outcomes
+        custom_vars2 = custom_label_helper.get_action(db_host, custom_vars)
+        custom_vars.update(custom_vars2)
+        if custom_vars.get('ignore'):
+            continue
         inventory.update(custom_vars)
         data['_meta']['hostvars'][hostname] = inventory
         data['all']['hosts'].append(hostname)
@@ -102,7 +89,6 @@ def get_host_inventory(hostname):
     """
     Get Inventory for single host
     """
-    action_helper = GetAnsibleAction()
     label_helper = GetLabel()
     try:
         #pylint: disable=no-member
@@ -110,12 +96,11 @@ def get_host_inventory(hostname):
     except DoesNotExist:
         return False
     labels, _ = label_helper.filter_labels(db_host.get_labels())
-    ansible_rules = action_helper.get_action(db_host, labels)
-    if ansible_rules.get('ignore'):
-        return False
     inventory = db_host.get_inventory()
-    if ansible_rules.get('vars'):
-        inventory.update(ansible_rules['vars'])
+    custom_vars = custom_label_helper.get_action(db_host, inventory)
+    if custom_vars.get('ignore'):
+        return {}
+    inventory.update(custom_vars)
     return inventory
 
 @cli_ansible.command('source')
