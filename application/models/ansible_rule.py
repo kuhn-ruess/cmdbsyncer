@@ -3,7 +3,7 @@ Ansible Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
-from application.models.rule import rule_types, ActionCondition
+from application.models.rule import rule_types, ActionCondition, FullLabelCondition
 
 ansible_outcome_types = [
   ('var', "Set Variable"),
@@ -12,7 +12,8 @@ ansible_outcome_types = [
 
 ansible_outcome_rule_types = [
   ('var', "Set Variable"),
-  ('ignore', "Ignore Matching Customvar"),
+  ('ignore', "Ignore matching Customvar"),
+  ('ignore_host', "Ignore matching Host in Ansible"),
 ]
 
 class AnsibleOutcomeRule(db.EmbeddedDocument):
@@ -65,10 +66,10 @@ class AnsibleCustomVariablesRule(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(AnsibleOutcomeRule))
+    conditions = db.ListField(db.EmbeddedDocumentField(FullLabelCondition))
     render_conditions = db.StringField() # Helper for preview
 
-    outcome = db.ListField(db.EmbeddedDocumentField(AnsibleOutcome))
+    outcome = db.ListField(db.EmbeddedDocumentField(AnsibleOutcomeRule))
     render_outcome = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)

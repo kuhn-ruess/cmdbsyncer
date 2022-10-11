@@ -41,7 +41,7 @@ class ActionCondition(db.EmbeddedDocument):
     """
     Condition
     """
-    match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Tag")])
+    match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Label")])
 
     hostname_match = db.StringField(choices=condition_types)
     hostname = db.StringField()
@@ -114,6 +114,24 @@ class LabelCondition(db.EmbeddedDocument):
         'strict': False,
     }
 
+class FullLabelCondition(db.EmbeddedDocument):
+    """
+    Condition
+    """
+    match_type = db.StringField(choices=[('tag', "Match for Label")])
+
+    tag_match = db.StringField(choices=condition_types)
+    tag = db.StringField()
+    tag_match_negate = db.BooleanField()
+
+    value_match = db.StringField(choices=condition_types)
+    value = db.StringField()
+    value_match_negate = db.BooleanField()
+
+
+    meta = {
+        'strict': False,
+    }
 
 class LabelRule(db.Document):
     """
