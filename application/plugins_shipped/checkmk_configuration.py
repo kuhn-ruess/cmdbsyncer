@@ -6,7 +6,7 @@ import sys
 import pprint
 import re
 import click
-from application.modules.cmk2 import CMK2, cli_cmk
+from application.modules.cmk2 import CMK2, cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
 from application.helpers.debug import ColorCodes
 from application.helpers.get_all_host_attributes import get_all_attributes
@@ -116,12 +116,39 @@ def export_cmk_groups(account, test_run):
 
 
 
+#.
+#   .-- Command: Activate Changes
+@cli_cmk.command('activate_changes')
+@click.argument("account")
+#pylint: disable=too-many-locals, too-many-branches
+def activate_changes(account):
+    """
+    Activate Changes in given Instance
+    """
+    account_config = get_account_by_name(account)
+    if account_config['typ'] != 'cmkv2':
+        print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
+        sys.exit(1)
+    cmk = CMK2(account_config)
+    url = "/domain-types/activation_run/actions/activate-changes/invoke"
+    data = {
+        'redirect': False,
+        'force_foreign_changes': True,
+    }
+    try:
+        cmk.request(url, data=data, method="POST")
+        print("Changes activated")
+        sys.exit(0)
+    except CmkException as errors:
+        print(errors)
+        sys.exit(1)
+
 
 
 
 #.
 #   .-- Command: Host Inventory
-@cli_cmk.command('inventory_hosts')
+@cli_cmk.command('inventorize_hosts')
 @click.argument('account')
 #pylint: disable=too-many-locals
 def run_cmk2_inventory(account):
