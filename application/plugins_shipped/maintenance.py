@@ -26,6 +26,7 @@ def cli_sys():
     """
 
 
+#   .-- Command: Maintanence
 @cli_sys.command('maintenance')
 @click.argument("days")
 def maintenance(days):
@@ -42,7 +43,8 @@ def maintenance(days):
             remove_seat(folder)
             print(f"{ColorCodes.WARNING}  *** {ColorCodes.ENDC}Seat in Pool {folder} free now")
         host.delete()
-
+#.
+#   .-- Command: Delete all Hosts
 @cli_sys.command('delete_all_hosts')
 def delete_all_hosts():
     """
@@ -57,6 +59,8 @@ def delete_all_hosts():
     else:
         print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")
 
+#.
+#   .-- Command: Reset Folder Pools
 @cli_sys.command('reset_folder_pools')
 def delete_all_hosts():
     """
@@ -73,6 +77,8 @@ def delete_all_hosts():
     else:
         print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")
 
+#.
+#   .-- Command: Show Accounts
 @cli_sys.command('show_accounts')
 def show_accounts():
     """Print list of all active accounts"""
@@ -80,6 +86,8 @@ def show_accounts():
     for account in Account.objects(enabled=True):
         print(f"- Name: {account.name}, Type: {account.typ}, Address: {account.address}")
 
+#.
+#   .-- Command: Create User
 @cli_sys.command('create_user')
 @click.argument("email")
 def seed_user(email):
@@ -99,3 +107,13 @@ def seed_user(email):
     user.disable = False
     user.save()
     print(f"User passwort set to: {passwd}")
+#.
+#   .-- Command: Export Rules
+#@cli_sys.command('export_rules')
+#@click.argument("rule_model")
+#def export_rules(rule_model):
+#    """Export given Rule Model"""
+#    models = [
+#    ]
+#
+##.

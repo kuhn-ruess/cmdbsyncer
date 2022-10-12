@@ -65,12 +65,13 @@ class CMK2():
                 #'Path already exists',
                 'Not Found',
                 'The operation has failed.',
+                'Mismatch between endpoint and internal data format. ',
             ]
 
             if response.status_code != 200:
-                if response.json()['title'] not in error_whitelist:
-                    print(response.text)
                 response_json = response.json()
+                if response_json['title'] not in error_whitelist:
+                    print(response.text)
                 raise CmkException(f"{response_json['title']} {response_json['detail']}")
             return response.json(), response.headers
         except (ConnectionResetError, requests.exceptions.ProxyError):
