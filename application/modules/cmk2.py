@@ -64,12 +64,14 @@ class CMK2():
             error_whitelist = [
                 #'Path already exists',
                 'Not Found',
+                'The operation has failed.',
             ]
 
             if response.status_code != 200:
                 if response.json()['title'] not in error_whitelist:
                     print(response.text)
-                raise CmkException(response.json()['title'])
+                response_json = response.json()
+                raise CmkException(f"{response_json['title']} {response_json['detail']}")
             return response.json(), response.headers
         except (ConnectionResetError, requests.exceptions.ProxyError):
             raise Exception("Cant connect to cmk site") # pylint: disable=raise-missing-from

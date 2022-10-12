@@ -1,2 +1,17 @@
 ---
 - include_tasks: "{{ ansible_os_family }}-tasks.yml"
+
+- name: "Discover Services"
+  ansible.builtin.uri:
+    url: "https://{{ cmk_main_server }}/{{ cmk_main_site }}/check_mk/api/1.0/domain-types/service_discovery_run/actions/start/invoke"
+    method: POST
+    validate_certs: no
+    headers:
+      Authorization: "Bearer {{ cmk_user }} {{ cmk_password }}"
+      Accept: "application/json"
+    return_content: False
+    body: "{\"host_name\": \"{{ inventory_hostname }}\", \"mode\": \"fix_all\" }"
+    body_format: json
+  when: cmk_discover | bool
+  ignore_errors: yes
+  delegate_to: localhost
