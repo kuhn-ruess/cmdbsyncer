@@ -145,6 +145,36 @@ def activate_changes(account):
 
 
 
+#.
+#   .-- Command: Bake and Sign agents
+@cli_cmk.command('bake_and_sign_agents')
+@click.argument("account")
+#pylint: disable=too-many-locals, too-many-branches
+def activate_changes(account):
+    """
+    Bake and Sign Agents for Instance
+    """
+    account_config = get_account_by_name(account)
+    custom_config = {x['name']:x['value'] for x in account_config['custom_fields']}
+    if account_config['typ'] != 'cmkv2':
+        print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
+        sys.exit(1)
+    if not "backery_key_id" in custom_config and not "bakery_passphrase" in custom_config:
+        print(f"{ColorCodes.FAIL} Please set baker_key_id and bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
+        sys.exit(1)
+    cmk = CMK2(account_config)
+    url = "/domain-types/agent/actions/bake_and_sign/invoke"
+    data = {
+        'key_id': int(custom_config['bakery_key_id']),
+        'passphrase': custom_config['bakery_passphrase'],
+    }
+    try:
+        cmk.request(url, data=data, method="POST")
+        print("Signed and Baked Agents")
+        sys.exit(0)
+    except CmkException as errors:
+        print(errors)
+        sys.exit(1)
 
 #.
 #   .-- Command: Host Inventory
