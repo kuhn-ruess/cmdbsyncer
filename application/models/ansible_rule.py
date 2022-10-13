@@ -7,13 +7,13 @@ from application.models.rule import rule_types, ActionCondition, FullLabelCondit
 
 ansible_outcome_types = [
   ('var', "Set Variable"),
-  ('ignore', "Ignore matching Host in Ansible"),
+  ('ignore_host', "Ignore Host(s)"),
 ]
 
 ansible_outcome_rule_types = [
   ('var', "Set Variable"),
-  ('ignore', "Ignore matching Customvar"),
-  ('ignore_host', "Ignore matching Host in Ansible"),
+  ('ignore_customvar', "Ignore matching Customvar"),
+  ('ignore_host', "Ignore Host(s)"),
 ]
 
 class AnsibleOutcomeRule(db.EmbeddedDocument):

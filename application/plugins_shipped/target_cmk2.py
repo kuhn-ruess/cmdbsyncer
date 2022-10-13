@@ -74,13 +74,13 @@ class UpdateCMKv2(CMK2):
 
             host_params = self.params_helper.get_params(db_host.hostname)
 
-            if host_params.get('ignore_hosts'):
+            if host_params.get('ignore_host'):
                 continue
             if host_params.get('custom_labels'):
                 labels.update(host_params['custom_labels'])
 
             next_actions = self.action_helper.get_action(db_host, labels)
-            if 'ignore' in next_actions:
+            if 'ignore' in next_actions or 'ignore_host' in next_actions:
                 print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Host ignored by rules")
                 continue
             synced_hosts.append(db_host.hostname)
@@ -337,7 +337,7 @@ def get_cmk_data():
         db_labels = db_host.get_labels()
         applied_labels, extra_actions = label_helper.filter_labels(db_labels)
         next_actions = action_helper.get_action(db_host, applied_labels)
-        if not next_actions or 'ignore' in next_actions:
+        if not next_actions or 'ignore' in next_actions or 'ignore_host' in next_actions:
             continue
         print(f'Next Action: {next_actions}')
         print(f"Extra Actions for {db_host.hostname}")

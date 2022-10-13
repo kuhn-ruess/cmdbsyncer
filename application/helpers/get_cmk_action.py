@@ -39,7 +39,7 @@ class GetCmkAction(Action): # pylint: disable=too-few-public-methods
         """ Handle the Outcomes """
         #pylint: disable=too-many-branches
         outcomes_to_return = [
-            'ignore',
+            'ignore', 'ignore_host' # @TODO Remove ignore for ignore_host
         ]
         for outcome in rule['outcome']:
             # We add only the outcome of the

@@ -26,8 +26,8 @@ class GetHostParams(): # pylint: disable=too-few-public-methods
         """
         outcome = {}
         for param in params:
-            if param['type'] == "ignore_hosts":
-                outcome['ignore_hosts'] = True
+            if param['type'] == "ignore_host":
+                outcome['ignore_host'] = True
             elif param['type'] == "add_custom_label":
                 outcome.setdefault('custom_labels', {})
                 outcome['custom_labels'][param['name']] = param['value']

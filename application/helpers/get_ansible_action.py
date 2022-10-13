@@ -21,8 +21,8 @@ class GetAnsibleCustomVars(Action):
 
     def add_outcomes(self, rule, outcomes):
         for outcome in rule['outcome']:
-            if outcome['type'] == "ignore":
-                outcomes['ignore'] = True
+            if outcome['type'] == "ignore_host":
+                outcomes['ignore_host'] = True
             if outcome['type'] == 'var':
                 value = outcome['value']
                 if value.lower() == 'true':
@@ -48,8 +48,8 @@ class GetAnsibleCustomVarsRule(Action):
     def add_outcomes(self, rule, outcomes):
         for outcome in rule['outcome']:
             if outcome['type'] == "ignore_host":
-                outcomes['ignore'] = True
-            if outcome['type'] == "ignore":
+                outcomes['ignore_host'] = True
+            if outcome['type'] == "ignore_customvar":
                 outcomes.setdefault('ignore_vars', [])
                 outcomes['ignore_vars'].append(outcome['param'])
             if outcome['type'] == 'var':
