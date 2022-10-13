@@ -27,13 +27,14 @@ action_outcome_types = [
     ('value_as_folder', "Use Value of given Tag as Folder"),
     ("tag_as_folder", "Use Tag of given Value as Folder"),
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
-    ("ignore", "Ignore this host"),
+    ("ignore", "Deprecated: Switch to: Ignore host(s)"),
+    ("ignore_host", "Ignore Host(s)"),
 ]
 
 
 host_params_types = [
-    ('add_custom_label', "Add Custom Label"),
-    ('ignore_hosts', "Ignore matching Hosts"),
+    ('add_custom_label', "Add Custom Label(s)"),
+    ('ignore_host', "Ignore Host(s)"),
 ]
 
 
