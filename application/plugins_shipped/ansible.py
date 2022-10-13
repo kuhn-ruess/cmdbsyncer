@@ -29,6 +29,7 @@ def clean_vars(special_vars, inventory):
                 del inventory[var]
             except KeyError:
                 continue
+    del inventory['ignore_vars']
     return inventory
 
 
@@ -57,6 +58,7 @@ def debug_ansible_rules(host):
     custom_vars = custom_variable_helper.get_action(db_host, labels)
     special_vars = custom_var_var_helper.get_action(db_host, custom_vars)
     inventory.update(custom_vars)
+    inventory.update(special_vars)
 
 
     print()
@@ -65,7 +67,7 @@ def debug_ansible_rules(host):
     pprint(custom_vars)
     if custom_vars.get('ignore_host'):
         print("!! This System would be ignored")
-    print(f"{ColorCodes.UNDERLINE}Custom Variables based on Other Custom Variables{ColorCodes.ENDC}")
+    print(f"{ColorCodes.UNDERLINE}Custom Vars based on Custom Vars{ColorCodes.ENDC}")
     pprint(special_vars)
     if special_vars.get('ignore_host'):
         print("!! This System would be ignored")
@@ -104,6 +106,7 @@ def get_full_inventory():
         if special_vars.get('ignore_host'):
             continue
         inventory.update(custom_vars)
+        inventory.update(special_vars)
         inventory = clean_vars(special_vars, inventory)
         data['_meta']['hostvars'][hostname] = inventory
         data['all']['hosts'].append(hostname)
@@ -120,9 +123,16 @@ def get_host_inventory(hostname):
     except DoesNotExist:
         return False
     labels, _ = label_helper.filter_labels(db_host.get_labels())
+    custom_label_helper = GetAnsibleCustomVars()
+    custom_var_var_helper = GetAnsibleCustomVarsRule()
     inventory = db_host.get_inventory()
-    custom_vars = custom_label_helper.get_action(db_host, inventory)
+    labels.update(inventory)
+    custom_vars = custom_label_helper.get_action(db_host, labels)
     if custom_vars.get('ignore_host'):
+        return {}
+    inventory.update(custom_vars)
+    special_vars = custom_var_var_helper.get_action(db_host, custom_vars)
+    if special_vars.get('ignore_host'):
         return {}
     inventory.update(custom_vars)
     return inventory
