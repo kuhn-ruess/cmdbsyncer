@@ -73,40 +73,80 @@ class CiscoDNA():
         ]
         token = self.get_auth_token()
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
-        url = f"{self.address}/dna/intent/api/v1/interface"
+        base_url = f"{self.address}/dna/intent/api/v1/interface/network_device/"
         headers = {"x-auth-token": token}
-        #pylint: disable=missing-timeout
-        response = requests.request("GET", url, headers=headers, verify=self.verify)
-        response_json = response.json()['response']
-        total = len(response_json)
-        import pprint
-        counter = 0
-        for interface in response_json:
-            counter += 1
-            process = 100.0 * counter / total
-            sync_id = interface['device_id']
-            print(f"\n{ColorCodes.HEADER}({process:.0f}%) {sync_id}{ColorCodes.ENDC}")
-            db_host = Host.objects.get(sync_id=sync_id)
-            inventory = {}
-            for attribute in inventory_attributes:
-                inventory[f'cisco_dna_port_{attribute}'] = device[attribute]
-            db_host.inventory.update_inventory('cisco_dna_port', inventory)
-            db_host.sync_id = device['id']
-            db_host.set_import_seen()
-            db_host.set_account(self.account_id, self.account_name)
-            db_host.save()
+
+        for host in Host.objects(available=True, source_account_id=self.account_id):
+            url = base_url + host.sync_id
+            #pylint: disable=missing-timeout
+            response = requests.request("GET", url, headers=headers, verify=self.verify)
+            print(response.json())
+            continue
+            response_json = response.json()['response']
 
 #.
 #   .-- Command: get_hosts
     def get_hosts(self):
         """
         Get Host list
+        {'apEthernetMacAddress': None,
+          'apManagerInterfaceIp': '',
+          'associatedWlcIp': '',
+          'bootDateTime': '2021-10-31 01:54:27',
+          'collectionInterval': 'Global Default',
+          'collectionStatus': 'Managed',
+          'description': 'Cisco IOS Software [Gibraltar], Catalyst L3 Switch Software '
+                         '(CAT9K_IOSXE), Version 16.11.1c, RELEASE SOFTWARE (fc3) '
+                         'Technical Support: http://www.cisco.com/techsupport '
+                         'Copyright (c) 1986-2019 by Cisco Systems, Inc. Compiled Tue '
+                         '18-Jun-19 21:21 by mcpre',
+          'deviceSupportLevel': 'Supported',
+          'errorCode': None,
+          'errorDescription': None,
+          'family': 'Switches and Hubs',
+          'hostname': 'spine1.abc.inc',
+          'id': 'f16955ae-c349-47e9-8e8f-9b62104ab604',
+          'instanceTenantId': '5e8e896e4d4add00ca2b6487',
+          'instanceUuid': 'f16955ae-c349-47e9-8e8f-9b62104ab604',
+          'interfaceCount': '0',
+          'inventoryStatusDetail': '<status><general code="SUCCESS"/></status>',
+          'lastUpdateTime': 1665711027479,
+          'lastUpdated': '2022-10-14 01:30:27',
+          'lineCardCount': '0',
+          'lineCardId': '',
+          'location': None,
+          'locationName': None,
+          'macAddress': '70:1f:53:73:8d:00',
+          'managedAtleastOnce': True,
+          'managementIpAddress': '10.10.20.80',
+          'managementState': 'Managed',
+          'memorySize': 'NA',
+          'platformId': 'C9300-48U',
+          'reachabilityFailureReason': '',
+          'reachabilityStatus': 'Reachable',
+          'role': 'ACCESS',
+          'roleSource': 'AUTO',
+          'serialNumber': 'FOC2135Z00T',
+          'series': 'Cisco Catalyst 9300 Series Switches',
+          'snmpContact': '',
+          'snmpLocation': '',
+          'softwareType': 'IOS-XE',
+          'softwareVersion': '16.11.1c',
+          'tagCount': '0',
+          'tunnelUdpPort': None,
+          'type': 'Cisco Catalyst 9300 Switch',
+          'upTime': '347 days, 23:36:23.24',
+          'uptimeSeconds': 30086167,
+          'waasDeviceMode': None}
         """
         inventory_attributes = [
             'id',
             'location',
             'platformId',
             'series',
+            'serialNumber',
+            'platformId',
+
         ]
         token = self.get_auth_token()
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
@@ -126,7 +166,7 @@ class CiscoDNA():
             inventory = {}
             for attribute in inventory_attributes:
                 inventory[f'cisco_dna_{attribute}'] = device[attribute]
-            db_host.inventory.update_inventory('cisco_dna_', inventory)
+            db_host.update_inventory('cisco_dna_', inventory)
             db_host.sync_id = device['id']
             db_host.set_import_seen()
             db_host.set_account(self.account_id, self.account_name)
