@@ -40,12 +40,13 @@ class GetHostParams(): # pylint: disable=too-few-public-methods
         """
 
         # First rule Match
+        outcomes = {}
         for rule in self.rules:
             for condtion in rule['conditions']:
                 cond_hostname = condtion['hostname']
                 if match(hostname, cond_hostname, condtion['match'], condtion['match_negate']):
-                    return self._convert_params(rule['params'])
-        return {}
+                    outcomes.update(self._convert_params(rule['params']))
+        return outcomes
 
 
 

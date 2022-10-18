@@ -92,8 +92,8 @@ admin = Admin(app, name=f"CMDB Syncer {VERSION}",
 
 admin.add_view(HostModelView(Host, name="Hosts"))
 
-admin.add_view(RuleModelView(LabelRule, name="Label Rules", category="Rules"))
-admin.add_view(RuleModelView(HostRule, name="Custom Host Rules", category="Rules"))
+admin.add_view(RuleModelView(HostRule, name="Custom Label Rules", category="Rules"))
+admin.add_view(RuleModelView(LabelRule, name="Label Cleanup/ Whitelist Rules", category="Rules"))
 
 admin.add_sub_category(name="Checkmk Rules", parent_name="Rules")
 admin.add_view(RuleModelView(ActionRule, name="Host Rules", category="Checkmk Rules"))

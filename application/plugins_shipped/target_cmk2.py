@@ -69,15 +69,16 @@ class UpdateCMKv2(CMK2):
             counter += 1
             process = 100.0 * counter / total
             print(f"\n{ColorCodes.HEADER}({process:.0f}%) {db_host.hostname}{ColorCodes.ENDC}")
-            db_labels = db_host.get_labels()
-            labels, extra_actions = self.label_helper.filter_labels(db_labels)
-
+            labels = db_host.get_labels()
             host_params = self.params_helper.get_params(db_host.hostname)
 
             if host_params.get('ignore_host'):
                 continue
             if host_params.get('custom_labels'):
                 labels.update(host_params['custom_labels'])
+
+            labels, extra_actions = self.label_helper.filter_labels(labels)
+
 
             next_actions = self.action_helper.get_action(db_host, labels)
             if 'ignore' in next_actions or 'ignore_host' in next_actions:
@@ -304,10 +305,11 @@ def debug_cmk_rules(hostname):
         print("Host not found")
         return
     db_labels = db_host.get_labels()
-    labels, extra_actions = label_helper.filter_labels(db_labels)
+    labels = db_labels
     params_export = params_helper_export.get_params(hostname)
     if params_export.get('custom_labels'):
         labels.update(params_export['custom_labels'])
+    labels, extra_actions = label_helper.filter_labels(labels)
     params_import = params_helper_import.get_params(hostname)
     actions = action_helper.get_action(db_host, labels)
 
