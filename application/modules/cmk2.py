@@ -66,13 +66,15 @@ class CMK2():
                 'Not Found',
                 'The operation has failed.',
                 'Mismatch between endpoint and internal data format. ',
+                'Precondition required If-Match header required for this operation. See documentation.',
             ]
 
             if response.status_code != 200:
                 response_json = response.json()
                 if response_json['title'] not in error_whitelist:
                     print(response.text)
-                raise CmkException(f"{response_json['title']} {response_json['detail']}")
+                    raise CmkException(f"{response_json['title']} {response_json['detail']}")
+                return {}, {}
             return response.json(), response.headers
         except (ConnectionResetError, requests.exceptions.ProxyError):
-            raise Exception("Cant connect to cmk site") # pylint: disable=raise-missing-from
+            return {}, {}

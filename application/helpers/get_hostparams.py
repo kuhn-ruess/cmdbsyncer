@@ -12,12 +12,12 @@ class GetHostParams(): # pylint: disable=too-few-public-methods
     Class to get actions for rule
     """
 
-    def __init__(self, target):
+    def __init__(self):
         """
         Prepare Rules
         """
         self.rules = [x.to_mongo() for x in HostRule.objects(enabled=True,
-                                                             target=target).order_by('sort_field')]
+                                                                 ).order_by('sort_field')]
 
     @staticmethod
     def _convert_params(params):
@@ -30,7 +30,6 @@ class GetHostParams(): # pylint: disable=too-few-public-methods
                 outcome['ignore_host'] = True
             elif param['type'] == "add_custom_label":
                 outcome.setdefault('custom_labels', {})
-                print(param['value'])
                 outcome['custom_labels'][param['name']] = param['value']
         return outcome
 

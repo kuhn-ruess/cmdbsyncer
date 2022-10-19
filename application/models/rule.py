@@ -178,7 +178,6 @@ class HostRule(db.Document):
     params = db.ListField(db.EmbeddedDocumentField(HostParams))
     render_host_params = db.StringField()
     enabled = db.BooleanField()
-    target = db.StringField(choices=[('import', 'Import'),('export', 'Export')])
     sort_field = db.IntField()
     meta = {
         'strict': False

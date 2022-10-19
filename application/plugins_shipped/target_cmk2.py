@@ -30,7 +30,7 @@ class UpdateCMKv2(CMK2):
         self.action_helper = GetCmkAction()
         self.account_name = config['name']
         self.label_helper = GetLabel()
-        self.params_helper = GetHostParams('export')
+        self.params_helper = GetHostParams()
 
     def run(self): #pylint: disable=too-many-locals, too-many-branches
         """Run Job"""
@@ -69,7 +69,8 @@ class UpdateCMKv2(CMK2):
             counter += 1
             process = 100.0 * counter / total
             print(f"\n{ColorCodes.HEADER}({process:.0f}%) {db_host.hostname}{ColorCodes.ENDC}")
-            labels = db_host.get_labels()
+            labels = {}
+            labels.update(db_host.get_labels())
             host_params = self.params_helper.get_params(db_host.hostname)
 
             if host_params.get('ignore_host'):
@@ -206,7 +207,7 @@ class UpdateCMKv2(CMK2):
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Read ETAG in CMK")
         url = f"objects/host_config/{db_host.hostname}"
         _, headers = self.request(url, "GET")
-        return headers['ETag']
+        return headers.get('ETag')
 
     def update_host(self, db_host, cmk_host, folder, labels, additional_attributes=None):
         """
@@ -239,7 +240,8 @@ class UpdateCMKv2(CMK2):
                          data=update_body,
                          additional_header=update_headers)
             # Need to update the header after last request
-            etag = header['Etag']
+            if new_etag := header.get('ETag'):
+                etag = new_etag
             update_headers = {
                 'if-match': etag,
             }
@@ -296,8 +298,7 @@ def debug_cmk_rules(hostname):
     print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
     action_helper = GetCmkAction(debug=True)
     label_helper = GetLabel()
-    params_helper_export = GetHostParams('export')
-    params_helper_import = GetHostParams('import')
+    params_helper = GetHostParams()
 
     try:
         db_host = Host.objects.get(hostname=hostname)
@@ -305,12 +306,12 @@ def debug_cmk_rules(hostname):
         print("Host not found")
         return
     db_labels = db_host.get_labels()
-    labels = db_labels
-    params_export = params_helper_export.get_params(hostname)
-    if params_export.get('custom_labels'):
-        labels.update(params_export['custom_labels'])
+    labels ={}
+    labels.update(db_labels)
+    params = params_helper.get_params(hostname)
+    if params.get('custom_labels'):
+        labels.update(params['custom_labels'])
     labels, extra_actions = label_helper.filter_labels(labels)
-    params_import = params_helper_import.get_params(hostname)
     actions = action_helper.get_action(db_host, labels)
 
     print()
@@ -321,10 +322,8 @@ def debug_cmk_rules(hostname):
     pprint(labels)
     print(f"{ColorCodes.UNDERLINE}Extra Actions for {db_host.hostname} {ColorCodes.ENDC}")
     print(extra_actions)
-    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Export {ColorCodes.ENDC}")
-    pprint(params_export)
-    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters for Import {ColorCodes.ENDC}")
-    pprint(params_import)
+    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters{ColorCodes.ENDC}")
+    pprint(params)
     print(f"{ColorCodes.UNDERLINE}Actions based on Action Rules {ColorCodes.ENDC}")
     pprint(actions)
 #.
