@@ -74,6 +74,10 @@ def delete_all_hosts():
             print(f"      - {pool.folder_name}")
             pool.folder_seats_taken = 0
             pool.save()
+
+        for host in Host.objects():
+            host.folder = None
+            host.save()
     else:
         print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")
 
