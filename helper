@@ -5,7 +5,7 @@ CONTAINER=cmdb_syncer
 APPLICATION=cmdb_syncer-api-1
 
 case "$1" in
-"cup")
+"up")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml build
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER up --force-recreate -d
     ;;
