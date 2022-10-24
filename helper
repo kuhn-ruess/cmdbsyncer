@@ -5,24 +5,24 @@ CONTAINER=cmdb_syncer
 APPLICATION=cmdb_syncer-api-1
 
 case "$1" in
-"dcup")
+"cup")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml build
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER up --force-recreate -d
     ;;
-"dcstart")
+"start")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER start
     ;;
-"dcstop")
+"stop")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER stop
     ;;
-"dcdown")
+"down")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER down --rmi local --remove-orphans
     ;;
-"dclogs")
+"logs")
     echo "Start Container Logs"
     docker logs -f $APPLICATION
     ;;
-"dcshell")
+"shell")
     echo "Start Container Shell"
     docker exec -it $APPLICATION sh
     ;;
@@ -31,7 +31,7 @@ case "$1" in
     ;;
 *)
     echo "Simple Helper for CMDB Syncer Jobs."
-    echo "For Docker Compose: dcup, dcdown, dcstart, dcstop, dclogs and dcshell are the options"
+    echo "For Docker Compose: up, down, start, stop, logs and shell are the options"
     echo "Create a venv with bve"
     ;;
 esac
