@@ -81,6 +81,9 @@ from application.models.cmk_group_rules import CmkGroupRule
 
 from application.models.ansible_rule import AnsibleCustomVariables, AnsibleCustomVariablesRule
 
+
+from application.models.netbox_rule import NetboxCustomVariables
+
 from application.models.folder_pool import FolderPool
 from application.views.folder_pool import FolderPoolModelView
 
@@ -103,9 +106,13 @@ admin.add_view(FolderPoolModelView(FolderPool, name="Folder Pools", category="Ch
 
 admin.add_sub_category(name="Ansible Rules", parent_name="Rules")
 admin.add_view(RuleModelView(AnsibleCustomVariables,\
-                                    name="Define Custom Variables by Labels", category="Ansible Rules"))
+                                    name="Define Custom Variables", category="Ansible Rules"))
 admin.add_view(RuleModelView(AnsibleCustomVariablesRule,\
-                                    name="Define Custom Variables based on Custom Variables", category="Ansible Rules"))
+                                    name="Define Custom Variables conditioned by Custom Variables", category="Ansible Rules"))
+
+admin.add_sub_category(name="Netbox Rules", parent_name="Rules")
+admin.add_view(RuleModelView(NetboxCustomVariables,\
+                                    name="Define Custom Attributes", category="Netbox Rules"))
 
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
 admin.add_view(UserView(User, category='Config'))
