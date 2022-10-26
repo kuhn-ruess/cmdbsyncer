@@ -8,6 +8,7 @@ from application.views.default import DefaultModelView
 from application.models.rule import label_choices, label_outcome_types, \
                                     host_params_types, action_outcome_types
 from application.models.ansible_rule import ansible_outcome_types, ansible_outcome_rule_types
+from application.models.netbox_rule import netbox_outcome_types
 
 condition_types={
     'equal': "is equal",
@@ -23,6 +24,7 @@ condition_types={
 action_outcome_types = dict(action_outcome_types)
 action_outcome_types.update(dict(ansible_outcome_types))
 action_outcome_types.update(dict(ansible_outcome_rule_types))
+action_outcome_types.update(dict(netbox_outcome_types))
 
 def _render_outcome(_view, _context, model, _name):
     """
@@ -31,10 +33,12 @@ def _render_outcome(_view, _context, model, _name):
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcome):
         value = ""
-        if entry.param:
+        if hasattr(entry, 'param'):
             value = entry.param
             if hasattr(entry, 'value'):
                 value +=f":{entry.value}"
+        elif hasattr(entry, 'value'):
+            value = entry.value
         html += f"<tr><td>{idx}</td><td>{action_outcome_types[entry.type]}</td>"\
                 f"<td><b>{value}</b></td></tr>"
     html += "</table>"
