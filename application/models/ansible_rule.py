@@ -56,7 +56,7 @@ class AnsibleCustomVariables(db.Document):
 
 
     enabled = db.BooleanField()
-    sort_field = db.IntField()
+    sort_field = db.IntField(required=True)
 
 class AnsibleCustomVariablesRule(db.Document):
     """
@@ -76,4 +76,4 @@ class AnsibleCustomVariablesRule(db.Document):
 
 
     enabled = db.BooleanField()
-    sort_field = db.IntField()
+    sort_field = db.IntField(required=True)

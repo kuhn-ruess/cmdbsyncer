@@ -1,6 +1,7 @@
 """
 Create Objects in Netbox
 """
+#pylint: disable=no-member
 from pprint import pprint
 import click
 import requests
@@ -24,6 +25,9 @@ if app.config.get("DISABLE_SSL_ERRORS"):
 
 
 class NetboxUpdate():
+    """
+    Netbox Update/ Get Operations
+    """
 
     def __init__(self, config):
         """
@@ -31,6 +35,7 @@ class NetboxUpdate():
         """
         self.log = log
         self.config = config
+        self.cache = {}
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
         self.rule_helper = GetNetboxsRules(debug=config.get('DEBUG'))
         self.label_helper = GetLabel()
@@ -43,7 +48,8 @@ class NetboxUpdate():
         password = self.config['password']
         url = f'{address}/api/{path}'
         headers = {
-            'Authorization': f"Token {password}"
+            'Authorization': f"Token {password}",
+            'Content-Type': 'application/json',
         }
         if additional_header:
             headers.update(additional_header)
@@ -59,18 +65,15 @@ class NetboxUpdate():
             elif method == 'post':
                 response = requests.post(url, json=data, headers=headers, verify=self.verify)
             elif method == 'patch':
-                response = requests.patch(url, params=data, headers=headers, verify=self.verify)
+                response = requests.patch(url, json=data, headers=headers, verify=self.verify)
             elif method == 'put':
-                response = requests.put(url, params=data, headers=headers, verify=self.verify)
+                response = requests.put(url, json=data, headers=headers, verify=self.verify)
             elif method == 'delete':
                 response = requests.delete(url, headers=headers, verify=self.verify)
                 # Checkmk gives no json response here, so we directly return
                 return True, response.headers
 
             response_json = response.json()
-            if response.status_code != 200:
-                print(response_json)
-                return {}
             if 'results' in response_json:
                 return response_json['results']
             return response_json
@@ -82,35 +85,54 @@ class NetboxUpdate():
         """
         Read full list of devices
         """
+        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Netbox: Read all devices")
         url = 'dcim/devices/'
         return {x['display']:x for x in self.request(url, "GET")}
 
-    def get_device_types(self):
-        """
-        Read Devicestypes from Netbox
-        {'count': 1, 'next': None, 'previous': None, 'results': [{'id': 1, 'url': 'http://10.8.0.6:5007/api/dcim/device-types/1/', 'display': 'Der die das device', 'manufacturer': {'id': 1, 'url': 'http://10.8.0.6:5007/api/dcim/manufacturers/1/', 'display': 'Cisco', 'name': 'Cisco', 'slug': 'cisco'}, 'model': 'Der die das device', 'slug': 'der-die-das-device', 'part_number': '', 'u_height': 1.0, 'is_full_depth': True, 'subdevice_role': None, 'airflow': None, 'front_image': None, 'rear_image': None, 'comments': '', 'tags': [], 'custom_fields': {}, 'created': '2022-10-25T08:41:03.301047Z', 'last_updated': '2022-10-25T08:41:03.301064Z', 'device_count': 0}]}
-        """
-        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC} Get list of Device Types")
-        url = 'dcim/device-types/'
-        print(self.request(url, "GET"))
 
-    def get_device_roles(self):
+    def uppsert_element(self, key, value):
         """
-        Read Device Roles
+        Returns the Element ID of given value
+        directly or creates it first
         """
-        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC} Get list of Device Roles")
-        url = 'dcim/device-roles/'
-        print(self.request(url, "GET"))
-        pass
 
-    def get_tendens(self):
-        pass
+        endpoints = {
+            'platform': {'url': 'dcim/platforms/',
+                         'name_tag': 'name'},
+            'device_type': {'url': 'dcim/device-types/',
+                            'name_tag': 'model',
+                            'additional_tags': ['manufacturer']},
+            'device_role': {'url': 'dcim/device-roles/',
+                            'name_tag': 'name'},
+        }
 
-    def get_plattforms(self):
-        pass
+        conf = endpoints[key]
 
-    def get_sites(self):
-        pass
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Need to sync {key} ({value})")
+        if not self.cache.get(key):
+            print(f"{ColorCodes.OKGREEN}   -- {ColorCodes.ENDC}build cache for {key}")
+            self.cache[key] = {}
+            for entry in self.request(conf['url'], "GET"):
+                self.cache[key][entry['display']] = entry['id']
+
+        # FIND Data
+        for entry_name, entry_id in self.cache[key].items():
+            if entry_name == value:
+                return entry_id
+
+        # Create Entry
+        payload = {
+            conf['name_tag']: value,
+            'slug': value.lower().replace(' ','_')
+        }
+        for extra_key in conf.get('additional_tags', []):
+            payload[extra_key] = 1
+
+        response = self.request(conf['url'], "POST", payload)
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} New {key} {value} created in Netbox")
+        new_id = response['id']
+        self.cache[key][value] = new_id
+        return new_id
 
 
     def get_payload(self, db_host, custom_rules, inventory):
@@ -157,23 +179,20 @@ class NetboxUpdate():
         key_translation = {
             'cisco_dna_serialNumber': "serial",
         }
-        int_keys = [
-        'platform', 'tenant',
-        ]
         # Add custom variables who match to keyload
         for key in custom_rules:
             if key in payload:
-                if key in int_keys:
-                    payload[key] = int(custom_rules[key])
-                else:
-                    payload[key] = custom_rules[key]
+                payload[key] = custom_rules[key]
+            if key.endswith("_sync"):
+                # Sync attribute by value of given tag
+                real_key = key[:-5]
+                wanted = inventory[custom_rules[key]]
+                payload[real_key] = self.uppsert_element(real_key, wanted)
+
         # Add Inventory Variables we have a remap entry for
         for key in inventory:
             if key in key_translation:
-                if key in int_keys:
-                    payload[key_translation[key]] = int(inventory[key])
-                else:
-                    payload[key_translation[key]] = inventory[key]
+                payload[key_translation[key]] = inventory[key]
 
         return payload
 
@@ -195,7 +214,6 @@ class NetboxUpdate():
         """
         Update Devices Table in Netbox
         """
-        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}CACHE: Read all devices from netbox")
         current_devices = self.get_devices()
 
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
@@ -217,11 +235,10 @@ class NetboxUpdate():
                 ## Update
                 if update_keys := self.need_update(current_devices[hostname], payload):
                     print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Update Host")
-                    url += str(current_devices[hostname]['id'])
+                    url += f"{current_devices[hostname]['id']}/"
                     update_payload = {}
                     for key in update_keys:
                         update_payload[key] = payload[key]
-                        print(update_payload)
                     self.request(url, "PATCH", update_payload)
                 else:
                     print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Nothing to do")
