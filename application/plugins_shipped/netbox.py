@@ -214,6 +214,7 @@ class NetboxUpdate():
         """
         Update Devices Table in Netbox
         """
+        #pylint: disable=too-many-locals
         current_devices = self.get_devices()
 
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
@@ -289,11 +290,24 @@ class NetboxUpdate():
         pprint(inventory)
         print(f"{ColorCodes.UNDERLINE}Final Outcome{ColorCodes.ENDC}")
 
+    def import_hosts(self):
+        """
+        Import Hosts from Netbox to the Syncer
+        """
+        for device, _data in self.get_devices().items():
+            host_obj = Host.get_host(device)
+            print(f"\n{ColorCodes.HEADER}Process: {device}{ColorCodes.ENDC}")
+            host_obj.set_import_seen()
+            labels = {
+            }
+            host_obj.set_labels(labels)
+            host_obj.save()
+
 #   .-- Command: Export Hosts
 @cli_netbox.command('export_hosts')
 @click.argument("account")
 def netebox_host_export(account):
-    """Move Objects into Netbox"""
+    """Sync Objects with Netbox"""
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -301,8 +315,22 @@ def netebox_host_export(account):
             job.export_hosts()
         else:
             print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
-    except Exception as error_obj:
-        raise
+    except Exception as error_obj: #pylint: disable=broad-except
+        print(f'C{ColorCodes.FAIL}Connection Error: {error_obj} {ColorCodes.ENDC}')
+#.
+#   .-- Command: Import Hosts
+@cli_netbox.command('import_hosts')
+@click.argument("account")
+def netebox_host_import(account):
+    """Import Devices from Netbox"""
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            job = NetboxUpdate(target_config)
+            job.import_hosts()
+        else:
+            print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
+    except Exception as error_obj: #pylint:disable=broad-except
         print(f'C{ColorCodes.FAIL}Connection Error: {error_obj} {ColorCodes.ENDC}')
 #.
 #   .-- Command: Debug Hosts
@@ -313,6 +341,6 @@ def netebox_host_debug(hostname):
     try:
         job = NetboxUpdate({'DEBUG': True})
         job.debug_rules(hostname)
-    except Exception as error_obj:
-        raise
+    except Exception as error_obj: #pylint:disable=broad-except
+        print(f'C{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
 #.

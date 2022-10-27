@@ -20,7 +20,10 @@ Main Goal is the complete Organization of the Hosts based on CMDB Systems
 # Currenlty supported Plattforms
 - Checkmk 1.x  (read)
 - Checkmk 2.x (read and write)
-- Ansible (Inventory Source)
+- Ansible (Controlled by CMDB Syncer)
+- Cisco DNA (read)
+- Netbox (read and write)
+- CSV
 - Any Source like DBs, Rest API with simple Plugin API
 
 For a quick test, best use Docker Compose. All regarding Documentation can be found in the [WIKI](https://github.com/Bastian-Kuhn/cmdb-syncer/wiki)
