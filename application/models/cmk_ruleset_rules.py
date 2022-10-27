@@ -10,12 +10,12 @@ class CmkRulesetOutcome(db.EmbeddedDocument):
     """
     Checkmk Rule Outcome
     """
-    ruleset_name = db.StringField()
-    folder_attribute = db.StringField()
-    folder = db.StringField()
-    foreach_attribute = db.StringField()
-    value_template = db.StringField()
-    condition_template = db.StringField()
+    ruleset_name = db.StringField(required=True)
+    folder_attribute = db.StringField(required=True)
+    folder = db.StringField(required=True)
+    foreach_attribute = db.StringField(required=True)
+    value_template = db.StringField(required=True)
+    condition_template = db.StringField(required=True)
     meta = {
         'strict': False,
     }
