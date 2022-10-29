@@ -30,7 +30,7 @@ class NetboxOutcome(db.EmbeddedDocument):
     Ansible Outcome
     """
     type = db.StringField(choices=netbox_outcome_types)
-    value = db.StringField(required=True)
+    value = db.StringField()
     meta = {
         'strict': False,
     }
