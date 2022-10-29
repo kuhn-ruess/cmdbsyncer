@@ -15,6 +15,7 @@ from application.helpers.poolfolder import remove_seat
 from application.models.account import Account
 from application.models.user import User
 from application.models.folder_pool import FolderPool
+from application.models.config import Config
 
 
 
@@ -120,4 +121,15 @@ def seed_user(email):
 #    models = [
 #    ]
 #
+##.
+#   .-- Command: self configure
+@cli_sys.command('self_configure')
+def self_configure():
+    """Seed an Update system"""
+    print("Seed data if needed:")
+    if not len(Config.objects()):
+        conf = Config()
+        conf.save()
+    print("- done")
+
 ##.
