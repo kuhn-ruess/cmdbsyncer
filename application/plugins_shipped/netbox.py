@@ -1,7 +1,7 @@
 """
 Create Objects in Netbox
 """
-#pylint: disable=no-member
+#pylint: disable=no-member, too-many-locals
 from pprint import pprint
 import click
 import requests
@@ -75,7 +75,23 @@ class NetboxUpdate():
 
             response_json = response.json()
             if 'results' in response_json:
-                return response_json['results']
+                results = []
+                results += response_json['results']
+                if response_json['next']:
+                    total = response_json['count']
+                    request_count = int(round(total/len(response_json['results']),0)) + 1
+                    print(f" -- Require {request_count} requests. {total} objects in total")
+                    counter = 0
+                    next_page = response_json['next']
+                    while next_page:
+                        counter += 1
+                        process = 100.0 * counter / request_count
+                        # pylint: disable=line-too-long
+                        print(f"   {ColorCodes.OKGREEN}({process:.0f}%)...{counter}/{request_count}{ColorCodes.ENDC}")
+                        sub_response= requests.get(next_page, headers=headers, verify=self.verify).json()
+                        next_page = sub_response['next']
+                        results += sub_response['results']
+                return results
             return response_json
         except (ConnectionResetError, requests.exceptions.ProxyError):
             return {}
@@ -86,8 +102,9 @@ class NetboxUpdate():
         Read full list of devices
         """
         print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Netbox: Read all devices")
-        url = 'dcim/devices/'
-        return {x['display']:x for x in self.request(url, "GET")}
+        url = 'dcim/devices/?limit=1000'
+        devices = self.request(url, "GET")
+        return {x['display']:x for x in devices}
 
 
     def uppsert_element(self, key, value):
@@ -186,7 +203,7 @@ class NetboxUpdate():
             if key.endswith("_sync"):
                 # Sync attribute by value of given tag
                 real_key = key[:-5]
-                wanted = inventory[custom_rules[key]]
+                wanted = inventory.get(custom_rules[key], "Not defined")
                 payload[real_key] = self.uppsert_element(real_key, wanted)
 
         # Add Inventory Variables we have a remap entry for
