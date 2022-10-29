@@ -10,7 +10,6 @@ class DefaultModelView(ModelView):
     """
     Default Model View Overwrite
     """
-    can_export = True
 
     def is_accessible(self):
         """ Overwrite """

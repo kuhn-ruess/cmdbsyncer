@@ -45,9 +45,6 @@ class Host(db.Document):
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
 
-    last_import_seen = db.DateTimeField()
-    last_import_sync = db.DateTimeField()
-
 
     folder = db.StringField()
 

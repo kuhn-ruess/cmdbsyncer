@@ -13,7 +13,7 @@ from flask_mongoengine import MongoEngine
 from application.modules.log import Log
 
 
-VERSION = '2.1.2-dev'
+VERSION = '2.2.0-dev'
 
 
 app = Flask(__name__)
@@ -25,7 +25,6 @@ elif env == "compose":
 else:
     app.config.from_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
-
 if app.config['DEBUG']:
     print(f"Loaded Config: {env}")
 
@@ -76,6 +75,9 @@ from application.views.user import UserView
 from application.models.rule import ActionRule, LabelRule, HostRule
 from application.views.rule import RuleModelView
 
+from application.models.config import Config
+from application.views.config import ConfigModelView
+
 #from application.models.cmk_ruleset_rules import CmkRulesetRule
 from application.models.cmk_group_rules import CmkGroupRule
 
@@ -116,6 +118,7 @@ admin.add_view(RuleModelView(NetboxCustomVariables,\
 
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
 admin.add_view(UserView(User, category='Config'))
+admin.add_view(ConfigModelView(Config, name="System Config", category="Config"))
 admin.add_link(MenuLink(name='Change Password', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}change-password"))
 admin.add_link(MenuLink(name='Set 2FA Code', category='Profil',
