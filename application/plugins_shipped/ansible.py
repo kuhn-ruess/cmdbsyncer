@@ -29,7 +29,7 @@ def clean_vars(special_vars, inventory):
                 del inventory[var]
             except KeyError:
                 continue
-    del inventory['ignore_vars']
+        del inventory['ignore_vars']
     return inventory
 
 
