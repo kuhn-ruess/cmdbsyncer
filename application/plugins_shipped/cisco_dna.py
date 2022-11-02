@@ -73,7 +73,7 @@ class CiscoDNA():
         ]
         token = self.get_auth_token()
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
-        base_url = f"{self.address}/dna/intent/api/v1/interface/network_device/"
+        base_url = f"{self.address}/dna/intent/api/v1/interface/network-device/"
         headers = {"x-auth-token": token}
 
         for host in Host.objects(available=True, source_account_id=self.account_id):
