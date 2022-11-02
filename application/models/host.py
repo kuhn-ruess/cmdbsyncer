@@ -31,6 +31,7 @@ class Host(db.Document):
     hostname = db.StringField(required=True, unique=True)
     sync_id = db.StringField()
     labels = db.ListField(db.EmbeddedDocumentField(Label))
+    addional_labels = db.DictField()
     inventory = db.DictField()
 
     force_update = db.BooleanField(default=False)
@@ -137,23 +138,23 @@ class Host(db.Document):
         """
         return dict({x.key:x.value for x in self.labels})
 
-
     def update_inventory(self, key, new_data):
         """
         Overwrite given Values only
         """
-        for name in [x for x in self.inventory.keys()]:
+        for name in self.inventory.keys():
             if name.startswith(key):
                 del self.inventory[name]
         self.inventory.update(new_data)
 
-    def get_inventory(self, filter=False):
+    def get_inventory(self, key_filter=False):
         """
         Return Hosts Inventory Data.
         Used eg. for Ansible
         """
-        if filter:
-            return {key: value for key, value in self.inventory.items() if key.startswith(filter)}
+        if key_filter:
+            return {key: value for key, value in self.inventory.items() \
+                            if key.startswith(key_filter)}
 
         return self.inventory
 
