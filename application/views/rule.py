@@ -9,6 +9,7 @@ from application.models.rule import label_choices, label_outcome_types, \
                                     host_params_types, action_outcome_types
 from application.models.ansible_rule import ansible_outcome_types, ansible_outcome_rule_types
 from application.models.netbox_rule import netbox_outcome_types
+from application.models.label_overwrite_rule import label_overwrite_outcome_types
 
 condition_types={
     'equal': "is equal",
@@ -25,6 +26,7 @@ action_outcome_types = dict(action_outcome_types)
 action_outcome_types.update(dict(ansible_outcome_types))
 action_outcome_types.update(dict(ansible_outcome_rule_types))
 action_outcome_types.update(dict(netbox_outcome_types))
+action_outcome_types.update(dict(label_overwrite_outcome_types))
 
 def _render_outcome(_view, _context, model, _name):
     """
@@ -132,7 +134,7 @@ def _render_conditions(_view, _context, model, _name):
     return Markup(html)
 
 
-#pylint: disable=too-few-public-methods, no-self-use
+#pylint: disable=too-few-public-methods
 class RuleModelView(DefaultModelView):
     """
     Rule Model

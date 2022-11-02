@@ -3,8 +3,8 @@ Host Model View
 """
 # pylint: disable=too-few-public-methods
 import re
+from mongoengine.errors import DoesNotExist
 from flask_login import current_user
-from flask_admin.model.template import LinkRowAction
 from flask_admin.actions import action
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 
@@ -118,7 +118,11 @@ def get_export_values():
     """
     Dynamic fill needed fields
     """
-    config = Config.objects.get()
+    try:
+        config = Config.objects.get()
+    except DoesNotExist:
+        return {}
+
     functions = {}
 
     for field in config.export_inventory_list:
