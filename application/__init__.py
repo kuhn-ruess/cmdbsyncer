@@ -83,6 +83,8 @@ from application.models.cmk_group_rules import CmkGroupRule
 
 from application.models.ansible_rule import AnsibleCustomVariables, AnsibleCustomVariablesRule
 
+from application.models.label_overwrite_rule import LabelOverwriteRule
+
 
 from application.models.netbox_rule import NetboxCustomVariables
 
@@ -99,6 +101,7 @@ admin.add_view(HostModelView(Host, name="Hosts"))
 
 admin.add_view(RuleModelView(HostRule, name="Custom Label Rules", category="Rules"))
 admin.add_view(RuleModelView(LabelRule, name="Label Cleanup/ Whitelist Rules", category="Rules"))
+admin.add_view(RuleModelView(LabelOverwriteRule, name="Overwrite Labels for Hosts with e.g. Inventory Data", category="Rules"))
 
 admin.add_sub_category(name="Checkmk Rules", parent_name="Rules")
 admin.add_view(RuleModelView(ActionRule, name="Host Rules", category="Checkmk Rules"))
