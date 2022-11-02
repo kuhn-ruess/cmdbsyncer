@@ -142,7 +142,9 @@ class Host(db.Document):
         """
         Overwrite given Values only
         """
-        for name in self.inventory.keys():
+        # pylint: disable=unnecessary-comprehension
+        # Prevent runtime error
+        for name in [x for x in self.inventory.keys()]:
             if name.startswith(key):
                 del self.inventory[name]
         self.inventory.update(new_data)
