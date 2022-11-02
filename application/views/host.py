@@ -103,9 +103,13 @@ def get_export_colums():
         'hostname',
     ]
 
-    config = Config.objects.get()
-    columns += config.export_labels_list
-    columns += config.export_inventory_list
+    try:
+        config = Config.objects.get()
+    except DoesNotExist:
+        pass
+    else:
+        columns += config.export_labels_list
+        columns += config.export_inventory_list
 
     columns += [
         'sync_id',
