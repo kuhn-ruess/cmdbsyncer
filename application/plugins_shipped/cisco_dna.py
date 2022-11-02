@@ -63,26 +63,79 @@ class CiscoDNA():
 #   .-- Command: get_interfaces
     def get_interfaces(self):
         """
-        Get Interfaces
+          {'addresses': [{'address': {'ipAddress': {'address': '10.10.20.82'},
+                                     'ipMask': {'address': '255.255.255.0'},
+                                     'isInverseMask': False,
+                                     'lazyLoadedEntities': None},
+                         'lazyLoadedEntities': None,
+                         'type': 'IPV4_PRIMARY'}],
+          'adminStatus': 'UP',
+          'className': 'VLANInterfaceExtended',
+          'description': '',
+          'deviceId': 'f0cb8464-1ce7-4afe-9c0d-a4b0cc5ee84c',
+          'duplex': '',
+          'id': '72ee5b47-0d6c-463f-a7b0-538714bd8ca0',
+          'ifIndex': '54',
+          'instanceTenantId': '5e8e896e4d4add00ca2b6487',
+          'instanceUuid': '72ee5b47-0d6c-463f-a7b0-538714bd8ca0',
+          'interfaceType': 'Virtual',
+          'ipv4Address': '10.10.20.82',
+          'ipv4Mask': '255.255.255.0',
+          'isisSupport': 'false',
+          'lastUpdated': None,
+          'macAddress': '68:ca:e4:37:8d:d1',
+          'managedComputeElement': None,
+          'managedComputeElementUrl': None,
+          'managedNetworkElement': {'id': 1159174,
+                                    'longType': 'com.cisco.xmp.m...lity.ManagedNetworkElement',
+                                    'type': 'ManagedNetworkElement',
+                                    'url': '../../ManagedNetworkElement/1159174'},
+          'managedNetworkElementUrl': '../../DeviceIf/-267/related/managedNetworkElement',
+          'mappedPhysicalInterfaceId': None,
+          'mappedPhysicalInterfaceName': None,
+          'mediaType': None,
+          'mtu': '1500',
+          'name': None,
+          'nativeVlanId': '',
+          'networkdevice_id': 1150152,
+          'ospfSupport': 'false',
+          'pid': 'C9300-24U',
+          'portMode': 'routed',
+          'portName': 'Vlan835',
+          'portType': 'Ethernet SVI',
+          'poweroverethernet': 0,
+          'serialNo': 'FCW2211G0MA',
+          'series': 'Cisco Catalyst 9300 Series Switches',
+          'speed': '1000000',
+          'status': 'up',
+          'vlanId': '835',
+          'voiceVlan': ''      Get Interfaces
         """
         inventory_attributes = [
-            'id',
-            'location',
-            'platformId',
-            'series',
+            'portName',
+            'status',
+            'adminStatus',
         ]
         token = self.get_auth_token()
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
         base_url = f"{self.address}/dna/intent/api/v1/interface/network-device/"
         headers = {"x-auth-token": token}
 
-        for host in Host.objects(available=True, source_account_id=self.account_id):
-            url = base_url + host.sync_id
+        #pylint: disable=no-member
+        for db_host in Host.objects(available=True, source_account_id=self.account_id):
+            print(f"{ColorCodes.HEADER}{db_host.hostname}{ColorCodes.ENDC}")
+            url = base_url + db_host.sync_id
             #pylint: disable=missing-timeout
             response = requests.request("GET", url, headers=headers, verify=self.verify)
-            print(response.json())
-            continue
             response_json = response.json()['response']
+            inventory = {}
+            for interface in response_json:
+                if_id = interface['id']
+                for attribute in inventory_attributes:
+                    inventory[f'cisco_dnainterface_{if_id}_{attribute}'] = interface[attribute]
+            db_host.update_inventory('cisco_dnainterface_', inventory)
+            db_host.save()
+
 
 #.
 #   .-- Command: get_hosts
@@ -161,7 +214,7 @@ class CiscoDNA():
             counter += 1
             process = 100.0 * counter / total
             hostname = device['hostname']
-            print(f"\n{ColorCodes.HEADER}({process:.0f}%) {hostname}{ColorCodes.ENDC}")
+            print(f"{ColorCodes.HEADER}({process:.0f}%) {hostname}{ColorCodes.ENDC}")
             db_host = Host.get_host(hostname)
             inventory = {}
             for attribute in inventory_attributes:
