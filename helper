@@ -15,6 +15,10 @@ case "$1" in
 "stop")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER stop
     ;;
+"restart")
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER stop
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER start
+    ;;
 "down")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER down --rmi local --remove-orphans
     ;;
