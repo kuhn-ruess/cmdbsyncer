@@ -3,7 +3,7 @@ Netbox Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
-from application.models.rule import rule_types, ActionCondition, FullLabelCondition
+from application.modules.rule.models import rule_types, FullCondition, FullLabelCondition
 
 
 # About the Names:
@@ -29,13 +29,13 @@ class NetboxOutcome(db.EmbeddedDocument):
     """
     Ansible Outcome
     """
-    type = db.StringField(choices=netbox_outcome_types)
-    value = db.StringField()
+    action = db.StringField(choices=netbox_outcome_types)
+    param = db.StringField()
     meta = {
         'strict': False,
     }
 
-class NetboxCustomVariables(db.Document):
+class NetboxCustomAttributes(db.Document):
     """
     Define Rule based Custom Ansible Variables
     """
@@ -43,14 +43,17 @@ class NetboxCustomVariables(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(ActionCondition))
-    render_conditions = db.StringField() # Helper for preview
+    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    render_full_conditions = db.StringField() # Helper for preview
 
-    outcome = db.ListField(db.EmbeddedDocumentField(NetboxOutcome))
-    render_outcome = db.StringField() # Helper for preview
+    outcomes = db.ListField(db.EmbeddedDocumentField(NetboxOutcome))
+    render_netbox_outcome = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
 
 
     enabled = db.BooleanField()
-    sort_field = db.IntField(required=True)
+    sort_field = db.IntField(default=0)
+    meta = {
+        'strict': False
+    }

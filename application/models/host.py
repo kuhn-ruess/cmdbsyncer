@@ -11,11 +11,6 @@ class HostError(Exception):
     Errors related to host updates or creation
     """
 
-class Label(db.EmbeddedDocument):
-    """ Label Object (CMK Style)"""
-    key = db.StringField()
-    value = db.StringField()
-
 class Target(db.EmbeddedDocument):
     """
     Target Stats
@@ -30,8 +25,7 @@ class Host(db.Document):
     """
     hostname = db.StringField(required=True, unique=True)
     sync_id = db.StringField()
-    labels = db.ListField(db.EmbeddedDocumentField(Label))
-    addional_labels = db.DictField()
+    labels = db.DictField()
     inventory = db.DictField()
 
     force_update = db.BooleanField(default=False)
@@ -108,35 +102,25 @@ class Host(db.Document):
         """
         hit = False
         for label in self.labels:
-            if label.key == key:
-                label.value = value
+            if label == key:
+                self.labels[label] = value
                 hit = True
         if not hit:
-            label = Label()
-            label.key = key
-            label.value = str(value)
-            self.labels.append(label)
+            self.labels[key] = str(value)
 
     def set_labels(self, label_dict):
         """
         Overwrites the Labels on this object
         """
-        labels = []
-        for key, value in label_dict.items():
-            if not value:
-                continue
-            label = Label()
-            label.key = key
-            label.value = str(value)
-            labels.append(label)
-        self.labels = labels
+        self.labels=label_dict
 
     def get_labels(self):
         """
         Return Labels
         in Dict Format
         """
-        return dict({x.key:x.value for x in self.labels})
+        return self.labels
+
 
     def update_inventory(self, key, new_data):
         """
@@ -145,6 +129,7 @@ class Host(db.Document):
         # pylint: disable=unnecessary-comprehension
         # Prevent runtime error
         for name in [x for x in self.inventory.keys()]:
+            # Delete all existing keys of type
             if name.startswith(key):
                 del self.inventory[name]
         self.inventory.update(new_data)
@@ -159,6 +144,18 @@ class Host(db.Document):
                             if key.startswith(key_filter)}
 
         return self.inventory
+
+    def get_attributes(self):
+        """
+        Return Labels and Inventory merged
+        """
+        labels = self.get_labels()
+        labels.update(self.get_inventory)
+        # Merge Custom Labels
+        labels.udpate(CustomLabels().get_labels(self.hostname))
+        return labels
+
+
 
     def add_log(self, entry):
         """

@@ -240,6 +240,7 @@ def get_hosts(account):
             print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
     except Exception as error_obj: #pylint: disable=broad-except
         print(f'C{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
+        raise
 
 @cli_cisco_dna.command('get_interfaces')
 @click.argument('account')

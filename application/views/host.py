@@ -22,7 +22,7 @@ class FilterLabelValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        return query.filter(labels__value__icontains=value)
+        return query.filter(labels__icontains=value)
 
     def operation(self):
         return "contains"
@@ -45,7 +45,7 @@ class FilterLabelKey(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        return query.filter(labels__key__icontains=value)
+        return query.filter(labels__icontains=value)
 
     def operation(self):
         return "contains"
@@ -63,8 +63,8 @@ def format_labels(v, c, m, p):
     """ Format Labels view"""
     # pylint: disable=invalid-name, unused-argument
     html = "<table>"
-    for entry in m.labels:
-        html += f"<tr><th>{entry.key}</th><td>{entry.value}</td></tr>"
+    for key, value in m.labels.items():
+        html += f"<tr><th>{key}</th><td>{value}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -187,6 +187,7 @@ class HostModelView(DefaultModelView):
     column_exclude_list = (
         'source_account_id',
         'sync_id',
+        'labels',
         'inventory',
         'log',
         'folder',

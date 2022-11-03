@@ -13,7 +13,7 @@ from flask_mongoengine import MongoEngine
 from application.modules.log import Log
 
 
-VERSION = '2.2.0-dev'
+VERSION = '3.0.0-wip'
 
 
 app = Flask(__name__)
@@ -51,80 +51,88 @@ login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message = False
 
-source_register = [
-   (lambda: False, "Not set")
-]
-
-from application.plugins_shipped import *
-from application.plugins import *
+#from application.plugins_shipped import *
+#from application.plugins import *
 
 from application.views.default import IndexView, DefaultModelView
 
 from application.auth.views import AUTH
 app.register_blueprint(AUTH)
 
-from application.models.host import Host
-from application.views.host import HostModelView
-
-from application.models.account import Account
-from application.views.account import AccountModelView
-
-from application.models.user import User
-from application.views.user import UserView
-
-from application.models.rule import ActionRule, LabelRule, HostRule
-from application.views.rule import RuleModelView
-
-from application.models.config import Config
-from application.views.config import ConfigModelView
-
-#from application.models.cmk_ruleset_rules import CmkRulesetRule
-from application.models.cmk_group_rules import CmkGroupRule
-
-from application.models.ansible_rule import AnsibleCustomVariables, AnsibleCustomVariablesRule
-
-from application.models.label_overwrite_rule import LabelOverwriteRule
+from application.modules.rule.views import FiltereModelView, RewriteLabelView
 
 
-from application.models.netbox_rule import NetboxCustomVariables
 
-from application.models.folder_pool import FolderPool
-from application.views.folder_pool import FolderPoolModelView
 
-from application.api.views import API_BP as api
-app.register_blueprint(api, url_prefix="/api/v1")
+#from application.api.views import API_BP as api
+#app.register_blueprint(api, url_prefix="/api/v1")
 
 admin = Admin(app, name=f"CMDB Syncer {VERSION}",
                    template_mode='bootstrap4', index_view=IndexView())
 
+
+#   .-- Host
+from application.models.host import Host
+from application.views.host import HostModelView
 admin.add_view(HostModelView(Host, name="Hosts"))
+#.
+#   .-- Global
+from application.modules.custom_labels.models import CustomLabelRule
+from application.modules.custom_labels.views import CustomLabelView
+admin.add_view(CustomLabelView(CustomLabelRule, name="Custom Labels", category="Rules"))
+#.
+#   .-- Checkmk
+admin.add_sub_category(name="Checkmk", parent_name="Rules")
+from application.modules.checkmk.models import CheckmkRule, CheckmkGroupRule, CheckmkFilterRule
+from application.modules.checkmk.views import CheckmkRuleView, CheckmkGroupRuleView
 
-admin.add_view(RuleModelView(HostRule, name="Custom Label Rules", category="Rules"))
-admin.add_view(RuleModelView(LabelRule, name="Label Cleanup/ Whitelist Rules", category="Rules"))
-admin.add_view(RuleModelView(LabelOverwriteRule, name="Overwrite Labels for Hosts with e.g. Inventory Data", category="Rules"))
 
-admin.add_sub_category(name="Checkmk Rules", parent_name="Rules")
-admin.add_view(RuleModelView(ActionRule, name="Host Rules", category="Checkmk Rules"))
-#admin.add_view(DefaultModelView(CmkRulesetRule, name="Ruleset Rules", category="Checkmk Rules"))
-admin.add_view(DefaultModelView(CmkGroupRule, name="Group Rules", category="Checkmk Rules"))
-admin.add_view(FolderPoolModelView(FolderPool, name="Folder Pools", category="Checkmk Rules"))
+admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter", category="Checkmk"))
+from application.modules.checkmk.models import CheckmkRewriteLabelRule
+admin.add_view(RewriteLabelView(CheckmkRewriteLabelRule, name="Rewrite Attributes",
+                                                            category="Checkmk"))
+admin.add_view(CheckmkRuleView(CheckmkRule, name="Export Rules", category="Checkmk"))
+admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, name="Group Mananagemt", category="Checkmk"))
 
-admin.add_sub_category(name="Ansible Rules", parent_name="Rules")
-admin.add_view(RuleModelView(AnsibleCustomVariables,\
-                                    name="Define Custom Variables", category="Ansible Rules"))
-admin.add_view(RuleModelView(AnsibleCustomVariablesRule,\
-                                    name="Define Custom Variables conditioned by Custom Variables", category="Ansible Rules"))
+from application.modules.checkmk.models import CheckmkFolderPool
+from application.modules.checkmk.views import CheckmkFolderPoolView
+admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
+#.
+#   .-- Ansible
+admin.add_sub_category(name="Ansible", parent_name="Rules")
+from application.modules.ansible.models import AnsibleCustomVariablesRule, AnsibleFilterRule
+from application.modules.ansible.views import AnsibleCustomVariablesView
 
-admin.add_sub_category(name="Netbox Rules", parent_name="Rules")
-admin.add_view(RuleModelView(NetboxCustomVariables,\
-                                    name="Define Custom Attributes", category="Netbox Rules"))
+admin.add_view(FiltereModelView(AnsibleFilterRule, name="Filter", category="Ansible"))
+admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
+                                    name="Custom Variables", category="Ansible"))
+#.
+#   .-- Netbox
+admin.add_sub_category(name="Netbox", parent_name="Rules")
 
+from application.modules.netbox.models import NetboxCustomAttributes
+from application.modules.netbox.views import NetboxCustomAttributesView
+admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
+                                    name="Custom Attributes", category="Netbox"))
+#.
+#   .-- Rest
+from application.models.account import Account
+from application.views.account import AccountModelView
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
+
+from application.models.user import User
+from application.views.user import UserView
 admin.add_view(UserView(User, category='Config'))
+
+from application.models.config import Config
+from application.views.config import ConfigModelView
+
 admin.add_view(ConfigModelView(Config, name="System Config", category="Config"))
+
 admin.add_link(MenuLink(name='Change Password', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}change-password"))
 admin.add_link(MenuLink(name='Set 2FA Code', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}set-2fa"))
 admin.add_link(MenuLink(name='Logout', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}logout"))
+#.
