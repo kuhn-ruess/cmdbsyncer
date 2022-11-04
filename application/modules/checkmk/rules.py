@@ -11,6 +11,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     """
     Class to get actions for rule
     """
+
+    name = "Checkmk -> Export Rules"
+
     found_poolfolder_rule = False # Spcific Helper for this kind of action
     db_host = False
     labels = {}

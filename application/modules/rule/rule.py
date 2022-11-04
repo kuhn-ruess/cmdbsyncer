@@ -5,7 +5,7 @@ Handle Rule Matching
 
 from application.modules.rule.match import match
 from application.modules.debug import debug as print_debug
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes as CC
 
 class Rule(): # pylint: disable=too-few-public-methods
     """
@@ -53,17 +53,20 @@ class Rule(): # pylint: disable=too-few-public-methods
         """
         Handle Rule Match logic
         """
+
+        rule_descriptions = {
+            'any' : "ANY can match",
+            'all' : "ALL must match",
+            'anyway': "ALLWAYS match"
+        }
         #pylint: disable=too-many-branches
         print_debug(self.debug, f"Debug '{self.name}' Rules for "\
-                                f"{ColorCodes.UNDERLINE}{hostname}{ColorCodes.ENDC}")
+                                f"{CC.UNDERLINE}{hostname}{CC.ENDC}")
         outcomes = {}
         for rule in self.rules:
             rule = rule.to_mongo()
             rule_hit = False
             if rule['condition_typ'] == 'any':
-                print_debug(self.debug,
-                            "- Rule Type: ANY can match "\
-                           f"(RuleID: {ColorCodes.OKBLUE}{rule['name'][:20]} ({rule['_id']}){ColorCodes.ENDC})")
                 for condtion in rule['conditions']:
                     local_hit = False
                     if condtion['match_type'] == 'tag':
@@ -73,9 +76,6 @@ class Rule(): # pylint: disable=too-few-public-methods
                     if local_hit:
                         rule_hit = True
             elif rule['condition_typ'] == 'all':
-                print_debug(self.debug,
-                            "- Rule Type: ALL must match "\
-                            f"(RuleID: {ColorCodes.OKBLUE}{rule['name'][:20]} ({rule['_id']}){ColorCodes.ENDC})")
                 negativ_match = False
                 for condtion in rule['conditions']:
                     if condtion['match_type'] == 'tag':
@@ -87,21 +87,26 @@ class Rule(): # pylint: disable=too-few-public-methods
                 if not negativ_match:
                     rule_hit = True
             elif rule['condition_typ'] == 'anyway':
-                print_debug(self.debug,
-                            "- Rule Typ: Match without condition' "\
-                            f"(RuleID: {ColorCodes.OKBLUE}{rule['name'][:20]} ({rule['_id']}){ColorCodes.ENDC})")
                 rule_hit = True
+
+            hit_text = ""
             if rule_hit:
-                print_debug(self.debug,
-                            f"-- {ColorCodes.OKCYAN}Rule Hit{ColorCodes.ENDC}")
+                hit_text = f" {CC.OKCYAN}HIT{CC.ENDC}"
+
+            print_debug(self.debug,
+                           f"{CC.OKBLUE}*{CC.ENDC}{hit_text} {rule_descriptions[rule['condition_typ']]} "\
+                           f"(RuleID: {CC.OKBLUE}{rule['name'][:20]} ({rule['_id']}){CC.ENDC})")
+            if rule_hit:
                 outcomes = self.add_outcomes([dict(x) for x in rule['outcomes']], outcomes)
 
                 # If rule has matched, and option is set, we are done
                 if rule['last_match']:
-                    print_debug(self.debug, f"--- {ColorCodes.FAIL}Rule id "\
-                                             f"{rule['_id']} was last_match{ColorCodes.ENDC}")
+                    print_debug(self.debug, f"{CC.OKBLUE}**{CC.ENDC} {CC.FAIL}Rule id "\
+                                             f"{rule['_id']} was last_match{CC.ENDC}")
                     break
 
+        print_debug(self.debug,
+                    f"{CC.OKBLUE}--------------------------------------------------------------------{CC.ENDC}")
         return outcomes
 
     def add_outcomes(self, rule, outcomes):

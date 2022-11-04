@@ -75,9 +75,9 @@ from application.views.host import HostModelView
 admin.add_view(HostModelView(Host, name="Hosts"))
 #.
 #   .-- Global
-from application.modules.custom_labels.models import CustomLabelRule
-from application.modules.custom_labels.views import CustomLabelView
-admin.add_view(CustomLabelView(CustomLabelRule, name="Custom Labels", category="Rules"))
+from application.modules.custom_attributes.models import CustomAttributeRule
+from application.modules.custom_attributes.views import CustomAttributeView
+admin.add_view(CustomAttributeView(CustomAttributeRule, name="Custom Attributes", category="Rules"))
 #.
 #   .-- Checkmk
 admin.add_sub_category(name="Checkmk", parent_name="Rules")

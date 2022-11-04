@@ -1,11 +1,11 @@
 """
-Custom Label Rule Model View
+Custom Attribute Rule Model View
 """
 from application.modules.rule.views import RuleModelView
 
 
 #pylint: disable=too-few-public-methods
-class CustomLabelView(RuleModelView):
+class CustomAttributeView(RuleModelView):
     """
-    Custom Label Model View
+    Custom Attribute Model View
     """
