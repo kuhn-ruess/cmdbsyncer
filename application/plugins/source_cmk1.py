@@ -6,7 +6,7 @@ import ast
 import click
 import requests
 from mongoengine.errors import DoesNotExist
-from application.plugins_shipped.target_cmk2 import cli_cmk
+from application.modules.checkmk.cmk2 import cli_cmk
 from application import log
 from application.models.host import Host, HostError
 from application.helpers.get_account import get_account_by_name

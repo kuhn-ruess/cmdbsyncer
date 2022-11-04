@@ -2,34 +2,26 @@
 Add Hosts into CMK Version 2 Installations
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get
-from pprint import pprint
-import click
-from mongoengine.errors import DoesNotExist
 from application.models.host import Host
-from application.modules.cmk2 import CMK2, CmkException, cli_cmk
-from application.helpers.get_account import get_account_by_name
-from application.helpers.get_cmk_action import GetCmkAction
-from application.helpers.get_label import GetLabel
-from application.helpers.debug import ColorCodes
+from application.modules.checkmk.cmk2 import CMK2, CmkException
+from application.modules.debug import ColorCodes
 
 
-#   .-- Class Update CMKv2
-class UpdateCMKv2(CMK2):
+class SyncCMK2(CMK2):
     """
-    Update Functions
+    Sync Functions
     """
 
 
-    def __init__(self, config):
+#   .-- Get Host Actions
+    def get_host_actions(self, db_host, attributes):
         """
-        Inital
+        Get CMK Specific Actions
         """
-        super().__init__(config)
-        self.account_id = str(config['_id'])
-        self.action_helper = GetCmkAction()
-        self.account_name = config['name']
-        self.label_helper = GetLabel()
+        return self.actions.get_outcomes(db_host, attributes)
 
+#.
+#   .-- Run Sync
     def run(self): #pylint: disable=too-many-locals, too-many-branches
         """Run Job"""
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
@@ -42,6 +34,8 @@ class UpdateCMKv2(CMK2):
         url += "?parent=/&recursive=true&show_hosts=false"
         api_folders = self.request(url, method="GET")
         existing_folders = []
+        if not api_folders[0]:
+            raise CmkException("Cant connect or auth with CMK")
         for folder in api_folders[0]['value']:
             existing_folders.append(folder['extensions']['path'])
 
@@ -67,15 +61,16 @@ class UpdateCMKv2(CMK2):
             counter += 1
             process = 100.0 * counter / total
             print(f"\n{ColorCodes.HEADER}({process:.0f}%) {db_host.hostname}{ColorCodes.ENDC}")
-            labels = {}
-            labels.update(db_host.get_labels())
-            labels, extra_actions = self.label_helper.filter_labels(labels)
+            attributes = self.get_host_attributes(db_host)
 
 
-            next_actions = self.action_helper.get_action(db_host, labels)
-            if 'ignore' in next_actions or 'ignore_host' in next_actions:
+            if not attributes:
                 print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Host ignored by rules")
                 continue
+            next_actions = self.get_host_actions(db_host, attributes['all'])
+
+            labels = attributes['filtered']
+
             synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id
 
@@ -93,10 +88,10 @@ class UpdateCMKv2(CMK2):
             # Check if Host Exists
 
             additional_attributes = {}
-            for action, value in extra_actions.items():
-                if action.startswith('attribute_'):
-                    attribute = action.split("_")[-1]
-                    additional_attributes[attribute] = value
+            for label, value in attributes['all'].items():
+                if label.startswith('attribute_'):
+                    label = label.split("_")[-1]
+                    additional_attributes[label] = value
 
             if db_host.hostname not in cmk_hosts:
                 # Create since missing
@@ -134,7 +129,8 @@ class UpdateCMKv2(CMK2):
                     self.request(url, method="DELETE")
                     print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Deleted host {host}")
         print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Cleanup Done")
-
+#.
+#   .-- Create Folder
     def _create_folder(self, parent, subfolder):
         """ Helper to create tree of folders """
         url = "domain-types/folder_config/collections/all"
@@ -171,7 +167,8 @@ class UpdateCMKv2(CMK2):
                 else:
                     next_parent  += '/' + sub_folder
 
-
+#.
+#   .-- Create Host
     def create_host(self, db_host, folder, labels, additional_attributes=None):
         """
         Create the not yet existing host in CMK
@@ -190,6 +187,8 @@ class UpdateCMKv2(CMK2):
         self.request(url, method="POST", data=body)
         print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Created Host {db_host.hostname}")
 
+#.
+#   .-- Get Etag
 
     def get_etag(self, db_host):
         """
@@ -200,6 +199,8 @@ class UpdateCMKv2(CMK2):
         _, headers = self.request(url, "GET")
         return headers.get('ETag')
 
+#.
+#   .-- Update Host
     def update_host(self, db_host, cmk_host, folder, labels, additional_attributes=None):
         """
         Update a Existing Host in Checkmk
@@ -265,71 +266,4 @@ class UpdateCMKv2(CMK2):
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Updated Host in Checkmk")
             db_host.set_export_sync()
 
-#.
-#   .-- Command: Export Hosts
-@cli_cmk.command('export_hosts')
-@click.argument("account")
-def cmk_host_export(account):
-    """Add hosts to a CMK 2.x Insallation"""
-    try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            job = UpdateCMKv2(target_config)
-            job.run()
-        else:
-            print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
-    except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-#.
-#   .-- Command: Host Debug
-@cli_cmk.command('debug_host')
-@click.argument("hostname")
-def debug_cmk_rules(hostname):
-    """Show Rule Engine Outcome for given Host"""
-    print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
-    action_helper = GetCmkAction(debug=True)
-    label_helper = GetLabel()
-
-    try:
-        db_host = Host.objects.get(hostname=hostname)
-    except DoesNotExist:
-        print("Host not found")
-        return
-    db_labels = db_host.get_labels()
-    labels ={}
-    labels.update(db_labels)
-    labels, extra_actions = label_helper.filter_labels(labels)
-    actions = action_helper.get_action(db_host, labels)
-
-    print()
-    print(f"{ColorCodes.HEADER} ***** Final Outcomes ***** {ColorCodes.ENDC}")
-    print(f"{ColorCodes.UNDERLINE} Labels in DB {ColorCodes.ENDC}")
-    pprint(db_labels)
-    print(f"{ColorCodes.UNDERLINE}Labels after Filter {ColorCodes.ENDC}")
-    pprint(labels)
-    print(f"{ColorCodes.UNDERLINE}Extra Actions for {db_host.hostname} {ColorCodes.ENDC}")
-    print(extra_actions)
-    print(f"{ColorCodes.UNDERLINE}Host Rule Parameters{ColorCodes.ENDC}")
-    pprint(params)
-    print(f"{ColorCodes.UNDERLINE}Actions based on Action Rules {ColorCodes.ENDC}")
-    pprint(actions)
-#.
-#   .-- Command: Print All
-@cli_cmk.command('print_all')
-def get_cmk_data():
-    """Print List of all Hosts and their Labels"""
-    action_helper = GetCmkAction()
-    label_helper = GetLabel()
-
-    for db_host in Host.objects():
-        db_labels = db_host.get_labels()
-        applied_labels, extra_actions = label_helper.filter_labels(db_labels)
-        next_actions = action_helper.get_action(db_host, applied_labels)
-        if not next_actions or 'ignore' in next_actions or 'ignore_host' in next_actions:
-            continue
-        print(f'Next Action: {next_actions}')
-        print(f"Extra Actions for {db_host.hostname}")
-        print(extra_actions)
-        print(f"Labels for {db_host.hostname}")
-        pprint(applied_labels)
 #.

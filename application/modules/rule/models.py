@@ -85,9 +85,9 @@ class FullLabelCondition(db.EmbeddedDocument):
 #.
 #   .-- Action Rules
 rule_types = [
-    ('all', "All conditions must match"),
-    ('any', "Any condition can match"),
     ('anyway', "Match without any condition"),
+    ('any', "Any condition can match"),
+    ('all', "All conditions must match"),
 ]
 #.
 #   .-- Filter

@@ -4,8 +4,8 @@
 Custom Labels for Host
 """
 
-from application.models.rule import CustomLabelRule
-from application.helpers.match import match
+from application.modules.rule.models import CustomLabelRule
+from application.modules.rule.match import match
 
 
 class CustomLabels(): # pylint: disable=too-few-public-methods

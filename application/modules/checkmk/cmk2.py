@@ -3,6 +3,7 @@ Central Request Modul to CMK 2.x
 """
 import requests
 from application import app, log
+from application.modules.plugin import Plugin
 
 @app.cli.group(name='checkmk')
 def cli_cmk():
@@ -17,18 +18,18 @@ class CmkException(Exception):
     """Cmk Errors"""
 
 #pylint: disable=too-few-public-methods
-class CMK2():
+class CMK2(Plugin):
     """
     Get Data from CMK
     """
 
-    def __init__(self, config):
+    def __init__(self):
         """
         Inital
         """
         self.log = log
-        self.config = config
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
+        self.config = {}
 
     def request(self, params, method='GET', data=None, additional_header=None):
         """
@@ -61,6 +62,7 @@ class CMK2():
                 # Checkmk gives no json response here, so we directly return
                 return True, response.headers
 
+            #pylint: disable=line-too-long
             error_whitelist = [
                 #'Path already exists',
                 'Not Found',
@@ -77,4 +79,5 @@ class CMK2():
                 return {}, {}
             return response.json(), response.headers
         except (ConnectionResetError, requests.exceptions.ProxyError):
+            print(response.text)
             return {}, {}

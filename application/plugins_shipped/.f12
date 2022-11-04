@@ -1,2 +1,0 @@
-sudo cp *.py /var/www/cmdb-syncer/application/plugins_shipped/
-

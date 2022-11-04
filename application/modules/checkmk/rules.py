@@ -1,29 +1,19 @@
 #!/usr/bin/env python3
 """
-Get CheckmkAction
+Checkmk Rules
 """
+from application.modules.rule.rule import Rule
+from application.modules.debug import debug as print_debug
+from application.modules.debug import ColorCodes
+from application.modules.checkmk import poolfolder
 
-from application.models.rule import ActionRule
-from application.helpers.action import Action
-from application.helpers.debug import debug as print_debug
-from application.helpers.debug import ColorCodes
-from application.helpers import poolfolder
-
-class GetCmkAction(Action): # pylint: disable=too-few-public-methods
+class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     """
     Class to get actions for rule
     """
     found_poolfolder_rule = False # Spcific Helper for this kind of action
     db_host = False
     labels = {}
-
-
-    def __init__(self, debug=False):
-        """
-        Prepare Rules
-        """
-        self.rules = [x.to_mongo() for x in ActionRule.objects(enabled=True).order_by('sort_field')]
-        self.debug = debug
 
     @staticmethod
     def format_foldername(folder):
@@ -35,15 +25,15 @@ class GetCmkAction(Action): # pylint: disable=too-few-public-methods
         return folder.lower()
 
 
-    def add_outcomes(self, rule, outcomes):
+    def add_outcomes(self, rule_outcomes, outcomes):
         """ Handle the Outcomes """
         #pylint: disable=too-many-branches
         outcomes_to_return = [
             'ignore', 'ignore_host' # @TODO Remove ignore for ignore_host
         ]
-        for outcome in rule['outcome']:
+        for outcome in rule_outcomes:
             # We add only the outcome of the
-            # first matching rule type
+            # first matching rule action
             # exception are the folders
 
             # Prepare empty string to add later on subfolder if needed
@@ -51,10 +41,10 @@ class GetCmkAction(Action): # pylint: disable=too-few-public-methods
 
             outcomes.setdefault('move_folder',"")
 
-            if outcome['type'] == 'move_folder':
-                outcomes['move_folder'] += self.format_foldername(outcome['param'])
+            if outcome['action'] == 'move_folder':
+                outcomes['move_folder'] += self.format_foldername(outcome['action_param'])
 
-            if outcome['type'] == 'folder_pool':
+            if outcome['action'] == 'folder_pool':
                 self.found_poolfolder_rule = True
                 if self.db_host.get_folder():
                     outcomes['move_folder'] += self.db_host.get_folder()
@@ -67,17 +57,17 @@ class GetCmkAction(Action): # pylint: disable=too-few-public-methods
                     self.db_host.lock_to_folder(folder)
                     outcomes['move_folder'] += folder
 
-            if outcome['type'] not in outcomes and \
-                outcome['type'] in outcomes_to_return:
+            if outcome['action'] not in outcomes and \
+                outcome['action'] in outcomes_to_return:
                 print_debug(self.debug,
-                            f"---- Added Outcome {outcome['type']} = {outcome['param']}")
-                outcomes[outcome['type']] = outcome['param']
+                            f"---- Added Outcome {outcome['action']} = {outcome['action_param']}")
+                outcomes[outcome['action']] = outcome['action_param']
 
             print_debug(self.debug,
                         "- Handle Special options")
 
-            if outcome['type'] == 'value_as_folder':
-                search_tag = outcome['param']
+            if outcome['action'] == 'value_as_folder':
+                search_tag = outcome['action_param']
                 print_debug(self.debug,
                             f"---- value_as_folder matched, search tag '{search_tag}'")
                 for tag, value in self.labels.items():
@@ -86,8 +76,8 @@ class GetCmkAction(Action): # pylint: disable=too-few-public-methods
                                                 f"{ColorCodes.ENDC}, add folder: '{value}'")
                         outcomes['move_folder'] += self.format_foldername(value)
 
-            if outcome['type'] == 'tag_as_folder':
-                search_value = outcome['param']
+            if outcome['action'] == 'tag_as_folder':
+                search_value = outcome['action_param']
                 print_debug(self.debug,
                             f"---- tag_as_folder matched, search value '{search_value}'")
                 for tag, value in self.labels.items():
@@ -106,7 +96,7 @@ class GetCmkAction(Action): # pylint: disable=too-few-public-methods
 
     def check_rule_match(self, db_host, labels):
         """
-        Overwritten cause of foulder_pool
+        Overwritten cause of folder_pool
         """
 
         hostname = db_host.hostname

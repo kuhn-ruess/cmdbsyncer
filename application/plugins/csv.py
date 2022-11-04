@@ -7,7 +7,7 @@ import csv
 import click
 from application import app
 from application.models.host import Host
-from application.helpers.debug import ColorCodes
+from application.modules.debug import ColorCodes
 
 @app.cli.group(name='csv')
 def cli_csv():

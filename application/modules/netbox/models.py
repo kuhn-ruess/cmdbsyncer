@@ -3,8 +3,49 @@ Netbox Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
-from application.modules.rule.models import rule_types, FullCondition, FullLabelCondition
+from application.modules.rule.models import rule_types, FullCondition, FilterAction, \
+                                            LabelRewriteAction
 
+#   .-- Netbox Label Filter
+class NetboxFilterRule(db.Document):
+    """
+    Filter Attributes
+    """
+    name = db.StringField(required=True, unique=True)
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    render_full_conditions = db.StringField() # Helper for Preview
+
+    outcomes = db.ListField(db.EmbeddedDocumentField(FilterAction))
+    render_filter_outcome = db.StringField()
+
+    last_match = db.BooleanField(default=False)
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+
+    meta = {
+        'strict': False,
+    }
+
+#.
+#   .-- Rewrite Labels
+class NetboxRewriteLabelRule(db.Document):
+    """
+    Rule to rewrite existing Labels
+    """
+    name = db.StringField()
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    render_full_conditions = db.StringField() # Helper for preview
+    outcomes = db.ListField(db.EmbeddedDocumentField(LabelRewriteAction))
+    render_label_rewrite = db.StringField()
+    last_match = db.BooleanField(default=False)
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+    meta = {
+        'strict': False
+    }
+#.
 
 # About the Names:
 # If they not end with _sync, their value is used as content

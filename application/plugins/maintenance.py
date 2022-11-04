@@ -10,11 +10,11 @@ import click
 from mongoengine.errors import DoesNotExist
 from application import app
 from application.models.host import Host
-from application.helpers.debug import ColorCodes
-from application.helpers.poolfolder import remove_seat
+from application.modules.debug import ColorCodes
+from application.modules.checkmk.poolfolder import remove_seat
 from application.models.account import Account
 from application.models.user import User
-from application.models.folder_pool import FolderPool
+from application.modules.checkmk.models import CheckmkFolderPool
 from application.models.config import Config
 
 
@@ -71,7 +71,7 @@ def delete_all_hosts():
     answer = input(" - Enter 'y' and hit enter to procceed: ")
     if answer.lower() in ['y', 'z']:
         print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Start reset")
-        for pool in FolderPool.objects():
+        for pool in CheckmkFolderPool.objects():
             print(f"      - {pool.folder_name}")
             pool.folder_seats_taken = 0
             pool.save()
