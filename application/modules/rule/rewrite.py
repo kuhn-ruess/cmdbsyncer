@@ -9,6 +9,8 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
     Rewrite Labels
     """
 
+    name = "Rewrite"
+
     def add_outcomes(self, rule_outcomes, outcomes):
         """
         Rewrite matching label
