@@ -6,12 +6,11 @@ import sys
 import pprint
 import re
 import click
-from application.modules.cmk2 import CMK2, cli_cmk, CmkException
+from application.modules.checkmk.cmk2 import CMK2, cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
-from application.helpers.debug import ColorCodes
+from application.modules.debug import ColorCodes
 from application.helpers.get_all_host_attributes import get_all_attributes
-#from application.models.cmk_ruleset_rules import CmkRulesetRule
-from application.models.cmk_group_rules import CmkGroupRule
+from application.modules.checkmk.models import CheckmkGroupRule
 from application.models.host import Host
 
 
@@ -32,7 +31,8 @@ def export_cmk_groups(account, test_run):
     if account_config['typ'] != 'cmkv2':
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
         sys.exit(1)
-    cmk = CMK2(account_config)
+    cmk = CMK2()
+    cmk.config = account_config
     print(f"\n{ColorCodes.HEADER}Read Internal Configuration{ColorCodes.ENDC}")
     print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC} Read all Host Attributes")
     attributes = get_all_attributes()
@@ -42,7 +42,7 @@ def export_cmk_groups(account, test_run):
       (',', ''),
       (' ', '_'),
     ]
-    for rule in CmkGroupRule.objects(enabled=True):
+    for rule in CheckmkGroupRule.objects(enabled=True):
         for outcome in rule.outcome:
             group_name = outcome.group_name
             groups.setdefault(group_name, [])
@@ -129,7 +129,8 @@ def activate_changes(account):
     if account_config['typ'] != 'cmkv2':
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
         sys.exit(1)
-    cmk = CMK2(account_config)
+    cmk = CMK2()
+    cmk.config = account_config
     url = "/domain-types/activation_run/actions/activate-changes/invoke"
     data = {
         'redirect': False,
@@ -162,7 +163,8 @@ def activate_changes(account):
     if not "backery_key_id" in custom_config and not "bakery_passphrase" in custom_config:
         print(f"{ColorCodes.FAIL} Please set baker_key_id and bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
         sys.exit(1)
-    cmk = CMK2(account_config)
+    cmk = CMK2()
+    cmk.config = account_config
     url = "/domain-types/agent/actions/bake_and_sign/invoke"
     data = {
         'key_id': int(custom_config['bakery_key_id']),
@@ -189,7 +191,8 @@ def run_cmk2_inventory(account):
         'site', 'inventory_failed','is_offline','tag_agent',
     ]
     config = get_account_by_name(account)
-    cmk = CMK2(config)
+    cmk = CMK2()
+    cmk.config = config
 
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
           f"{ColorCodes.UNDERLINE}{account}{ColorCodes.ENDC}")

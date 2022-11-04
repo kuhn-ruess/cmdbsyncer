@@ -6,16 +6,17 @@ import click
 from application import app
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
-from application.helpers.debug import ColorCodes
+from application.modules.debug import ColorCodes
 
 
-@app.cli.group(name='example')
-def cli_example():
-    """Commands from example files"""
-
-
-@cli_example.command('example_import') # Here you set the Job Name
-@click.argument('account') # Here the Commandline Arguments
+#!!!!! uncomment this in again, it's just commented to not show it as default
+# in the Parameters list of ./cmdbsyncer
+#@app.cli.group(name='example')
+#def cli_example():
+#    """Commands from example files"""
+#
+#@cli_example.command('example_import') # Here you set the Job Name
+#@click.argument('account') # Here the Commandline Arguments
 def example_import(account):
     """Import Example Set of Host Data"""
 

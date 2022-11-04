@@ -10,7 +10,7 @@ import click
 from application import app
 from application.helpers.get_account import get_account_by_name
 from application.models.host import Host
-from application.helpers.debug import ColorCodes
+from application.modules.debug import ColorCodes
 
 @app.cli.group(name='cisco-dna')
 def cli_cisco_dna():

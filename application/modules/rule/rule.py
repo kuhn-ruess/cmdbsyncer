@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Get Action
+Handle Rule Matching
 """
 
-from application.helpers.match import match
-from application.helpers.debug import debug as print_debug
-from application.helpers.debug import ColorCodes
+from application.modules.rule.match import match
+from application.modules.debug import debug as print_debug
+from application.modules.debug import ColorCodes
 
-class Action(): # pylint: disable=too-few-public-methods
+class Rule(): # pylint: disable=too-few-public-methods
     """
-    Class to get actions for rule
+    Base Rule Class
     """
     debug = False
     rules = []
+    name = ""
 
-    @staticmethod
-    def _check_label_match(condition, labels):
+    def _check_label_match(self, condition):
         """
         Check if on of the given labels match the rule
         """
@@ -28,7 +28,7 @@ class Action(): # pylint: disable=too-few-public-methods
         value_match_negate = condition['value_match_negate']
 
         # Wee need to find out if tag AND tag value match
-        for tag, value in labels.items():
+        for tag, value in self.labels.items():
             # Check if Tag matchs
             if match(tag, needed_tag, tag_match, tag_match_negate):
                 # Tag Match, see if Value Match
@@ -49,15 +49,16 @@ class Action(): # pylint: disable=too-few-public-methods
             return True
         return False
 
-    def check_rules(self, hostname, labels):
+    def check_rules(self, hostname):
         """
         Handle Rule Match logic
         """
         #pylint: disable=too-many-branches
-        print_debug(self.debug, "Debug Rules for "\
+        print_debug(self.debug, f"Debug '{self.name}' Rules for "\
                                 f"{ColorCodes.UNDERLINE}{hostname}{ColorCodes.ENDC}")
         outcomes = {}
         for rule in self.rules:
+            rule = rule.to_mongo()
             rule_hit = False
             if rule['condition_typ'] == 'any':
                 print_debug(self.debug,
@@ -66,7 +67,7 @@ class Action(): # pylint: disable=too-few-public-methods
                 for condtion in rule['conditions']:
                     local_hit = False
                     if condtion['match_type'] == 'tag':
-                        local_hit = self._check_label_match(condtion, labels)
+                        local_hit = self._check_label_match(condtion)
                     else:
                         local_hit = self._check_hostname_match(condtion, hostname)
                     if local_hit:
@@ -78,7 +79,7 @@ class Action(): # pylint: disable=too-few-public-methods
                 negativ_match = False
                 for condtion in rule['conditions']:
                     if condtion['match_type'] == 'tag':
-                        if not self._check_label_match(condtion, labels):
+                        if not self._check_label_match(condtion):
                             negativ_match = True
                     else:
                         if not self._check_hostname_match(condtion, hostname):
@@ -93,7 +94,7 @@ class Action(): # pylint: disable=too-few-public-methods
             if rule_hit:
                 print_debug(self.debug,
                             f"-- {ColorCodes.OKCYAN}Rule Hit{ColorCodes.ENDC}")
-                outcomes = self.add_outcomes(rule, outcomes)
+                outcomes = self.add_outcomes([dict(x) for x in rule['outcomes']], outcomes)
 
                 # If rule has matched, and option is set, we are done
                 if rule['last_match']:
@@ -110,14 +111,9 @@ class Action(): # pylint: disable=too-few-public-methods
         raise NotImplementedError
 
 
-    def check_rule_match(self, db_host, labels):
+    def get_outcomes(self, db_host, labels):
         """
         Handle Return of outcomes.
         """
-        return self.check_rules(db_host.hostname, labels)
-
-    def get_action(self, db_host, labels):
-        """
-        Return next Action for this Host
-        """
-        return self.check_rule_match(db_host, labels)
+        self.labels = labels
+        return self.check_rules(db_host.hostname)

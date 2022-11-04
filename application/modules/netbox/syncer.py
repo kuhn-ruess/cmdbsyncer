@@ -2,21 +2,12 @@
 Create Objects in Netbox
 """
 #pylint: disable=no-member, too-many-locals
-from pprint import pprint
-import click
 import requests
 
-from mongoengine.errors import DoesNotExist
 from application.models.host import Host
 from application import app, log
-from application.helpers.debug import ColorCodes
-from application.helpers.get_account import get_account_by_name
-from application.helpers.get_netbox_actions import GetNetboxsRules
-from application.helpers.get_label import GetLabel
-
-@app.cli.group(name='netbox')
-def cli_netbox():
-    """Netbox Commands"""
+from application.modules.debug import ColorCodes
+from application.modules.plugin import Plugin
 
 if app.config.get("DISABLE_SSL_ERRORS"):
     from urllib3.exceptions import InsecureRequestWarning
@@ -24,21 +15,24 @@ if app.config.get("DISABLE_SSL_ERRORS"):
     disable_warnings(InsecureRequestWarning)
 
 
-class NetboxUpdate():
+class SyncNetbox(Plugin):
     """
     Netbox Update/ Get Operations
     """
 
-    def __init__(self, config):
+    def __init__(self):
         """
         Inital
         """
         self.log = log
-        self.config = config
         self.cache = {}
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
-        self.rule_helper = GetNetboxsRules(debug=config.get('DEBUG'))
-        self.label_helper = GetLabel()
+
+    def get_host_data(self, db_host, attributes):
+        """
+        Return commands for fullfilling of the netbox params
+        """
+        return self.actions.get_outcomes(db_host, attributes)
 
     def request(self, path, method='GET', data=None, additional_header=None):
         """
@@ -198,12 +192,14 @@ class NetboxUpdate():
         }
         # Add custom variables who match to keyload
         for key in custom_rules:
+            if key.startswith('nb_'):
+                key = key[3:]
             if key in payload:
-                payload[key] = custom_rules[key]
+                payload[key] = custom_rules.get(key)
             if key.endswith("_sync"):
                 # Sync attribute by value of given tag
                 real_key = key[:-5]
-                wanted = inventory.get(custom_rules[key], "Not defined")
+                wanted = inventory.get(custom_rules.get(key), "Not defined")
                 payload[real_key] = self.uppsert_element(real_key, wanted)
 
         # Add Inventory Variables we have a remap entry for
@@ -241,13 +237,18 @@ class NetboxUpdate():
         for db_host in db_objects:
             hostname = db_host.hostname
             counter += 1
-            custom_rules, _labels, inventory = self.get_hostdata(db_host)
-            if 'ignore_host' in custom_rules:
+
+            attributes = self.get_host_attributes(db_host)
+            if not attributes:
                 continue
+            custom_rules = self.get_host_data(db_host, attributes['all'])
+
+            attributes = attributes['filtered']
+
             process = 100.0 * counter / total
             print(f"\n{ColorCodes.HEADER}({process:.0f}%) {hostname}{ColorCodes.ENDC}")
 
-            payload = self.get_payload(db_host, custom_rules, inventory)
+            payload = self.get_payload(db_host, custom_rules, attributes)
             url = 'dcim/devices/'
             if hostname in current_devices:
                 ## Update
@@ -265,48 +266,6 @@ class NetboxUpdate():
                 print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Create Host")
                 self.request(url, "POST", payload)
 
-
-    def get_hostdata(self, db_host):
-        """
-        Process all Rules and return final outcome
-        """
-        labels, _ = self.label_helper.filter_labels(db_host.get_labels())
-        inventory = db_host.get_inventory()
-        merged = {}
-        merged.update(labels)
-        merged.update(inventory)
-        custom_rules = self.rule_helper.get_action(db_host, merged)
-
-        return custom_rules, labels, inventory
-
-    def debug_rules(self, hostname):
-        """
-        Debug Netbox Rules for Object
-        """
-        try:
-            #pylint: disable=no-member
-            db_host = Host.objects.get(hostname=hostname)
-        except DoesNotExist:
-            print("Host not found")
-            return
-        if not db_host.available:
-            print("Host not  marked as available")
-            return
-
-        custom_rules, labels, inventory = self.get_hostdata(db_host)
-
-        print()
-        print(f"{ColorCodes.HEADER} ***** Final Outcomes ***** {ColorCodes.ENDC}")
-        print(f"{ColorCodes.UNDERLINE}Custom Rules{ColorCodes.ENDC}")
-        pprint(custom_rules)
-        if custom_rules.get('ignore_host'):
-            print("!! This System would be ignored")
-        print(f"{ColorCodes.UNDERLINE}Original Labels{ColorCodes.ENDC}")
-        pprint(labels)
-        print(f"{ColorCodes.UNDERLINE}Filtered and renamed Inventory Variables{ColorCodes.ENDC}")
-        pprint(inventory)
-        print(f"{ColorCodes.UNDERLINE}Final Outcome{ColorCodes.ENDC}")
-
     def import_hosts(self):
         """
         Import Hosts from Netbox to the Syncer
@@ -319,45 +278,3 @@ class NetboxUpdate():
             }
             host_obj.set_labels(labels)
             host_obj.save()
-
-#   .-- Command: Export Hosts
-@cli_netbox.command('export_hosts')
-@click.argument("account")
-def netebox_host_export(account):
-    """Sync Objects with Netbox"""
-    try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            job = NetboxUpdate(target_config)
-            job.export_hosts()
-        else:
-            print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
-    except Exception as error_obj: #pylint: disable=broad-except
-        print(f'C{ColorCodes.FAIL}Connection Error: {error_obj} {ColorCodes.ENDC}')
-#.
-#   .-- Command: Import Hosts
-@cli_netbox.command('import_hosts')
-@click.argument("account")
-def netebox_host_import(account):
-    """Import Devices from Netbox"""
-    try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            job = NetboxUpdate(target_config)
-            job.import_hosts()
-        else:
-            print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
-    except Exception as error_obj: #pylint:disable=broad-except
-        print(f'C{ColorCodes.FAIL}Connection Error: {error_obj} {ColorCodes.ENDC}')
-#.
-#   .-- Command: Debug Hosts
-@cli_netbox.command('debug_host')
-@click.argument("hostname")
-def netebox_host_debug(hostname):
-    """Debug Host Rules"""
-    try:
-        job = NetboxUpdate({'DEBUG': True})
-        job.debug_rules(hostname)
-    except Exception as error_obj: #pylint:disable=broad-except
-        print(f'C{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
-#.
