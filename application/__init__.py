@@ -28,7 +28,10 @@ else:
 if app.config['DEBUG']:
     print(f"Loaded Config: {env}")
 
-
+# Wired new behavior in UWSGI:
+# Master Process seams not to get the db init like before
+# So we init it, try again if we are in a worker and fall back like before
+db = MongoEngine(app)
 try:
     db = MongoEngine()
     from uwsgidecorators import postfork
