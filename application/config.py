@@ -34,7 +34,7 @@ class BaseConfig():
     MONGODB_SETTINGS = {
         'db': 'cmdb-api',
         'host': '127.0.0.1',
-        'port': '27017',
+        'port': 27017,
         'alias': 'default',
 
     }
@@ -53,6 +53,6 @@ class ComposeConfig(BaseConfig):
     MONGODB_SETTINGS = {
         'db': 'cmdb-api',
         'host': 'mongo',
-        'port': '27017',
+        'port': 27017,
         'alias': 'default',
     }
