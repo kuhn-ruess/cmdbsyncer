@@ -115,10 +115,18 @@ class Rule(): # pylint: disable=too-few-public-methods
         """
         raise NotImplementedError
 
+    def check_rule_match(self, db_host):
+        """
+        Handle Return of outcomes.
+        This Function in needed in case a plugin needs to overwrite
+        content in the class. In this case the plugin like checkmk rule overwrite this function
+        """
+        return self.check_rules(db_host.hostname)
+
 
     def get_outcomes(self, db_host, labels):
         """
         Handle Return of outcomes.
         """
         self.labels = labels
-        return self.check_rules(db_host.hostname)
+        return self.check_rules_match(db_host)
