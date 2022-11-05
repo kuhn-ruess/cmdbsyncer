@@ -31,9 +31,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     def add_outcomes(self, rule_outcomes, outcomes):
         """ Handle the Outcomes """
         #pylint: disable=too-many-branches
-        outcomes_to_return = [
-            'ignore', 'ignore_host' # @TODO Remove ignore for ignore_host
-        ]
+
         for outcome in rule_outcomes:
             # We add only the outcome of the
             # first matching rule action
@@ -43,6 +41,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             # We delete it anyway at the end, if it's stays empty
 
             outcomes.setdefault('move_folder',"")
+            outcomes.setdefault('attributes', [])
 
             if outcome['action'] == 'move_folder':
                 outcomes['move_folder'] += self.format_foldername(outcome['action_param'])
@@ -59,12 +58,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                     folder = self.format_foldername(folder)
                     self.db_host.lock_to_folder(folder)
                     outcomes['move_folder'] += folder
-
-            if outcome['action'] not in outcomes and \
-                outcome['action'] in outcomes_to_return:
-                print_debug(self.debug,
-                            f"---- Added Outcome {outcome['action']} = {outcome['action_param']}")
-                outcomes[outcome['action']] = outcome['action_param']
+            if outcome['action'] == 'attribute':
+                outcomes['attributes'].append(outcome['action_param'])
 
             print_debug(self.debug,
                         "- Handle Special options")

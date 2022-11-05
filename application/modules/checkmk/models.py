@@ -35,6 +35,7 @@ action_outcome_types = [
     ('value_as_folder', "Use Value of given Tag as Folder"),
     ("tag_as_folder", "Use Tag of given Value as Folder"),
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
+    ("attribute", "Create Checkmk Attribute with label given in action param"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
