@@ -16,16 +16,6 @@ condition_types = [
     ('bool', "Match Bool, True or False bool(value)"),
     ('ignore', "Match All (*)"),
 ]
-class HostCondition(db.EmbeddedDocument):
-    """
-    Host Condition
-    """
-    match = db.StringField(choices=condition_types)
-    hostname = db.StringField(required=True)
-    match_negate = db.BooleanField()
-    meta = {
-        'strict': False,
-    }
 
 class FullCondition(db.EmbeddedDocument):
     """
@@ -50,38 +40,6 @@ class FullCondition(db.EmbeddedDocument):
         'strict': False,
     }
 
-label_choices =[('label_name', 'Label Name'), ('label_value', 'Label Value')]
-
-class LabelCondition(db.EmbeddedDocument):
-    """
-    Condition
-    """
-    match_on = db.StringField(choices=label_choices)
-    match = db.StringField(choices=condition_types)
-    value = db.StringField(required=True)
-    match_negate = db.BooleanField()
-    meta = {
-        'strict': False,
-    }
-
-class FullLabelCondition(db.EmbeddedDocument):
-    """
-    Condition
-    """
-    match_type = db.StringField(choices=[('tag', "Match for Label")])
-
-    tag_match = db.StringField(choices=condition_types)
-    tag = db.StringField()
-    tag_match_negate = db.BooleanField()
-
-    value_match = db.StringField(choices=condition_types)
-    value = db.StringField()
-    value_match_negate = db.BooleanField()
-
-
-    meta = {
-        'strict': False,
-    }
 #.
 #   .-- Action Rules
 rule_types = [

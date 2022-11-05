@@ -3,7 +3,7 @@ Ansible Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
-from application.modules.rule.models import rule_types, FullLabelCondition, CustomLabel, \
+from application.modules.rule.models import rule_types, CustomLabel, \
                                             FilterAction, FullCondition, LabelRewriteAction
 
 class AnsibleCustomVariablesRule(db.Document):
@@ -14,7 +14,7 @@ class AnsibleCustomVariablesRule(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullLabelCondition))
+    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
     render_label_conditions = db.StringField() # Helper for preview
 
     outcomes = db.ListField(db.EmbeddedDocumentField(CustomLabel))
