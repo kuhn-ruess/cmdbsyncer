@@ -1,5 +1,6 @@
 plugins/*.py
 !plugins/example_*.py
+!plugins/__init__.py
 application/config.local.py
 nogit_*
 local_*
