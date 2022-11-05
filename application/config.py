@@ -1,4 +1,5 @@
 """ Config File """
+#pylint: disable=too-few-public-methods
 
 class BaseConfig():
     """
@@ -6,7 +7,6 @@ class BaseConfig():
     Can be overwritten later if needed.
     """
     SECRET_KEY = "j+}[56_c$%u5F5PH)P4s~q(.H'mZH!dFkn?e!@{,f)Zj9Cd<Dj@DG"
-    MONGODB_DB = "cmdb-api"
     TIME_STAMP_FORMAT = "%d.%m.%Y %H:%M"
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
@@ -31,6 +31,13 @@ class BaseConfig():
     DISABLE_SSL_ERRORS = True
     SWAGGER_ENABLED = True
     DEBUG = True
+    MONGODB_SETTINGS = {
+        'db': 'cmdb-api',
+        'host': '127.0.0.1',
+        'port': '27017',
+        'alias': 'default',
+
+    }
 
 class ProductionConfig(BaseConfig):
     """
@@ -43,5 +50,9 @@ class ComposeConfig(BaseConfig):
     Config to run in docker_compose
     """
     DEBUG = False
-    MONGODB_HOST = 'mongo'
-    MONGODB_PORT = 27017
+    MONGODB_SETTINGS = {
+        'db': 'cmdb-api',
+        'host': 'mongo',
+        'port': '27017',
+        'alias': 'default',
+    }
