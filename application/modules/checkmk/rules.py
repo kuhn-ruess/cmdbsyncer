@@ -97,7 +97,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
 
 
-    def check_rule_match(self, db_host, labels):
+    def check_rule_match(self, db_host):
         """
         Overwritten cause of folder_pool
         """
@@ -107,7 +107,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
         self.found_poolfolder_rule = False
         self.db_host = db_host
-        self.labels = labels
         outcomes = self.check_rules(hostname, labels)
         # Cleanup Pool folder since no match
         # to a poolfolder rule anymore
