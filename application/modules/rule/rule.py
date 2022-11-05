@@ -129,4 +129,4 @@ class Rule(): # pylint: disable=too-few-public-methods
         Handle Return of outcomes.
         """
         self.labels = labels
-        return self.check_rules_match(db_host)
+        return self.check_rule_match(db_host)
