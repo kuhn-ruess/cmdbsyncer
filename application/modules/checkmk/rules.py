@@ -107,7 +107,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
         self.found_poolfolder_rule = False
         self.db_host = db_host
-        outcomes = self.check_rules(hostname, labels)
+        outcomes = self.check_rules(hostname)
         # Cleanup Pool folder since no match
         # to a poolfolder rule anymore
         if not self.found_poolfolder_rule:
