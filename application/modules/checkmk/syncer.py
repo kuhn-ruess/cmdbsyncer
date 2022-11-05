@@ -90,7 +90,7 @@ class SyncCMK2(CMK2):
             additional_attributes = {}
             for additional_attr in next_actions['attributes']:
                 if attr_value := attributes['all'].get(additional_attr):
-                    additional_attributes[additional_attributes] = attr_value
+                    additional_attributes[additional_attr] = attr_value
 
             if db_host.hostname not in cmk_hosts:
                 # Create since missing
