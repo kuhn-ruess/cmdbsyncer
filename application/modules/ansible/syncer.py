@@ -38,6 +38,8 @@ class SyncAnsible(Plugin):
             if not attributes:
                 continue
             extra_attributes = self.get_host_data(db_host, attributes['all'])
+            if 'ignore_host' in extra_attributes:
+                continue
 
             inventory = attributes['filtered']
             inventory.update(extra_attributes)
@@ -61,6 +63,8 @@ class SyncAnsible(Plugin):
         if not attributes:
             return False
         extra_attributes = self.get_host_data(db_host, attributes['all'])
+        if 'ignore_host' in extra_attributes:
+            return False
 
         inventory = attributes['filtered']
         inventory.update(extra_attributes)

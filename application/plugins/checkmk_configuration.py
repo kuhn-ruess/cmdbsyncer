@@ -43,7 +43,7 @@ def export_cmk_groups(account, test_run):
       (' ', '_'),
     ]
     for rule in CheckmkGroupRule.objects(enabled=True):
-        for outcome in rule.outcome:
+        for outcome in rule.outcomes:
             group_name = outcome.group_name
             groups.setdefault(group_name, [])
             regex = False
