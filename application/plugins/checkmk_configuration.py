@@ -9,10 +9,38 @@ import click
 from application.modules.checkmk.cmk2 import CMK2, cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
-from application.helpers.get_all_host_attributes import get_all_attributes
 from application.modules.checkmk.models import CheckmkGroupRule
 from application.models.host import Host
 
+def get_all_attributes():
+    """
+    Create dict with list of all possible attributes
+    """
+    collection_keys = {}
+    collection_values = {}
+    for host in Host.objects(available=True):
+        for key, value in host.get_labels().items():
+            # Add the Keys
+            collection_keys.setdefault(key, [])
+            if value not in collection_keys[key]:
+                collection_keys[key].append(value)
+            # Add the Values
+            collection_values.setdefault(value, [])
+            if key not in collection_values[value]:
+                collection_values[value].append(key)
+
+        for key, value in host.get_inventory().items():
+            # Add the Keys
+            collection_keys.setdefault(key, [])
+            if value not in collection_keys[key]:
+                collection_keys[key].append(value)
+
+            # Add the Values
+            collection_values.setdefault(value, [])
+            if key not in collection_values[value]:
+                collection_values[value].append(key)
+
+    return collection_keys, collection_values
 
 #   .-- Command: Export Rulesets
 #@cli_cmk.command('export_rules')
@@ -41,6 +69,14 @@ def export_cmk_groups(account, test_run):
     replacers = [
       (',', ''),
       (' ', '_'),
+      ('/', '-'),
+      ('&', '-'),
+      ('(', '-'),
+      (')', '-'),
+      ('ü', 'ue'),
+      ('ä', 'ae'),
+      ('ö', 'oe'),
+      ('ß', 'ss'),
     ]
     for rule in CheckmkGroupRule.objects(enabled=True):
         for outcome in rule.outcomes:
@@ -50,19 +86,19 @@ def export_cmk_groups(account, test_run):
             if outcome.regex:
                 regex = re.compile(outcome.regex)
             if outcome.foreach_type == 'value':
-                for label_value in attributes.get(outcome.foreach):
+                for label_value in attributes[1].get(outcome.foreach):
                     if regex:
                         label_value = regex.findall(label_value)[0]
                     for needle, replacer in replacers:
-                        label_value = label_value.replace(needle, replacer)
+                        label_value = label_value.replace(needle, replacer).strip()
                     if label_value not in groups[group_name]:
                         groups[group_name].append(label_value)
             elif outcome.foreach_type == 'label':
-                for label_key in [x for x,y in attributes.items() if outcome.foreach in y]:
+                for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
                     if regex:
                         label_key = regex.findall(label_key)[0]
                     for needle, replacer in replacers:
-                        label_key = label_key.replace(needle, replacer)
+                        label_key = label_key.replace(needle, replacer).strip()
                     label_key = label_key.replace(' ', '_').strip()
                     if label_key not in groups[group_name]:
                         groups[group_name].append(label_key)
@@ -86,11 +122,11 @@ def export_cmk_groups(account, test_run):
             for group_alias in configured_groups:
                 group_name = f"cmdbsyncer_{account_id}_{group_alias}"
                 if group_name not in syncers_groups_in_cmk:
+                    print(f"{ColorCodes.OKBLUE}  *{ColorCodes.ENDC} Added {group_alias}")
                     entries.append({
                         'alias' : group_alias,
                         'name' : group_name,
                     })
-                print(f"{ColorCodes.OKBLUE}  *{ColorCodes.ENDC} Added {group_alias}")
 
             if entries:
                 data = {
@@ -99,7 +135,6 @@ def export_cmk_groups(account, test_run):
                 url = "/domain-types/contact_group_config/actions/bulk-create/invoke"
                 if test_run:
                     print(f"\n{ColorCodes.HEADER}Output only (Testrun){ColorCodes.ENDC}")
-                    pprint.pprint(entries)
                 else:
                     print(f"\n{ColorCodes.HEADER}Send to Checkmk{ColorCodes.ENDC}")
                     cmk.request(url, data=data, method="POST")

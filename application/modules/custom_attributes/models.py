@@ -6,7 +6,6 @@ from application import db
 from application.modules.rule.models import FullCondition, CustomLabel, rule_types
 
 
-
 class CustomAttributeRule(db.Document):
     """
     Rule to add Custom Labels

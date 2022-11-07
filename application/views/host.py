@@ -16,17 +16,6 @@ from application.models.host import Host
 from application.models.config import Config
 
 
-class FilterLabelValue(BaseMongoEngineFilter):
-    """
-    Filter for Label Value
-    """
-
-    def apply(self, query, value):
-        return query.filter(labels__icontains=value)
-
-    def operation(self):
-        return "contains"
-
 class FilterHostnameRegex(BaseMongoEngineFilter):
     """
     Filter Value with Regex
@@ -45,10 +34,10 @@ class FilterLabelKey(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        return query.filter(labels__icontains=value)
+        return query.filter(__raw__={f'labels.{value}': {'$exists': True}})
 
     def operation(self):
-        return "contains"
+        return "exists"
 
 def format_log(v, c, m, p):
     """ Format Log view"""
@@ -165,10 +154,6 @@ class HostModelView(DefaultModelView):
        FilterLabelKey(
         Host,
         "Label Key"
-       ),
-       FilterLabelValue(
-        Host,
-        "Label Value"
        ),
     )
 

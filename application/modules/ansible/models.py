@@ -15,7 +15,7 @@ class AnsibleCustomVariablesRule(db.Document):
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
-    render_label_conditions = db.StringField() # Helper for preview
+    render_full_conditions = db.StringField() # Helper for preview
 
     outcomes = db.ListField(db.EmbeddedDocumentField(CustomLabel))
     render_label_outcomes = db.StringField() # Helper for preview
