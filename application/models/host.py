@@ -170,7 +170,7 @@ class Host(db.Document):
         Set account Information
         """
         if self.source_account_id and self.source_account_id != account_id:
-            raise HostError(f"Host {self.hostname} already importet by source {self.source_name}")
+            raise HostError(f"Host already importet by account {self.source_account_name}")
         self.source_account_id = account_id
         self.source_account_name = account_name
 

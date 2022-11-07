@@ -3,9 +3,12 @@
 Ansible Inventory Modul
 """
 #pylint: disable=too-many-arguments, no-member
+#   .-- Init
 import json
 from pprint import pprint
 import click
+
+from mongoengine.errors import NotUniqueError
 
 from application import app
 from application.models.host import Host
@@ -15,9 +18,16 @@ from application.modules.rule.rewrite import Rewrite
 
 from application.modules.ansible.models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
                                                AnsibleCustomVariablesRule
+from application.modules.rule.models import CustomLabel, FullCondition, FilterAction
 from application.modules.ansible.rules import AnsibleVariableRule
 from application.modules.ansible.syncer import SyncAnsible
 
+@app.cli.group(name='ansible')
+def cli_ansible():
+    """Ansible related commands"""
+
+#.
+#   .-- Load Rules
 def load_rules():
     """
     Cache all needed Rules for operation
@@ -37,12 +47,160 @@ def load_rules():
         'rewrite': attribute_rewrite,
         'actions': ansible_rules,
     }
+#.
+#   .-- Seed Default Rules
+@cli_ansible.command('seed_default_rules')
+def seed_default_rules():
+    """
+    Print matching rules and Inventory Outcome for Host
+    """
+    # pylint: disable=too-many-statements
+    print("- Create Ansible Filters")
+    rules = {
+        'Default Variables': {
+            'condition_typ': 'anyway',
+            'outcomes': [
+                 ('cmk_install_agent', 'whitelist_attribute'),
+                 ('cmk_register_tls', 'whitelist_attribute'),
+                 ('cmk_register_bakery', 'whitelist_attribute'),
+                 ('cmk_discover', 'whitelist_attribute'),
+                 ('cmk_linux_tmp', 'whitelist_attribute'),
+                 ('cmk_windows_tmp', 'whitelist_attribute'),
+                 ('cmk_agent_receiver_port', 'whitelist_attribute'),
+                 ('cmk_main_server', 'whitelist_attribute'),
+                 ('cmk_main_site', 'whitelist_attribute'),
+                 ('cmk_site', 'whitelist_attribute'),
+                 ('cmk_server', 'whitelist_attribute'),
+            ],
+            'conditions': [],
+            'sort_field': 10,
+        }
+    }
+    print("-- Done")
 
-@app.cli.group(name='ansible')
-def cli_ansible():
-    """Ansible related commands"""
+    for rule_name, settings in rules.items():
+        rule = AnsibleFilterRule()
+        rule.name = rule_name
+        rule.condition_typ = settings['condition_typ']
+        rule.sort_field = settings['sort_field']
+        rule.enabled = True
+        conditions = []
+        for cond in settings['conditions']:
+            if cond['type'] == 'label':
+                condition = FullCondition()
+                condition.match_type = 'tag'
+                condition.tag_match = cond['tag'][0]
+                condition.tag = cond['tag'][1]
+                condition.value_match = cond['value'][0]
+                condition.value = cond['value'][1]
+                conditions.append(condition)
+        rule.conditions = conditions
+        outcomes = []
+        for out in settings['outcomes']:
+            label = FilterAction()
+            label.attribute_name = out[0]
+            label.action = out[1]
+            outcomes.append(label)
+        rule.outcomes = outcomes
+        try:
+            rule.save()
+        except NotUniqueError:
+            pass
 
 
+    print("- Create Ansible Custom Variable Rules")
+    rules = {
+        'Default Ansible Variables': {
+            'condition_typ': 'anyway',
+            'outcomes': [
+                ('ansible_user', ""),
+            ],
+            'conditions' : [],
+            'sort_field': 10,
+
+        },
+        'Default Checkmk Variables' : {
+            'condition_typ': 'anyway',
+            'outcomes': [
+                 ('cmk_main_server', ""),
+                 ('cmk_main_site', ""),
+                 ('cmk_user', ""),
+                 ('cmk_password', ""),
+                 ('cmk_windows_tmp', ""),
+                 ('cmk_linux_tmp', ""),
+            ],
+            'conditions': [],
+            'sort_field': 11,
+        },
+        'Default Checkmk Install Agent Conditions' : {
+            'condition_typ': 'any',
+            'outcomes': [
+                ('cmk_install_agent', 'true'),
+                ('cmk_discover', 'true'),
+                ('cmk_register_bakery', 'true'),
+                ('cmk_register_tls', 'true'),
+            ],
+            'conditions': [
+                {
+                    'type': 'label',
+                    'tag': ('equal', 'cmk_inventory_failed'),
+                    'value': ('equal', 'True'),
+                },
+                {
+                    'type': 'label',
+                    'tag': ('equal', 'cmk_svc_check_mk_output'),
+                    'value': ('equal', '[agent] Empty output'),
+                },
+                {
+                    'type': 'label',
+                    'tag': ('equal', 'cmk_svc_check_mk_output'),
+                    'value': ('equal', '[agent] Communication failed'),
+                },
+                {
+                    'type': 'label',
+                    'tag': ('equal', 'cmk_svc_check_mk_agent_output'),
+                    'value': ('equal', 'Version: 1'),
+                },
+            ],
+            'sort_field': 12,
+
+        },
+    }
+
+
+
+    for rule_name, settings in rules.items():
+        rule = AnsibleCustomVariablesRule()
+        rule.name = rule_name
+        rule.condition_typ = settings['condition_typ']
+        rule.enabled = False
+        rule.sort_field = settings['sort_field']
+        conditions = []
+        for cond in settings['conditions']:
+            if cond['type'] == 'label':
+                condition = FullCondition()
+                condition.match_type = 'tag'
+                condition.tag_match = cond['tag'][0]
+                condition.tag = cond['tag'][1]
+                condition.value_match = cond['value'][0]
+                condition.value = cond['value'][1]
+                conditions.append(condition)
+        rule.conditions = conditions
+        outcomes = []
+        for out in settings['outcomes']:
+            label = CustomLabel()
+            label.label_name = out[0]
+            label.label_value = out[1]
+            outcomes.append(label)
+        rule.outcomes = outcomes
+        try:
+            rule.save()
+        except NotUniqueError:
+            pass
+    print("-- Done")
+
+#.
+#   .-- Debug Host
 @cli_ansible.command('debug_host')
 @click.argument("hostname")
 def debug_ansible_rules(hostname):
@@ -82,6 +240,8 @@ def debug_ansible_rules(hostname):
     print(f"{ColorCodes.UNDERLINE} Extra Attributes {ColorCodes.ENDC}")
     pprint(extra_attributes)
 
+#.
+#   .-- Ansible Source
 @cli_ansible.command('source')
 @click.option("--list", is_flag=True)
 @click.option("--host")
@@ -102,3 +262,4 @@ def source(list, host): #pylint: disable=redefined-builtin
         return True
     print("Params missing")
     return False
+#.

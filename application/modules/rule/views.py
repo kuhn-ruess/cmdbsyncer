@@ -46,21 +46,6 @@ def _render_label_outcomes(_view, _context, model, _name):
     html += "</table>"
     return Markup(html)
 
-def _render_host_conditions(_view, _context, model, _name):
-    """
-    Condition for Host Params
-    """
-    html = "<table width=100%>"
-    for idx, entry in enumerate(model.conditions):
-        line = f"<tr><td>{idx}</td>"\
-               f"<td><b>Hostname</b></td><td>"
-        if entry.match_negate:
-            line += "<b>NOT</b> "
-        line += f"{condition_types[entry.match]}</td>"\
-                f"<td><b>{entry.hostname}</b></td></tr>"
-        html += line
-    html += "</table>"
-    return Markup(html)
 
 def _render_full_conditions(_view, _context, model, _name):
     """
@@ -94,31 +79,6 @@ def _render_full_conditions(_view, _context, model, _name):
     html += "</table>"
     return Markup(html)
 
-def _render_label_conditions(_view, _context, model, _name):
-    """
-    Render Label Conditions
-    """
-    html = "<table width=100%>"
-    for idx, entry in enumerate(model.conditions):
-        html += f"<tr><td>{idx}</td><td><b>Label</b></td><td>"\
-            "<table width=100%>"\
-            "<tr>"\
-            "<td><b>Key</b></td>"\
-            f"<td>{condition_types[entry.tag_match]}</td>"\
-            f"<td><b>{entry.tag}</b></td>"\
-            f"<td>Negate: <b>{entry.tag_match_negate}</b></td>"\
-            "</tr>"\
-            "<tr>"\
-            "<td><b>Value</b></td>"\
-            f"<td>{condition_types[entry.value_match]}</td>"\
-            f"<td><b>{entry.value}</b></td>"\
-            f"<td>Negate: <b>{entry.value_match_negate}</b></td>"\
-            "</tr>"\
-            "</table>"\
-            "</td></tr>"
-    html += "</table>"
-    return Markup(html)
-
 #.
 #   .-- Rule Model
 #pylint: disable=too-few-public-methods
@@ -126,6 +86,10 @@ class RuleModelView(DefaultModelView):
     """
     Rule Model
     """
+
+    can_export = True
+
+    export_types = ['xlsx', 'csv']
 
     column_default_sort = "sort_field"
     column_filters = (
@@ -151,25 +115,17 @@ class RuleModelView(DefaultModelView):
 
     column_formatters = {
         'render_full_conditions': _render_full_conditions,
-        'render_host_conditions': _render_host_conditions,
         'render_label_outcomes': _render_label_outcomes,
-        'render_label_conditions': _render_label_conditions,
-        #'render_host_params': _render_host_params,
     }
 
     form_overrides = {
         'render_full_conditions': HiddenField,
-        'render_host_conditions': HiddenField,
         'render_label_outcomes': HiddenField,
-        'render_label_conditions': HiddenField,
-        #'render_host_params': HiddenField,
     }
 
     column_labels = {
         'render_full_conditions': "Conditions",
-        'render_host_conditions': "Host Conditions",
         'render_label_outcomes': "New Labels",
-        'render_label_conditions': "Label Conditions",
     }
 
     def is_accessible(self):

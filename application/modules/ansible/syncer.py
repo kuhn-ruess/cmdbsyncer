@@ -11,6 +11,25 @@ class SyncAnsible(Plugin):
     Class for the Ansible Actions
     """
 
+
+    def bypass_host(self, attributes1, attributes2):
+        """
+        Check if we should ignore a host
+        """
+        checks = [
+            ('cmk_register_tls', "False"),
+            ('cmk_register_bakery', "False"),
+            ('cmk_install_agent', "False"),
+            ('cmk_do_discover', "False"),
+        ]
+        for check, target in checks:
+            if attributes1.get(check, "False") != target:
+                return False
+            if attributes2.get(check, "False") != target:
+                return False
+        return True
+
+
     def get_host_data(self, db_host, attributes):
         """
         Return extra Attributes based on
@@ -39,6 +58,9 @@ class SyncAnsible(Plugin):
                 continue
             extra_attributes = self.get_host_data(db_host, attributes['all'])
             if 'ignore_host' in extra_attributes:
+                continue
+
+            if self.bypass_host(attributes['all'], extra_attributes):
                 continue
 
             inventory = attributes['filtered']
