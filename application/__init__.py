@@ -10,7 +10,7 @@ from flask_login import LoginManager
 from flask_mail import Mail
 from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
-from application.modules.log import Log
+from application.modules.log.log import Log
 
 
 VERSION = '3.0.0-wip'
@@ -44,7 +44,26 @@ except ImportError:
     db = MongoEngine(app)
 
 
-log = Log()
+from application.modules.log.models import LogEntry
+from application.modules.log.views import LogView
+
+def LogFunction(message): #pylint: disable=invalid-name
+    """
+    Write entries do db
+    """
+    log_entry = LogEntry()
+    log_entry.datetime = datetime.now()
+    log_entry.message = message['message']
+    log_entry.raw = ""
+    if message['raw']:
+        for raw_entry in message['raw']:
+            log_entry.raw += raw_entry[0]+"\n"
+            log_entry.raw += pformat(raw_entry[1])+"\n\n"
+    log_entry.type = message['type']
+    log_entry.traceback = message['traceback']
+    log_entry.save()
+
+log = Log(log_func=LogFunction)
 
 mail = Mail(app)
 bootstrap = Bootstrap(app)
@@ -142,4 +161,6 @@ admin.add_link(MenuLink(name='Set 2FA Code', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}set-2fa"))
 admin.add_link(MenuLink(name='Logout', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}logout"))
+
+admin.add_view(LogView(LogEntry, name="Log"))
 #.
