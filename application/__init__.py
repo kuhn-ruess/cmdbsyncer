@@ -66,7 +66,7 @@ from application.views.default import IndexView, DefaultModelView
 from application.auth.views import AUTH
 app.register_blueprint(AUTH)
 
-from application.modules.rule.views import FiltereModelView, RewriteLabelView
+from application.modules.rule.views import FiltereModelView, RewriteAttributeView
 
 
 from application.api.views import API_BP as api
@@ -92,12 +92,13 @@ from application.modules.checkmk.models import CheckmkRule, CheckmkGroupRule, Ch
 from application.modules.checkmk.views import CheckmkRuleView, CheckmkGroupRuleView
 
 
-from application.modules.checkmk.models import CheckmkRewriteLabelRule
-admin.add_view(RewriteLabelView(CheckmkRewriteLabelRule, name="Rewrite Attributes",
+from application.modules.checkmk.models import CheckmkRewriteAttributeRule
+admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Checkmk"))
 admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter", category="Checkmk"))
-admin.add_view(CheckmkRuleView(CheckmkRule, name="Export Rules", category="Checkmk"))
-admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, name="Group Mananagemt", category="Checkmk"))
+admin.add_view(CheckmkRuleView(CheckmkRule, name="CMK Export Rules", category="Checkmk"))
+admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
+                                    name="CMK Group Mananagemt", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkFolderPool
 from application.modules.checkmk.views import CheckmkFolderPoolView
@@ -105,10 +106,11 @@ admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", cat
 #.
 #   .-- Ansible
 admin.add_sub_category(name="Ansible", parent_name="Rules")
-from application.modules.ansible.models import AnsibleCustomVariablesRule, AnsibleFilterRule, AnsibleRewriteAttributesRule
+from application.modules.ansible.models import AnsibleCustomVariablesRule, \
+                                        AnsibleFilterRule, AnsibleRewriteAttributesRule
 from application.modules.ansible.views import AnsibleCustomVariablesView
 
-admin.add_view(RewriteLabelView(AnsibleRewriteAttributesRule, name="Rewrite Attributes",
+admin.add_view(RewriteAttributeView(AnsibleRewriteAttributesRule, name="Rewrite Attributes",
                                                             category="Ansible"))
 admin.add_view(FiltereModelView(AnsibleFilterRule, name="Filter", category="Ansible"))
 admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
@@ -118,9 +120,9 @@ admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
 admin.add_sub_category(name="Netbox", parent_name="Rules")
 
 from application.modules.netbox.views import NetboxCustomAttributesView
-from application.modules.netbox.models import NetboxCustomAttributes, NetboxRewriteLabelRule,\
-                                              NetboxFilterRule
-admin.add_view(RewriteLabelView(NetboxRewriteLabelRule, name="Rewrite Attributes",
+from application.modules.netbox.models import NetboxCustomAttributes, \
+                                                NetboxRewriteAttributeRule, NetboxFilterRule
+admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
 admin.add_view(FiltereModelView(NetboxFilterRule, name="Filter", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\

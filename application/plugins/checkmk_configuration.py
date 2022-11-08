@@ -3,7 +3,6 @@ Add Configuration in Checkmk
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get
 import sys
-import pprint
 import re
 import click
 from application.modules.checkmk.cmk2 import CMK2, cli_cmk, CmkException
@@ -105,49 +104,75 @@ def export_cmk_groups(account, test_run):
 
     print(f"\n{ColorCodes.HEADER}Start Sync{ColorCodes.ENDC}")
     account_id = account_config['_id']
+    urls = {
+        'contact_groups': {
+            'short': "cg",
+            'get': "/domain-types/contact_group_config/collections/all",
+            'put': "/domain-types/contact_group_config/actions/bulk-create/invoke",
+            'alias': "/objects/contact_group_config/"
+        },
+        'host_groups' : {
+            'short': "hg",
+            'get': "/domain-types/host_group_config/collections/all",
+            'put': "/domain-types/host_group_config/actions/bulk-create/invoke",
+            'alias': "objects/host_group_config/"
+        },
+        'service_groups' : {
+            'short': "sg",
+            'get': "/domain-types/service_group_config/collections/all",
+            'put': "/domain-types/service_group_config/actions/bulk-create/invoke",
+            'alias': "objects/service_group_config/"
+        },
+    }
     for group_type, configured_groups in groups.items():
-        if group_type == "contact_groups":
-            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Read Current Groups")
-            url = "/domain-types/contact_group_config/collections/all"
-            cmks_groups = cmk.request(url, method="GET")
-            syncers_groups_in_cmk = []
-            for cmk_group in [x['href'] for x in cmks_groups[0]['value']]:
-                cmk_name = cmk_group.split('/')[-1]
-                if cmk_name.startswith(f"cmdbsyncer_{account_id}_"):
-                    syncers_groups_in_cmk.append(cmk_name)
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Read Current {group_type}")
+        url = urls[group_type]['get']
+        short = urls[group_type]['short']
+        cmks_groups = cmk.request(url, method="GET")
+        syncers_groups_in_cmk = []
+        name_prefix = f"cmdbsyncer_{short}_{account_id}_"
+        for cmk_group in [x['href'] for x in cmks_groups[0]['value']]:
+            cmk_name = cmk_group.split('/')[-1]
+            if cmk_name.startswith(name_prefix):
+                syncers_groups_in_cmk.append(cmk_name)
 
 
-            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Create Groups if needed")
-            entries = []
-            for group_alias in configured_groups:
-                group_name = f"cmdbsyncer_{account_id}_{group_alias}"
-                if group_name not in syncers_groups_in_cmk:
-                    print(f"{ColorCodes.OKBLUE}  *{ColorCodes.ENDC} Added {group_alias}")
-                    entries.append({
-                        'alias' : group_alias,
-                        'name' : group_name,
-                    })
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Create {group_type}s if needed")
+        entries = []
+        for new_group_alias in configured_groups:
+            new_group_name = f"{name_prefix}_{new_group_alias}"
+            if new_group_name not in syncers_groups_in_cmk:
+                print(f"{ColorCodes.OKBLUE}  *{ColorCodes.ENDC} Added {new_group_alias}")
+                entries.append({
+                    'alias' : short+new_group_alias,
+                    'name' : new_group_name,
+                })
 
-            if entries:
-                data = {
-                    'entries': entries,
-                }
-                url = "/domain-types/contact_group_config/actions/bulk-create/invoke"
-                if test_run:
-                    print(f"\n{ColorCodes.HEADER}Output only (Testrun){ColorCodes.ENDC}")
-                else:
-                    print(f"\n{ColorCodes.HEADER}Send to Checkmk{ColorCodes.ENDC}")
+        if entries:
+            data = {
+                'entries': entries,
+            }
+            url = urls[group_type]['put']
+            if test_run:
+                print(f"\n{ColorCodes.HEADER}Output only (Testrun){ColorCodes.ENDC}")
+            else:
+                print(f"\n{ColorCodes.HEADER}Send {group_name} to Checkmk{ColorCodes.ENDC}")
+                try:
                     cmk.request(url, data=data, method="POST")
+                except CmkException as error:
+                    print(f"{ColorCodes.FAIL} {error} {ColorCodes.ENDC}")
+                    return
 
-            if not test_run:
-                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Delete Groups if needed")
-                for group_alias in syncers_groups_in_cmk:
-                    pure_alias = "_".join(group_alias.split('_')[2:])
-                    if pure_alias not in configured_groups:
-                        # Checkmk is not deleting objects if the still referenced
-                        url = f"objects/contact_group_config/{group_alias}"
-                        cmk.request(url, method="DELETE")
-                        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Group {group_alias} deleted")
+
+        if not test_run:
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Delete Groups if needed")
+            for group_alias in syncers_groups_in_cmk:
+                pure_alias = "_".join(group_alias.split('_')[2:])
+                if pure_alias not in configured_groups:
+                    # Checkmk is not deleting objects if the still referenced
+                    url = f"{urls[group_type]}{group_alias}"
+                    cmk.request(url, method="DELETE")
+                    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Group {group_alias} deleted")
 
 
 
@@ -186,7 +211,7 @@ def activate_changes(account):
 @cli_cmk.command('bake_and_sign_agents')
 @click.argument("account")
 #pylint: disable=too-many-locals, too-many-branches
-def activate_changes(account):
+def bake_and_sign(account):
     """
     Bake and Sign Agents for Instance
     """
@@ -196,7 +221,8 @@ def activate_changes(account):
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
         sys.exit(1)
     if not "backery_key_id" in custom_config and not "bakery_passphrase" in custom_config:
-        print(f"{ColorCodes.FAIL} Please set baker_key_id and bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
+        print(f"{ColorCodes.FAIL} Please set baker_key_id and "\
+              f"bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
         sys.exit(1)
     cmk = CMK2()
     cmk.config = account_config

@@ -19,7 +19,7 @@ from application.modules.rule.rewrite import Rewrite
 
 from application.modules.ansible.models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
                                                AnsibleCustomVariablesRule
-from application.modules.rule.models import CustomLabel, FullCondition, FilterAction
+from application.modules.rule.models import CustomAttribute, FullCondition, FilterAction
 from application.modules.ansible.rules import AnsibleVariableRule
 from application.modules.ansible.syncer import SyncAnsible
 
@@ -98,10 +98,10 @@ def seed_default_rules():
         rule.conditions = conditions
         outcomes = []
         for out in settings['outcomes']:
-            label = FilterAction()
-            label.attribute_name = out[0]
-            label.action = out[1]
-            outcomes.append(label)
+            attribute = FilterAction()
+            attribute.attribute_name = out[0]
+            attribute.action = out[1]
+            outcomes.append(attribute)
         rule.outcomes = outcomes
         try:
             rule.save()
@@ -189,10 +189,10 @@ def seed_default_rules():
         rule.conditions = conditions
         outcomes = []
         for out in settings['outcomes']:
-            label = CustomLabel()
-            label.label_name = out[0]
-            label.label_value = out[1]
-            outcomes.append(label)
+            attribute = CustomAttribute()
+            attribute.attribute_name = out[0]
+            attribute.attribute_value = out[1]
+            outcomes.append(attribute)
         rule.outcomes = outcomes
         try:
             rule.save()

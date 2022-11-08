@@ -35,14 +35,14 @@ def _render_filter_outcomes(_view, _context, model, _name):
     return Markup(html)
 
 
-def _render_label_outcomes(_view, _context, model, _name):
+def _render_attribute_outcomes(_view, _context, model, _name):
     """
-    Render Label outcomes
+    Render attribute outcomes
     """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{entry.label_name}</td>"\
-                f"<td><b>{entry.label_value}</b></td></tr>"
+        html += f"<tr><td>{idx}</td><td>{entry.attribute_name}</td>"\
+                f"<td><b>{entry.attribute_value}</b></td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -60,7 +60,7 @@ def _render_full_conditions(_view, _context, model, _name):
             html += f"{condition_types[entry.hostname_match]}</td>"\
                     f"<td><b>{entry.hostname}</b></td></tr>"
         else:
-            html += f"<tr><td>{idx}</td><td><b>Label</b></td><td>"\
+            html += f"<tr><td>{idx}</td><td><b>Attribute</b></td><td>"\
                 "<table width=100%>"\
                 "<tr>"\
                 "<td><b>Key</b></td>"\
@@ -115,17 +115,17 @@ class RuleModelView(DefaultModelView):
 
     column_formatters = {
         'render_full_conditions': _render_full_conditions,
-        'render_label_outcomes': _render_label_outcomes,
+        'render_attribute_outcomes': _render_attribute_outcomes,
     }
 
     form_overrides = {
         'render_full_conditions': HiddenField,
-        'render_label_outcomes': HiddenField,
+        'render_attribute_outcomes': HiddenField,
     }
 
     column_labels = {
         'render_full_conditions': "Conditions",
-        'render_label_outcomes': "New Labels",
+        'render_attribute_outcomes': "New Attributes",
     }
 
     def is_accessible(self):
@@ -181,24 +181,24 @@ class FiltereModelView(DefaultModelView):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('rule')
 #.
-#   .-- Rewrite Labels
-def _render_label_rewrite(_view, _context, model, _name):
+#   .-- Rewrite Attributes
+def _render_attribute_rewrite(_view, _context, model, _name):
     """
-    Render Label outcomes
+    Render Attribute outcomes
     """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{entry.old_label_name}</td>"\
+        html += f"<tr><td>{idx}</td><td>{entry.old_attribute_name}</td>"\
                  "<td><b>to</b></td>"\
-                f"<td>{entry.new_label_name}</td></tr>"
+                f"<td>{entry.new_attribute_name}</td></tr>"
     html += "</table>"
     return Markup(html)
 
 
 #pylint: disable=too-few-public-methods
-class RewriteLabelView(RuleModelView):
+class RewriteAttributeView(RuleModelView):
     """
-    Custom Label Model View
+    Custom Attribute Model View
     """
 
     def __init__(self, model, **kwargs):
@@ -206,15 +206,15 @@ class RewriteLabelView(RuleModelView):
         Update elements
         """
         self.column_formatters.update({
-            'render_label_rewrite': _render_label_rewrite,
+            'render_attribute_rewrite': _render_attribute_rewrite,
         })
 
         self.form_overrides.update({
-            'render_label_rewrite': HiddenField,
+            'render_attribute_rewrite': HiddenField,
         })
 
         self.column_labels.update({
-            'render_label_rewrite': "Label Rewrites",
+            'render_attribute_rewrite': "Attribute Rewrites",
         })
 
         super().__init__(model, **kwargs)

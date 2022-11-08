@@ -4,9 +4,9 @@ Netbox Rule
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
 from application.modules.rule.models import rule_types, FullCondition, FilterAction, \
-                                            LabelRewriteAction
+                                            AttributeRewriteAction
 
-#   .-- Netbox Label Filter
+#   .-- Netbox Attribute Filter
 class NetboxFilterRule(db.Document):
     """
     Filter Attributes
@@ -28,17 +28,17 @@ class NetboxFilterRule(db.Document):
     }
 
 #.
-#   .-- Rewrite Labels
-class NetboxRewriteLabelRule(db.Document):
+#   .-- Rewrite Attribute
+class NetboxRewriteAttributeRule(db.Document):
     """
-    Rule to rewrite existing Labels
+    Rule to rewrite existing Attributes
     """
     name = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
     render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(db.EmbeddedDocumentField(LabelRewriteAction))
-    render_label_rewrite = db.StringField()
+    outcomes = db.ListField(db.EmbeddedDocumentField(AttributeRewriteAction))
+    render_attribute_rewrite = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     sort_field = db.IntField(default=0)

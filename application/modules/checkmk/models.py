@@ -4,9 +4,9 @@ Checkmk Rules
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
 from application.modules.rule.models import rule_types, FullCondition, FilterAction, \
-                                            LabelRewriteAction
+                                            AttributeRewriteAction
 
-#   .-- Checkmk Label Filter
+#   .-- Checkmk Attribute Filter
 class CheckmkFilterRule(db.Document):
     """
     Filter Attributes
@@ -35,7 +35,7 @@ action_outcome_types = [
     ('value_as_folder', "Use Value of given Tag as Folder"),
     ("tag_as_folder", "Use Tag of given Value as Folder"),
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
-    ("attribute", "Create Checkmk Attribute with label given in action param"),
+    ("attribute", "Create Checkmk Attribute with Attribute given in action param"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
@@ -72,11 +72,13 @@ class CheckmkRule(db.Document):
 #   .-- Checkmk Groups
 groups = [
  ('contact_groups', "Contact Groups"),
+ ('host_groups', "Host Groups"),
+ ('service_groups', "Service Groups"),
 ]
 
 foreach_types = [
- ('label', "Foreach Labename for given Value"),
- ('value', "Foreach Value for given Labelname")
+ ('label', "Foreach Attribute name for given Value"),
+ ('value', "Foreach Value for given Attribute name")
 ]
 
 class CmkGroupOutcome(db.EmbeddedDocument):
@@ -108,7 +110,6 @@ class CheckmkGroupRule(db.Document):
         'strict': False,
     }
 #.
-
 #   .-- Folder Pools
 class CheckmkFolderPool(db.Document):
     """
@@ -135,17 +136,17 @@ class CheckmkFolderPool(db.Document):
             return True
         return False
 #.
-#   .-- Rewrite Labels
-class CheckmkRewriteLabelRule(db.Document):
+#   .-- Rewrite Attributes
+class CheckmkRewriteAttributeRule(db.Document):
     """
-    Rule to rewrite existing Labels
+    Rule to rewrite existing Attributes
     """
     name = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
     render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(db.EmbeddedDocumentField(LabelRewriteAction))
-    render_label_rewrite = db.StringField()
+    outcomes = db.ListField(db.EmbeddedDocumentField(AttributeRewriteAction))
+    render_attribute_rewrite = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     sort_field = db.IntField(default=0)

@@ -3,8 +3,8 @@ Ansible Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
-from application.modules.rule.models import rule_types, CustomLabel, \
-                                            FilterAction, FullCondition, LabelRewriteAction
+from application.modules.rule.models import rule_types, CustomAttribute, \
+                                            FilterAction, FullCondition, AttributeRewriteAction
 
 class AnsibleCustomVariablesRule(db.Document):
     """
@@ -17,8 +17,8 @@ class AnsibleCustomVariablesRule(db.Document):
     conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
     render_full_conditions = db.StringField() # Helper for preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(CustomLabel))
-    render_label_outcomes = db.StringField() # Helper for preview
+    outcomes = db.ListField(db.EmbeddedDocumentField(CustomAttribute))
+    render_attribute_outcomes = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
 
@@ -31,7 +31,7 @@ class AnsibleCustomVariablesRule(db.Document):
         'strict': False
     }
 
-#   .-- Ansible Label Filter
+#   .-- Ansible Attribute Filter
 class AnsibleFilterRule(db.Document):
     """
     Filter Attributes
@@ -53,17 +53,17 @@ class AnsibleFilterRule(db.Document):
     }
 
 #.
-#   .-- Rewrite Labels
+#   .-- Rewrite Attributes
 class AnsibleRewriteAttributesRule(db.Document):
     """
-    Rule to Attributes existing Labels
+    Rule to Attributes existing Attributes
     """
     name = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
     render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(db.EmbeddedDocumentField(LabelRewriteAction))
-    render_label_rewrite = db.StringField()
+    outcomes = db.ListField(db.EmbeddedDocumentField(AttributeRewriteAction))
+    render_attribute_rewrite = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     sort_field = db.IntField(default=0)

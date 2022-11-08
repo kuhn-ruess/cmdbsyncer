@@ -6,20 +6,20 @@ from application.modules.rule.rule import Rule
 
 class Rewrite(Rule):# pylint: disable=too-few-public-methods
     """
-    Rewrite Labels
+    Rewrite Attributes
     """
 
     name = "Rewrite"
 
     def add_outcomes(self, rule_outcomes, outcomes):
         """
-        Rewrite matching label
+        Rewrite matching Attribute
         """
         # pylint: disable=too-many-nested-blocks
         for outcome in rule_outcomes:
-            label_name = outcome['old_label_name']
-            new_label_name = outcome['new_label_name']
-            if self.labels.get(label_name):
-                outcomes[f'add_{new_label_name}'] = self.labels[label_name]
-                outcomes[f'del_{label_name}'] = True
+            attribute_name = outcome['old_attribute_name']
+            new_attribute_name = outcome['new_attribute_name']
+            if self.attributes.get(attribute_name):
+                outcomes[f'add_{new_attribute_name}'] = self.attributes[attribute_name]
+                outcomes[f'del_{attribute_name}'] = True
         return outcomes

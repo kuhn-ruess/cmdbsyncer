@@ -14,7 +14,7 @@ from application.helpers.get_account import get_account_by_name
 from application.modules.rule.rewrite import Rewrite
 from application.modules.rule.filter import Filter
 
-from application.modules.netbox.models import NetboxCustomAttributes, NetboxRewriteLabelRule,\
+from application.modules.netbox.models import NetboxCustomAttributes, NetboxRewriteAttributeRule,\
                                               NetboxFilterRule
 from application.modules.netbox.rules import NetboxVariableRule
 from application.modules.netbox.syncer import SyncNetbox
@@ -28,7 +28,7 @@ def load_rules():
 
     attribute_rewrite = Rewrite()
     attribute_rewrite.rules = \
-            NetboxRewriteLabelRule.objects(enabled=True).order_by('sort_field')
+            NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
 
     netbox_rules = NetboxVariableRule()
     netbox_rules.rules = NetboxCustomAttributes.objects(enabled=True).order_by('sort_field')
