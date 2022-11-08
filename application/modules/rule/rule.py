@@ -2,7 +2,7 @@
 """
 Handle Rule Matching
 """
-
+# pylint: disable=import-error
 from application.modules.rule.match import match
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes as CC
@@ -14,10 +14,11 @@ class Rule(): # pylint: disable=too-few-public-methods
     debug = False
     rules = []
     name = ""
+    attributes = {}
 
-    def _check_label_match(self, condition):
+    def _check_attribute_match(self, condition):
         """
-        Check if on of the given labels match the rule
+        Check if on of the given attributes match the rule
         """
         needed_tag = condition['tag']
         tag_match = condition['tag_match']
@@ -28,7 +29,7 @@ class Rule(): # pylint: disable=too-few-public-methods
         value_match_negate = condition['value_match_negate']
 
         # Wee need to find out if tag AND tag value match
-        for tag, value in self.labels.items():
+        for tag, value in self.attributes.items():
             # Check if Tag matchs
             if match(tag, needed_tag, tag_match, tag_match_negate):
                 # Tag Match, see if Value Match
@@ -49,17 +50,17 @@ class Rule(): # pylint: disable=too-few-public-methods
             return True
         return False
 
-    def check_rules(self, hostname):
+    def check_rules(self, hostname): #pylint: disable=too-many-branches
         """
         Handle Rule Match logic
         """
+        #pylint: disable=too-many-branches
 
         rule_descriptions = {
             'any' : "ANY can match",
             'all' : "ALL must match",
             'anyway': "ALLWAYS match"
         }
-        #pylint: disable=too-many-branches
         print_debug(self.debug, f"Debug '{self.name}' Rules for "\
                                 f"{CC.UNDERLINE}{hostname}{CC.ENDC}")
         outcomes = {}
@@ -70,7 +71,7 @@ class Rule(): # pylint: disable=too-few-public-methods
                 for condtion in rule['conditions']:
                     local_hit = False
                     if condtion['match_type'] == 'tag':
-                        local_hit = self._check_label_match(condtion)
+                        local_hit = self._check_attribute_match(condtion)
                     else:
                         local_hit = self._check_hostname_match(condtion, hostname)
                     if local_hit:
@@ -79,7 +80,7 @@ class Rule(): # pylint: disable=too-few-public-methods
                 negativ_match = False
                 for condtion in rule['conditions']:
                     if condtion['match_type'] == 'tag':
-                        if not self._check_label_match(condtion):
+                        if not self._check_attribute_match(condtion):
                             negativ_match = True
                     else:
                         if not self._check_hostname_match(condtion, hostname):
@@ -94,7 +95,8 @@ class Rule(): # pylint: disable=too-few-public-methods
                 hit_text = f" {CC.OKCYAN}HIT{CC.ENDC}"
 
             print_debug(self.debug,
-                           f"{CC.OKBLUE}*{CC.ENDC}{hit_text} {rule_descriptions[rule['condition_typ']]} "\
+                           f"{CC.OKBLUE}*{CC.ENDC}{hit_text} " \
+                           f"{rule_descriptions[rule['condition_typ']]} "\
                            f"(RuleID: {CC.OKBLUE}{rule['name'][:20]} ({rule['_id']}){CC.ENDC})")
             if rule_hit:
                 outcomes = self.add_outcomes([dict(x) for x in rule['outcomes']], outcomes)
@@ -106,7 +108,7 @@ class Rule(): # pylint: disable=too-few-public-methods
                     break
 
         print_debug(self.debug,
-                    f"{CC.OKBLUE}--------------------------------------------------------------------{CC.ENDC}")
+                    f"{CC.OKBLUE}--------------------------------------------------------{CC.ENDC}")
         return outcomes
 
     def add_outcomes(self, rule, outcomes):
@@ -124,9 +126,9 @@ class Rule(): # pylint: disable=too-few-public-methods
         return self.check_rules(db_host.hostname)
 
 
-    def get_outcomes(self, db_host, labels):
+    def get_outcomes(self, db_host, attributes):
         """
         Handle Return of outcomes.
         """
-        self.labels = labels
+        self.attributes = attributes
         return self.check_rule_match(db_host)
