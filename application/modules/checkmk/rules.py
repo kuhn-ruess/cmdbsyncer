@@ -2,6 +2,7 @@
 """
 Checkmk Rules
 """
+#pylint: disable=import-error
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
@@ -16,7 +17,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
     found_poolfolder_rule = False # Spcific Helper for this kind of action
     db_host = False
-    labels = {}
 
     @staticmethod
     def format_foldername(folder):
@@ -68,7 +68,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 search_tag = outcome['action_param']
                 print_debug(self.debug,
                             f"---- value_as_folder matched, search tag '{search_tag}'")
-                for tag, value in self.labels.items():
+                for tag, value in self.attributes.items():
                     if search_tag == tag:
                         print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found tag"\
                                                 f"{ColorCodes.ENDC}, add folder: '{value}'")
@@ -78,7 +78,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 search_value = outcome['action_param']
                 print_debug(self.debug,
                             f"---- tag_as_folder matched, search value '{search_value}'")
-                for tag, value in self.labels.items():
+                for tag, value in self.attributes.items():
                     if search_value == value:
                         print_debug(self.debug, f"------ {ColorCodes.OKGREEN}Found value"\
                                                 f"{ColorCodes.ENDC}, add folder: '{tag}'")
