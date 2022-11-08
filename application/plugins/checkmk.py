@@ -4,6 +4,7 @@ Commands to handle Checkmk Sync
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get
 from pprint import pprint
 import click
+from mongoengine.errors import DoesNotExist
 from application.modules.checkmk.syncer import SyncCMK2
 from application.modules.checkmk.cmk2 import cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
@@ -85,7 +86,11 @@ def debug_cmk_rules(hostname):
     rules['actions'].debug=True
     syncer.actions = rules['actions']
 
-    db_host = Host.objects.get(hostname=hostname)
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
+        return
 
     attributes = syncer.get_host_attributes(db_host)
 

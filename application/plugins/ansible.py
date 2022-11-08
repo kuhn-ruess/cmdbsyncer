@@ -9,6 +9,7 @@ from pprint import pprint
 import click
 
 from mongoengine.errors import NotUniqueError
+from mongoengine.errors import DoesNotExist
 
 from application import app
 from application.models.host import Host
@@ -222,7 +223,11 @@ def debug_ansible_rules(hostname):
     rules['actions'].debug=True
     syncer.actions = rules['actions']
 
-    db_host = Host.objects.get(hostname=hostname)
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
+        return
 
     attributes = syncer.get_host_attributes(db_host)
 

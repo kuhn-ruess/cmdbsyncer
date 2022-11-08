@@ -2,6 +2,7 @@
 Add Hosts into CMK Version 2 Installations
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get
+from application import log
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
