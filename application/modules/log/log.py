@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """ LOGGING Module"""
 import traceback
+from datetime import datetime
+from application.modules.log.models import LogEntry, DetailEntry
 
 class Log():
     """
@@ -13,12 +15,31 @@ class Log():
         """
         self.log_func = log_func
 
-    def log(self, message, log_type="debug", url=None, raw=False):
+    def log_function(self, message):
+        """
+        Write entries do db
+        """
+        log_entry = LogEntry()
+        log_entry.datetime = datetime.now()
+        log_entry.message = message['message']
+        log_entry.source = message['source']
+        details = []
+        if message['details']:
+            for detail in message['details']:
+                new = DetailEntry()
+                new.level = detail[0].lower()
+                new.message = detail[1]
+                details.append(new)
+        log_entry.details = details
+        log_entry.traceback = message['traceback']
+        log_entry.save()
+
+    def log(self, message, source="SYSTEM", details=False):
         """ LOG Messages"""
-        self.log_func({'message' : message,
-                       'type': log_type,
-                       'traceback': traceback.format_exc(),
-                       'raw': raw})
+        self.log_function({'message' : message,
+                           'source': source,
+                           'traceback': traceback.format_exc(),
+                           'details': details})
 
     def debug(self, message):
         """Just print it out"""

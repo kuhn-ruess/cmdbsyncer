@@ -4,6 +4,7 @@ Handle Netbox
 #pylint: disable=no-member, too-many-locals
 from pprint import pprint
 import click
+from mongoengine.errors import DoesNotExist
 
 from application.models.host import Host
 from application import app
@@ -100,7 +101,11 @@ def netebox_host_debug(hostname):
     rules['actions'].debug=True
     syncer.actions = rules['actions']
 
-    db_host = Host.objects.get(hostname=hostname)
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
+        return
 
     attributes = syncer.get_host_attributes(db_host)
 
