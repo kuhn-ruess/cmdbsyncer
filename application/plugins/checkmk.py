@@ -15,7 +15,7 @@ from application.modules.rule.filter import Filter
 from application.modules.checkmk.models import CheckmkFilterRule
 
 from application.modules.rule.rewrite import Rewrite
-from application.modules.checkmk.models import CheckmkRewriteLabelRule
+from application.modules.checkmk.models import CheckmkRewriteAttributeRule
 
 from application.modules.checkmk.rules import CheckmkRule
 from application.modules.checkmk.models import CheckmkRule as CheckmkRuleModel
@@ -32,7 +32,7 @@ def load_rules():
     attribute_filter.rules = CheckmkFilterRule.objects(enabled=True).order_by('sort_field')
 
     attribute_rewrite = Rewrite()
-    attribute_rewrite.rules = CheckmkRewriteLabelRule.objects(enabled=True).order_by('sort_field')
+    attribute_rewrite.rules = CheckmkRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
 
     checkmk_rules = CheckmkRule()
     checkmk_rules.rules = CheckmkRuleModel.objects(enabled=True).order_by('sort_field')
@@ -101,9 +101,9 @@ def debug_cmk_rules(hostname):
     actions = syncer.get_host_actions(db_host, attributes['all'])
 
     print(f"{ColorCodes.HEADER} ***** Outcomes ***** {ColorCodes.ENDC}")
-    print(f"{ColorCodes.UNDERLINE} Full Label List {ColorCodes.ENDC}")
+    print(f"{ColorCodes.UNDERLINE} Full Attribute List {ColorCodes.ENDC}")
     pprint(attributes['all'])
-    print(f"{ColorCodes.UNDERLINE} Filtered Label List {ColorCodes.ENDC}")
+    print(f"{ColorCodes.UNDERLINE} Filtered Attribute List {ColorCodes.ENDC}")
     pprint(attributes['filtered'])
     print(f"{ColorCodes.UNDERLINE} Actions {ColorCodes.ENDC}")
     pprint(actions)

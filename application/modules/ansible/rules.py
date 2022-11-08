@@ -13,9 +13,9 @@ class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
 
     def add_outcomes(self, rule_outcomes, outcomes):
         """
-        Filter if labels match to a rule
+        Filter if Attributes match to a rule
         """
         # pylint: disable=too-many-nested-blocks
         for outcome in rule_outcomes:
-            outcomes[outcome['label_name']] = outcome['label_value']
+            outcomes[outcome['attribute_name']] = outcome['attribute_value']
         return outcomes

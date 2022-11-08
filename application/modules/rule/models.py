@@ -21,7 +21,7 @@ class FullCondition(db.EmbeddedDocument):
     """
     Condition
     """
-    match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Label")])
+    match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Attribute")])
 
     hostname_match = db.StringField(choices=condition_types)
     hostname = db.StringField()
@@ -50,7 +50,7 @@ rule_types = [
 #.
 #   .-- Filter
 filter_actions = [
-    ('whitelist_attribute', "Whitelist Label/ Inventory Attribute"),
+    ('whitelist_attribute', "Whitelist Attribute"),
     ('ignore_hosts', "Ignore Matching Hosts"),
 ]
 class FilterAction(db.EmbeddedDocument):
@@ -64,25 +64,25 @@ class FilterAction(db.EmbeddedDocument):
     }
 #.
 
-#   .-- Label Rewrite
-class LabelRewriteAction(db.EmbeddedDocument):
+#   .-- Attribute Rewrite
+class AttributeRewriteAction(db.EmbeddedDocument):
     """
     Custom Params
     """
-    old_label_name = db.StringField()
-    new_label_name = db.StringField()
+    old_attribute_name = db.StringField()
+    new_attribute_name = db.StringField()
     meta = {
         'strict': False
     }
 
 #.
-#   .-- Custom Label
-class CustomLabel(db.EmbeddedDocument):
+#   .-- Custom Attribute
+class CustomAttribute(db.EmbeddedDocument):
     """
     Custom Params
     """
-    label_name = db.StringField()
-    label_value = db.StringField()
+    attribute_name = db.StringField()
+    attribute_value = db.StringField()
     meta = {
         'strict': False
     }
