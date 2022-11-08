@@ -32,8 +32,8 @@ class CheckmkFilterRule(db.Document):
 #   .-- Checkmk Actions
 action_outcome_types = [
     ("move_folder", "Move Host to specified Folder"),
-    ('value_as_folder', "Use Attribute of given Tag as Folder"),
-    ("tag_as_folder", "Use Tag of given Attribute as Folder"),
+    ('value_as_folder', "Use Value of given Attribute Name as Folder"),
+    ("tag_as_folder", "Use Attribute Name of given Attribute Value as Folder"),
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute", "Create Checkmk Attribute with Attribute given in action param"),
 ]
