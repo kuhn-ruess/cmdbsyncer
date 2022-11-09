@@ -3,6 +3,25 @@
 Debug Helpers
 """
 
+from rich.console import Console
+from rich.table import Table
+from rich import box
+
+def attribute_table(title, data):
+    """
+    Write a nice Table
+    """
+    table = Table(title=title, box=box.ASCII_DOUBLE_HEAD, header_style="bold blue", title_style="yellow")
+    table.add_column("Attribute Name", style="cyan")
+    table.add_column("Attribute Value", style="magenta")
+    for key, value in data.items():
+        table.add_row(key, str(value))
+
+    console = Console()
+    console.print(table)
+    print()
+
+
 class ColorCodes(): #pylint: disable=too-few-public-methods
     """
     Color Defentions (found in Stack Overflow)
