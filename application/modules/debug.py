@@ -11,7 +11,7 @@ def attribute_table(title, data):
     """
     Write a nice Table
     """
-    table = Table(title=title, box=box.ASCII_DOUBLE_HEAD, header_style="bold blue", title_style="yellow")
+    table = Table(title=title, box=box.ASCII_DOUBLE_HEAD, header_style="bold blue", title_style="yellow", width=90)
     table.add_column("Attribute Name", style="cyan")
     table.add_column("Attribute Value", style="magenta")
     for key, value in data.items():

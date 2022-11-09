@@ -68,8 +68,6 @@ def cmk_host_export(account):
 @click.argument("hostname")
 def debug_cmk_rules(hostname):
     """Show Rule Engine Outcome for given Host"""
-    print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
-
     rules = load_rules()
 
     syncer = SyncCMK2()
