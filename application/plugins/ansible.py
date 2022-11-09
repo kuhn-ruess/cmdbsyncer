@@ -5,7 +5,6 @@ Ansible Inventory Modul
 #pylint: disable=too-many-arguments, no-member
 #   .-- Init
 import json
-from pprint import pprint
 import click
 
 from mongoengine.errors import NotUniqueError
@@ -13,7 +12,7 @@ from mongoengine.errors import DoesNotExist
 
 from application import app
 from application.models.host import Host
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes, attribute_table
 from application.modules.rule.filter import Filter
 from application.modules.rule.rewrite import Rewrite
 
@@ -208,8 +207,6 @@ def debug_ansible_rules(hostname):
     """
     Print matching rules and Inventory Outcome for Host
     """
-    print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
-
     rules = load_rules()
 
     syncer = SyncAnsible()
@@ -236,14 +233,9 @@ def debug_ansible_rules(hostname):
         return
 
     extra_attributes = syncer.get_host_data(db_host, attributes['all'])
-
-    print(f"{ColorCodes.HEADER} ***** Outcomes ***** {ColorCodes.ENDC}")
-    print(f"{ColorCodes.UNDERLINE} Full Attributes List {ColorCodes.ENDC}")
-    pprint(attributes['all'])
-    print(f"{ColorCodes.UNDERLINE} Filtered Attributes List {ColorCodes.ENDC}")
-    pprint(attributes['filtered'])
-    print(f"{ColorCodes.UNDERLINE} Extra Attributes {ColorCodes.ENDC}")
-    pprint(extra_attributes)
+    attribute_table("Full Attributes", attributes['all'])
+    attributes['filtered'].update(extra_attributes)
+    attribute_table("Final Attributes", attributes['filtered'])
 
 #.
 #   .-- Ansible Source

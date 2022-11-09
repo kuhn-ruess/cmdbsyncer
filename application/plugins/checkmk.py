@@ -2,13 +2,12 @@
 Commands to handle Checkmk Sync
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get
-from pprint import pprint
 import click
 from mongoengine.errors import DoesNotExist
 from application.modules.checkmk.syncer import SyncCMK2
 from application.modules.checkmk.cmk2 import cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes, attribute_table
 
 
 from application.modules.rule.filter import Filter
@@ -21,8 +20,6 @@ from application.modules.checkmk.rules import CheckmkRule
 from application.modules.checkmk.models import CheckmkRule as CheckmkRuleModel
 
 from application.models.host import Host
-
-
 
 def load_rules():
     """
@@ -100,12 +97,8 @@ def debug_cmk_rules(hostname):
 
     actions = syncer.get_host_actions(db_host, attributes['all'])
 
-    print(f"{ColorCodes.HEADER} ***** Outcomes ***** {ColorCodes.ENDC}")
-    print(f"{ColorCodes.UNDERLINE} Full Attribute List {ColorCodes.ENDC}")
-    pprint(attributes['all'])
-    print(f"{ColorCodes.UNDERLINE} Filtered Attribute List {ColorCodes.ENDC}")
-    pprint(attributes['filtered'])
-    print(f"{ColorCodes.UNDERLINE} Actions {ColorCodes.ENDC}")
-    pprint(actions)
+    attribute_table("Full Attribute List", attributes['all'])
+    attribute_table("Filtered Labels for Checkmk", attributes['filtered'])
+    attribute_table("Actions", actions)
 
 #.

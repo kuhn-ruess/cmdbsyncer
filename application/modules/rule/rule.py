@@ -3,9 +3,10 @@
 Handle Rule Matching
 """
 # pylint: disable=import-error
+from rich.console import Console
+from rich.table import Table
+
 from application.modules.rule.match import match
-from application.modules.debug import debug as print_debug
-from application.modules.debug import ColorCodes as CC
 
 class Rule(): # pylint: disable=too-few-public-methods
     """
@@ -61,8 +62,15 @@ class Rule(): # pylint: disable=too-few-public-methods
             'all' : "ALL must match",
             'anyway': "ALLWAYS match"
         }
-        print_debug(self.debug, f"Debug '{self.name}' Rules for "\
-                                f"{CC.UNDERLINE}{hostname}{CC.ENDC}")
+        if self.debug:
+            table = Table(title=f"Debug '{self.name}' Rules for "\
+                                f"{hostname}", title_style="yellow")
+            table.add_column("Hit")
+            table.add_column("Description")
+            table.add_column("Rule Name")
+            table.add_column("Rule ID")
+            table.add_column("Last Match")
+
         outcomes = {}
         for rule in self.rules:
             rule = rule.to_mongo()
@@ -90,25 +98,18 @@ class Rule(): # pylint: disable=too-few-public-methods
             elif rule['condition_typ'] == 'anyway':
                 rule_hit = True
 
-            hit_text = ""
-            if rule_hit:
-                hit_text = f" {CC.OKCYAN}HIT{CC.ENDC}"
-
-            print_debug(self.debug,
-                           f"{CC.OKBLUE}*{CC.ENDC}{hit_text} " \
-                           f"{rule_descriptions[rule['condition_typ']]} "\
-                           f"(RuleID: {CC.OKBLUE}{rule['name'][:20]} ({rule['_id']}){CC.ENDC})")
+            
+            if self.debug:
+                table.add_row(str(rule_hit), rule_descriptions[rule['condition_typ']],\
+                              rule['name'][:30], str(rule['_id']), str(rule['last_match']))
             if rule_hit:
                 outcomes = self.add_outcomes([dict(x) for x in rule['outcomes']], outcomes)
-
                 # If rule has matched, and option is set, we are done
                 if rule['last_match']:
-                    print_debug(self.debug, f"{CC.OKBLUE}**{CC.ENDC} {CC.FAIL}Rule id "\
-                                             f"{rule['_id']} was last_match{CC.ENDC}")
                     break
-
-        print_debug(self.debug,
-                    f"{CC.OKBLUE}--------------------------------------------------------{CC.ENDC}")
+        if self.debug:
+            console = Console()
+            console.print(table)
         return outcomes
 
     def add_outcomes(self, rule, outcomes):
