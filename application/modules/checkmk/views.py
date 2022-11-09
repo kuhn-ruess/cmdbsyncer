@@ -8,7 +8,7 @@ from flask_login import current_user
 from application.views.default import DefaultModelView
 
 from application.modules.rule.views import RuleModelView
-from application.modules.checkmk.models import action_outcome_types
+from application.modules.checkmk.models import action_outcome_types, cmk_mngmt_groups
 
 def _render_checkmk_outcome(_view, _context, model, _name):
     """
@@ -26,14 +26,13 @@ def _render_group_outcome(_view, _context, model, _name):
     """
     Render Group Outcome
     """
-    html = "<table width=100%>"
-    for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{entry.group_name}</td>"\
-                f"<td>{entry.foreach_type}</td>" \
-                f"<td>{entry.foreach}</td>" \
-                f"<td>{entry.regex}</td>" \
-                "</tr>"
-    html += "</table>"
+    entry = model.outcome
+    html = "<table width=100%>"\
+           f"<tr><th>Type</th><td>{entry.group_name}</td></tr>"\
+           f"<tr><th>Foreach</th><td>{entry.foreach_type}</td></tr>" \
+           f"<tr><th>Value</th><td>{entry.foreach}</td></tr>" \
+           f"<tr><th>Regex</th><td>{entry.regex}</td></tr>" \
+           "</table>"
     return Markup(html)
 
 
@@ -61,6 +60,21 @@ class CheckmkRuleView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+def _render_rule_mngmt_outcome(_view, _context, model, _name):
+    """
+    Render Group Outcome
+    """
+    entry = model.outcome
+    html = "<table width=100%>"\
+           f"<tr><th>Type</th><td>{dict(cmk_mngmt_groups)[entry.rule_name]}</td></tr>"\
+           f"<tr><th>Foreach</th><td>{entry.foreach_type}</td></tr>" \
+           f"<tr><th>Value</th><td>{entry.foreach}</td></tr>" \
+           f"<tr><th>Regex</th><td>{entry.regex}</td></tr>" \
+           f"<tr><th>Label Template</th><td>{entry.template_label}</td></tr>" \
+           f"<tr><th>Group Template</th><td>{entry.template_group}</td></tr>"\
+           "</table>"
+    return Markup(html)
+
 class CheckmkGroupRuleView(RuleModelView):
     """
     Custom Group Model View
@@ -84,6 +98,29 @@ class CheckmkGroupRuleView(RuleModelView):
 
         self.column_labels.update({
             'render_checkmk_group_outcome': "Create following Groups",
+        })
+
+        super().__init__(model, **kwargs)
+
+class CheckmkMngmtRuleView(RuleModelView):
+    """
+    Custom Group Model View
+    """
+
+    def __init__(self, model, **kwargs):
+        """
+        Update elements
+        """
+        self.column_formatters.update({
+            'render_cmk_rule_mngmt': _render_rule_mngmt_outcome,
+        })
+
+        self.form_overrides.update({
+            'render_cmk_rule_mngmt': HiddenField,
+        })
+
+        self.column_labels.update({
+            'render_cmk_rule_mngmt': "Create following Rules",
         })
 
         super().__init__(model, **kwargs)
