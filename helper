@@ -6,8 +6,8 @@ APPLICATION=cmdb_syncer-api-1
 
 case "$1" in
 "up")
-    docker-compose -f docker-compose.yml -f docker-compose.local.yml build
-    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER up --force-recreate -d
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER rm
+    docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER up --build --force-recreate -d
     ;;
 "start")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER start
