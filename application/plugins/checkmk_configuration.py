@@ -78,29 +78,29 @@ def export_cmk_groups(account, test_run):
       ('ß', 'ss'),
     ]
     for rule in CheckmkGroupRule.objects(enabled=True):
-        for outcome in rule.outcomes:
-            group_name = outcome.group_name
-            groups.setdefault(group_name, [])
-            regex = False
-            if outcome.regex:
-                regex = re.compile(outcome.regex)
-            if outcome.foreach_type == 'value':
-                for label_value in attributes[1].get(outcome.foreach):
-                    if regex:
-                        label_value = regex.findall(label_value)[0]
-                    for needle, replacer in replacers:
-                        label_value = label_value.replace(needle, replacer).strip()
-                    if label_value not in groups[group_name]:
-                        groups[group_name].append(label_value)
-            elif outcome.foreach_type == 'label':
-                for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
-                    if regex:
-                        label_key = regex.findall(label_key)[0]
-                    for needle, replacer in replacers:
-                        label_key = label_key.replace(needle, replacer).strip()
-                    label_key = label_key.replace(' ', '_').strip()
-                    if label_key not in groups[group_name]:
-                        groups[group_name].append(label_key)
+        outcome = rule.outcome
+        group_name = outcome.group_name
+        groups.setdefault(group_name, [])
+        regex = False
+        if outcome.regex:
+            regex = re.compile(outcome.regex)
+        if outcome.foreach_type == 'value':
+            for label_value in attributes[1].get(outcome.foreach):
+                if regex:
+                    label_value = regex.findall(label_value)[0]
+                for needle, replacer in replacers:
+                    label_value = label_value.replace(needle, replacer).strip()
+                if label_value not in groups[group_name]:
+                    groups[group_name].append(label_value)
+        elif outcome.foreach_type == 'label':
+            for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
+                if regex:
+                    label_key = regex.findall(label_key)[0]
+                for needle, replacer in replacers:
+                    label_key = label_key.replace(needle, replacer).strip()
+                label_key = label_key.replace(' ', '_').strip()
+                if label_key not in groups[group_name]:
+                    groups[group_name].append(label_key)
 
     print(f"\n{ColorCodes.HEADER}Start Sync{ColorCodes.ENDC}")
     account_id = account_config['_id']
@@ -109,19 +109,19 @@ def export_cmk_groups(account, test_run):
             'short': "cg",
             'get': "/domain-types/contact_group_config/collections/all",
             'put': "/domain-types/contact_group_config/actions/bulk-create/invoke",
-            'alias': "/objects/contact_group_config/"
+            'delete': "/objects/contact_group_config/"
         },
         'host_groups' : {
             'short': "hg",
             'get': "/domain-types/host_group_config/collections/all",
             'put': "/domain-types/host_group_config/actions/bulk-create/invoke",
-            'alias': "objects/host_group_config/"
+            'delete': "/objects/host_group_config/"
         },
         'service_groups' : {
             'short': "sg",
             'get': "/domain-types/service_group_config/collections/all",
             'put': "/domain-types/service_group_config/actions/bulk-create/invoke",
-            'alias': "objects/service_group_config/"
+            'delete': "/objects/service_group_config/"
         },
     }
     for group_type, configured_groups in groups.items():
@@ -139,8 +139,10 @@ def export_cmk_groups(account, test_run):
 
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Create {group_type}s if needed")
         entries = []
+        new_group_names = []
         for new_group_alias in configured_groups:
-            new_group_name = f"{name_prefix}_{new_group_alias}"
+            new_group_name = f"{name_prefix}{new_group_alias}"
+            new_group_names.append(new_group_name)
             if new_group_name not in syncers_groups_in_cmk:
                 print(f"{ColorCodes.OKBLUE}  *{ColorCodes.ENDC} Added {new_group_alias}")
                 entries.append({
@@ -156,7 +158,7 @@ def export_cmk_groups(account, test_run):
             if test_run:
                 print(f"\n{ColorCodes.HEADER}Output only (Testrun){ColorCodes.ENDC}")
             else:
-                print(f"\n{ColorCodes.HEADER}Send {group_name} to Checkmk{ColorCodes.ENDC}")
+                print(f"\n{ColorCodes.HEADER}Send {group_type} to Checkmk{ColorCodes.ENDC}")
                 try:
                     cmk.request(url, data=data, method="POST")
                 except CmkException as error:
@@ -167,10 +169,9 @@ def export_cmk_groups(account, test_run):
         if not test_run:
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Delete Groups if needed")
             for group_alias in syncers_groups_in_cmk:
-                pure_alias = "_".join(group_alias.split('_')[2:])
-                if pure_alias not in configured_groups:
+                if group_alias not in new_group_names:
                     # Checkmk is not deleting objects if the still referenced
-                    url = f"{urls[group_type]}{group_alias}"
+                    url = f"{urls[group_type]['delete']}{group_alias}"
                     cmk.request(url, method="DELETE")
                     print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Group {group_alias} deleted")
 
