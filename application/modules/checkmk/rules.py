@@ -31,6 +31,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     def add_outcomes(self, rule_outcomes, outcomes):
         """ Handle the Outcomes """
         #pylint: disable=too-many-branches
+        title = "Handle Outcomes"
 
         for outcome in rule_outcomes:
             # We add only the outcome of the
@@ -88,6 +89,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             # we have nothing to return to the plugins
             if not outcomes['move_folder']:
                 del outcomes['move_folder']
+        print_debug(self.debug, "")
         return outcomes
 
 

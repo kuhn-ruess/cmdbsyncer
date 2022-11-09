@@ -5,6 +5,7 @@ Handle Rule Matching
 # pylint: disable=import-error
 from rich.console import Console
 from rich.table import Table
+from rich import box
 
 from application.modules.rule.match import match
 
@@ -63,8 +64,11 @@ class Rule(): # pylint: disable=too-few-public-methods
             'anyway': "ALLWAYS match"
         }
         if self.debug:
-            table = Table(title=f"Debug '{self.name}' Rules for "\
-                                f"{hostname}", title_style="yellow")
+            title = f"Debug '{self.name}' Rules for {hostname}"
+
+            table = Table(title=title, box=box.ASCII_DOUBLE_HEAD,\
+                        header_style="bold blue", title_style="yellow", \
+                        title_justify="left", width=90)
             table.add_column("Hit")
             table.add_column("Description")
             table.add_column("Rule Name")
@@ -98,7 +102,6 @@ class Rule(): # pylint: disable=too-few-public-methods
             elif rule['condition_typ'] == 'anyway':
                 rule_hit = True
 
-            
             if self.debug:
                 table.add_row(str(rule_hit), rule_descriptions[rule['condition_typ']],\
                               rule['name'][:30], str(rule['_id']), str(rule['last_match']))
@@ -110,6 +113,7 @@ class Rule(): # pylint: disable=too-few-public-methods
         if self.debug:
             console = Console()
             console.print(table)
+            print()
         return outcomes
 
     def add_outcomes(self, rule, outcomes):
