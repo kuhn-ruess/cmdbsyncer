@@ -91,12 +91,14 @@ class SyncNetbox(Plugin):
             return {}
 
 
-    def get_devices(self):
+    def get_devices(self, syncer_only=False):
         """
         Read full list of devices
         """
-        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Netbox: Read all devices")
+        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Netbox: Read all devices (Filter: {syncer_only})")
         url = 'dcim/devices/?limit=1000'
+        if syncer_only:
+            url += f"&cf_cmdbsyncer_id={self.config['_id']}"
         devices = self.request(url, "GET")
         return {x['display']:x for x in devices}
 
@@ -183,7 +185,8 @@ class SyncNetbox(Plugin):
           #    "color": "string"
           #  }
           #],
-          #"custom_fields": {}
+          #"custom_fields": {
+          #}
         }
 
 
@@ -207,6 +210,10 @@ class SyncNetbox(Plugin):
             if key in key_translation:
                 payload[key_translation[key]] = inventory[key]
 
+        payload['custom_fields'] = {
+            'cmdbsyncer_id': str(self.config['_id']),
+        }
+
         return payload
 
 
@@ -218,6 +225,8 @@ class SyncNetbox(Plugin):
         for key, value in main_payload.items():
             target_value = target_payload.get(key)
             if isinstance(target_value, dict):
+                if 'cmdbsyncer_id' in target_value:
+                    continue
                 target_value = target_value['id']
             if target_value and str(value) != str(target_value):
                 keys.append(key)
@@ -228,12 +237,13 @@ class SyncNetbox(Plugin):
         Update Devices Table in Netbox
         """
         #pylint: disable=too-many-locals
-        current_devices = self.get_devices()
+        current_devices = self.get_devices(syncer_only=True)
 
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
         db_objects = Host.objects(available=True)
         total = len(db_objects)
         counter = 0
+        found_hosts = []
         for db_host in db_objects:
             hostname = db_host.hostname
             counter += 1
@@ -250,6 +260,7 @@ class SyncNetbox(Plugin):
 
             payload = self.get_payload(db_host, custom_rules, attributes)
             url = 'dcim/devices/'
+            found_hosts.append(hostname)
             if hostname in current_devices:
                 ## Update
                 if update_keys := self.need_update(current_devices[hostname], payload):
@@ -265,6 +276,12 @@ class SyncNetbox(Plugin):
                 ### Create
                 print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Create Host")
                 self.request(url, "POST", payload)
+        print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Cleanup")
+        for hostname, host_data in current_devices.items():
+            if hostname not in found_hosts:
+                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Delete {hostname}")
+                device_id = host_data['id']
+                self.request(f"{url}{device_id}", "DELETE", payload)
 
     def import_hosts(self):
         """

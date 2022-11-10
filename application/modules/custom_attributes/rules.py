@@ -19,6 +19,9 @@ class CustomAttributeRule(Rule): # pylint: disable=too-few-public-methods
         Add the new Attributes
         """
         for outcome in rule_outcomes:
+            if not outcome:
+                continue
+            print(outcome)
             outcomes[outcome['attribute_name']] = outcome['attribute_value']
         return outcomes
 
