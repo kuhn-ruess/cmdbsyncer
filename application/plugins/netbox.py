@@ -2,13 +2,12 @@
 Handle Netbox
 """
 #pylint: disable=no-member, too-many-locals
-from pprint import pprint
 import click
 from mongoengine.errors import DoesNotExist
 
 from application.models.host import Host
 from application import app
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes, attribute_table
 from application.helpers.get_account import get_account_by_name
 
 from application.modules.rule.rewrite import Rewrite
@@ -115,10 +114,6 @@ def netebox_host_debug(hostname):
 
     extra_attributes = syncer.get_host_data(db_host, attributes['all'])
 
-    print(f"{ColorCodes.HEADER} ***** Outcomes ***** {ColorCodes.ENDC}")
-    print(f"{ColorCodes.UNDERLINE} Full Attributes List {ColorCodes.ENDC}")
-    pprint(attributes['all'])
-    print(f"{ColorCodes.UNDERLINE} Filtered Attributes List {ColorCodes.ENDC}")
-    pprint(attributes['filtered'])
-    print(f"{ColorCodes.UNDERLINE} Extra Attributes {ColorCodes.ENDC}")
-    pprint(extra_attributes)
+    attribute_table("Full Attribute List", attributes['all'])
+    attribute_table("Filtered Attribute for Netbox Rules", attributes['filtered'])
+    attribute_table("Attributes by Rule ", extra_attributes)
