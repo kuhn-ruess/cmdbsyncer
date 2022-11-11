@@ -1,7 +1,7 @@
 """
 Create Objects in Netbox
 """
-#pylint: disable=no-member, too-many-locals
+#pylint: disable=no-member, too-many-locals, import-error
 import requests
 
 from application.models.host import Host
@@ -26,6 +26,7 @@ class SyncNetbox(Plugin):
         """
         self.log = log
         self.cache = {}
+        self.interface_cache = {}
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 
     def get_host_data(self, db_host, attributes):
@@ -95,7 +96,8 @@ class SyncNetbox(Plugin):
         """
         Read full list of devices
         """
-        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Netbox: Read all devices (Filter: {syncer_only})")
+        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Netbox: "\
+              f"Read all devices (Filter: {syncer_only})")
         url = 'dcim/devices/?limit=1000'
         if syncer_only:
             url += f"&cf_cmdbsyncer_id={self.config['_id']}"
@@ -121,7 +123,7 @@ class SyncNetbox(Plugin):
 
         conf = endpoints[key]
 
-        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Need to sync {key} ({value})")
+        print(f"{ColorCodes.OKCYAN} *{ColorCodes.ENDC} Attribute: {key}:{value} will be synced")
         if not self.cache.get(key):
             print(f"{ColorCodes.OKGREEN}   -- {ColorCodes.ENDC}build cache for {key}")
             self.cache[key] = {}
@@ -232,12 +234,21 @@ class SyncNetbox(Plugin):
                 keys.append(key)
         return keys
 
+    def update_interfaces(self, host_id, attributes):
+        """
+        Update Interfaces based on Attributes
+        """
+        url = '/dcim/interfaces'
+        for entry in self.request(url, "GET"):
+            print(entry)
+        print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Check Sync of Interfaces")
+
     def export_hosts(self):
         """
         Update Devices Table in Netbox
         """
         #pylint: disable=too-many-locals
-        current_devices = self.get_devices(syncer_only=True)
+        current_netbox_devices = self.get_devices(syncer_only=True)
 
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
         db_objects = Host.objects(available=True)
@@ -261,23 +272,29 @@ class SyncNetbox(Plugin):
             payload = self.get_payload(db_host, custom_rules, attributes)
             url = 'dcim/devices/'
             found_hosts.append(hostname)
-            if hostname in current_devices:
+            if hostname in current_netbox_devices:
                 ## Update
-                if update_keys := self.need_update(current_devices[hostname], payload):
+                host_netbox_data = current_netbox_devices[hostname]
+                host_netbox_id = host_netbox_data['id']
+                if update_keys := self.need_update(host_netbox_data, payload):
                     print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Update Host")
-                    url += f"{current_devices[hostname]['id']}/"
+                    url += f"{current_netbox_devices[hostname]['id']}/"
                     update_payload = {}
                     for key in update_keys:
                         update_payload[key] = payload[key]
                     self.request(url, "PATCH", update_payload)
                 else:
-                    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Nothing to do")
+                    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Netbox already up to date")
             else:
                 ### Create
-                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Create Host")
-                self.request(url, "POST", payload)
+                print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Create Host")
+                create_response = self.request(url, "POST", payload)
+                host_netbox_id = create_response['id']
+            if 'update_interfaces' in custom_rules:
+                self.update_interfaces(host_netbox_id, attributes)
+
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Cleanup")
-        for hostname, host_data in current_devices.items():
+        for hostname, host_data in current_netbox_devices.items():
             if hostname not in found_hosts:
                 print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Delete {hostname}")
                 device_id = host_data['id']

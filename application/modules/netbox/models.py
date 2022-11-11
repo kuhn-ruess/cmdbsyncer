@@ -1,7 +1,7 @@
 """
 Netbox Rule
 """
-# pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
+# pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes, import-error
 from application import db
 from application.modules.rule.models import rule_types, FullCondition, FilterAction, \
                                             AttributeRewriteAction
@@ -63,6 +63,7 @@ netbox_outcome_types = [
   ('nb_site', "Set Site ID manualy"),
   ('nb_location', "Set Location ID manualy"),
   ('nb_rack', "Set Rack ID manualy"),
+  ('update_interfaces', "Update Interfaces in Netbox"),
   ('ignore_host', "Ignore Host(s)"),
 ]
 
