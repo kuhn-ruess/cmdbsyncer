@@ -145,18 +145,6 @@ class Host(db.Document):
 
         return self.inventory
 
-    def get_attributes(self):
-        """
-        Return Labels and Inventory merged
-        """
-        labels = self.get_labels()
-        labels.update(self.get_inventory)
-        # Merge Custom Labels
-        labels.udpate(CustomLabels().get_labels(self.hostname))
-        return labels
-
-
-
     def add_log(self, entry):
         """
         Add a new Entry to the Host log
