@@ -30,6 +30,10 @@ case "$1" in
     echo "Start Container Shell"
     docker exec -it $APPLICATION sh
     ;;
+"create_user")
+    echo "Create User"
+    docker exec -it $APPLICATION ./cmdbsyncer sys create_user "$2"
+    ;;
 "bve")
     python3 -m venv ENV
     ;;
