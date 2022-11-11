@@ -14,8 +14,7 @@ from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 
 
-VERSION = '3.0.0-wip'
-
+VERSION = '3.0.0-pre1'
 
 app = Flask(__name__)
 env = os.environ.get('config')
