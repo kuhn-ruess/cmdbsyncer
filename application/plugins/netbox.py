@@ -46,7 +46,7 @@ def cli_netbox():
 #   .-- Command: Export Hosts
 @cli_netbox.command('export_hosts')
 @click.argument("account")
-def netebox_host_export(account):
+def netbox_host_export(account):
     """Sync Objects with Netbox"""
     try:
         target_config = get_account_by_name(account)
@@ -67,7 +67,7 @@ def netebox_host_export(account):
 #   .-- Command: Import Hosts
 @cli_netbox.command('import_hosts')
 @click.argument("account")
-def netebox_host_import(account):
+def netbox_host_import(account):
     """Import Devices from Netbox"""
     try:
         target_config = get_account_by_name(account)
@@ -83,7 +83,7 @@ def netebox_host_import(account):
 #   .-- Command: Debug Hosts
 @cli_netbox.command('debug_host')
 @click.argument("hostname")
-def netebox_host_debug(hostname):
+def netbox_host_debug(hostname):
     """Debug Host Rules"""
     print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
 
