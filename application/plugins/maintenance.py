@@ -7,7 +7,7 @@ import datetime
 import string
 import secrets
 import click
-from mongoengine.errors import DoesNotExist
+from mongoengine.errors import DoesNotExist, ValidationError
 from application import app
 from application.models.host import Host
 from application.modules.debug import ColorCodes
@@ -110,8 +110,13 @@ def seed_user(email):
     user.global_admin = True
     user.tfa_secret = None
     user.disable = False
-    user.save()
+    try:
+        user.save()
+    except ValidationError:
+        print(f"Invalid E-Mail: {email}")
+        return 1
     print(f"User passwort set to: {passwd}")
+    return 0
 #.
 #   .-- Command: Export Rules
 #@cli_sys.command('export_rules')
