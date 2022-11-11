@@ -1,31 +1,58 @@
-# Sync System for Hosts to other Systems and APIs like Checkmk
+# CMDB Syncer
 
-Rule Based and Modular System to sync Hosts into Checkmk.
+Rule Based and Modular System to syncronize Hosts into and between Checkmk, Netbox and other Systems.
 Main Goal is the complete Organization of the Hosts based on CMDB Systems
+
+
+![Rules](https://user-images.githubusercontent.com/899110/201333967-2d7f3f35-cc69-4cad-931f-1da096f94056.png)
+![Debug Options](https://user-images.githubusercontent.com/899110/201333725-d699d50f-a5eb-4539-a3af-3db3e0647ebb.png)
+
+## Quickstart
+I recommend docker-compose:
+- checkout the Repo
+- run ./helper up
+- run ./helper create_user 'mail@address.org' (to create login)
+- Login to the Interface: http://your-host:5003
+This is runs a Development Version which you can use to test everthing
 
 ## Main Functions
 - Web Interface with Login, 2FA and User management
-- All configuration besides Installation in Web Interface (with User Roles)
+- All configuration besides Installation in Web Interface
+- Simple Plugin API to integrate own Data Sources
+- Various Debug Options with the ./cmdbsyncer command
 - Rules to control the Synchronization:
-  - Based on Hostname Patterns
-  - Based on Labels
-  - Outcome is Rewrite Labels, add Custom Labels, Ignore Hosts, Move to Folder and more
-- Automatically Creates the folder in Checkmk and Moves the Hosts (cmkv2)
-- Automatically Deletes Hosts if needed
-  - Management of the complete Host lifetime in Checkmk
-- Simple Plugin API to integrate own Data Sources, or even own Targets (Target must not be Checkmk, also Checkmk can be the source instead of a CMDB).
-- Integrated options to prevent to many Updates in Checkmk (e.g. Updates only on Label Change). For Rule changes, the Update can be forced.
-- Controll Ansible to install Agents based on Syncer Rules or Data of his inventory rules.
+  - Based on Host Attributes
+  - Attribute Rewrites
+  - Filters
+  - Action Rules
+  
+## Modules
+### Checkmk
+- Manges full Host Lifecycle (creation, labels, folders, deletion)
+- Full management of Checkmk Folders
+ or even own Targets (Target must not be Checkmk, also Checkmk can be the source instead of a CMDB).
+- Folder Pool Feature to split big amounts of Hosts automatticly between folders (and therfore sites).
+- Creation of Host-, Contact- and Service Groups
+- Integrated options to prevent to many Updates in Checkmk
+- Command to Active Configuration
+- Command to Bake and Sign Agents
+- Inventory for Host Attributes (need e.g. for Ansible, like on which site is server on)
 
-# Currenlty supported Plattforms
-- Checkmk 1.x  (read)
-- Checkmk 2.x (read and write)
-- Ansible (Controlled by CMDB Syncer)
-- Cisco DNA (read)
-- Netbox (read and write)
-- CSV
-- Any Source like DBs, Rest API with simple Plugin API
+### Ansible
+- Rule Based Inventory Source
+- All Functions for Checkmk Agent Management (Installation, TLS Registration, Bakery Registration)
+- Linux and Windows
 
-For a quick test, best use Docker Compose. All regarding Documentation can be found in the [WIKI](https://github.com/Bastian-Kuhn/cmdb-syncer/wiki)
+### Netbox
+- Rulebased Export and Import Devices to Netbox
 
-To use with Apache and uWSGI, see Wiki. This Setup can be used on your Checkmk Server.
+### Cisco DNA
+- Import devices and their Interface Information
+
+### CSV
+- Manage Hosts based on CSV File (Import Source)
+- Add Addional Informationen from CSV Files to your Hosts (eg. Overwrite IP Addresses)
+
+## Other
+- [Documentation](https://github.com/Bastian-Kuhn/cmdb-syncer/wiki)
+- [Roadmap](https://github.com/Bastian-Kuhn/cmdb-syncer/wiki/Roadmap)
