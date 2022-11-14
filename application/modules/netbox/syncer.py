@@ -19,7 +19,7 @@ class SyncNetbox(Plugin):
     """
     Netbox Update/ Get Operations
     """
-
+#   .-- Init
     def __init__(self):
         """
         Inital
@@ -28,13 +28,15 @@ class SyncNetbox(Plugin):
         self.cache = {}
         self.interface_cache = {}
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
-
+#.
+#   .-- Get Host Data
     def get_host_data(self, db_host, attributes):
         """
         Return commands for fullfilling of the netbox params
         """
         return self.actions.get_outcomes(db_host, attributes)
-
+#.
+#   . -- Request
     def request(self, path, method='GET', data=None, additional_header=None):
         """
         Handle Request to Netbox
@@ -90,8 +92,8 @@ class SyncNetbox(Plugin):
             return response_json
         except (ConnectionResetError, requests.exceptions.ProxyError):
             return {}
-
-
+#.
+#   .-- Get Devices
     def get_devices(self, syncer_only=False):
         """
         Read full list of devices
@@ -103,8 +105,8 @@ class SyncNetbox(Plugin):
             url += f"&cf_cmdbsyncer_id={self.config['_id']}"
         devices = self.request(url, "GET")
         return {x['display']:x for x in devices}
-
-
+#.
+#   .-- Uppsert Element
     def uppsert_element(self, key, value):
         """
         Returns the Element ID of given value
@@ -148,8 +150,8 @@ class SyncNetbox(Plugin):
         new_id = response['id']
         self.cache[key][value] = new_id
         return new_id
-
-
+#.
+#   .-- Get Device Payload
     def get_payload(self, db_host, custom_rules, inventory):
         """
         Build API Payload
@@ -192,9 +194,9 @@ class SyncNetbox(Plugin):
         }
 
 
-        key_translation = {
-            'cisco_dna_serialNumber': "serial",
-        }
+        keys_from_inventory = [
+            "serial",
+        ]
         # Add custom variables who match to keyload
         for key in custom_rules:
             if key.startswith('nb_'):
@@ -209,16 +211,16 @@ class SyncNetbox(Plugin):
 
         # Add Inventory Variables we have a remap entry for
         for key in inventory:
-            if key in key_translation:
-                payload[key_translation[key]] = inventory[key]
+            if key in keys_from_inventory:
+                payload[key]= inventory.get(key)
 
         payload['custom_fields'] = {
             'cmdbsyncer_id': str(self.config['_id']),
         }
 
         return payload
-
-
+#.
+#   .-- Device Need Update?
     def need_update(self, target_payload, main_payload):
         """
         Compare Request Payload with Device Response
@@ -233,16 +235,99 @@ class SyncNetbox(Plugin):
             if target_value and str(value) != str(target_value):
                 keys.append(key)
         return keys
+#.
+#   .-- Get Interface Payload
+    def get_interface_payload(self, host_id, if_attributes):
+        """ Return Interface Payload
+        """
+        payload = {
+          "device": host_id,
+          #"module": 0,
+          "name": if_attributes['portName'],
+          #"label": "string",
+          "type": "virtual",
+          #"enabled": true,
+          #"parent": 0,
+          #"bridge": 0,
+          #"lag": 0,
+          #"mtu": 65536,
+          #"mac_address": "string",
+          #"speed": 2147483647,
+          #"duplex": "half",
+          #"wwn": "string",
+          #"mgmt_only": true,
+          #"description": "string",
+          #"mode": "access",
+          #"rf_role": "ap",
+          #"rf_channel": "2.4g-1-2412-22",
+          #"poe_mode": "pd",
+          #"poe_type": "type1-ieee802.3af",
+          #"rf_channel_frequency": 0,
+          #"rf_channel_width": 0,
+          #"tx_power": 127,
+          #"untagged_vlan": 0,
+          #"tagged_vlans": [
+          #  0
+          #],
+          #"mark_connected": true,
+          #"cable": {
+          #  "label": "string"
+          #},
+          #"wireless_link": 0,
+          #"wireless_lans": [
+          #  0
+          #],
+          #"vrf": 0,
+          #"tags": [
+          #  {
+          #    "name": "string",
+          #    "slug": "string",
+          #    "color": "string"
+          #  }
+          #],
+          #"custom_fields": {}
+        }
+        return payload
+#.
+#   .-- Create Interface
+    def create_interface(self, host_id, attributes):
+        """
+        Create Interface in Netbox
+        """
+        payload = self.get_interface_payload(host_id, attributes)
+        url = 'dcim/interfaces/'
+        create_response = self.request(url, "POST", payload)
 
+#.
+#   .-- Update Interfaces
     def update_interfaces(self, host_id, attributes):
         """
         Update Interfaces based on Attributes
         """
-        url = '/dcim/interfaces'
+        url = f'/dcim/interfaces?device_id={host_id}'
+        device_interfaces = []
         for entry in self.request(url, "GET"):
-            print(entry)
-        print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Check Sync of Interfaces")
+            device_interfaces.append(entry['display'])
+        # Group Interfaces
+        interfaces = {}
+        for attribute, value in attributes.items():
+            # @TODO: Build more general approach
+            # Better RegEx Rewrites needed for that
+            if attribute.startswith('cisco_dnainterface'):
+                splitted = attribute.split('_')
+                interface_id = splitted[-2]
+                field_name = splitted[-1]
+                interfaces.setdefault(interface_id, {})
+                interfaces[interface_id][field_name] = value
 
+        for interface, interface_data in interfaces.items():
+            if interface_data['portName'] not in device_interfaces:
+                self.create_interface(host_id, interface_data)
+            continue
+
+        print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Check Sync of Interfaces")
+#.
+#   .--- Export Hosts
     def export_hosts(self):
         """
         Update Devices Table in Netbox
@@ -259,12 +344,12 @@ class SyncNetbox(Plugin):
             hostname = db_host.hostname
             counter += 1
 
-            attributes = self.get_host_attributes(db_host)
-            if not attributes:
+            all_attributes = self.get_host_attributes(db_host)
+            if not all_attributes:
                 continue
-            custom_rules = self.get_host_data(db_host, attributes['all'])
+            custom_rules = self.get_host_data(db_host, all_attributes['all'])
 
-            attributes = attributes['filtered']
+            attributes = all_attributes['filtered']
 
             process = 100.0 * counter / total
             print(f"\n{ColorCodes.HEADER}({process:.0f}%) {hostname}{ColorCodes.ENDC}")
@@ -291,7 +376,7 @@ class SyncNetbox(Plugin):
                 create_response = self.request(url, "POST", payload)
                 host_netbox_id = create_response['id']
             if 'update_interfaces' in custom_rules:
-                self.update_interfaces(host_netbox_id, attributes)
+                self.update_interfaces(host_netbox_id, all_attributes['all'])
 
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Cleanup")
         for hostname, host_data in current_netbox_devices.items():
@@ -299,7 +384,8 @@ class SyncNetbox(Plugin):
                 print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Delete {hostname}")
                 device_id = host_data['id']
                 self.request(f"{url}{device_id}", "DELETE", payload)
-
+#.
+#   .--- Import Hosts
     def import_hosts(self):
         """
         Import Hosts from Netbox to the Syncer
@@ -312,3 +398,4 @@ class SyncNetbox(Plugin):
             }
             host_obj.set_labels(labels)
             host_obj.save()
+#.
