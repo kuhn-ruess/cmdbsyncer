@@ -299,16 +299,11 @@ class SyncNetbox(Plugin):
         create_response = self.request(url, "POST", payload)
 
 #.
-#   .-- Update Interfaces
-    def update_interfaces(self, host_id, attributes):
+#   .-- build interface_list
+    def get_interface_list_by_attributes(self, attributes):
         """
-        Update Interfaces based on Attributes
+        Return List of Interfaces
         """
-        url = f'/dcim/interfaces?device_id={host_id}'
-        device_interfaces = []
-        for entry in self.request(url, "GET"):
-            device_interfaces.append(entry['display'])
-        # Group Interfaces
         interfaces = {}
         for attribute, value in attributes.items():
             # @TODO: Build more general approach
@@ -319,7 +314,21 @@ class SyncNetbox(Plugin):
                 field_name = splitted[-1]
                 interfaces.setdefault(interface_id, {})
                 interfaces[interface_id][field_name] = value
+        return interfaces
 
+
+#.
+#   .-- Update Interfaces
+    def update_interfaces(self, host_id, attributes):
+        """
+        Update Interfaces based on Attributes
+        """
+        url = f'/dcim/interfaces?device_id={host_id}'
+        device_interfaces = []
+        for entry in self.request(url, "GET"):
+            device_interfaces.append(entry['display'])
+        
+        interfaces = self.get_interface_list_by_attributes(attributes)
         for interface, interface_data in interfaces.items():
             if interface_data['portName'] not in device_interfaces:
                 self.create_interface(host_id, interface_data)
