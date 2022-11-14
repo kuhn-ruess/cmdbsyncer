@@ -117,3 +117,7 @@ def netbox_host_debug(hostname):
     attribute_table("Full Attribute List", attributes['all'])
     attribute_table("Filtered Attribute for Netbox Rules", attributes['filtered'])
     attribute_table("Attributes by Rule ", extra_attributes)
+    if 'update_interfaces' in extra_attributes:
+        attribute_table("Interfaces", {y['portName']: y for x,y in syncer.get_interface_list_by_attributes(attributes['all']).items()})
+
+
