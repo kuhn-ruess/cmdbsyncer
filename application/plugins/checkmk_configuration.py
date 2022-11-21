@@ -1,19 +1,33 @@
 """
 Add Configuration in Checkmk
 """
-#pylint: disable=too-many-arguments, too-many-statements, consider-using-get
+#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 import sys
 import re
 import click
 from application.modules.checkmk.cmk2 import CMK2, cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
-from application.modules.checkmk.models import CheckmkGroupRule
+from application.modules.checkmk.models import CheckmkGroupRule, CheckmkRuleMngmt
 from application.models.host import Host
+
+replacers = [
+  (',', ''),
+  (' ', '_'),
+  ('/', '-'),
+  ('&', '-'),
+  ('(', '-'),
+  (')', '-'),
+  ('ü', 'ue'),
+  ('ä', 'ae'),
+  ('ö', 'oe'),
+  ('ß', 'ss'),
+]
 
 def get_all_attributes():
     """
     Create dict with list of all possible attributes
+    @ TODO: Honor Rewrites
     """
     collection_keys = {}
     collection_values = {}
@@ -42,10 +56,109 @@ def get_all_attributes():
     return collection_keys, collection_values
 
 #   .-- Command: Export Rulesets
-#@cli_cmk.command('export_rules')
-#def export_cmk_rules():
-#    """WIP: Create Rules in Checkmk"""
+@cli_cmk.command('export_rules')
+@click.argument("account")
+def export_cmk_rules(account):
+    """Create Rules in Checkmk"""
+    account_config = get_account_by_name(account)
+    account_id = account_config['_id']
+    if not account_config or account_config['typ'] != 'cmkv2':
+        print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
+        sys.exit(1)
+    cmk = CMK2()
+    cmk.config = account_config
+    print(f"\n{ColorCodes.HEADER}Read Internal Configuration{ColorCodes.ENDC}")
+    print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC} Read all Host Attributes")
+    attributes = get_all_attributes()
+    print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC} Read all Rules and group them")
+    groups = {}
+    prefixes = {
+        'host_contactgroups': f'cmdbsyncer_cg_{account_id}_',
+        'host_groups': f'cmdbsyncer_hg_{account_id}_'
+    }
+    for rule in CheckmkRuleMngmt.objects(enabled=True):
+        outcome = rule.outcome
+        cmk_group_name = rule.rule_group
+        groups.setdefault(cmk_group_name, [])
+        regex = re.compile(outcome.regex)
+        prefix = ''
+        if outcome.group_created_by_syncer:
+            prefix = prefixes[cmk_group_name]
+        if outcome.foreach_type == 'value':
+            for label_value in attributes[0].get(outcome.foreach, []):
+                label_value = regex.findall(label_value)[0]
+                for needle, replacer in replacers:
+                    label_value = label_value.replace(needle, replacer).strip()
+                group_name = prefix + outcome.template_group.replace('$1', label_value)
+                label_data = outcome.template_label.replace('$1', label_value)
+                if (group_name, label_data)  not in groups[cmk_group_name]:
+                    groups[cmk_group_name].append((group_name, label_data))
+        elif outcome.foreach_type == 'label':
+            for label_key in [x for x,y in attributes[1].items() if outcome.foreach in y]:
+                label_key = regex.findall(label_key)[0]
+                for needle, replacer in replacers:
+                    label_key = label_key.replace(needle, replacer).strip()
+                label_key = label_key.replace(' ', '_').strip()
+                group_name = prefix + outcome.template_group.replace('$1', label_key)
+                label_data = outcome.template_label.replace('$1', label_key)
+                if (group_name, label_data) not in groups[cmk_group_name]:
+                    groups[cmk_group_name].append((group_name, label_data))
 
+    print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC} Clean existing CMK configuration")
+    for cmk_group_name in prefixes.keys():
+        url = f"domain-types/rule/collections/all?ruleset_name={cmk_group_name}"
+        rule_response = cmk.request(url, method="GET")[0]
+        for rule in rule_response['value']:
+            if rule['extensions']['properties']['description'] != \
+                f'cmdbsyncer_{account_id}':
+                continue
+            group_name = rule['extensions']['value_raw']
+            condition = rule['extensions']['conditions']['host_labels'][0]
+            label_data = f"{condition['key']}:{condition['value']}"
+            # Replace needed since response from cmk is "'groupname'"
+            search_group = (group_name.replace("'",""), label_data)
+            if search_group not in groups.get(cmk_group_name, []):
+                rule_id = rule['id']
+                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} DELETE Rule in {cmk_group_name} {rule_id}")
+                url = f'/objects/rule/{rule_id}'
+                cmk.request(url, method="DELETE")
+            else:
+                # In This case we don't need to create it
+                groups[cmk_group_name].remove(search_group)
+
+
+    print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC} Create new Rules")
+    for cmk_group_name, rules in groups.items():
+        for group_name, label_data in rules:
+            label_key, label_value = label_data.split(':')
+            if not label_value:
+                continue
+            template = {
+                "ruleset": f"{cmk_group_name}",
+                "folder": "/",
+                "properties": {
+                    "disabled": False,
+                    "description": f"cmdbsyncer_{account_id}"
+                },
+                "value_raw": f"'{group_name}'",
+                "conditions": {
+                    "host_tags": [],
+                    "host_labels": [
+                        {
+                            "key": label_key,
+                            "operator": "is",
+                            "value": label_value
+                        }
+                    ],
+                }
+            }
+
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Create Rule in {cmk_group_name} ({label_key}:{label_value} = {group_name})")
+            url = "domain-types/rule/collections/all"
+            try:
+                cmk.request(url, data=template, method="POST")
+            except CmkException as error:
+                print(f"{ColorCodes.FAIL} Failue: {error} {ColorCodes.ENDC}")
 #.
 #   .-- Command: Export Group
 @cli_cmk.command('export_groups')
@@ -65,18 +178,6 @@ def export_cmk_groups(account, test_run):
     attributes = get_all_attributes()
     print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC} Read all Rules and group them")
     groups = {}
-    replacers = [
-      (',', ''),
-      (' ', '_'),
-      ('/', '-'),
-      ('&', '-'),
-      ('(', '-'),
-      (')', '-'),
-      ('ü', 'ue'),
-      ('ä', 'ae'),
-      ('ö', 'oe'),
-      ('ß', 'ss'),
-    ]
     for rule in CheckmkGroupRule.objects(enabled=True):
         outcome = rule.outcome
         group_name = outcome.group_name
@@ -85,21 +186,21 @@ def export_cmk_groups(account, test_run):
         if outcome.regex:
             regex = re.compile(outcome.regex)
         if outcome.foreach_type == 'value':
-            for label_value in attributes[1].get(outcome.foreach):
+            for label_value in attributes[0].get(outcome.foreach, []):
                 if regex:
                     label_value = regex.findall(label_value)[0]
                 for needle, replacer in replacers:
                     label_value = label_value.replace(needle, replacer).strip()
-                if label_value not in groups[group_name]:
+                if label_value and label_value not in groups[group_name]:
                     groups[group_name].append(label_value)
         elif outcome.foreach_type == 'label':
-            for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
+            for label_key in [x for x,y in attributes[1].items() if outcome.foreach in y]:
                 if regex:
                     label_key = regex.findall(label_key)[0]
                 for needle, replacer in replacers:
                     label_key = label_key.replace(needle, replacer).strip()
                 label_key = label_key.replace(' ', '_').strip()
-                if label_key not in groups[group_name]:
+                if label_key and label_key not in groups[group_name]:
                     groups[group_name].append(label_key)
 
     print(f"\n{ColorCodes.HEADER}Start Sync{ColorCodes.ENDC}")

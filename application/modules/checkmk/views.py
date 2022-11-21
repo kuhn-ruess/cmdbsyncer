@@ -66,7 +66,6 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
     """
     entry = model.outcome
     html = "<table width=100%>"\
-           f"<tr><th>Type</th><td>{dict(cmk_mngmt_groups)[entry.rule_name]}</td></tr>"\
            f"<tr><th>Foreach</th><td>{entry.foreach_type}</td></tr>" \
            f"<tr><th>Value</th><td>{entry.foreach}</td></tr>" \
            f"<tr><th>Regex</th><td>{entry.regex}</td></tr>" \

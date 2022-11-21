@@ -113,7 +113,7 @@ class CheckmkGroupRule(db.Document):
 #   .-- Checkmk Rule Mngmt
 
 cmk_mngmt_groups = [
- ('contact_groups', "Contact Groups"),
+ ('host_contactgroups', "Contact Groups"),
  ('host_groups', "Host Groups"),
 ]
 
@@ -121,7 +121,6 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     """
     Checkmk Rule Managment Outcome
     """
-    rule_name = db.StringField(choices=cmk_mngmt_groups)
     foreach_type = db.StringField(choices=foreach_types)
     foreach = db.StringField(required=True)
     regex = db.StringField(required=True)
@@ -138,6 +137,7 @@ class CheckmkRuleMngmt(db.Document):
     Manage Checkmk Rules
     """
     name = db.StringField()
+    rule_group = db.StringField(choices=cmk_mngmt_groups)
     outcome = db.EmbeddedDocumentField(RuleMngmtOutcome)
     render_cmk_rule_mngmt = db.StringField()
     enabled = db.BooleanField()
