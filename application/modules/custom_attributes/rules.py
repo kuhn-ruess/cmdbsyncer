@@ -41,4 +41,3 @@ class CustomAttributeRule(Rule): # pylint: disable=too-few-public-methods
                     # Merge old Attributes to the new ones
                     outcomes.update(new_outcome)
         return outcomes
-

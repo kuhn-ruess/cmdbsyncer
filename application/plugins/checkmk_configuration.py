@@ -85,7 +85,7 @@ def export_cmk_rules(account):
         if outcome.group_created_by_syncer:
             prefix = prefixes[cmk_group_name]
         if outcome.foreach_type == 'value':
-            for label_value in attributes[0].get(outcome.foreach, []):
+            for label_value in attributes[1].get(outcome.foreach, []):
                 label_value = regex.findall(label_value)[0]
                 for needle, replacer in replacers:
                     label_value = label_value.replace(needle, replacer).strip()
@@ -94,7 +94,7 @@ def export_cmk_rules(account):
                 if (group_name, label_data)  not in groups[cmk_group_name]:
                     groups[cmk_group_name].append((group_name, label_data))
         elif outcome.foreach_type == 'label':
-            for label_key in [x for x,y in attributes[1].items() if outcome.foreach in y]:
+            for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
                 label_key = regex.findall(label_key)[0]
                 for needle, replacer in replacers:
                     label_key = label_key.replace(needle, replacer).strip()
@@ -186,7 +186,7 @@ def export_cmk_groups(account, test_run):
         if outcome.regex:
             regex = re.compile(outcome.regex)
         if outcome.foreach_type == 'value':
-            for label_value in attributes[0].get(outcome.foreach, []):
+            for label_value in attributes[1].get(outcome.foreach, []):
                 if regex:
                     label_value = regex.findall(label_value)[0]
                 for needle, replacer in replacers:
@@ -194,7 +194,7 @@ def export_cmk_groups(account, test_run):
                 if label_value and label_value not in groups[group_name]:
                     groups[group_name].append(label_value)
         elif outcome.foreach_type == 'label':
-            for label_key in [x for x,y in attributes[1].items() if outcome.foreach in y]:
+            for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
                 if regex:
                     label_key = regex.findall(label_key)[0]
                 for needle, replacer in replacers:
