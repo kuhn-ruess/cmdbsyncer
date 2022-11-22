@@ -77,8 +77,8 @@ cmk_groups = [
 ]
 
 foreach_types = [
- ('label', "Foreach Attribute name for given Value"),
- ('value', "Foreach Value for given Attribute name")
+ ('label', "Foreach Attribute"),
+ ('value', "Foreach Attribute Value")
 ]
 
 class CmkGroupOutcome(db.EmbeddedDocument):
