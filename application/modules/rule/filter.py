@@ -27,6 +27,11 @@ class Filter(Rule):# pylint: disable=too-few-public-methods
                     for attribute in self.attributes:
                         if attribute.startswith(real_name):
                             outcomes[attribute] = self.attributes[attribute]
+            if outcome['action'] == 'whitelist_attribute_value':
+                search_value = outcome['attribute_name']
+                for attr, attr_value in self.attributes.items():
+                    if str(attr_value).startswith(search_value):
+                        outcomes[attr] = attr_value
             if outcome['action'] == 'ignore_hosts':
                 outcomes['ignore_host'] = True
         return outcomes

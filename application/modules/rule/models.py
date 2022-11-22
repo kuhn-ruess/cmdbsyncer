@@ -51,6 +51,7 @@ rule_types = [
 #   .-- Filter
 filter_actions = [
     ('whitelist_attribute', "Whitelist Attribute"),
+    ('whitelist_attribute_value', "Whitelist Attribute with Value"),
     ('ignore_hosts', "Ignore Matching Hosts"),
 ]
 class FilterAction(db.EmbeddedDocument):
