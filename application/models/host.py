@@ -41,6 +41,9 @@ class Host(db.Document):
     last_import_sync = db.DateTimeField()
 
 
+    raw = db.StringField()
+
+
     folder = db.StringField()
 
     export_problem = False
