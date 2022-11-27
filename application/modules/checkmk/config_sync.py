@@ -10,6 +10,7 @@ from application.modules.debug import ColorCodes as CC
 from application.models.host import Host
 
 replacers = [
+  (' ', '_'),
   (',', ''),
   (' ', '_'),
   ('/', '-'),
@@ -26,6 +27,15 @@ class SyncConfiguration(CMK2):
     """
     Sync jobs for Checkmk Config
     """
+
+    @staticmethod
+    def replace(input_str):
+        """
+        Replace all given inputs
+        """
+        for needle, replacer in replacers:
+            input_str = input_str.replace(needle, replacer)
+        return input_str.strip()
 
     def parse_attributes(self):
         """
@@ -44,7 +54,8 @@ class SyncConfiguration(CMK2):
                     collection_values.setdefault(value, [])
                     if key not in collection_values[value]:
                         collection_values[value].append(key)
-
+        # [0] All Values behind Label
+        # [1] All Keys which have value
         return collection_keys, collection_values
 
 #   .-- Export Rulesets
@@ -53,6 +64,8 @@ class SyncConfiguration(CMK2):
         Export config rules to checkmk
         """
         messages = []
+
+
 
         print(f"\n{CC.HEADER}Read Internal Configuration{CC.ENDC}")
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attributes")
@@ -72,20 +85,19 @@ class SyncConfiguration(CMK2):
             if outcome.group_created_by_syncer:
                 prefix = prefixes[cmk_group_name]
             if outcome.foreach_type == 'value':
+                # Get ALL labels which have given value
                 for label_value in attributes[1].get(outcome.foreach, []):
                     label_value = regex.findall(label_value)[0]
-                    for needle, replacer in replacers:
-                        label_value = label_value.replace(needle, replacer).strip()
+                    # Replace not allowed chars
+                    label_value = self.replace(label_value)
                     group_name = prefix + outcome.template_group.replace('$1', label_value)
                     label_data = outcome.template_label.replace('$1', label_value)
                     if (group_name, label_data)  not in groups[cmk_group_name]:
                         groups[cmk_group_name].append((group_name, label_data))
             elif outcome.foreach_type == 'label':
-                for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
+                for label_key in attributes[0].get(outcome.foreach, []):
                     label_key = regex.findall(label_key)[0]
-                    for needle, replacer in replacers:
-                        label_key = label_key.replace(needle, replacer).strip()
-                    label_key = label_key.replace(' ', '_').strip()
+                    label_key = self.replace(label_key)
                     group_name = prefix + outcome.template_group.replace('$1', label_key)
                     label_data = outcome.template_label.replace('$1', label_key)
                     if (group_name, label_data) not in groups[cmk_group_name]:
@@ -150,7 +162,8 @@ class SyncConfiguration(CMK2):
                 except CmkException as error:
                     print(f"{CC.FAIL} Failue: {error} {CC.ENDC}")
 
-        log.log(f"Checkmk Rules synced with {self.account_name}", source="CMK_RULE_SYNC", details=messages)
+        log.log(f"Checkmk Rules synced with {self.account_name}", \
+                        source="CMK_RULE_SYNC", details=messages)
 #.
 #   .-- Export Group
 
@@ -175,18 +188,16 @@ class SyncConfiguration(CMK2):
                 for label_value in attributes[1].get(outcome.foreach, []):
                     if regex_match:
                         label_value = regex_match.findall(label_value)[0]
-                    for needle, replacer in replacers:
-                        label_value = label_value.replace(needle, replacer).strip()
+                    label_value = self.replace(label_value)
                     if label_value and label_value not in groups[group_name]:
                         groups[group_name].append(label_value)
             elif outcome.foreach_type == 'label':
                 print("Check for label:")
-                for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
+                for label_key in attributes[0].get(outcome.foreach, []):
                     print(f"CHecking: {label_key}")
                     if regex_match:
                         label_key = regex_match.findall(label_key)[0]
-                    for needle, replacer in replacers:
-                        label_key = label_key.replace(needle, replacer).strip()
+                    label_key = self.replace(label_key)
                     label_key = label_key.replace(' ', '_').strip()
                     if label_key and label_key not in groups[group_name]:
                         groups[group_name].append(label_key)
