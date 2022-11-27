@@ -3,6 +3,7 @@ Checkmk Configuration
 """
 #pylint: disable=import-error, too-many-locals, too-many-branches, too-many-statements
 import re
+from application import log
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.checkmk.models import CheckmkGroupRule, CheckmkRuleMngmt
 from application.modules.debug import ColorCodes as CC
@@ -51,6 +52,7 @@ class SyncConfiguration(CMK2):
         """
         Export config rules to checkmk
         """
+        messages = []
 
         print(f"\n{CC.HEADER}Read Internal Configuration{CC.ENDC}")
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attributes")
@@ -107,6 +109,7 @@ class SyncConfiguration(CMK2):
                     print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in {cmk_group_name} {rule_id}")
                     url = f'/objects/rule/{rule_id}'
                     self.request(url, method="DELETE")
+                    messages.append(("INFO", f"Deleted Rule in {cmk_group_name} {rule_id}"))
                 else:
                     # In This case we don't need to create it
                     groups[cmk_group_name].remove(search_group)
@@ -143,8 +146,11 @@ class SyncConfiguration(CMK2):
                 url = "domain-types/rule/collections/all"
                 try:
                     self.request(url, data=template, method="POST")
+                    messages.append(("INFO", f"Created Rule in {cmk_group_name} {group_name}"))
                 except CmkException as error:
                     print(f"{CC.FAIL} Failue: {error} {CC.ENDC}")
+
+        log.log(f"Checkmk Rules synced with {self.account_name}", source="CMK_RULE_SYNC", details=messages)
 #.
 #   .-- Export Group
 
@@ -152,6 +158,7 @@ class SyncConfiguration(CMK2):
         """
         Export all Checkmk Groups
         """
+        messages = []
         print(f"\n{CC.HEADER}Read Internal Configuration{CC.ENDC}")
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attributes")
         attributes = self.parse_attributes()
@@ -173,7 +180,9 @@ class SyncConfiguration(CMK2):
                     if label_value and label_value not in groups[group_name]:
                         groups[group_name].append(label_value)
             elif outcome.foreach_type == 'label':
+                print("Check for label:")
                 for label_key in [x for x,y in attributes[0].items() if outcome.foreach in y]:
+                    print(f"CHecking: {label_key}")
                     if regex_match:
                         label_key = regex_match.findall(label_key)[0]
                     for needle, replacer in replacers:
@@ -240,6 +249,7 @@ class SyncConfiguration(CMK2):
                     print(f"\n{CC.HEADER}Send {group_type} to Checkmk{CC.ENDC}")
                     try:
                         self.request(url, data=data, method="POST")
+                        messages.append(("INFO", f"Created Groups: {group_type} {data}"))
                     except CmkException as error:
                         print(f"{CC.FAIL} {error} {CC.ENDC}")
                         return
@@ -252,6 +262,9 @@ class SyncConfiguration(CMK2):
                         # Checkmk is not deleting objects if the still referenced
                         url = f"{urls[group_type]['delete']}{group_alias}"
                         self.request(url, method="DELETE")
+                        messages.append(("INFO", f"Deleted Group: {group_alias}"))
                         print(f"{CC.OKBLUE} *{CC.ENDC} Group {group_alias} deleted")
 
+        log.log(f"Checkmk Group synced with {self.account_name}",
+                    source="CMK_GROUP_SYNC", details=messages)
 #.
