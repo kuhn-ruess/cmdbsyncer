@@ -7,6 +7,7 @@ import csv
 import click
 from application import app
 from application.models.host import Host
+from application.modules.plugin import Plugin
 from application.modules.debug import ColorCodes
 
 @app.cli.group(name='csv')
@@ -14,17 +15,25 @@ def cli_csv():
     """CSV related commands"""
 
 
-
 @cli_csv.command('compare_hosts')
 @click.argument("csv_path")
-@click.argument("delimiter", default=';')
-@click.argument("hostname_field", default='host')
-def compare_csv(csv_path, delimiter, hostname_field):
+@click.option("--delimiter", default=';')
+@click.option("--hostname_field", default='host')
+@click.option("--label_filter", default='')
+def compare_csv(csv_path, delimiter, hostname_field, label_filter):
     """
     Check which Hosts in CSV are not in DB
     """
     #pylint: disable=no-member, consider-using-generator
-    host_list = list([x.hostname for x in Host.objects(available=True)])
+    if label_filter:
+        host_list = []
+        # we need to load the full plugins then
+        plugin = Plugin()
+        for host in Host.objects(available=True):
+            if label_filter in plugin.get_host_attributes(host)['all']:
+                host_list.append(host.hostname)
+    else:
+        host_list = list([x.hostname for x in Host.objects(available=True)])
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
@@ -34,8 +43,8 @@ def compare_csv(csv_path, delimiter, hostname_field):
 
 @cli_csv.command('import_hosts')
 @click.argument("csv_path")
-@click.argument("delimiter", default=';')
-@click.argument("hostname_field", default='host')
+@click.option("--delimiter", default=';')
+@click.option("--hostname_field", default='host')
 def import_csv(csv_path, delimiter, hostname_field):
     """
     Import and Maintane Hosts from given CSV
@@ -58,9 +67,9 @@ def import_csv(csv_path, delimiter, hostname_field):
 
 @cli_csv.command('inventorize_hosts')
 @click.argument("csv_path")
-@click.argument("delimiter", default=';')
-@click.argument("hostname_field", default='host')
-@click.argument("key", default='csv')
+@click.option("--delimiter", default=';')
+@click.option("--hostname_field", default='host')
+@click.option("--key", default='csv')
 def inventorize_csv(csv_path, delimiter, hostname_field, key):
     """
     Do inventory for fields in given csv
@@ -69,13 +78,16 @@ def inventorize_csv(csv_path, delimiter, hostname_field, key):
     filename = csv_path.split('/')[-1]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
           f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
+    new_attributes = {}
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
             hostname = row[hostname_field]
-            print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
-            host_obj = Host.get_host(hostname, False)
-            if host_obj:
-                del row[hostname_field]
-                host_obj.update_inventory(key, {f"{key}_{x}":y for x,y in row.items()})
-                host_obj.save()
+            print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Got Data for {hostname}")
+            del row[hostname_field]
+            new_attributes[hostname] = {f"{key}_{x}":y for x,y in row.items()}
+
+    for host_obj in Host.objects(available=True):
+        print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {host_obj.hostname}")
+        host_obj.update_inventory(key, new_attributes.get(host_obj.hostname, {}))
+        host_obj.save()
