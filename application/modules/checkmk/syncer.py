@@ -94,6 +94,10 @@ class SyncCMK2(CMK2):
                 if attr_value := attributes['all'].get(additional_attr):
                     additional_attributes[additional_attr] = attr_value
 
+            remove_attributes = []
+            if next_actions['remove_attributes']:
+                remove_attributes = next_actions['remove_attributes']
+
             if db_host.hostname not in cmk_hosts:
                 # Create since missing
                 print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Need to created in Checkmk")
@@ -112,7 +116,7 @@ class SyncCMK2(CMK2):
                 cmk_host = cmk_hosts[db_host.hostname]
                 # Update if needed
                 self.update_host(db_host, cmk_host, folder,
-                                labels, additional_attributes)
+                                labels, additional_attributes, remove_attributes)
 
 
 
@@ -202,7 +206,7 @@ class SyncCMK2(CMK2):
 
 #.
 #   .-- Update Host
-    def update_host(self, db_host, cmk_host, folder, labels, additional_attributes=None):
+    def update_host(self, db_host, cmk_host, folder, labels, additional_attributes, remove_attributes):
         """
         Update a Existing Host in Checkmk
         """
@@ -246,9 +250,18 @@ class SyncCMK2(CMK2):
         if labels != cmk_labels:
             do_update = True
 
-        for key, value in additional_attributes.items():
-            if cmk_attributes.get(key) != value:
-                do_update = True
+        if not do_update:
+            for key, value in additional_attributes.items():
+                if cmk_attributes.get(key) != value:
+                    do_update = True
+                    break
+            for attr in remove_attributes:
+                if attr in cmk_attributes:
+                    do_update = True
+                    break
+
+
+
 
         if do_update:
             # We may already got the Etag by the folder move action
@@ -266,6 +279,9 @@ class SyncCMK2(CMK2):
             }
             if additional_attributes:
                 update_body['update_attributes'].update(additional_attributes)
+
+            if remove_attributes:
+                update_body['remove_attributes'] = remove_attributes
 
             self.request(update_url, method="PUT",
                          data=update_body,

@@ -43,6 +43,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             outcomes.setdefault('move_folder',"")
             outcomes.setdefault('attributes', [])
             outcomes.setdefault('custom_attributes', [])
+            outcomes.setdefault('remove_attributes', [])
 
             if outcome['action'] == 'move_folder':
                 outcomes['move_folder'] += self.format_foldername(outcome['action_param'])
@@ -67,7 +68,10 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 new_key, new_value = outcome['action_param'].split(':')
                 hostname = self.db_host.hostname
                 new_value = new_value.replace('{hostname}', hostname)
-                outcomes['custom_attributes'].append({new_key: new_value})
+                if new_value.lower() in ['none', 'false']:
+                    outcomes['remove_attributes'].append(new_key)
+                else:
+                    outcomes['custom_attributes'].append({new_key: new_value})
 
             print_debug(self.debug,
                         "- Handle Special options")
