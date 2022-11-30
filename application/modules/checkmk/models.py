@@ -35,7 +35,8 @@ action_outcome_types = [
     ('value_as_folder', "Use Value of given Attribute Name as Folder"),
     ("tag_as_folder", "Use Attribute Name of given Attribute Value as Folder"),
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
-    ("attribute", "Create Checkmk Attribute with Attribute given in action param"),
+    ("attribute", "Create Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
+    ("custom_attribute", "Create Custom Checkmk Attribute: Set key:value, Placeholders: {hostname}"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):

@@ -86,9 +86,10 @@ class SyncCMK2(CMK2):
                 self.create_folder(folder)
                 existing_folders.append(folder)
 
-            # Check if Host Exists
-
             additional_attributes = {}
+            for custom_attr in next_actions['custom_attributes']:
+                additional_attributes.update(custom_attr)
+
             for additional_attr in next_actions['attributes']:
                 if attr_value := attributes['all'].get(additional_attr):
                     additional_attributes[additional_attr] = attr_value
