@@ -31,7 +31,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     def add_outcomes(self, rule_outcomes, outcomes):
         """ Handle the Outcomes """
         #pylint: disable=too-many-branches
-        title = "Handle Outcomes"
 
         for outcome in rule_outcomes:
             # We add only the outcome of the
@@ -43,6 +42,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             outcomes.setdefault('move_folder',"")
             outcomes.setdefault('attributes', [])
+            outcomes.setdefault('custom_attributes', [])
 
             if outcome['action'] == 'move_folder':
                 outcomes['move_folder'] += self.format_foldername(outcome['action_param'])
@@ -59,8 +59,15 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                     folder = self.format_foldername(folder)
                     self.db_host.lock_to_folder(folder)
                     outcomes['move_folder'] += folder
+
             if outcome['action'] == 'attribute':
                 outcomes['attributes'].append(outcome['action_param'])
+
+            if outcome['action'] == 'custom_attribute':
+                new_key, new_value = outcome['action_param'].split(':')
+                hostname = self.db_host.hostname
+                new_value = new_value.replace('{hostname}', hostname)
+                outcomes['custom_attributes'].append({new_key: new_value})
 
             print_debug(self.debug,
                         "- Handle Special options")

@@ -115,6 +115,11 @@ class CiscoDNA():
             'portName',
             'status',
             'adminStatus',
+            'description',
+            'mtu',
+            'name',
+            'interfaceType',
+            'macAddress',
         ]
         token = self.get_auth_token()
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
