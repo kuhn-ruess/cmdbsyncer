@@ -240,11 +240,17 @@ class SyncCMK2(CMK2):
             }
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Moved Host from {current_folder}")
 
-
-        # compare Labels
-        cmk_labels = cmk_host['extensions']['attributes'].get('labels', {})
-
+        do_update = False
+        cmk_attributes = cmk_host['extensions']['attributes']
+        cmk_labels = cmk_attributes.get('labels', {})
         if labels != cmk_labels:
+            do_update = True
+
+        for key, value in additional_attributes.items():
+            if cmk_attributes.get(key) != value:
+                do_update = True
+
+        if do_update:
             # We may already got the Etag by the folder move action
             if not etag:
                 etag = self.get_etag(db_host)
