@@ -30,14 +30,10 @@ def match(value, needle, condition, negate=False):
     if condition == 'bool':
         value = make_bool(value)
         needle = make_bool(needle)
-    if isinstance(value, int) and value:
-        value = str(value)
-    if isinstance(needle, int) and needle:
-        needle = str(needle)
-    if not isinstance(value, bool) and value:
-        value = value.lower()
-    if not isinstance(needle, bool) and needle:
-        needle = needle.lower()
+    else:
+        value = str(value).lower()
+        needle = str(needle).lower()
+
     if negate:
         if condition == 'equal':
             if value != needle:
@@ -80,7 +76,7 @@ def match(value, needle, condition, negate=False):
         if value.endswith(needle):
             return True
     elif condition == 'regex':
-        pattern = re.compile(needle) #@TODO Cache
+        pattern = re.compile(needle)
         if pattern.match(value):
             return True
     elif condition == 'bool':
