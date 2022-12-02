@@ -87,10 +87,10 @@ class SyncCMK2(CMK2):
                 existing_folders.append(folder)
 
             additional_attributes = {}
-            for custom_attr in next_actions['custom_attributes']:
+            for custom_attr in next_actions.get('custom_attributes', []):
                 additional_attributes.update(custom_attr)
 
-            for additional_attr in next_actions['attributes']:
+            for additional_attr in next_actions.get('attributes', []):
                 if attr_value := attributes['all'].get(additional_attr):
                     additional_attributes[additional_attr] = attr_value
 
