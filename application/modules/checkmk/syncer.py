@@ -95,7 +95,7 @@ class SyncCMK2(CMK2):
                     additional_attributes[additional_attr] = attr_value
 
             remove_attributes = []
-            if next_actions['remove_attributes']:
+            if 'remove_attributes' in next_actions:
                 remove_attributes = next_actions['remove_attributes']
 
             if db_host.hostname not in cmk_hosts:
