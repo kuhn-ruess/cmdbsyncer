@@ -46,13 +46,14 @@ def cli_netbox():
 #   .-- Command: Export Hosts
 @cli_netbox.command('export_hosts')
 @click.argument("account")
-def netbox_host_export(account):
+@click.option("-d", "--debug", default=False, is_flag=True)
+def netbox_host_export(account, debug):
     """Sync Objects with Netbox"""
     try:
         target_config = get_account_by_name(account)
         if target_config:
             rules = load_rules()
-            syncer = SyncNetbox()
+            syncer = SyncNetbox(debug)
             syncer.filter = rules['filter']
             syncer.rewrite = rules['rewrite']
             syncer.actions = rules['actions']
@@ -119,5 +120,3 @@ def netbox_host_debug(hostname):
     attribute_table("Attributes by Rule ", extra_attributes)
     if 'update_interfaces' in extra_attributes:
         attribute_table("Interfaces", {y['portName']: y for x,y in syncer.get_interface_list_by_attributes(attributes['all']).items()})
-
-
