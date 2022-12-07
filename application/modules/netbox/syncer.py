@@ -241,23 +241,26 @@ class SyncNetbox(Plugin):
     def get_interface_payload(self, host_id, if_attributes):
         """ Return Interface Payload
         """
+        status_map = {
+            'up' : True,
+        }
         payload = {
           "device": host_id,
           #"module": 0,
           "name": if_attributes['portName'],
           #"label": "string",
-          "type": "virtual",
-          #"enabled": true,
+          "type": if_attributes['interfaceType'],
+          "enabled": status_map.get(if_attributes['adminStatus'].lower(), False),
           #"parent": 0,
           #"bridge": 0,
           #"lag": 0,
-          #"mtu": 65536,
-          #"mac_address": "string",
+          "mtu": int(if_attributes['mtu']),
+          "mac_address": if_attributes['macAddress'],
           #"speed": 2147483647,
           #"duplex": "half",
           #"wwn": "string",
           #"mgmt_only": true,
-          #"description": "string",
+          "description": if_attributes['description'],
           #"mode": "access",
           #"rf_role": "ap",
           #"rf_channel": "2.4g-1-2412-22",
