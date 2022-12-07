@@ -20,11 +20,12 @@ class SyncNetbox(Plugin):
     Netbox Update/ Get Operations
     """
 #   .-- Init
-    def __init__(self):
+    def __init__(self, debug):
         """
         Inital
         """
         self.log = log
+        self.print_debug = debug
         self.cache = {}
         self.interface_cache = {}
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
@@ -99,7 +100,7 @@ class SyncNetbox(Plugin):
         Read full list of devices
         """
         print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Netbox: "\
-              f"Read all devices (Filter: {syncer_only})")
+              f"Read all devices (Filter only CMDB Syncer: {syncer_only})")
         url = 'dcim/devices/?limit=1000'
         if syncer_only:
             url += f"&cf_cmdbsyncer_id={self.config['_id']}"
@@ -297,6 +298,8 @@ class SyncNetbox(Plugin):
         payload = self.get_interface_payload(host_id, attributes)
         url = 'dcim/interfaces/'
         create_response = self.request(url, "POST", payload)
+        if self.print_debug:
+            print(f"Debug: Created Interface: {create_response}")
 
 #.
 #   .-- build interface_list
