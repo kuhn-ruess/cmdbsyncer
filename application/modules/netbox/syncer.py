@@ -244,18 +244,21 @@ class SyncNetbox(Plugin):
         status_map = {
             'up' : True,
         }
+
+        # @Todo: Detect Type:
+        interface_type = "other"
+
         payload = {
           "device": host_id,
           #"module": 0,
           "name": if_attributes['portName'],
           #"label": "string",
-          "type": if_attributes['interfaceType'],
+          "type": interface_type,
           "enabled": status_map.get(if_attributes['adminStatus'].lower(), False),
           #"parent": 0,
           #"bridge": 0,
           #"lag": 0,
           "mtu": int(if_attributes['mtu']),
-          "mac_address": if_attributes['macAddress'],
           #"speed": 2147483647,
           #"duplex": "half",
           #"wwn": "string",
@@ -291,6 +294,10 @@ class SyncNetbox(Plugin):
           #],
           #"custom_fields": {}
         }
+        if if_attributes['macAddress']:
+            payload['mac_address'] = if_attributes['macAddress']
+        if self.print_debug:
+            print(payload)
         return payload
 #.
 #   .-- Create Interface
@@ -333,7 +340,7 @@ class SyncNetbox(Plugin):
         device_interfaces = []
         for entry in self.request(url, "GET"):
             device_interfaces.append(entry['display'])
-        
+
         interfaces = self.get_interface_list_by_attributes(attributes)
         for interface, interface_data in interfaces.items():
             if interface_data['portName'] not in device_interfaces:
