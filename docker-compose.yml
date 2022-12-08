@@ -12,8 +12,6 @@ services:
       context: .
     depends_on:
       - mongo
-    ports:
-      - 8080:9090
     environment:
       config: base
 
