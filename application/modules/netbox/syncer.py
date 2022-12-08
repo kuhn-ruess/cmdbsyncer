@@ -6,7 +6,7 @@ import requests
 
 from application.models.host import Host
 from application import app, log
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes as CC
 from application.modules.plugin import Plugin
 
 if app.config.get("DISABLE_SSL_ERRORS"):
@@ -89,7 +89,7 @@ class SyncNetbox(Plugin):
                         counter += 1
                         process = 100.0 * counter / request_count
                         # pylint: disable=line-too-long
-                        print(f"   {ColorCodes.OKGREEN}({process:.0f}%)...{counter}/{request_count}{ColorCodes.ENDC}")
+                        print(f"   {CC.OKGREEN}({process:.0f}%)...{counter}/{request_count}{CC.ENDC}")
                         sub_response= requests.get(next_page, headers=headers, verify=self.verify).json()
                         next_page = sub_response['next']
                         results += sub_response['results']
@@ -103,7 +103,7 @@ class SyncNetbox(Plugin):
         """
         Read full list of devices
         """
-        print(f"{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Netbox: "\
+        print(f"{CC.OKGREEN} -- {CC.ENDC}Netbox: "\
               f"Read all devices (Filter only CMDB Syncer: {syncer_only})")
         url = 'dcim/devices/?limit=1000'
         if syncer_only:
@@ -130,9 +130,9 @@ class SyncNetbox(Plugin):
 
         conf = endpoints[key]
 
-        print(f"{ColorCodes.OKCYAN} *{ColorCodes.ENDC} Attribute: {key}:{value} will be synced")
+        print(f"{CC.OKCYAN} *{CC.ENDC} Attribute: {key}:{value} will be synced")
         if not self.cache.get(key):
-            print(f"{ColorCodes.OKGREEN}   -- {ColorCodes.ENDC}build cache for {key}")
+            print(f"{CC.OKGREEN}   -- {CC.ENDC}build cache for {key}")
             self.cache[key] = {}
             for entry in self.request(conf['url'], "GET"):
                 self.cache[key][entry['display']] = entry['id']
@@ -151,7 +151,7 @@ class SyncNetbox(Plugin):
             payload[extra_key] = 1
 
         response = self.request(conf['url'], "POST", payload)
-        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} New {key} {value} created in Netbox")
+        print(f"{CC.OKBLUE} *{CC.ENDC} New {key} {value} created in Netbox")
         new_id = response['id']
         self.cache[key][value] = new_id
         return new_id
@@ -241,7 +241,7 @@ class SyncNetbox(Plugin):
             if isinstance(target_value, dict):
                 if 'cmdbsyncer_id' in target_value:
                     continue
-                target_value = target_value['id']
+                target_value = target_value.get('id')
             if target_value and str(value) != str(target_value):
                 keys.append(key)
         return keys
@@ -264,15 +264,15 @@ class SyncNetbox(Plugin):
             'FullDuplex' : 'full',
             'HalfDuplex' : 'half',
         }
-        duplex_mode = duplex_modes.get(if_attributes['duplex'], 'auto')
+        duplex_mode = duplex_modes.get(if_attributes.get('duplex'), 'auto')
 
         access_modes = {
             'access': 'access',
             'trunk': 'tagged',
         }
-        access_mode = access_modes.get(if_attributes['portMode'])
+        access_mode = access_modes.get(if_attributes.get('portMode'))
 
-        interface_speed = int(if_attributes['speed'])
+        interface_speed = int(if_attributes.get('speed',0))
 
         payload = {
           "device": host_id,
@@ -284,12 +284,11 @@ class SyncNetbox(Plugin):
           #"parent": 0,
           #"bridge": 0,
           #"lag": 0,
-          "mtu": int(if_attributes['mtu']),
           "speed": interface_speed,
           "duplex": duplex_mode,
           #"wwn": "string",
           #"mgmt_only": true,
-          "description": if_attributes['description'],
+          "description": if_attributes.get('description'),
           #"rf_role": "ap",
           #"rf_channel": "2.4g-1-2412-22",
           #"poe_mode": "pd",
@@ -320,23 +319,20 @@ class SyncNetbox(Plugin):
           #"custom_fields": {}
         }
         if if_attributes['macAddress']:
-            payload['mac_address'] = if_attributes['macAddress']
+            payload['mac_address'] = if_attributes['macAddress'].upper()
         if access_mode:
             payload["mode"] =  access_mode
+        if mtu := if_attributes.get('mtu'):
+            payload["mtu"] = int(mtu)
         if self.print_debug:
             print(payload)
         return payload
 #.
 #   .-- Create Interface
-    def create_interface(self, host_id, attributes):
+    def create_interface(self, host_id, payload):
         """
         Create Interface in Netbox
         """
-        payload = self.get_interface_payload(host_id, attributes)
-        url = 'dcim/interfaces/'
-        create_response = self.request(url, "POST", payload)
-        if self.print_debug:
-            print(f"Debug: Created Interface: {create_response}")
 
 #.
 #   .-- build interface_list
@@ -364,17 +360,32 @@ class SyncNetbox(Plugin):
         Update Interfaces based on Attributes
         """
         url = f'dcim/interfaces?device_id={host_id}'
-        device_interfaces = []
+        device_interfaces = {}
         for entry in self.request(url, "GET"):
-            device_interfaces.append(entry['display'])
+            # We need some rewrite here to match the payloads of the api
+            del entry['device']
+            entry['name'] = entry['display']
+            device_interfaces[entry['name']] = entry
 
+        url = 'dcim/interfaces/'
         interfaces = self.get_interface_list_by_attributes(attributes)
-        for interface, interface_data in interfaces.items():
-            if interface_data['portName'] not in device_interfaces:
-                self.create_interface(host_id, interface_data)
-            continue
+        for _interface, interface_data in interfaces.items():
+            payload = self.get_interface_payload(host_id, interface_data)
+            port_name = interface_data['portName']
+            if port_name not in device_interfaces:
+                print(f"{CC.OKBLUE} *{CC.ENDC} Create Interface {port_name}")
+                create_response = self.request(url, "POST", payload)
+                if self.print_debug:
+                    print(f"Debug: Created Interface: {create_response}")
+            elif update_keys := self.need_update(device_interfaces[port_name], payload):
+                update_payload = {}
+                for key in update_keys:
+                    update_payload[key] = payload[key]
+                print(f"{CC.OKGREEN} *{CC.ENDC} Update Interface {port_name} ({update_keys})")
+                url = f'dcim/interfaces/{device_interfaces[port_name]["id"]}/'
+                self.request(url, "PATCH", update_payload)
 
-        print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Check Sync of Interfaces")
+        print(f"{CC.OKGREEN} *{CC.ENDC} Check Sync of Interfaces")
 #.
 #   .--- Export Hosts
     def export_hosts(self):
@@ -384,7 +395,7 @@ class SyncNetbox(Plugin):
         #pylint: disable=too-many-locals
         current_netbox_devices = self.get_devices(syncer_only=True)
 
-        print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
+        print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
         db_objects = Host.objects(available=True)
         total = len(db_objects)
         counter = 0
@@ -401,7 +412,7 @@ class SyncNetbox(Plugin):
             attributes = all_attributes['filtered']
 
             process = 100.0 * counter / total
-            print(f"\n{ColorCodes.HEADER}({process:.0f}%) {hostname}{ColorCodes.ENDC}")
+            print(f"\n{CC.HEADER}({process:.0f}%) {hostname}{CC.ENDC}")
 
             payload = self.get_payload(db_host, custom_rules, attributes)
             url = 'dcim/devices/'
@@ -411,26 +422,26 @@ class SyncNetbox(Plugin):
                 host_netbox_data = current_netbox_devices[hostname]
                 host_netbox_id = host_netbox_data['id']
                 if update_keys := self.need_update(host_netbox_data, payload):
-                    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Update Host")
+                    print(f"{CC.OKBLUE} *{CC.ENDC} Update Host")
                     url += f"{current_netbox_devices[hostname]['id']}/"
                     update_payload = {}
                     for key in update_keys:
                         update_payload[key] = payload[key]
                     self.request(url, "PATCH", update_payload)
                 else:
-                    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Netbox already up to date")
+                    print(f"{CC.OKBLUE} *{CC.ENDC} Netbox already up to date")
             else:
                 ### Create
-                print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Create Host")
+                print(f"{CC.OKGREEN} *{CC.ENDC} Create Host")
                 create_response = self.request(url, "POST", payload)
                 host_netbox_id = create_response['id']
             if 'update_interfaces' in custom_rules:
                 self.update_interfaces(host_netbox_id, all_attributes['all'])
 
-        print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Cleanup")
+        print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
         for hostname, host_data in current_netbox_devices.items():
             if hostname not in found_hosts:
-                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Delete {hostname}")
+                print(f"{CC.OKBLUE} *{CC.ENDC} Delete {hostname}")
                 device_id = host_data['id']
                 self.request(f"{url}{device_id}", "DELETE", payload)
 #.
@@ -441,7 +452,7 @@ class SyncNetbox(Plugin):
         """
         for device, _data in self.get_devices().items():
             host_obj = Host.get_host(device)
-            print(f"\n{ColorCodes.HEADER}Process: {device}{ColorCodes.ENDC}")
+            print(f"\n{CC.HEADER}Process: {device}{CC.ENDC}")
             host_obj.set_import_seen()
             labels = {
             }
