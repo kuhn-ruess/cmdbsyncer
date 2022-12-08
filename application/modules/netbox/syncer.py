@@ -148,7 +148,7 @@ class SyncNetbox(Plugin):
         # Create Entry
         payload = {
             conf['name_tag']: value,
-            'slug': value.lower().replace(' ','_')
+            'slug': value.lower().replace(' ','_').replace(',', '_')
         }
         for extra_key in conf.get('sub_entries', []):
             payload[extra_key] = self.create_sub_entry(extra_key, \
