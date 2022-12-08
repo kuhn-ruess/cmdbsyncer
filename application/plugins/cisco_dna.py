@@ -230,6 +230,7 @@ class CiscoDNA():
             print(f"{ColorCodes.HEADER}({process:.0f}%) {hostname}{ColorCodes.ENDC}")
             db_host = Host.get_host(hostname)
             inventory = {}
+            inventory['manufacturer'] = "cisco"
             for attribute in inventory_attributes:
                 inventory[f'cisco_dna_{attribute}'] = device[attribute]
             db_host.update_inventory('cisco_dna_', inventory)
