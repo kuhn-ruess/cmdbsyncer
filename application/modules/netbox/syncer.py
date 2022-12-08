@@ -111,34 +111,37 @@ class SyncNetbox(Plugin):
         devices = self.request(url, "GET")
         return {x['display']:x for x in devices}
 #.
-#   .-- Uppsert Element
-    def uppsert_element(self, key, value):
+#   .-- Create Netbox Sub Entry Types
+    def create_sub_entry(self, endpoint, value, inventory):
         """
-        Returns the Element ID of given value
+        Returns the Netbox Entry ID of given value
         directly or creates it first
         """
+        value = value.lower()
 
         endpoints = {
             'platform': {'url': 'dcim/platforms/',
                          'name_tag': 'name'},
             'device_type': {'url': 'dcim/device-types/',
                             'name_tag': 'model',
-                            'additional_tags': ['manufacturer']},
+                            'sub_entries': ['manufacturer']},
             'device_role': {'url': 'dcim/device-roles/',
+                            'name_tag': 'name'},
+            'manufacturer': {'url': 'dcim/manufacturers/',
                             'name_tag': 'name'},
         }
 
-        conf = endpoints[key]
+        conf = endpoints[endpoint]
 
-        print(f"{CC.OKCYAN} *{CC.ENDC} Attribute: {key}:{value} will be synced")
-        if not self.cache.get(key):
-            print(f"{CC.OKGREEN}   -- {CC.ENDC}build cache for {key}")
-            self.cache[key] = {}
+        print(f"{CC.OKCYAN} *{CC.ENDC} Attribute: {endpoint}:{value} will be synced")
+        if not self.cache.get(endpoint):
+            print(f"{CC.OKGREEN}   -- {CC.ENDC}build cache for {endpoint}")
+            self.cache[endpoint] = {}
             for entry in self.request(conf['url'], "GET"):
-                self.cache[key][entry['display']] = entry['id']
+                self.cache[endpoint][entry['display'].lower()] = entry['id']
 
-        # FIND Data
-        for entry_name, entry_id in self.cache[key].items():
+        # FIND Data and Return in that case
+        for entry_name, entry_id in self.cache[endpoint].items():
             if entry_name == value:
                 return entry_id
 
@@ -147,13 +150,17 @@ class SyncNetbox(Plugin):
             conf['name_tag']: value,
             'slug': value.lower().replace(' ','_')
         }
-        for extra_key in conf.get('additional_tags', []):
-            payload[extra_key] = 1
+        for extra_key in conf.get('sub_entries', []):
+            payload[extra_key] = self.create_sub_entry(extra_key, \
+                            inventory.get('manufacturer', 'Manufacturer Attribute Missing'), None)
 
         response = self.request(conf['url'], "POST", payload)
-        print(f"{CC.OKBLUE} *{CC.ENDC} New {key} {value} created in Netbox")
-        new_id = response['id']
-        self.cache[key][value] = new_id
+        print(f"{CC.OKBLUE} *{CC.ENDC} New {endpoint} {value} created in Netbox")
+        new_id = response.get('id')
+        if not new_id:
+            print(response)
+            raise ValueError("Invalid Response from Netbox")
+        self.cache[endpoint][value] = new_id
         return new_id
 #.
 #   .-- Get Device Payload
@@ -204,15 +211,18 @@ class SyncNetbox(Plugin):
         ]
         # Add custom variables who match to keyload
         for key in custom_rules:
+            if key.endswith("_sync"):
+                # Sync attribute by value of given tag
+                # Needs to be first since we need nb_ in keyname
+                endpoint_name = key[3:-5]
+                needed_entry = inventory.get(custom_rules.get(key), "Not defined")
+                payload[endpoint_name] = self.create_sub_entry(endpoint_name,
+                                                                needed_entry, inventory)
+
             if key.startswith('nb_'):
                 key = key[3:]
             if key in payload:
                 payload[key] = custom_rules.get(key)
-            if key.endswith("_sync"):
-                # Sync attribute by value of given tag
-                real_key = key[:-5]
-                wanted = inventory.get(custom_rules.get(key), "Not defined")
-                payload[real_key] = self.uppsert_element(real_key, wanted)
 
         # Add Inventory Variables we have a remap entry for
         for key in inventory:
@@ -409,12 +419,10 @@ class SyncNetbox(Plugin):
                 continue
             custom_rules = self.get_host_data(db_host, all_attributes['all'])
 
-            attributes = all_attributes['filtered']
-
             process = 100.0 * counter / total
             print(f"\n{CC.HEADER}({process:.0f}%) {hostname}{CC.ENDC}")
 
-            payload = self.get_payload(db_host, custom_rules, attributes)
+            payload = self.get_payload(db_host, custom_rules, all_attributes['all'])
             url = 'dcim/devices/'
             found_hosts.append(hostname)
             if hostname in current_netbox_devices:
