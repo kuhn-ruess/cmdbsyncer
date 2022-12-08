@@ -109,7 +109,7 @@ class CiscoDNA():
           'speed': '1000000',
           'status': 'up',
           'vlanId': '835',
-          'voiceVlan': ''      Get Interfaces
+          'voiceVlan': ''
         """
         inventory_attributes = [
             'portName',
@@ -120,6 +120,10 @@ class CiscoDNA():
             'name',
             'interfaceType',
             'macAddress',
+            'speed',
+            'duplex',
+            'portMode',
+            'vlanId',
         ]
         token = self.get_auth_token()
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
@@ -204,6 +208,10 @@ class CiscoDNA():
             'series',
             'serialNumber',
             'platformId',
+            'location',
+            'locationName',
+            'role',
+            'softwareType',
 
         ]
         token = self.get_auth_token()

@@ -71,7 +71,11 @@ class SyncNetbox(Plugin):
                 # Checkmk gives no json response here, so we directly return
                 return True, response.headers
 
-            response_json = response.json()
+            try:
+                response_json = response.json()
+            except:
+                print(response.text)
+                raise
             if 'results' in response_json:
                 results = []
                 results += response_json['results']
@@ -161,27 +165,27 @@ class SyncNetbox(Plugin):
           "name": db_host.hostname,
           "device_type": 1,
           "device_role": 1,
-          "tenant": 1,
-          "platform": 1,
-          "serial": "string",
+          "tenant": None,
+          "platform": None,
+          "serial": None,
           #"asset_tag": "string",
           "site": 1,
-          "location": 1,
-          "rack": 1,
+          #"location": None,
+          #"rack": None,
           #"position": 0.5,
-          #"face": "front",
+          "face": None,
           #"parent_device": {
           #  "name": "string"
           #},
           #"status": "offline",
           #"airflow": "front-to-rear",
-          #"primary_ip4": 0,
-          #"primary_ip6": 0,
+          "primary_ip4": None,
+          "primary_ip6": None,
           #"cluster": 0,
           #"virtual_chassis": 0,
           #"vc_position": 255,
           #"vc_priority": 255,
-          #"comments": "string",
+          "comments": None,
           #"local_context_data": {},
           #"tags": [
           #  {
@@ -215,6 +219,11 @@ class SyncNetbox(Plugin):
             if key in keys_from_inventory:
                 payload[key]= inventory.get(key)
 
+        keys = list(payload.keys())
+        for key in keys:
+            if not payload[key]:
+                del payload[key]
+
         payload['custom_fields'] = {
             'cmdbsyncer_id': str(self.config['_id']),
         }
@@ -247,6 +256,23 @@ class SyncNetbox(Plugin):
 
         # @Todo: Detect Type:
         interface_type = "other"
+        if if_attributes['interfaceType'] == "Virtual":
+            interface_type = 'virtual'
+
+
+        duplex_modes = {
+            'FullDuplex' : 'full',
+            'HalfDuplex' : 'half',
+        }
+        duplex_mode = duplex_modes.get(if_attributes['duplex'], 'auto')
+
+        access_modes = {
+            'access': 'access',
+            'trunk': 'tagged',
+        }
+        access_mode = access_modes.get(if_attributes['portMode'])
+
+        interface_speed = int(if_attributes['speed'])
 
         payload = {
           "device": host_id,
@@ -259,12 +285,11 @@ class SyncNetbox(Plugin):
           #"bridge": 0,
           #"lag": 0,
           "mtu": int(if_attributes['mtu']),
-          #"speed": 2147483647,
-          #"duplex": "half",
+          "speed": interface_speed,
+          "duplex": duplex_mode,
           #"wwn": "string",
           #"mgmt_only": true,
           "description": if_attributes['description'],
-          #"mode": "access",
           #"rf_role": "ap",
           #"rf_channel": "2.4g-1-2412-22",
           #"poe_mode": "pd",
@@ -296,6 +321,8 @@ class SyncNetbox(Plugin):
         }
         if if_attributes['macAddress']:
             payload['mac_address'] = if_attributes['macAddress']
+        if access_mode:
+            payload["mode"] =  access_mode
         if self.print_debug:
             print(payload)
         return payload
@@ -336,7 +363,7 @@ class SyncNetbox(Plugin):
         """
         Update Interfaces based on Attributes
         """
-        url = f'/dcim/interfaces?device_id={host_id}'
+        url = f'dcim/interfaces?device_id={host_id}'
         device_interfaces = []
         for entry in self.request(url, "GET"):
             device_interfaces.append(entry['display'])

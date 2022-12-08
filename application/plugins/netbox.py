@@ -90,7 +90,7 @@ def netbox_host_debug(hostname):
 
     rules = load_rules()
 
-    syncer = SyncNetbox()
+    syncer = SyncNetbox(False)
     syncer.debug = True
     rules['filter'].debug = True
     syncer.filter = rules['filter']
