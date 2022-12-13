@@ -125,10 +125,9 @@ admin.add_sub_category(name="Netbox", parent_name="Rules")
 
 from application.modules.netbox.views import NetboxCustomAttributesView
 from application.modules.netbox.models import NetboxCustomAttributes, \
-                                                NetboxRewriteAttributeRule, NetboxFilterRule
+                                                NetboxRewriteAttributeRule
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
-admin.add_view(FiltereModelView(NetboxFilterRule, name="Filter", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
                                     name="Custom Attributes", category="Netbox"))
 #.
