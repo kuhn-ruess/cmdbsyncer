@@ -212,6 +212,7 @@ class CiscoDNA():
             'locationName',
             'role',
             'softwareType',
+            'managementIpAddress',
 
         ]
         token = self.get_auth_token()

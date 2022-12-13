@@ -11,10 +11,8 @@ from application.modules.debug import ColorCodes, attribute_table
 from application.helpers.get_account import get_account_by_name
 
 from application.modules.rule.rewrite import Rewrite
-from application.modules.rule.filter import Filter
 
-from application.modules.netbox.models import NetboxCustomAttributes, NetboxRewriteAttributeRule,\
-                                              NetboxFilterRule
+from application.modules.netbox.models import NetboxCustomAttributes, NetboxRewriteAttributeRule
 from application.modules.netbox.rules import NetboxVariableRule
 from application.modules.netbox.syncer import SyncNetbox
 
@@ -22,8 +20,7 @@ def load_rules():
     """
     Cache all needed Rules for operation
     """
-    attribute_filter = Filter()
-    attribute_filter.rules = NetboxFilterRule.objects(enabled=True).order_by('sort_field')
+    attribute_filter = False
 
     attribute_rewrite = Rewrite()
     attribute_rewrite.rules = \

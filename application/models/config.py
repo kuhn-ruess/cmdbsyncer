@@ -9,4 +9,3 @@ class Config(db.Document):
 
     export_labels_list = db.ListField(db.StringField())
     export_inventory_list = db.ListField(db.StringField())
-

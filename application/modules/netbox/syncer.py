@@ -117,31 +117,57 @@ class SyncNetbox(Plugin):
         Returns the Netbox Entry ID of given value
         directly or creates it first
         """
-        value = value.lower()
-
         endpoints = {
             'platform': {'url': 'dcim/platforms/',
-                         'name_tag': 'name'},
+                         'name_tag': 'name',
+                         'fallback': 'CMDB Syncer Not defined',
+                        },
             'device_type': {'url': 'dcim/device-types/',
                             'name_tag': 'model',
-                            'sub_entries': ['manufacturer']},
+                            'sub_entries': ['manufacturer'],
+                            'fallback': 'CMDB Syncer Not defined',
+                           },
             'device_role': {'url': 'dcim/device-roles/',
-                            'name_tag': 'name'},
+                            'name_tag': 'name',
+                            'fallback': 'CMDB Syncer Not defined',
+                           },
             'manufacturer': {'url': 'dcim/manufacturers/',
-                            'name_tag': 'name'},
+                            'name_tag': 'name',
+                            'fallback': 'CMDB Syncer Not defined',
+                            },
+            'primary_ip4': {'url': 'ipam/ip-addresses/',
+                            'name_tag': 'address',
+                            'fallback': None,
+                            'split_needle': "/",
+                           },
+            'primary_ip6': {'url': 'ipam/ip-addresses/',
+                            'name_tag': 'address',
+                            'fallback': None,
+                           },
         }
 
         conf = endpoints[endpoint]
+        if not value:
+            fallback = conf['fallback']
+            print(f"{CC.FAIL} *{CC.ENDC} {endpoint} invalid Value: {value}, Fallback to {fallback}")
+            if not fallback:
+                return None
+            value = fallback
+        value = value.lower()
+
+
 
         print(f"{CC.OKCYAN} *{CC.ENDC} Attribute: {endpoint}:{value} will be synced")
         if not self.cache.get(endpoint):
-            print(f"{CC.OKGREEN}   -- {CC.ENDC}build cache for {endpoint}")
+            print(f"{CC.OKGREEN} ** {CC.ENDC}build cache for {endpoint}")
             self.cache[endpoint] = {}
             for entry in self.request(conf['url'], "GET"):
                 self.cache[endpoint][entry['display'].lower()] = entry['id']
 
         # FIND Data and Return in that case
         for entry_name, entry_id in self.cache[endpoint].items():
+            if spliter := conf.get('split_needle'):
+                entry_name = entry_name.split(spliter)[0]
             if entry_name == value:
                 return entry_id
 
@@ -159,7 +185,7 @@ class SyncNetbox(Plugin):
         new_id = response.get('id')
         if not new_id:
             print(response)
-            raise ValueError("Invalid Response from Netbox")
+            raise ValueError(f"Invalid Response from Netbox for {value}")
         self.cache[endpoint][value] = new_id
         return new_id
 #.
@@ -215,7 +241,7 @@ class SyncNetbox(Plugin):
                 # Sync attribute by value of given tag
                 # Needs to be first since we need nb_ in keyname
                 endpoint_name = key[3:-5]
-                needed_entry = inventory.get(custom_rules.get(key), "Not defined")
+                needed_entry = inventory.get(custom_rules.get(key))
                 payload[endpoint_name] = self.create_sub_entry(endpoint_name,
                                                                 needed_entry, inventory)
 
@@ -442,7 +468,11 @@ class SyncNetbox(Plugin):
                 ### Create
                 print(f"{CC.OKGREEN} *{CC.ENDC} Create Host")
                 create_response = self.request(url, "POST", payload)
-                host_netbox_id = create_response['id']
+                host_netbox_id = create_response.get('id')
+                if not host_netbox_id:
+                    print(payload)
+                    print(create_response)
+                    raise Exception("Cannot create Host")
             if 'update_interfaces' in custom_rules:
                 self.update_interfaces(host_netbox_id, all_attributes['all'])
 
