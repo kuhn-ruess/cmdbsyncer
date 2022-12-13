@@ -35,8 +35,6 @@ class Host(db.Document):
 
     available = db.BooleanField()
 
-    last_export = db.DateTimeField()
-
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
 
