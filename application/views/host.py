@@ -186,17 +186,17 @@ class HostModelView(DefaultModelView):
     #column_extra_row_actions = [LinkRowAction('fa fa-heartbeat', '/debug_rules?hostid={row_id}')]
 
 
-    @action('force_update', 'Force Update')
-    def action_update(self, ids):
-        """
-        Set force Update Attribute
-        """
-        for host_id in ids:
-            host = Host.objects.get(id=host_id)
-            host.force_update = True
-            host.save()
-        flash(f"Updated {len(ids)} hosts")
-        return self.index_view()
+    #@action('force_update', 'Force Update')
+    #def action_update(self, ids):
+    #    """
+    #    Set force Update Attribute
+    #    """
+    #    for host_id in ids:
+    #        host = Host.objects.get(id=host_id)
+    #        host.force_update = True
+    #        host.save()
+    #    flash(f"Updated {len(ids)} hosts")
+    #    return self.index_view()
 
     def is_accessible(self):
         """ Overwrite """
