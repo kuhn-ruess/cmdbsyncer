@@ -1,7 +1,7 @@
 """
 Commands to handle Checkmk Sync
 """
-#pylint: disable=too-many-arguments, too-many-statements, consider-using-get
+#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 import click
 from mongoengine.errors import DoesNotExist
 from application.modules.checkmk.syncer import SyncCMK2
@@ -29,7 +29,8 @@ def load_rules():
     attribute_filter.rules = CheckmkFilterRule.objects(enabled=True).order_by('sort_field')
 
     attribute_rewrite = Rewrite()
-    attribute_rewrite.rules = CheckmkRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+    attribute_rewrite.rules = \
+                    CheckmkRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
 
     checkmk_rules = CheckmkRule()
     checkmk_rules.rules = CheckmkRuleModel.objects(enabled=True).order_by('sort_field')
@@ -39,7 +40,27 @@ def load_rules():
         'actions': checkmk_rules
     }
 
+#   . -- Command: Show Hosts
+@cli_cmk.command('show_hosts')
+@click.option("--disabled_only", is_flag=True)
+def show_hosts(disabled_only=False):
+    """Return List of Hosts we sync to Checkmk"""
+    rules = load_rules()
+    syncer = SyncCMK2()
+    syncer.filter = rules['filter']
+    syncer.rewrite = rules['rewrite']
+    syncer.actions = rules['actions']
 
+
+    for db_host in Host.objects(available=True):
+        attributes = syncer.get_host_attributes(db_host)
+        if not attributes:
+            if disabled_only:
+                print(db_host.hostname)
+            continue
+        if not disabled_only:
+            print(db_host.hostname)
+#.
 #   .-- Command: Export Hosts
 @cli_cmk.command('export_hosts')
 @click.argument("account")
