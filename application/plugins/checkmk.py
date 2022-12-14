@@ -120,10 +120,10 @@ def debug_cmk_rules(hostname):
     attribute_table("Filtered Labels for Checkmk", attributes['filtered'])
     attribute_table("Actions", actions)
     additional_attributes = {}
-    for custom_attr in actions['custom_attributes']:
+    for custom_attr in actions.get('custom_attributes', []):
         additional_attributes.update(custom_attr)
 
-    for additional_attr in actions['attributes']:
+    for additional_attr in actions.get('attributes',[]):
         if attr_value := attributes['all'].get(additional_attr):
             additional_attributes[additional_attr] = attr_value
     attribute_table("Custom Attributes", additional_attributes)
