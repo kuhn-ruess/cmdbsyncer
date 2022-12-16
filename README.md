@@ -25,7 +25,7 @@ This is runs a Development Version which you can use to test everthing
   - Attribute Rewrites
   - Filters
   - Action Rules
-  
+
 ## Modules
 ### Checkmk
 - Manges full Host Lifecycle (creation, labels, folders, deletion)
@@ -54,5 +54,4 @@ This is runs a Development Version which you can use to test everthing
 - Add Addional Informationen from CSV Files to your Hosts (eg. Overwrite IP Addresses)
 
 ## Other
-- [Documentation](https://github.com/Bastian-Kuhn/cmdb-syncer/wiki)
-- [Roadmap](https://github.com/Bastian-Kuhn/cmdb-syncer/wiki/Roadmap)
+- [Documentation](https://cmdb-syncer.readthedocs.io/en/latest/)
