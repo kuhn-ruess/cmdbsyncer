@@ -4,16 +4,9 @@ Rule Based and Modular System to syncronize Hosts into and between Checkmk, Netb
 Main Goal is the complete Organization of the Hosts based on CMDB Systems
 
 
-![Rules](https://user-images.githubusercontent.com/899110/201333967-2d7f3f35-cc69-4cad-931f-1da096f94056.png)
-![Debug Options](https://user-images.githubusercontent.com/899110/201333725-d699d50f-a5eb-4539-a3af-3db3e0647ebb.png)
+![Rules](img/index_rules.png)
+![Debug Options](img/index_rules_debug.png)
 
-## Quickstart
-I recommend docker-compose:
-- checkout the Repo
-- run ./helper up
-- run ./helper create_user 'mail@address.org' (to create login)
-- Login to the Interface: http://your-host:5003
-This is runs a Development Version which you can use to test everthing
 
 ## Main Functions
 - Web Interface with Login, 2FA and User management
@@ -25,7 +18,7 @@ This is runs a Development Version which you can use to test everthing
   - Attribute Rewrites
   - Filters
   - Action Rules
-## Modules
+## Modules and Functions
 ### Checkmk
 - Manges full Host Lifecycle (creation, labels, folders, deletion)
 - Full management of Checkmk Folders

@@ -1,8 +1,12 @@
 site_name: Cmdbsyncer Documentation
 nav:
   - Home: index.md
-  - Setup: setup.md
-  - Principles: principles.md
-  - Checkmk: checkmk.md
-  - Ansible: ansible.md
+  - "First Steps":
+      - Setup: setup.md
+      - Principles: principles.md
+  - "Modules":
+      - Checkmk: checkmk.md
+      - Ansible: ansible.md
+      - Cisco Dna: cisco-dna.md
+      - Netbox: netbox.md
 theme: readthedocs
