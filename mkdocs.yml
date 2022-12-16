@@ -4,8 +4,8 @@ nav:
   - "First Steps":
       - Setup:
         - Docker: basics/setup_docker.md
-        - Ubuntu: basics/setup_ubuntu.md
-        - RedHat: basics/setup_redhat.md
+        - Checkout the Code: basics/checkout_code.md
+        - UWSGI and Apache: basics/uwsgi_apache.md
         - Development: basics/setup_development.md
       - Principles:
         - Import Systems: basics/import.md
@@ -23,8 +23,13 @@ nav:
           - Groups Management: checkmk/groups_management.md
           - Rules Management: checkmk/rules_management.md
           - Folder Pools: checkmk/folder_pools.md
-          - Cookbook: checkmk/cookbook.md
+          - Cookbook:
+              - Custom Checkmk Attributes: checkmk/cmk_attributes.md
       - Ansible: ansible/index.md
       - Cisco Dna: ciscodna/index.md
       - Netbox: netbox/index.md
+  - "Advanced":
+     - Build your own Plugin: advanced/own_plugins.md
+     - Plugin API: advanced/plugin_api.md
+     - Background Jobs: advanced/background_jobs.md
 theme: readthedocs
