@@ -8,6 +8,22 @@ from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
 from application.modules.checkmk import poolfolder
 
+class CheckmkRulesetRule(Rule): # pylint: disable=too-few-public-methods
+    """
+    Rule to create Rulesets in Checkmk
+    """
+
+    name = "Checkmk -> CMK Rules Managment"
+
+
+    def add_outcomes(self, rule_outcomes, outcomes):
+        """
+        Add matching Rules to the set
+        """
+        for outcome in rule_outcomes:
+            outcomes.update(outcome)
+        return outcomes
+
 class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     """
     Class to get actions for rule

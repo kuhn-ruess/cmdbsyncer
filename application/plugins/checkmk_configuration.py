@@ -9,6 +9,8 @@ from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
 from application.models.host import Host
 from application.modules.checkmk.config_sync import SyncConfiguration
+from application.modules.checkmk.rules import CheckmkRulesetRule
+from application.modules.checkmk.models import CheckmkRuleMngmt
 
 
 from application.plugins.checkmk import load_rules
@@ -30,7 +32,9 @@ def export_cmk_rules(account):
             syncer.config = target_config
             syncer.filter = rules['filter']
             syncer.rewrite = rules['rewrite']
-            syncer.actions = rules['actions']
+            actions = CheckmkRulesetRule()
+            actions.rules = CheckmkRuleMngmt.objects(enabled=True)
+            syncer.actions = actions
             syncer.export_cmk_rules()
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
@@ -48,14 +52,14 @@ def export_cmk_groups(account, test_run):
     try:
         target_config = get_account_by_name(account)
         if target_config:
-            rules = load_rules()
+            #rules = load_rules()
             syncer = SyncConfiguration()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.config = target_config
-            syncer.filter = rules['filter']
-            syncer.rewrite = rules['rewrite']
-            syncer.actions = rules['actions']
+            #syncer.filter = rules['filter']
+            #syncer.rewrite = rules['rewrite']
+            #syncer.actions = rules['actions']
             syncer.export_cmk_groups(test_run)
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
