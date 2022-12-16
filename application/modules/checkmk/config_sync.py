@@ -64,45 +64,20 @@ class SyncConfiguration(CMK2):
         Export config rules to checkmk
         """
         messages = []
+        print(f"\n{CC.HEADER}Build needed Rules{CC.ENDC}")
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
+
+        for db_host in Host.objects(available=True):
+            attributes = self.get_host_attributes(db_host)
+            if not attributes:
+                continue
+            next_actions = self.actions.get_outcomes(db_host, attributes['all'])
+            if next_actions:
+                print(next_actions)
 
 
 
-        print(f"\n{CC.HEADER}Read Internal Configuration{CC.ENDC}")
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attributes")
-        attributes = self.parse_attributes()
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
-        groups = {}
-        prefixes = {
-            'host_contactgroups': f'cmdbsyncer_cg_{self.account_id}_',
-            'host_groups': f'cmdbsyncer_hg_{self.account_id}_'
-        }
-        for rule in CheckmkRuleMngmt.objects(enabled=True):
-            outcome = rule.outcome
-            cmk_group_name = rule.rule_group
-            groups.setdefault(cmk_group_name, [])
-            regex = re.compile(outcome.regex)
-            prefix = ''
-            if outcome.group_created_by_syncer:
-                prefix = prefixes[cmk_group_name]
-            if outcome.foreach_type == 'value':
-                # Get ALL labels which have given value
-                for label_value in attributes[1].get(outcome.foreach, []):
-                    label_value = regex.findall(label_value)[0]
-                    # Replace not allowed chars
-                    label_value = self.replace(label_value)
-                    group_name = prefix + outcome.template_group.replace('$1', label_value)
-                    label_data = outcome.template_label.replace('$1', label_value)
-                    if (group_name, label_data)  not in groups[cmk_group_name]:
-                        groups[cmk_group_name].append((group_name, label_data))
-            elif outcome.foreach_type == 'label':
-                for label_key in attributes[0].get(outcome.foreach, []):
-                    label_key = regex.findall(label_key)[0]
-                    label_key = self.replace(label_key)
-                    group_name = prefix + outcome.template_group.replace('$1', label_key)
-                    label_data = outcome.template_label.replace('$1', label_key)
-                    if (group_name, label_data) not in groups[cmk_group_name]:
-                        groups[cmk_group_name].append((group_name, label_data))
-
+        return
         print(f"{CC.OKGREEN} -- {CC.ENDC} Clean existing CMK configuration")
         for cmk_group_name in prefixes:
             url = f"domain-types/rule/collections/all?ruleset_name={cmk_group_name}"

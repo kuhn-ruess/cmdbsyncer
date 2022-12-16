@@ -8,7 +8,7 @@ from flask_login import current_user
 from application.views.default import DefaultModelView
 
 from application.modules.rule.views import RuleModelView
-from application.modules.checkmk.models import action_outcome_types, cmk_mngmt_groups
+from application.modules.checkmk.models import action_outcome_types
 
 def _render_checkmk_outcome(_view, _context, model, _name):
     """
@@ -64,14 +64,18 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
     """
     Render Group Outcome
     """
-    entry = model.outcome
     html = "<table width=100%>"\
-           f"<tr><th>Foreach</th><td>{entry.foreach_type}</td></tr>" \
-           f"<tr><th>Value</th><td>{entry.foreach}</td></tr>" \
-           f"<tr><th>Regex</th><td>{entry.regex}</td></tr>" \
-           f"<tr><th>Label Template</th><td>{entry.template_label}</td></tr>" \
-           f"<tr><th>Group Template</th><td>{entry.template_group}</td></tr>"\
-           "</table>"
+           "<tr><td colspan=2>"
+    for rule in model.outcomes:
+        html += "<table width=100%>"\
+               f"<tr><th>Folder</th><td>{rule.folder}</td></tr>" \
+               f"<tr><th>Folder Index</th><td>{rule.folder_index}</td></tr>" \
+               f"<tr><th>Comment</th><td>{rule.comment}</td></tr>" \
+               f"<tr><th>Value Template</th><td>{rule.value_template}</td></tr>" \
+               f"<tr><th>Condtion Label Template</th><td>{rule.condition_label_template}</td></tr>"\
+               "</table>"
+    html += "</td></tr>"\
+    "</table>"
     return Markup(html)
 
 class CheckmkGroupRuleView(RuleModelView):
@@ -123,6 +127,19 @@ class CheckmkMngmtRuleView(RuleModelView):
         })
 
         super().__init__(model, **kwargs)
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Cleanup Inputs
+        """
+        for rule in model.outcomes:
+            if rule.value_template[0] == '"':
+                rule.value_template = rule.value_template[1:]
+            if rule.value_template[-1] == '"':
+                rule.value_template = rule.value_template[:-1]
+            rule.value_template = rule.value_template.replace('\\n',' ')
+
+        return super().on_model_change(form, model, is_created)
 
 class CheckmkFolderPoolView(DefaultModelView):
     """

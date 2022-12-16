@@ -113,21 +113,16 @@ class CheckmkGroupRule(db.Document):
 #.
 #   .-- Checkmk Rule Mngmt
 
-cmk_mngmt_groups = [
- ('host_contactgroups', "Contact Groups"),
- ('host_groups', "Host Groups"),
-]
 
 class RuleMngmtOutcome(db.EmbeddedDocument):
     """
     Checkmk Rule Managment Outcome
     """
-    foreach_type = db.StringField(choices=foreach_types)
-    foreach = db.StringField(required=True)
-    regex = db.StringField(required=True)
-    template_label = db.StringField(required=True)
-    template_group = db.StringField(required=True)
-    group_created_by_syncer = db.BooleanField(default=False)
+    folder = db.StringField(required=True)
+    folder_index = db.IntField(default=0)
+    comment = db.StringField()
+    value_template = db.StringField(required=True)
+    condition_label_template = db.StringField(required=True)
 
     meta = {
         'strict': False,
@@ -138,13 +133,20 @@ class CheckmkRuleMngmt(db.Document):
     Manage Checkmk Rules
     """
     name = db.StringField()
-    rule_group = db.StringField(choices=cmk_mngmt_groups)
-    outcome = db.EmbeddedDocumentField(RuleMngmtOutcome)
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    render_full_conditions = db.StringField() # Helper for Preview
+
+    ruleset = db.StringField()
+    outcomes = db.ListField(db.EmbeddedDocumentField(RuleMngmtOutcome))
     render_cmk_rule_mngmt = db.StringField()
+    last_match = db.StringField(default=False)
     enabled = db.BooleanField()
     meta = {
         'strict': False
     }
+
 #.
 #   .-- Folder Pools
 class CheckmkFolderPool(db.Document):
