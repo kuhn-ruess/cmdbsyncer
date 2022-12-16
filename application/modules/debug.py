@@ -9,9 +9,14 @@ from rich import box
 
 def attribute_table(title, data):
     """
-    Write a nice Table
+    Print nice looking Debug  Table
+
+    Args:
+        title (string): Title of Table
+        data (dict): Key Value Pairs
     """
-    table = Table(title=title, box=box.ASCII_DOUBLE_HEAD, header_style="bold blue", title_style="yellow", width=90)
+    table = Table(title=title, box=box.ASCII_DOUBLE_HEAD,
+                    header_style="bold blue", title_style="yellow", width=90)
     table.add_column("Attribute Name", style="cyan")
     table.add_column("Attribute Value", style="magenta")
     for key, value in data.items():
@@ -24,8 +29,19 @@ def attribute_table(title, data):
 
 class ColorCodes(): #pylint: disable=too-few-public-methods
     """
-    Color Defentions (found in Stack Overflow)
-    https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
+    Color Definitions
+
+    Methods:
+        - HEADER: Print Header
+        - OKBLUE: Blue Color
+        - OKGREEN: Green Color
+        - OKCYAN: Cyan Color
+        - WARNING: Warning
+        - FAIL: Failure
+        - BOLD: Bold
+        - UNDERLINE: Underline
+        - ENDC: End String
+
     """
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -39,7 +55,11 @@ class ColorCodes(): #pylint: disable=too-few-public-methods
 
 def debug(debug_mode, text):
     """
-    Simple Debug Print wrapper
+    Debug Print Wrapper
+
+    Args:
+       debug_mode (bool): Defines if the ouput should be printed
+       text (string): Output Text
     """
     if debug_mode:
         print(f"{ColorCodes.WARNING} * {ColorCodes.ENDC} {text}")

@@ -15,7 +15,7 @@ class Log():
         """
         self.log_func = log_func
 
-    def log_function(self, message):
+    def _log_function(self, message):
         """
         Write entries do db
         """
@@ -39,7 +39,7 @@ class Log():
 
     def log(self, message, source="SYSTEM", details=False):
         """ LOG Messages"""
-        self.log_function({'message' : message,
+        self._log_function({'message' : message,
                            'source': source,
                            'traceback': traceback.format_exc(),
                            'details': details})

@@ -32,4 +32,9 @@ nav:
      - Build your own Plugin: advanced/own_plugins.md
      - Plugin API: advanced/plugin_api.md
      - Background Jobs: advanced/background_jobs.md
+
 theme: readthedocs
+
+plugins:
+- search
+- mkdocstrings
