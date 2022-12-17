@@ -25,7 +25,7 @@ nav:
           - Groups Management: checkmk/groups_management.md
           - Rules Management: checkmk/rules_management.md
           - Folder Pools: checkmk/folder_pools.md
-          - Cookbook:
+          - Recipes:
               - Custom Checkmk Attributes: checkmk/cmk_attributes.md
       - Cisco Dna: ciscodna/index.md
       - Netbox: netbox/index.md
