@@ -11,11 +11,11 @@ from application.modules.plugin import Plugin
 from application.modules.debug import ColorCodes
 
 @app.cli.group(name='csv')
-def cli_csv():
+def _cli_csv():
     """CSV related commands"""
 
 
-@cli_csv.command('compare_hosts')
+@_cli_csv.command('compare_hosts')
 @click.argument("csv_path")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
@@ -23,6 +23,12 @@ def cli_csv():
 def compare_csv(csv_path, delimiter, hostname_field, label_filter):
     """
     Check which Hosts in CSV are not in DB
+
+    Args:
+        csv_path (string): Path to CSV
+        delimiter (string): Field delimiter. Default: ;
+        hostname_field (string): Name of Colum where Hostname is found Default: host
+        label_filter (string): Filder for given Labelname
     """
     #pylint: disable=no-member, consider-using-generator
     if label_filter:
@@ -41,13 +47,20 @@ def compare_csv(csv_path, delimiter, hostname_field, label_filter):
             if hostname not in host_list:
                 print(hostname)
 
-@cli_csv.command('import_hosts')
+@_cli_csv.command('import_hosts')
 @click.argument("csv_path")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 def import_csv(csv_path, delimiter, hostname_field):
     """
-    Import and Maintane Hosts from given CSV
+    Import Hosts from CSV and make File the Master
+    Every CSV column, other then the host column, will translate
+    into key:value attributes.
+
+    Args:
+        csv_path (string): Path to CSV
+        delimiter (string): Field delimiter. Default: ;
+        hostname_field (string): Name of Colum where Hostname is found Default: host
     """
     #pylint: disable=no-member, consider-using-generator
     filename = csv_path.split('/')[-1]
@@ -65,14 +78,22 @@ def import_csv(csv_path, delimiter, hostname_field):
             host_obj.set_account(f"csv_{filename}", filename)
             host_obj.save()
 
-@cli_csv.command('inventorize_hosts')
+@_cli_csv.command('inventorize_hosts')
 @click.argument("csv_path")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--key", default='csv')
 def inventorize_csv(csv_path, delimiter, hostname_field, key):
     """
-    Do inventory for fields in given csv
+    Add Inventory Information to hosts.
+    Source is a CSV. Every other Column then the host Column, will translate
+    into key:value attributes.
+
+    Args:
+        csv_path (string): Path to CSV
+        delimiter (string): Field delimiter. Default: ;
+        hostname_field (string): Name of Colum where Hostname is found Default: host
+        key (string): Group Name for Inventory data. Default: csv
     """
     #pylint: disable=no-member, consider-using-generator
     filename = csv_path.split('/')[-1]

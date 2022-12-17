@@ -37,6 +37,7 @@ class Host(db.Document):
 
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
+    last_export = db.DateTimeField()
 
 
     raw = db.StringField()
@@ -57,8 +58,11 @@ class Host(db.Document):
     @staticmethod
     def get_host(hostname, create=True):
         """
-        Return existing Host or
-        create a object and return it
+        Returns the Host Object.
+        Creates if not yet existing.
+
+        Args:
+            create (bool): Create a object if not yet existing (default)
         """
         try:
             return Host.objects.get(hostname=hostname)
@@ -70,15 +74,6 @@ class Host(db.Document):
             new_host.hostname = hostname
             return new_host
         return False
-
-
-    def set_export_problem(self, message):
-        """
-        Mark Host as Export problem
-        """
-        self.export_problem = True
-        self.add_log(message)
-        self.save()
 
     def lock_to_folder(self, folder_name):
         """
@@ -99,7 +94,11 @@ class Host(db.Document):
 
     def replace_label(self, key, value):
         """
-        Replace given Label name with value
+        Replace or Create a single Label
+
+        Args:
+            key (string): Label Name
+            value (string): Label Value
         """
         hit = False
         for label in self.labels:
@@ -111,21 +110,30 @@ class Host(db.Document):
 
     def set_labels(self, label_dict):
         """
-        Overwrites the Labels on this object
+        Overwrite all Labels on host
+
+        Args:
+            label_dict (dict): Key:Value pairs of labels
         """
         self.labels=label_dict
 
     def get_labels(self):
         """
-        Return Labels
-        in Dict Format
+        Return Hosts Labels dict.
         """
         return self.labels
 
 
     def update_inventory(self, key, new_data):
         """
-        Overwrite given Values only
+        Updates all inventory entries, with names who starting with given key.
+        Ones not existing any more in new_data will be removed.
+        !! Make sure that the keys of new_data already are prefixt !!
+
+
+        Args:
+           key (string): Identifier for Inventory Attributes
+           new_data (dict): Key:Value of Attributes. Name must start with key
         """
         # pylint: disable=unnecessary-comprehension
         # Prevent runtime error
@@ -137,8 +145,10 @@ class Host(db.Document):
 
     def get_inventory(self, key_filter=False):
         """
-        Return Hosts Inventory Data.
-        Used eg. for Ansible
+        Return all Inventory Data of Host.
+
+        Args:
+            key_filter (string): Filter for entries starting with this string
         """
         if key_filter:
             return {key: value for key, value in self.inventory.items() \
@@ -148,7 +158,12 @@ class Host(db.Document):
 
     def add_log(self, entry):
         """
-        Add a new Entry to the Host log
+        Add Log Entry to Host log.
+        Can be shown in Frontend in the Host View.
+
+
+        Args:
+            entry (string): Message
         """
         entries = self.log[:app.config['HOST_LOG_LENGTH']-1]
         date = datetime.datetime.now().strftime(app.config['TIME_STAMP_FORMAT'])
@@ -156,7 +171,12 @@ class Host(db.Document):
 
     def set_account(self, account_id, account_name):
         """
-        Set account Information
+        Mark Host with Account he was fetched with.
+        Prevent Overwrites if Host is importet from multiple sources.
+
+        Args:
+            account_id (string): UUID of Account entry
+            account_name (string): Name of account
         """
         if self.source_account_id and self.source_account_id != account_id:
             raise HostError(f"Host already importet by account {self.source_account_name}")
@@ -166,16 +186,14 @@ class Host(db.Document):
 
     def set_import_sync(self):
         """
-        Called always when we Update data
-        to this object on import
+        Mark that a sync for this host was needed to import
         """
         self.available = True
         self.last_import_sync = datetime.datetime.now()
 
     def set_import_seen(self):
         """
-        Call when seen on the import source,
-        even if no update happens
+        Mark that this host was found on import
         """
         self.available = True
         self.last_import_seen = datetime.datetime.now()
@@ -183,23 +201,26 @@ class Host(db.Document):
 
     def set_source_not_found(self):
         """
-        When not found anymore on source,
-        this will be set
+        Mark when host was not found anymore.
+        Exports will then ignore this system
         """
         self.available = False
         self.add_log("Not found on Source anymore")
 
     def set_export_sync(self):
         """
-        Mark that host was updated on Export Target
+        Mark that the host was updated on export
         """
         self.last_export = datetime.datetime.now()
         self.save()
 
     def need_import_sync(self, hours=24):
         """
-        Check if the host needs to be synced
-        from the import source
+        Check when the last sync on import happend,
+        and if a new sync is needed
+
+        Args:
+            hours (int): Time in which no update is needed
         """
         if not self.available:
             return True
@@ -213,8 +234,9 @@ class Host(db.Document):
 
     def need_update(self, hours=24*7):
         """
-        Check if we need to Update this host
-        on the target
+        Check if we want to force an Update on a possible Targe.
+        Args:
+            hours (int): Time in which no update is needed
         """
         last_export = self.last_export
         if not last_export:

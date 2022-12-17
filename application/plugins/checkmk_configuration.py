@@ -13,19 +13,24 @@ from application.modules.checkmk.rules import CheckmkRulesetRule
 from application.modules.checkmk.models import CheckmkRuleMngmt
 
 
-from application.plugins.checkmk import load_rules
+from application.plugins.checkmk import _load_rules
 
 
 
 #   .-- Command: Export Rulesets
 @cli_cmk.command('export_rules')
 @click.argument("account")
-def export_cmk_rules(account):
-    """Create Rules in Checkmk"""
+def export_rules(account):
+    """
+    Export all configured Rules to given Checkmk Installations
+
+    Args:
+        account (string): Name Account Config
+    """
     try:
         target_config = get_account_by_name(account)
         if target_config:
-            rules = load_rules()
+            rules = _load_rules()
             syncer = SyncConfiguration()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
@@ -47,12 +52,17 @@ def export_cmk_rules(account):
 @click.argument("account")
 @click.option('-t', '--test-run', is_flag=True)
 #pylint: disable=too-many-locals, too-many-branches
-def export_cmk_groups(account, test_run):
-    """Create Groups in Checkmk"""
+def export_groups(account, test_run):
+    """
+    Create Groups in Checkmk
+    Args:
+        account (string): Name Account Config
+        test_run (bool): Only Print Result
+    """
     try:
         target_config = get_account_by_name(account)
         if target_config:
-            #rules = load_rules()
+            #rules = _load_rules()
             syncer = SyncConfiguration()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
@@ -74,7 +84,10 @@ def export_cmk_groups(account, test_run):
 #pylint: disable=too-many-locals, too-many-branches
 def activate_changes(account):
     """
-    Activate Changes in given Instance
+    Activate Changes in given Checkmk Instance
+
+    Args:
+        account (string): Name Account Config
     """
     account_config = get_account_by_name(account)
     if account_config['typ'] != 'cmkv2':
@@ -102,9 +115,12 @@ def activate_changes(account):
 @cli_cmk.command('bake_and_sign_agents')
 @click.argument("account")
 #pylint: disable=too-many-locals, too-many-branches
-def bake_and_sign(account):
+def bake_and_sign_agents(account):
     """
-    Bake and Sign Agents for Instance
+    Bake and Sign Agents for given Checkmk Instance
+
+    Args:
+        account (string): Name Account Config
     """
     account_config = get_account_by_name(account)
     custom_config = {x['name']:x['value'] for x in account_config['custom_fields']}
@@ -135,9 +151,13 @@ def bake_and_sign(account):
 @cli_cmk.command('inventorize_hosts')
 @click.argument('account')
 #pylint: disable=too-many-locals
-def run_cmk2_inventory(account):
+def inventorize_hosts(account):
     """
-    Query CMK with Version  2.1p9 for Inventory Data
+    Do an Status Data inventory on given Checkmk Instance.
+    Requires CMK Version greater then 2.1p9
+
+    Args:
+        account (string): Name Account Config
     """
     inventory_target = [
         'site', 'inventory_failed','is_offline','tag_agent',

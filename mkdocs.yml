@@ -17,6 +17,8 @@ nav:
 
 
   - "Modules":
+      - Ansible: ansible/index.md
+      - CSV: csv/index.md
       - Checkmk:
           - Main: 'checkmk/index.md'
           - Export Rules: checkmk/export_rules.md
@@ -25,9 +27,9 @@ nav:
           - Folder Pools: checkmk/folder_pools.md
           - Cookbook:
               - Custom Checkmk Attributes: checkmk/cmk_attributes.md
-      - Ansible: ansible/index.md
       - Cisco Dna: ciscodna/index.md
       - Netbox: netbox/index.md
+      - SYS: sys/index.md
   - "Advanced":
      - Build your own Plugin: advanced/own_plugins.md
      - Plugin API: advanced/plugin_api.md
