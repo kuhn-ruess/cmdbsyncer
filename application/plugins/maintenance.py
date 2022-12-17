@@ -20,7 +20,7 @@ from application.models.config import Config
 
 
 @app.cli.group(name='sys', short_help="Syncer commands")
-def cli_sys():
+def _cli_sys():
     """Syncer Commands
 
     This Group contains all syncer related commands
@@ -28,10 +28,16 @@ def cli_sys():
 
 
 #   .-- Command: Maintanence
-@cli_sys.command('maintenance')
+@_cli_sys.command('maintenance')
 @click.argument("days")
 def maintenance(days):
-    """Run maintenance tasks"""
+    """
+    Run maintenance tasks
+    This includes deletion of old hosts.
+
+    Args:
+        days (int): Gracetime before host is deleted
+    """
     print(f"{ColorCodes.HEADER} ***** Run Tasks ***** {ColorCodes.ENDC}")
     print(f"{ColorCodes.UNDERLINE}Cleanup Hosts not found anymore{ColorCodes.ENDC}")
     now = datetime.datetime.now()
@@ -46,7 +52,7 @@ def maintenance(days):
         host.delete()
 #.
 #   .-- Command: Delete all Hosts
-@cli_sys.command('delete_all_hosts')
+@_cli_sys.command('delete_all_hosts')
 def delete_all_hosts():
     """
     Deletes All hosts from DB
@@ -62,8 +68,8 @@ def delete_all_hosts():
 
 #.
 #   .-- Command: Reset Folder Pools
-@cli_sys.command('reset_folder_pools')
-def delete_all_hosts():
+@_cli_sys.command('reset_folder_pools')
+def reset_folder_pools():
     """
     Reset Folder Pools Usage
     """
@@ -84,7 +90,7 @@ def delete_all_hosts():
 
 #.
 #   .-- Command: Show Accounts
-@cli_sys.command('show_accounts')
+@_cli_sys.command('show_accounts')
 def show_accounts():
     """Print list of all active accounts"""
 
@@ -93,10 +99,16 @@ def show_accounts():
 
 #.
 #   .-- Command: Create User
-@cli_sys.command('create_user')
+@_cli_sys.command('create_user')
 @click.argument("email")
 def seed_user(email):
-    """Create new user or overwrite user password"""
+    """
+    Create new user or overwrite user password
+   
+    Args:
+        email (string): E-Mail Address of User
+
+    """
 
     try:
         user = User.objects.get(email=email)
@@ -119,7 +131,7 @@ def seed_user(email):
     return 0
 #.
 #   .-- Command: Export Rules
-#@cli_sys.command('export_rules')
+#@_cli_sys.command('export_rules')
 #@click.argument("rule_model")
 #def export_rules(rule_model):
 #    """Export given Rule Model"""
@@ -128,9 +140,12 @@ def seed_user(email):
 #
 ##.
 #   .-- Command: self configure
-@cli_sys.command('self_configure')
+@_cli_sys.command('self_configure')
 def self_configure():
-    """Seed an Update system"""
+    """
+    Seed needed DB Changes or cleanup stuff.
+    Use if stated in docs after Update.
+    """
     print("Seed data if needed:")
     if not len(Config.objects()):
         conf = Config()

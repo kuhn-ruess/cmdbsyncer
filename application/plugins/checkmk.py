@@ -21,7 +21,7 @@ from application.modules.checkmk.models import CheckmkRule as CheckmkRuleModel
 
 from application.models.host import Host
 
-def load_rules():
+def _load_rules():
     """
     Cache all needed Rules for operation
     """
@@ -44,8 +44,14 @@ def load_rules():
 @cli_cmk.command('show_hosts')
 @click.option("--disabled_only", is_flag=True)
 def show_hosts(disabled_only=False):
-    """Return List of Hosts we sync to Checkmk"""
-    rules = load_rules()
+    """
+    Print List of all Hosts currently synced to Checkmk
+    Disabled_only means: All hosts not configured to sync to Checkmk
+
+    Args:
+        disabled_only (bool): Only not synced hosts
+    """
+    rules = _load_rules()
     syncer = SyncCMK2()
     syncer.filter = rules['filter']
     syncer.rewrite = rules['rewrite']
@@ -64,12 +70,17 @@ def show_hosts(disabled_only=False):
 #   .-- Command: Export Hosts
 @cli_cmk.command('export_hosts')
 @click.argument("account")
-def cmk_host_export(account):
-    """Add hosts to a CMK 2.x Installation"""
+def export_hosts(account):
+    """
+    Export Hosts to Checkmk
+
+    Args:
+        account (string): Name Account Config
+    """
     try:
         target_config = get_account_by_name(account)
         if target_config:
-            rules = load_rules()
+            rules = _load_rules()
             syncer = SyncCMK2()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
@@ -87,9 +98,14 @@ def cmk_host_export(account):
 #   .-- Command: Host Debug
 @cli_cmk.command('debug_host')
 @click.argument("hostname")
-def debug_cmk_rules(hostname):
-    """Show Rule Engine Outcome for given Host"""
-    rules = load_rules()
+def debug_host(hostname):
+    """
+    Debug Host Configuration
+
+    Args:
+        hostname (string): Name of Host
+    """
+    rules = _load_rules()
 
     syncer = SyncCMK2()
     syncer.debug = True
