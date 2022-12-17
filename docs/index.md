@@ -5,8 +5,8 @@ Rule Based and Modular System to syncronize Hosts into and between Checkmk, Netb
 Main Goal is the complete Organization of the Hosts based on CMDB Systems
 
 
-[Rules](img/index_rules.png)
-[Debug Options](img/index_rules_debug.png)
+![Rules](img/index_rules.png)
+![Debug Options](img/index_rules_debug.png)
 
 
 ## Main Functions
