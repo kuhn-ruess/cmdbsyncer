@@ -2,6 +2,8 @@ site_name: Cmdbsyncer Documentation
 nav:
   - Home: index.md
   - "First Steps":
+      - General:
+        - How it Works: basics/how_it_works.md
       - Setup:
         - Docker: basics/setup_docker.md
         - Checkout the Code: basics/checkout_code.md
@@ -11,9 +13,11 @@ nav:
         - Import Systems: basics/import.md
         - Export Systems: basics/export.md
         - Hosts, Labels and Inventory: basics/host_labels_inventory.md
+        - Conditions: basics/conditions.md
         - Custom Attributes: basics/custom_attributes.md
         - Rewrite Attributes: basics/rewrite_attributes.md
         - Filter: basics/filter.md
+        - Debug Rules: basics/debug_rules.md
 
 
   - "Modules":

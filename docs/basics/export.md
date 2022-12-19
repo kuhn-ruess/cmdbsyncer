@@ -1,0 +1,2 @@
+# Export
+Export is the Sync of CMDB Syncer Data to a target. Most likely is the Support for this target already included in the Syncer. Most users use Checkmk or Net box as target. But of course, it's possible to build export plugins in the same way as you build import Plugins. Also, Of course, they are more complicated, since they need more support for rules and want to have a Frontend integration.  
