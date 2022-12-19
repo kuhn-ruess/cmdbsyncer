@@ -41,7 +41,42 @@ action_outcome_types = [
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
     """
-    Checkmk Rule Outcome
+    Checkmk Export Rule Outcome
+
+
+    Options
+    =======
+
+    Move Host to specified Folder
+    -----------------------------
+    Hardcode a custom Folder Name in _action_param_ field.
+
+    Use Value of given Attribute Name as Folder
+    -------------------------------------------
+    Define an Attribute in _action_param_. The value of it, will be used
+    as a Folder name for the matching host
+
+    Use Attribute Name of given Attribute Value as Folder
+    -----------------------------------------------------
+    Same like the option before, but just Attribute Name and Attribute Value swapped.
+    So you can pick by the attributes value.
+
+    Use Pool Folder
+    ---------------
+    Please refer to the Folder Pool Documentation.
+
+    Create Checkmk-Attribute
+    ------------------------
+    The given Attribute Name will be sent as Checkmk Attribute. This way you can set
+    every Attribute you want like ipaddress of management board. Please refer to the documentation in
+    Recipes.
+
+    Create Custom Checkmk Attribute
+    -------------------------------
+    You can specify a new Attribute as key value pair, separated by double point.
+    You can use {hostname} as placeholder to create for example:
+    managmentboard:rib-{hostname} as new attribute
+
     """
     action = db.StringField(choices=action_outcome_types)
     action_param = db.StringField()
@@ -177,7 +212,7 @@ class CheckmkFolderPool(db.Document):
 #   .-- Rewrite Attributes
 class CheckmkRewriteAttributeRule(db.Document):
     """
-    Rule to rewrite existing Attributes
+    Rewrite all Attributes
     """
     name = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
