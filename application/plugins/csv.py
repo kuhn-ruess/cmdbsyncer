@@ -22,13 +22,17 @@ def _cli_csv():
 @click.option("--label_filter", default='')
 def compare_hosts(csv_path, delimiter, hostname_field, label_filter):
     """
-    Check which Hosts in CSV are not in DB
+    Check which Hosts from your CSV are not in the syncer
+
+    Example
+    =======
+    _./cmdbsyncer csv compare_hosts path_to.csv --delimiter ';'_
 
     Args:
         csv_path (string): Path to CSV
-        delimiter (string): Field delimiter. Default: ;
-        hostname_field (string): Name of Colum where Hostname is found Default: host
-        label_filter (string): Filder for given Labelname
+        delimiter (string): --delimiter, Field delimiter.
+        hostname_field (string): --hostname_field, Name of Colum where Hostname is found.
+        label_filter (string): --label_filter, Filder for given Labelname
     """
     #pylint: disable=no-member, consider-using-generator
     if label_filter:
@@ -57,10 +61,15 @@ def import_hosts(csv_path, delimiter, hostname_field):
     Every CSV column, other then the host column, will translate
     into key:value attributes.
 
+    Example
+    =======
+    _./cmdbsyncer csv import_hosts path_to.csv --delimiter ';'_
+
+
     Args:
         csv_path (string): Path to CSV
-        delimiter (string): Field delimiter. Default: ;
-        hostname_field (string): Name of Colum where Hostname is found Default: host
+        delimiter (string): --delimiter, Field delimiter
+        hostname_field (string): --hostname_field, Name of Colum where Hostname is found
     """
     #pylint: disable=no-member, consider-using-generator
     filename = csv_path.split('/')[-1]
@@ -89,11 +98,15 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key):
     Source is a CSV. Every other Column then the host Column, will translate
     into key:value attributes.
 
+    Example
+    =======
+    _./cmdbsyncer csv inventorize_hosts path_to.csv --delimiter ';' --key "File1"_
+
     Args:
         csv_path (string): Path to CSV
-        delimiter (string): Field delimiter. Default: ;
-        hostname_field (string): Name of Colum where Hostname is found Default: host
-        key (string): Group Name for Inventory data. Default: csv
+        delimiter (string): --delimiter, Field delimiter
+        hostname_field (string): --hostname_field, Name of Colum where Hostname is found
+        key (string): --key, Group Name for Inventory data
     """
     #pylint: disable=no-member, consider-using-generator
     filename = csv_path.split('/')[-1]
