@@ -20,7 +20,7 @@ def _cli_csv():
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--label_filter", default='')
-def compare_csv(csv_path, delimiter, hostname_field, label_filter):
+def compare_hosts(csv_path, delimiter, hostname_field, label_filter):
     """
     Check which Hosts in CSV are not in DB
 
@@ -51,7 +51,7 @@ def compare_csv(csv_path, delimiter, hostname_field, label_filter):
 @click.argument("csv_path")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
-def import_csv(csv_path, delimiter, hostname_field):
+def import_hosts(csv_path, delimiter, hostname_field):
     """
     Import Hosts from CSV and make File the Master
     Every CSV column, other then the host column, will translate
@@ -83,7 +83,7 @@ def import_csv(csv_path, delimiter, hostname_field):
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--key", default='csv')
-def inventorize_csv(csv_path, delimiter, hostname_field, key):
+def inventorize_hosts(csv_path, delimiter, hostname_field, key):
     """
     Add Inventory Information to hosts.
     Source is a CSV. Every other Column then the host Column, will translate
