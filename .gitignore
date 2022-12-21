@@ -4,6 +4,7 @@ plugins/*.py
 application/config.local.py
 nogit_*
 local_*
+.obsidian*
 
 *.swp
 src/
