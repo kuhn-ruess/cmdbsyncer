@@ -64,18 +64,19 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
     """
     Render Group Outcome
     """
-    html = "<table width=100%>"\
-           "<tr><td colspan=2>"
-    for rule in model.outcomes:
-        html += "<table width=100%>"\
+    html = "<table width=100%>"
+    for idx, rule in enumerate(model.outcomes):
+        html += f"<tr><td>{idx}</td><td>"\
+               "<table width=100%>"\
+               f"<tr><th>Ruleset</th><td>{rule.ruleset}</td></tr>" \
                f"<tr><th>Folder</th><td>{rule.folder}</td></tr>" \
                f"<tr><th>Folder Index</th><td>{rule.folder_index}</td></tr>" \
                f"<tr><th>Comment</th><td>{rule.comment}</td></tr>" \
                f"<tr><th>Value Template</th><td>{rule.value_template}</td></tr>" \
                f"<tr><th>Condtion Label Template</th><td>{rule.condition_label_template}</td></tr>"\
-               "</table>"
-    html += "</td></tr>"\
-    "</table>"
+               "</table>"\
+               "</td></tr>"
+    html += "</table>"
     return Markup(html)
 
 class CheckmkGroupRuleView(RuleModelView):

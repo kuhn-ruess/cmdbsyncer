@@ -1,11 +1,13 @@
 """
 Checkmk Configuration
 """
-#pylint: disable=import-error, too-many-locals, too-many-branches, too-many-statements
+#pylint: disable=import-error, too-many-locals, too-many-branches, too-many-statements, no-member
 import re
+import ast
+import jinja2
 from application import log
 from application.modules.checkmk.cmk2 import CMK2, CmkException
-from application.modules.checkmk.models import CheckmkGroupRule, CheckmkRuleMngmt
+from application.modules.checkmk.models import CheckmkGroupRule
 from application.modules.debug import ColorCodes as CC
 from application.models.host import Host
 
@@ -67,55 +69,78 @@ class SyncConfiguration(CMK2):
         print(f"\n{CC.HEADER}Build needed Rules{CC.ENDC}")
         print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
 
+        rulsets_by_type = {}
+
         for db_host in Host.objects(available=True):
             attributes = self.get_host_attributes(db_host)
             if not attributes:
                 continue
-            next_actions = self.actions.get_outcomes(db_host, attributes['all'])
-            if next_actions:
-                print(next_actions)
+            host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+            if host_actions:
+                for rule_type, rules in host_actions.items():
+                    for rule_params in rules:
+                        # Render Template Value
+                        value_tpl = jinja2.Template(rule_params['value_template'])
+                        value = \
+                            value_tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
+                        condition_tpl = \
+                            jinja2.Template(rule_params['condition_label_template'])
+                        condition = \
+                            condition_tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
+                        # Overwrite the Params again
+                        rule_params['value'] = value
+                        del rule_params['value_template']
+                        rule_params['condition'] = condition
+                        del rule_params['condition_label_template']
 
+                        rulsets_by_type.setdefault(rule_type, [])
+                        if rule_params not in rulsets_by_type[rule_type]:
+                            rulsets_by_type[rule_type].append(rule_params)
 
-
-        return
         print(f"{CC.OKGREEN} -- {CC.ENDC} Clean existing CMK configuration")
-        for cmk_group_name in prefixes:
-            url = f"domain-types/rule/collections/all?ruleset_name={cmk_group_name}"
+        for ruleset_name, rules in rulsets_by_type.items():
+            url = f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
             rule_response = self.request(url, method="GET")[0]
-            for rule in rule_response['value']:
-                if rule['extensions']['properties']['description'] != \
+            for cmk_rule in rule_response['value']:
+                if cmk_rule['extensions']['properties'].get('description', '') != \
                     f'cmdbsyncer_{self.account_id}':
                     continue
-                group_name = rule['extensions']['value_raw']
-                condition = rule['extensions']['conditions']['host_labels'][0]
-                label_data = f"{condition['key']}:{condition['value']}"
-                # Replace needed since response from cmk is "'groupname'"
-                search_group = (group_name.replace("'",""), label_data)
-                if search_group not in groups.get(cmk_group_name, []):
-                    rule_id = rule['id']
-                    print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in {cmk_group_name} {rule_id}")
+
+
+
+                value = cmk_rule['extensions']['value_raw']
+                cmk_condition = cmk_rule['extensions']['conditions']['host_labels'][0]
+                condition = f"{cmk_condition['key']}:{cmk_condition['value']}"
+                rule_found = False
+                for rule in rules:
+                    cmk_value = ast.literal_eval(rule['value'])
+                    check_value = ast.literal_eval(value)
+                    #print(DeepDiff(rule['value'], value))
+                    if rule['condition'] == condition and cmk_value == check_value:
+                        rule_found = True
+                        # Remove from list, so that it not will be created in the next step
+                        rulsets_by_type[ruleset_name].remove(rule)
+
+                if not rule_found: # Not existing any more
+                    rule_id = cmk_rule['id']
+                    print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in {ruleset_name} {rule_id}")
                     url = f'/objects/rule/{rule_id}'
                     self.request(url, method="DELETE")
-                    messages.append(("INFO", f"Deleted Rule in {cmk_group_name} {rule_id}"))
-                else:
-                    # In This case we don't need to create it
-                    groups[cmk_group_name].remove(search_group)
-
+                    messages.append(("INFO", f"Deleted Rule in {ruleset_name} {rule_id}"))
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Create new Rules")
-        for cmk_group_name, rules in groups.items():
-            for group_name, label_data in rules:
-                label_key, label_value = label_data.split(':')
-                if not label_value:
-                    continue
+        for ruleset_name, rules in rulsets_by_type.items():
+            for rule in rules:
+                label_key, label_value = rule['condition'].split(':')
                 template = {
-                    "ruleset": f"{cmk_group_name}",
-                    "folder": "/",
+                    "ruleset": f"{ruleset_name}",
+                    "folder": rule['folder'],
                     "properties": {
                         "disabled": False,
-                        "description": f"cmdbsyncer_{self.account_id}"
+                        "description": f"cmdbsyncer_{self.account_id}",
+                        "comment": rule['comment'],
                     },
-                    "value_raw": f"'{group_name}'",
+                    "value_raw": rule['value'],
                     "conditions": {
                         "host_tags": [],
                         "host_labels": [
@@ -128,12 +153,12 @@ class SyncConfiguration(CMK2):
                     }
                 }
 
-                print(f"{CC.OKBLUE} *{CC.ENDC} Create Rule in {cmk_group_name} " \
-                      f"({label_key}:{label_value} = {group_name})")
+                print(f"{CC.OKBLUE} *{CC.ENDC} Create Rule in {ruleset_name} " \
+                      f"({label_key}:{label_value} = {rule['value']})")
                 url = "domain-types/rule/collections/all"
                 try:
                     self.request(url, data=template, method="POST")
-                    messages.append(("INFO", f"Created Rule in {cmk_group_name} {group_name}"))
+                    messages.append(("INFO", f"Created Rule in {ruleset_name}: {rule['value']}"))
                 except CmkException as error:
                     print(f"{CC.FAIL} Failue: {error} {CC.ENDC}")
 
