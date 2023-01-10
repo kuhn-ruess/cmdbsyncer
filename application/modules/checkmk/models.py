@@ -28,7 +28,6 @@ class CheckmkFilterRule(db.Document):
     }
 
 #.
-
 #   .-- Checkmk Actions
 action_outcome_types = [
     ("move_folder", "Move Host to specified Folder"),
@@ -152,7 +151,47 @@ class CheckmkGroupRule(db.Document):
 class RuleMngmtOutcome(db.EmbeddedDocument):
     """
     Checkmk Rule Managment Outcome
+
+
+    Options
+    =======
+
+    Ruleset
+    -------
+    The needed Value can be found as "Ruleset name" within the
+    Checkmk "Rule Properties" part for the needed Rule. You may need to enable
+    "Show More" for the block.
+
+    Folder
+    ------
+    Full path to the Checkmk Folder where the rule is to be placed.
+    Use / for Main Folder
+
+    Folder Index
+    ------------
+    Numeric position for the Rule in side the Folder
+
+    Comment
+    -------
+    Custom Comment placed with the created rule
+
+    Value Template
+    --------------
+    The Value Template need to be looked up in Checkmk.
+    Create an rule as Example, then click "Export Rule for API"
+    Copy the shown string and replace the needed Values with placeholders.
+    Available is {{HOSTNAME}} and all other Host Attributes. It's possible to
+    use the full Jinja2 Template Syntax.
+
+
+    Condition Label Template
+    ------------------------
+    Defines which label has to match.
+    Labels format is key:value. You can Hardcode something or use the same Placeholders
+    like in the Value Templates (Jinja2). Only one Label can be used.
     """
+
+    ruleset = db.StringField()
     folder = db.StringField(required=True)
     folder_index = db.IntField(default=0)
     comment = db.StringField()
@@ -173,10 +212,9 @@ class CheckmkRuleMngmt(db.Document):
     conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
     render_full_conditions = db.StringField() # Helper for Preview
 
-    ruleset = db.StringField()
     outcomes = db.ListField(db.EmbeddedDocumentField(RuleMngmtOutcome))
     render_cmk_rule_mngmt = db.StringField()
-    last_match = db.StringField(default=False)
+    last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     meta = {
         'strict': False

@@ -23,7 +23,7 @@
   when: cmk_register_tls | bool
 
 - name: "Register Agent for Bakery."
-  win_command: "check_mk_agent.exe updater register -s {{ cmk_server }} -i {{ cmk_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -P {{cmk_password }} -v"
+  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_server }} -i {{ cmk_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -P {{cmk_password }} -v"
   args:
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_bakery | bool

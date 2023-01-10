@@ -11,9 +11,6 @@ The Names of the functions are equal to the CLI Parameter. Example:
 ```
 
 
-
-
-
 ::: application.plugins.csv
     options:
       show_source: false
