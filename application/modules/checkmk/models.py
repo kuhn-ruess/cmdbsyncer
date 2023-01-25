@@ -35,7 +35,7 @@ action_outcome_types = [
     ("tag_as_folder", "Use Attribute Name of given Attribute Value as Folder"),
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute", "Create Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
-    ("custom_attribute", "Create Custom Checkmk Attribute: Set key:value, Placeholders: {hostname}"),
+    ("custom_attribute", "Create Custom Checkmk Attribute: Set key:value, Placeholders: {{hostname}}"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
@@ -76,8 +76,8 @@ class CheckmkRuleOutcome(db.EmbeddedDocument):
     Create Custom Checkmk Attribute
     -------------------------------
     You can specify a new Attribute as key value pair, separated by double point.
-    You can use {hostname} as placeholder to create for example:
-    managmentboard:rib-{hostname} as new attribute
+    You can use {{hostname}} as placeholder to create for example:
+    managmentboard:rib-{{hostname}} as new attribute
 
     """
     action = db.StringField(choices=action_outcome_types)

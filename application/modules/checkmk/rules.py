@@ -88,7 +88,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             if outcome['action'] == 'custom_attribute':
                 new_key, new_value = outcome['action_param'].split(':')
                 hostname = self.db_host.hostname
-                new_value = new_value.replace('{hostname}', hostname)
+                new_value = new_value.replace('{{hostname}}', hostname)
                 if new_value.lower() in ['none', 'false']:
                     outcomes['remove_attributes'].append(new_key)
                 else:
