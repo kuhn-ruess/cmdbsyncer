@@ -1,6 +1,6 @@
 #!/bin/bash
 #START SETTINGS
-API="https://vlcmkop010.at.inside/hostapi/api/v1/ansible"
+API="https://hostname/hostapi/api/v1/ansible"
 SECRET="TEST123"
 #END SETTINGS
 case "$1" in
