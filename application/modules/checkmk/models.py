@@ -121,7 +121,29 @@ foreach_types = [
 
 class CmkGroupOutcome(db.EmbeddedDocument):
     """
-    Checkmk Rule Outcome
+    Checkmk Group Rule Outcome
+
+
+    Group Name
+    ----------
+    You have to choice which kind of group you want to create
+
+    Foreach Type
+    ------------
+    Do you want to iterate over the Attribute Names, or Attribute Values.
+    Example: if you have Attributes like: Firewall:service, DNS:service you wan't
+    to use "Foreach Attribute". Is you strcture like service:Firewall, you wan't to go by Value.
+
+    Foreach
+    -------
+    Name of the Attribute or Attribute Value we should search for.
+
+    Regex
+    -----
+    You can rewrite the result with an regex. This regex has to define at least one match group.
+    And only the first Match Group will be used.
+    Example: something-(.*).
+    Leave blank if not needed
     """
     group_name = db.StringField(choices=cmk_groups)
     foreach_type = db.StringField(choices=foreach_types)
