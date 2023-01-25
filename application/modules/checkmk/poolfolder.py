@@ -1,4 +1,5 @@
 #!/usr/bin/env/python
+#pylint: disable=no-member
 """
 Helper to find a free Poolfolder
 """
@@ -6,9 +7,13 @@ from mongoengine.errors import DoesNotExist
 from application.modules.checkmk.models import CheckmkFolderPool
 
 
-def get_folder():
+def get_folder(only_pools=None):
     """ Try to find a free Pool Folder """
-    for folder in CheckmkFolderPool.objects().order_by('folder_name'):
+    if only_pools:
+        query = CheckmkFolderPool.objects(folder_name__in=only_pools).order_by('folder_name')
+    else:
+        query = CheckmkFolderPool.objects().order_by('folder_name')
+    for folder in query:
         if folder.has_free_seat():
             folder.folder_seats_taken += 1
             folder.save()
