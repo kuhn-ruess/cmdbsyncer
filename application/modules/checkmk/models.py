@@ -62,7 +62,10 @@ class CheckmkRuleOutcome(db.EmbeddedDocument):
 
     Use Pool Folder
     ---------------
-    Please refer to the Folder Pool Documentation.
+    Matching Host will use a Pool Folder. If not action_param is given,
+    the system will query from all folders. Otherwise you can provide a comma seperated list
+    of Folder Pool Names.
+    For more Details, please refer to the Folder Pool Documentation.
 
     Create Checkmk-Attribute
     ------------------------

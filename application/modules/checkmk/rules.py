@@ -72,7 +72,10 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                     outcomes['move_folder'] += self.db_host.get_folder()
                 else:
                     # Find new Pool Folder
-                    folder = poolfolder.get_folder()
+                    only_pools = None
+                    if outcome['action_param']:
+                        only_pools = [x.strip() for x in outcome['action_param'].split(',')]
+                    folder = poolfolder.get_folder(only_pools)
                     if not folder:
                         raise Exception(f"No Pool Folder left for {self.db_host.hostname}")
                     folder = self.format_foldername(folder)
