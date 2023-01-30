@@ -103,9 +103,12 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                             f"---- value_as_folder matched, search tag '{search_tag}'")
                 for tag, value in self.attributes.items():
                     if search_tag == tag:
-                        print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found tag"\
-                                                f"{ColorCodes.ENDC}, add folder: '{value}'")
-                        outcomes['move_folder'] += self.format_foldername(value)
+                        if value and value != 'null':
+                            print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found tag"\
+                                                    f"{ColorCodes.ENDC}, add folder: '{value}'")
+                            outcomes['move_folder'] += self.format_foldername(value)
+                        else:
+                            print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found tag but content null")
 
             if outcome['action'] == 'tag_as_folder':
                 search_value = outcome['action_param']
@@ -113,9 +116,12 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                             f"---- tag_as_folder matched, search value '{search_value}'")
                 for tag, value in self.attributes.items():
                     if search_value == value:
-                        print_debug(self.debug, f"------ {ColorCodes.OKGREEN}Found value"\
-                                                f"{ColorCodes.ENDC}, add folder: '{tag}'")
-                        outcomes['move_folder'] += self.format_foldername(tag)
+                        if value and value != 'null':
+                            print_debug(self.debug, f"------ {ColorCodes.OKGREEN}Found value"\
+                                                    f"{ColorCodes.ENDC}, add folder: '{tag}'")
+                            outcomes['move_folder'] += self.format_foldername(tag)
+                        else:
+                            print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found value but content null")
 
             # Cleanup in case not folder rule applies,
             # we have nothing to return to the plugins
