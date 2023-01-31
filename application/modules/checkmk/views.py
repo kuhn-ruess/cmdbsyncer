@@ -3,12 +3,19 @@ Checkmk Rule Views
 """
 from markupsafe import Markup
 from wtforms import HiddenField
+from flask import request
+from flask_admin import expose
+from mongoengine.errors import DoesNotExist
 
 from flask_login import current_user
 from application.views.default import DefaultModelView
 
 from application.modules.rule.views import RuleModelView
 from application.modules.checkmk.models import action_outcome_types
+from application.plugins.checkmk import _load_rules
+from application.modules.checkmk.syncer import SyncCMK2
+
+from application.models.host import Host
 
 def _render_checkmk_outcome(_view, _context, model, _name):
     """
@@ -35,12 +42,69 @@ def _render_group_outcome(_view, _context, model, _name):
            "</table>"
     return Markup(html)
 
+def get_host_debug(hostname):
+    """
+    Get Output for Host Debug Page
+    """
+
+    rules = _load_rules()
+
+    syncer = SyncCMK2()
+    syncer.filter = rules['filter']
+
+    syncer.rewrite = rules['rewrite']
+
+    syncer.actions = rules['actions']
+
+    output = {}
+    #'Filter Rules': rules['filter'],
+    #'Rewrite Rules': rules['rewrite'],
+    #'Action Rules': rules['actions'],
+    #}
+
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        return {'Error': "Host not found in Database"}
+
+    attributes = syncer.get_host_attributes(db_host)
+
+    if not attributes:
+        return {"Error": "This host is ignored by a rule"}
+
+    actions = syncer.get_host_actions(db_host, attributes['all'])
+
+
+    output["Full Attribute List"] = attributes['all']
+    output["Filtered Labels for Checkmk"] = attributes['filtered']
+    output["Actions"] =  actions
+    additional_attributes = {}
+    for custom_attr in actions.get('custom_attributes', []):
+        additional_attributes.update(custom_attr)
+
+    for additional_attr in actions.get('attributes',[]):
+        if attr_value := attributes['all'].get(additional_attr):
+            additional_attributes[additional_attr] = attr_value
+    output["Custom Attributes"] = additional_attributes
+    # We need to save the host,
+    # Otherwise, if a rule with folder pools is executed at first time here,
+    # the seat will be locked, but not saved by the host
+    db_host.save()
+    return output
 
 #pylint: disable=too-few-public-methods
 class CheckmkRuleView(RuleModelView):
     """
     Custom Rule Model View
     """
+
+    @expose('/debug')
+    def debug(self):
+        hostname = request.args.get('hostname','')
+        output= {}
+        if hostname:
+            output = get_host_debug(hostname)
+        return self.render('debug.html', hostname=hostname, output=output)
 
     def __init__(self, model, **kwargs):
         """

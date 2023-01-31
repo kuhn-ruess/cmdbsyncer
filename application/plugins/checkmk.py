@@ -144,4 +144,9 @@ def debug_host(hostname):
             additional_attributes[additional_attr] = attr_value
     attribute_table("Custom Attributes", additional_attributes)
 
+    # We need to save the host,
+    # Otherwise, if a rule with folder pools is executed at first time here,
+    # the seat will be locked, but not saved by the host
+    db_host.save()
+
 #.

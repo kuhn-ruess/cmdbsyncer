@@ -1,0 +1,51 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="container">
+  <h2>Debug Host</h2>
+  <form mehtod=GET>
+    <div class="form-group">
+      <label for="hostname">Hostname</label>
+      <input name="hostname" class="form-control" id="hostname" aria-describedby="hostnameHelp" placeholder="Hostname" value={{hostname}}>
+      <small id="hostnameHelp" class="form-text text-muted">Enter the Hostname for which you want to see the rule analysis</small>
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+  </form>
+
+  {% if output %}
+  <br>
+
+  {% for header, content in output.items() %}
+    <div class="card">
+    <div class="card-header">
+    {{ header }}
+    </div>
+    <div class="card-body">
+    {%if content is mapping %}
+    <table class="table table-bordered">
+      <thead>
+	<tr>
+	  <th scope="col" style="width:300px">Attribute Name</th>
+	  <th scope="col">Attribute Content</th>
+	</tr>
+      </thead>
+      <tbody>
+      {% for attr, attr_name in content.items() %}
+	<tr>
+	  <td>{{attr}}</td>
+	  <td>{{attr_name}}</td>
+	</tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    {{ content }}
+    {% endif %}
+    </div>
+    </div>
+    <br>
+  {% endfor %}
+	
+
+  {% endif %}
+ </div>
+{% endblock %}
