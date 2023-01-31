@@ -8,6 +8,8 @@ if 'config' not in os.environ:
 
 try:
     from application import app
+    from application import VERSION
+    print(f"CMDB Syncer Version: {VERSION}")
 except Exception as exp:
     raise
     print("Cannot Load Application. Is the Virtual Environment loaded?")
