@@ -14,7 +14,7 @@ from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 
 
-VERSION = '3.0p0'
+VERSION = '3.1-pre1'
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -107,6 +107,8 @@ admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
 from application.modules.checkmk.models import CheckmkFolderPool
 from application.modules.checkmk.views import CheckmkFolderPoolView
 admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
+admin.add_link(MenuLink(name='Debug Host', category='Checkmk',
+                        url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
 #.
 #   .-- Ansible
 admin.add_sub_category(name="Ansible", parent_name="Rules")
