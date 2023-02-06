@@ -70,7 +70,7 @@ def netbox_host_import(account):
     try:
         target_config = get_account_by_name(account)
         if target_config:
-            syncer = SyncNetbox()
+            syncer = SyncNetbox(False)
             syncer.config = target_config
             syncer.import_hosts()
         else:
