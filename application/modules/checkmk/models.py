@@ -325,10 +325,6 @@ class CheckmkSite(db.Document):
     name = db.StringField(required=True)
     server_address = db.StringField(required=True, unique=True)
     settings_master = db.ReferenceField(CheckmkSettings, required=True)
-    uid = db.IntField()
-    gid = db.IntField()
-
-    do_not_update = db.BooleanField()
 
     enabled = db.BooleanField()
 #.
