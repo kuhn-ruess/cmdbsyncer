@@ -21,6 +21,7 @@ from application.modules.ansible.models import AnsibleFilterRule, AnsibleRewrite
 from application.modules.rule.models import CustomAttribute, FullCondition, FilterAction
 from application.modules.ansible.rules import AnsibleVariableRule
 from application.modules.ansible.syncer import SyncAnsible
+from application.modules.ansible.site_syncer import SyncSites
 
 @app.cli.group(name='ansible')
 def cli_ansible():
@@ -49,7 +50,7 @@ def load_rules():
     }
 #.
 #   .-- Seed Default Rules
-@cli_ansible.command('seed_default_rules')
+@cli_ansible.command('seed_cmk_default_rules')
 def seed_default_rules():
     """
     Print matching rules and Inventory Outcome for Host
@@ -259,4 +260,24 @@ def source(list, host): #pylint: disable=redefined-builtin
         return True
     print("Params missing")
     return False
+#.
+
+
+#    .-- Checkmk Server Source
+@cli_ansible.command('cmk-server-source')
+@click.option("--list", is_flag=True)
+@click.option("--host")
+def source(list, host): #pylint: disable=redefined-builtin
+    """Inventory Source for Checkmk Server Data"""
+    #pylint: disable=no-else-return
+    cmksitemngmt = SyncSites()
+    if list:
+        print(json.dumps(cmksitemngmt.get_full_inventory()))
+        return True
+    elif host:
+        print(json.dumps(cmksitemngmt.get_host_inventory(host)))
+        return True
+    print("Params missing")
+    return False
+
 #.

@@ -1,0 +1,2 @@
+#!/bin/sh
+../cmdbsyncer ansible cmk-server-source $1 $2

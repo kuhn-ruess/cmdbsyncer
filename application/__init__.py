@@ -109,6 +109,11 @@ from application.modules.checkmk.views import CheckmkFolderPoolView
 admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
 admin.add_link(MenuLink(name='Debug Host', category='Checkmk',
                         url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
+
+from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
+admin.add_view(DefaultModelView(CheckmkSettings, name="CMK Server Settings", category="Checkmk"))
+admin.add_view(DefaultModelView(CheckmkSite, name="CMK Server Sites", category="Checkmk"))
+
 #.
 #   .-- Ansible
 admin.add_sub_category(name="Ansible", parent_name="Rules")
