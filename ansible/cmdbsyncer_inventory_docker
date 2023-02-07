@@ -1,2 +1,0 @@
-#!/bin/bash
-docker exec -it cmdb_syncer_api_1 /srv/cmdbsyncer ansible source $1 $2

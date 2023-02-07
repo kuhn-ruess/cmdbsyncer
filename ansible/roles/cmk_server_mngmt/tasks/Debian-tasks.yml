@@ -1,0 +1,5 @@
+- name: Install Checkmk Version
+  become: true
+  ansible.builtin.apt:
+    deb: "/tmp/{{ cmk_version_filename }}"
+  when: checkmk_version_installed.stdout != cmk_version

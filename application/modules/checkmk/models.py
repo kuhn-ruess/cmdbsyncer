@@ -290,3 +290,44 @@ class CheckmkRewriteAttributeRule(db.Document):
         'strict': False
     }
 #.
+
+#   .-- Checkmk Settings
+
+editions = [
+    ('cee', "Checkmk Enterprise Edition"),
+
+]
+class CheckmkSettings(db.Document):
+    """
+    Checkmk Settings
+    """
+    name = db.StringField()
+    server_user = db.StringField()
+    cmk_version = db.StringField()
+    cmk_edition = db.StringField(choices=editions)
+    cmk_version_filename = db.StringField()
+
+    subscription_username = db.StringField()
+    subscription_password = db.StringField()
+
+    def __str__(self):
+        """
+        Self representation
+        """
+        return self.name
+
+#   .-- Checkmk Sites
+class CheckmkSite(db.Document):
+    """
+    Checkmk Site
+    """
+    name = db.StringField(required=True)
+    server_address = db.StringField(required=True, unique=True)
+    settings_master = db.ReferenceField(CheckmkSettings, required=True)
+    uid = db.IntField()
+    gid = db.IntField()
+
+    do_not_update = db.BooleanField()
+
+    enabled = db.BooleanField()
+#.
