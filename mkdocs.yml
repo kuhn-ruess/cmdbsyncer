@@ -21,7 +21,11 @@ nav:
 
 
   - "Modules":
-      - Ansible: ansible/index.md
+      - Ansible: 
+        - Basics: ansible/index.md
+        - Recipes:
+          - Checkmk Agents: ansible/cmk_agents.md
+          - Checkmk Sites: ansible/cmk_sites.md
       - CSV: csv/index.md
       - Checkmk:
           - Main: 'checkmk/index.md'
