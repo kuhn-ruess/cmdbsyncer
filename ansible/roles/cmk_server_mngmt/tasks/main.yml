@@ -53,9 +53,12 @@
   ansible.builtin.shell: |
     set -o pipefail
     omd -V {{ cmk_version }}.{{ cmk_edition }} create {{ cmk_site }}
+    echo '{{ inital_password }}' | htpasswd -i -B -C 12 /omd/sites/{{ cmk_site }}/etc/htpasswd cmkadmin
+    omd start {{ cmk_site }}
   args:
     executable: /bin/bash
   when: server_site_version.stderr.startswith("No such site")
+  register: site_installed
 
 - name: "Update Site from {{ server_site_version.stdout}} to {{ cmk_version }}.{{ cmk_edition }}"
   become: True
@@ -65,4 +68,4 @@
     omd start {{ cmk_site }}
   args:
     executable: /bin/bash
-  when: server_site_version.stdout != cmk_version+"."+cmk_edition
+  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_installed

@@ -306,6 +306,7 @@ class CheckmkSettings(db.Document):
     cmk_version = db.StringField()
     cmk_edition = db.StringField(choices=editions)
     cmk_version_filename = db.StringField()
+    inital_password = db.StringField()
 
     subscription_username = db.StringField()
     subscription_password = db.StringField()

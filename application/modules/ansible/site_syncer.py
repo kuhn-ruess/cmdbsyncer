@@ -19,6 +19,7 @@ class SyncSites(Plugin):
         return {
             'ansible_user': site.settings_master.server_user,
             'cmk_site': site.name,
+            'inital_password': site.settings_master.inital_password,
             'cmk_edition': site.settings_master.cmk_edition,
             'cmk_version': site.settings_master.cmk_version,
             'cmk_version_filename': site.settings_master.cmk_version_filename,
