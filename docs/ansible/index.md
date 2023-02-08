@@ -43,7 +43,7 @@ After that, the Workfloww is:
 If you want to use the Syncers script, but from adifferentt server and to connectt via Rest API,
 these are the Steps:
 
-- [Checkout the Repo](../basics/checkout_code.md)
+- [Checkout the Repo](setup_code.md)
 - Copy the Inventory File: cp rest_inventory local_rest_inventory
 - Edit the File and set the URL (beware of Proxy) to the Syncer Installation, and set a Secret:
 - ![](img/secret.png)

@@ -1,8 +1,24 @@
 # General
-The cmk_agent_mngmt.yml Playbook contains everything to mange the Installation and the Bakery and TLS Registrations of you Checkmk Agents. This works for Linux and Windows.
+The cmk_agent_mngmt.yml Playbook contains everything to manage the Installation and the Bakery and TLS Registrations of your Checkmk Agents. This works for Linux and Windows.
 
-## Extra Information
-Ansible needs some Information more, it needs to know on which Checkmk Server the Host is running, or if it is even necessary to do a certain operation like installing an Agent, or do some kind of Registration. For that, the Syncer uses an Inventory Feature. It queries checkmk and asks for all Information the Syncer needs to know. This should run as Cronjob. The Command is:
+The job of the Syncer is, to dynamical provide variables to the Ansible Playbook, that Ansible always know what to do with each Host.
+
+Information are inventorized for example from Checkmk self, like on which site the host is, or if the Checkmk Agent reports for example TLS errors. Also, all kind of known attributes can be used. And the Syncer Rules then created dynamic all Variables for Ansible.
+
+## Functions
+
+- Support for Linux and Windows
+- Install Checkmk Agents
+- Register Checkmk Bakery
+- Register TLS for Checkmk
+- Discover Host in Checkmk
+- Bake and Sign Agents (See Checkmk part)
+- Restart Checkmk (See Checkmk part)
+
+## Inventorize Checkmk
+To get the current Status Information about the Host, like is the Agent on Error, is the Bakery registered the inventory function of the Syncer is used. All Information found will be added to the Syncers Database. 
+
+The Command is:
 `./cmdbsyncer checkmk hosts_inventory account`. 
 
 After the run, you can verify what the Inventory found, when you check a Host in the Frontend and Scroll to inventory:
@@ -10,7 +26,7 @@ After the run, you can verify what the Inventory found, when you check a Host in
 ![](img/inventory.png)
 
 ## Ansible Variables
-Next, you need to seed Variables and Conditions. This is nesseary in order to know when a Action is due, or what Credentials are used.
+Next, you need to seed Variables and Conditions. This is necessary for Ansible to know if an Action is due, or which Credentials are used.
 
 The following Variables existing in the Ansible Role. You learn later how to set them:
 
@@ -30,18 +46,21 @@ The following Variables existing in the Ansible Role. You learn later how to set
 | cmk_discovery | Trigger Checkmk Discovery on Host |
 | cmk_windows_tmp | Temo dir on Windows Server|
 
-As shortcut, you can install a default set of rules with:
+Some of them are already part of the Inventory after you invenorized Checkmk others a Hardcoded like Credentials. And finally, there are the condition based, like cmk_register_bakery which only should be true, if the registration is missing. 
 
-```
-./cmdbsyncer ansible seed_cmk_default_rules
-```
+To start easier, you can create a Set of Default rules with this command: 
 
-## Configuration
+`./cmdbsyncer ansible seed_cmk_default_rules`
 
-### Syncer Settings
 
-You can set which Hosts you want to manage via Ansible, or deploy custom Variables to some Hosts with the Ansible Rules.
+# Syncer Configuration
 
+##  Settings
+
+You can set which Hosts you want to manage via Ansible, or deploy custom Variables to some Hosts with the Ansible Rules. The normal Filter and Rewrite Function also apply here. 
+
+The Conditions are configured in:
+*Rules →Ansible →Custom Variables* <br>
 
  To set the Credentials, Ansible should use contact Checkmk, see here:
 ![](img/credentials.png)
@@ -49,10 +68,33 @@ You can set which Hosts you want to manage via Ansible, or deploy custom Variabl
 Example how to Install the Agent when a given Service Output was found:
 ![](img/install_agent.png)
 
-Likewise, you can configure if to register to bakery or the TLS. Filter for example for the TLS Error message in the Service Output (See the seed_cmk_default_rules to have more exmpales directly in your system)
+Likewise, you can configure if to register to bakery or the TLS. Filter for example for the TLS Error message in the Service Output. Best is to seed defaults as descripted above, to have more examples which just need to be adapted a bit.
 
-## Debug
+# Run the job
+
+## Debugging
 Before you run anything in Ansible, use the debug_host feature to check if the Outcome is what you want:
 `./cmdbsyncer ansible debug_host HOSTNAME`
 The command will tell you all variable outcomes you will have in Ansible.
 
+## Ansible Command
+
+`ansible-playbooks -i inventory cmk_agent_mngmt.yml`
+
+Please just replace the inventory source if needed.
+
+
+# Known Problems
+
+## Distributed Bakery not supported yet in API
+The Checkmk API currently can't reflect a Distributed Setup. Therefore Ansible fails to Download Agents from a remote site.  As Workarround you can set an Apache Reverseproxy Rule, to Forward only the Bakery API Requests to the Main Site
+
+```
+SSLProxyEngine On
+
+SSLProxyCheckPeerCN off
+
+RewriteEngine On
+
+RewriteRules /sitename/check_mk/api/1.0/domain-types/agent/(.*)$ https://mastersite/sitename/check_mk/api/1.0/domain-types/$1 [P]
+```

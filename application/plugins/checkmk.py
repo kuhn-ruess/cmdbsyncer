@@ -45,8 +45,11 @@ def _load_rules():
 @click.option("--disabled_only", is_flag=True)
 def show_hosts(disabled_only=False):
     """
-    Print List of all Hosts currently synced to Checkmk
+    ## Print List of all Hosts currently synced to Checkmk
     Disabled_only means: All hosts not configured to sync to Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk show_hosts_ 
 
     Args:
         disabled_only (bool): Only not synced hosts
@@ -72,7 +75,10 @@ def show_hosts(disabled_only=False):
 @click.argument("account")
 def export_hosts(account):
     """
-    Export Hosts to Checkmk
+    ## Export Hosts to Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_hosts SITEACCOUNT_
 
     Args:
         account (string): Name Account Config
@@ -100,7 +106,10 @@ def export_hosts(account):
 @click.argument("hostname")
 def debug_host(hostname):
     """
-    Debug Host Configuration
+    ## Debug Host Configuration
+
+    ### Example
+    _./cmdbsyncer checkmk debug_host HOSTNAME_
 
     Args:
         hostname (string): Name of Host

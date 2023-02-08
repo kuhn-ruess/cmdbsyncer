@@ -40,41 +40,35 @@ action_outcome_types = [
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
     """
-    Checkmk Export Rule Outcome
+    ## Move Host to specified Folder
 
-
-    Options
-    =======
-
-    Move Host to specified Folder
-    -----------------------------
     Hardcode a custom Folder Name in _action_param_ field.
 
-    Use Value of given Attribute Name as Folder
-    -------------------------------------------
+    ## Use Value of given Attribute Name as Folder
+
     Define an Attribute in _action_param_. The value of it, will be used
     as a Folder name for the matching host
 
-    Use Attribute Name of given Attribute Value as Folder
-    -----------------------------------------------------
+    ## Use Attribute Name of given Attribute Value as Folder
+
     Same like the option before, but just Attribute Name and Attribute Value swapped.
     So you can pick by the attributes value.
 
-    Use Pool Folder
-    ---------------
+    ## Use Pool Folder
+
     Matching Host will use a Pool Folder. If not action_param is given,
     the system will query from all folders. Otherwise you can provide a comma seperated list
     of Folder Pool Names.
-    For more Details, please refer to the Folder Pool Documentation.
+    For more Details, please refer to the [Folder Pool Documentation](folder_pools.md).
 
-    Create Checkmk-Attribute
-    ------------------------
+    ## Create Checkmk-Attribute
+
     The given Attribute Name will be sent as Checkmk Attribute. This way you can set
-    every Attribute you want like ipaddress of management board. Please refer to the documentation in
-    Recipes.
+    every Attribute you want like ipaddress of management board. Please refer to the [documentation in
+    Recipes](cmk_attributes.md).
 
-    Create Custom Checkmk Attribute
-    -------------------------------
+    ## Create Custom Checkmk Attribute
+
     You can specify a new Attribute as key value pair, separated by double point.
     You can use {{hostname}} as placeholder to create for example:
     managmentboard:rib-{{hostname}} as new attribute
@@ -121,25 +115,22 @@ foreach_types = [
 
 class CmkGroupOutcome(db.EmbeddedDocument):
     """
-    Checkmk Group Rule Outcome
+    ## Group Managment Options
 
+    ### Group Name
+    You have to choose which kind of group you want to create
 
-    Group Name
-    ----------
-    You have to choice which kind of group you want to create
+    ### Foreach Type
 
-    Foreach Type
-    ------------
     Do you want to iterate over the Attribute Names, or Attribute Values.
     Example: if you have Attributes like: Firewall:service, DNS:service you wan't
     to use "Foreach Attribute". Is you strcture like service:Firewall, you wan't to go by Value.
 
-    Foreach
-    -------
+    ### Foreach
     Name of the Attribute or Attribute Value we should search for.
 
-    Regex
-    -----
+    ### Regex
+
     You can rewrite the result with an regex. This regex has to define at least one match group.
     And only the first Match Group will be used.
     Example: something-(.*).
@@ -175,33 +166,24 @@ class CheckmkGroupRule(db.Document):
 
 class RuleMngmtOutcome(db.EmbeddedDocument):
     """
-    Checkmk Rule Managment Outcome
+    Below all Options of the Configuration:
 
-
-    Options
-    =======
-
-    Ruleset
-    -------
+    ### Ruleset
     The needed Value can be found as "Ruleset name" within the
     Checkmk "Rule Properties" part for the needed Rule. You may need to enable
     "Show More" for the block.
 
-    Folder
-    ------
+    ### Folder
     Full path to the Checkmk Folder where the rule is to be placed.
     Use / for Main Folder
 
-    Folder Index
-    ------------
+    ### Folder Index
     Numeric position for the Rule in side the Folder
 
-    Comment
-    -------
+    ### Comment
     Custom Comment placed with the created rule
 
-    Value Template
-    --------------
+    ### Value Template
     The Value Template need to be looked up in Checkmk.
     Create an rule as Example, then click "Export Rule for API"
     Copy the shown string and replace the needed Values with placeholders.
@@ -209,8 +191,7 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     use the full Jinja2 Template Syntax.
 
 
-    Condition Label Template
-    ------------------------
+    ### Condition Label Template
     Defines which label has to match.
     Labels format is key:value. You can Hardcode something or use the same Placeholders
     like in the Value Templates (Jinja2). Only one Label can be used.

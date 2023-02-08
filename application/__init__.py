@@ -97,12 +97,12 @@ admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite A
 admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter", category="Checkmk"))
 admin.add_view(CheckmkRuleView(CheckmkRule, name="CMK Export Rules", category="Checkmk"))
 admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
-                                    name="CMK Groups Mananagemt", category="Checkmk"))
+                                    name="CMK Groups Management", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkRuleMngmt
 from application.modules.checkmk.views import CheckmkMngmtRuleView
 admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
-                                    name="CMK Rules Mananagemt", category="Checkmk"))
+                                    name="CMK Rules Management", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkFolderPool
 from application.modules.checkmk.views import CheckmkFolderPoolView
