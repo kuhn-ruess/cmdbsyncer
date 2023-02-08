@@ -16,8 +16,10 @@ class SyncSites(Plugin):
         """
         Return Inventory for site
         """
-        return {
-            'ansible_user': site.settings_master.server_user,
+        inventory = {}
+        if site.settings_master.server_user:
+            inventory['ansible_user'] =  site.settings_master.server_user
+        inventory.update({
             'cmk_site': site.name,
             'inital_password': site.settings_master.inital_password,
             'cmk_edition': site.settings_master.cmk_edition,
@@ -25,7 +27,8 @@ class SyncSites(Plugin):
             'cmk_version_filename': site.settings_master.cmk_version_filename,
             'subscription_username': site.settings_master.subscription_username,
             'subscription_password': site.settings_master.subscription_password,
-        }
+        })
+        return inventory
 
     def get_full_inventory(self):
         """
