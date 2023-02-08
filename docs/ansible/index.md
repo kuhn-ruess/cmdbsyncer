@@ -11,16 +11,21 @@ These are for use with the ansible-playbook command, behind the -i parameter.
 
 As of now, these are:
 
-- inventory: General Inventory source for local installation 
-- docker_inventory: Inventory source when running in docker
-- rest_inventory: Example for Inventory Source using the Rest API of Syncer
-- cmk_server_inventory: Special source for use with the cmk_server_mngm.yml playbook
-- cmk_server_docker_inventory: Like above
+| File | Description |
+|:----|:-----------|
+| inventory | General Inventory source for local installation |
+| docker_inventory | Inventory source when running in docker | 
+| rest_inventory | Example for Inventory Source using the Rest API of Syncer |
+| cmk_server_inventory | Special source for use with the cmk_server_mngm.yml playbook |
+| cmk_server_docker_inventory | Like above |
+
 
 Also you find two playbooks and two roles:
 
-- cmk_agent_mngmt.yml: The complete Managment of the Agent Installations of Checkmk
-- cmk_server_mngmnt.yml: The Update and Installation of Checkmk Sites and Versions.
+| File | Description |
+|:----|:-----------|
+| cmk_agent_mngmt.yml| The complete Managment of the Agent Installations of Checkmk | 
+| cmk_server_mngmnt.yml| The Update and Installation of Checkmk Sites and Versions. |
 
 From here you can copy and adapt these scripts to your need (when so, prefix with local_) or just use the provided ones.
 
