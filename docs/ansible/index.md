@@ -32,7 +32,8 @@ From here you can copy and adapt these scripts to your need (when so, prefix wit
 ## Use the Ansible Playbooks directly inside Syncer
 If you not have an Ansible installation or the Ansible Knowledge, you can just run the included stuff from inside the Syncers Folder. Just make sure to install the additional requirements at the first time: pip install -r ./ansible/requirements.txt
 
-After that, theWorkfloww is: 
+After that, the Workfloww is: 
+
 - Change into the CMDB Syncer Directory
 - Load his environment (source ENV/bin/activate)
 - Change to the ansible subdir: cd ./ansible
@@ -41,6 +42,7 @@ After that, theWorkfloww is:
 ## Remote Installation
 If you want to use the Syncers script, but from adifferentt server and to connectt via Rest API,
 these are the Steps:
+
 - [Checkout the Repo](../basics/checkout_code.md)
 - Copy the Inventory File: cp rest_inventory local_rest_inventory
 - Edit the File and set the URL (beware of Proxy) to the Syncer Installation, and set a Secret:
