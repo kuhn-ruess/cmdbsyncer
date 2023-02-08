@@ -9,3 +9,8 @@ You just look up the Formats, Checkmk want's. There are some Examples in the [Ch
       show_bases: false
       show_root_toc_entry: false
 
+::: application.plugins.checkmk_configuration.export_rules
+    options:
+      show_source: false
+      show_bases: false
+      show_root_toc_entry: false

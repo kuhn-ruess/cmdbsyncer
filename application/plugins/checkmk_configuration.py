@@ -66,7 +66,7 @@ def export_groups(account, test_run):
 
     Args:
         account (string): Name Account Config
-        test_run (bool): Only Print Result
+        test_run (bool): Only Print Result ( default is False )
     """
     try:
         target_config = get_account_by_name(account)

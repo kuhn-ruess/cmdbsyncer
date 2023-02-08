@@ -11,3 +11,9 @@ Here you find their options explained:
       show_source: false
       show_bases: false
       show_root_toc_entry: false
+
+::: application.plugins.checkmk.export_hosts
+    options:
+      show_source: false
+      show_bases: false
+      show_root_toc_entry: false
