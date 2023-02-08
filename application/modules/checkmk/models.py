@@ -40,34 +40,34 @@ action_outcome_types = [
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
     """
-    ## Move Host to specified Folder
+    ### Move Host to specified Folder
 
     Hardcode a custom Folder Name in _action_param_ field.
 
-    ## Use Value of given Attribute Name as Folder
+    ### Use Value of given Attribute Name as Folder
 
     Define an Attribute in _action_param_. The value of it, will be used
     as a Folder name for the matching host
 
-    ## Use Attribute Name of given Attribute Value as Folder
+    ### Use Attribute Name of given Attribute Value as Folder
 
     Same like the option before, but just Attribute Name and Attribute Value swapped.
     So you can pick by the attributes value.
 
-    ## Use Pool Folder
+    ### Use Pool Folder
 
     Matching Host will use a Pool Folder. If not action_param is given,
     the system will query from all folders. Otherwise you can provide a comma seperated list
     of Folder Pool Names.
     For more Details, please refer to the [Folder Pool Documentation](folder_pools.md).
 
-    ## Create Checkmk-Attribute
+    ### Create Checkmk-Attribute
 
     The given Attribute Name will be sent as Checkmk Attribute. This way you can set
     every Attribute you want like ipaddress of management board. Please refer to the [documentation in
     Recipes](cmk_attributes.md).
 
-    ## Create Custom Checkmk Attribute
+    ### Create Custom Checkmk Attribute
 
     You can specify a new Attribute as key value pair, separated by double point.
     You can use {{hostname}} as placeholder to create for example:

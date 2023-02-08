@@ -15,3 +15,9 @@ The Rule to configure everything you find in:
       show_source: false
       show_bases: false
       show_root_toc_entry: false
+
+::: application.plugins.checkmk_configuration.export_groups
+    options:
+      show_source: false
+      show_bases: false
+      show_root_toc_entry: false
