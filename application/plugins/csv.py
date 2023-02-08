@@ -1,4 +1,3 @@
-
 """
 CSV Function
 """
@@ -22,10 +21,9 @@ def _cli_csv():
 @click.option("--label_filter", default='')
 def compare_hosts(csv_path, delimiter, hostname_field, label_filter):
     """
-    Check which Hosts from your CSV are not in the syncer
+    ## Check which Hosts from your CSV are not in the syncer
 
-    Example
-    =======
+    ### Example
     _./cmdbsyncer csv compare_hosts path_to.csv --delimiter ';'_
 
     Args:
@@ -57,12 +55,11 @@ def compare_hosts(csv_path, delimiter, hostname_field, label_filter):
 @click.option("--hostname_field", default='host')
 def import_hosts(csv_path, delimiter, hostname_field):
     """
-    Import Hosts from CSV and make File the Master
+    ## Import Hosts from CSV and make File the Master
     Every CSV column, other then the host column, will translate
     into key:value attributes.
 
-    Example
-    =======
+    ### Example
     _./cmdbsyncer csv import_hosts path_to.csv --delimiter ';'_
 
 
@@ -94,12 +91,11 @@ def import_hosts(csv_path, delimiter, hostname_field):
 @click.option("--key", default='csv')
 def inventorize_hosts(csv_path, delimiter, hostname_field, key):
     """
-    Add Inventory Information to hosts.
+    ## Add Inventory Information to hosts
     Source is a CSV. Every other Column then the host Column, will translate
     into key:value attributes.
 
-    Example
-    =======
+    ### Example
     _./cmdbsyncer csv inventorize_hosts path_to.csv --delimiter ';' --key "File1"_
 
     Args:

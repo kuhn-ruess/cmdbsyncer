@@ -22,7 +22,11 @@ from application.plugins.checkmk import _load_rules
 @click.argument("account")
 def export_rules(account):
     """
-    Export all configured Rules to given Checkmk Installations
+    ## Export all configured Rules to given Checkmk Installations
+
+    ### Example
+    _./cmdbsyncer checkmk export_rules SITEACCOUNT_
+
 
     Args:
         account (string): Name Account Config
@@ -54,7 +58,12 @@ def export_rules(account):
 #pylint: disable=too-many-locals, too-many-branches
 def export_groups(account, test_run):
     """
-    Create Groups in Checkmk
+    ## Create Groups in Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_groups SITEACCOUNT_
+
+
     Args:
         account (string): Name Account Config
         test_run (bool): Only Print Result
@@ -84,7 +93,11 @@ def export_groups(account, test_run):
 #pylint: disable=too-many-locals, too-many-branches
 def activate_changes(account):
     """
-    Activate Changes in given Checkmk Instance
+    ## Activate Changes in given Checkmk Instance
+
+    ### Example
+    _./cmdbsyncer checkmk activate_changes SITEACCOUNT_
+
 
     Args:
         account (string): Name Account Config
@@ -117,7 +130,11 @@ def activate_changes(account):
 #pylint: disable=too-many-locals, too-many-branches
 def bake_and_sign_agents(account):
     """
-    Bake and Sign Agents for given Checkmk Instance
+    ## Bake and Sign Agents for given Checkmk Instance
+
+    ### Example
+    _./cmdbsyncer checkmk bake_and_sign_agents SITEACCOUNT_
+
 
     Args:
         account (string): Name Account Config
@@ -153,8 +170,11 @@ def bake_and_sign_agents(account):
 #pylint: disable=too-many-locals
 def inventorize_hosts(account):
     """
-    Do an Status Data inventory on given Checkmk Instance.
+    ## Do an Status Data inventory on given Checkmk Instance.
     Requires CMK Version greater then 2.1p9
+
+    ### Example
+    _./cmdbsyncer checkmk inventorize_hosts SITEACCOUNT_
 
     Args:
         account (string): Name Account Config

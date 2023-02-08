@@ -7,7 +7,7 @@
 - uWSGI and the python3 Plugin of uWSGI must be installed in version 3.9
 
 ## First Steps:
-[Checkout](checkout_code.md) the Code into /var/www/cmdbsyncer.
+[Checkout](setup_code.md) the Code into /var/www/cmdb-syncer.
 We will define a Path in Apache which will proxy to the uWSGI daemon. For this Example: hostapi
 Update application/config.py and adjust the BASE_PREFIX to that path. For example, https://checkmk-server.de/hostapi would be BASE_PREFIX='/hostapi/'
 
@@ -26,5 +26,19 @@ Also rename it as you need and Restart Apache.
 If you left all examples as they are, it would be http[s]://servername/hostapi/admin where you can access the Frontend
 
 
+# Known Problems
+
+## uWSGI Python Version to old on Redhat or Centos
+-   yum -y install gcc libcap-devel libuuid-devel make openssl-devel python39-devel pcre-devel uwsgi-devel
+-   if needed: yum install rpm-config (if redhat-hardened missing)
+-   cd /usr/src/uwsgi/NUMMER
+-   PYTHON=python3.9 /usr/sbin/uwsgi --build-plugin "plugins/python python39"
+-   cp plugin to /usr/lib64/uwsgi
+  
+
+## Filesocket no right for Apache:
+
+-  Add Apache user to uwsgi group
+-   Disable SELinux
 
 
