@@ -54,4 +54,4 @@ This is runs a Development Version which you can use to test everthing
 - Add Addional Informationen from CSV Files to your Hosts (eg. Overwrite IP Addresses)
 
 ## Other
-- [Documentation](https://cmdb-syncer.readthedocs.io/en/latest/)
+- [Documentation](https://cmdbsyncer.readthedocs.io/en/latest/)
