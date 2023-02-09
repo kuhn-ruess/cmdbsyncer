@@ -7,7 +7,7 @@
 - uWSGI and the python3 Plugin of uWSGI must be installed in version 3.9
 
 ## First Steps:
-[Checkout](setup_code.md) the Code into /var/www/cmdb-syncer.
+[Checkout](setup_code.md) the Code into /var/www/cmdbsyncer.
 We will define a Path in Apache which will proxy to the uWSGI daemon. For this Example: hostapi
 Update application/config.py and adjust the BASE_PREFIX to that path. For example, https://checkmk-server.de/hostapi would be BASE_PREFIX='/hostapi/'
 

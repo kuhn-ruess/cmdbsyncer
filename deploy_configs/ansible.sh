@@ -1,2 +1,2 @@
 #!/bin/bash
-cd /var/www/cmdb-syncer && source /var/www/cmdb-syncer/ENV/bin/activate && flask ansible_source $1 $2
+cd /var/www/cmdbsyncer && source /var/www/cmdbsyncer/ENV/bin/activate && flask ansible_source $1 $2
