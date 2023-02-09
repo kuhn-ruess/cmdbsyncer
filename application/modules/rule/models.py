@@ -145,11 +145,6 @@ class FilterAction(db.EmbeddedDocument):
 #   .-- Attribute Rewrite
 class AttributeRewriteAction(db.EmbeddedDocument):
     """
-    Rewrite Action
-
-    Options:
-    ========
-
     Old Attribute Name
     ------------------
     Name of the attribute to rewrite
