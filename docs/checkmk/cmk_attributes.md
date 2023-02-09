@@ -5,7 +5,7 @@ If you'd like to, you can set a rule to convert Syncer Attributes into Checkmk A
 The Easy way to find out this Attribute's Name, is to check with the Swagger Documentation provided in Checkmk
 
 Let's do some Examples.
-The Rule for everything is Checkmk → CMK Export Rules.
+The Rule for everything is **Checkmk → CMK Export Rules**.
 
 ## Find out the Checkmk Attributes Name
 If you don't know the name already, just set a Host manually with this attribute and query it using Swagger Documentation.

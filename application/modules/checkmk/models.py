@@ -36,6 +36,7 @@ action_outcome_types = [
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute", "Create Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
     ("custom_attribute", "Create Custom Checkmk Attribute: Set key:value, Placeholders: {{hostname}}"),
+    ("create_cluster", "Create Cluster. Specify Tags with Nodes as Wildcard (*) and or Comma separated"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
@@ -72,6 +73,12 @@ class CheckmkRuleOutcome(db.EmbeddedDocument):
     You can specify a new Attribute as key value pair, separated by double point.
     You can use {{hostname}} as placeholder to create for example:
     managmentboard:rib-{{hostname}} as new attribute
+
+    ### Create Cluster
+    The Matching Host will be created as a Cluster in Checkmk.
+    Since Cluster have Nodes, you need to tell syncer in witch attribute he will find
+    their Names. You can add the Attributes comma seperated, and use * as Wildcard add the
+    end of the Name. See also the [Documentation](create_cluster.md).
 
     """
     action = db.StringField(choices=action_outcome_types)
@@ -271,7 +278,6 @@ class CheckmkRewriteAttributeRule(db.Document):
         'strict': False
     }
 #.
-
 #   .-- Checkmk Settings
 
 editions = [

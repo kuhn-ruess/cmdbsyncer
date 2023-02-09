@@ -76,6 +76,10 @@ def import_hosts(csv_path, delimiter, hostname_field):
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
             hostname = row[hostname_field]
+            keys = list(row.keys())
+            for dkey in keys:
+                if not row[dkey]:
+                    del row[dkey]
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             host_obj = Host.get_host(hostname)
             del row[hostname_field]
@@ -113,6 +117,10 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key):
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
             hostname = row[hostname_field]
+            keys = list(row.keys())
+            for dkey in keys:
+                if not row[dkey]:
+                    del row[dkey]
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Got Data for {hostname}")
             del row[hostname_field]
             new_attributes[hostname] = {f"{key}_{x}":y for x,y in row.items()}
