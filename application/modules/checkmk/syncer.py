@@ -1,8 +1,7 @@
 """
 Add Hosts into CMK Version 2 Installations
 """
-#pylint: disable=too-many-arguments, too-many-statements, consider-using-get
-from application import log
+#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member, too-many-locals, too-many-branches
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
@@ -57,6 +56,8 @@ class SyncCMK2(CMK2):
         db_objects = Host.objects(available=True)
         total = len(db_objects)
         counter = 0
+        clusters = []
+        cluster_updates = []
         for db_host in db_objects:
             # Actions
             counter += 1
@@ -81,6 +82,10 @@ class SyncCMK2(CMK2):
                 # Get the Folder where we move to
                 folder = next_actions['move_folder']
 
+            cluster_nodes = [] # if true, we have a cluster
+            if 'create_cluster' in next_actions:
+                cluster_nodes = next_actions['create_cluster']
+
             if folder not in existing_folders:
                 # We may need to create them later
                 self.create_folder(folder)
@@ -100,27 +105,42 @@ class SyncCMK2(CMK2):
 
             if db_host.hostname not in cmk_hosts:
                 # Create since missing
-                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Need to created in Checkmk")
-                self.create_host(db_host, folder, labels, additional_attributes)
+                if cluster_nodes:
+                    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Will be created as Cluster")
+                    # We need to create them Later, since we not know that we have all nodes
+                    clusters.append((db_host, folder, labels, \
+                                        cluster_nodes, additional_attributes))
+                else:
+                    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Need to created in Checkmk")
+                    self.create_host(db_host, folder, labels, additional_attributes)
                 # Add Host information to the dict, for later cleanup.
                 # So no need to query all the hosta again
-                cmk_hosts[db_host.hostname] = {'extensions': {
-                                                    'attributes':{
-                                                           'labels': {
-                                                                'cmdb_syncer': self.account_id
-                                                                }
-                                                            }
-                                                    }
-                                                }
-            else :
+                cmk_hosts[db_host.hostname] = \
+                            {'extensions': {
+                                'attributes':{
+                                     'labels': {
+                                          'cmdb_syncer': self.account_id
+                                }}
+                             }}
+            else:
                 cmk_host = cmk_hosts[db_host.hostname]
                 # Update if needed
                 self.update_host(db_host, cmk_host, folder,
                                 labels, additional_attributes, remove_attributes)
+                if cluster_nodes:
+                    cmk_cluster = cmk_host['extensions']['cluster_nodes']
+                    cluster_updates.append((db_host, cmk_cluster, cluster_nodes))
 
 
 
             db_host.save()
+
+        ## Create the Clusters
+        print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Check if we need to handle Clusters")
+        for cluster in clusters:
+            self.create_cluster(*cluster)
+        for cluster in cluster_updates:
+            self.update_cluster_nodes(*cluster)
 
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
@@ -174,6 +194,7 @@ class SyncCMK2(CMK2):
 
 #.
 #   .-- Create Host
+
     def create_host(self, db_host, folder, labels, additional_attributes=None):
         """
         Create the not yet existing host in CMK
@@ -193,6 +214,27 @@ class SyncCMK2(CMK2):
         print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Created Host {db_host.hostname}")
 
 #.
+#   .-- Create Cluster
+    def create_cluster(self, db_host, folder, labels, nodes, additional_attributes=None):
+        """
+        Create a not existing Cluster in CHeckmk
+        """
+        url = "/domain-types/host_config/collections/clusters"
+        body = {
+            'host_name' : db_host.hostname,
+            'folder' : '/' if not folder else folder,
+            'attributes': {
+                'labels' : labels,
+            },
+            'nodes' : nodes,
+        }
+        if additional_attributes:
+            body['attributes'].update(additional_attributes)
+
+        self.request(url, method="POST", data=body)
+        print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} Created Cluster {db_host.hostname}")
+
+#.
 #   .-- Get Etag
 
     def get_etag(self, db_host):
@@ -205,8 +247,29 @@ class SyncCMK2(CMK2):
         return headers.get('ETag')
 
 #.
+#   .-- Update Cluster Nodes
+    def update_cluster_nodes(self, db_host, cmk_nodes, syncer_nodes):
+        """
+        Update the Nodes of Cluster in case of change
+        """
+        if cmk_nodes != syncer_nodes:
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Cluster has new Nodes {syncer_nodes}")
+            etag = self.get_etag(db_host)
+            update_headers = {
+                'if-match': etag
+            }
+            update_url = f"/objects/host_config/{db_host.hostname}/properties/nodes"
+            update_body = {
+                'nodes': syncer_nodes
+            }
+            self.request(update_url, method="PUT",
+                data=update_body,
+                additional_header=update_headers)
+
+#.
 #   .-- Update Host
-    def update_host(self, db_host, cmk_host, folder, labels, additional_attributes, remove_attributes):
+    def update_host(self, db_host, cmk_host, folder, \
+                    labels, additional_attributes, remove_attributes):
         """
         Update a Existing Host in Checkmk
         """

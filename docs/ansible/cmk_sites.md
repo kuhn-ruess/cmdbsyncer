@@ -9,12 +9,12 @@ The Included Playbook cmk_server_mngmnt.yml makes use of the following functions
 ## How It works
 
 Configure your Checkmk Target Version, and your Checkmk Sites inside the Syncer. 
-Then run the Playbook.  The Configuration can be Found in Rules→ Checkmk
+Then run the Playbook.  The Configuration can be Found in **Rules→ Checkmk**
 
 Now the Details:
 
 ### CMK Server Settings
-*Rules →Checkmk →CMK Server Settings* <br>
+**Rules →Checkmk →CMK Server Settings** <br>
 Here you set the Target Version you want to use. The needed information can be found on the Checkmk Download Page:
 
 ![](img/cmk_download.png)
@@ -34,7 +34,7 @@ When you create a rule, you find the following options:
 |Subscription Username/ Password | Your Checkmk Subscription Account |
 
 ### CMK Sever Sites
-*Rules →Checkmk →CMK Server Sites* <br>
+**Rules →Checkmk →CMK Server Sites** <br>
 As Second you add all your Sites here. Every Entry references to a Server Setting entry.
 Make sure that the operating system will match to the Server Settings.
 

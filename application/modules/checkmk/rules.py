@@ -8,7 +8,7 @@ from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
 from application.modules.checkmk import poolfolder
 
-class CheckmkRulesetRule(Rule): # pylint: disable=too-few-public-methods
+class CheckmkRulesetRule(Rule): # pylint: disable=too-few-public-methods, too-many-locals, too-many-nested-blocks
     """
     Rule to create Rulesets in Checkmk
     """
@@ -48,7 +48,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
     def add_outcomes(self, rule, outcomes):
         """ Handle the Outcomes """
-        #pylint: disable=too-many-branches
+        #pylint: disable=too-many-branches, too-many-statements
 
         for outcome in rule:
             # We add only the outcome of the
@@ -62,6 +62,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             outcomes.setdefault('attributes', [])
             outcomes.setdefault('custom_attributes', [])
             outcomes.setdefault('remove_attributes', [])
+            outcomes.setdefault('create_cluster', [])
 
             if outcome['action'] == 'move_folder':
                 outcomes['move_folder'] += self.format_foldername(outcome['action_param'])
@@ -108,7 +109,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                                     f"{ColorCodes.ENDC}, add folder: '{value}'")
                             outcomes['move_folder'] += self.format_foldername(value)
                         else:
-                            print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found tag but content null")
+                            print_debug(self.debug, \
+                                f"----- {ColorCodes.OKGREEN}Found tag but content null")
 
             if outcome['action'] == 'tag_as_folder':
                 search_value = outcome['action_param']
@@ -121,12 +123,27 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                                     f"{ColorCodes.ENDC}, add folder: '{tag}'")
                             outcomes['move_folder'] += self.format_foldername(tag)
                         else:
-                            print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found value but content null")
+                            print_debug(self.debug, \
+                                f"----- {ColorCodes.OKGREEN}Found value but content null")
+
+            if outcome['action'] == 'create_cluster':
+                params = [x.strip() for x in outcome['action_param'].split(',')]
+                for node_tag in params:
+                    if node_tag.endswith('*'):
+                        for tag, value in self.attributes.items():
+                            if tag.startswith(node_tag[:-1]):
+                                outcomes['create_cluster'].append(value)
+                    else:
+                        if node := self.attributes.get(node_tag):
+                            outcomes['create_cluster'].append(node)
 
             # Cleanup in case not folder rule applies,
             # we have nothing to return to the plugins
             if not outcomes['move_folder']:
                 del outcomes['move_folder']
+            if not outcomes['remove_attributes']:
+                del outcomes['remove_attributes']
+
         print_debug(self.debug, "")
         return outcomes
 

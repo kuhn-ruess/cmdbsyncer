@@ -60,7 +60,7 @@ To start easier, you can create a Set of Default rules with this command:
 You can set which Hosts you want to manage via Ansible, or deploy custom Variables to some Hosts with the Ansible Rules. The normal Filter and Rewrite Function also apply here. 
 
 The Conditions are configured in:
-*Rules →Ansible →Custom Variables* <br>
+**Rules →Ansible →Custom Variables** <br>
 
  To set the Credentials, Ansible should use contact Checkmk, see here:
 ![](img/credentials.png)
