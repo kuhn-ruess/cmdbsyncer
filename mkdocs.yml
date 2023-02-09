@@ -37,6 +37,7 @@ nav:
           - Folder Pools: checkmk/folder_pools.md
           - Recipes:
               - Custom Checkmk Attributes: checkmk/cmk_attributes.md
+              - Create Checkmk Cluster: checkmk/create_cluster.md
               #- Checkmk Rules: checkmk/create_cmk_rules.md
       - Cisco Dna: ciscodna/index.md
       - Netbox: netbox/index.md
