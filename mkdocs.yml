@@ -38,6 +38,7 @@ nav:
           - Recipes:
               - Custom Checkmk Attributes: checkmk/cmk_attributes.md
               - Create Checkmk Cluster: checkmk/create_cluster.md
+              - Manage Checkmk Contact Groups: checkmk/recipe_contact_groups.md
               #- Checkmk Rules: checkmk/create_cmk_rules.md
       - Cisco Dna: ciscodna/index.md
       - Netbox: netbox/index.md

@@ -194,7 +194,7 @@ class SyncConfiguration(CMK2):
             elif outcome.foreach_type == 'label':
                 print("Check for label:")
                 for label_key in attributes[0].get(outcome.foreach, []):
-                    print(f"CHecking: {label_key}")
+                    print(f"Checking: {label_key}")
                     if regex_match:
                         label_key = regex_match.findall(label_key)[0]
                     label_key = self.replace(label_key)
@@ -236,7 +236,7 @@ class SyncConfiguration(CMK2):
                     syncers_groups_in_cmk.append(cmk_name)
 
 
-            print(f"{CC.OKBLUE} *{CC.ENDC} Create {group_type}s if needed")
+            print(f"{CC.OKBLUE} *{CC.ENDC} Create {group_type} if needed")
             entries = []
             new_group_names = []
             for new_group_alias in configured_groups:

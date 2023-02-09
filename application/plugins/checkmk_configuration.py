@@ -180,7 +180,7 @@ def inventorize_hosts(account):
         account (string): Name Account Config
     """
     inventory_target = [
-        'site', 'inventory_failed','is_offline','tag_agent',
+        'site', 'inventory_failed','is_offline',
     ]
     config = get_account_by_name(account)
     cmk = CMK2()
@@ -199,7 +199,7 @@ def inventorize_hosts(account):
         attributes = host['extensions']['effective_attributes']
         host_inventory = {}
         for attribute in attributes:
-            if attribute in inventory_target:
+            if attribute in inventory_target or attribute.startswith('tag_'):
                 host_inventory[f"cmk_{attribute}"] = attributes[attribute]
 
         config_inventory[hostname] = host_inventory

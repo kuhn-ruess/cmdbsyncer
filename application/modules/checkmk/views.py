@@ -137,7 +137,8 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                f"<tr><th>Folder Index</th><td>{rule.folder_index}</td></tr>" \
                f"<tr><th>Comment</th><td>{rule.comment}</td></tr>" \
                f"<tr><th>Value Template</th><td>{rule.value_template}</td></tr>" \
-               f"<tr><th>Condtion Label Template</th><td>{rule.condition_label_template}</td></tr>"\
+               f"<tr><th>Condition Label Template</th><td>{rule.condition_label_template}</td></tr>"\
+               f"<tr><th>Condition Host</th><td>{rule.condition_host}</td></tr>"\
                "</table>"\
                "</td></tr>"
     html += "</table>"
