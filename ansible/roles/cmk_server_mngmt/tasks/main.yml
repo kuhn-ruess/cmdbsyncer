@@ -58,7 +58,7 @@
   args:
     executable: /bin/bash
   when: server_site_version.stderr.startswith("No such site")
-  register: site_installed
+  register: site_just_installed
 
 - name: "Update Site from {{ server_site_version.stdout}} to {{ cmk_version }}.{{ cmk_edition }}"
   become: True
@@ -68,4 +68,4 @@
     omd start {{ cmk_site }}
   args:
     executable: /bin/bash
-  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_installed
+  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed

@@ -173,8 +173,6 @@ class CheckmkGroupRule(db.Document):
 
 class RuleMngmtOutcome(db.EmbeddedDocument):
     """
-    Below all Options of the Configuration:
-
     ### Ruleset
     The needed Value can be found as "Ruleset name" within the
     Checkmk "Rule Properties" part for the needed Rule. You may need to enable
@@ -202,6 +200,9 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     Defines which label has to match.
     Labels format is key:value. You can Hardcode something or use the same Placeholders
     like in the Value Templates (Jinja2). Only one Label can be used.
+
+    ### Condition Host
+    It's possible to define a Host Condition. Placeholder is {{ hostname }}
     """
 
     ruleset = db.StringField()
@@ -209,7 +210,8 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     folder_index = db.IntField(default=0)
     comment = db.StringField()
     value_template = db.StringField(required=True)
-    condition_label_template = db.StringField(required=True)
+    condition_label_template = db.StringField()
+    condition_host = db.StringField()
 
     meta = {
         'strict': False,
@@ -314,4 +316,8 @@ class CheckmkSite(db.Document):
     settings_master = db.ReferenceField(CheckmkSettings, required=True)
 
     enabled = db.BooleanField()
+
+    meta = {
+        'strict': False,
+    }
 #.
