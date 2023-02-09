@@ -80,18 +80,46 @@ class SyncConfiguration(CMK2):
                 for rule_type, rules in host_actions.items():
                     for rule_params in rules:
                         # Render Template Value
+                        condition_tpl = {"host_tags": [], "service_labels": []}
                         value_tpl = jinja2.Template(rule_params['value_template'])
                         value = \
                             value_tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
-                        condition_tpl = \
-                            jinja2.Template(rule_params['condition_label_template'])
-                        condition = \
-                            condition_tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
+
+                        if rule_params['condition_label_template']:
+                            label_condition_tpl = \
+                                jinja2.Template(rule_params['condition_label_template'])
+                            label_condition = \
+                                label_condition_tpl.render(HOSTNAME=db_host.hostname, \
+                                                                **attributes['all'])
+
+                            label_key, label_value = label_condition.split(':')
+                            condition_tpl['host_labels'] = [{
+                                                    "key": label_key,
+                                                    "operator": "is",
+                                                    "value": label_value
+                                                 }]
+                        del rule_params['condition_label_template']
+
+                        if rule_params['condition_host']:
+                            host_condition_tpl = \
+                                jinja2.Template(rule_params['condition_host'])
+
+                            host_condition = \
+                                host_condition_tpl.render(HOSTNAME=db_host.hostname, \
+                                                                **attributes['all'])
+                            if host_condition:
+                                condition_tpl["host_name"]= {
+                                                "match_on": host_condition.split(','),
+                                                "operator": "one_of"
+                                              }
+
+                        del rule_params['condition_host']
+
                         # Overwrite the Params again
                         rule_params['value'] = value
                         del rule_params['value_template']
-                        rule_params['condition'] = condition
-                        del rule_params['condition_label_template']
+
+                        rule_params['condition'] = condition_tpl
 
                         rulsets_by_type.setdefault(rule_type, [])
                         if rule_params not in rulsets_by_type[rule_type]:
@@ -109,14 +137,12 @@ class SyncConfiguration(CMK2):
 
 
                 value = cmk_rule['extensions']['value_raw']
-                cmk_condition = cmk_rule['extensions']['conditions']['host_labels'][0]
-                condition = f"{cmk_condition['key']}:{cmk_condition['value']}"
+                cmk_condition = cmk_rule['extensions']['conditions']
                 rule_found = False
                 for rule in rules:
                     cmk_value = ast.literal_eval(rule['value'])
                     check_value = ast.literal_eval(value)
-                    #print(DeepDiff(rule['value'], value))
-                    if rule['condition'] == condition and cmk_value == check_value:
+                    if rule['condition'] == cmk_condition and cmk_value == check_value:
                         rule_found = True
                         # Remove from list, so that it not will be created in the next step
                         rulsets_by_type[ruleset_name].remove(rule)
@@ -131,7 +157,6 @@ class SyncConfiguration(CMK2):
         print(f"{CC.OKGREEN} -- {CC.ENDC} Create new Rules")
         for ruleset_name, rules in rulsets_by_type.items():
             for rule in rules:
-                label_key, label_value = rule['condition'].split(':')
                 template = {
                     "ruleset": f"{ruleset_name}",
                     "folder": rule['folder'],
@@ -140,21 +165,13 @@ class SyncConfiguration(CMK2):
                         "description": f"cmdbsyncer_{self.account_id}",
                         "comment": rule['comment'],
                     },
+                    'conditions' : rule['condition'],
                     "value_raw": rule['value'],
-                    "conditions": {
-                        "host_tags": [],
-                        "host_labels": [
-                            {
-                                "key": label_key,
-                                "operator": "is",
-                                "value": label_value
-                            }
-                        ],
-                    }
                 }
 
+
                 print(f"{CC.OKBLUE} *{CC.ENDC} Create Rule in {ruleset_name} " \
-                      f"({label_key}:{label_value} = {rule['value']})")
+                      f"({rule['condition']})")
                 url = "domain-types/rule/collections/all"
                 try:
                     self.request(url, data=template, method="POST")
