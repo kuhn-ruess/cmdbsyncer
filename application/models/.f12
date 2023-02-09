@@ -1,2 +1,2 @@
-sudo cp *.py /var/www/cmdb-syncer/application/models/
+sudo cp *.py /var/www/cmdbsyncer/application/models/
 

@@ -7,13 +7,15 @@ The most common way to use the application without Docker is direct from Code. T
 ## Download Repo
 You need to check out the Code directly from GitHub.  Go to the Repo, and copy the Clone URL to example /var/www. In all examples, this Path is used.
 
+[Repo](https://github.com/kuhn-ruess/cmdbsyncer)
+
 ![](img/checkout_github.png)
 
 Example:
 ```
 cd /var/www
 git clone <url_to_project>
-cd cmdb-syncer
+cd cmdbsyncer
 ```
 
 
@@ -21,7 +23,7 @@ cd cmdb-syncer
 The Syncer Need some Python Libraries. But these we don't want to install into your system.
 Instead, we create a virtual environment. Make sure that you have at least python3.9. The Python Interpreter on your system may have a different Name.
 
-Make always sure you are in /var/www/cmdb-syncer
+Make always sure you are in /var/www/cmdbsyncer
 
 `python3.9 -m venv ENV`
 
