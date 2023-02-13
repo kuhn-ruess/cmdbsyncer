@@ -1,0 +1,8 @@
+---
+- name: Install Checkmk Version
+  become: true
+  ansible.builtin.yum:
+    name: "/tmp/{{ cmk_version_filename }}"
+    state: present
+    disable_gpg_check: true
+  when: checkmk_version_installed.stdout != cmk_version
