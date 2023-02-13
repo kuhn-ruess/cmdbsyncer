@@ -40,6 +40,8 @@ nav:
               - Create Checkmk Cluster: checkmk/create_cluster.md
               - Manage Checkmk Contact Groups: checkmk/recipe_contact_groups.md
               - Create Checkmk Rules: checkmk/recipe_checkmk_rules.md
+              - Checkmk Agenten Automation: ansible/cmk_agents.md
+              - Checkmk Site Automation: ansible/cmk_sites.md
       - Cisco Dna: ciscodna/index.md
       - Netbox: netbox/index.md
       - SYS: sys/index.md
