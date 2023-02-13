@@ -49,5 +49,5 @@ As a current limit, the System can only manage one Checkmk Site per Server.
 ### Run the automation
 With the settings done, you can run Ansible now.
 
-`ansible-playbooks -i cmk_server_inventory cmk_server_mngmt.yml`
+`ansible-playbook -i cmk_server_inventory cmk_server_mngmt.yml`
 

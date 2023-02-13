@@ -79,7 +79,7 @@ The command will tell you all variable outcomes you will have in Ansible.
 
 ## Ansible Command
 
-`ansible-playbooks -i inventory cmk_agent_mngmt.yml`
+`ansible-playbook -i inventory cmk_agent_mngmt.yml`
 
 Please just replace the inventory source if needed.
 
