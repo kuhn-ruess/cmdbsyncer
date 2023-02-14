@@ -31,10 +31,11 @@ class SyncConfiguration(CMK2):
     """
 
     @staticmethod
-    def replace(input_str):
+    def replace(input_raw):
         """
         Replace all given inputs
         """
+        input_str = str(input_raw)
         for needle, replacer in replacers:
             input_str = input_str.replace(needle, replacer)
         return input_str.strip()
