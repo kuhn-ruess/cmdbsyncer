@@ -7,6 +7,7 @@ nav:
       - Setup:
         - Installation from Code: basics/setup_code.md
         - Installation with Docker: basics/setup_docker.md
+        - Updates: basics/updates.md
         - First Steps: basics/first_steps.md
         - Recipes:
             - UWSGI and Apache: basics/uwsgi_apache.md
@@ -35,13 +36,14 @@ nav:
           - Groups Management: checkmk/groups_management.md
           - Rules Management: checkmk/rules_management.md
           - Folder Pools: checkmk/folder_pools.md
-          - Recipes:
-              - Custom Checkmk Attributes: checkmk/cmk_attributes.md
-              - Create Checkmk Cluster: checkmk/create_cluster.md
-              - Manage Checkmk Contact Groups: checkmk/recipe_contact_groups.md
-              - Create Checkmk Rules: checkmk/recipe_checkmk_rules.md
-              - Checkmk Agenten Automation: ansible/cmk_agents.md
-              - Checkmk Site Automation: ansible/cmk_sites.md
+          - Recipes Checkmk:
+              - Custom Attributes: checkmk/cmk_attributes.md
+              - Create Cluster: checkmk/create_cluster.md
+              - Manage Contact Groups: checkmk/recipe_contact_groups.md
+              - Create Rules: checkmk/recipe_checkmk_rules.md
+              - Create Multiple HTTP Rules: checkmk/recipe_multiple_http_rules.md
+              - Full Agenten Automations: ansible/cmk_agents.md
+              - Site Update Automations: ansible/cmk_sites.md
       - Cisco Dna: ciscodna/index.md
       - Netbox: netbox/index.md
       - SYS: sys/index.md
