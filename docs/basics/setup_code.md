@@ -14,7 +14,7 @@ You need to check out the Code directly from GitHub.  Go to the Repo, and copy t
 Example:
 ```
 cd /var/www
-git clone <url_to_project>
+git clone https://github.com/kuhn-ruess/cmdbsyncer
 cd cmdbsyncer
 ```
 
