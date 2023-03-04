@@ -25,8 +25,13 @@ def match(value, needle, condition, negate=False):
     Check for Match for given params
     """
     # pylint: disable=too-many-branches, too-many-return-statements
+    if condition == 'ignore' and negate:
+        # In case that rule ignore is negate, than the condition simply not match
+        return False
+
     if condition == 'ignore':
         return True
+
     if condition == 'bool':
         value = make_bool(value)
         needle = make_bool(needle)

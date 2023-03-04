@@ -12,7 +12,7 @@ condition_types = [
     ('in_list', "String in list (comma seperated) (x in [y,y,y])"),
     ('ewith', "String ends with (x.endswith(y)"),
     ('swith', "String starts with (x.startswith(y)"),
-    ('regex', "Regex Match (can cause performance problems)"),
+    ('regex', "Regex Match"),
     ('bool', "Match Bool, True or False bool(value)"),
     ('ignore', "Match All (*)"),
 ]
