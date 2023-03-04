@@ -94,6 +94,9 @@ class SyncConfiguration(CMK2):
                                                                 **attributes['all'])
 
                             label_key, label_value = label_condition.split(':')
+                            # Fix bug in case of empty Labels in store
+                            if not label_key and not label_value:
+                                continue
                             condition_tpl['host_labels'] = [{
                                                     "key": label_key,
                                                     "operator": "is",
