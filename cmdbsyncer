@@ -2,20 +2,24 @@
 """
 CMDB Syncer CLI Interface
 """
-import os, sys
+import os
+import sys
+import warnings
 if 'config' not in os.environ:
     os.environ['config'] = 'prod'
 
-try:
-    from application import app
-    from application import VERSION
-    if len(sys.argv) == 1:
-        print(f"CMDB Syncer Version: {VERSION}")
-except Exception as exp:
-    raise
-    print("Cannot Load Application. Is the Virtual Environment loaded?")
-    print(exp)
-    sys.exit(1)
+with warnings.catch_warnings():
+    warnings.filterwarnings('ignore', 'Fields missing from ruleset', UserWarning)
 
-if __name__ == '__main__':
-    app.cli()
+    try:
+        from application import app
+        from application import VERSION
+        if len(sys.argv) == 1:
+            print(f"CMDB Syncer Version: {VERSION}")
+    except Exception as exp: #pylint: disable=broad-except
+        print("Cannot Load Application. Is the Virtual Environment loaded?")
+        print(exp)
+        sys.exit(1)
+
+    if __name__ == '__main__':
+        app.cli()

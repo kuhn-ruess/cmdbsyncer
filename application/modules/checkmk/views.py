@@ -5,17 +5,28 @@ from markupsafe import Markup
 from wtforms import HiddenField, StringField
 from flask import request
 from flask_admin import expose
+from flask_admin.form import rules
 from mongoengine.errors import DoesNotExist
 
 from flask_login import current_user
 from application.views.default import DefaultModelView
 
-from application.modules.rule.views import RuleModelView
+from application.modules.rule.views import RuleModelView, divider, _render_full_conditions
 from application.modules.checkmk.models import action_outcome_types
 from application.plugins.checkmk import _load_rules
 from application.modules.checkmk.syncer import SyncCMK2
 
 from application.models.host import Host
+
+def _render_bi_rule(_view, _context, model, _name):
+    """
+    Render BI Rule
+    """
+    html = "<table width=100%>"
+    for idx, entry in enumerate(model.outcomes):
+        html += f"<tr><td>{idx}</td><td>{entry['description']}</td></tr>"
+    html += "</table>"
+    return Markup(html)
 
 def _render_checkmk_outcome(_view, _context, model, _name):
     """
@@ -174,11 +185,89 @@ class CheckmkGroupRuleView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+
+class CheckmkBiRuleView(DefaultModelView):
+    """
+    Custom BI Rule View
+    """
+
+    form_excluded_columns = (
+        'render_full_conditions',
+        'render_cmk_bi_aggregation',
+    )
+
+    #@TODO: Fix that it's not possible just to reference to from_subdocuments_template
+    form_subdocuments = {
+        'conditions': {
+            'form_subdocuments' : {
+                None: {
+                    'form_widget_args': {
+                        'hostname_match': {'style': 'background-color: #2EFE9A;' },
+                        'hostname': { 'style': 'background-color: #2EFE9A;' },
+                        'tag_match': { 'style': 'background-color: #81DAF5;' },
+                        'tag': { 'style': 'background-color: #81DAF5;' },
+                        'value_match': { 'style': 'background-color: #81DAF5;' },
+                        'value': { 'style': 'background-color: #81DAF5;'},
+                    },
+                    'form_overrides' : {
+                        'hostname': StringField,
+                        'tag': StringField,
+                        'value': StringField,
+                    },
+                    'form_rules' : [
+                        rules.FieldSet(('match_type',), "Condition Match Type"),
+                        rules.HTML(divider % "Match on Host"),
+                        rules.FieldSet(
+                            ('hostname_match', 'hostname', 'hostname_match_negate'), "Host Match"),
+                        rules.HTML(divider % "Match on Attribute"),
+                        rules.FieldSet(
+                            (
+                                'tag_match', 'tag', 'tag_match_negate',
+                                'value_match', 'value', 'value_match_negate',
+                            ), "Attribute Match"),
+                    ]
+                }
+            }
+        },
+        'outcomes' : {
+            'form_subdocuments' : {
+                None: {
+                    'form_widget_args': {
+                        'rule_template' : {"rows": 10},
+                    },
+                }
+            }
+        }
+    }
+
+    column_formatters = {
+        'render_full_conditions': _render_full_conditions,
+        'render_cmk_bi_rule': _render_bi_rule,
+    }
+
+    column_labels = {
+        'render_cmk_bi_rule': "Rules",
+        'render_full_conditions': "Conditions",
+    }
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Cleanup Inputs
+        """
+        for rule in model.outcomes:
+            rule.rule_template = rule.rule_template.replace('\\n',' ')
+            rule.rule_template = rule.rule_template.replace('false','False')
+            rule.rule_template = rule.rule_template.replace('true','True')
+
+        return super().on_model_change(form, model, is_created)
+
+
 class CheckmkMngmtRuleView(RuleModelView):
     """
     Custom Group Model View
     """
 
+    #@TODO: Fix that it's not possible just to reference to from_subdocuments_template
     form_subdocuments = {
         'conditions': {
             'form_subdocuments' : {
@@ -196,6 +285,18 @@ class CheckmkMngmtRuleView(RuleModelView):
                         'tag': StringField,
                         'value': StringField,
                     },
+                    'form_rules' : [
+                        rules.FieldSet(('match_type',), "Condition Match Type"),
+                        rules.HTML(divider % "Match on Host"),
+                        rules.FieldSet(
+                            ('hostname_match', 'hostname', 'hostname_match_negate'), "Host Match"),
+                        rules.HTML(divider % "Match on Attribute"),
+                        rules.FieldSet(
+                            (
+                                'tag_match', 'tag', 'tag_match_negate',
+                                'value_match', 'value', 'value_match_negate',
+                            ), "Attribute Match"),
+                    ]
                 }
             }
         }

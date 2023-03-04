@@ -30,18 +30,18 @@ class AnsibleCustomVariablesView(RuleModelView):
                         'tag': StringField,
                         'value': StringField,
                     },
-                'form_rules' : [
-                    rules.FieldSet(('match_type',), "Condition Match Type"),
-                    rules.HTML(divider % "Match on Host"),
-                    rules.FieldSet(
-                        ('hostname_match', 'hostname', 'hostname_match_negate'), "Host Match"),
-                    rules.HTML(divider % "Match on Attribute"),
-                    rules.FieldSet(
-                        (
-                            'tag_match', 'tag', 'tag_match_negate',
-                            'value_match', 'value', 'value_match_negate',
-                        ), "Attribute Match"),
-                ]
+                    'form_rules' : [
+                        rules.FieldSet(('match_type',), "Condition Match Type"),
+                        rules.HTML(divider % "Match on Host"),
+                        rules.FieldSet(
+                            ('hostname_match', 'hostname', 'hostname_match_negate'), "Host Match"),
+                        rules.HTML(divider % "Match on Attribute"),
+                        rules.FieldSet(
+                            (
+                                'tag_match', 'tag', 'tag_match_negate',
+                                'value_match', 'value', 'value_match_negate',
+                            ), "Attribute Match"),
+                    ]
                 }
             }
         }

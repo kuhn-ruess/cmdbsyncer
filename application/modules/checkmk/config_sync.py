@@ -300,3 +300,72 @@ class SyncConfiguration(CMK2):
         log.log(f"Checkmk Group synced with {self.account_name}",
                     source="CMK_GROUP_SYNC", details=messages)
 #.
+#   .-- Export Bi Rules
+    def export_bi_rules(self):
+        """
+        Export BI Rules
+        """
+        print(f"\n{CC.HEADER}Build needed Rules{CC.ENDC}")
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
+
+
+        for db_host in Host.objects(available=True):
+            attributes = self.get_host_attributes(db_host)
+            if not attributes:
+                continue
+            host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+            unique_rules = {}
+            related_packs = []
+            if host_actions:
+                for rule_type, rules in host_actions.items():
+                    for rule_params in rules:
+                        # Render Template Value
+                        tpl = jinja2.Template(rule_params['rule_template'])
+                        rule_body = \
+                            tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
+                        rule_dict = ast.literal_eval(rule_body)
+                        unique_rules[rule_dict['id']] = rule_dict
+                        related_packs.append(rule_dict['pack_id'])
+
+
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Load Rule Packs from Checkmk")
+        found_list = []
+        create_list = []
+        sync_list = []
+        delete_list = []
+        unique_rules_keys = list(unique_rules.keys())
+        for pack in related_packs:
+            print(f"{CC.HEADER}Check Pack {pack} {CC.ENDC}")
+            url = f"/objects/bi_pack/{pack}"
+            response = self.request(url, method="GET")
+            for cmk_rule in response[0]['members']['rules']['value']:
+                cmk_rule_id = cmk_rule['href'].split('/')[-1]
+                found_list.append(cmk_rule_id)
+                if cmk_rule_id not in unique_rules_keys:
+                    delete_list.append(cmk_rule_id)
+            for local_rule in unique_rules_keys:
+                if local_rule not in found_list:
+                    create_list.append(local_rule)
+                else:
+                    sync_list.append(local_rule)
+
+            for delete_id in delete_list:
+                url = f"/objects/bi_rule/{delete_id}"
+                del_response = self.request(url, method="DELETE")[1]
+                print(f"{CC.WARNING} *{CC.ENDC} Rule {delete_id} deleted. Status: {del_response}")
+
+            for create_id in create_list:
+                url = f"/objects/bi_rule/{create_id}"
+                self.request(url, data=unique_rules[create_id], method="POST")[0]
+                print(f"{CC.OKGREEN} *{CC.ENDC} Rule {create_id} created.")
+
+            for sync_id in sync_list:
+                print(f"{CC.OKGREEN} *{CC.ENDC} Check {sync_id} for Changes.")
+                url = f"/objects/bi_rule/{sync_id}"
+                cmk_rule = self.request(url, method="GET")[0]
+                if cmk_rule != unique_rules[sync_id]:
+                    print(f"{CC.WARNING}   *{CC.ENDC} Sync needed")
+                    self.request(url, data=unique_rules[sync_id],  method="PUT")[0]
+#.
+
+
