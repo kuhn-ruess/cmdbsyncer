@@ -35,8 +35,6 @@
 - include_tasks: "{{ ansible_os_family }}-tasks.yml"
 
 
-# Check Version of Site {{ cmk_site }} vs {{ cmk_version }}
-
 - name: "Check Site version of {{ cmk_site }}"
   become: True
   ansible.builtin.shell: |
@@ -60,7 +58,7 @@
   when: server_site_version.stderr.startswith("No such site")
   register: site_just_installed
 
-- name: "Update Site from {{ server_site_version.stdout}} to {{ cmk_version }}.{{ cmk_edition }}"
+- name: "Update Site {{ cmk_site }} to {{ cmk_version }}.{{ cmk_edition }}"
   become: True
   ansible.builtin.shell: |
     omd stop {{ cmk_site }}
