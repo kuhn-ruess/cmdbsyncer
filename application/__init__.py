@@ -87,6 +87,9 @@ admin.add_view(CustomAttributeView(CustomAttributeRule, name="Custom Attributes"
 #.
 #   .-- Checkmk
 admin.add_sub_category(name="Checkmk", parent_name="Rules")
+admin.add_link(MenuLink(name='Debug Config', category='Checkmk',
+                        url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
+
 from application.modules.checkmk.models import CheckmkRule, CheckmkGroupRule, CheckmkFilterRule
 from application.modules.checkmk.views import CheckmkRuleView, CheckmkGroupRuleView
 
@@ -95,25 +98,31 @@ from application.modules.checkmk.models import CheckmkRewriteAttributeRule
 admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Checkmk"))
 admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter", category="Checkmk"))
-admin.add_view(CheckmkRuleView(CheckmkRule, name="CMK Export Rules", category="Checkmk"))
+admin.add_view(CheckmkRuleView(CheckmkRule, name="Export Rules", category="Checkmk"))
 admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
-                                    name="CMK Groups Management", category="Checkmk"))
+                                    name="Checkmk Groups Management", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkRuleMngmt
 from application.modules.checkmk.views import CheckmkMngmtRuleView
 admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
-                                    name="CMK Rules Management", category="Checkmk"))
+                                    name="Checkmk Rules Management", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkFolderPool
 from application.modules.checkmk.views import CheckmkFolderPoolView
 admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
-admin.add_link(MenuLink(name='Debug Host', category='Checkmk',
-                        url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
 
+admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
 from application.modules.checkmk.views import CheckmkSettingsView
-admin.add_view(CheckmkSettingsView(CheckmkSettings, name="CMK Server Settings", category="Checkmk"))
-admin.add_view(DefaultModelView(CheckmkSite, name="CMK Server Sites", category="Checkmk"))
+admin.add_view(CheckmkSettingsView(CheckmkSettings, name="Server Settings", category="Checkmk Server"))
+admin.add_view(DefaultModelView(CheckmkSite, name="Site Settings", category="Checkmk Server"))
+
+admin.add_sub_category(name="Business Intelligence", parent_name="Checkmk")
+from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRule
+from application.modules.checkmk.views import CheckmkBiRuleView
+#admin.add_view(DefaultModelView(CheckmkBiAggregation, name="BI Aggregation", category="Business Intelligence"))
+admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Business Intelligence"))
+
 
 #.
 #   .-- Ansible

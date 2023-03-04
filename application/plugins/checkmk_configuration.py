@@ -9,8 +9,8 @@ from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
 from application.models.host import Host
 from application.modules.checkmk.config_sync import SyncConfiguration
-from application.modules.checkmk.rules import CheckmkRulesetRule
-from application.modules.checkmk.models import CheckmkRuleMngmt
+from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
+from application.modules.checkmk.models import CheckmkRuleMngmt, CheckmkBiRule
 
 
 from application.plugins.checkmk import _load_rules
@@ -22,7 +22,7 @@ from application.plugins.checkmk import _load_rules
 @click.argument("account")
 def export_rules(account):
     """
-    ## Export all configured Rules to given Checkmk Installations
+    Export all configured Rules to given Checkmk Installations
 
     ### Example
     _./cmdbsyncer checkmk export_rules SITEACCOUNT_
@@ -71,14 +71,10 @@ def export_groups(account, test_run):
     try:
         target_config = get_account_by_name(account)
         if target_config:
-            #rules = _load_rules()
             syncer = SyncConfiguration()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.config = target_config
-            #syncer.filter = rules['filter']
-            #syncer.rewrite = rules['rewrite']
-            #syncer.actions = rules['actions']
             syncer.export_cmk_groups(test_run)
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
@@ -242,4 +238,35 @@ def inventorize_hosts(account):
             print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
         else:
             print(f" {ColorCodes.FAIL}* {ColorCodes.ENDC} Not in Syncer: {hostname}")
+#.
+#   .-- Command: Checkmk BI
+@cli_cmk.command('export_bi_rules')
+@click.argument("account")
+def export_bi_rules(account):
+    """
+    Export all BI Rules to given Checkmk Installations
+
+    ### Example
+    _./cmdbsyncer checkmk export_bi_rules SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Account Config
+    """
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            syncer = SyncConfiguration()
+            syncer.account_id = str(target_config['_id'])
+            syncer.account_name = target_config['name']
+            syncer.config = target_config
+            actions = DefaultRule()
+            actions.rules = CheckmkBiRule.objects(enabled=True)
+            syncer.actions = actions
+            syncer.export_bi_rules()
+        else:
+            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+
 #.

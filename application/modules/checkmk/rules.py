@@ -26,6 +26,20 @@ class CheckmkRulesetRule(Rule): # pylint: disable=too-few-public-methods, too-ma
             outcomes[ruleset_type].append(outcome)
         return outcomes
 
+
+class DefaultRule(Rule):
+    """
+    Just adds all to the set
+    """
+    def add_outcomes(self, rule, outcomes):
+        """
+        Add matching Rules to the set
+        """
+        outcomes.setdefault('default', [])
+        for outcome in rule:
+            outcomes['default'].append(outcome)
+        return outcomes
+
 class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     """
     Class to get actions for rule

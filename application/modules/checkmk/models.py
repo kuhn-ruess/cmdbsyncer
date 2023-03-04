@@ -284,6 +284,7 @@ class CheckmkRewriteAttributeRule(db.Document):
 
 editions = [
     ('cee', "Checkmk Enterprise Edition"),
+    ('cre', "Checkmk RAW Edition"),
 
 ]
 class CheckmkSettings(db.Document):
@@ -305,7 +306,7 @@ class CheckmkSettings(db.Document):
         Self representation
         """
         return self.name
-
+#.
 #   .-- Checkmk Sites
 class CheckmkSite(db.Document):
     """
@@ -320,4 +321,66 @@ class CheckmkSite(db.Document):
     meta = {
         'strict': False,
     }
+#.
+#   .-- Checkmk BI Aggregations
+
+class BiAggregationOutcome(db.EmbeddedDocument):
+    """
+    BI Aggregation
+    """
+    pack_id = db.StringField()
+    aggregation_id = db.StringField()
+
+
+
+class CheckmkBiAggregation(db.Document):
+    """
+    BI Aggregation
+    """
+    name = db.StringField(required=True, unique=True)
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    render_full_conditions = db.StringField() # Helper for Preview
+
+    outcomes = db.ListField(db.EmbeddedDocumentField(BiAggregationOutcome))
+    render_cmk_bi_aggregation = db.StringField()
+    last_match = db.BooleanField(default=False)
+    enabled = db.BooleanField()
+    meta = {
+        'strict': False
+    }
+#.
+#   .-- Checkmk BI Rules
+
+class BiRuleOutcome(db.EmbeddedDocument):
+    """
+    BI Aggregation
+    """
+    description = db.StringField()
+    rule_template = db.StringField()
+
+    meta = {
+        'strict': False
+    }
+
+
+class CheckmkBiRule(db.Document):
+    """
+    BI Rule
+    """
+    name = db.StringField(required=True, unique=True)
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    render_full_conditions = db.StringField() # Helper for Preview
+
+    outcomes = db.ListField(db.EmbeddedDocumentField(BiRuleOutcome))
+    render_cmk_bi_rule = db.StringField()
+    last_match = db.BooleanField(default=False)
+    enabled = db.BooleanField()
+    meta = {
+        'strict': False
+    }
+
 #.

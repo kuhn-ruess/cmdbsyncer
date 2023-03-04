@@ -60,7 +60,7 @@ class CMK2(Plugin):
             elif method == 'delete':
                 response = requests.delete(url, headers=headers, verify=self.verify)
                 # Checkmk gives no json response here, so we directly return
-                return True, response.headers
+                return True, response.status_code
 
             #pylint: disable=line-too-long
             error_whitelist = [
@@ -75,8 +75,10 @@ class CMK2(Plugin):
                 response_json = response.json()
                 if response_json['title'] not in error_whitelist:
                     raise CmkException(f"{response_json['title']} {response_json['detail']}")
-                return {}, {}
-            return response.json(), response.headers
+                return {}, {'status_code': response.status_code}
+            resp_header = response.headers
+            resp_header['status_code'] = response.status_code
+            return response.json(), resp_header
         except (ConnectionResetError, requests.exceptions.ProxyError):
             print(response.text)
-            return {}, {}
+            return {}, {'status_code': response.status_code}
