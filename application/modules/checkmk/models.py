@@ -221,7 +221,7 @@ class CheckmkRuleMngmt(db.Document):
     """
     Manage Checkmk Rules
     """
-    name = db.StringField()
+    name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
@@ -267,7 +267,7 @@ class CheckmkRewriteAttributeRule(db.Document):
     """
     Rewrite all Attributes
     """
-    name = db.StringField()
+    name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
     render_full_conditions = db.StringField() # Helper for preview
@@ -290,7 +290,7 @@ class CheckmkSettings(db.Document):
     """
     Checkmk Settings
     """
-    name = db.StringField()
+    name = db.StringField(required=True, unique=True)
     server_user = db.StringField()
     cmk_version = db.StringField()
     cmk_edition = db.StringField(choices=editions)
@@ -311,7 +311,7 @@ class CheckmkSite(db.Document):
     """
     Checkmk Site
     """
-    name = db.StringField(required=True)
+    name = db.StringField(required=True, unique=True)
     server_address = db.StringField(required=True, unique=True)
     settings_master = db.ReferenceField(CheckmkSettings, required=True)
 

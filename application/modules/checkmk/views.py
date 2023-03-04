@@ -2,7 +2,7 @@
 Checkmk Rule Views
 """
 from markupsafe import Markup
-from wtforms import HiddenField
+from wtforms import HiddenField, StringField
 from flask import request
 from flask_admin import expose
 from mongoengine.errors import DoesNotExist
@@ -157,6 +157,9 @@ class CheckmkGroupRuleView(RuleModelView):
         # but RuleModelView defines it -> Error
         del self.form_subdocuments['conditions']
 
+        # Default Form rules not match for the Fields of this Form
+        self.form_rules = []
+
         self.column_formatters.update({
             'render_checkmk_group_outcome': _render_group_outcome,
         })
@@ -188,6 +191,11 @@ class CheckmkMngmtRuleView(RuleModelView):
                         'value_match': { 'style': 'background-color: #81DAF5' },
                         'value': { 'style': 'background-color: #81DAF5' },
                     },
+                    'form_overrides' : {
+                        'hostname': StringField,
+                        'tag': StringField,
+                        'value': StringField,
+                    },
                 }
             }
         }
@@ -197,6 +205,9 @@ class CheckmkMngmtRuleView(RuleModelView):
         """
         Update elements
         """
+        # Default Form rules not match for the Fields of this Form
+        self.form_rules = []
+
         self.column_formatters.update({
             'render_cmk_rule_mngmt': _render_rule_mngmt_outcome,
         })
@@ -223,6 +234,17 @@ class CheckmkMngmtRuleView(RuleModelView):
             rule.value_template = rule.value_template.replace('\\n',' ')
 
         return super().on_model_change(form, model, is_created)
+
+class CheckmkSettingsView(DefaultModelView):
+    """
+    Checkmk Server Settings View
+    """
+
+    column_exclude_list = [
+        'inital_password',
+        'subscription_username',
+        'subscription_password',
+    ]
 
 class CheckmkFolderPoolView(DefaultModelView):
     """

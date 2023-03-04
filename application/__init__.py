@@ -14,7 +14,7 @@ from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 
 
-VERSION = '3.1-pre1'
+VERSION = '3.1-pre2'
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -111,7 +111,8 @@ admin.add_link(MenuLink(name='Debug Host', category='Checkmk',
                         url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
 
 from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
-admin.add_view(DefaultModelView(CheckmkSettings, name="CMK Server Settings", category="Checkmk"))
+from application.modules.checkmk.views import CheckmkSettingsView
+admin.add_view(CheckmkSettingsView(CheckmkSettings, name="CMK Server Settings", category="Checkmk"))
 admin.add_view(DefaultModelView(CheckmkSite, name="CMK Server Sites", category="Checkmk"))
 
 #.
