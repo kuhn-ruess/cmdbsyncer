@@ -24,7 +24,6 @@ class DataGeter():
         self.log = log
         self.config = config
         self.account_id = str(config['_id'])
-        self.account_name = config['name']
 
     def request(self, what, payload):
         """
@@ -43,7 +42,7 @@ class DataGeter():
         else: # payload is empty
             formated = ascii(payload)
 
-        response = requests.post(url, {"request": formated}, verify=False)
+        response = requests.post(url, {"request": formated}, verify=False, timeout=180)
         return ast.literal_eval(response.text)
 
 
@@ -58,18 +57,15 @@ class DataGeter():
                 host.add_log('Found in Source')
             except DoesNotExist:
                 host = Host()
-                host.set_hostname(hostname)
+                host.hostname = hostname
                 host.add_log("Inital Add")
-            try:
-                host.set_account(self.account_id, self.account_name)
                 host.set_source_update()
             except HostError as error_obj:
                 host.add_log(f"Update Error {error_obj}")
 
-            host.save()
-        for host in Host.objects(account_id=self.account_id, available_on_source=True):
-            if host.hostname not in found_hosts:
-                host.set_source_not_found()
+            do_save = host.set_account(account_dict=self.config)
+            if do_save:
+                host.set_import_seen()
                 host.save()
 
 

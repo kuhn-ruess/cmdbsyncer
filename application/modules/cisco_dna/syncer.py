@@ -18,11 +18,10 @@ class CiscoDNA():
         """
         Init
         """
+        self.account_dict = config
         self.address = config['address']
         self.user = config['username']
         self.password = config['password']
-        self.account_id = str(config['_id'])
-        self.account_name = config['name']
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 
 #   .-- get_auth_token
@@ -224,5 +223,7 @@ class CiscoDNA():
             db_host.update_inventory('cisco_dna_', inventory)
             db_host.sync_id = device['id']
             db_host.set_import_seen()
-            db_host.set_account(self.account_id, self.account_name)
-            db_host.save()
+            do_save = db_host.set_account(account_dict=self.account_dict)
+            if do_save:
+                db_host.save()
+            print("  - Object owned by other Source, not saved")

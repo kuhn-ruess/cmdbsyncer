@@ -8,6 +8,7 @@ from application import app
 from application.models.host import Host
 from application.modules.plugin import Plugin
 from application.modules.debug import ColorCodes
+from application.helpers.get_account import get_account_by_name
 
 @app.cli.group(name='csv')
 def _cli_csv():
@@ -53,11 +54,14 @@ def compare_hosts(csv_path, delimiter, hostname_field, label_filter):
 @click.argument("csv_path")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
-def import_hosts(csv_path, delimiter, hostname_field):
+@click.option("--account", default=False)
+def import_hosts(csv_path, delimiter, hostname_field, account):
     """
     ## Import Hosts from CSV and make File the Master
     Every CSV column, other then the host column, will translate
     into key:value attributes.
+
+    If you seet account as parameter, all config will be read from there
 
     ### Example
     _./cmdbsyncer csv import_hosts path_to.csv --delimiter ';'_
@@ -67,8 +71,19 @@ def import_hosts(csv_path, delimiter, hostname_field):
         csv_path (string): Path to CSV
         delimiter (string): --delimiter, Field delimiter
         hostname_field (string): --hostname_field, Name of Colum where Hostname is found
+        account (string): --account, Name of Account to read config from
     """
     #pylint: disable=no-member, consider-using-generator
+    if account:
+        account = get_account_by_name(account)
+        if 'hostname_field' in account:
+            hostname_field = account['hostname_field']
+        if 'delimiter' in account:
+            delimiter = account['delimiter']
+        if 'csv_path' in account:
+            csv_path = account['csv_path']
+
+
     filename = csv_path.split('/')[-1]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
           f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
@@ -85,8 +100,14 @@ def import_hosts(csv_path, delimiter, hostname_field):
             del row[hostname_field]
             host_obj.set_labels(row)
             host_obj.set_import_seen()
-            host_obj.set_account(f"csv_{filename}", filename)
-            host_obj.save()
+            if account:
+                do_save = host_obj.set_account(account_dict=account)
+            else:
+                do_save = True
+                host_obj.set_account(f"csv_{filename}", filename)
+
+            if do_save:
+                host_obj.save()
 
 @_cli_csv.command('inventorize_hosts')
 @click.argument("csv_path")

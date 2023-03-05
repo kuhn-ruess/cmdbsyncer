@@ -111,6 +111,9 @@ class CheckmkRuleView(RuleModelView):
 
     @expose('/debug')
     def debug(self):
+        """
+        Checkmk specific Debug Page
+        """
         hostname = request.args.get('hostname','')
         output= {}
         if hostname:
@@ -248,6 +251,10 @@ class CheckmkBiRuleView(DefaultModelView):
     column_labels = {
         'render_cmk_bi_rule': "Rules",
         'render_full_conditions': "Conditions",
+    }
+
+    form_overrides = {
+        'render_cmk_bi_rule': HiddenField,
     }
 
     def on_model_change(self, form, model, is_created):
