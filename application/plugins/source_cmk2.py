@@ -9,7 +9,7 @@ from application import app, log
 from application.modules.checkmk.cmk2 import cli_cmk
 from application.models.host import Host, HostError
 from application.helpers.get_account import get_account_by_name
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes as CC
 
 
 if app.config.get("DISABLE_SSL_ERRORS"):
@@ -32,8 +32,7 @@ class DataGeter():
         """
         self.log = log
         self.config = config
-        self.account_id = str(config['_id'])
-        self.account_name = config['name']
+        self.account_id = config['id']
 
     def request(self, url=False):
         """
@@ -65,41 +64,34 @@ class DataGeter():
 
     def run(self):
         """Run Actual Job"""
-        found_hosts = []
         for hostdata in self.request()['value']:
             hostname = hostdata['title']
             links = self.get_links(hostdata['links'])
             host_details = self.request(links['GET'])
-            print(f"\n{ColorCodes.HEADER} Process: {hostname}{ColorCodes.ENDC}")
+            print(f"\n{CC.HEADER} Process: {hostname}{CC.ENDC}")
 
-            found_hosts.append(hostname)
             try:
                 host = Host.objects.get(hostname=hostname)
                 host.add_log('Found in Source')
-                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Found host locally")
+                print(f"{CC.OKBLUE} *{CC.ENDC} Found host locally")
             except DoesNotExist:
                 host = Host()
                 host.hostname = hostname
                 host.add_log("Inital Add")
-                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Created host locally")
+                print(f"{CC.OKBLUE} *{CC.ENDC} Created host locally")
 
-            try:
-                host.set_account(self.account_id, self.account_name)
-            except:
-                print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Host managed by diffrent Source")
-                continue
+            do_save = host.set_account(account_dict=self.config)
             try:
                 attributes = host_details['extensions']['attributes']
                 if 'labels' in attributes:
                     host.add_labels(attributes['labels'])
-                host.set_import_seen()
             except HostError as error_obj:
                 host.add_log(f"Update Error {error_obj}")
-            host.save()
-
-        for host in Host.objects(source_account_id=self.account_id, available=True):
-            if host.hostname not in found_hosts:
-                host.delete()
+            if do_save:
+                host.set_import_seen()
+                host.save()
+            else:
+                print(f"{CC.OKBLUE} *{CC.ENDC} Host owned by diffrent source, ignored")
 
 
 @cli_cmk.command('import_v2')

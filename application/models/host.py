@@ -169,7 +169,7 @@ class Host(db.Document):
         date = datetime.datetime.now().strftime(app.config['TIME_STAMP_FORMAT'])
         self.log = [f"{date} {entry}"] + entries
 
-    def set_account(self, account_id, account_name):
+    def set_account(self, account_id=False, account_name=False, account_dict=False):
         """
         Mark Host with Account he was fetched with.
         Prevent Overwrites if Host is importet from multiple sources.
@@ -177,11 +177,40 @@ class Host(db.Document):
         Args:
             account_id (string): UUID of Account entry
             account_name (string): Name of account
+            account_dict (dict): New: pass full Account Information
+
+        Returns:
+            status (bool): Should Object be saved or not
+
         """
-        if self.source_account_id and self.source_account_id != account_id:
-            raise HostError(f"Host already importet by account {self.source_account_name}")
-        self.source_account_id = account_id
-        self.source_account_name = account_name
+        if not account_id and not account_dict:
+            raise ValueError("Either Set account_id or pass account_dict")
+
+        # That is the legacy behavior: Raise if not equal
+        if not account_dict:
+            if self.source_account_id and self.source_account_id != account_id:
+                raise HostError(f"Host already importet by account {self.source_account_name}")
+        else:
+            # Get Name from Full dict
+            account_id = account_dict['id']
+            account_name = account_dict['name']
+
+        # Everthing Match alread
+        if self.source_account_id and self.source_account_id == account_id:
+            return True
+        
+        # Nothing was set yet
+        if not self.source_account_id:
+            self.source_account_id = account_id
+            self.source_account_name = account_name
+            return True
+
+        # If we are here, there is no match. Only Chance, this Account is master
+        if account_dict['is_master']:
+            return True
+
+        # No, Account was not master. So we go
+        return False
 
 
     def set_import_sync(self):

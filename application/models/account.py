@@ -1,12 +1,13 @@
 """
 Account
 """
-# pylint: disable=no-member
+# pylint: disable=no-member, too-few-public-methods
 from application import db
 
 account_types = [
     ('cmkv1', "Checkmk Version 1.x"),
     ('cmkv2', "Checkmk Version 2.x"),
+    ('csv', "CSV File"),
     ('custom', "Custom Entries, like DBs"),
     ('restapi', "Rest API"),
 ]
@@ -24,9 +25,9 @@ class Account(db.Document):
     Account
     """
 
-
     name = db.StringField(required=True, unique=True)
     typ = db.StringField(choices=account_types)
+    is_master = db.BooleanField(default=False)
 
     address = db.StringField()
     username = db.StringField()
