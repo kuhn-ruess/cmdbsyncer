@@ -49,7 +49,7 @@ def show_hosts(disabled_only=False):
     Disabled_only means: All hosts not configured to sync to Checkmk
 
     ### Example
-    _./cmdbsyncer checkmk show_hosts_ 
+    _./cmdbsyncer checkmk show_hosts_
 
     Args:
         disabled_only (bool): Only not synced hosts
@@ -65,10 +65,38 @@ def show_hosts(disabled_only=False):
         attributes = syncer.get_host_attributes(db_host)
         if not attributes:
             if disabled_only:
-                print(db_host.hostname)
+                print(db_host.hostname, attributes['filtered'])
             continue
         if not disabled_only:
-            print(db_host.hostname)
+            print(db_host.hostname, attributes['filtered'])
+#.
+#   . -- Show Labels
+@cli_cmk.command('show_labels')
+def show_labels():
+    """
+    ## Print unique list of labels which later will be in Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk show_labels_
+    """
+    rules = _load_rules()
+    syncer = SyncCMK2()
+    syncer.filter = rules['filter']
+    syncer.rewrite = rules['rewrite']
+    syncer.actions = rules['actions']
+
+    outcome = []
+    for db_host in Host.objects(available=True):
+        attributes = syncer.get_host_attributes(db_host)
+        if not attributes:
+            continue
+
+        for key, value in attributes['filtered'].items():
+            if (key, value) not in outcome:
+                outcome.append((key, value))
+
+    for key, value in outcome:
+        print(f"{key}:{value}")
 #.
 #   .-- Command: Export Hosts
 @cli_cmk.command('export_hosts')
