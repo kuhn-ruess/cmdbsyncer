@@ -15,5 +15,6 @@ def get_account_by_name(name):
         for field, value  in [(x['name'], x['value']) for x in account_dict['custom_fields']]:
             account_dict[field] = value
         return account_dict
+        account_dict['id'] = str(account_dict['_id'])
     except DoesNotExist:
         return False
