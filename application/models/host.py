@@ -198,7 +198,7 @@ class Host(db.Document):
         # Everthing Match alread
         if self.source_account_id and self.source_account_id == account_id:
             return True
-        
+
         # Nothing was set yet
         if not self.source_account_id:
             self.source_account_id = account_id
@@ -207,6 +207,8 @@ class Host(db.Document):
 
         # If we are here, there is no match. Only Chance, this Account is master
         if account_dict['is_master']:
+            self.source_account_id = account_id
+            self.source_account_name = account_name
             return True
 
         # No, Account was not master. So we go
