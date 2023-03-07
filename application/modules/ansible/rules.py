@@ -3,6 +3,7 @@
 Ansible Rules
 """
 from application.modules.rule.rule import Rule
+from application.helpers.get_account import get_account_variable
 
 class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
     """
@@ -17,5 +18,8 @@ class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
         """
         # pylint: disable=too-many-nested-blocks
         for outcome in rule_outcomes:
-            outcomes[outcome['attribute_name']] = outcome['attribute_value']
+            attr_value = outcome['attribute_value']
+            if attr_value.startswith('{{ACCOUNT:'):
+                attr_value = get_account_variable(attr_value)
+            outcomes[outcome['attribute_name']] = attr_value
         return outcomes

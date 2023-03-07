@@ -1,8 +1,8 @@
 """
 Helper to get Account
 """
-from application.models.account import Account
 from mongoengine.errors import DoesNotExist
+from application.models.account import Account
 
 
 def get_account_by_name(name):
@@ -18,3 +18,13 @@ def get_account_by_name(name):
         return account_dict
     except DoesNotExist:
         return False
+
+
+def get_account_variable(macro):
+    """
+    Replaces the given Macro with the Account data
+    Example: {{ACCOUNT:mon:password}}
+    """
+    # @TODO: Cache
+    _, account, var = macro.split(':')
+    return get_account_by_name(account)[var[:-2]]
