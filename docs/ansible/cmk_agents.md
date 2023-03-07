@@ -70,6 +70,12 @@ Example how to Install the Agent when a given Service Output was found:
 
 Likewise, you can configure if to register to bakery or the TLS. Filter for example for the TLS Error message in the Service Output. Best is to seed defaults as descripted above, to have more examples which just need to be adapted a bit.
 
+## Passwords and Account Data as Variables
+You don't need to set the Password value directly in the settings, you can also read it from your Accounts. For that, instead of the Password, just Enter the Macro: {{ACCOUNT:NAME:password}}. Account needs to be uppercase, Name is the Account Name, password can also be every other field or custom field in your account Settings.
+
+![](img/account_placeholder.png)
+
+
 # Run the job
 
 ## Debugging
