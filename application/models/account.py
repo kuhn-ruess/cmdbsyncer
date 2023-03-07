@@ -1,7 +1,6 @@
 """
 Account
 """
-# pylint: disable=no-member, too-few-public-methods
 from application import db
 
 account_types = [
