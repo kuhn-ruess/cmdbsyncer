@@ -30,7 +30,6 @@ ARG config
 ENV config=$config
 
 COPY . /srv/
-COPY  ./application/config-docker.py /srv/application/config.py
 
 
 USER uwsgi
