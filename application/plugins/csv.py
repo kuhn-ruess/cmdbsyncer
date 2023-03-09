@@ -90,7 +90,7 @@ def import_hosts(csv_path, delimiter, hostname_field, account):
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
-            hostname = row[hostname_field].lower()
+            hostname = row[hostname_field].strip().lower()
             keys = list(row.keys())
             for dkey in keys:
                 if not row[dkey]:
@@ -137,7 +137,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key):
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
-            hostname = row[hostname_field].lower()
+            hostname = row[hostname_field].strip().lower()
             keys = list(row.keys())
             for dkey in keys:
                 if not row[dkey]:

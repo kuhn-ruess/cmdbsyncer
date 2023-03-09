@@ -32,7 +32,7 @@ def mysql_import(account):
     all_hosts = mycursor.fetchall()
     field_names = config['fields'].split(',')
     for line in all_hosts:
-        hostname = labels['host_hostname'].lower()
+        hostname = labels['host_hostname'].strip().lower()
         print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
         labels = dict(zip(field_names, line))
         del labels['host_hostname']
