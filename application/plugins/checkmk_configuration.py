@@ -1,9 +1,10 @@
 """
 Add Configuration in Checkmk
 """
-#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
+#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member, too-many-locals
 import sys
 import click
+from application import cron_register
 from application.modules.checkmk.cmk2 import CMK2, cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
@@ -15,22 +16,8 @@ from application.modules.checkmk.models import CheckmkRuleMngmt, CheckmkBiRule
 
 from application.plugins.checkmk import _load_rules
 
-
-
 #   .-- Command: Export Rulesets
-@cli_cmk.command('export_rules')
-@click.argument("account")
-def export_rules(account):
-    """
-    Export all configured Rules to given Checkmk Installations
-
-    ### Example
-    _./cmdbsyncer checkmk export_rules SITEACCOUNT_
-
-
-    Args:
-        account (string): Name Account Config
-    """
+def _inner_export_rules(account):
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -50,8 +37,36 @@ def export_rules(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
 
+@cli_cmk.command('export_rules')
+@click.argument("account")
+def export_rules(account):
+    """
+    Export all configured Rules to given Checkmk Installations
+
+    ### Example
+    _./cmdbsyncer checkmk export_rules SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Account Config
+    """
+    _inner_export_rules(account)
+
 #.
 #   .-- Command: Export Group
+def _inner_export_groups(account, test_run):
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            syncer = SyncConfiguration()
+            syncer.account_id = str(target_config['_id'])
+            syncer.account_name = target_config['name']
+            syncer.config = target_config
+            syncer.export_cmk_groups(test_run)
+        else:
+            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
 @cli_cmk.command('export_groups')
 @click.argument("account")
 @click.option('-t', '--test-run', is_flag=True)
@@ -68,18 +83,7 @@ def export_groups(account, test_run):
         account (string): Name Account Config
         test_run (bool): Only Print Result ( default is False )
     """
-    try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            syncer = SyncConfiguration()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.config = target_config
-            syncer.export_cmk_groups(test_run)
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
-    except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+    _inner_export_groups(account, test_run)
 
 
 #.
@@ -161,20 +165,7 @@ def bake_and_sign_agents(account):
 
 #.
 #   .-- Command: Host Inventory
-@cli_cmk.command('inventorize_hosts')
-@click.argument('account')
-#pylint: disable=too-many-locals
-def inventorize_hosts(account):
-    """
-    ## Do an Status Data inventory on given Checkmk Instance.
-    Requires CMK Version greater then 2.1p9
-
-    ### Example
-    _./cmdbsyncer checkmk inventorize_hosts SITEACCOUNT_
-
-    Args:
-        account (string): Name Account Config
-    """
+def _inner_inventorize_hosts(account):
     inventory_target = [
         'site', 'inventory_failed','is_offline',
     ]
@@ -238,21 +229,25 @@ def inventorize_hosts(account):
             print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
         else:
             print(f" {ColorCodes.FAIL}* {ColorCodes.ENDC} Not in Syncer: {hostname}")
-#.
-#   .-- Command: Checkmk BI
-@cli_cmk.command('export_bi_rules')
-@click.argument("account")
-def export_bi_rules(account):
+
+@cli_cmk.command('inventorize_hosts')
+@click.argument('account')
+#pylint: disable=too-many-locals
+def inventorize_hosts(account):
     """
-    Export all BI Rules to given Checkmk Installations
+    ## Do an Status Data inventory on given Checkmk Instance.
+    Requires CMK Version greater then 2.1p9
 
     ### Example
-    _./cmdbsyncer checkmk export_bi_rules SITEACCOUNT_
-
+    _./cmdbsyncer checkmk inventorize_hosts SITEACCOUNT_
 
     Args:
         account (string): Name Account Config
     """
+    _inner_inventorize_hosts(account)
+#.
+#   .-- Command: Checkmk BI
+def _inner_export_bi_rules(account):
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -269,4 +264,24 @@ def export_bi_rules(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
 
+@cli_cmk.command('export_bi_rules')
+@click.argument("account")
+def export_bi_rules(account):
+    """
+    Export all BI Rules to given Checkmk Installations
+
+    ### Example
+    _./cmdbsyncer checkmk export_bi_rules SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Account Config
+    """
+    _inner_export_bi_rules(account)
+
 #.
+
+cron_register['Checkmk: Export Rules'] = _inner_export_rules
+cron_register['Checkmk: Export Groups'] = _inner_export_groups
+cron_register['Checkmk: Export BI Rules'] = _inner_export_bi_rules
+cron_register['Checkmk: Inventory'] = _inner_inventorize_hosts

@@ -57,6 +57,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message = False
 
+cron_register = {}
 from plugins import *
 from application.plugins import *
 
@@ -148,7 +149,7 @@ admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite At
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
                                     name="Custom Attributes", category="Netbox"))
 #.
-#   .-- Rest
+#   .-- Config
 from application.models.account import Account
 from application.views.account import AccountModelView
 admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
@@ -161,7 +162,18 @@ from application.models.config import Config
 from application.views.config import ConfigModelView
 
 admin.add_view(ConfigModelView(Config, name="System Config", category="Config"))
+#.
+#   .-- Cron
 
+admin.add_sub_category(name="Cronjobs", parent_name="Config")
+from application.models.cron import CronGroup, CronJob, CronStats
+from application.views.cron import CronStatsView
+admin.add_view(DefaultModelView(CronJob, name="Cronjob Jobs", category="Cronjobs"))
+admin.add_view(DefaultModelView(CronGroup, name="Cronjob Group", category="Cronjobs"))
+admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs"))
+
+#.
+#   .-- Rest
 admin.add_link(MenuLink(name='Change Password', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}change-password"))
 admin.add_link(MenuLink(name='Set 2FA Code', category='Profil',

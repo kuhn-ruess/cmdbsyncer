@@ -4,6 +4,7 @@ Commands to handle Checkmk Sync
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 import click
 from mongoengine.errors import DoesNotExist
+from application import cron_register
 from application.modules.checkmk.syncer import SyncCMK2
 from application.modules.checkmk.cmk2 import cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
@@ -99,18 +100,8 @@ def show_labels():
         print(f"{key}:{value}")
 #.
 #   .-- Command: Export Hosts
-@cli_cmk.command('export_hosts')
-@click.argument("account")
-def export_hosts(account):
-    """
-    ## Export Hosts to Checkmk
 
-    ### Example
-    _./cmdbsyncer checkmk export_hosts SITEACCOUNT_
-
-    Args:
-        account (string): Name Account Config
-    """
+def _inner_export_hosts(account):
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -128,6 +119,21 @@ def export_hosts(account):
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+
+
+@cli_cmk.command('export_hosts')
+@click.argument("account")
+def export_hosts(account):
+    """
+    ## Export Hosts to Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_hosts SITEACCOUNT_
+
+    Args:
+        account (string): Name Account Config
+    """
+    _inner_export_hosts(account)
 #.
 #   .-- Command: Host Debug
 @cli_cmk.command('debug_host')
@@ -187,3 +193,6 @@ def debug_host(hostname):
     db_host.save()
 
 #.
+
+
+cron_register['Checkmk: Export Hosts'] = _inner_export_hosts
