@@ -54,6 +54,15 @@ class CronStats(db.Document):
     """
 
     group = db.StringField()
-    last_run = db.DateTimeField()
     next_run = db.DateTimeField()
+
+    last_start = db.DateTimeField()
+    is_running = db.BooleanField(default=False)
+    last_ended = db.DateTimeField()
+
     last_message = db.StringField()
+
+
+    meta = {
+        'strict' : False
+    }
