@@ -49,7 +49,7 @@ def _render_group_outcome(_view, _context, model, _name):
            f"<tr><th>Type</th><td>{entry.group_name}</td></tr>"\
            f"<tr><th>Foreach</th><td>{entry.foreach_type}</td></tr>" \
            f"<tr><th>Value</th><td>{entry.foreach}</td></tr>" \
-           f"<tr><th>Regex</th><td>{entry.regex}</td></tr>" \
+           f"<tr><th>Jinja Rewrite</th><td>{entry.rewrite}</td></tr>" \
            "</table>"
     return Markup(html)
 
@@ -383,3 +383,15 @@ class CheckmkFolderPoolView(DefaultModelView):
             model.folder_name = "/" + model.folder_name
 
         return super().on_model_change(form, model, is_created)
+
+class CheckmkCacheView(DefaultModelView):
+    """
+    Checkmk Cache View
+    """
+    can_create = False
+    can_edit = False
+    show_details = True
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated

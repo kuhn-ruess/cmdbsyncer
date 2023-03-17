@@ -5,9 +5,10 @@ Checkmk Configuration
 import re
 import ast
 import jinja2
+from mongoengine.errors import DoesNotExist
 from application import log
 from application.modules.checkmk.cmk2 import CMK2, CmkException
-from application.modules.checkmk.models import CheckmkGroupRule
+from application.modules.checkmk.models import CheckmkGroupRule, CheckmkObjectCache
 from application.modules.debug import ColorCodes as CC
 from application.models.host import Host
 
@@ -39,6 +40,18 @@ class SyncConfiguration(CMK2):
         for needle, replacer in replacers:
             input_str = input_str.replace(needle, replacer)
         return input_str.strip()
+
+    def get_cache_object(self, group):
+        """
+        Get Cache Objects
+        """
+        try:
+            return CheckmkObjectCache.objects.get(cache_group=group, account=self.account)
+        except DoesNotExist:
+            new = CheckmkObjectCache()
+            new.cache_group = group
+            new.account = self.account
+            return new
 
     def parse_attributes(self):
         """
@@ -202,13 +215,14 @@ class SyncConfiguration(CMK2):
             outcome = rule.outcome
             group_name = outcome.group_name
             groups.setdefault(group_name, [])
-            regex_match = False
-            if outcome.regex:
-                regex_match = re.compile(outcome.regex)
+            rewrite = False
+            if outcome.rewrite:
+                rewrite = True
+                rewrite_tpl = jinja2.Template(outcome.rewrite)
             if outcome.foreach_type == 'value':
                 for label_value in attributes[1].get(outcome.foreach, []):
-                    if regex_match:
-                        label_value = regex_match.findall(label_value)[0]
+                    if rewrite:
+                        label_value = rewrite_tpl.render(name=label_value)
                     label_value = self.replace(label_value)
                     if label_value and label_value not in groups[group_name]:
                         groups[group_name].append(label_value)
@@ -216,8 +230,8 @@ class SyncConfiguration(CMK2):
                 print("Check for label:")
                 for label_key in attributes[0].get(outcome.foreach, []):
                     print(f"Checking: {label_key}")
-                    if regex_match:
-                        label_key = regex_match.findall(label_key)[0]
+                    if rewrite:
+                        label_key = rewrite_tpl.render(name=label_key)
                     label_key = self.replace(label_key)
                     label_key = label_key.replace(' ', '_').strip()
                     if label_key and label_key not in groups[group_name]:
@@ -226,19 +240,16 @@ class SyncConfiguration(CMK2):
         print(f"\n{CC.HEADER}Start Sync{CC.ENDC}")
         urls = {
             'contact_groups': {
-                'short': "cg",
                 'get': "/domain-types/contact_group_config/collections/all",
                 'put': "/domain-types/contact_group_config/actions/bulk-create/invoke",
                 'delete': "/objects/contact_group_config/"
             },
             'host_groups' : {
-                'short': "hg",
                 'get': "/domain-types/host_group_config/collections/all",
                 'put': "/domain-types/host_group_config/actions/bulk-create/invoke",
                 'delete': "/objects/host_group_config/"
             },
             'service_groups' : {
-                'short': "sg",
                 'get': "/domain-types/service_group_config/collections/all",
                 'put': "/domain-types/service_group_config/actions/bulk-create/invoke",
                 'delete': "/objects/service_group_config/"
@@ -247,27 +258,34 @@ class SyncConfiguration(CMK2):
         for group_type, configured_groups in groups.items():
             print(f"{CC.OKBLUE} *{CC.ENDC} Read Current {group_type}")
             url = urls[group_type]['get']
-            short = urls[group_type]['short']
+
             cmks_groups = self.request(url, method="GET")
             syncers_groups_in_cmk = []
-            name_prefix = f"cmdbsyncer_{short}_{self.account_id}_"
+
+            cache = self.get_cache_object(group=group_type)
+
+            group_list = cache.content.get('list', [])
+
             for cmk_group in [x['href'] for x in cmks_groups[0]['value']]:
                 cmk_name = cmk_group.split('/')[-1]
-                if cmk_name.startswith(name_prefix):
+                if cmk_name in group_list:
                     syncers_groups_in_cmk.append(cmk_name)
+
+            cache.content['list'] = configured_groups
+            cache.save()
+
 
 
             print(f"{CC.OKBLUE} *{CC.ENDC} Create {group_type} if needed")
             entries = []
             new_group_names = []
-            for new_group_alias in configured_groups:
-                new_group_name = f"{name_prefix}{new_group_alias}"
-                new_group_names.append(new_group_name)
-                if new_group_name not in syncers_groups_in_cmk:
-                    print(f"{CC.OKBLUE}  *{CC.ENDC} Added {new_group_alias}")
+            for new_group in configured_groups:
+                new_group_names.append(new_group)
+                if new_group not in syncers_groups_in_cmk:
+                    print(f"{CC.OKBLUE}  *{CC.ENDC} Added {new_group}")
                     entries.append({
-                        'alias' : short+new_group_alias,
-                        'name' : new_group_name,
+                        'alias' : new_group,
+                        'name' : new_group,
                     })
 
             if entries:
@@ -367,5 +385,3 @@ class SyncConfiguration(CMK2):
                     print(f"{CC.WARNING}   *{CC.ENDC} Sync needed")
                     self.request(url, data=unique_rules[sync_id],  method="PUT")[0]
 #.
-
-

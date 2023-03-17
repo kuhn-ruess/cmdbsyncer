@@ -136,17 +136,14 @@ class CmkGroupOutcome(db.EmbeddedDocument):
     ### Foreach
     Name of the Attribute or Attribute Value we should search for.
 
-    ### Regex
-
-    You can rewrite the result with an regex. This regex has to define at least one match group.
-    And only the first Match Group will be used.
-    Example: something-(.*).
+    ### Rewrite
+    You can rewrite the value with Jinja Syntax
     Leave blank if not needed
     """
     group_name = db.StringField(choices=cmk_groups)
     foreach_type = db.StringField(choices=foreach_types)
     foreach = db.StringField(required=True)
-    regex = db.StringField()
+    rewrite = db.StringField()
 
     meta = {
         'strict': False,
@@ -379,6 +376,22 @@ class CheckmkBiRule(db.Document):
     render_cmk_bi_rule = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
+    meta = {
+        'strict': False
+    }
+
+#.
+#   .-- Object Cache
+
+class CheckmkObjectCache(db.Document):
+    """
+    DB Object Cache
+    """
+
+    cache_group = db.StringField()
+    account = db.ReferenceField('Account')
+    content = db.DictField()
+
     meta = {
         'strict': False
     }

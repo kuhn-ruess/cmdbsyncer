@@ -26,6 +26,7 @@ The sync will send them then to Checkmk:
 
 Where you find them:
 ![](img/recipe_cg_4.png)
+(Please note that in the current Version, no syncer Prefixes needed anymore because of an internal cache)
 
 ## The Assignment Rule
 Now you create a normal Checkmk rule. Even that this example shows the Assignment of Hosts to Contact groups, you can adapt it to every other Rule type.
