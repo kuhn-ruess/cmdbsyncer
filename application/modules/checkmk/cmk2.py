@@ -74,7 +74,7 @@ class CMK2(Plugin):
             if response.status_code != 200:
                 response_json = response.json()
                 if response_json['title'] not in error_whitelist:
-                    raise CmkException(f"{response_json['title']} {response_json['detail']}")
+                    raise CmkException(f"{response_json['title']} {response_json.get('detail')}")
                 return {}, {'status_code': response.status_code}
             resp_header = response.headers
             resp_header['status_code'] = response.status_code
