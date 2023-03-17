@@ -7,6 +7,8 @@ account_types = [
     ('cmkv1', "Checkmk Version 1.x"),
     ('cmkv2', "Checkmk Version 2.x"),
     ('csv', "CSV File"),
+    ('json', "Json File"),
+    ('mysql', "Mysql Table"),
     ('custom', "Custom Entries, like DBs"),
     ('restapi', "Rest API"),
 ]
@@ -40,3 +42,7 @@ class Account(db.Document):
     meta = {
         'strict': False,
     }
+
+
+    def __str__(self):
+        return f"{self.name} ({self.typ})"
