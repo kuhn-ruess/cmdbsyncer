@@ -17,6 +17,7 @@ class Plugin():
     filter = False
     custom_attributes = False
     debug = False
+    account = False
 
 
     def init_custom_attributes(self):

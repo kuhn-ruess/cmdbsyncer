@@ -124,6 +124,12 @@ from application.modules.checkmk.views import CheckmkBiRuleView
 #admin.add_view(DefaultModelView(CheckmkBiAggregation, name="BI Aggregation", category="Business Intelligence"))
 admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Business Intelligence"))
 
+from application.modules.checkmk.models import CheckmkObjectCache
+from application.modules.checkmk.views import CheckmkCacheView
+
+admin.add_view(CheckmkCacheView(CheckmkObjectCache, \
+                                    name="Object Cache", category="Checkmk"))
+
 
 #.
 #   .-- Ansible

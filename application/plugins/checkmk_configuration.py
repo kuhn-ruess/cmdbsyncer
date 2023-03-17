@@ -59,6 +59,7 @@ def _inner_export_groups(account, test_run):
         target_config = get_account_by_name(account)
         if target_config:
             syncer = SyncConfiguration()
+            syncer.account = target_config['_id']
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.config = target_config
