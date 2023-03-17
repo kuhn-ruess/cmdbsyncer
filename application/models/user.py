@@ -1,7 +1,7 @@
 """
 Internal User Accounts
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import current_app
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -60,13 +60,14 @@ class User(db.Document, UserMixin):
         """
         Token generator
         """
-        # @TODO Expire Token
+        dt = datetime.now()+timedelta(minutes=expiration)
         header = {
               'alg': 'HS256'
         }
         key = current_app.config['SECRET_KEY']
         data = {
-            'userid': str(self.id)
+            'userid': str(self.id),
+            'exp' : dt
         }
         data.update(**kwargs)
 
