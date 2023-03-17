@@ -65,7 +65,7 @@ def show_hosts(disabled_only=False):
         attributes = syncer.get_host_attributes(db_host)
         if not attributes:
             if disabled_only:
-                print(db_host.hostname, attributes['filtered'])
+                print(db_host.hostname)
             continue
         if not disabled_only:
             print(db_host.hostname, attributes['filtered'])
