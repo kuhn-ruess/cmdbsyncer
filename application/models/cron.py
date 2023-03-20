@@ -41,12 +41,14 @@ class CronJob(db.Document):
     name = db.StringField(required=True, unique=True)
     command = db.StringField(choices=cron_register.keys())
     account = db.ReferenceField('Account')
-    params = db.ListField(db.StringField())
 
     def __str__(self):
         return f"{self.name} ({self.command})"
 
 
+    meta = {
+        'strict': False,
+    }
 
 class CronStats(db.Document):
     """
