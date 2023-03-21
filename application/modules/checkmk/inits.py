@@ -109,11 +109,10 @@ def bake_and_sign_agents(account):
     Bake and Sign Agents in Checkmk
     """
     account_config = get_account_by_name(account)
-    custom_config = {x['name']:x['value'] for x in account_config['custom_fields']}
     if account_config['typ'] != 'cmkv2':
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
         sys.exit(1)
-    if not "backery_key_id" in custom_config and not "bakery_passphrase" in custom_config:
+    if not "backery_key_id" in account_config and not "bakery_passphrase" in account_config:
         print(f"{ColorCodes.FAIL} Please set baker_key_id and "\
               f"bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
         sys.exit(1)
@@ -121,8 +120,8 @@ def bake_and_sign_agents(account):
     cmk.config = account_config
     url = "/domain-types/agent/actions/bake_and_sign/invoke"
     data = {
-        'key_id': int(custom_config['bakery_key_id']),
-        'passphrase': custom_config['bakery_passphrase'],
+        'key_id': int(account_config['bakery_key_id']),
+        'passphrase': account_config['bakery_passphrase'],
     }
     try:
         cmk.request(url, data=data, method="POST")
