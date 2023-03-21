@@ -40,6 +40,7 @@ The following Variables existing in the Ansible Role. You learn later how to set
 | cmk_install_agent | True if Agent has to be installed |
 | cmk_register_tls | True if TLS Registration has to be done |
 | cmk_register_bakery | True if Bakery Registration as to be done |
+| cmk_register_central_bakery | True if Bakery Registration for no Distributed Bakery Setup |
 | cmk_delete_manual_files | Set True if you delte the Checkmk Files on the Server |
 | cmk_linux_tmp | Temp dir which is used on Linux |
 | cmk_agent_receiver_port | Port for Agent TLS Registration |
