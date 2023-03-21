@@ -12,10 +12,26 @@ from application.modules.checkmk.inits import (
     activate_changes,
     bake_and_sign_agents,
     inventorize_hosts,
+    show_missing,
 )
 
 
+#   .-- Command: Show Hosts not in Syncer
+@cli_cmk.command('show_missing_hosts')
+@click.argument('account')
+#pylint: disable=too-many-locals
+def cli_missing_hosts(account):
+    """
+    ## Check which Hosts are in Checkmk but not in Syncer
 
+    ### Example
+    _./cmdbsyncer checkmk show_missing_hosts SITEACCOUNT_
+
+    Args:
+        account (string): Name Account Config
+    """
+    show_missing(account)
+#.
 
 #   .-- Command: Export Rulesets
 
