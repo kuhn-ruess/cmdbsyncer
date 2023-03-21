@@ -103,6 +103,23 @@ def inventorize_hosts(account):
         else:
             print(f" {ColorCodes.FAIL}* {ColorCodes.ENDC} Not in Syncer: {hostname}")
 #.
+#   . -- Show missing hosts
+def show_missing(account):
+    config = get_account_by_name(account)
+    cmk = CMK2()
+    cmk.config = config
+
+    local_hosts = list([x.hostname for x in Host.objects()])
+    print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
+          f"{ColorCodes.UNDERLINE}{account}{ColorCodes.ENDC}")
+    url = "domain-types/host_config/collections/all?effective_attributes=false"
+    api_hosts = cmk.request(url, method="GET")
+    for host in api_hosts[0]['value']:
+        hostname = host['id']
+        if hostname not in local_hosts:
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} {hostname}")
+
+#.
 #   . -- Bake and Sign Agents
 def bake_and_sign_agents(account):
     """
