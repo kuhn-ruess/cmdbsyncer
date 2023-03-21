@@ -16,6 +16,7 @@ from application.models.account import Account
 from application.models.user import User
 from application.modules.checkmk.models import CheckmkFolderPool
 from application.models.config import Config
+from application.helpers.cron import register_cronjob
 
 
 
@@ -28,16 +29,8 @@ def _cli_sys():
 
 
 #   .-- Command: Maintanence
-@_cli_sys.command('maintenance')
-@click.argument("days")
-def maintenance(days):
-    """
-    Run maintenance tasks
-    This includes deletion of old hosts.
 
-    Args:
-        days (int): Gracetime before host is deleted
-    """
+def maintenance(days):
     print(f"{ColorCodes.HEADER} ***** Run Tasks ***** {ColorCodes.ENDC}")
     print(f"{ColorCodes.UNDERLINE}Cleanup Hosts not found anymore{ColorCodes.ENDC}")
     now = datetime.datetime.now()
@@ -50,6 +43,18 @@ def maintenance(days):
             remove_seat(folder)
             print(f"{ColorCodes.WARNING}  *** {ColorCodes.ENDC}Seat in Pool {folder} free now")
         host.delete()
+
+@_cli_sys.command('maintenance')
+@click.argument("days", default=7)
+def cli_maintenance(days):
+    """
+    Run maintenance tasks
+    This includes deletion of old hosts.
+
+    Args:
+        days (int): Gracetime before host is deleted
+    """
+    maintenance(days)
 #.
 #   .-- Command: Delete all Hosts
 @_cli_sys.command('delete_all_hosts')
@@ -104,7 +109,7 @@ def show_accounts():
 def seed_user(email):
     """
     Create new user or overwrite user password
-   
+
     Args:
         email (string): E-Mail Address of User
 
@@ -138,7 +143,7 @@ def seed_user(email):
 #    models = [
 #    ]
 #
-##.
+#.
 #   .-- Command: self configure
 @_cli_sys.command('self_configure')
 def self_configure():
@@ -147,9 +152,10 @@ def self_configure():
     Use if stated in docs after Update.
     """
     print("Seed data if needed:")
-    if not len(Config.objects()):
+    if not Config.objects():
         conf = Config()
         conf.save()
     print("- done")
 
-##.
+#.
+register_cronjob("Syncer: Maintanence", maintenance)
