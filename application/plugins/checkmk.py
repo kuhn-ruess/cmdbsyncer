@@ -4,10 +4,10 @@ Commands to handle Checkmk Sync
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 import click
 from mongoengine.errors import DoesNotExist
-from application import cron_register
 from application.modules.checkmk.syncer import SyncCMK2
 from application.modules.checkmk.cmk2 import cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
+from application.helpers.cron import register_cronjob
 from application.modules.debug import ColorCodes, attribute_table
 
 
@@ -195,4 +195,4 @@ def debug_host(hostname):
 #.
 
 
-cron_register['Checkmk: Export Hosts'] = _inner_export_hosts
+register_cronjob('Checkmk: Export Hosts', _inner_export_hosts)

@@ -5,17 +5,17 @@ from application import app
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
+from application.helpers.cron import register_cronjob
 import mysql.connector
 
 @app.cli.group(name='mysql')
 def cli_mysql():
     """MYSQL Related commands"""
 
-@cli_mysql.command('import_hosts')
-@click.argument('account')
 def mysql_import(account):
-    """Import MysQL Hosts"""
-
+    """
+    Mysql Import
+    """
     config = get_account_by_name(account)
 
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
@@ -46,3 +46,11 @@ def mysql_import(account):
             host_obj.save()
             continue
         print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
+
+@cli_mysql.command('import_hosts')
+@click.argument('account')
+def cli_mysql_import(account):
+    """Import MysQL Hosts"""
+    mysql_import(account)
+
+register_cronjob("Mysql: Import Hosts", mysql_import)

@@ -9,6 +9,7 @@ from application.models.host import Host
 from application import app
 from application.modules.debug import ColorCodes, attribute_table
 from application.helpers.get_account import get_account_by_name
+from application.helpers.cron import register_cronjob
 
 from application.modules.rule.rewrite import Rewrite
 
@@ -41,9 +42,6 @@ def cli_netbox():
 
 
 #   .-- Command: Export Hosts
-@cli_netbox.command('export_hosts')
-@click.argument("account")
-@click.option("-d", "--debug", default=False, is_flag=True)
 def netbox_host_export(account, debug):
     """Sync Objects with Netbox"""
     try:
@@ -61,10 +59,14 @@ def netbox_host_export(account, debug):
     except Exception as error_obj: #pylint: disable=broad-except
         print(f'C{ColorCodes.FAIL}Connection Error: {error_obj} {ColorCodes.ENDC}')
         raise
+@cli_netbox.command('export_hosts')
+@click.argument("account")
+@click.option("-d", "--debug", default=False, is_flag=True)
+def cli_netbox_host_export(account, debug):
+    """Sync Objects with Netbox"""
+    netbox_host_export(account, debug)
 #.
 #   .-- Command: Import Hosts
-@cli_netbox.command('import_hosts')
-@click.argument("account")
 def netbox_host_import(account):
     """Import Devices from Netbox"""
     try:
@@ -77,6 +79,11 @@ def netbox_host_import(account):
             print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
     except Exception as error_obj: #pylint:disable=broad-except
         print(f'C{ColorCodes.FAIL}Connection Error: {error_obj} {ColorCodes.ENDC}')
+@cli_netbox.command('import_hosts')
+@click.argument("account")
+def cli_netbox_host_import(account):
+    """Import Devices from Netbox"""
+    netbox_host_import(account)
 #.
 #   .-- Command: Debug Hosts
 @cli_netbox.command('debug_host')
@@ -117,3 +124,7 @@ def netbox_host_debug(hostname):
     attribute_table("Attributes by Rule ", extra_attributes)
     if 'update_interfaces' in extra_attributes:
         attribute_table("Interfaces", {y['portName']: y for x,y in syncer.get_interface_list_by_attributes(attributes['all']).items()})
+#.
+
+register_cronjob("Netbox: Export Hosts", netbox_host_export)
+register_cronjob("Netbox: Import Hosts", netbox_host_import)
