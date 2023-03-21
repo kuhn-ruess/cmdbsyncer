@@ -22,8 +22,14 @@
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_tls | bool
 
-- name: "Register Agent for Bakery."
+- name: "Register Agent on Local Bakery."
   win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_server }} -i {{ cmk_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_password }} -v"
   args:
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_bakery | bool
+
+- name: "Register Agent on Central Bakery."
+  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_main_server }} -i {{ cmk_main_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_password }} -v"
+  args:
+    chdir: C:\\Program Files (x86)\\checkmk\service
+  when: cmk_register_central_bakery | bool

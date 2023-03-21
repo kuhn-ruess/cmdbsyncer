@@ -2,6 +2,7 @@
 cmk_install_agent: False
 cmk_register_tls: False
 cmk_register_bakery: False
+cmk_register_central_bakery: False
 cmk_delete_manual_files: False
 cmk_discover: False
 cmk_linux_tmp: /tmp

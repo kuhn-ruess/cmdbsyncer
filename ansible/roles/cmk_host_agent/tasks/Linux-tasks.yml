@@ -8,7 +8,7 @@
   when: cmk_register_tls | bool
   ignore_errors: yes
 
-- name: "Register Agent for Bakery."
+- name: "Register Agent on Local Bakery."
   become: true
   ansible.builtin.shell: |
     cmk-update-agent register -H {{ inventory_hostname }} \
@@ -17,3 +17,11 @@
   when: cmk_register_bakery | bool
   ignore_errors: yes
 
+- name: "Register Agent on Central Bakery."
+  become: true
+  ansible.builtin.shell: |
+    cmk-update-agent register -H {{ inventory_hostname }} \
+    -s {{ cmk_main_server }} -i {{ cmk_main_site }} -p https \
+    -U {{ cmk_user }} -S {{ cmk_password }}
+  when: cmk_register_central_bakery | bool
+  ignore_errors: yes
