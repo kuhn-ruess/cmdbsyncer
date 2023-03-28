@@ -19,6 +19,7 @@ class CiscoDNA():
         Init
         """
         self.account_dict = config
+        self.account_id = str(config['_id'])
         self.address = config['address']
         self.user = config['username']
         self.password = config['password']
@@ -226,4 +227,5 @@ class CiscoDNA():
             do_save = db_host.set_account(account_dict=self.account_dict)
             if do_save:
                 db_host.save()
-            print("  - Object owned by other Source, not saved")
+            else:
+                print("  - Object owned by other Source, not saved")
