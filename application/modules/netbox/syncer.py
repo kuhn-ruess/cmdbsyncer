@@ -70,7 +70,8 @@ class SyncNetbox(Plugin):
                 response = requests.delete(url, headers=headers, verify=self.verify)
                 # Checkmk gives no json response here, so we directly return
                 return True, response.headers
-
+            if response.status_code >= 299:
+                raise ValueError(response.text)
             try:
                 response_json = response.json()
             except:
