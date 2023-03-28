@@ -56,3 +56,4 @@ openpyxl==3.0.9
 pylint-mongoengine==0.4.0
 rich==12.6.0
 mysql-connector-python==8.0.32
+ansible-runner==2.3.2

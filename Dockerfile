@@ -16,14 +16,19 @@ RUN apk add --no-cache python3 \
     uwsgi-python3 \
     tzdata \
     libffi-dev \
-    openssl-dev
+    openssl-dev \
+    krb5-pkinit \
+    krb5-dev \
+    krb5
 
 ENV TZ=Etc/Universal
 RUN ln -sf /usr/share/zoneinfo/Ect/Universal /etc/localtime
 
 COPY requirements.txt ./
+COPY ansible/requirements.txt ./ansible_reqirements.txt
 RUN pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r ansible_reqirements.txt
 
 
 ARG config
