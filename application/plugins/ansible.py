@@ -1,11 +1,11 @@
-
 """
 Ansible Inventory Modul
 """
 #pylint: disable=too-many-arguments, no-member
-#   .-- Init
+import os
 import json
 import click
+import ansible_runner
 
 from mongoengine.errors import NotUniqueError
 from mongoengine.errors import DoesNotExist
@@ -15,6 +15,7 @@ from application.models.host import Host
 from application.modules.debug import ColorCodes, attribute_table
 from application.modules.rule.filter import Filter
 from application.modules.rule.rewrite import Rewrite
+from application.helpers.get_account import get_account_by_name
 
 from application.modules.ansible.models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
                                                AnsibleCustomVariablesRule
@@ -27,7 +28,6 @@ from application.modules.ansible.site_syncer import SyncSites
 def cli_ansible():
     """Ansible related commands"""
 
-#.
 #   .-- Load Rules
 def load_rules():
     """
@@ -261,13 +261,11 @@ def source(list, host): #pylint: disable=redefined-builtin
     print("Params missing")
     return False
 #.
-
-
-#    .-- Checkmk Server Source
+#   .-- Checkmk Server Source
 @cli_ansible.command('cmk-server-source')
 @click.option("--list", is_flag=True)
 @click.option("--host")
-def source(list, host): #pylint: disable=redefined-builtin
+def server_source(list, host): #pylint: disable=redefined-builtin
     """Inventory Source for Checkmk Server Data"""
     #pylint: disable=no-else-return
     cmksitemngmt = SyncSites()
@@ -281,3 +279,40 @@ def source(list, host): #pylint: disable=redefined-builtin
     return False
 
 #.
+#   . -- Ansible Playbook
+
+def print_out(data, runner_config):
+    print(data)
+
+def run_agent_playbook():
+    """
+    Run Ansible Playbook
+    """
+
+    rules = load_rules()
+    syncer = SyncAnsible()
+    syncer.filter = rules['filter']
+    syncer.rewrite = rules['rewrite']
+    syncer.actions = rules['actions']
+
+    inventory = syncer.get_full_inventory()
+    playbook = './ansible/cmk_agent_mngmt.yml'
+
+    path = os.path.abspath(os.getcwd())
+    path += "/ansible"
+    envvars = {
+        'PATH': path,
+        'ANSIBLE_ROLES_PATH': path,
+    }
+    result = ansible_runner.run(playbook=playbook,
+                                status_handler=print_out,
+                                envvars = envvars,
+                                inventory=inventory)
+    print(result)
+
+@cli_ansible.command('run_agent_playbook')
+def cli_run_agent_playbook():
+    """
+    Run Ansible Playbook
+    """
+    run_agent_playbook()
