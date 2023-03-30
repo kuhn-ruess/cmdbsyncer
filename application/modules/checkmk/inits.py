@@ -60,7 +60,7 @@ def inventorize_hosts(account):
         host_inventory = {}
         for attribute in attributes:
             if attribute in inventory_target or attribute.startswith('tag_'):
-                host_inventory[f"cmk_{attribute}"] = attributes[attribute]
+                host_inventory[attribute] = attributes[attribute]
 
         config_inventory[hostname] = host_inventory
 
@@ -86,8 +86,8 @@ def inventorize_hosts(account):
         service_state = service['extensions']['state']
         service_output = service['extensions']['plugin_output']
         status_inventory.setdefault(host_name, {})
-        status_inventory[host_name][f"cmk_svc_{service_description}_state"] = service_state
-        status_inventory[host_name][f"cmk_svc_{service_description}_output"] = service_output
+        status_inventory[host_name][f"{service_description}_state"] = service_state
+        status_inventory[host_name][f"{service_description}_output"] = service_output
 
     print(f"{ColorCodes.UNDERLINE}Write to DB{ColorCodes.ENDC}")
 
