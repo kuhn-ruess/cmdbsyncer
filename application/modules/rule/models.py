@@ -123,7 +123,7 @@ class FilterAction(db.EmbeddedDocument):
     Whitelist Attribute
     -------------------
     This attributes will be exported for the current Module.
-    Match by Attribute Name
+    Match by Attribute Name. Use * at the end of attribute to match startswith
 
     Whitelist Attribute Value
     -------------------------
