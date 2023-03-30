@@ -141,7 +141,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
                     del row[dkey]
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Got Data for {hostname}")
             del row[hostname_field]
-            new_attributes[hostname] = {f"{key}_{x}":y for x,y in row.items()}
+            new_attributes[hostname] = row
 
     for host_obj in Host.objects(available=True):
         print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {host_obj.hostname}")

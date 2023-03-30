@@ -128,7 +128,7 @@ class CiscoDNA():
             for interface in response_json:
                 if_id = interface['id']
                 for attribute in inventory_attributes:
-                    inventory[f'cisco_dnainterface_{if_id}_{attribute}'] = interface[attribute]
+                    inventory[f'{if_id}_{attribute}'] = interface[attribute]
             db_host.update_inventory('cisco_dnainterface_', inventory)
             db_host.save()
 
@@ -220,7 +220,7 @@ class CiscoDNA():
             inventory = {}
             inventory['manufacturer'] = "cisco"
             for attribute in inventory_attributes:
-                inventory[f'cisco_dna_{attribute}'] = device[attribute]
+                inventory[attribute] = device[attribute]
             db_host.update_inventory('cisco_dna_', inventory)
             db_host.sync_id = device['id']
             db_host.set_import_seen()

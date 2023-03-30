@@ -128,12 +128,11 @@ class Host(db.Document):
         """
         Updates all inventory entries, with names who starting with given key.
         Ones not existing any more in new_data will be removed.
-        !! Make sure that the keys of new_data already are prefixt !!
 
 
         Args:
            key (string): Identifier for Inventory Attributes
-           new_data (dict): Key:Value of Attributes. Name must start with key
+           new_data (dict): Key:Value of Attributes.
         """
         # pylint: disable=unnecessary-comprehension
         # Prevent runtime error
@@ -141,7 +140,7 @@ class Host(db.Document):
             # Delete all existing keys of type
             if name.startswith(key):
                 del self.inventory[name]
-        self.inventory.update(new_data)
+        self.inventory.update({f"{key}_{x}":y for x, y in new_data.items()})
 
     def get_inventory(self, key_filter=False):
         """
