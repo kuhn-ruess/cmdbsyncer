@@ -2,6 +2,15 @@
 The CMDB Syncer contains Ansible Endpoints and a set of Ansible Playbooks.
 As of now, you can basically controll all of your own playbooks with rule based variables from the syncer, or use the providedd ones for Update and Register of Checkmk Agents (Linux/ Windows) or the Managementt and Installation of Checkmk Sites on your Servers.
 
+## Config Tricks
+If you want to refer to Passwords in your Syncer Configuration, you can use an Integrated Marco called ACCOUNT who connects you to every Field which you can set in the Account config.  The Syntax is MACRONAME:ACCOUNTNAME:FIELDNAME.
+
+Therefore , to get the Password of account cmk, it would look like:
+```
+{{ACOUNT:cmk:password}}
+```
+
+
 
 
 ## General

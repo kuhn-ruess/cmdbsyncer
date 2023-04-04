@@ -126,7 +126,7 @@ def seed_default_rules():
                  ('cmk_main_server', ""),
                  ('cmk_main_site', ""),
                  ('cmk_user', ""),
-                 ('cmk_password', "{{ACCOUNT:<NAME>:password}}"),
+                 ('cmk_secret', "{{ACCOUNT:<NAME>:password}}"),
                  ('cmk_windows_tmp', ""),
                  ('cmk_linux_tmp', ""),
             ],
