@@ -33,7 +33,7 @@ The following Variables existing in the Ansible Role. You learn later how to set
 | Variable | Description |
 | :--------|:------------|
 | cmk_user | User for Auth in Checkmk and API Operations |
-| cmk_password | Password to the user |
+| cmk_secret | The Automation Secret for the User |
 | cmk_server | The Site specifc Server for Registrations (Distributed Monitoring) |
 | cmk_main_site | Master Site |
 | cmk_main_server | Master Sites Address (with https://) |

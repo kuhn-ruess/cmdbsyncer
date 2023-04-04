@@ -5,7 +5,7 @@
       url: "https://{{ cmk_server }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=windows_msi&host_name={{ inventory_hostname }}"
       dest: "{{ cmk_windows_tmp }}\\cmk_agent.msi"
       headers:
-        Authorization: "Bearer {{ cmk_user }} {{ cmk_password}}"
+        Authorization: "Bearer {{ cmk_user }} {{ cmk_secret}}"
         accept: "application/octet-stream"
   when: cmk_install_agent | bool
 
@@ -17,19 +17,19 @@
   when: cmk_install_agent | bool
 
 - name: "Register Agent for TLS."
-  win_shell: ".\\cmk-agent-ctl.exe register --hostname {{ inventory_hostname }} --server {{ cmk_server }}:{{ cmk_agent_receiver_port}} --site {{ cmk_site }} --user {{ cmk_user }} --secret {{ cmk_password }}  --trust-cert"
+  win_shell: ".\\cmk-agent-ctl.exe register --hostname {{ inventory_hostname }} --server {{ cmk_server }}:{{ cmk_agent_receiver_port}} --site {{ cmk_site }} --user {{ cmk_user }} --secret {{ cmk_secret }}  --trust-cert"
   args:
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_tls | bool
 
 - name: "Register Agent on Local Bakery."
-  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_server }} -i {{ cmk_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_password }} -v"
+  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_server }} -i {{ cmk_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_secret }} -v"
   args:
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_bakery | bool
 
 - name: "Register Agent on Central Bakery."
-  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_main_server }} -i {{ cmk_main_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_password }} -v"
+  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_main_server }} -i {{ cmk_main_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_secret }} -v"
   args:
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_central_bakery | bool
