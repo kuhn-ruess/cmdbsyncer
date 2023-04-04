@@ -2,19 +2,18 @@
 CronJobs
 """
 #pylint: disable=too-many-arguments
-import json
-import click
 import os
 from datetime import datetime, timedelta
-from application import app, cron_register
-from application.modules.debug import ColorCodes
-from application.models.cron import CronStats, CronGroup
+import click
 from mongoengine.errors import DoesNotExist
+
+from application import app, cron_register
+from application.modules.debug import ColorCodes as CC
+from application.models.cron import CronStats, CronGroup
 
 @app.cli.group(name='cron')
 def _cli_cron():
     """Cron Jobs"""
-
 
 def get_stats(group):
     """
@@ -51,10 +50,11 @@ def next_run(interval):
         return now + timedelta(days=days)
     if hours:
         return now + timedelta(hours=hours)
+    return now
 
 @_cli_cron.command('run_jobs')
 @click.option("-v", default=False)
-def run_jobs(v):
+def run_jobs(v): #pylint: disable=invalid-name
     """
     Run all configured Jobs
     """
@@ -64,19 +64,20 @@ def run_jobs(v):
 
         # Add Time Delta of 1min to get jobs which never run before
         if not stats.is_running and stats.next_run <= now+timedelta(minutes=1):
-            print('-------------------------------------------------------------')
-            print(f"{ColorCodes.HEADER} Running Group {job.name} {ColorCodes.ENDC}")
+            if v:
+                print('-------------------------------------------------------------')
+                print(f"{CC.HEADER} Running Group {job.name} {CC.ENDC}")
             stats.is_running = True
             stats.last_start = now
             stats.save()
             for task in job.jobs:
-                print(f"{ColorCodes.UNDERLINE}{ColorCodes.OKBLUE}Task: {task.name} {ColorCodes.ENDC}")
+                if v:
+                    print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
                 stats.last_message = f"{now}: Started {task.name} (PID: {os.getpid()})"
                 stats.save()
-                try:
-                    cron_register[task.command](account=task.account.name)
-                except Exception as error_obj:
-                    print(Exception, error_obj)
+                # Don't Catch any exceptions. If for example the Import breaks,
+                # there should no export of deletion of hosts
+                cron_register[task.command](account=task.account.name)
 
             stats.last_ended = datetime.now()
             stats.next_run = next_run(job.interval)
