@@ -47,6 +47,15 @@ Some of the Reference Fields need even a Reverence by themselves:
 - Device Type → Manufacturer: The Attribute __manufacturer__ is needed on your host. Best would be adding this attribute in your import plugin. Some integrated plugins like Cisco DNA also handle the manufacturer attribute automatically. 
 
 
+# Setup of Netbox
+You need at Least an API Key, to Set up the Connection as Account in Syncer.
+Also, you need to Set up a Reference Field for the Devices, that the Syncer can mark systems owned by him.
+
+![](img/netbox_custom_field.png)
+
+
+
+
 
  
 
