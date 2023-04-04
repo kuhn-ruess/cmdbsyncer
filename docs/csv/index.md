@@ -21,25 +21,36 @@ srvlx100;content1;content2
 
 This means we would have a host: srvlx100 with labels: label_name1:content1, labels_name2:content2
 
+## Account Settings
+Instead of passing Command Line Options, we recommend creating a Account for each file.
+This not only simplifiess the command line, but also enables the Syncer to use the *is_master* feature. This feature for can let another Plugin overtake the import from the field. 
+
+You can use the following Settings as Custom Fields:
+
+- hostname_field
+- delimiter
+- csv_path (required)
+- key (only in case of inventory needed)
+
 ## Command line Options
 
 In the following part, you find the possible functions and their Parameters.
 
 
 
-::: application.plugins.csv.import_hosts
+::: application.plugins.csv.cli_import_hosts
     options:
       show_source: false
       show_bases: false
       show_root_toc_entry: false
     
-::: application.plugins.csv.inventorize_hosts
+::: application.plugins.csv.cli_inventorize_hosts
     options:
       show_source: false
       show_bases: false
       show_root_toc_entry: false
 
-::: application.plugins.csv.compare_hosts
+::: application.plugins.csv.cli_compare_hosts
     options:
       show_source: false
       show_bases: false
