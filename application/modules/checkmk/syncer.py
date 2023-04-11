@@ -71,7 +71,7 @@ class SyncCMK2(CMK2):
                 continue
             next_actions = self.get_host_actions(db_host, attributes['all'])
 
-            labels = attributes['filtered']
+            labels = {k:str(v) for k,v in attributes['filtered'].items()}
 
             synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id

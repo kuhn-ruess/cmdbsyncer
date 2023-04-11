@@ -96,8 +96,8 @@ def inventorize_hosts(account):
     for hostname in config_inventory:
         db_host = Host.get_host(hostname, False)
         if db_host:
-            db_host.update_inventory('cmk_', config_inventory[hostname])
-            db_host.update_inventory('cmk_svc)', status_inventory.get(hostname, {}))
+            db_host.update_inventory('cmk', config_inventory[hostname])
+            db_host.update_inventory('cmk_svc', status_inventory.get(hostname, {}))
             db_host.save()
             print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
         else:
