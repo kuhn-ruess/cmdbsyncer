@@ -34,12 +34,13 @@ def import_hosts(json_path, hostname_field, account):
     with open(json_path, newline='', encoding='utf-8') as json_file:
         data = json.load(json_file)
         for host in data:
-            labels = {}
             hostname = host[hostname_field]
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             del host[hostname_field]
             host_obj = Host.get_host(hostname)
-            host_obj.set_labels(host)
+            if host_obj.get_labels() != host:
+                host_obj.set_import_sync()
+                host_obj.set_labels(host)
             host_obj.set_import_seen()
 
             do_save = host_obj.set_account(account_dict=account)

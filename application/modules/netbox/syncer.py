@@ -495,6 +495,8 @@ class SyncNetbox(Plugin):
             host_obj.set_import_seen()
             labels = {
             }
-            host_obj.set_labels(labels)
+            if host_obj.get_labels() != labels:
+                host_obj.set_import_sync()
+                host_obj.set_labels(labels)
             host_obj.save()
 #.

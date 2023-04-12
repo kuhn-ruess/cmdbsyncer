@@ -81,7 +81,9 @@ def import_hosts(csv_path, delimiter, hostname_field, account):
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             host_obj = Host.get_host(hostname)
             del row[hostname_field]
-            host_obj.set_labels(row)
+            if host_obj.get_labels() != row:
+                host_obj.set_import_sync()
+                host_obj.set_labels(row)
             host_obj.set_import_seen()
             if account:
                 do_save = host_obj.set_account(account_dict=account)
