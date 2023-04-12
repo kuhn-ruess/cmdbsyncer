@@ -3,6 +3,7 @@
 # pylint: disable=wrong-import-position
 # pylint: disable=ungrouped-imports
 import os
+import logging
 from datetime import datetime
 from pprint import pformat
 from flask import Flask, url_for
@@ -15,6 +16,8 @@ from flask_mongoengine import MongoEngine
 
 
 VERSION = '3.1.4'
+# create logger
+logger = logging.getLogger('cmdb_syncer')
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -25,14 +28,23 @@ elif env == "compose":
 else:
     app.config.from_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
-if app.config['DEBUG']:
-    print(f"Loaded Config: {env}")
 
 try:
     from local_config import config
     app.config.update(config)
 except ModuleNotFoundError:
     pass
+logger.setLevel(logging.DEBUG)
+
+ch = app.config['LOG_CHANNEL'] 
+ch.setLevel(app.config['LOG_LEVEL'])
+
+formatter = logging.Formatter('%(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+if app.config['DEBUG']:
+    logger.info('Loaded Debug Mode')
+
 
 # Wired new behavior in UWSGI:
 # Master Process seams not to get the db init like before

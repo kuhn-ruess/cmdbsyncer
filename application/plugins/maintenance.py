@@ -8,7 +8,7 @@ import string
 import secrets
 import click
 from mongoengine.errors import DoesNotExist, ValidationError
-from application import app
+from application import app, logger
 from application.models.host import Host
 from application.modules.debug import ColorCodes
 from application.modules.checkmk.poolfolder import remove_seat
@@ -66,6 +66,7 @@ if app.config['USE_CACHE']:
         """
         print(f"{ColorCodes.HEADER} ***** Delete Cache ***** {ColorCodes.ENDC}")
         for host in Host.objects():
+            logger.debug(f"Handling Host {host.hostname}")
             host.cache = {}
             host.save()
         print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Done")
@@ -82,6 +83,7 @@ def delete_all_hosts():
     if answer.lower() in ['y', 'z']:
         print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Start deletion")
         for host in Host.objects():
+            logger.debug(f"Handling Host {host.hostname}")
             host.delete()
     else:
         print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")

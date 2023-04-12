@@ -1,5 +1,6 @@
 """ Config File """
 #pylint: disable=too-few-public-methods
+import logging
 
 class BaseConfig():
     """
@@ -11,6 +12,9 @@ class BaseConfig():
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
     BASE_PREFIX = '/'
+
+    LOG_LEVEL = logging.INFO
+    LOG_CHANNEL = logging.StreamHandler()
 
     # Minimum length for user Passwords (not applied to admin panel)
     PASSWD_MIN_PASSWD_LENGTH = 9
