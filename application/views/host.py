@@ -177,6 +177,7 @@ class HostModelView(DefaultModelView):
         'log',
         'folder',
         'raw',
+        'cache',
     )
 
     column_editable_list = (
