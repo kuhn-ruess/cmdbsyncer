@@ -113,11 +113,13 @@ class Host(db.Document):
     def set_labels(self, label_dict):
         """
         Overwrite all Labels on host
+        Will reset the cache, so check if realy needed before using
 
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
         self.labels=label_dict
+        self.cache = {}
 
     def get_labels(self):
         """
@@ -130,6 +132,7 @@ class Host(db.Document):
         """
         Updates all inventory entries, with names who starting with given key.
         Ones not existing any more in new_data will be removed.
+        Will also reset the Cache for the Host.
 
 
         Args:
@@ -143,6 +146,7 @@ class Host(db.Document):
             if name.startswith(key):
                 del self.inventory[name]
         self.inventory.update({f"{key}_{x}":y for x, y in new_data.items()})
+        self.cache = {}
 
     def get_inventory(self, key_filter=False):
         """
@@ -222,6 +226,8 @@ class Host(db.Document):
         """
         self.available = True
         self.last_import_sync = datetime.datetime.now()
+        # Delete Cache if new Data is imported
+        self.cache = {}
 
     def set_import_seen(self):
         """

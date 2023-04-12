@@ -40,6 +40,7 @@ def mysql_import(account):
         host_obj = Host.get_host(hostname)
         host_obj.set_import_seen()
         if host_obj.get_labels() == labels:
+            host_obj.set_import_sync()
             host_obj.set_labels(labels)
         if host_obj.set_account(account_dict=config):
             print(f" {ColorCodes.OKGREEN} * {ColorCodes.ENDC} Updated Labels")
