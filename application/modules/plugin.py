@@ -3,7 +3,7 @@ Alle Stuff shared by the plugins
 """
 #pylint: disable=too-few-public-methods
 
-
+from application import app
 from application.modules.custom_attributes.models import CustomAttributeRule as CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
 
@@ -34,11 +34,12 @@ class Plugin():
         Return Host Attributes or False if Host should be ignored
         """
         # Get Attributes
-        db_host.cache.setdefault(cache, {})
-        if 'attributes' in db_host.cache[cache]:
-            if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
-                return False
-            return db_host.cache[cache]['attributes']
+        if app.config['USE_CACHE']:
+            db_host.cache.setdefault(cache, {})
+            if 'attributes' in db_host.cache[cache]:
+                if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
+                    return False
+                return db_host.cache[cache]['attributes']
         attributes = {}
         attributes.update(db_host.labels)
         attributes.update(db_host.inventory)
@@ -66,7 +67,6 @@ class Plugin():
                 db_host.cache[cache]['attributes'] = data
                 db_host.save()
                 return False
-
 
         db_host.cache[cache]['attributes'] = data
         db_host.save()

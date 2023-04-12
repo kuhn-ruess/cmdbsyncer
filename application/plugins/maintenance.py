@@ -57,16 +57,18 @@ def cli_maintenance(days):
     maintenance(days)
 #.
 #   .-- Command: Delete Caches
-@_cli_sys.command('delete_cache')
-def delete_cache():
-    """
-    Delete object Cache
-    """
-    print(f"{ColorCodes.HEADER} ***** Delete Cache ***** {ColorCodes.ENDC}")
-    for host in Host.objects():
-        host.cache = {}
-        host.save()
-    print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Done")
+
+if app.config['USE_CACHE']:
+    @_cli_sys.command('delete_cache')
+    def delete_cache():
+        """
+        Delete object Cache
+        """
+        print(f"{ColorCodes.HEADER} ***** Delete Cache ***** {ColorCodes.ENDC}")
+        for host in Host.objects():
+            host.cache = {}
+            host.save()
+        print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Done")
 
 #.
 #   .-- Command: Delete all Hosts
