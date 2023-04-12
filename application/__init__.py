@@ -79,6 +79,7 @@ from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
 
 admin = Admin(app, name=f"CMDB Syncer {VERSION}",
+                   url=f"{app.config['BASE_PREFIX']}admin",
                    template_mode='bootstrap4', index_view=IndexView())
 
 
