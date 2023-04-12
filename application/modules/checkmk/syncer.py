@@ -308,18 +308,23 @@ class SyncCMK2(CMK2):
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Moved Host from {current_folder}")
 
         do_update = False
+        update_reasons = []
         cmk_attributes = cmk_host['extensions']['attributes']
         cmk_labels = cmk_attributes.get('labels', {})
         if labels != cmk_labels:
             do_update = True
+            update_reasons.append("Labels not match")
 
         if not do_update:
             for key, value in additional_attributes.items():
-                if cmk_attributes.get(key) != value:
+                attr = cmk_attributes.get(key)
+                if attr != value:
+                    update_reasons.append(f"Add Extra Attribute: {key} {attr} != {value}")
                     do_update = True
                     break
             for attr in remove_attributes:
                 if attr in cmk_attributes:
+                    update_reasons.append(f"Remove Extra Attribute: {attr}")
                     do_update = True
                     break
 
