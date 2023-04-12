@@ -29,11 +29,16 @@ class Plugin():
         self.custom_attributes.rules = \
                         CustomAttributeRuleModel.objects(enabled=True).order_by('sort_field')
 
-    def get_host_attributes(self, db_host):
+    def get_host_attributes(self, db_host, cache):
         """
         Return Host Attributes or False if Host should be ignored
         """
         # Get Attributes
+        db_host.cache.setdefault(cache, {})
+        if 'attributes' in db_host.cache[cache]:
+            if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
+                return False
+            return db_host.cache[cache]['attributes']
         attributes = {}
         attributes.update(db_host.labels)
         attributes.update(db_host.inventory)
@@ -49,12 +54,21 @@ class Plugin():
                     attributes[realname] = value
                 elif rewrite.startswith('del_'):
                     del attributes[realname]
-        if self.filter:
-            attributes_filtered = self.filter.get_outcomes(db_host, attributes)
-            if attributes_filtered.get('ignore_host'):
-                return False
-
-        return {
+        data = {
             'all': attributes,
             'filtered': attributes_filtered,
         }
+
+        if self.filter:
+            attributes_filtered = self.filter.get_outcomes(db_host, attributes)
+            data['filtered'] = attributes_filtered
+            if attributes_filtered.get('ignore_host'):
+                db_host.cache[cache]['attributes'] = data
+                db_host.save()
+                return False
+
+
+        db_host.cache[cache]['attributes'] = data
+        db_host.save()
+
+        return data

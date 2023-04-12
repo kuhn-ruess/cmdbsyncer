@@ -60,7 +60,7 @@ class SyncConfiguration(CMK2):
         collection_keys = {}
         collection_values = {}
         for db_host in Host.objects(available=True):
-            if attributes := self.get_host_attributes(db_host):
+            if attributes := self.get_host_attributes(db_host, 'cmk_conf'):
                 for key, value in attributes['all'].items():
                     # Add the Keys
                     collection_keys.setdefault(key, [])
@@ -86,7 +86,7 @@ class SyncConfiguration(CMK2):
         rulsets_by_type = {}
 
         for db_host in Host.objects(available=True):
-            attributes = self.get_host_attributes(db_host)
+            attributes = self.get_host_attributes(db_host, 'cmk_conf')
             if not attributes:
                 continue
             host_actions = self.actions.get_outcomes(db_host, attributes['all'])
@@ -328,7 +328,7 @@ class SyncConfiguration(CMK2):
 
 
         for db_host in Host.objects(available=True):
-            attributes = self.get_host_attributes(db_host)
+            attributes = self.get_host_attributes(db_host, 'cmk_conf')
             if not attributes:
                 continue
             host_actions = self.actions.get_outcomes(db_host, attributes['all'])

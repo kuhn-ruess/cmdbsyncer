@@ -42,6 +42,7 @@ class CMK2(Plugin):
         headers = {
             'Authorization': f"Bearer {username} {password}"
         }
+        response = False
         if additional_header:
             headers.update(additional_header)
         try:
@@ -80,5 +81,7 @@ class CMK2(Plugin):
             resp_header['status_code'] = response.status_code
             return response.json(), resp_header
         except (ConnectionResetError, requests.exceptions.ProxyError):
-            print(response.text)
-            return {}, {'status_code': response.status_code}
+            if response:
+                print(response.text)
+                return {}, {'status_code': response.status_code}
+            return {}, {"error": "Checkmk Connections broken"}
