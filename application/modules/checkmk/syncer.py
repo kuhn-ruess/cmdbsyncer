@@ -355,6 +355,7 @@ class SyncCMK2(CMK2):
                          data=update_body,
                          additional_header=update_headers)
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Updated Host in Checkmk")
+            print(f"  Reasons: {', '.join(update_reasons)}")
             db_host.set_export_sync()
 
 #.
