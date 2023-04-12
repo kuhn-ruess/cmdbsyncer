@@ -59,8 +59,11 @@ class SyncCMK2(CMK2):
         clusters = []
         cluster_updates = []
         for db_host in db_objects:
-            # Actions
             counter += 1
+            if self.limit:
+                if db_host.hostname not in self.limit:
+                    continue
+            # Actions
             process = 100.0 * counter / total
             print(f"\n{ColorCodes.HEADER}({process:.0f}%) {db_host.hostname}{ColorCodes.ENDC}")
             attributes = self.get_host_attributes(db_host, 'checkmk')
