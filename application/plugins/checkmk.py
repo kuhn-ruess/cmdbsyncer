@@ -101,7 +101,7 @@ def show_labels():
 #.
 #   .-- Command: Export Hosts
 
-def _inner_export_hosts(account):
+def _inner_export_hosts(account, limit):
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -109,6 +109,7 @@ def _inner_export_hosts(account):
             syncer = SyncCMK2()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
+            syncer.limit = limit
             syncer.config = target_config
             syncer.filter = rules['filter']
             syncer.rewrite = rules['rewrite']
@@ -123,7 +124,8 @@ def _inner_export_hosts(account):
 
 @cli_cmk.command('export_hosts')
 @click.argument("account")
-def export_hosts(account):
+@click.option("--limit", default='')
+def export_hosts(account, limit):
     """
     ## Export Hosts to Checkmk
 
@@ -132,8 +134,11 @@ def export_hosts(account):
 
     Args:
         account (string): Name Account Config
+        limit (list): Comma separted list of Hosts
     """
-    _inner_export_hosts(account)
+
+    limit_list = [x.strip() for x in limit.split(',')]
+    _inner_export_hosts(account, limit_list)
 #.
 #   .-- Command: Host Debug
 @cli_cmk.command('debug_host')
