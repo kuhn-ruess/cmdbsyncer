@@ -138,6 +138,9 @@ class SyncCMK2(CMK2):
 
             db_host.save()
 
+        if self.limit:
+            print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Stop processing in limit mode")
+            return
         ## Create the Clusters
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Check if we need to handle Clusters")
         for cluster in clusters:
