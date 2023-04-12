@@ -63,7 +63,7 @@ def show_hosts(disabled_only=False):
 
 
     for db_host in Host.objects(available=True):
-        attributes = syncer.get_host_attributes(db_host)
+        attributes = syncer.get_host_attributes(db_host, 'checkmk')
         if not attributes:
             if disabled_only:
                 print(db_host.hostname)
@@ -88,7 +88,7 @@ def show_labels():
 
     outcome = []
     for db_host in Host.objects(available=True):
-        attributes = syncer.get_host_attributes(db_host)
+        attributes = syncer.get_host_attributes(db_host, 'checkmk')
         if not attributes:
             continue
 
@@ -167,7 +167,7 @@ def debug_host(hostname):
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
         return
 
-    attributes = syncer.get_host_attributes(db_host)
+    attributes = syncer.get_host_attributes(db_host, 'checkmk')
 
     if not attributes:
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY RULE{ColorCodes.ENDC}")

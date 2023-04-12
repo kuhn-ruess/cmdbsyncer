@@ -441,7 +441,7 @@ class SyncNetbox(Plugin):
             hostname = db_host.hostname
             counter += 1
 
-            all_attributes = self.get_host_attributes(db_host)
+            all_attributes = self.get_host_attributes(db_host, 'netbox')
             if not all_attributes:
                 continue
             custom_rules = self.get_host_data(db_host, all_attributes['all'])

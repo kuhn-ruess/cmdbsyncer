@@ -63,7 +63,7 @@ class SyncCMK2(CMK2):
             counter += 1
             process = 100.0 * counter / total
             print(f"\n{ColorCodes.HEADER}({process:.0f}%) {db_host.hostname}{ColorCodes.ENDC}")
-            attributes = self.get_host_attributes(db_host)
+            attributes = self.get_host_attributes(db_host, 'checkmk')
 
 
             if not attributes:

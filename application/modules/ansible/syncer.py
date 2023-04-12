@@ -35,9 +35,10 @@ class SyncAnsible(Plugin):
         Return extra Attributes based on
         rules which has existing attributes in condition
         """
-        if db_host.cache.get('ansible'):
+        if db_host.cache.get('ansible',{}).get('outcomes'):
             return db_host.cache['ansible']['outcomes']
         outcomes = self.actions.get_outcomes(db_host, attributes)
+        db_host.cache.setdefault('ansible', {})
         db_host.cache['ansible']['outcomes'] = outcomes
         db_host.save()
         return outcomes
@@ -59,7 +60,7 @@ class SyncAnsible(Plugin):
         for db_host in Host.objects(available=True):
             hostname = db_host.hostname
 
-            attributes = self.get_host_attributes(db_host)
+            attributes = self.get_host_attributes(db_host, 'ansible')
             if not attributes:
                 continue
             extra_attributes = self.get_host_data(db_host, attributes['all'])
@@ -87,7 +88,7 @@ class SyncAnsible(Plugin):
         except DoesNotExist:
             return False
 
-        attributes = self.get_host_attributes(db_host)
+        attributes = self.get_host_attributes(db_host, 'ansible')
         if not attributes:
             return False
         extra_attributes = self.get_host_data(db_host, attributes['all'])

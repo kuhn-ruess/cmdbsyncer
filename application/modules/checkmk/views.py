@@ -78,7 +78,7 @@ def get_host_debug(hostname):
     except DoesNotExist:
         return {'Error': "Host not found in Database"}
 
-    attributes = syncer.get_host_attributes(db_host)
+    attributes = syncer.get_host_attributes(db_host, 'checkmk')
 
     if not attributes:
         return {"Error": "This host is ignored by a rule"}

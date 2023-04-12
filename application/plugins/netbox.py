@@ -111,7 +111,7 @@ def netbox_host_debug(hostname):
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
         return
 
-    attributes = syncer.get_host_attributes(db_host)
+    attributes = syncer.get_host_attributes(db_host, 'netbox')
 
     if not attributes:
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY RULE{ColorCodes.ENDC}")
