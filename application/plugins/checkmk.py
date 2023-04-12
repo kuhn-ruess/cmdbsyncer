@@ -137,7 +137,7 @@ def export_hosts(account, limit):
         limit (list): Comma separted list of Hosts
     """
 
-    limit_list = [x.strip() for x in limit.split(',')]
+    limit_list = [x.strip() for x in limit.split(',') if x]
     _inner_export_hosts(account, limit_list)
 #.
 #   .-- Command: Host Debug
