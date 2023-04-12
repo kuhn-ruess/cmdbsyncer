@@ -14,7 +14,7 @@ from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 
 
-VERSION = '3.1-pre3'
+VERSION = '3.1-pre4'
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -191,3 +191,5 @@ from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
 admin.add_view(LogView(LogEntry, name="Log"))
 #.
+admin.add_link(MenuLink(name='Commit Changes',
+                        url=f"{app.config['BASE_PREFIX']}admin/config/commit_changes"))
