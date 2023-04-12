@@ -49,6 +49,8 @@ class Host(db.Document):
 
     log = db.ListField(db.StringField())
 
+    cache = db.DictField()
+
 
     meta = {
         'strict': False,

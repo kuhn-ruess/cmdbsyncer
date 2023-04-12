@@ -35,7 +35,13 @@ class SyncAnsible(Plugin):
         Return extra Attributes based on
         rules which has existing attributes in condition
         """
-        return self.actions.get_outcomes(db_host, attributes)
+        if db_host.cache.get('ansible'):
+            return db_host.cache['ansible']['outcomes']
+        outcomes = self.actions.get_outcomes(db_host, attributes)
+        db_host.cache['ansible']['outcomes'] = outcomes
+        db_host.save()
+        return outcomes
+
 
     def get_full_inventory(self):
         """
