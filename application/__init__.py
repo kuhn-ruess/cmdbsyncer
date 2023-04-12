@@ -14,7 +14,7 @@ from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 
 
-VERSION = '3.1-pre4'
+VERSION = '3.1.4'
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -79,7 +79,6 @@ from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
 
 admin = Admin(app, name=f"CMDB Syncer {VERSION}",
-                   url=f"{app.config['BASE_PREFIX']}admin",
                    template_mode='bootstrap4', index_view=IndexView())
 
 
