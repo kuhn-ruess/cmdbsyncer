@@ -154,7 +154,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
 @click.option("--hostname_field", default='host')
 @click.option("--key", default='csv')
 @click.option("--account", default='')
-def cli_inventorize_hosts(csv_path, delimiter, hostname_field, key):
+def cli_inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
     """
     ## Add Inventory Information to hosts
     Source is a CSV. Every other Column then the host Column, will translate
