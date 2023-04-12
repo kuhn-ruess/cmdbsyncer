@@ -319,7 +319,7 @@ class SyncCMK2(CMK2):
             for key, value in additional_attributes.items():
                 attr = cmk_attributes.get(key)
                 if attr != value:
-                    update_reasons.append(f"Add Extra Attribute: {key} {attr} != {value}")
+                    update_reasons.append(f"Update Extra Attribute: {key} Currently: {attr} != {value}")
                     do_update = True
                     break
             for attr in remove_attributes:
@@ -355,7 +355,7 @@ class SyncCMK2(CMK2):
                          data=update_body,
                          additional_header=update_headers)
             print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Updated Host in Checkmk")
-            print(f"  Reasons: {', '.join(update_reasons)}")
+            print(f"   Reasons: {', '.join(update_reasons)}")
             db_host.set_export_sync()
 
 #.
