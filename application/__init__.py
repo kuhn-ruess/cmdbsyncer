@@ -28,6 +28,12 @@ else:
 if app.config['DEBUG']:
     print(f"Loaded Config: {env}")
 
+try:
+    from local_config import config
+    app.config.update(config)
+except ModuleNotFoundError:
+    pass
+
 # Wired new behavior in UWSGI:
 # Master Process seams not to get the db init like before
 # So we init it, try again if we are in a worker and fall back like before
@@ -191,5 +197,6 @@ from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
 admin.add_view(LogView(LogEntry, name="Log"))
 #.
-admin.add_link(MenuLink(name='Commit Changes',
+if app.config['USE_CACHE']:
+    admin.add_link(MenuLink(name='Commit Changes',
                         url=f"{app.config['BASE_PREFIX']}admin/config/commit_changes"))

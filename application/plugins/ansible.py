@@ -15,7 +15,6 @@ from application.models.host import Host
 from application.modules.debug import ColorCodes, attribute_table
 from application.modules.rule.filter import Filter
 from application.modules.rule.rewrite import Rewrite
-from application.helpers.get_account import get_account_by_name
 
 from application.modules.ansible.models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
                                                AnsibleCustomVariablesRule
@@ -240,24 +239,25 @@ def debug_ansible_rules(hostname):
 
 #.
 #   .-- Ansible Cache
-@cli_ansible.command('update_cache')
-def update_cache():
-    """
-    Update Cache for Ansible
-    """
-    print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
-    for host in Host.objects():
-        if 'ansible' in host.cache:
-            del host.cache['ansible']
-            host.save()
-    print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
-    rules = load_rules()
-    syncer = SyncAnsible()
-    syncer.filter = rules['filter']
-    syncer.rewrite = rules['rewrite']
-    syncer.actions = rules['actions']
-    # Do the action which triggers the caches
-    syncer.get_full_inventory()
+if app.config['USE_CACHE']:
+    @cli_ansible.command('update_cache')
+    def update_cache():
+        """
+        Update Cache for Ansible
+        """
+        print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
+        for host in Host.objects():
+            if 'ansible' in host.cache:
+                del host.cache['ansible']
+                host.save()
+        print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
+        rules = load_rules()
+        syncer = SyncAnsible()
+        syncer.filter = rules['filter']
+        syncer.rewrite = rules['rewrite']
+        syncer.actions = rules['actions']
+        # Do the action which triggers the caches
+        syncer.get_full_inventory()
 
 #.
 #   .-- Ansible Source

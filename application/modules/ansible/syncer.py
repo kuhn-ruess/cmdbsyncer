@@ -3,6 +3,7 @@
 Ansible Inventory Modul
 """
 from mongoengine.errors import DoesNotExist
+from application import app
 from application.models.host import Host
 from application.modules.plugin import Plugin
 
@@ -35,12 +36,13 @@ class SyncAnsible(Plugin):
         Return extra Attributes based on
         rules which has existing attributes in condition
         """
-        if db_host.cache.get('ansible',{}).get('outcomes'):
+        if app.config['USE_CACHE'] and db_host.cache.get('ansible',{}).get('outcomes'):
             return db_host.cache['ansible']['outcomes']
         outcomes = self.actions.get_outcomes(db_host, attributes)
-        db_host.cache.setdefault('ansible', {})
-        db_host.cache['ansible']['outcomes'] = outcomes
-        db_host.save()
+        if app.config['USE_CACHE']:
+            db_host.cache.setdefault('ansible', {})
+            db_host.cache['ansible']['outcomes'] = outcomes
+            db_host.save()
         return outcomes
 
 
