@@ -4,7 +4,7 @@
   ansible.builtin.shell: |
     cmk-agent-ctl register -H {{ inventory_hostname }} \
     -s {{ cmk_server }}:{{ cmk_agent_receiver_port }}  -i {{ cmk_site }} \
-    -U {{ cmk_user }} -S {{ cmk_secret }} --trust-cert
+    -U {{ cmk_user }} --password {{ cmk_secret }} --trust-cert
   when: cmk_register_tls | bool
   ignore_errors: yes
 
