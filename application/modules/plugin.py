@@ -70,5 +70,4 @@ class Plugin():
 
         db_host.cache[cache]['attributes'] = data
         db_host.save()
-
         return data
