@@ -9,6 +9,8 @@ nav:
         - Installation with Docker: basics/setup_docker.md
         - Updates: basics/updates.md
         - First Steps: basics/first_steps.md
+        - Config: basics/lcl_config.md
+        - Caching: basics/caching.md
         - Accounts: basics/accounts.md
         - Recipes:
             - UWSGI and Apache: basics/uwsgi_apache.md
