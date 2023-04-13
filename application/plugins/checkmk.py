@@ -2,6 +2,7 @@
 Commands to handle Checkmk Sync
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
+
 import click
 from mongoengine.errors import DoesNotExist
 from application.modules.checkmk.syncer import SyncCMK2
@@ -101,7 +102,7 @@ def show_labels():
 #.
 #   .-- Command: Export Hosts
 
-def _inner_export_hosts(account, limit):
+def _inner_export_hosts(account, limit=False):
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -125,6 +126,7 @@ def _inner_export_hosts(account, limit):
 @cli_cmk.command('export_hosts')
 @click.argument("account")
 @click.option("--limit", default='')
+#@click.option("--debug", default=False, is_flag=True)
 def export_hosts(account, limit):
     """
     ## Export Hosts to Checkmk

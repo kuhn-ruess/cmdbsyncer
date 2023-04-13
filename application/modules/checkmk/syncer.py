@@ -5,6 +5,7 @@ Add Hosts into CMK Version 2 Installations
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
+from application import logger
 
 
 class SyncCMK2(CMK2):
@@ -95,16 +96,26 @@ class SyncCMK2(CMK2):
                 existing_folders.append(folder)
 
             additional_attributes = {}
-            for custom_attr in next_actions.get('custom_attributes', []):
-                additional_attributes.update(custom_attr)
-
-            for additional_attr in next_actions.get('attributes', []):
-                if attr_value := attributes['all'].get(additional_attr):
-                    additional_attributes[additional_attr] = attr_value
-
             remove_attributes = []
             if 'remove_attributes' in next_actions:
                 remove_attributes = next_actions['remove_attributes']
+            logger.debug(f'Attributes will be removed: {remove_attributes}')
+
+            for custom_attr in next_actions.get('custom_attributes', []):
+                logger.debug(f"Check to add Custom Attribute: {custom_attr}")
+                for attr_key in list(custom_attr):
+                    if attr_key in remove_attributes:
+                        del custom_attr[attr_key]
+                        logger.debug(f"Don't add Attribute {attr_key} beause is in remove_attributes")
+                additional_attributes.update(custom_attr)
+
+
+
+            for additional_attr in next_actions.get('attributes', []):
+                logger.debug(f"Check to add Attribute: {additional_attr}")
+                if attr_value := attributes['all'].get(additional_attr):
+                    additional_attributes[additional_attr] = attr_value
+
 
             if db_host.hostname not in cmk_hosts:
                 # Create since missing
@@ -290,6 +301,8 @@ class SyncCMK2(CMK2):
         if current_folder.endswith('/') and current_folder != '/':
             current_folder = current_folder[:-1]
 
+        logger.debug(f"Checkmk Body: {cmk_host}")
+
         etag = False
         # Check if we really need to move
         if current_folder != folder:
@@ -321,18 +334,17 @@ class SyncCMK2(CMK2):
             do_update = True
             update_reasons.append("Labels not match")
 
-        if not do_update:
-            for key, value in additional_attributes.items():
-                attr = cmk_attributes.get(key)
-                if attr != value:
-                    update_reasons.append(f"Update Extra Attribute: {key} Currently: {attr} != {value}")
-                    do_update = True
-                    break
-            for attr in remove_attributes:
-                if attr in cmk_attributes:
-                    update_reasons.append(f"Remove Extra Attribute: {attr}")
-                    do_update = True
-                    break
+        for key, value in additional_attributes.items():
+            attr = cmk_attributes.get(key)
+            if attr != value:
+                update_reasons.append(f"Update Extra Attribute: {key} Currently: {attr} != {value}")
+                do_update = True
+                break
+        for attr in remove_attributes:
+            if attr in cmk_attributes:
+                update_reasons.append(f"Remove Extra Attribute: {attr}")
+                do_update = True
+                break
 
 
 
@@ -357,6 +369,7 @@ class SyncCMK2(CMK2):
             if remove_attributes:
                 update_body['remove_attributes'] = remove_attributes
 
+            logger.debug(f"Syncer Update Body: {update_body}")
             self.request(update_url, method="PUT",
                          data=update_body,
                          additional_header=update_headers)
