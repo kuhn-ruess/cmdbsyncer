@@ -36,7 +36,7 @@ except ModuleNotFoundError:
     pass
 logger.setLevel(logging.DEBUG)
 
-ch = app.config['LOG_CHANNEL'] 
+ch = app.config['LOG_CHANNEL']
 ch.setLevel(app.config['LOG_LEVEL'])
 
 formatter = logging.Formatter('%(levelname)s - %(message)s')
@@ -209,6 +209,5 @@ from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
 admin.add_view(LogView(LogEntry, name="Log"))
 #.
-if app.config['USE_CACHE']:
-    admin.add_link(MenuLink(name='Commit Changes',
+admin.add_link(MenuLink(name='Commit Changes',
                         url=f"{app.config['BASE_PREFIX']}admin/config/commit_changes"))

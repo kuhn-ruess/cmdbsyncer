@@ -34,12 +34,11 @@ class Plugin():
         Return Host Attributes or False if Host should be ignored
         """
         # Get Attributes
-        if app.config['USE_CACHE']:
-            db_host.cache.setdefault(cache, {})
-            if 'attributes' in db_host.cache[cache]:
-                if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
-                    return False
-                return db_host.cache[cache]['attributes']
+        db_host.cache.setdefault(cache, {})
+        if 'attributes' in db_host.cache[cache]:
+            if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
+                return False
+            return db_host.cache[cache]['attributes']
         attributes = {}
         attributes.update(db_host.labels)
         attributes.update(db_host.inventory)
