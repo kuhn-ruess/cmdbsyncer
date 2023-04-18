@@ -3,7 +3,6 @@
 Inits for the Plugins
 """
 #pylint: disable=too-many-locals
-import sys
 from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
@@ -128,11 +127,11 @@ def bake_and_sign_agents(account):
     account_config = get_account_by_name(account)
     if account_config['typ'] != 'cmkv2':
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
-        sys.exit(1)
+        return False
     if not "backery_key_id" in account_config and not "bakery_passphrase" in account_config:
         print(f"{ColorCodes.FAIL} Please set baker_key_id and "\
               f"bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
-        sys.exit(1)
+        return False
     cmk = CMK2()
     cmk.config = account_config
     url = "/domain-types/agent/actions/bake_and_sign/invoke"
@@ -143,10 +142,10 @@ def bake_and_sign_agents(account):
     try:
         cmk.request(url, data=data, method="POST")
         print("Signed and Baked Agents")
-        sys.exit(0)
+        return True
     except CmkException as errors:
         print(errors)
-        sys.exit(1)
+        return False
 #.
 #   .-- Activate Changes
 def activate_changes(account):
@@ -156,7 +155,7 @@ def activate_changes(account):
     account_config = get_account_by_name(account)
     if account_config['typ'] != 'cmkv2':
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
-        sys.exit(1)
+        return False
     cmk = CMK2()
     cmk.config = account_config
     url = "/domain-types/activation_run/actions/activate-changes/invoke"
@@ -167,10 +166,8 @@ def activate_changes(account):
     try:
         cmk.request(url, data=data, method="POST")
         print("Changes activated")
-        sys.exit(0)
     except CmkException as errors:
         print(errors)
-        sys.exit(1)
 #.
 #   .-- Export Groups
 def export_groups(account, test_run):

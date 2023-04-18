@@ -10,7 +10,8 @@ from application.views.default import DefaultModelView
 
 def format_date(v, c, m, p):
     """ Format Date Field"""
-    return datetime.strftime(getattr(m,p), "%d.%m.%Y %H:%M")
+    if value := getattr(m,p):
+        return datetime.strftime(value, "%d.%m.%Y %H:%M")
 
 
 

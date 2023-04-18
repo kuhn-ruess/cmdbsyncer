@@ -9,6 +9,15 @@ intervals = [
     ("daily", "Once Daily"),
 ]
 
+class GroupEntry(db.EmbeddedDocument):
+    """
+    Cron Entry
+    """
+    name = db.StringField()
+    command = db.StringField(choices=cron_register.keys())
+    account = db.ReferenceField('Account')
+
+
 class CronGroup(db.Document):
     """
     Cron Croup
@@ -17,7 +26,7 @@ class CronGroup(db.Document):
     name = db.StringField(required=True, unique=True)
 
     interval = db.StringField(choices=intervals)
-    jobs = db.ListField(db.ReferenceField("CronJob"))
+    jobs = db.ListField(db.EmbeddedDocumentField("GroupEntry"))
 
     enabled = db.BooleanField()
 
@@ -33,22 +42,6 @@ commands = [
     ('ansible-manage_hosts', "Ansible: Manage Hosts"),
     ('ansible-manage_servers', "Ansible: Manage Servers"),
 ]
-
-class CronJob(db.Document):
-    """
-    Cron Job
-    """
-    name = db.StringField(required=True, unique=True)
-    command = db.StringField(choices=cron_register.keys())
-    account = db.ReferenceField('Account')
-
-    def __str__(self):
-        return f"{self.name} ({self.command})"
-
-
-    meta = {
-        'strict': False,
-    }
 
 class CronStats(db.Document):
     """
