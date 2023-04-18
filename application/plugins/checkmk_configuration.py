@@ -150,6 +150,6 @@ def cli_export_bi_rules(account):
 register_cronjob('Checkmk: Export Rules', export_rules)
 register_cronjob('Checkmk: Export Groups', export_groups)
 register_cronjob('Checkmk: Export BI Rules', export_bi_rules)
-register_cronjob('Checkmk: Inventory', inventorize_hosts)
+register_cronjob('Checkmk: Inventorize', inventorize_hosts)
 register_cronjob('Checkmk: Activate Changes', activate_changes)
 register_cronjob('Checkmk: Bake and Sign Agents', bake_and_sign_agents)
