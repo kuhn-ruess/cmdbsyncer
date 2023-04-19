@@ -2,7 +2,7 @@
 Central Request Modul to CMK 2.x
 """
 import requests
-from application import app, log
+from application import app, log, logger
 from application.modules.plugin import Plugin
 
 @app.cli.group(name='checkmk')
@@ -48,6 +48,8 @@ class CMK2(Plugin):
         try:
             method = method.lower()
             #pylint: disable=missing-timeout
+            logger.debug(f"Request ({method.upper()}) to {url}")
+            logger.debug(f"Request Body: {data}")
             if method == 'get':
                 response = requests.get(url,
                                         headers=headers,
@@ -63,6 +65,7 @@ class CMK2(Plugin):
                 # Checkmk gives no json response here, so we directly return
                 return True, response.status_code
 
+
             #pylint: disable=line-too-long
             error_whitelist = [
                 #'Path already exists',
@@ -74,6 +77,7 @@ class CMK2(Plugin):
 
             if response.status_code != 200:
                 response_json = response.json()
+                logger.debug(f"Response Json {response_json}")
                 if response_json['title'] not in error_whitelist:
                     raise CmkException(f"{response_json['title']} {response_json.get('detail')}")
                 return {}, {'status_code': response.status_code}
@@ -82,6 +86,7 @@ class CMK2(Plugin):
             return response.json(), resp_header
         except (ConnectionResetError, requests.exceptions.ProxyError):
             if response:
+                logger.debug(f"Response Error {response.text}")
                 print(response.text)
                 return {}, {'status_code': response.status_code}
             return {}, {"error": "Checkmk Connections broken"}
