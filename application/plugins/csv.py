@@ -35,7 +35,7 @@ def compare_hosts(csv_path, delimiter, hostname_field, label_filter):
                 print(hostname)
 
 @_cli_csv.command('compare_hosts')
-@click.argument("csv_path")
+@click.argument("csv_path", default="")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--label_filter", default='')

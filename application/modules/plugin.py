@@ -3,7 +3,7 @@ Alle Stuff shared by the plugins
 """
 #pylint: disable=too-few-public-methods
 
-from application import app
+from application import app, logger
 from application.modules.custom_attributes.models import CustomAttributeRule as CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
 
@@ -36,6 +36,7 @@ class Plugin():
         # Get Attributes
         db_host.cache.setdefault(cache, {})
         if 'attributes' in db_host.cache[cache]:
+            logger.debug(f"Using Cache for {db_host.hostname}")
             if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
                 return False
             return db_host.cache[cache]['attributes']

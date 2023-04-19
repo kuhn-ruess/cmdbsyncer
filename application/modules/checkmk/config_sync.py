@@ -374,7 +374,8 @@ class SyncConfiguration(CMK2):
 
             for create_id in create_list:
                 url = f"/objects/bi_rule/{create_id}"
-                self.request(url, data=unique_rules[create_id], method="POST")[0]
+                data = unique_rules[create_id]
+                self.request(url, data=data, method="POST")[0]
                 print(f"{CC.OKGREEN} *{CC.ENDC} Rule {create_id} created.")
 
             for sync_id in sync_list:
@@ -383,5 +384,6 @@ class SyncConfiguration(CMK2):
                 cmk_rule = self.request(url, method="GET")[0]
                 if cmk_rule != unique_rules[sync_id]:
                     print(f"{CC.WARNING}   *{CC.ENDC} Sync needed")
-                    self.request(url, data=unique_rules[sync_id],  method="PUT")[0]
+                    data = unique_rules[sync_id]
+                    self.request(url, data=data,  method="PUT")[0]
 #.
