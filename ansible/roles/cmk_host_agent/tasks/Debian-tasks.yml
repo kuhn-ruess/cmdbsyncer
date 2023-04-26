@@ -1,15 +1,4 @@
 ---
-- name: "Cleanup files"
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop:
-    - /usr/bin/check_mk_agent
-    - /usr/bin/check_mk_agent_cache
-    - /usr/bin/cmk-update-agent
-    - /usr/lib/check_mk_agent/
-    - /var/lib/check_mk_agent/
-  when: cmk_delete_manual_files | bool
 
 - name: "Download Checkmk Agent."
   ansible.builtin.uri:
