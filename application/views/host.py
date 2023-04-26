@@ -141,7 +141,7 @@ class HostModelView(DefaultModelView):
     column_details_list = [
         'hostname', 'folder', 'available', 'force_update', 'labels', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'last_export', "export_problem",
-        'source_account_name', 'raw'
+        'source_account_name', 'raw', 'cache'
     ]
     column_filters = (
        'hostname',
