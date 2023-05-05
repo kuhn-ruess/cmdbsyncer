@@ -69,15 +69,23 @@ def run_jobs(v): #pylint: disable=invalid-name
                 print(f"{CC.HEADER} Running Group {job.name} {CC.ENDC}")
             stats.is_running = True
             stats.last_start = now
+            stats.failure = False
             stats.save()
             for task in job.jobs:
                 if v:
                     print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
                 stats.last_message = f"{now}: Started {task.name} (PID: {os.getpid()})"
                 stats.save()
-                # Don't Catch any exceptions. If for example the Import breaks,
-                # there should no export of deletion of hosts
-                cron_register[task.command](account=task.account.name)
+                try:
+                    cron_register[task.command](account=task.account.name)
+                except:
+                    stats.is_running = False
+                    stats.failure = True
+                    stats.last_ended = None
+                    stats.save()
+                    # Don't Catch any exceptions. If for example the Import breaks,
+                    # there should no export of deletion of hosts
+                    raise
 
             stats.last_ended = datetime.now()
             stats.next_run = next_run(job.interval)

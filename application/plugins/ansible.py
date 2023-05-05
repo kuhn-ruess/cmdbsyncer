@@ -22,6 +22,7 @@ from application.modules.rule.models import CustomAttribute, FullCondition, Filt
 from application.modules.ansible.rules import AnsibleVariableRule
 from application.modules.ansible.syncer import SyncAnsible
 from application.modules.ansible.site_syncer import SyncSites
+from application.helpers.cron import register_cronjob
 
 @app.cli.group(name='ansible')
 def cli_ansible():
@@ -239,10 +240,10 @@ def debug_ansible_rules(hostname):
 
 #.
 #   .-- Ansible Cache
-@cli_ansible.command('update_cache')
-def update_cache():
+
+def _inner_udpate_cache():
     """
-    Update Cache for Ansible
+    Update Cache of Ansible
     """
     print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
     for host in Host.objects():
@@ -257,6 +258,13 @@ def update_cache():
     syncer.actions = rules['actions']
     # Do the action which triggers the caches
     syncer.get_full_inventory()
+
+@cli_ansible.command('update_cache')
+def update_cache():
+    """
+    Update Cache for Ansible
+    """
+    _inner_udpate_cache()
 
 #.
 #   .-- Ansible Source
@@ -301,38 +309,44 @@ def server_source(list, host): #pylint: disable=redefined-builtin
 #.
 #   . -- Ansible Playbook
 
-def print_out(data, runner_config):
-    print(data)
-
-def run_agent_playbook():
-    """
-    Run Ansible Playbook
-    """
-
-    rules = load_rules()
-    syncer = SyncAnsible()
-    syncer.filter = rules['filter']
-    syncer.rewrite = rules['rewrite']
-    syncer.actions = rules['actions']
-
-    inventory = syncer.get_full_inventory()
-    playbook = './ansible/cmk_agent_mngmt.yml'
-
-    path = os.path.abspath(os.getcwd())
-    path += "/ansible"
-    envvars = {
-        'PATH': path,
-        'ANSIBLE_ROLES_PATH': path,
-    }
-    result = ansible_runner.run(playbook=playbook,
-                                status_handler=print_out,
-                                envvars = envvars,
-                                inventory=inventory)
-    print(result)
-
-@cli_ansible.command('run_agent_playbook')
-def cli_run_agent_playbook():
-    """
-    Run Ansible Playbook
-    """
-    run_agent_playbook()
+#def print_out(data, runner_config):
+#    """
+#    Debug print
+#    """
+#    print(data, runner_config)
+#
+#def run_agent_playbook():
+#    """
+#    Run Ansible Playbook
+#    """
+#
+#    rules = load_rules()
+#    syncer = SyncAnsible()
+#    syncer.filter = rules['filter']
+#    syncer.rewrite = rules['rewrite']
+#    syncer.actions = rules['actions']
+#
+#    inventory = syncer.get_full_inventory()
+#    playbook = './ansible/cmk_agent_mngmt.yml'
+#
+#    path = os.path.abspath(os.getcwd())
+#    path += "/ansible"
+#    envvars = {
+#        'PATH': path,
+#        'ANSIBLE_ROLES_PATH': path,
+#    }
+#    result = ansible_runner.run(playbook=playbook,
+#                                status_handler=print_out,
+#                                envvars = envvars,
+#                                inventory=inventory)
+#    print(result)
+#
+#@cli_ansible.command('run_agent_playbook')
+#def cli_run_agent_playbook():
+#    """
+#    Run Ansible Playbook
+#    """
+#    run_agent_playbook()
+#
+#.
+register_cronjob('Ansible: Build Cache', _inner_udpate_cache)
