@@ -54,6 +54,7 @@ class CronStats(db.Document):
     last_start = db.DateTimeField()
     is_running = db.BooleanField(default=False)
     last_ended = db.DateTimeField()
+    failure = db.BooleanField(default=False)
 
     last_message = db.StringField()
 
