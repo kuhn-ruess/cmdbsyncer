@@ -77,10 +77,11 @@ def run_jobs(v): #pylint: disable=invalid-name
                 stats.last_message = f"{now}: Started {task.name} (PID: {os.getpid()})"
                 stats.save()
                 try:
-                    account_name = None
                     if task.account:
                         account_name = task.account.name
-                    cron_register[task.command](account=account_name)
+                        cron_register[task.command](account=account_name)
+                    else:
+                        cron_register[task.command]()
                 except:
                     stats.is_running = False
                     stats.failure = True
