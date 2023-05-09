@@ -26,22 +26,11 @@
   when: cmk_register_central_bakery | bool
   ignore_errors: yes
 
-- name: "Delete Backery Cache File"
-  ansible.builtin.file:
-    path: /var/lib/check_mk_agent/cache/plugins_cmk-update-agent.cache
-    state: absent
-  become: true
-  when: cmk_register_bakery or cmk_register_central_bakery
-  ignore_errors: yes
-
-- name: "Cleanup files"
+- name: "Cleanup cache"
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
-    - /usr/bin/check_mk_agent
-    - /usr/bin/check_mk_agent_cache
-    - /usr/bin/cmk-update-agent
-    - /usr/lib/check_mk_agent/
-    - /var/lib/check_mk_agent/
-  when: cmk_delete_manual_files | bool
+    - /var/lib/check_mk_agent/cache/plugins_3600\cmk-update-agent.cache
+    - /var/lib/check_mk_agent/cache/plugins_cmk-update-agent.cache
+  when: cmk_register_central_bakery or cmk_register_bakery
