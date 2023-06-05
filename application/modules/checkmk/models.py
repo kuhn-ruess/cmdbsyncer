@@ -325,8 +325,8 @@ class BiAggregationOutcome(db.EmbeddedDocument):
     """
     BI Aggregation
     """
-    pack_id = db.StringField()
-    aggregation_id = db.StringField()
+    description = db.StringField()
+    rule_template = db.StringField()
 
 
 
@@ -341,7 +341,7 @@ class CheckmkBiAggregation(db.Document):
     render_full_conditions = db.StringField() # Helper for Preview
 
     outcomes = db.ListField(db.EmbeddedDocumentField(BiAggregationOutcome))
-    render_cmk_bi_aggregation = db.StringField()
+    render_cmk_bi_rule = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     meta = {
