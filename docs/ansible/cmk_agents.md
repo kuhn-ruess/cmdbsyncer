@@ -103,5 +103,5 @@ SSLProxyCheckPeerCN off
 
 RewriteEngine On
 
-RewriteRule /sitename/check_mk/api/1.0/domain-types/agent/(.*)$ https://mastersite/sitename/check_mk/api/1.0/domain-types/$1 [P]
+RewriteRule /sitename/check_mk/api/1.0/domain-types/agent/(.*)$ https://mastersite/sitename/check_mk/api/1.0/domain-types/agent/$1 [P]
 ```

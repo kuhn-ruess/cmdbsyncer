@@ -139,7 +139,7 @@ admin.add_view(DefaultModelView(CheckmkSite, name="Site Settings", category="Che
 admin.add_sub_category(name="Business Intelligence", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRule
 from application.modules.checkmk.views import CheckmkBiRuleView
-#admin.add_view(DefaultModelView(CheckmkBiAggregation, name="BI Aggregation", category="Business Intelligence"))
+admin.add_view(CheckmkBiRuleView(CheckmkBiAggregation, name="BI Aggregation", category="Business Intelligence"))
 admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Business Intelligence"))
 
 from application.modules.checkmk.models import CheckmkObjectCache
