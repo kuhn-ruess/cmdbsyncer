@@ -4,6 +4,7 @@ Cron Model View
 # pylint: disable=too-few-public-methods
 from datetime import datetime
 from flask_login import current_user
+from markupsafe import Markup
 
 from application.views.default import DefaultModelView
 
@@ -13,6 +14,34 @@ def format_date(v, c, m, p):
     if value := getattr(m,p):
         return datetime.strftime(value, "%d.%m.%Y %H:%M")
 
+def _render_cronjob(_view, _context, model, _name):
+    """
+    Render BI Rule
+    """
+    html = "<table width=100%>"
+    for idx, entry in enumerate(model.jobs):
+        html += f"<tr><td>{idx}</td><td>{entry['name']}</td><td>{entry['command']}</td><td>{entry['account']}</td></tr>"
+    html += "</table>"
+    return Markup(html)
+
+class CronGroupView(DefaultModelView):
+    """
+    Cron Group View
+    """
+    column_default_sort = "folder_name"
+
+    column_filters = (
+       'name',
+       'enabled',
+    )
+
+    column_formatters = {
+        'render_jobs': _render_cronjob,
+    }
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('cron')
 
 
 

@@ -28,6 +28,8 @@ class CronGroup(db.Document):
     interval = db.StringField(choices=intervals)
     jobs = db.ListField(db.EmbeddedDocumentField("GroupEntry"))
 
+    render_jobs = db.StringField()
+
     enabled = db.BooleanField()
 
     meta = {

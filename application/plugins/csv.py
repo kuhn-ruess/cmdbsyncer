@@ -65,7 +65,11 @@ def import_hosts(csv_path, delimiter, hostname_field, account):
             delimiter = account['delimiter']
         if 'csv_path' in account:
             csv_path = account['csv_path']
+        if 'path' in account:
+            csv_path = account['path']
 
+    if not csv_path:
+        raise ValueError("No path given in account config")
 
     filename = csv_path.split('/')[-1]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
@@ -95,7 +99,7 @@ def import_hosts(csv_path, delimiter, hostname_field, account):
                 host_obj.save()
 
 @_cli_csv.command('import_hosts')
-@click.argument("csv_path")
+@click.argument("csv_path", default=False)
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--account", default='')
@@ -129,6 +133,12 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
             delimiter = account['delimiter']
         if 'csv_path' in account:
             csv_path = account['csv_path']
+        if 'path' in account:
+            csv_path = account['path']
+
+    if not csv_path:
+        raise ValueError("No path given in account config")
+
     filename = csv_path.split('/')[-1]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
           f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
@@ -151,7 +161,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
         host_obj.save()
 
 @_cli_csv.command('inventorize_hosts')
-@click.argument("csv_path")
+@click.argument("csv_path", default=False)
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--key", default='csv')

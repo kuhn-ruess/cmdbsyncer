@@ -9,7 +9,7 @@ from application.modules.debug import ColorCodes
 from application.models.host import Host
 from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
-from application.modules.checkmk.models import CheckmkRuleMngmt, CheckmkBiRule
+from application.modules.checkmk.models import CheckmkRuleMngmt, CheckmkBiRule, CheckmkBiAggregation
 from application.plugins.checkmk import _load_rules
 
 #   .-- Export BI Rules
@@ -32,6 +32,28 @@ def export_bi_rules(account):
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+#.
+#   .-- Export BI Aggregations
+def export_bi_aggregations(account):
+    """
+    Export BI Aggregations to Checkmk
+    """
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            syncer = SyncConfiguration()
+            syncer.account_id = str(target_config['_id'])
+            syncer.account_name = target_config['name']
+            syncer.config = target_config
+            actions = DefaultRule()
+            actions.rules = CheckmkBiAggregation.objects(enabled=True)
+            syncer.actions = actions
+            syncer.export_bi_aggregations()
+        else:
+            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+
 #.
 #   .-- Inventorize Hosts
 def inventorize_hosts(account):
