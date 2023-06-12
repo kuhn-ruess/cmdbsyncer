@@ -7,6 +7,7 @@ from application.modules.checkmk.cmk2 import cli_cmk
 from application.helpers.cron import register_cronjob
 from application.modules.checkmk.inits import (
     export_bi_rules,
+    export_bi_aggregations,
     export_rules,
     export_groups,
     activate_changes,
@@ -146,10 +147,26 @@ def cli_export_bi_rules(account):
     export_bi_rules(account)
 
 #.
+@cli_cmk.command('export_bi_aggregations')
+@click.argument("account")
+def cli_export_bi_aggregations(account):
+    """
+    Export all BI Aggregations to given Checkmk Installations
+
+    ### Example
+    _./cmdbsyncer checkmk export_bi_aggregations SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Account Config
+    """
+    export_bi_aggregations(account)
+#.
 
 register_cronjob('Checkmk: Export Rules', export_rules)
 register_cronjob('Checkmk: Export Groups', export_groups)
 register_cronjob('Checkmk: Export BI Rules', export_bi_rules)
+register_cronjob('Checkmk: Export BI Aggregations', export_bi_aggregations)
 register_cronjob('Checkmk: Inventorize', inventorize_hosts)
 register_cronjob('Checkmk: Activate Changes', activate_changes)
 register_cronjob('Checkmk: Bake and Sign Agents', bake_and_sign_agents)

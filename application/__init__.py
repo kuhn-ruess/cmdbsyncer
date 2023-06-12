@@ -15,7 +15,7 @@ from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 
 
-VERSION = '3.1.4'
+VERSION = '3.1.5'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -191,8 +191,8 @@ admin.add_view(ConfigModelView(Config, name="System Config", category="Config"))
 
 admin.add_sub_category(name="Cronjobs", parent_name="Config")
 from application.models.cron import CronGroup, CronStats
-from application.views.cron import CronStatsView
-admin.add_view(DefaultModelView(CronGroup, name="Cronjob Group", category="Cronjobs"))
+from application.views.cron import CronStatsView, CronGroupView
+admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs"))
 admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs"))
 
 #.

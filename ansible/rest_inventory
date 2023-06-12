@@ -1,6 +1,6 @@
 #!/bin/bash
 #START SETTINGS
-API="https://hostname/hostapi/api/v1/ansible"
+API="https://hostname/cmdbsyncer/api/v1/ansible"
 SECRET="TEST123"
 #END SETTINGS
 case "$1" in

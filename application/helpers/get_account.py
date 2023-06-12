@@ -28,4 +28,7 @@ def get_account_variable(macro):
     """
     # @TODO: Cache
     _, account, var = macro.split(':')
-    return get_account_by_name(account)[var[:-2]]
+    try:
+        return get_account_by_name(account)[var[:-2]]
+    except:
+        raise ValueError("Account Variable not found")
