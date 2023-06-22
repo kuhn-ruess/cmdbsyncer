@@ -61,7 +61,7 @@ class Rule(): # pylint: disable=too-few-public-methods
         rule_descriptions = {
             'any' : "ANY can match",
             'all' : "ALL must match",
-            'anyway': "ALLWAYS match"
+            'anyway': "ALWAYS match"
         }
         if self.debug:
             title = f"Debug '{self.name}' Rules for {hostname}"
