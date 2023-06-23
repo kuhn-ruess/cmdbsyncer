@@ -110,6 +110,17 @@ class Host(db.Document):
         if not hit:
             self.labels[key] = str(value)
 
+    def update_host(self, labels):
+        """
+        Overwrite all Labels on Hosts,
+        but checks first if needed and also sets
+        set_import_sync and import_seen as needed
+        """
+        if self.get_labels() != labels:
+            self.set_import_sync()
+            self.set_labels(labels)
+        self.set_import_seen()
+
     def set_labels(self, label_dict):
         """
         Overwrite all Labels on host

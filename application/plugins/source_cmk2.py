@@ -65,7 +65,7 @@ class DataGeter():
     def run(self):
         """Run Actual Job"""
         for hostdata in self.request()['value']:
-            hostname = hostdata['title']
+            hostname = hostdata['id']
             links = self.get_links(hostdata['links'])
             host_details = self.request(links['GET'])
             print(f"\n{CC.HEADER} Process: {hostname}{CC.ENDC}")
@@ -84,7 +84,7 @@ class DataGeter():
             try:
                 attributes = host_details['extensions']['attributes']
                 if 'labels' in attributes:
-                    host.add_labels(attributes['labels'])
+                    host.set_labels(attributes['labels'])
             except HostError as error_obj:
                 host.add_log(f"Update Error {error_obj}")
             if do_save:

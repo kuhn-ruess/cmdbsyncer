@@ -45,10 +45,7 @@ def import_hosts(json_path, hostname_field, account):
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             del host[hostname_field]
             host_obj = Host.get_host(hostname)
-            if host_obj.get_labels() != host:
-                host_obj.set_import_sync()
-                host_obj.set_labels(host)
-            host_obj.set_import_seen()
+            host_obj.update_host(host)
 
             do_save = host_obj.set_account(account_dict=account)
 
