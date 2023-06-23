@@ -85,10 +85,7 @@ def import_hosts(csv_path, delimiter, hostname_field, account):
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             host_obj = Host.get_host(hostname)
             del row[hostname_field]
-            if host_obj.get_labels() != row:
-                host_obj.set_import_sync()
-                host_obj.set_labels(row)
-            host_obj.set_import_seen()
+            host_obj.update_host(row)
             if account:
                 do_save = host_obj.set_account(account_dict=account)
             else:
@@ -99,7 +96,7 @@ def import_hosts(csv_path, delimiter, hostname_field, account):
                 host_obj.save()
 
 @_cli_csv.command('import_hosts')
-@click.argument("csv_path", default=False)
+@click.argument("csv_path", default="")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--account", default='')
