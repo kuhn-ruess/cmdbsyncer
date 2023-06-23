@@ -84,11 +84,10 @@ class DataGeter():
             try:
                 attributes = host_details['extensions']['attributes']
                 if 'labels' in attributes:
-                    host.set_labels(attributes['labels'])
+                    host.update_host(attributes['labels'])
             except HostError as error_obj:
                 host.add_log(f"Update Error {error_obj}")
             if do_save:
-                host.set_import_seen()
                 host.save()
             else:
                 print(f"{CC.OKBLUE} *{CC.ENDC} Host owned by diffrent source, ignored")
