@@ -265,8 +265,9 @@ class SyncConfiguration(CMK2):
 
             group_list = cache.content.get('list', [])
 
-            for cmk_group in [x['href'] for x in cmks_groups[0]['value']]:
-                cmk_name = cmk_group.split('/')[-1]
+
+            for cmk_group in cmks_groups[0]['value']:
+                cmk_name = cmk_group['links'][0]['href'].split('/')[-1]
                 if cmk_name in group_list:
                     syncers_groups_in_cmk.append(cmk_name)
 
