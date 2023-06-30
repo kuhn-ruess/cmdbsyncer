@@ -327,13 +327,13 @@ class SyncConfiguration(CMK2):
         print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
 
 
+        unique_rules = {}
+        related_packs = []
         for db_host in Host.objects(available=True):
             attributes = self.get_host_attributes(db_host, 'cmk_conf')
             if not attributes:
                 continue
             host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-            unique_rules = {}
-            related_packs = []
             if host_actions:
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
@@ -343,7 +343,9 @@ class SyncConfiguration(CMK2):
                             tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
                         rule_dict = ast.literal_eval(rule_body.replace('null', 'None'))
                         unique_rules[rule_dict['id']] = rule_dict
-                        related_packs.append(rule_dict['pack_id'])
+                        pack_id = rule_dict['pack_id']
+                        if pack_id not in related_packs:
+                            related_packs.append(rule_dict['pack_id'])
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Load Rule Packs from Checkmk")
@@ -396,13 +398,13 @@ class SyncConfiguration(CMK2):
         print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
 
 
+        unique_aggregations = {}
+        related_packs = []
         for db_host in Host.objects(available=True):
             attributes = self.get_host_attributes(db_host, 'cmk_conf')
             if not attributes:
                 continue
             host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-            unique_aggregations = {}
-            related_packs = []
             if host_actions:
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
@@ -412,7 +414,9 @@ class SyncConfiguration(CMK2):
                             tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
                         aggregation_dict = ast.literal_eval(rule_body.replace('null', 'None'))
                         unique_aggregations[aggregation_dict['id']] = aggregation_dict
-                        related_packs.append(aggregation_dict['pack_id'])
+                        pack_id = aggregation_dict['pack_id']
+                        if pack_id not in related_packs:
+                            related_packs.append(pack_id)
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Load Rule Packs from Checkmk")
