@@ -306,7 +306,7 @@ class SyncCMK2(CMK2):
         etag = False
         # Check if we really need to move
         if current_folder != folder:
-            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Host Moved to Folder: {folder}")
+            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Host Moved from Folder: {current_folder} to {folder}")
             etag = self.get_etag(db_host)
             update_headers = {
                 'if-match': etag
@@ -324,7 +324,6 @@ class SyncCMK2(CMK2):
             update_headers = {
                 'if-match': etag,
             }
-            print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Moved Host from {current_folder}")
 
         do_update = False
         update_reasons = []
