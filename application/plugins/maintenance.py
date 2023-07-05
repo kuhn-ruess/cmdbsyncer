@@ -30,7 +30,7 @@ def _cli_sys():
 
 #   .-- Command: Maintanence
 
-def maintenance(days):
+def maintenance(days=7):
     print(f"{ColorCodes.HEADER} ***** Run Tasks ***** {ColorCodes.ENDC}")
     print(f"{ColorCodes.UNDERLINE}Cleanup Hosts not found anymore{ColorCodes.ENDC}")
     now = datetime.datetime.now()
