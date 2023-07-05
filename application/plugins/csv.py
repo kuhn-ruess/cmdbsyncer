@@ -55,7 +55,7 @@ def cli_compare_hosts(csv_path, delimiter, hostname_field, label_filter):
     compare_hosts(csv_path, delimiter, hostname_field, label_filter)
 
 
-def import_hosts(csv_path, delimiter, hostname_field, account):
+def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=None):
     #pylint: disable=no-member, consider-using-generator
     if account:
         account = get_account_by_name(account)
