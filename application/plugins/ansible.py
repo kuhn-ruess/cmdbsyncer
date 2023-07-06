@@ -223,6 +223,8 @@ def debug_ansible_rules(hostname):
 
     try:
         db_host = Host.objects.get(hostname=hostname)
+        db_host.cache = {}
+        db_host.save()
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
         return
