@@ -18,16 +18,18 @@ class SyncAnsible(Plugin):
         Check if we should ignore a host
         """
         checks = [
-            ('cmk_register_tls', "True"),
-            ('cmk_register_bakery', "True"),
-            ('cmk_register_central_bakery', "True"),
-            ('cmk_install_agent', "True"),
-            ('cmk_do_discover', "True"),
+            'cmk_register_tls',
+            'cmk_register_bakery',
+            'cmk_register_central_bakery',
+            'cmk_install_agent',
+            'cmk_discover',
         ]
-        for check, target in checks:
-            if attributes1.get(check, "False") == target:
-                return True
-            if attributes2.get(check, "False") == target:
+        # If not at leas one of the attributes is True,
+        # we have to ignore the host
+        for check in checks:
+            if attributes1.get(check, "False") == "True":
+                return False
+            if attributes2.get(check, "False") == "True":
                 return False
         return True
 
