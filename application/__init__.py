@@ -6,7 +6,7 @@ import os
 import logging
 from datetime import datetime
 from pprint import pformat
-from flask import Flask, url_for
+from flask import Flask, url_for, redirect
 from flask_admin import Admin
 from flask_admin.menu import MenuLink
 from flask_login import LoginManager
@@ -86,6 +86,12 @@ app.register_blueprint(AUTH)
 
 from application.modules.rule.views import FiltereModelView, RewriteAttributeView
 
+@app.route('/')
+def page_redirect():
+    """
+    Redirect to admin Panel
+    """
+    return redirect(url_for("admin.index"))
 
 from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
