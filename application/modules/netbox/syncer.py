@@ -106,11 +106,24 @@ class SyncNetbox(Plugin):
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC}Netbox: "\
               f"Read all devices (Filter only CMDB Syncer: {syncer_only})")
-        url = 'dcim/devices/?limit=1000'
+        url = 'dcim/devices/?limit=10000'
         if syncer_only:
             url += f"&cf_cmdbsyncer_id={self.config['_id']}"
         devices = self.request(url, "GET")
         return {x['display']:x for x in devices}
+#.
+#   .-- Get VMS
+    def get_vms(self, syncer_only=False):
+        """
+        Read full list of vms
+        """
+        print(f"{CC.OKGREEN} -- {CC.ENDC}Netbox: "\
+              f"Read all VMs (Filter only CMDB Syncer: {syncer_only})")
+        url = 'virtualisation/vitual-machines/?limit=10000'
+        if syncer_only:
+            url += f"&cf_cmdbsyncer_id={self.config['_id']}"
+        vms = self.request(url, "GET")
+        return {x['display']:x for x in vms}
 #.
 #   .-- Create Netbox Sub Entry Types
     def create_sub_entry(self, endpoint, value, inventory):
@@ -487,16 +500,26 @@ class SyncNetbox(Plugin):
 #   .--- Import Hosts
     def import_hosts(self):
         """
-        Import Hosts from Netbox to the Syncer
+        Import Objects from Netbox to the Syncer
         """
         for device, _data in self.get_devices().items():
             host_obj = Host.get_host(device)
-            print(f"\n{CC.HEADER}Process: {device}{CC.ENDC}")
-            host_obj.set_import_seen()
+            print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
             labels = {
             }
-            if host_obj.get_labels() != labels:
-                host_obj.set_import_sync()
-                host_obj.set_labels(labels)
-            host_obj.save()
+            host_obj.update_host(labels)
+            do_save = host_obj.set_account(account_dict=self.config)
+            if do_save:
+                host_obj.save()
+
+        for device, _data in self.get_vms().items():
+            host_obj = Host.get_host(device)
+            print(f"\n{CC.HEADER}Process VM: {device}{CC.ENDC}")
+            labels = {
+            }
+            host_obj.update_host(labels)
+            do_save = host_obj.update_host(labels)
+            do_save = host_obj.set_account(account_dict=self.config)
+            if do_save:
+                host_obj.save()
 #.
