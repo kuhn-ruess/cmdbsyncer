@@ -5,7 +5,7 @@ Create Objects in Netbox
 import requests
 
 from application.models.host import Host
-from application import app, log
+from application import app, log, logger
 from application.modules.debug import ColorCodes as CC
 from application.modules.plugin import Plugin
 
@@ -53,6 +53,8 @@ class SyncNetbox(Plugin):
             headers.update(additional_header)
         try:
             method = method.lower()
+            logger.debug(f"Request ({method.upper()}) to {url}")
+            logger.debug(f"Request Json Body: {data}")
             #pylint: disable=missing-timeout
             if method == 'get':
                 response = requests.get(url,
@@ -70,12 +72,12 @@ class SyncNetbox(Plugin):
                 response = requests.delete(url, headers=headers, verify=self.verify)
                 # Checkmk gives no json response here, so we directly return
                 return True, response.headers
+            logger.debug(f"Response Text: {response.text}")
             if response.status_code >= 299:
-                print(f"Error: {response.text}")
+                print("Error in response, enable debug_log to see more")
             try:
                 response_json = response.json()
             except:
-                print(response.text)
                 raise
             if 'results' in response_json:
                 results = []
