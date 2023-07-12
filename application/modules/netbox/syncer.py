@@ -515,7 +515,7 @@ class SyncNetbox(Plugin):
             'primary_ip6',
         ]
 
-        for device, _data in self.get_devices().items():
+        for device, data in self.get_devices().items():
             host_obj = Host.get_host(device)
             labels = {}
             print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
