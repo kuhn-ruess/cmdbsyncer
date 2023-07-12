@@ -121,7 +121,7 @@ class SyncNetbox(Plugin):
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC}Netbox: "\
               f"Read all VMs (Filter only CMDB Syncer: {syncer_only})")
-        url = 'virtualisation/vitual-machines/?limit=10000'
+        url = 'virtualization/virtual-machines/?limit=10000'
         if syncer_only:
             url += f"&cf_cmdbsyncer_id={self.config['_id']}"
         vms = self.request(url, "GET")
@@ -504,21 +504,36 @@ class SyncNetbox(Plugin):
         """
         Import Objects from Netbox to the Syncer
         """
+        label_keys = [
+            'site',
+            'cluster',
+            'device',
+            'role',
+            'tenant',
+            'platform',
+            'primary_ip4',
+            'primary_ip6',
+        ]
+
         for device, _data in self.get_devices().items():
             host_obj = Host.get_host(device)
+            labels = {}
             print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
-            labels = {
-            }
+            for label in label_keys:
+                if sub_data := data.get(label):
+                    labels[label] = sub_data.get('display')
             host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)
             if do_save:
                 host_obj.save()
 
-        for device, _data in self.get_vms().items():
+        for device, data in self.get_vms().items():
             host_obj = Host.get_host(device)
+            labels = {}
             print(f"\n{CC.HEADER}Process VM: {device}{CC.ENDC}")
-            labels = {
-            }
+            for label in label_keys:
+                if sub_data := data.get(label):
+                    labels[label] = sub_data.get('display')
             host_obj.update_host(labels)
             do_save = host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)
