@@ -142,7 +142,15 @@ class FilterAction(db.EmbeddedDocument):
     }
 #.
 
+
 #   .-- Attribute Rewrite
+
+modes = [
+  ("", "Don't Use"),
+  ("string", "With String Match"),
+  ("regex", "With Regex Match"),
+  ("split", "With Split Match, Syntax: SEPERATOR:INDEX"),
+]
 class AttributeRewriteAction(db.EmbeddedDocument):
     """
     Old Attribute Name
@@ -154,7 +162,10 @@ class AttributeRewriteAction(db.EmbeddedDocument):
     New Name of the attribute
     """
     old_attribute_name = db.StringField()
+    overwrite_name = db.StringField(choices=modes, default='string')
     new_attribute_name = db.StringField()
+    overwrite_value = db.StringField(choices=modes, default="None")
+    new_value = db.StringField()
     meta = {
         'strict': False
     }
