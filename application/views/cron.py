@@ -5,6 +5,7 @@ Cron Model View
 from datetime import datetime
 from flask_login import current_user
 from markupsafe import Markup
+from wtforms import HiddenField
 
 from application.views.default import DefaultModelView
 
@@ -39,6 +40,9 @@ class CronGroupView(DefaultModelView):
         'render_jobs': _render_cronjob,
     }
 
+    form_overrides = {
+        'render_jobs': HiddenField,
+    }
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('cron')
