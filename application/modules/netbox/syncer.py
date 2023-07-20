@@ -261,10 +261,11 @@ class SyncNetbox(Plugin):
                 payload[endpoint_name] = self.create_sub_entry(endpoint_name,
                                                                 needed_entry, inventory)
 
+
             if key.startswith('nb_'):
                 key = key[3:]
             if key in payload:
-                payload[key] = custom_rules.get(key)
+                payload[key] = custom_rules.get("nb_"+key)
 
         # Add Inventory Variables we have a remap entry for
         for key in inventory:
@@ -279,7 +280,7 @@ class SyncNetbox(Plugin):
         payload['custom_fields'] = {
             'cmdbsyncer_id': str(self.config['_id']),
         }
-
+        logger.debug(f"Payload: {payload}")
         return payload
 #.
 #   .-- Device Need Update?
