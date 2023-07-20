@@ -23,7 +23,7 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
         for outcome in rule_outcomes:
             attribute_name = outcome['old_attribute_name']
             # Save inital Attribute value too have it even the attribute name changes
-            old_value = self.attributes[attribute_name]
+            old_value = self.attributes.get(attribute_name, "")
             new_attribute_name = False
             if mode := outcome['overwrite_name']:
                 new_attribute_name = outcome['new_attribute_name']
