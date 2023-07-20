@@ -96,7 +96,12 @@ def netbox_host_debug(hostname):
 
     syncer = SyncNetbox(False)
     syncer.debug = True
-    rules['filter'].debug = True
+    syncer.config = {
+        '_id': "debugmode",
+    }
+
+    if rules['filter']:
+        rules['filter'].debug = True
     syncer.filter = rules['filter']
 
     rules['rewrite'].debug = True
@@ -107,9 +112,11 @@ def netbox_host_debug(hostname):
 
     try:
         db_host = Host.objects.get(hostname=hostname)
+        db_host.cache = {}
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
         return
+
 
     attributes = syncer.get_host_attributes(db_host, 'netbox')
 
@@ -123,7 +130,12 @@ def netbox_host_debug(hostname):
     attribute_table("Filtered Attribute for Netbox Rules", attributes['filtered'])
     attribute_table("Attributes by Rule ", extra_attributes)
     if 'update_interfaces' in extra_attributes:
-        attribute_table("Interfaces", {y['portName']: y for x,y in syncer.get_interface_list_by_attributes(attributes['all']).items()})
+        attribute_table("Interfaces", {y['portName']: y for x,y in \
+                syncer.get_interface_list_by_attributes(attributes['all']).items()})
+
+    ## Disabled because fails in case of attribute sync, payload method tries to create them
+    #payload = syncer.get_payload(db_host, extra_attributes, attributes['all'])
+    #attribute_table("API Payload", payload)
 #.
 
 register_cronjob("Netbox: Export Hosts", netbox_host_export)
