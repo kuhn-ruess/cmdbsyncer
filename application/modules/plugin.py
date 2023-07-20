@@ -3,8 +3,9 @@ Alle Stuff shared by the plugins
 """
 #pylint: disable=too-few-public-methods
 
-from application import app, logger
-from application.modules.custom_attributes.models import CustomAttributeRule as CustomAttributeRuleModel
+from application import logger
+from application.modules.custom_attributes.models import CustomAttributeRule as \
+    CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
 
 
