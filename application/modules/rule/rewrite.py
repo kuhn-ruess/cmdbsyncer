@@ -76,5 +76,4 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                         outcomes[f'add_{attribute_name}'] = splited[int(index)]
                     except:
                         logger.debug("Cant Split Value")
-        print(outcomes)
         return outcomes
