@@ -54,6 +54,7 @@ def cli_maintenance(days):
     Args:
         days (int): Gracetime before host is deleted
     """
+
     maintenance(days)
 #.
 #   .-- Command: Delete Caches

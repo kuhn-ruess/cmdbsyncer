@@ -9,8 +9,11 @@ account_types = [
     ('csv', "CSV File"),
     ('json', "Json File"),
     ('mysql', "Mysql Table"),
+    ('netbox', "Netbox Account"),
+    ('cisco_dna', "Cisco DNA Account"),
+    ('restapi', "Internal Rest API Credentials"),
+    ('restapi', "Internal Rest API Credentials"),
     ('custom', "Custom Entries, like DBs"),
-    ('restapi', "Rest API"),
 ]
 
 
