@@ -5,6 +5,7 @@ from markupsafe import Markup
 from flask_login import current_user
 from wtforms import StringField
 from application.views.default import DefaultModelView
+from application.models.account import CustomEntry
 
 
 def _render_custom_data(_view, _context, model, _name):
@@ -45,6 +46,34 @@ class AccountModelView(DefaultModelView):
     form_widget_args = {
         'password': {'autocomplete': 'new-password' },
     }
+
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Create Defauls for Account on create
+        """
+        if is_created:
+            default_fields = []
+            if form.typ.data == 'csv':
+                default_fields = [
+                    ('path', ''),
+                    ('hostname_field', 'host'),
+                    ('delimiter', ';'),
+                ]
+            elif form.typ.data == 'json':
+                default_fields = [
+                    ('path', ''),
+                    ('hostname_field', 'host'),
+                ]
+
+            if default_fields:
+                for field, content in default_fields:
+                    new = CustomEntry()
+                    new.name = field
+                    new.value = content
+                    model.custom_fields.append(new)
+
+        return super().on_model_change(form, model, is_created)
 
 
     def is_accessible(self):
