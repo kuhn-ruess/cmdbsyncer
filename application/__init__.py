@@ -15,7 +15,7 @@ from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 
 
-VERSION = '3.2.2'
+VERSION = '3.2.3'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 

@@ -12,7 +12,7 @@ account_types = [
     ('netbox', "Netbox Account"),
     ('cisco_dna', "Cisco DNA Account"),
     ('restapi', "Internal Rest API Credentials"),
-    ('restapi', "Internal Rest API Credentials"),
+    ('maintenance', "Maintanence Jobs"),
     ('custom', "Custom Entries, like DBs"),
 ]
 

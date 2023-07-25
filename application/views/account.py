@@ -52,22 +52,27 @@ class AccountModelView(DefaultModelView):
         """
         Create Defauls for Account on create
         """
-        if is_created:
-            default_fields = []
-            if form.typ.data == 'csv':
-                default_fields = [
-                    ('path', ''),
-                    ('hostname_field', 'host'),
-                    ('delimiter', ';'),
-                ]
-            elif form.typ.data == 'json':
-                default_fields = [
-                    ('path', ''),
-                    ('hostname_field', 'host'),
-                ]
+        default_fields = []
+        if form.typ.data == 'csv':
+            default_fields = [
+                ('path', ''),
+                ('hostname_field', 'host'),
+                ('delimiter', ';'),
+            ]
+        elif form.typ.data == 'json':
+            default_fields = [
+                ('path', ''),
+                ('hostname_field', 'host'),
+            ]
+        elif form.typ.data == 'maintenance':
+            default_fields = [
+                ('delete_hosts_after_days', '0'),
+            ]
 
-            if default_fields:
-                for field, content in default_fields:
+
+        if default_fields:
+            for field, content in default_fields:
+                if field not in [x.name for x in model.custom_fields]:
                     new = CustomEntry()
                     new.name = field
                     new.value = content

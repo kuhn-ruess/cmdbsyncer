@@ -2,7 +2,7 @@
 """
 Maintenance Module
 """
-#pylint: disable=too-many-arguments
+#pylint: disable=too-many-arguments, logging-fstring-interpolation
 import datetime
 import string
 import secrets
@@ -10,13 +10,14 @@ import click
 from mongoengine.errors import DoesNotExist, ValidationError
 from application import app, logger
 from application.models.host import Host
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes as CC
 from application.modules.checkmk.poolfolder import remove_seat
 from application.models.account import Account
 from application.models.user import User
 from application.modules.checkmk.models import CheckmkFolderPool
 from application.models.config import Config
 from application.helpers.cron import register_cronjob
+from application.helpers.get_account import get_account_by_name
 
 
 
@@ -30,18 +31,36 @@ def _cli_sys():
 
 #   .-- Command: Maintanence
 
-def maintenance(days=7):
-    print(f"{ColorCodes.HEADER} ***** Run Tasks ***** {ColorCodes.ENDC}")
-    print(f"{ColorCodes.UNDERLINE}Cleanup Hosts not found anymore{ColorCodes.ENDC}")
+def maintenance(account):
+    """
+    Inner Maintenance Mode
+    """
+    print(f"{CC.HEADER} ***** Run Tasks ***** {CC.ENDC}")
+
+    # Hack: You could call the inital command without account,
+    # so whe assume if we just get a Integer, this is the legacy mode,
+    # else it's a account
+    if isinstance(account, int):
+        days = account
+    else:
+        account = get_account_by_name(account)
+        days = int(account['delete_hosts_after_days'])
+
+    if not days:
+        print(f"{CC.WARNING} Days set to 0, exiting {CC.ENDC}")
+        return
+
+    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days{CC.ENDC}")
+
     now = datetime.datetime.now()
-    delta = datetime.timedelta(int(days))
+    delta = datetime.timedelta(days)
     timedelta = now - delta
     for host in Host.objects(last_import_seen__lte=timedelta):
-        print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Deleted host {host.hostname}")
+        print(f"{CC.WARNING}  ** {CC.ENDC}Deleted host {host.hostname}")
         if host.get_folder():
             folder = host.get_folder()
             remove_seat(folder)
-            print(f"{ColorCodes.WARNING}  *** {ColorCodes.ENDC}Seat in Pool {folder} free now")
+            print(f"{CC.WARNING}  *** {CC.ENDC}Seat in Pool {folder} free now")
         host.delete()
 
 @_cli_sys.command('maintenance')
@@ -54,7 +73,6 @@ def cli_maintenance(days):
     Args:
         days (int): Gracetime before host is deleted
     """
-
     maintenance(days)
 #.
 #   .-- Command: Delete Caches
@@ -64,12 +82,12 @@ def delete_cache():
     """
     Delete object Cache
     """
-    print(f"{ColorCodes.HEADER} ***** Delete Cache ***** {ColorCodes.ENDC}")
+    print(f"{CC.HEADER} ***** Delete Cache ***** {CC.ENDC}")
     for host in Host.objects():
         logger.debug(f"Handling Host {host.hostname}")
         host.cache = {}
         host.save()
-    print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Done")
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
 #.
 #   .-- Command: Delete all Hosts
@@ -78,15 +96,15 @@ def delete_all_hosts():
     """
     Deletes All hosts from DB
     """
-    print(f"{ColorCodes.HEADER} ***** Delete Hosts ***** {ColorCodes.ENDC}")
+    print(f"{CC.HEADER} ***** Delete Hosts ***** {CC.ENDC}")
     answer = input(" - Enter 'y' and hit enter to procceed: ")
     if answer.lower() in ['y', 'z']:
-        print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Start deletion")
+        print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
         for host in Host.objects():
             logger.debug(f"Handling Host {host.hostname}")
             host.delete()
     else:
-        print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")
+        print(f"{CC.OKGREEN}  ** {CC.ENDC}Aborted")
 
 #.
 #   .-- Command: Reset Folder Pools
@@ -95,10 +113,11 @@ def reset_folder_pools():
     """
     Reset Folder Pools Usage
     """
-    print(f"{ColorCodes.HEADER} ***** Restet Pools (make sure to delete hosts from cmk after and resync) ***** {ColorCodes.ENDC}")
+    print(f"{CC.HEADER} Rested Pools {CC.ENDC}")
+    print(" -> make sure to delete hosts from cmk after and resync")
     answer = input(" - Enter 'y' and hit enter to procceed: ")
     if answer.lower() in ['y', 'z']:
-        print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}Start reset")
+        print(f"{CC.WARNING}  ** {CC.ENDC}Start reset")
         for pool in CheckmkFolderPool.objects():
             print(f"      - {pool.folder_name}")
             pool.folder_seats_taken = 0
@@ -108,7 +127,7 @@ def reset_folder_pools():
             host.folder = None
             host.save()
     else:
-        print(f"{ColorCodes.OKGREEN}  ** {ColorCodes.ENDC}Aborted")
+        print(f"{CC.OKGREEN}  ** {CC.ENDC}Aborted")
 
 #.
 #   .-- Command: Show Accounts
