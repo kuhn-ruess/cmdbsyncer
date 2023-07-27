@@ -126,6 +126,9 @@ def inventorize_hosts(account):
 #.
 #   . -- Show missing hosts
 def show_missing(account):
+    """
+    Return list of all currently missing hosts
+    """
     config = get_account_by_name(account)
     cmk = CMK2()
     cmk.config = config
@@ -180,13 +183,27 @@ def activate_changes(account):
         return False
     cmk = CMK2()
     cmk.config = account_config
+    # Get current activation etag
+    url = "/domain-types/activation_run/collections/pending_changes"
+    _, headers = cmk.request(url, "GET")
+    etag = headers.get('ETag')
+
+    update_headers = {
+        'if-match': etag
+    }
+
+    # Trigger Activate Changes
     url = "/domain-types/activation_run/actions/activate-changes/invoke"
     data = {
         'redirect': False,
         'force_foreign_changes': True,
     }
     try:
-        cmk.request(url, data=data, method="POST")
+        cmk.request(url,
+                    data=data,
+                    method="POST",
+                    additional_header=update_headers,
+        )
         print("Changes activated")
     except CmkException as errors:
         print(errors)
