@@ -13,9 +13,10 @@ from flask_login import LoginManager
 from flask_mail import Mail
 from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
+from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.2.3'
+VERSION = '3.2.4'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -192,6 +193,7 @@ from application.models.config import Config
 from application.views.config import ConfigModelView
 
 admin.add_view(ConfigModelView(Config, name="System Config", category="Config"))
+admin.add_view(FileAdmin(app.config['FILEADMIN_PATH'], name="Files", category="Config"))
 #.
 #   .-- Cron
 
@@ -202,6 +204,9 @@ admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs
 admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs"))
 
 #.
+
+
+
 #   .-- Rest
 admin.add_link(MenuLink(name='Change Password', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}change-password"))

@@ -169,7 +169,8 @@ class CheckmkGroupRuleView(RuleModelView):
         """
         # Evil hack: Field not exists here,
         # but RuleModelView defines it -> Error
-        del self.form_subdocuments['conditions']
+        if 'conditions' in self.form_subdocuments:
+            del self.form_subdocuments['conditions']
 
         # Default Form rules not match for the Fields of this Form
         self.form_rules = []
