@@ -81,10 +81,12 @@ class DataGeter():
                 print(f"{CC.OKBLUE} *{CC.ENDC} Created host locally")
 
             do_save = host.set_account(account_dict=self.config)
+            labels = {}
             try:
                 attributes = host_details['extensions']['attributes']
                 if 'labels' in attributes:
-                    host.update_host(attributes['labels'])
+                    labels.update(attributes['labels'])
+                host.update_host(labels)
             except HostError as error_obj:
                 host.add_log(f"Update Error {error_obj}")
             if do_save:
