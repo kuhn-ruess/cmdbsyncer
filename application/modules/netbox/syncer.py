@@ -73,6 +73,8 @@ class SyncNetbox(Plugin):
                 # Checkmk gives no json response here, so we directly return
                 return True, response.headers
             logger.debug(f"Response Text: {response.text}")
+            if response.status_code == 403:
+                raise Exception("Invalid Login, you may need to create a login token")
             if response.status_code >= 299:
                 print("Error in response, enable debug_log to see more")
             try:
@@ -487,9 +489,9 @@ class SyncNetbox(Plugin):
                 create_response = self.request(url, "POST", payload)
                 host_netbox_id = create_response.get('id')
                 if not host_netbox_id:
-                    print(payload)
-                    print(create_response)
-                    raise Exception("Cannot create Host")
+                    logger.debug(payload)
+                    logger.debug(create_response)
+                    raise Exception(f"Cannot create Host: {create_response}")
             if 'update_interfaces' in custom_rules:
                 self.update_interfaces(host_netbox_id, all_attributes['all'])
 
