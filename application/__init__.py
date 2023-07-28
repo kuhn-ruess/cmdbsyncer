@@ -193,7 +193,7 @@ from application.models.config import Config
 from application.views.config import ConfigModelView
 
 admin.add_view(ConfigModelView(Config, name="System Config", category="Config"))
-admin.add_view(FileAdmin(app.config['FILEADMIN_PATH'], name="Files", category="Config"))
+#admin.add_view(FileAdmin(app.config['FILEADMIN_PATH'], name="Files", category="Config"))
 #.
 #   .-- Cron
 
