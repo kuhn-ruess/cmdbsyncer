@@ -157,9 +157,22 @@ class AttributeRewriteAction(db.EmbeddedDocument):
     ------------------
     Name of the attribute to rewrite
 
+    Overwrite Name
+    --------------
+    Enable if and with which Method you wan't to overwrite
+    the Fields Key
+
     New Attribute Name
     ------------------
     New Name of the attribute
+
+    Overwrite Value
+    ---------------
+    Enable if, and with which Method you wan't to overwrite
+    the Fields Value.  You can for example Split the Subnet from an ip.
+    If the Value would be: 127.0.0.1/24, you choose "With Split Match"
+    and Enter /:0 which would spearate at /, and take the first result of this split.
+
     """
     old_attribute_name = db.StringField()
     overwrite_name = db.StringField(choices=modes, default='string')

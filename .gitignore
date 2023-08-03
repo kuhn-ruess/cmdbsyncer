@@ -2,7 +2,7 @@ plugins/*.py
 !plugins/example_*.py
 !plugins/__init__.py
 application/config.local.py
-cmdbsyncer_import
+cmdbsyncer-files
 nogit_*
 local_*
 .obsidian*
