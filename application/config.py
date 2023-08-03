@@ -44,7 +44,7 @@ class BaseConfig():
 
     }
 
-    FILEADMIN_PATH = '/srv/cmdbsyncer_imports'
+    FILEADMIN_PATH = '/srv/cmdbsyncer-files'
 
 class ProductionConfig(BaseConfig):
     """
