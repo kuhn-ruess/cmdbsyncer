@@ -12,6 +12,8 @@ nav:
         - Config: basics/lcl_config.md
         - Caching: basics/caching.md
         - Accounts: basics/accounts.md
+        - Cronjobs: basics/cron.md
+        - Fileadmin: basics/fileadmin.md
         - Recipes:
             - UWSGI and Apache: basics/uwsgi_apache.md
       - Principles:
