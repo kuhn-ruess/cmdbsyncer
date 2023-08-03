@@ -57,6 +57,7 @@ def cli_compare_hosts(csv_path, delimiter, hostname_field, label_filter):
 
 def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=None):
     #pylint: disable=no-member, consider-using-generator
+    encoding = 'utf-8'
     if account:
         account = get_account_by_name(account)
         if 'hostname_field' in account:
@@ -67,6 +68,8 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
             csv_path = account['csv_path']
         if 'path' in account:
             csv_path = account['path']
+        if 'encoding' in account:
+            encoding = account['encoding']
 
     if not csv_path:
         raise ValueError("No path given in account config")
@@ -74,7 +77,7 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
     filename = csv_path.split('/')[-1]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
           f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
-    with open(csv_path, newline='', encoding='utf-8') as csvfile:
+    with open(csv_path, newline='', encoding=encoding) as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
             hostname = row[hostname_field].strip().lower()

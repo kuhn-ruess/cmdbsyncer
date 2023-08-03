@@ -58,6 +58,7 @@ class AccountModelView(DefaultModelView):
                 ('path', ''),
                 ('hostname_field', 'host'),
                 ('delimiter', ';'),
+                ('encoding', 'utf-8'),
             ]
         elif form.typ.data == 'json':
             default_fields = [
