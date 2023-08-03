@@ -17,7 +17,7 @@
   when: cmk_install_agent | bool
 
 - name: "Register Agent for TLS."
-  win_shell: ".\\cmk-agent-ctl.exe register --hostname {{ inventory_hostname }} --server {{ cmk_server }}:{{ cmk_agent_receiver_port}} --site {{ cmk_site }} --user {{ cmk_user }} --secret {{ cmk_password }}  --trust-cert"
+  win_shell: ".\\cmk-agent-ctl.exe register --hostname {{ inventory_hostname }} --server {{ cmk_server }}:{{ cmk_agent_receiver_port}} --site {{ cmk_site }} --user {{ cmk_user }} --password {{ cmk_password }}  --trust-cert"
   args:
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_tls | bool
