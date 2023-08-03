@@ -68,6 +68,7 @@ class AccountModelView(DefaultModelView):
         elif form.typ.data == 'maintenance':
             default_fields = [
                 ('delete_hosts_after_days', '0'),
+                ('account_filter', None),
             ]
 
 

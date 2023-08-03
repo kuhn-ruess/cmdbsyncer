@@ -37,6 +37,9 @@ def maintenance(account):
     """
     print(f"{CC.HEADER} ***** Run Tasks ***** {CC.ENDC}")
 
+    account_filter = False
+    account_filter_name = False
+
     # Hack: You could call the inital command without account,
     # so whe assume if we just get a Integer, this is the legacy mode,
     # else it's a account
@@ -45,17 +48,25 @@ def maintenance(account):
     else:
         account = get_account_by_name(account)
         days = int(account['delete_hosts_after_days'])
+        account_filter_name = account.get('account_filter')
+        if account_filter_name:
+            account_filter = get_account_by_name(account_filter_name)
 
     if not days:
         print(f"{CC.WARNING} Days set to 0, exiting {CC.ENDC}")
         return
 
-    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days{CC.ENDC}")
+    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days, Filter: {account_filter_name}{CC.ENDC}")
 
     now = datetime.datetime.now()
     delta = datetime.timedelta(days)
     timedelta = now - delta
-    for host in Host.objects(last_import_seen__lte=timedelta):
+    if account_filter:
+        objects = Host.objects(last_import_seen__lte=timedelta,
+                               source_account_id=str(account_filter['id']))
+    else:
+        objects = Host.objects(last_import_seen__lte=timedelta)
+    for host in objects:
         print(f"{CC.WARNING}  ** {CC.ENDC}Deleted host {host.hostname}")
         if host.get_folder():
             folder = host.get_folder()
@@ -65,7 +76,7 @@ def maintenance(account):
 
 @_cli_sys.command('maintenance')
 @click.argument("days", default=7)
-def cli_maintenance(days):
+def cli_maintenance(days, account_filter):
     """
     Run maintenance tasks
     This includes deletion of old hosts.
