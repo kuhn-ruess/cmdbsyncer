@@ -464,7 +464,7 @@ class SyncNetbox(Plugin):
                 continue
             custom_rules = self.get_host_data(db_host, all_attributes['all'])
 
-            if 'ignore_host' in custom_rules:
+            if custom_rules.get('ignore_host'):
                 continue
 
             process = 100.0 * counter / total
