@@ -464,6 +464,9 @@ class SyncNetbox(Plugin):
                 continue
             custom_rules = self.get_host_data(db_host, all_attributes['all'])
 
+            if 'ignore_host' in custom_rules:
+                continue
+
             process = 100.0 * counter / total
             print(f"\n{CC.HEADER}({process:.0f}%) {hostname}{CC.ENDC}")
 
