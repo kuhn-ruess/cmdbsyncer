@@ -32,6 +32,20 @@ class BaseConfig():
     BOOTSTRAP_SERVE_LOCAL = True
     USE_CACHE = True
 
+    REPLACERS = [
+      (' ', '_'),
+      (',', ''),
+      (' ', '_'),
+      ('/', '-'),
+      ('&', '-'),
+      ('(', '-'),
+      (')', '-'),
+      ('ü', 'ue'),
+      ('ä', 'ae'),
+      ('ö', 'oe'),
+      ('ß', 'ss'),
+    ]
+
 
     DISABLE_SSL_ERRORS = True
     SWAGGER_ENABLED = True
