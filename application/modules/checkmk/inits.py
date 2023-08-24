@@ -209,7 +209,7 @@ def activate_changes(account):
         print(errors)
 #.
 #   .-- Export Groups
-def export_groups(account, test_run):
+def export_groups(account, test_run=False):
     """
     Manage Groups in Checkmk
     """
