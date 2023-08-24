@@ -70,6 +70,13 @@ class AccountModelView(DefaultModelView):
                 ('delete_hosts_after_days', '0'),
                 ('account_filter', None),
             ]
+        elif form.typ.data == 'external_restapi':
+            default_fields = [
+                ('use_auth_basic', None),
+                ('request_headers', '{"Content-Type": "application/json"}'),
+                ('data_key', 'result'),
+                ('hostname_field', 'host'),
+            ]
 
 
         if default_fields:
