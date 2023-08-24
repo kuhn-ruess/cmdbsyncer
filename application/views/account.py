@@ -72,7 +72,7 @@ class AccountModelView(DefaultModelView):
             ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
-                ('use_auth_basic', None),
+                ('auth_type', "Basic"),
                 ('request_headers', '{"Content-Type": "application/json"}'),
                 ('data_key', 'result'),
                 ('hostname_field', 'host'),
