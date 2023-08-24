@@ -52,10 +52,11 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                         except:
                             logger.debug("Cant Split Rewrite Attribute")
                 elif mode == 'jinja':
-                    tpl = jinja2.Template(new_attribute_name)
-                    new_attribute_name = tpl.render(self.attributes)
-                    outcomes[f'add_{new_attribute_name}'] = self.attributes[attribute_name]
-                    outcomes[f'del_{attribute_name}'] = True
+                    if self.attributes.get(attribute_name):
+                        tpl = jinja2.Template(new_attribute_name)
+                        new_attribute_name = tpl.render(self.attributes)
+                        outcomes[f'add_{new_attribute_name}'] = self.attributes[attribute_name]
+                        outcomes[f'del_{attribute_name}'] = True
 
 
             if value_mode := outcome['overwrite_value']:
