@@ -72,8 +72,9 @@ def import_hosts_json(account):
     if account.get('request_headers'):
         headers = dict(account['request_headers'])
 
-    if account.get('use_auth_basic'):
-        auth = HTTPBasicAuth(account['username'], account['password'])
+    if auth_type:= account.get('auth_type'):
+        if auth_type.lower() == "basic":
+            auth = HTTPBasicAuth(account['username'], account['password'])
 
     logger.debug(f"Auth: {auth}")
 
