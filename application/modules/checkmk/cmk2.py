@@ -1,6 +1,7 @@
 """
 Central Request Modul to CMK 2.x
 """
+#pylint: disable=logging-fstring-interpolation
 import requests
 from application import app, log, logger
 from application.modules.plugin import Plugin
@@ -30,6 +31,16 @@ class CMK2(Plugin):
         self.log = log
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
         self.config = {}
+
+    @staticmethod
+    def replace(input_raw):
+        """
+        Replace all given inputs
+        """
+        input_str = str(input_raw)
+        for needle, replacer in app.config['REPLACERS']:
+            input_str = input_str.replace(needle, replacer)
+        return input_str.strip()
 
     def request(self, params, method='GET', data=None, additional_header=None):
         """

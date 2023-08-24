@@ -11,34 +11,10 @@ from application.modules.checkmk.models import CheckmkGroupRule, CheckmkObjectCa
 from application.modules.debug import ColorCodes as CC
 from application.models.host import Host
 
-replacers = [
-  (' ', '_'),
-  (',', ''),
-  (' ', '_'),
-  ('/', '-'),
-  ('&', '-'),
-  ('(', '-'),
-  (')', '-'),
-  ('ü', 'ue'),
-  ('ä', 'ae'),
-  ('ö', 'oe'),
-  ('ß', 'ss'),
-]
-
 class SyncConfiguration(CMK2):
     """
     Sync jobs for Checkmk Config
     """
-
-    @staticmethod
-    def replace(input_raw):
-        """
-        Replace all given inputs
-        """
-        input_str = str(input_raw)
-        for needle, replacer in replacers:
-            input_str = input_str.replace(needle, replacer)
-        return input_str.strip()
 
     def get_cache_object(self, group):
         """
@@ -84,6 +60,7 @@ class SyncConfiguration(CMK2):
 
         rulsets_by_type = {}
 
+        # pylint: disable=too-many-nested-blocks
         for db_host in Host.objects(available=True):
             attributes = self.get_host_attributes(db_host, 'cmk_conf')
             if not attributes:
@@ -443,7 +420,7 @@ class SyncConfiguration(CMK2):
             for delete_id in delete_list:
                 url = f"/objects/bi_aggregation/{delete_id}"
                 del_response = self.request(url, method="DELETE")[1]
-                print(f"{CC.WARNING} *{CC.ENDC} Aggregation {delete_id} deleted. Status: {del_response}")
+                print(f"{CC.WARNING} *{CC.ENDC} Aggr. {delete_id} deleted. Resp: {del_response}")
 
             for create_id in create_list:
                 url = f"/objects/bi_aggregation/{create_id}"
