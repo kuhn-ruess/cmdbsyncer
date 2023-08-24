@@ -150,12 +150,14 @@ modes = [
   ("string", "With String Match"),
   ("regex", "With Regex Match"),
   ("split", "With Split Match, Syntax: SEPERATOR:INDEX"),
+  ("jinja", "With Jina Template and access to all Hosts Attributes"),
 ]
 class AttributeRewriteAction(db.EmbeddedDocument):
     """
     Old Attribute Name
     ------------------
     Name of the attribute to rewrite
+    Or Name for the New Attribute based on overwrites
 
     Overwrite Name
     --------------
@@ -165,13 +167,6 @@ class AttributeRewriteAction(db.EmbeddedDocument):
     New Attribute Name
     ------------------
     New Name of the attribute
-
-    Overwrite Value
-    ---------------
-    Enable if, and with which Method you wan't to overwrite
-    the Fields Value.  You can for example Split the Subnet from an ip.
-    If the Value would be: 127.0.0.1/24, you choose "With Split Match"
-    and Enter /:0 which would spearate at /, and take the first result of this split.
 
     """
     old_attribute_name = db.StringField()

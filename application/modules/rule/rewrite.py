@@ -4,6 +4,7 @@ Rewrite
 """
 #pylint: disable=logging-fstring-interpolation, bare-except, too-many-branches, too-many-locals
 import re
+import jinja2
 from application.modules.rule.rule import Rule
 from application import logger
 
@@ -50,6 +51,11 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                             outcomes[f'del_{attribute_name}'] = True
                         except:
                             logger.debug("Cant Split Rewrite Attribute")
+                elif mode == 'jinja':
+                    tpl = jinja2.Template(new_attribute_name)
+                    new_attribute_name = tpl.render(self.attributes)
+                    outcomes[f'add_{new_attribute_name}'] = self.attributes[attribute_name]
+                    outcomes[f'del_{attribute_name}'] = True
 
 
             if value_mode := outcome['overwrite_value']:
@@ -76,4 +82,9 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                         outcomes[f'add_{attribute_name}'] = splited[int(index)]
                     except:
                         logger.debug("Cant Split Value")
+                elif value_mode == 'jinja':
+                    tpl = jinja2.Template(new_value)
+                    new_value = tpl.render(self.attributes)
+                    outcomes[f'add_{attribute_name}'] = new_value
+                    print(f"Created {new_value}")
         return outcomes
