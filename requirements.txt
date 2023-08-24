@@ -57,4 +57,3 @@ pylint-mongoengine==0.4.0
 rich==12.6.0
 mysql-connector-python==8.0.32
 ansible-runner==2.3.2
-griffe==0.34.0
