@@ -510,24 +510,30 @@ class SyncNetbox(Plugin):
         """
         Import Objects from Netbox to the Syncer
         """
-        label_keys = [
-            'site',
-            'cluster',
-            'device',
-            'role',
-            'tenant',
-            'platform',
-            'primary_ip4',
-            'primary_ip6',
-        ]
+
+        def extract_data(data):
+            """
+            Extract Netbox fields
+            """
+            labels = {}
+            for key, value in data.items():
+                if key == 'custom_fields':
+                    if 'cmdbsyncer_id' in value:
+                        del value['cmdbsyncer_id']
+                    labels.update(value)
+                elif isinstance(value, str):
+                    labels[key] = value
+                elif isinstance(value, dict):
+                    if 'display' in value:
+                        labels[key] = value['display']
+                    elif 'label' in value:
+                        labels[key] = value['label']
+            return labels
 
         for device, data in self.get_devices().items():
             host_obj = Host.get_host(device)
-            labels = {}
             print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
-            for label in label_keys:
-                if sub_data := data.get(label):
-                    labels[label] = sub_data.get('display')
+            labels = extract_data(data)
             host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)
             if do_save:
@@ -535,11 +541,8 @@ class SyncNetbox(Plugin):
 
         for device, data in self.get_vms().items():
             host_obj = Host.get_host(device)
-            labels = {}
             print(f"\n{CC.HEADER}Process VM: {device}{CC.ENDC}")
-            for label in label_keys:
-                if sub_data := data.get(label):
-                    labels[label] = sub_data.get('display')
+            labels = extract_data(data)
             host_obj.update_host(labels)
             do_save = host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)
