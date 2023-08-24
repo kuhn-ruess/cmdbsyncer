@@ -4,9 +4,11 @@ Account Model View
 from markupsafe import Markup
 from flask_login import current_user
 from wtforms import StringField
+from wtforms.validators import ValidationError
+from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
 from application.models.account import CustomEntry
-
+from application.modules.checkmk.models import CheckmkObjectCache
 
 def _render_custom_data(_view, _context, model, _name):
     """
@@ -88,6 +90,19 @@ class AccountModelView(DefaultModelView):
                     model.custom_fields.append(new)
 
         return super().on_model_change(form, model, is_created)
+
+    def on_model_delete(self, model):
+        """
+        Prevent deletion of Accounts with Assigned References
+        """
+        for group in CronGroup.objects():
+            for job in group.jobs:
+                if job.account == model:
+                    raise ValidationError(f"Can't delete: Used by Cronjob '{group.name}'")
+
+        for entry in CheckmkObjectCache.objects():
+            if entry.account == model:
+                raise ValidationError("Can't delete: Cache objectes have this Account Assigned")
 
 
     def is_accessible(self):
