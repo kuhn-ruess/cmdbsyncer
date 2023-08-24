@@ -51,6 +51,7 @@ nav:
               - Site Update Automations: ansible/cmk_sites.md
       - Cisco Dna: ciscodna/index.md
       - Netbox: netbox/index.md
+      - RestApi: restapi/index.md
       - SYS: sys/index.md
   - "Advanced":
      - Build your own Plugin: advanced/own_plugins.md
