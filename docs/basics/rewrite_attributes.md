@@ -22,7 +22,7 @@ So for example if you import an attribute like the ipaddress from a CSV, there w
 
 ### String Match
 Simply add the new String as the new attribute or value
-### Slit
+### Split
 Add a pattern to the field. This Pattern contains a seperator where you want to split the string,
 and then the index for the result.
 
