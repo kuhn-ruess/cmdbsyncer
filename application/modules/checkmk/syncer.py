@@ -85,7 +85,7 @@ class SyncCMK2(CMK2):
 
             if 'move_folder' in next_actions:
                 # Get the Folder where we move to
-                folder = self.replace(next_actions['move_folder'])
+                folder = self.replace(next_actions['move_folder'], exceptions=['/'])
 
             cluster_nodes = [] # if true, we have a cluster
             if 'create_cluster' in next_actions:
