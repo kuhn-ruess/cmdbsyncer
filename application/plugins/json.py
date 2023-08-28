@@ -4,9 +4,10 @@ JSON Plugin
 #pylint: disable=too-many-arguments, logging-fstring-interpolation
 import json
 import click
+import ast
 
 import requests
-from requests.auth import HTTPBasicAuth
+from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 from application import app, logger
 from application.models.host import Host
@@ -70,22 +71,28 @@ def import_hosts_json(account):
     headers = {}
     auth = None
     if account.get('request_headers'):
-        headers = dict(account['request_headers'])
+        headers = ast.literal_eval(account['request_headers'])
+        logger.debug(f"Request Headers: {headers}")
 
     if auth_type:= account.get('auth_type'):
         if auth_type.lower() == "basic":
             auth = HTTPBasicAuth(account['username'], account['password'])
+        if auth_type.lower() == 'digest':
+            auth = HTTPDigestAuth(account['username'], account['password'])
 
     logger.debug(f"Auth: {auth}")
 
-    response = requests.post(account['address'], headers=headers, auth=auth, timeout=30)
+    response = requests.get(account['address'], headers=headers, auth=auth, timeout=30, verify=False)
+    logger.debug(f"Response RAW: {response.text}")
+    logger.debug(f"Response Status: {response.status_code}")
     data = response.json()
-    logger.debug(f"Response: {data}")
+    logger.debug(f"Response JSON: {data}")
 
     for entry in data[account['data_key']]:
         hostname = entry[account['hostname_field']]
         del entry[account['hostname_field']]
 
+        print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
         host_obj = Host.get_host(hostname)
         host_obj.update_host(entry)
 
