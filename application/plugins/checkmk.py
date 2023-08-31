@@ -111,6 +111,7 @@ def _inner_export_hosts(account, limit=False):
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.limit = limit
+            syncer.account_filter = target_config.get('account_filter', False)
             syncer.config = target_config
             syncer.filter = rules['filter']
             syncer.rewrite = rules['rewrite']

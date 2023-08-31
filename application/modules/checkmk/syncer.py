@@ -65,6 +65,10 @@ class SyncCMK2(CMK2):
             if self.limit:
                 if db_host.hostname not in self.limit:
                     continue
+            if self.account_filter:
+                if db_host.account_name != self.account_filter:
+                    continue
+
             # Actions
             process = 100.0 * counter / total
             print(f"\n{CC.HEADER}({process:.0f}%) {db_host.hostname}{CC.ENDC}")

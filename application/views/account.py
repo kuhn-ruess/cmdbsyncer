@@ -79,6 +79,10 @@ class AccountModelView(DefaultModelView):
                 ('data_key', 'result'),
                 ('hostname_field', 'host'),
             ]
+        elif form.typ.data == 'cmkv2':
+            default_fields = [
+                ('account_filter', ""),
+            ]
 
 
         if default_fields:
