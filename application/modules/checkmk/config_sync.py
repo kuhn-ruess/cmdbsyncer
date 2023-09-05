@@ -191,27 +191,41 @@ class SyncConfiguration(CMK2):
             outcome = rule.outcome
             group_name = outcome.group_name
             groups.setdefault(group_name, [])
-            rewrite = False
+            rewrite_name = False
+            rewrite_title = False
             if outcome.rewrite:
-                rewrite = True
-                rewrite_tpl = jinja2.Template(outcome.rewrite)
+                rewrite_name = True
+                rewrite_name_tpl = jinja2.Template(outcome.rewrite)
+            if outcome.rewrite_title:
+                rewrite_title = True
+                rewrite_title_tpl = jinja2.Template(outcome.rewrite_title)
             if outcome.foreach_type == 'value':
                 for label_value in attributes[1].get(outcome.foreach, []):
-                    if rewrite:
-                        label_value = rewrite_tpl.render(name=label_value)
-                    label_value = self.replace(label_value)
-                    if label_value and label_value not in groups[group_name]:
-                        groups[group_name].append(label_value)
+                    new_group_title = label_value
+                    new_group_name = label_value
+                    if rewrite_name:
+                        new_group_name = rewrite_name_tpl.render(name=label_value)
+                    new_group_name = self.replace(new_group_name).strip()
+                    if rewrite_title:
+                        new_group_title = rewrite_title_tpl.render(name=label_value)
+                    new_group_title = self.replace(new_group_title).strip()
+
+                    if new_group_name and (new_group_title, new_group_name) not in groups[group_name]:
+                        groups[new_group_name].append((new_group_title, new_group_name))
             elif outcome.foreach_type == 'label':
                 print("Check for label:")
                 for label_key in attributes[0].get(outcome.foreach, []):
+                    new_group_title = label_key
+                    new_group_name = label_key
                     print(f"Checking: {label_key}")
-                    if rewrite:
-                        label_key = rewrite_tpl.render(name=label_key)
-                    label_key = self.replace(label_key)
-                    label_key = label_key.replace(' ', '_').strip()
-                    if label_key and label_key not in groups[group_name]:
-                        groups[group_name].append(label_key)
+                    if rewrite_name:
+                        new_group_name = rewrite_name_tpl.render(name=label_key)
+                    new_group_name = self.replace(new_group_name).strip()
+                    if rewrite_title:
+                        new_group_title = rewrite_title_tpl.render(name=label_key)
+                    new_group_title = self.replace(new_group_title).strip()
+                    if new_group_name and (new_group_title, new_group_name) not in groups[group_name]:
+                        groups[new_group_name].append((new_group_title, new_group_name))
 
         print(f"\n{CC.HEADER}Start Sync{CC.ENDC}")
         urls = {
@@ -260,9 +274,11 @@ class SyncConfiguration(CMK2):
                 new_group_names.append(new_group)
                 if new_group not in syncers_groups_in_cmk:
                     print(f"{CC.OKBLUE}  *{CC.ENDC} Added {new_group}")
+                    title = new_group[0]
+                    name = new_group[1]
                     entries.append({
-                        'alias' : new_group,
-                        'name' : new_group,
+                        'alias' : title,
+                        'name' : name,
                     })
 
             if entries:

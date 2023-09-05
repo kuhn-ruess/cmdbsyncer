@@ -136,14 +136,19 @@ class CmkGroupOutcome(db.EmbeddedDocument):
     ### Foreach
     Name of the Attribute or Attribute Value we should search for.
 
-    ### Rewrite
+    ### Rewrite (optional)
     You can rewrite the value with Jinja Syntax
     Leave blank if not needed. Use {{name}} for the value or key selected
+
+    ### Rewrite Title (optional)
+    Like the normal Rewrite, use this if you wan't to have a diffrent
+    Titles and Names
     """
     group_name = db.StringField(choices=cmk_groups)
     foreach_type = db.StringField(choices=foreach_types)
     foreach = db.StringField(required=True)
     rewrite = db.StringField()
+    rewrite_title = db.StringField()
 
     meta = {
         'strict': False,
