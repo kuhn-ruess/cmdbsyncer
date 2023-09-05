@@ -49,7 +49,8 @@ def _render_group_outcome(_view, _context, model, _name):
            f"<tr><th>Type</th><td>{entry.group_name}</td></tr>"\
            f"<tr><th>Foreach</th><td>{entry.foreach_type}</td></tr>" \
            f"<tr><th>Value</th><td>{entry.foreach}</td></tr>" \
-           f"<tr><th>Jinja Rewrite</th><td>{entry.rewrite}</td></tr>" \
+           f"<tr><th>Jinja Name Rewrite</th><td>{entry.rewrite}</td></tr>" \
+           f"<tr><th>Jinja Title Rewrite</th><td>{entry.rewrite_title}</td></tr>" \
            "</table>"
     return Markup(html)
 

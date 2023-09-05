@@ -187,10 +187,11 @@ class SyncConfiguration(CMK2):
         attributes = self.parse_attributes()
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
         groups = {}
+        replace_exceptions = ['-', '_']
         for rule in CheckmkGroupRule.objects(enabled=True):
             outcome = rule.outcome
-            group_name = outcome.group_name
-            groups.setdefault(group_name, [])
+            group_type = outcome.group_name
+            groups.setdefault(group_type, [])
             rewrite_name = False
             rewrite_title = False
             if outcome.rewrite:
@@ -205,13 +206,13 @@ class SyncConfiguration(CMK2):
                     new_group_name = label_value
                     if rewrite_name:
                         new_group_name = rewrite_name_tpl.render(name=label_value)
-                    new_group_name = self.replace(new_group_name).strip()
+                    new_group_name = self.replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
                         new_group_title = rewrite_title_tpl.render(name=label_value)
-                    new_group_title = self.replace(new_group_title).strip()
+                    new_group_title = self.replace(new_group_title, replace_exceptions).strip()
 
-                    if new_group_name and (new_group_title, new_group_name) not in groups[group_name]:
-                        groups[new_group_name].append((new_group_title, new_group_name))
+                    if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
+                        groups[group_type].append((new_group_title, new_group_name))
             elif outcome.foreach_type == 'label':
                 print("Check for label:")
                 for label_key in attributes[0].get(outcome.foreach, []):
@@ -220,29 +221,32 @@ class SyncConfiguration(CMK2):
                     print(f"Checking: {label_key}")
                     if rewrite_name:
                         new_group_name = rewrite_name_tpl.render(name=label_key)
-                    new_group_name = self.replace(new_group_name).strip()
+                    new_group_name = self.replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
                         new_group_title = rewrite_title_tpl.render(name=label_key)
-                    new_group_title = self.replace(new_group_title).strip()
-                    if new_group_name and (new_group_title, new_group_name) not in groups[group_name]:
-                        groups[new_group_name].append((new_group_title, new_group_name))
+                    new_group_title = self.replace(new_group_title, replace_exceptions).strip()
+                    if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
+                        groups[group_type].append((new_group_title, new_group_name))
 
         print(f"\n{CC.HEADER}Start Sync{CC.ENDC}")
         urls = {
             'contact_groups': {
                 'get': "/domain-types/contact_group_config/collections/all",
                 'put': "/domain-types/contact_group_config/actions/bulk-create/invoke",
-                'delete': "/objects/contact_group_config/"
+                'delete': "/objects/contact_group_config/",
+                'update': "/domain-types/contact_group_config/actions/bulk-update/invoke"
             },
             'host_groups' : {
                 'get': "/domain-types/host_group_config/collections/all",
                 'put': "/domain-types/host_group_config/actions/bulk-create/invoke",
-                'delete': "/objects/host_group_config/"
+                'delete': "/objects/host_group_config/",
+                'update': "/domain-types/host_group_config/actions/bulk-update/invoke"
             },
             'service_groups' : {
                 'get': "/domain-types/service_group_config/collections/all",
                 'put': "/domain-types/service_group_config/actions/bulk-create/invoke",
-                'delete': "/objects/service_group_config/"
+                'delete': "/objects/service_group_config/",
+                'update': "/domain-types/service_group_config/actions/bulk-update/invoke"
             },
         }
         for group_type, configured_groups in groups.items():
@@ -251,6 +255,7 @@ class SyncConfiguration(CMK2):
 
             cmks_groups = self.request(url, method="GET")
             syncers_groups_in_cmk = []
+            syncers_groups_needing_update = []
 
             cache = self.get_cache_object(group=group_type)
 
@@ -258,32 +263,44 @@ class SyncConfiguration(CMK2):
 
 
             for cmk_group in cmks_groups[0]['value']:
-                cmk_name = cmk_group['links'][0]['href'].split('/')[-1]
-                if cmk_name in group_list:
+                cmk_name = cmk_group['id']
+                cmk_title = cmk_group['title']
+                # From Cache we get Lists not tuple
+                if [cmk_title, cmk_name] in group_list:
                     syncers_groups_in_cmk.append(cmk_name)
+                elif cmk_name in [x[1] for x in group_list]:
+                    syncers_groups_needing_update.append(cmk_name)
 
             cache.content['list'] = configured_groups
             cache.save()
 
 
-
             print(f"{CC.OKBLUE} *{CC.ENDC} Create {group_type} if needed")
-            entries = []
-            new_group_names = []
+            new_entries = []
+            update_entries = []
+            handeled_groups = []
             for new_group in configured_groups:
-                new_group_names.append(new_group)
-                if new_group not in syncers_groups_in_cmk:
+                handeled_groups.append(new_group)
+                alias = new_group[0]
+                name = new_group[1]
+                if name not in syncers_groups_in_cmk and name not in syncers_groups_needing_update:
                     print(f"{CC.OKBLUE}  *{CC.ENDC} Added {new_group}")
-                    title = new_group[0]
-                    name = new_group[1]
-                    entries.append({
-                        'alias' : title,
+                    new_entries.append({
+                        'alias' : alias,
                         'name' : name,
                     })
+                elif name in syncers_groups_needing_update:
+                    print(f"{CC.OKBLUE}  *{CC.ENDC} Updated {new_group}")
+                    update_entries.append({
+                        'name' : name,
+                        "attributes" : {
+                            "alias": alias,
+                        }
+                    })
 
-            if entries:
+            if new_entries:
                 data = {
-                    'entries': entries,
+                    'entries': new_entries,
                 }
                 url = urls[group_type]['put']
                 if test_run:
@@ -296,17 +313,32 @@ class SyncConfiguration(CMK2):
                     except CmkException as error:
                         print(f"{CC.FAIL} {error} {CC.ENDC}")
                         return
+            if update_entries:
+                data = {
+                    'entries': update_entries,
+                }
+                url = urls[group_type]['update']
+                if test_run:
+                    print(f"\n{CC.HEADER}Output only (Testrun){CC.ENDC}")
+                else:
+                    print(f"\n{CC.HEADER}Send {group_type} to Checkmk{CC.ENDC}")
+                    try:
+                        self.request(url, data=data, method="PUT")
+                        messages.append(("INFO", f"Update Groups: {group_type} {data}"))
+                    except CmkException as error:
+                        print(f"{CC.FAIL} {error} {CC.ENDC}")
+                        return
 
 
             if not test_run:
                 print(f"{CC.OKBLUE} *{CC.ENDC} Delete Groups if needed")
-                for group_alias in syncers_groups_in_cmk:
-                    if group_alias not in new_group_names:
+                for name in syncers_groups_in_cmk:
+                    if name not in [x[1] for x in handeled_groups]:
                         # Checkmk is not deleting objects if the still referenced
-                        url = f"{urls[group_type]['delete']}{group_alias}"
+                        url = f"{urls[group_type]['delete']}{name}"
                         self.request(url, method="DELETE")
-                        messages.append(("INFO", f"Deleted Group: {group_alias}"))
-                        print(f"{CC.OKBLUE} *{CC.ENDC} Group {group_alias} deleted")
+                        messages.append(("INFO", f"Deleted Group: {name}"))
+                        print(f"{CC.OKBLUE} *{CC.ENDC} Group {name} deleted")
 
         log.log(f"Checkmk Group synced with {self.account_name}",
                     source="CMK_GROUP_SYNC", details=messages)
