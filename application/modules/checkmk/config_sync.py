@@ -75,6 +75,10 @@ class SyncConfiguration(CMK2):
                         value = \
                             value_tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
 
+                        # Overwrite the Params again
+                        rule_params['value'] = value
+                        del rule_params['value_template']
+
                         if rule_params['condition_label_template']:
                             label_condition_tpl = \
                                 jinja2.Template(rule_params['condition_label_template'])
@@ -84,7 +88,7 @@ class SyncConfiguration(CMK2):
 
                             label_key, label_value = label_condition.split(':')
                             # Fix bug in case of empty Labels in store
-                            if not label_key and not label_value:
+                            if not label_key or not label_value:
                                 continue
                             condition_tpl['host_labels'] = [{
                                                     "key": label_key,
@@ -108,9 +112,6 @@ class SyncConfiguration(CMK2):
 
                         del rule_params['condition_host']
 
-                        # Overwrite the Params again
-                        rule_params['value'] = value
-                        del rule_params['value_template']
 
                         rule_params['condition'] = condition_tpl
 
@@ -159,7 +160,7 @@ class SyncConfiguration(CMK2):
                         "comment": rule['comment'],
                     },
                     'conditions' : rule['condition'],
-                    "value_raw": rule['value'],
+                    'value_raw' : rule['value'],
                 }
 
 
@@ -205,10 +206,10 @@ class SyncConfiguration(CMK2):
                 if outcome.foreach.endswith('*'):
                     keys = []
                     search = outcome.foreach[:-1]
-                    for key, keys_values in in attributes[0].items():
-                        if key.startswith(search)
+                    for key, keys_values in attributes[0].items():
+                        if key.startswith(search):
                             keys += keys_values
-                else
+                else:
                     keys = attributes[1].get(outcome.foreach, [])
 
 
@@ -228,21 +229,20 @@ class SyncConfiguration(CMK2):
                 if outcome.foreach.endswith('*'):
                     values = []
                     search = outcome.foreach[:-1]
-                    for label, label_values in in attributes[0].items():
-                        if label.startswith(search)
+                    for label, label_values in attributes[0].items():
+                        if label.startswith(search):
                             values += label_values
-                else
+                else:
                     values = attributes[0].get(outcome.foreach, [])
 
                 for value in values:
                     new_group_title = value
                     new_group_name = value
-                    print(f"Checking: {value}")
                     if rewrite_name:
-                        new_group_name = rewrite_name_tpl.render(name=value, result=name)
+                        new_group_name = rewrite_name_tpl.render(name=value, result=value)
                     new_group_name = self.replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = rewrite_title_tpl.render(name=value, result=name)
+                        new_group_title = rewrite_title_tpl.render(name=value, result=value)
                     new_group_title = self.replace(new_group_title, replace_exceptions).strip()
                     if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
                         groups[group_type].append((new_group_title, new_group_name))
