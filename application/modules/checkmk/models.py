@@ -135,14 +135,17 @@ class CmkGroupOutcome(db.EmbeddedDocument):
 
     ### Foreach
     Name of the Attribute or Attribute Value we should search for.
+    Use * at the  end of the String, if you wan't to match all Strings beginning with this
 
     ### Rewrite (optional)
-    You can rewrite the value with Jinja Syntax
-    Leave blank if not needed. Use {{name}} for the value or key selected
+    You can rewrite the groups Name with Jinja Syntax
+    Leave blank if not needed. The RAW Value will be used.
+    Else, use {{name}} as Placeholder for the seleted attribute.
 
     ### Rewrite Title (optional)
-    Like the normal Rewrite, use this if you wan't to have a diffrent
-    Titles and Names
+    You can rewrite the groups Title with Jinja Syntax
+    Leave blank if not needed. Then Title and Name will be same.
+    Otherwise use {{name}} as Placeholder for the seleted attribute.
     """
     group_name = db.StringField(choices=cmk_groups)
     foreach_type = db.StringField(choices=foreach_types)
