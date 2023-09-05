@@ -201,29 +201,48 @@ class SyncConfiguration(CMK2):
                 rewrite_title = True
                 rewrite_title_tpl = jinja2.Template(outcome.rewrite_title)
             if outcome.foreach_type == 'value':
-                for label_value in attributes[1].get(outcome.foreach, []):
-                    new_group_title = label_value
-                    new_group_name = label_value
+
+                if outcome.foreach.endswith('*'):
+                    keys = []
+                    search = outcome.foreach[:-1]
+                    for key, keys_values in in attributes[0].items():
+                        if key.startswith(search)
+                            keys += keys_values
+                else
+                    keys = attributes[1].get(outcome.foreach, [])
+
+
+                for key in keys:
+                    new_group_title = key
+                    new_group_name = key
                     if rewrite_name:
-                        new_group_name = rewrite_name_tpl.render(name=label_value)
+                        new_group_name = rewrite_name_tpl.render(name=key, result=key)
                     new_group_name = self.replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = rewrite_title_tpl.render(name=label_value)
+                        new_group_title = rewrite_title_tpl.render(name=key, result=key)
                     new_group_title = self.replace(new_group_title, replace_exceptions).strip()
 
                     if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
                         groups[group_type].append((new_group_title, new_group_name))
             elif outcome.foreach_type == 'label':
-                print("Check for label:")
-                for label_key in attributes[0].get(outcome.foreach, []):
-                    new_group_title = label_key
-                    new_group_name = label_key
-                    print(f"Checking: {label_key}")
+                if outcome.foreach.endswith('*'):
+                    values = []
+                    search = outcome.foreach[:-1]
+                    for label, label_values in in attributes[0].items():
+                        if label.startswith(search)
+                            values += label_values
+                else
+                    values = attributes[0].get(outcome.foreach, [])
+
+                for value in values:
+                    new_group_title = value
+                    new_group_name = value
+                    print(f"Checking: {value}")
                     if rewrite_name:
-                        new_group_name = rewrite_name_tpl.render(name=label_key)
+                        new_group_name = rewrite_name_tpl.render(name=value, result=name)
                     new_group_name = self.replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = rewrite_title_tpl.render(name=label_key)
+                        new_group_title = rewrite_title_tpl.render(name=value, result=name)
                     new_group_title = self.replace(new_group_title, replace_exceptions).strip()
                     if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
                         groups[group_type].append((new_group_title, new_group_name))
