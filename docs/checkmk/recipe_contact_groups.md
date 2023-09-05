@@ -26,7 +26,9 @@ The sync will send them then to Checkmk:
 
 Where you find them:
 ![](img/recipe_cg_4.png)
-(Please note that in the current Version, no syncer Prefixes needed anymore because of an internal cache)
+(Please note that in the current Version, no syncer Prefixes needed any more because of an internal cache). 
+
+HINT: If you have values like contact_1 to contact_x, you can also use contact_* as a Wildcard for the value to trigger all values starting with the string. Only works at the End of the string.
 
 ## The Assignment Rule
 Now you create a normal Checkmk rule. Even that this example shows the Assignment of Hosts to Contact groups, you can adapt it to every other Rule type.
