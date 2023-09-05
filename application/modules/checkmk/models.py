@@ -138,7 +138,7 @@ class CmkGroupOutcome(db.EmbeddedDocument):
 
     ### Rewrite
     You can rewrite the value with Jinja Syntax
-    Leave blank if not needed
+    Leave blank if not needed. Use {{name}} for the value or key selected
     """
     group_name = db.StringField(choices=cmk_groups)
     foreach_type = db.StringField(choices=foreach_types)
