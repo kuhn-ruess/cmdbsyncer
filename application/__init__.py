@@ -16,7 +16,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.3.0'
+VERSION = '3.3.1'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
