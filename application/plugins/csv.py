@@ -161,7 +161,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
         host_obj.save()
 
 @_cli_csv.command('inventorize_hosts')
-@click.argument("csv_path", default=False)
+@click.argument("csv_path", default="")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--key", default='csv')
