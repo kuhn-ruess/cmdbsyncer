@@ -63,6 +63,8 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                 if new_attribute_name:
                     # if overwriten before, write overwrite
                     attribute_name = new_attribute_name
+                if 'new_value' not in outcome:
+                    continue
                 new_value = outcome['new_value']
 
                 if value_mode == 'regex':
