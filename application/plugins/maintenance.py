@@ -76,7 +76,7 @@ def maintenance(account):
 
 @_cli_sys.command('maintenance')
 @click.argument("days", default=7)
-def cli_maintenance(days, account_filter):
+def cli_maintenance(days):
     """
     Run maintenance tasks
     This includes deletion of old hosts.
