@@ -66,7 +66,8 @@ class SyncCMK2(CMK2):
                 if db_host.hostname not in self.limit:
                     continue
             if self.account_filter:
-                if db_host.account_name != self.account_filter:
+                filters = [x.strip() for x in self.account_filter.split(',')]
+                if db_host.account_name not in filters:
                     continue
 
             # Actions
