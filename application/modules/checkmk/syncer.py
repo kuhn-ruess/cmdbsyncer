@@ -67,7 +67,7 @@ class SyncCMK2(CMK2):
                     continue
             if self.account_filter:
                 filters = [x.strip() for x in self.account_filter.split(',')]
-                if db_host.account_name not in filters:
+                if db_host.source_account_name not in filters:
                     continue
 
             # Actions
