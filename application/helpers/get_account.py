@@ -18,7 +18,7 @@ def get_account_by_name(name):
         account_dict['id'] = str(account_dict['_id'])
         return account_dict
     except DoesNotExist:
-        return False
+        raise Exception("Account not found")
 
 
 def get_account_variable(macro):

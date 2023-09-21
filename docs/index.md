@@ -48,6 +48,9 @@ Main Goal is the complete Organization of the Hosts based on CMDB Systems
 * Manage Hosts based on CSV File (Import Source)
 * Add Addional Informationen from CSV Files to your Hosts (eg. Overwrite IP Addresses)
 
+## LDAP
+ - Import Objects from LDAP Directories
+
 ## RestAPI
 - Import of Custom Rest APIs
 

@@ -72,6 +72,10 @@ class AccountModelView(DefaultModelView):
                 ('delete_hosts_after_days', '0'),
                 ('account_filter', None),
             ]
+        elif form.typ.data == 'mysql':
+            default_fields = [
+                ('hostname_field', ''),
+            ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
                 ('auth_type', "Basic"),
@@ -82,6 +86,12 @@ class AccountModelView(DefaultModelView):
         elif form.typ.data == 'cmkv2':
             default_fields = [
                 ('account_filter', ""),
+            ]
+        elif form.typ.data == 'ldap':
+            default_fields = [
+                ('base_dn', ""),
+                ('search_filter', ""),
+                ('attributes', "memberOf")
             ]
 
 
