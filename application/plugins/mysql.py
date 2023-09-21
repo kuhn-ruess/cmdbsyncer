@@ -6,7 +6,10 @@ from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
 from application.helpers.cron import register_cronjob
-import mysql.connector
+try:
+    import mysql.connector
+except ImportError:
+    pass
 
 @app.cli.group(name='mysql')
 def cli_mysql():
@@ -32,21 +35,19 @@ def mysql_import(account):
     all_hosts = mycursor.fetchall()
     field_names = config['fields'].split(',')
     for line in all_hosts:
-        hostname = labels['host_hostname'].strip().lower()
-        print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
         labels = dict(zip(field_names, line))
-        del labels['host_hostname']
+        hostname = labels[config['hostname_field']].strip().lower()
+        print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
+        del labels[config['hostname_field']]
 
         host_obj = Host.get_host(hostname)
-        host_obj.set_import_seen()
-        if host_obj.get_labels() == labels:
-            host_obj.set_import_sync()
-            host_obj.set_labels(labels)
-        if host_obj.set_account(account_dict=config):
+        host_obj.update_host(labels)
+        do_save = host_obj.set_account(account_dict=config)
+        if do_save:
             print(f" {ColorCodes.OKGREEN} * {ColorCodes.ENDC} Updated Labels")
             host_obj.save()
-            continue
-        print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
+        else:
+            print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
 
 @cli_mysql.command('import_hosts')
 @click.argument('account')
