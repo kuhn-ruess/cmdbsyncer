@@ -39,14 +39,19 @@ def ldap_import(account):
     base_dn = config['base_dn']
     search_filter = config['search_filter']
     #pylint: disable=consider-using-generator
-    attributes = list([x.strip() for x in config['attributes'].split(',')])
+    attributes = []
+    if config['attributes']:
+        attributes = list([x.strip() for x in config['attributes'].split(',')])
 
     result = connect.search_s(base_dn,
                               scope,
                               search_filter,
                               attributes)
     for _dn, entry in result:
-        print(entry)
+        for key, content in entry.items():
+            print(key)
+            for what in content:
+                print(what)
 
         #hostname = labels['host_hostname'].strip().lower()
         #print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
