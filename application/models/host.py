@@ -129,7 +129,7 @@ class Host(db.Document):
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
-        self.labels=label_dict
+        self.labels=dict({x:str(y) for x, y in label_dict.items()})
         self.cache = {}
 
     def get_labels(self):
