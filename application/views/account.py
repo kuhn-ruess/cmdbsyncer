@@ -93,6 +93,15 @@ class AccountModelView(DefaultModelView):
                 ('search_filter', ""),
                 ('attributes', "memberOf")
             ]
+        elif form.typ.data == 'mssql':
+            default_fields = [
+                ('fields', ""),
+                ('table', ""),
+                ('instance', ""),
+                ('database', ""),
+                ('hostname_field', 'Hostname'),
+                ('driver', "ODBC Driver 18 for SQL Server"),
+            ]
 
 
         if default_fields:
