@@ -254,10 +254,24 @@ def _render_attribute_rewrite(_view, _context, model, _name):
     """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{entry.old_attribute_name}</td>"\
-                 "<td><b>to</b></td>"\
-                f"<td>{entry.new_attribute_name}</td></tr>"
-    html += "</table>"
+        attribute_name = entry.old_attribute_name
+        html += f"<tr><td>{idx}</td>"
+        colspan = 3
+        value = entry.new_value 
+        if value:
+            colspan = 0
+        if not attribute_name:
+            html += f"<td><b>New Attibute</b></td>"\
+                    "<td><b>to</b></td>"\
+                    f"<td>{entry.new_attribute_name}</td>"
+        else:
+            html += f"<td>{attribute_name}</td>"\
+                    "<td><b>to</b></td>"\
+                    f"<td colspan={colspan}>{entry.new_attribute_name}</td>"
+
+        if value:
+            html += f"<td><b>New Value</b></td><td>{value}</td>"
+    html += "</tr></table>"
     return Markup(html)
 
 
