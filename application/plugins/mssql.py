@@ -39,6 +39,8 @@ def mssql_import(account):
     for row in rows:
         labels=dict(zip(config['fields'].split(","),row))
         hostname = labels[config['hostname_field']].strip().lower()
+        if 'rewrite_hostname' in config and config['rewrite_hostname']:
+            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
         print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
         del labels[config['hostname_field']]
         host_obj = Host.get_host(hostname)
