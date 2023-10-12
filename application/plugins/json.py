@@ -3,8 +3,8 @@ JSON Plugin
 """
 #pylint: disable=too-many-arguments, logging-fstring-interpolation
 import json
-import click
 import ast
+import click
 
 import requests
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
@@ -48,8 +48,10 @@ def import_hosts(json_path, hostname_field, account):
         data = json.load(json_file)
         for host in data:
             hostname = host[hostname_field]
-            print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             del host[hostname_field]
+            if 'rewrite_hostname' in account and account['rewrite_hostname']:
+                hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], entry)
+            print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             host_obj = Host.get_host(hostname)
             host_obj.update_host(host)
 
@@ -82,7 +84,8 @@ def import_hosts_json(account):
 
     logger.debug(f"Auth: {auth}")
 
-    response = requests.get(account['address'], headers=headers, auth=auth, timeout=30, verify=False)
+    response = requests.get(account['address'], headers=headers,
+                            auth=auth, timeout=30, verify=False)
     logger.debug(f"Response RAW: {response.text}")
     logger.debug(f"Response Status: {response.status_code}")
     data = response.json()
@@ -91,6 +94,8 @@ def import_hosts_json(account):
     for entry in data[account['data_key']]:
         hostname = entry[account['hostname_field']]
         del entry[account['hostname_field']]
+        if 'rewrite_hostname' in account and account['rewrite_hostname']:
+            hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], entry)
 
         print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
         host_obj = Host.get_host(hostname)

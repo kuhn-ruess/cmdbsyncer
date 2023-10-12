@@ -61,11 +61,13 @@ class AccountModelView(DefaultModelView):
                 ('hostname_field', 'host'),
                 ('delimiter', ';'),
                 ('encoding', 'utf-8'),
+                ('rewrite_hostname', None),
             ]
         elif form.typ.data == 'json':
             default_fields = [
                 ('path', ''),
                 ('hostname_field', 'host'),
+                ('rewrite_hostname', None),
             ]
         elif form.typ.data == 'maintenance':
             default_fields = [
@@ -75,6 +77,7 @@ class AccountModelView(DefaultModelView):
         elif form.typ.data == 'mysql':
             default_fields = [
                 ('hostname_field', ''),
+                ('rewrite_hostname', None),
             ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
@@ -82,6 +85,7 @@ class AccountModelView(DefaultModelView):
                 ('request_headers', '{"Content-Type": "application/json"}'),
                 ('data_key', 'result'),
                 ('hostname_field', 'host'),
+                ('rewrite_hostname', None),
             ]
         elif form.typ.data == 'cmkv2':
             default_fields = [
@@ -92,6 +96,7 @@ class AccountModelView(DefaultModelView):
                 ('base_dn', ""),
                 ('search_filter', ""),
                 ('attributes', "memberOf")
+                ('rewrite_hostname', None),
             ]
         elif form.typ.data == 'mssql':
             default_fields = [
@@ -100,7 +105,8 @@ class AccountModelView(DefaultModelView):
                 ('instance', ""),
                 ('database', ""),
                 ('where', None),
-                ('hostname_field', 'Hostname'),
+                ('hostname_field', 'host'),
+                ('rewrite_hostname', None),
                 ('driver', "ODBC Driver 18 for SQL Server"),
             ]
 

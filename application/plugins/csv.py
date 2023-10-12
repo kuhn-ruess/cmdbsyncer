@@ -85,6 +85,8 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
             for dkey in keys:
                 if not row[dkey]:
                     del row[dkey]
+            if 'rewrite_hostname' in account and account['rewrite_hostname']:
+                hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], row)
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             host_obj = Host.get_host(hostname)
             del row[hostname_field]
@@ -153,6 +155,8 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
                     del row[dkey]
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Got Data for {hostname}")
             del row[hostname_field]
+            if 'rewrite_hostname' in account and account['rewrite_hostname']:
+                hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], row)
             new_attributes[hostname] = row
 
     for host_obj in Host.objects(available=True):

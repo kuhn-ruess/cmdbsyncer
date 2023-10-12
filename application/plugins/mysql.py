@@ -37,6 +37,8 @@ def mysql_import(account):
     for line in all_hosts:
         labels = dict(zip(field_names, line))
         hostname = labels[config['hostname_field']].strip().lower()
+        if 'rewrite_hostname' in config and config['rewrite_hostname']:
+            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
         print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
         del labels[config['hostname_field']]
 
