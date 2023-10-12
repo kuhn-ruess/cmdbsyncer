@@ -40,7 +40,7 @@ From there it would pick the first (0) index, new value would be: 127.0.0.1
 Enter a Pattern with an Match Group
 
 ### Jinja
-Full Power of Jinja2, you can use every Attribute of the host in {{ Brackets }} and manipulate using all Jinja Magic if you wan't 
+Full Power of Jinja2, you can use every Attribute of the host in {{ Brackets }} and manipulate using all Jinja Magic if you wan't. To access the hostname, use {{HOSTNAME}}
 
 ## Create a New Attribute
 If you specify a not existing attribute as "old_attribute_name", it will be created as a new Attribute. Of course,, all Overwrite Options can be used for the value, so you could create a new
