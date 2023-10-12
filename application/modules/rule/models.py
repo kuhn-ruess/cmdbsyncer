@@ -145,11 +145,19 @@ class FilterAction(db.EmbeddedDocument):
 
 #   .-- Attribute Rewrite
 
-modes = [
-  ("", "Don't Use"),
+modes_name = [
+  ("", "Don't Use (Let Old Attribute Name entry if creating a new Attribute)"),
   ("string", "With String Match"),
   ("regex", "With Regex Match"),
   ("split", "With Split Match, Syntax: SEPERATOR:INDEX"),
+  ("jinja", "With Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
+]
+
+modes_value = [
+  ("", "Don't Use"),
+  ("string", "To String"),
+  ("regex", "With Regex"),
+  ("split", "With Split, Syntax: SEPERATOR:INDEX"),
   ("jinja", "With Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
 ]
 class AttributeRewriteAction(db.EmbeddedDocument):
@@ -171,9 +179,9 @@ class AttributeRewriteAction(db.EmbeddedDocument):
 
     """
     old_attribute_name = db.StringField()
-    overwrite_name = db.StringField(choices=modes, default='string')
+    overwrite_name = db.StringField(choices=modes_name, default='string')
     new_attribute_name = db.StringField()
-    overwrite_value = db.StringField(choices=modes, default="None")
+    overwrite_value = db.StringField(choices=modes_value, default="None")
     new_value = db.StringField()
     meta = {
         'strict': False
