@@ -99,6 +99,7 @@ class AccountModelView(DefaultModelView):
                 ('table', ""),
                 ('instance', ""),
                 ('database', ""),
+                ('where', None),
                 ('hostname_field', 'Hostname'),
                 ('driver', "ODBC Driver 18 for SQL Server"),
             ]

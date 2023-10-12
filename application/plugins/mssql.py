@@ -30,7 +30,11 @@ def mssql_import(account):
     connect_str = f'DRIVER={{{config["driver"]}}};SERVER={server};DATABASE={config["database"]};UID={config["username"]};PWD={config["password"]};TrustServerCertificate=YES'
     cnxn = pyodbc.connect(connect_str)
     cursor = cnxn.cursor()
-    cursor.execute(f"select {config['fields']} from {config['table']};")
+    query = f"select {config['fields']} from {config['table']}"
+    if 'where' in config and config['where']:
+        query += f"WHERE {config['where']}"
+    query += ";"
+    cursor.execute(query)
     rows = cursor.fetchall()
     for row in rows:
         labels=dict(zip(config['fields'].split(","),row))
