@@ -27,6 +27,7 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
             old_value = self.attributes.get(attribute_name, "")
             new_attribute_name = False
             if mode := outcome['overwrite_name']:
+                print(1)
                 new_attribute_name = outcome['new_attribute_name']
                 if mode == 'regex':
                     pattern = attribute_name
@@ -52,14 +53,20 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                         except:
                             logger.debug("Cant Split Rewrite Attribute")
                 elif mode == 'jinja':
+                    tpl = jinja2.Template(new_attribute_name)
+                    new_attribute_name = tpl.render(HOSTNAME=self.hostname, **self.attributes)
                     if self.attributes.get(attribute_name):
-                        tpl = jinja2.Template(new_attribute_name)
-                        new_attribute_name = tpl.render(self.attributes)
                         outcomes[f'add_{new_attribute_name}'] = self.attributes[attribute_name]
                         outcomes[f'del_{attribute_name}'] = True
+                    else:
+                        # This can happen when we create a complete new one, 
+                        # there is now old value, and tis is correctly set in the   
+                        # Overwrite Value part
+                        outcomes[f'add_{new_attribute_name}'] = None
 
 
             if value_mode := outcome['overwrite_value']:
+                print(2)
                 if new_attribute_name:
                     # if overwriten before, write overwrite
                     attribute_name = new_attribute_name
@@ -85,9 +92,9 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                         outcomes[f'add_{attribute_name}'] = splited[int(index)]
                     except:
                         logger.debug("Cant Split Value")
-                elif value_mode == 'jinja':
+                elif value_mode == '':
                     tpl = jinja2.Template(new_value)
-                    new_value = tpl.render(self.attributes)
+                    new_value = tpl.render(HOSTNAME=self.hostname, **self.attributes)
                     outcomes[f'add_{attribute_name}'] = new_value
                     print(f"Created {new_value}")
         return outcomes
