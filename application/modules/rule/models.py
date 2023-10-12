@@ -150,7 +150,7 @@ modes = [
   ("string", "With String Match"),
   ("regex", "With Regex Match"),
   ("split", "With Split Match, Syntax: SEPERATOR:INDEX"),
-  ("jinja", "With Jina Template and access to all Hosts Attributes"),
+  ("jinja", "With Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
 ]
 class AttributeRewriteAction(db.EmbeddedDocument):
     """
@@ -158,6 +158,7 @@ class AttributeRewriteAction(db.EmbeddedDocument):
     ------------------
     Name of the attribute to rewrite
     Or Name for the New Attribute based on overwrites
+    Stays Empty if you create a new Attribute
 
     Overwrite Name
     --------------

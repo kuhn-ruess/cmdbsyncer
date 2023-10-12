@@ -17,6 +17,7 @@ class Rule(): # pylint: disable=too-few-public-methods
     rules = []
     name = ""
     attributes = {}
+    hostname = False
 
     def _check_attribute_match(self, condition):
         """
@@ -136,4 +137,5 @@ class Rule(): # pylint: disable=too-few-public-methods
         Handle Return of outcomes.
         """
         self.attributes = attributes
+        self.hostname = db_host.hostname
         return self.check_rule_match(db_host)
