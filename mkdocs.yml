@@ -23,6 +23,7 @@ nav:
         - Conditions: basics/conditions.md
         - Custom Attributes: basics/custom_attributes.md
         - Rewrite Attributes: basics/rewrite_attributes.md
+        - Rewrite Hostnames: basics/rewrite_hostnames.md
         - Filter: basics/filter.md
         - Debug Rules: basics/debug_rules.md
 
