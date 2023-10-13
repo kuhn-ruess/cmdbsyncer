@@ -19,6 +19,7 @@ nav:
       - Principles:
         - Import Systems: basics/import.md
         - Export Systems: basics/export.md
+        - Remove Hosts: basics/maintenance.md
         - Hosts, Labels and Inventory: basics/host_labels_inventory.md
         - Conditions: basics/conditions.md
         - Custom Attributes: basics/custom_attributes.md

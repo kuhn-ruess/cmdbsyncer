@@ -22,4 +22,6 @@ Just the Outcome is special for every rule:
 
 ## Create real Custom Attributes with Rewrites
 
-In the Module-Specific Rewrite Section, it is since Version 3.3 possible to create New labels using Templates. Please refer to the [Rewrite Attributes](rewrite_attributes.md)
+In the Module-Specific Rewrite Section, it is since Version 3.3 possible to create New labels using Templates. Please refer to the [Rewrite Attributes](rewrite_attributes.md) This is more powerful as this global option.
+
+
