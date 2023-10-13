@@ -1,10 +1,11 @@
 
 """
-Ansible Inventory Modul
+Ansible Checkmk Modul
 """
 from mongoengine.errors import DoesNotExist
 from application.modules.checkmk.models import CheckmkSite
 from application.modules.plugin import Plugin
+import jinja2
 
 class SyncSites(Plugin):
     """
@@ -19,12 +20,18 @@ class SyncSites(Plugin):
         inventory = {}
         if site.settings_master.server_user:
             inventory['ansible_user'] =  site.settings_master.server_user
+
+
+        file_template = jinja2.Template(site.settings_master.cmk_version_filename,)
+        filename = file_template.render(CMK_VERSION=site.settings_master.cmk_version,
+                                        CMK_EDITION=site.settings_master.cmk_edition)
+
         inventory.update({
             'cmk_site': site.name,
             'inital_password': site.settings_master.inital_password,
             'cmk_edition': site.settings_master.cmk_edition,
             'cmk_version': site.settings_master.cmk_version,
-            'cmk_version_filename': site.settings_master.cmk_version_filename,
+            'cmk_version_filename': filename,
             'subscription_username': site.settings_master.subscription_username,
             'subscription_password': site.settings_master.subscription_password,
         })
