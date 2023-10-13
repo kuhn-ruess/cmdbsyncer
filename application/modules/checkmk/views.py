@@ -3,6 +3,7 @@ Checkmk Rule Views
 """
 from markupsafe import Markup
 from wtforms import HiddenField, StringField
+from wtforms.validators import ValidationError
 from flask import request
 from flask_admin import expose
 from flask_admin.form import rules
@@ -12,7 +13,7 @@ from flask_login import current_user
 from application.views.default import DefaultModelView
 
 from application.modules.rule.views import RuleModelView, divider, _render_full_conditions
-from application.modules.checkmk.models import action_outcome_types
+from application.modules.checkmk.models import action_outcome_types, CheckmkSite
 from application.plugins.checkmk import _load_rules
 from application.modules.checkmk.syncer import SyncCMK2
 
@@ -345,6 +346,13 @@ class CheckmkMngmtRuleView(RuleModelView):
 
         return super().on_model_change(form, model, is_created)
 
+class CheckmkSiteView(DefaultModelView):
+    """
+    Checkmk Site Management Config
+    """
+
+
+
 class CheckmkSettingsView(DefaultModelView):
     """
     Checkmk Server Settings View
@@ -355,6 +363,14 @@ class CheckmkSettingsView(DefaultModelView):
         'subscription_username',
         'subscription_password',
     ]
+
+    def on_model_delete(self, model):
+        """
+        Prevent deletion of Sites with Assignes configs
+        """
+        for site in CheckmkSite.objects():
+            if site.settings_master == model:
+                raise ValidationError(f"Can't delete: Still used by a Siteconfig {site.name}")
 
 class CheckmkFolderPoolView(DefaultModelView):
     """

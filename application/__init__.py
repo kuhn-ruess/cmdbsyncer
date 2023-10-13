@@ -139,9 +139,9 @@ admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", cat
 
 admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
-from application.modules.checkmk.views import CheckmkSettingsView
+from application.modules.checkmk.views import CheckmkSettingsView, CheckmkSiteView
 admin.add_view(CheckmkSettingsView(CheckmkSettings, name="Server Settings", category="Checkmk Server"))
-admin.add_view(DefaultModelView(CheckmkSite, name="Site Settings", category="Checkmk Server"))
+admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Checkmk Server"))
 
 admin.add_sub_category(name="Business Intelligence", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRule
