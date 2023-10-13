@@ -109,8 +109,8 @@ rule_types = [
 #.
 #   .-- Filter
 filter_actions = [
-    ('whitelist_attribute', "Whitelist Attribute"),
-    ('whitelist_attribute_value', "Whitelist Attribute with Value"),
+    ('whitelist_attribute', "Whitelist Attribute (Use e.g. NAME* for everyhing starting with NAME)"),
+    ('whitelist_attribute_value', "Whitelist Attribute with Value (Use of Wildcard like in Attribute with *)"),
     ('ignore_hosts', "Ignore Matching Hosts"),
 ]
 class FilterAction(db.EmbeddedDocument):
