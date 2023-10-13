@@ -29,9 +29,11 @@ When you create a rule, you find the following options:
 | Server User | User for Ansible to connect to the Server. Sudo needs to be possibe |
 | CMK Version | Version's String like 2.1.0p19 |
 | CMK Edition | Enterprise or RAW |
-|CMK Version Filename | Filename like found on the cmk download server, example: check-mk-enterprise-2.1.0p19_0.bullseye_amd64.deb |
+|CMK Version Filename | Filename like found on the cmk download server, example: check-mk-enterprise-{{CMK_VERSION}}_0.bullseye_amd64.deb |
 | Inital Password | This password will be set for new sites |
 |Subscription Username/ Password | Your Checkmk Subscription Account |
+
+Note: For the CMK Version Filename, you can use the Placeholders {{CMK_VERSION}} and {{CMK_EDITION}}
 
 ### CMK Sever Sites
 **Rules →Checkmk →CMK Server Sites** <br>
