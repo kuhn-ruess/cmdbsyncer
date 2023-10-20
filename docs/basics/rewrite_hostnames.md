@@ -6,7 +6,7 @@ The renaming of Hostnames must happen on import. For most of the integrated plug
 Would the host have an Attribute dns, a rewrite could look like this:
 
 <pre>
-{{HOSTNAME}}.{dns}
+{{HOSTNAME}}.{{dns}}
 </pre>
 
 ![](img/rewrite_hostname.png)
