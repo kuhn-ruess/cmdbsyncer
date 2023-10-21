@@ -16,7 +16,11 @@ Using the Import, or the Inventory functions, the Hosts must have the Attributes
 ## The Group's Rule
 First we create the Rule for creating the Groups.
 **Rules → Checkmk → CMK Groups Management**<br>
-Since the information is clean, we do not need a Regex. In case of Regex you would need to define one match with round brackets. 
+Since the information is clean, you don't need to fill the Rewrite or the Rewrite Title.
+But if you want to change something, could do for example:
+Rewrite: cg_{{name|lower}}
+Rewrite Title: {{name|capitalize}}
+Note: The Screenshot show Regex instead of the new Rewrite Fields
 
 ![](img/recipe_cg_2.png)
 
