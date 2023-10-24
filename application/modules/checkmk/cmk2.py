@@ -91,7 +91,15 @@ class CMK2(Plugin):
             ]
 
             if response.status_code != 200:
-                response_json = response.json()
+                try:
+                    response_json = response.json()
+                except:
+                    # pylint: disable=raise-missing-from
+                    # Wired but on purpose:
+                    # API 404 has JSON Response, every webserver 404 has not
+                    if response.status_code == 404:
+                        raise CmkException(f"Page not Found: {url}")
+                    raise CmkException("Cant parse Checkmk Response")
                 logger.debug(f"Response Json {response_json}")
                 if response_json['title'] not in error_whitelist:
                     raise CmkException(f"{response_json['title']} {response_json.get('detail')}")

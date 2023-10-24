@@ -14,6 +14,7 @@ from application.modules.checkmk.inits import (
     bake_and_sign_agents,
     inventorize_hosts,
     show_missing,
+    export_users,
 )
 
 
@@ -29,7 +30,7 @@ def cli_missing_hosts(account):
     _./cmdbsyncer checkmk show_missing_hosts SITEACCOUNT_
 
     Args:
-        account (string): Name Account Config
+        account (string): Name Checkmk Account Config
     """
     show_missing(account)
 #.
@@ -47,7 +48,7 @@ def cli_export_rules(account):
 
 
     Args:
-        account (string): Name Account Config
+        account (string): Name Checkmk Account Config
     """
     export_rules(account)
 
@@ -86,7 +87,7 @@ def cli_activate_changes(account):
 
 
     Args:
-        account (string): Name Account Config
+        account (string): Name CHeckmk Account Config
     """
     activate_changes(account)
 
@@ -106,7 +107,7 @@ def cli_bake_and_sign_agents(account):
 
 
     Args:
-        account (string): Name Account Config
+        account (string): Name Checkmk Account Config
     """
     bake_and_sign_agents(account)
 
@@ -125,7 +126,7 @@ def cli_inventorize_hosts(account):
     _./cmdbsyncer checkmk inventorize_hosts SITEACCOUNT_
 
     Args:
-        account (string): Name Account Config
+        account (string): Name Checkmk Account Config
     """
     inventorize_hosts(account)
 #.
@@ -142,11 +143,10 @@ def cli_export_bi_rules(account):
 
 
     Args:
-        account (string): Name Account Config
+        account (string): Name Checkmk Account Config
     """
     export_bi_rules(account)
 
-#.
 @cli_cmk.command('export_bi_aggregations')
 @click.argument("account")
 def cli_export_bi_aggregations(account):
@@ -158,10 +158,25 @@ def cli_export_bi_aggregations(account):
 
 
     Args:
-        account (string): Name Account Config
+        account (string): Name Checkmk Account Config
     """
     export_bi_aggregations(account)
 #.
+
+@cli_cmk.command('export_users')
+@click.argument("account")
+def cli_cmk_users(account):
+    """
+    Export configured Users and their settings to Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_users SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_users(account)
 
 register_cronjob('Checkmk: Export Rules', export_rules)
 register_cronjob('Checkmk: Export Groups', export_groups)
@@ -170,3 +185,4 @@ register_cronjob('Checkmk: Export BI Aggregations', export_bi_aggregations)
 register_cronjob('Checkmk: Inventorize', inventorize_hosts)
 register_cronjob('Checkmk: Activate Changes', activate_changes)
 register_cronjob('Checkmk: Bake and Sign Agents', bake_and_sign_agents)
+register_cronjob('Checkmk: Export Users', export_users)

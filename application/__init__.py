@@ -133,9 +133,10 @@ from application.modules.checkmk.views import CheckmkMngmtRuleView
 admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
                                     name="Checkmk Rules Management", category="Checkmk"))
 
-from application.modules.checkmk.models import CheckmkFolderPool
-from application.modules.checkmk.views import CheckmkFolderPoolView
-admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
+from application.modules.checkmk.models import CheckmkUserMngmt
+from application.modules.checkmk.views import CheckmkUserMngmtView
+admin.add_view(CheckmkUserMngmtView(CheckmkUserMngmt, name="Checkmk User", category="Checkmk"))
+
 
 admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
@@ -148,6 +149,10 @@ from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRu
 from application.modules.checkmk.views import CheckmkBiRuleView
 admin.add_view(CheckmkBiRuleView(CheckmkBiAggregation, name="BI Aggregation", category="Business Intelligence"))
 admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Business Intelligence"))
+
+from application.modules.checkmk.models import CheckmkFolderPool
+from application.modules.checkmk.views import CheckmkFolderPoolView
+admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkObjectCache
 from application.modules.checkmk.views import CheckmkCacheView

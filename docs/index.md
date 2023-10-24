@@ -24,12 +24,15 @@ Main Goal is the complete Organization of the Hosts based on CMDB Systems
 
 ### Checkmk
 * Manges full Host Lifecycle (creation, labels, folders, deletion)
+* Sync and Update all possible Host Attributes
 * Full management of Checkmk Folders or even own Targets (Target must not be Checkmk, also Checkmk can be the source instead of a CMDB).
 * Folder Pool Feature to split big amounts of Hosts automatticly between folders (and therfore sites).
 * Creation of Host-, Contact- and Service Groups
 * Integrated options to prevent to many Updates in Checkmk
 * Command to Active Configuration
 * Command to Bake and Sign Agents
+* Command to Sync BI Aggregations
+* Management of Checkmk (Fallback) users (Create/ Delete/ Reset Password/ Disable Login)
 * Inventory for Host Attributes (need e.g. for Ansible, like on which site is server on)
 
 ### Ansible

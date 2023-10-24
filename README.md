@@ -29,12 +29,14 @@ This is runs a Development Version which you can use to test everthing
 ## Modules
 ### Checkmk
 - Manges full Host Lifecycle (creation, labels, folders, deletion)
+- Sync and Update all possible Host Attributes
 - Full management of Checkmk Folders
  or even own Targets (Target must not be Checkmk, also Checkmk can be the source instead of a CMDB).
 - Folder Pool Feature to split big amounts of Hosts automatticly between folders (and therfore sites).
 - Creation of Host-, Contact- and Service Groups
 - Creation of all types of Checkmk Rules
 - Creation of BI Rules
+- Management of Checkmk (Fallback) users (Create/ Delete/ Reset Password/ Disable Login)
 - Integrated options to prevent to many Updates in Checkmk
 - Command to Active Configuration
 - Command to Bake and Sign Agents

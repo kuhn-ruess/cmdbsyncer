@@ -241,6 +241,28 @@ class CheckmkRuleMngmt(db.Document):
     }
 
 #.
+#   .-- Checkmk User Management
+class CheckmkUserMngmt(db.Document):
+    """
+    Manage Checkmk Users
+    """
+    user_id = db.StringField()
+    full_name = db.StringField()
+    email = db.StringField()
+    pager_address = db.StringField()
+
+    roles = db.ListField(db.StringField(), default=['admin'])
+    contact_groups = db.ListField(db.StringField(), default=['all'])
+
+    password = db.StringField()
+    overwrite_password = db.BooleanField()
+    force_passwort_change = db.BooleanField()
+    disable_login = db.BooleanField()
+    remove_if_found = db.BooleanField()
+
+    disabled = db.BooleanField(default=False)
+
+#.
 #   .-- Folder Pools
 class CheckmkFolderPool(db.Document):
     """

@@ -60,20 +60,16 @@ def get_host_debug(hostname):
     Get Output for Host Debug Page
     """
 
-    rules = _load_rules()
+    debug_rules = _load_rules()
 
     syncer = SyncCMK2()
-    syncer.filter = rules['filter']
+    syncer.filter = debug_rules['filter']
 
-    syncer.rewrite = rules['rewrite']
+    syncer.rewrite = debug_rules['rewrite']
 
-    syncer.actions = rules['actions']
+    syncer.actions = debug_rules['actions']
 
     output = {}
-    #'Filter Rules': rules['filter'],
-    #'Rewrite Rules': rules['rewrite'],
-    #'Action Rules': rules['actions'],
-    #}
 
     try:
         db_host = Host.objects.get(hostname=hostname)
@@ -153,7 +149,7 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                f"<tr><th>Folder Index</th><td>{rule.folder_index}</td></tr>" \
                f"<tr><th>Comment</th><td>{rule.comment}</td></tr>" \
                f"<tr><th>Value Template</th><td>{rule.value_template}</td></tr>" \
-               f"<tr><th>Condition Label Template</th><td>{rule.condition_label_template}</td></tr>"\
+               f"<tr><th>Condition Label Tmple</th><td>{rule.condition_label_template}</td></tr>"\
                f"<tr><th>Condition Host</th><td>{rule.condition_host}</td></tr>"\
                "</table>"\
                "</td></tr>"
@@ -351,6 +347,16 @@ class CheckmkSiteView(DefaultModelView):
     Checkmk Site Management Config
     """
 
+
+class CheckmkUserMngmtView(DefaultModelView):
+    """
+    Checkmk User Management
+    """
+
+    column_exclude_list = [
+        'password', 'email',
+        'pager_address'
+    ]
 
 
 class CheckmkSettingsView(DefaultModelView):
