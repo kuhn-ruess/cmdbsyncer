@@ -139,6 +139,7 @@ class SyncConfiguration(CMK2):
                     if rule['condition'] == cmk_condition and cmk_value == check_value:
                         rule_found = True
                         # Remove from list, so that it not will be created in the next step
+                        # pylint: disable=unnecessary-dict-index-lookup
                         rulsets_by_type[ruleset_name].remove(rule)
 
                 if not rule_found: # Not existing any more
@@ -223,7 +224,8 @@ class SyncConfiguration(CMK2):
                         new_group_title = rewrite_title_tpl.render(name=key, result=key)
                     new_group_title = self.replace(new_group_title, replace_exceptions).strip()
 
-                    if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
+                    if new_group_name and (new_group_title, new_group_name) \
+                                                            not in groups[group_type]:
                         groups[group_type].append((new_group_title, new_group_name))
             elif outcome.foreach_type == 'label':
                 if outcome.foreach.endswith('*'):
@@ -244,7 +246,8 @@ class SyncConfiguration(CMK2):
                     if rewrite_title:
                         new_group_title = rewrite_title_tpl.render(name=value, result=value)
                     new_group_title = self.replace(new_group_title, replace_exceptions).strip()
-                    if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
+                    if new_group_name and (new_group_title, new_group_name) \
+                                                        not in groups[group_type]:
                         groups[group_type].append((new_group_title, new_group_name))
 
         print(f"\n{CC.HEADER}Start Sync{CC.ENDC}")
@@ -282,7 +285,11 @@ class SyncConfiguration(CMK2):
 
 
             for cmk_group in cmks_groups[0]['value']:
-                cmk_name = cmk_group['id']
+                if 'id' in cmk_group:
+                    cmk_name = cmk_group['id']
+                else:
+                    # Support Checkmk 2.1x
+                    cmk_name = cmk_group['href'].split('/')[-1]
                 cmk_title = cmk_group['title']
                 # From Cache we get Lists not tuple
                 if [cmk_title, cmk_name] in group_list:
