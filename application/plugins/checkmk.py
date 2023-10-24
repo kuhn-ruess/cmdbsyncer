@@ -195,6 +195,14 @@ def debug_host(hostname):
     for additional_attr in actions.get('attributes',[]):
         if attr_value := attributes['all'].get(additional_attr):
             additional_attributes[additional_attr] = attr_value
+
+    if 'remove_attributes' in actions:
+        # Do not show Removed Attributes in the Custom Attributes list
+        for del_attr in additional_attributes['remove_attributes']:
+            try:
+                del additional_attributes[del_attr]
+            except KeyError:
+                pass
     attribute_table("Custom Attributes", additional_attributes)
 
     # We need to save the host,
