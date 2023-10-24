@@ -18,7 +18,7 @@
     method: GET
     validate_certs: no
     headers:
-      Authorization: "Bearer {{ cmk_user }} {{ cmk_password }}"
+      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
       Accept: "application/octet-stream"
   when: cmk_install_agent | bool
   register: checkmk_agent_download_state

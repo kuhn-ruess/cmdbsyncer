@@ -7,7 +7,7 @@
     method: POST
     validate_certs: no
     headers:
-      Authorization: "Bearer {{ cmk_user }} {{ cmk_password }}"
+      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
       Accept: "application/json"
     return_content: False
     body: "{\"host_name\": \"{{ inventory_hostname }}\", \"mode\": \"fix_all\" }"
