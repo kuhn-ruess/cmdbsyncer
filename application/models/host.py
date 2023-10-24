@@ -209,6 +209,7 @@ class Host(db.Document):
 
         """
         if not account_id and not account_dict:
+            print(2)
             raise ValueError("Either Set account_id or pass account_dict")
 
         # That is the legacy behavior: Raise if not equal
@@ -220,8 +221,9 @@ class Host(db.Document):
             account_id = account_dict['id']
             account_name = account_dict['name']
 
-        # Everthing Match alread
-        if self.source_account_id and self.source_account_id == account_id:
+        # Everthing Match already, make it short
+        if self.source_account_id and self.source_account_id == account_id \
+                            and self.source_account_name == account_name:
             return True
 
         # Nothing was set yet
