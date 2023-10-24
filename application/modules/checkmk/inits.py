@@ -133,7 +133,7 @@ def show_missing(account):
     cmk = CMK2()
     cmk.config = config
 
-    local_hosts = list([x.hostname for x in Host.objects()])
+    local_hosts = [x.hostname for x in Host.objects()]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
           f"{ColorCodes.UNDERLINE}{account}{ColorCodes.ENDC}")
     url = "domain-types/host_config/collections/all?effective_attributes=false"
@@ -153,7 +153,7 @@ def bake_and_sign_agents(account):
     if account_config['typ'] != 'cmkv2':
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
         return False
-    if not "backery_key_id" in account_config and not "bakery_passphrase" in account_config:
+    if "backery_key_id" not in account_config and "bakery_passphrase" not in account_config:
         print(f"{ColorCodes.FAIL} Please set baker_key_id and "\
               f"bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
         return False
@@ -207,6 +207,7 @@ def activate_changes(account):
         print("Changes activated")
     except CmkException as errors:
         print(errors)
+    return True
 #.
 #   .-- Export Groups
 def export_groups(account, test_run=False):
@@ -246,6 +247,24 @@ def export_rules(account):
             actions.rules = CheckmkRuleMngmt.objects(enabled=True)
             syncer.actions = actions
             syncer.export_cmk_rules()
+        else:
+            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+#.
+#   . Export Users
+def export_users(account):
+    """
+    Export configured Users to Checkmk
+    """
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            syncer = SyncConfiguration()
+            syncer.account_id = str(target_config['_id'])
+            syncer.account_name = target_config['name']
+            syncer.config = target_config
+            syncer.export_users()
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
