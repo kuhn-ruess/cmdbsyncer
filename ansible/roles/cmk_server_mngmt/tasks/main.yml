@@ -1,11 +1,11 @@
 
-- name: "Check if we have the Installation File"
+- name: "Check if we have the Installation File local"
   stat:
     path: /tmp/{{ cmk_version_filename }}
   register: installation_file
   delegate_to: localhost
 
-- name: "Download needed Checkmk Version"
+- name: "Download Installation File from Checkmk Server"
   ansible.builtin.uri:
     url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_version_filename}}"
     dest: "/tmp/{{ cmk_version_filename }}"
@@ -16,7 +16,7 @@
   when: installation_file.stat.exists != True
   delegate_to: localhost
 
-- name: "Check if Version is already installed"
+- name: "Check if Version is already installed on the Servers"
   ansible.builtin.shell: |
     set -o pipefail
     omd versions | egrep -o {{ cmk_version }}
@@ -26,7 +26,7 @@
   changed_when: false
   ignore_errors: yes
 
-- name: "Copy Installation File to Server"
+- name: "Copy Installation File to Servers"
   ansible.builtin.copy:
     src: "/tmp/{{ cmk_version_filename }}"
     dest: "/tmp/{{ cmk_version_filename }}"
@@ -35,7 +35,7 @@
 - include_tasks: "{{ ansible_os_family }}-tasks.yml"
 
 
-- name: "Check Site version of {{ cmk_site }}"
+- name: "Check Site versions"
   become: True
   ansible.builtin.shell: |
     set -o pipefail
@@ -46,7 +46,7 @@
   register: server_site_version
   ignore_errors: True
 
-- name: "Create Site {{ cmk_site }}"
+- name: "Create needed Sites on Servers"
   become: True
   ansible.builtin.shell: |
     set -o pipefail
@@ -58,7 +58,7 @@
   when: server_site_version.stderr.startswith("No such site")
   register: site_just_installed
 
-- name: "Update Site {{ cmk_site }} to {{ cmk_version }}.{{ cmk_edition }}"
+- name: "Update Sites to {{ cmk_version }}.{{ cmk_edition }}"
   become: True
   ansible.builtin.shell: |
     omd stop {{ cmk_site }}
