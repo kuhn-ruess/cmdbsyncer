@@ -53,6 +53,8 @@ class CMK2(Plugin):
         address = self.config['address']
         username = self.config['username']
         password = self.config['password']
+        if params.startswith('/'):
+            params = params[1:]
         url = f'{address}/check_mk/api/1.0/{params}'
         headers = {
             'Authorization': f"Bearer {username} {password}"
@@ -65,6 +67,7 @@ class CMK2(Plugin):
             #pylint: disable=missing-timeout
             logger.debug(f"Request ({method.upper()}) to {url}")
             logger.debug(f"Request Body: {data}")
+            logger.debug(f"Request Headers: {headers}")
             if method == 'get':
                 response = requests.get(url,
                                         headers=headers,
