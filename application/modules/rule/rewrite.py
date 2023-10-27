@@ -16,18 +16,17 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
     name = "Rewrite"
     rewrite_cache = {}
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, rule, outcomes):
         """
         Rewrite matching Attribute
         """
-        # pylint: disable=too-many-nested-blocks
-        for outcome in rule_outcomes:
+        # pylint: disable=too-many-nested-blocks, too-many-statements
+        for outcome in rule:
             attribute_name = outcome['old_attribute_name']
             # Save inital Attribute value too have it even the attribute name changes
             old_value = self.attributes.get(attribute_name, "")
             new_attribute_name = False
             if mode := outcome['overwrite_name']:
-                print(1)
                 new_attribute_name = outcome['new_attribute_name']
                 if mode == 'regex':
                     pattern = attribute_name
@@ -59,14 +58,13 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                         outcomes[f'add_{new_attribute_name}'] = self.attributes[attribute_name]
                         outcomes[f'del_{attribute_name}'] = True
                     else:
-                        # This can happen when we create a complete new one, 
-                        # there is now old value, and tis is correctly set in the   
+                        # This can happen when we create a complete new one,
+                        # there is now old value, and tis is correctly set in the
                         # Overwrite Value part
                         outcomes[f'add_{new_attribute_name}'] = None
 
 
             if value_mode := outcome['overwrite_value']:
-                print(2)
                 if new_attribute_name:
                     # if overwriten before, write overwrite
                     attribute_name = new_attribute_name
@@ -96,5 +94,4 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                     tpl = jinja2.Template(new_value)
                     new_value = tpl.render(HOSTNAME=self.hostname, **self.attributes)
                     outcomes[f'add_{attribute_name}'] = new_value
-                    print(f"Created {new_value}")
         return outcomes
