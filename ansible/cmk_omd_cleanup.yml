@@ -1,0 +1,20 @@
+---
+# This Playbook is suplied with information by the cmdb_syncer
+# See Docu there about how to use
+
+- hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check SSH Access
+      command: echo "Access working"
+      become: true
+      run_once: true
+      tags:
+        - always
+
+    - name: "Cleanup old CMK Installations"
+      become: True
+      ansible.builtin.shell: |
+        omd cleanup
+      args:
+        executable: /bin/bash
