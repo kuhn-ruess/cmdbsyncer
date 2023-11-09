@@ -49,6 +49,8 @@ def ldap_import(account):
                               attributes)
     for _dn, entry in result:
         labels = {}
+        if not isinstance(entry, dict):
+            continue
         for key, content in entry.items():
             content = content[0].decode(config['encoding'])
             if key  == config['hostname_field']:
