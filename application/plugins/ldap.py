@@ -50,7 +50,6 @@ def ldap_import(account):
     for _dn, entry in result:
         labels = {}
         for key, content in entry.items():
-            key = key.decode(config['encoding'])
             content = content[0].decode(config['encoding'])
             if key  == config['hostname_field']:
                 hostname = content
@@ -60,6 +59,7 @@ def ldap_import(account):
         print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
         host_obj = Host.get_host(hostname)
         do_save = host_obj.set_account(account_dict=config)
+        host_obj.update_host(labels)
         if do_save:
             print(f" {ColorCodes.OKGREEN} * {ColorCodes.ENDC} Updated Labels")
             host_obj.save()
