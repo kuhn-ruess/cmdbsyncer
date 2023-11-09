@@ -48,23 +48,20 @@ def ldap_import(account):
                               search_filter,
                               attributes)
     for _dn, entry in result:
+        labels = {}
         for key, content in entry.items():
-            print(key)
-            for what in content:
-                print(what)
+            if key  == config['hostname_field']:
+                hostname = content[0]
+            else:
+                labels[key] = content[0]
 
-        #hostname = labels['host_hostname'].strip().lower()
-        #print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
-        #labels = dict(zip(field_names, line))
-        #del labels['host_hostname']
-
-        #host_obj = Host.get_host(hostname)
-        #do_save = host_obj.set_account(account_dict=config)
-        #if do_save:
-        #    print(f" {ColorCodes.OKGREEN} * {ColorCodes.ENDC} Updated Labels")
-        #    host_obj.save()
-        #else:
-        #    print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
+        host_obj = Host.get_host(hostname)
+        do_save = host_obj.set_account(account_dict=config)
+        if do_save:
+            print(f" {ColorCodes.OKGREEN} * {ColorCodes.ENDC} Updated Labels")
+            host_obj.save()
+        else:
+            print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
 
 @cli_ldap.command('import_hosts')
 @click.argument('account')

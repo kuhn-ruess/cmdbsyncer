@@ -96,6 +96,7 @@ class AccountModelView(DefaultModelView):
                 ('base_dn', ""),
                 ('search_filter', ""),
                 ('attributes', "memberOf"),
+                ('hostname_field', 'host'),
                 ('rewrite_hostname', None),
             ]
         elif form.typ.data == 'mssql':
