@@ -3,9 +3,12 @@
 Handle Rule Matching
 """
 # pylint: disable=import-error
+# pylint: disable=logging-fstring-interpolation
 from rich.console import Console
 from rich.table import Table
 from rich import box
+
+from application import logger
 
 from application.modules.rule.match import match
 
@@ -18,6 +21,8 @@ class Rule(): # pylint: disable=too-few-public-methods
     name = ""
     attributes = {}
     hostname = False
+    db_host = False
+    cache_name = False
 
     def _check_attribute_match(self, condition):
         """
@@ -136,6 +141,17 @@ class Rule(): # pylint: disable=too-few-public-methods
         """
         Handle Return of outcomes.
         """
+        cache = self.__class__.__qualname__
+        if self.cache_name:
+            cache = self.cache_name
+        if cache in db_host.cache:
+            logger.debug(f"Using Rule Cache Cache for {db_host.hostname}")
+            return db_host.cache[cache]
+
         self.attributes = attributes
         self.hostname = db_host.hostname
-        return self.check_rule_match(db_host)
+        self.db_host = db_host
+        rules = self.check_rule_match(db_host)
+        db_host.cache[cache] = rules
+        db_host.save()
+        return rules

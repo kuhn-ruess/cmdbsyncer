@@ -28,9 +28,11 @@ def _load_rules():
     Cache all needed Rules for operation
     """
     attribute_filter = Filter()
+    attribute_filter.cache_name = "checkmk_filter"
     attribute_filter.rules = CheckmkFilterRule.objects(enabled=True).order_by('sort_field')
 
     attribute_rewrite = Rewrite()
+    attribute_rewrite.cache_name = 'checkmk_rewrite'
     attribute_rewrite.rules = \
                     CheckmkRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
 

@@ -2,6 +2,7 @@
 Alle Stuff shared by the plugins
 """
 #pylint: disable=too-few-public-methods
+#pylint: disable=logging-fstring-interpolation
 
 from application import logger
 from application.modules.custom_attributes.models import CustomAttributeRule as \
@@ -35,9 +36,10 @@ class Plugin():
         Return Host Attributes or False if Host should be ignored
         """
         # Get Attributes
+        cache += "_hostattribute"
         db_host.cache.setdefault(cache, {})
         if 'attributes' in db_host.cache[cache]:
-            logger.debug(f"Using Cache for {db_host.hostname}")
+            logger.debug(f"Using Attribute Cache for {db_host.hostname}")
             if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
                 return False
             return db_host.cache[cache]['attributes']

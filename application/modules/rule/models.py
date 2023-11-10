@@ -39,7 +39,7 @@ class FullCondition(db.EmbeddedDocument):
 
     Attribute Matches
     -----------------
-    You need to enter the Attribute Key and the Attribute Value 
+    You need to enter the Attribute Key and the Attribute Value
     together with a condition type.
     Negate will match everything not matching your expression.
 
@@ -146,7 +146,7 @@ class FilterAction(db.EmbeddedDocument):
 #   .-- Attribute Rewrite
 
 modes_name = [
-  ("", "Don't Use (Let Old Attribute Name entry if creating a new Attribute)"),
+  ("", "Don't Use (Set  old attribute anyway to create a new custom attribute)"),
   ("string", "With String Match"),
   ("regex", "With Regex Match"),
   ("split", "With Split Match, Syntax: SEPERATOR:INDEX"),
