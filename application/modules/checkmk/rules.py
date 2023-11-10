@@ -3,6 +3,7 @@
 Checkmk Rules
 """
 #pylint: disable=import-error
+import jinja2
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
@@ -107,7 +108,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             if outcome['action'] == 'custom_attribute':
                 new_key, new_value = outcome['action_param'].split(':')
                 hostname = self.db_host.hostname
-                new_value = new_value.replace('{{hostname}}', hostname)
+                new_value = new_value.replace('{{hostname}}', hostname) # Legacy, Removed in 4.0
+                tpl = jinja2.Template(new_value)
+                new_value = tpl.render(HOSTNAME=hostname, **self.attributes)
                 if new_value.lower() in ['none', 'false']:
                     outcomes['remove_attributes'].append(new_key)
                 else:
