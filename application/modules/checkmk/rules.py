@@ -77,9 +77,13 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             outcomes.setdefault('custom_attributes', [])
             outcomes.setdefault('remove_attributes', [])
             outcomes.setdefault('create_cluster', [])
+            outcomes.setdefault('dont_move', False)
 
             if outcome['action'] == 'move_folder':
                 outcomes['move_folder'] += self.format_foldername(outcome['action_param'])
+
+            if outcome['action'] == 'dont_move':
+                outcomes['dont_move'] = True
 
             if outcome['action'] == 'folder_pool':
                 self.found_poolfolder_rule = True

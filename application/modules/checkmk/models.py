@@ -37,6 +37,7 @@ action_outcome_types = [
     ("attribute", "Create Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
     ("custom_attribute", "Create Custom Checkmk Attribute: Set key:value, Placeholders: {{hostname}}"),
     ("create_cluster", "Create Cluster. Specify Tags with Nodes as Wildcard (*) and or Comma separated"),
+    ("dont_move", "Don't Move host to another Folder after inital creation"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
@@ -80,6 +81,11 @@ class CheckmkRuleOutcome(db.EmbeddedDocument):
     their Names. You can add the Attributes comma seperated, and use * as Wildcard add the
     end of the Name. See also the [Documentation](create_cluster.md).
 
+
+    ### Don't Move hosts
+    Host will be created matching the Folder Rules, but not moved anymore.
+    When something changes like Data in the CMDB, or he is moved manual in WATO,
+    the move operation is skipped on export.
     """
     action = db.StringField(choices=action_outcome_types)
     action_param = db.StringField()
