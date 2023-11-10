@@ -30,7 +30,6 @@ class BaseConfig():
     PASSWD_SPECIAL_NEEDED = 3
 
     BOOTSTRAP_SERVE_LOCAL = True
-    USE_CACHE = True
 
     REPLACERS = [
       (' ', '_'),
