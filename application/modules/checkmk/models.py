@@ -312,6 +312,8 @@ class CheckmkRewriteAttributeRule(db.Document):
 editions = [
     ('cee', "Checkmk Enterprise Edition"),
     ('cre', "Checkmk RAW Edition"),
+    ('cce', "Checkmk Cloud Edition"),
+    ('cme', "Checkmk MSP Edition"),
 
 ]
 class CheckmkSettings(db.Document):
