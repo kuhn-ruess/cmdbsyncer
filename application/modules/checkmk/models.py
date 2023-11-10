@@ -35,7 +35,7 @@ action_outcome_types = [
     ("tag_as_folder", "Use Attribute Name of given Attribute Value as Folder"),
     ("folder_pool", "Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute", "Create Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
-    ("custom_attribute", "Create Custom Checkmk Attribute: Set key:value, Placeholders: {{hostname}}"),
+    ("custom_attribute", "Create Custom Checkmk Attribute: Set key:value, Placeholders: {{HOSTNAME}} and all Host Attributes in Jinja Syntax"),
     ("create_cluster", "Create Cluster. Specify Tags with Nodes as Wildcard (*) and or Comma separated"),
     ("dont_move", "Don't Move host to another Folder after inital creation"),
 ]
