@@ -86,10 +86,14 @@ class SyncCMK2(CMK2):
             synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id
 
+            dont_move_host = next_actions.get('dont_move', False)
+
             folder = '/'
 
             if 'move_folder' in next_actions:
                 # Get the Folder where we move to
+                # We need that even dont_move is set, because could be for the
+                # inital creation
                 folder = self.replace(next_actions['move_folder'], exceptions=['/'])
 
             cluster_nodes = [] # if true, we have a cluster
@@ -144,7 +148,8 @@ class SyncCMK2(CMK2):
                 cmk_host = cmk_hosts[db_host.hostname]
                 # Update if needed
                 self.update_host(db_host, cmk_host, folder,
-                                labels, additional_attributes, remove_attributes)
+                                labels, additional_attributes, remove_attributes,
+                                dont_move_host)
                 if cluster_nodes:
                     cmk_cluster = cmk_host['extensions']['cluster_nodes']
                     cluster_updates.append((db_host, cmk_cluster, cluster_nodes))
@@ -290,7 +295,8 @@ class SyncCMK2(CMK2):
 #.
 #   .-- Update Host
     def update_host(self, db_host, cmk_host, folder, \
-                    labels, additional_attributes, remove_attributes):
+                    labels, additional_attributes, remove_attributes, \
+                    dont_move_host):
         """
         Update a Existing Host in Checkmk
         """
@@ -309,7 +315,7 @@ class SyncCMK2(CMK2):
 
         etag = False
         # Check if we really need to move
-        if current_folder != folder:
+        if not dont_move_host and current_folder != folder:
             print(f"{CC.OKBLUE} *{CC.ENDC} Host Moved from Folder: {current_folder} to {folder}")
             etag = self.get_etag(db_host)
             update_headers = {
@@ -328,6 +334,8 @@ class SyncCMK2(CMK2):
             update_headers = {
                 'if-match': etag,
             }
+        if dont_move_host and current_folder != folder:
+            print(f"{CC.WARNING} *{CC.ENDC} Folder Move to {folder} disabled. ")
 
         do_update = False
         update_reasons = []
