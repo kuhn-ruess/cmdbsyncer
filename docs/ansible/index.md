@@ -7,7 +7,7 @@ If you want to refer to Passwords in your Syncer Configuration, you can use an I
 
 Therefore , to get the Password of account cmk, it would look like:
 ```
-{{ACOUNT:cmk:password}}
+{{ACCOUNT:cmk:password}}
 ```
 
 
