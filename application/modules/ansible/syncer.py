@@ -27,9 +27,9 @@ class SyncAnsible(Plugin):
         # If not at leas one of the attributes is True,
         # we have to ignore the host
         for check in checks:
-            if attributes1.get(check, "False") == "True":
+            if attributes1.get(check.lower(), "false") == "true":
                 return False
-            if attributes2.get(check, "False") == "True":
+            if attributes2.get(check.lower(), "false") == "true":
                 return False
         return True
 
