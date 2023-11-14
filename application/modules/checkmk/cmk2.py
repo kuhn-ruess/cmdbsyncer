@@ -32,20 +32,6 @@ class CMK2(Plugin):
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
         self.config = {}
 
-    @staticmethod
-    def replace(input_raw, exceptions=None):
-        """
-        Replace all given inputs
-        """
-        if not exceptions:
-            exceptions = []
-        input_str = str(input_raw)
-        for needle, replacer in app.config['REPLACERS']:
-            if needle in exceptions:
-                continue
-            input_str = input_str.replace(needle, replacer)
-        return input_str.strip()
-
     def request(self, params, method='GET', data=None, additional_header=None):
         """
         Handle Request to CMK
