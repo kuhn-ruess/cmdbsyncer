@@ -51,15 +51,13 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     found_poolfolder_rule = False # Spcific Helper for this kind of action
     db_host = False
 
-    @staticmethod
-    def format_foldername(folder):
+    def format_foldername(self, folder):
         """ Format Foldername """
         if not folder.startswith('/'):
             folder = "/" + folder
         if folder.endswith('/'):
             folder = folder[:-1]
-        return folder.lower()
-
+        return self.replace(folder.lower(), exceptions=['/'])
 
     def add_outcomes(self, rule, outcomes):
         """ Handle the Outcomes """
@@ -111,6 +109,10 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 new_value = new_value.replace('{{hostname}}', hostname) # Legacy, Removed in 4.0
                 tpl = jinja2.Template(new_value)
                 new_value = tpl.render(HOSTNAME=hostname, **self.attributes)
+                new_value = self.replace(new_value, exceptions=[
+                                                        " ", '/'
+                                                    ]) # Replace Chars not working in Checkmk
+                #new_value = new_value.encode('ascii', 'ignore')
                 if new_value.lower() in ['none', 'false']:
                     outcomes['remove_attributes'].append(new_key)
                 else:
@@ -167,8 +169,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
         print_debug(self.debug, "")
         return outcomes
-
-
 
     def check_rule_match(self, db_host):
         """

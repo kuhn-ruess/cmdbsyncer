@@ -94,7 +94,7 @@ class SyncCMK2(CMK2):
                 # Get the Folder where we move to
                 # We need that even dont_move is set, because could be for the
                 # inital creation
-                folder = self.replace(next_actions['move_folder'], exceptions=['/'])
+                folder = next_actions['move_folder']
 
             cluster_nodes = [] # if true, we have a cluster
             if 'create_cluster' in next_actions:
