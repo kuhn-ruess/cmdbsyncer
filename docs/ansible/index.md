@@ -61,7 +61,6 @@ these are the Steps:
 - ![](img/account.png)
 - You are Ready
 
-
 ## Run Ansible
 You can run Ansible now with the wanted Play books. I would recommend to always check with the debug_host feature of the Ansible Module, which Variables are set. From here one, it's normal ansible:
 
