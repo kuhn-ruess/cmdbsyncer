@@ -351,13 +351,17 @@ class SyncCMK2(CMK2):
                 update_reasons.append(f"Update Extra Attribute: {key} Currently: {attr} != {value}")
                 do_update = True
                 break
+
+
+        not_existing = []
         for attr in remove_attributes:
             if attr in cmk_attributes:
                 update_reasons.append(f"Remove Extra Attribute: {attr}")
                 do_update = True
-                break
-
-
+            else:
+                not_existing.append(attr)
+        for attr in not_existing:
+            del remove_attributes[attr]
 
 
         if do_update:
