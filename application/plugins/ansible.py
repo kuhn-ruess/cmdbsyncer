@@ -2,12 +2,9 @@
 Ansible Inventory Modul
 """
 #pylint: disable=too-many-arguments, no-member
-import os
 import json
 import click
-import ansible_runner
 
-from mongoengine.errors import NotUniqueError
 from mongoengine.errors import DoesNotExist
 
 from application import app
@@ -18,7 +15,6 @@ from application.modules.rule.rewrite import Rewrite
 
 from application.modules.ansible.models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
                                                AnsibleCustomVariablesRule
-from application.modules.rule.models import CustomAttribute, FullCondition, FilterAction
 from application.modules.ansible.rules import AnsibleVariableRule
 from application.modules.ansible.syncer import SyncAnsible
 from application.modules.ansible.site_syncer import SyncSites
@@ -73,7 +69,8 @@ def debug_ansible_rules(hostname):
 
     try:
         db_host = Host.objects.get(hostname=hostname)
-        db_host.cache = {}
+        if 'ansible' in db_host.cache:
+            del db_host.cache['ansible']
         db_host.save()
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
