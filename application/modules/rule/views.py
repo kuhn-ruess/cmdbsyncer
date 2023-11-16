@@ -150,6 +150,10 @@ class RuleModelView(DefaultModelView):
     }
 
 
+    column_descriptions = dict(
+          last_match='No more rules match for objects matching this rule'
+    )
+
 
 
     column_default_sort = "sort_field"
@@ -157,6 +161,10 @@ class RuleModelView(DefaultModelView):
        'name',
        'enabled',
     )
+
+    column_editable_list = [
+        'enabled',
+    ]
     form_subdocuments = form_subdocuments_template
 
     column_formatters = {
@@ -227,6 +235,9 @@ class FiltereModelView(DefaultModelView):
             }
         }
     }
+    column_editable_list = [
+        'enabled',
+    ]
 
     column_formatters = {
         'render_full_conditions': _render_full_conditions,
