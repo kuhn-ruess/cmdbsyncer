@@ -20,6 +20,9 @@ class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
         for outcome in rule_outcomes:
             attr_value = outcome['attribute_value']
             if attr_value.startswith('{{ACCOUNT:'):
-                attr_value = get_account_variable(attr_value)
+                try:
+                    attr_value = get_account_variable(attr_value)
+                except ValueError:
+                    pass
             outcomes[outcome['attribute_name']] = attr_value
         return outcomes
