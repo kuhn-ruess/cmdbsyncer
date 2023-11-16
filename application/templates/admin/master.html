@@ -9,6 +9,13 @@
             width: 100% !important;
             max-width: 100%;
         }
+
+        .icon-minus-sign {
+            color: red;
+        }
+        .icon-ok-circle {
+            color: green;
+        }
     </style>
 {% endblock %}
 
@@ -50,4 +57,11 @@
 
         {% block body %}{% endblock %}
     </div>
+{% endblock %}
+
+{% block tail %}
+    {{ super() }}
+    <script type="text/javascript">
+    $("a#enabled>span.icon-minus-sign").parents('tr').css("background-color", "#f0f0f0").css("color", "grey");
+    </script>
 {% endblock %}
