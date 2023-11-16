@@ -361,7 +361,7 @@ class SyncCMK2(CMK2):
             else:
                 not_existing.append(attr)
         for attr in not_existing:
-            del remove_attributes[attr]
+            remove_attributes.remove(attr)
 
 
         if do_update:
