@@ -161,18 +161,21 @@ def request_password():
 
     return render_template('formular.html', form=form)
 
-def get_userid(token): #pylint: disable=inconsistent-return-statements
+def get_userid(token):  # pylint: disable=inconsistent-return-statements
     """
     Helper to read Userid from token
     """
-    key = current_app.config['SECRET_KEY'],
-    timeout = current_app.config.get('USER_SESSION_SECONDS') or 28800
+    key = current_app.config['SECRET_KEY']
     try:
         data = jwt.decode(token, key)
-    except JoseError:
-        return False
+        if 'exp' in data:
+            now = datetime.utcnow().timestamp()
+            if now > data['exp']:
+                raise ValueError("Token Expired")
 
-    if data.get('userid'):
+    except JoseError as error:
+        raise ValueError(error)
+    if data:
         return data.get('userid')
 
 @AUTH.route('/reset-password/<token>', methods=['GET', 'POST'])
