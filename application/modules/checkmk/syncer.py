@@ -361,6 +361,9 @@ class SyncCMK2(CMK2):
             else:
                 not_existing.append(attr)
         for attr in not_existing:
+            # If we would try to remove
+            # A attribute not exiting in checkmk,
+            # The API would respond with an exception
             remove_attributes.remove(attr)
 
 

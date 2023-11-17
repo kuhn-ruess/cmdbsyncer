@@ -15,6 +15,10 @@ from application.modules.checkmk.models import (
         )
 from application.modules.debug import ColorCodes as CC
 from application.models.host import Host
+from application.modules.rule.rule import Rule
+
+
+str_replace = Rule.replace
 
 class SyncConfiguration(CMK2):
     """
@@ -42,6 +46,7 @@ class SyncConfiguration(CMK2):
         for db_host in Host.objects(available=True):
             if attributes := self.get_host_attributes(db_host, 'cmk_conf'):
                 for key, value in attributes['all'].items():
+                    key, value = str(key), str(value)
                     # Add the Keys
                     collection_keys.setdefault(key, [])
                     if value not in collection_keys[key]:
@@ -224,10 +229,10 @@ class SyncConfiguration(CMK2):
                     new_group_name = key
                     if rewrite_name:
                         new_group_name = rewrite_name_tpl.render(name=key, result=key)
-                    new_group_name = self.replace(new_group_name, replace_exceptions).strip()
+                    new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
                         new_group_title = rewrite_title_tpl.render(name=key, result=key)
-                    new_group_title = self.replace(new_group_title, replace_exceptions).strip()
+                    new_group_title = str_replace(new_group_title, replace_exceptions).strip()
 
                     if new_group_name and (new_group_title, new_group_name) \
                                                             not in groups[group_type]:
@@ -247,10 +252,10 @@ class SyncConfiguration(CMK2):
                     new_group_name = value
                     if rewrite_name:
                         new_group_name = rewrite_name_tpl.render(name=value, result=value)
-                    new_group_name = self.replace(new_group_name, replace_exceptions).strip()
+                    new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
                         new_group_title = rewrite_title_tpl.render(name=value, result=value)
-                    new_group_title = self.replace(new_group_title, replace_exceptions).strip()
+                    new_group_title = str_replace(new_group_title, replace_exceptions).strip()
                     if new_group_name and (new_group_title, new_group_name) \
                                                         not in groups[group_type]:
                         groups[group_type].append((new_group_title, new_group_name))
