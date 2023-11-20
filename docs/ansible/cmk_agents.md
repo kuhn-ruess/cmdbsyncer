@@ -94,7 +94,7 @@ Please just replace the inventory source if needed.
 # Known Problems
 
 ## Distributed Bakery not supported yet in API
-The Checkmk API currently can't reflect a Distributed Setup. Therefore Ansible fails to Download Agents from a remote site.  As Workarround you can set an Apache Reverseproxy Rule, to Forward only the Bakery API Requests to the Main Site
+The Checkmk API currently can't reflect a Distributed Setup. Therefore Ansible fails to Download Agents from a remote site.  As Workarround you can set an Apache Reverseproxy Rule, to Forward only the Bakery API Requests to the Main Site.
 
 ```
 SSLProxyEngine On
@@ -105,3 +105,6 @@ RewriteEngine On
 
 RewriteRule /sitename/check_mk/api/1.0/domain-types/agent/(.*)$ https://mastersite/sitename/check_mk/api/1.0/domain-types/agent/$1 [P]
 ```
+
+
+This config must be put into the VirtualHost config for Port 443 on your remote Site.
