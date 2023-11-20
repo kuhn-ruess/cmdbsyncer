@@ -12,7 +12,9 @@ def get_account_by_name(name):
 
     try:
         account_dict = dict(Account.objects.get(name=name, enabled=True).to_mongo())
-        for field, value  in [(x['name'], x['value']) for x in account_dict['custom_fields']]:
+        for field, value  in [(x['name'], x.get('value')) for x in account_dict['custom_fields']]:
+            if not value:
+                value = False
             account_dict[field] = value
         del account_dict['custom_fields']
         account_dict['id'] = str(account_dict['_id'])

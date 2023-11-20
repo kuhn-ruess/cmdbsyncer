@@ -61,23 +61,23 @@ class AccountModelView(DefaultModelView):
                 ('hostname_field', 'host'),
                 ('delimiter', ';'),
                 ('encoding', 'utf-8'),
-                ('rewrite_hostname', None),
+                ('rewrite_hostname', ""),
             ]
         elif form.typ.data == 'json':
             default_fields = [
                 ('path', ''),
                 ('hostname_field', 'host'),
-                ('rewrite_hostname', None),
+                ('rewrite_hostname', ""),
             ]
         elif form.typ.data == 'maintenance':
             default_fields = [
                 ('delete_hosts_after_days', '0'),
-                ('account_filter', None),
+                ('account_filter', ""),
             ]
         elif form.typ.data == 'mysql':
             default_fields = [
                 ('hostname_field', ''),
-                ('rewrite_hostname', None),
+                ('rewrite_hostname', ""),
             ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
@@ -85,7 +85,7 @@ class AccountModelView(DefaultModelView):
                 ('request_headers', '{"Content-Type": "application/json"}'),
                 ('data_key', 'result'),
                 ('hostname_field', 'host'),
-                ('rewrite_hostname', None),
+                ('rewrite_hostname', ""),
             ]
         elif form.typ.data == 'cmkv2':
             default_fields = [
@@ -98,7 +98,7 @@ class AccountModelView(DefaultModelView):
                 ('attributes', "memberOf"),
                 ('hostname_field', 'host'),
                 ('encoding', 'ascii'),
-                ('rewrite_hostname', None),
+                ('rewrite_hostname', ""),
             ]
         elif form.typ.data == 'mssql':
             default_fields = [
@@ -106,9 +106,9 @@ class AccountModelView(DefaultModelView):
                 ('table', ""),
                 ('instance', ""),
                 ('database', ""),
-                ('where', None),
+                ('where', ""),
                 ('hostname_field', 'host'),
-                ('rewrite_hostname', None),
+                ('rewrite_hostname', ""),
                 ('driver', "ODBC Driver 18 for SQL Server"),
             ]
 
