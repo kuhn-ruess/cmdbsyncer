@@ -28,6 +28,8 @@ class BaseConfig():
     PASSWD_SEPCIAL_LOWER = True
     # How many of the PASSWD_SEPCIAL prefixt  options must apply
     PASSWD_SPECIAL_NEEDED = 3
+    SENTRY_ENABLED = False
+    SENTRY_DSN = ""
 
     BOOTSTRAP_SERVE_LOCAL = True
 

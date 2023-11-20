@@ -47,6 +47,32 @@ if app.config['DEBUG']:
     logger.info('Loaded Debug Mode')
 
 
+if app.config['SENTRY_ENABLED']:
+    import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+
+    def filter_events(event, _hint):
+        """
+        Filter a list of Exception from sending to sentry
+        """
+        excp = event.get('exception', {})
+        values = excp.get('values', [])
+        if values:
+            excp_type = values[0]['type']
+            if excp_type in [
+                    'timeout',
+                ]:
+                return None
+        return event
+
+    sentry_sdk.init(
+        dsn=app.config['SENTRY_DSN'],
+        before_send=filter_events,
+        integrations=[FlaskIntegration(),
+                     ],
+        release=VERSION
+    )
+
 # Wired new behavior in UWSGI:
 # Master Process seams not to get the db init like before
 # So we init it, try again if we are in a worker and fall back like before
@@ -141,13 +167,15 @@ admin.add_view(CheckmkUserMngmtView(CheckmkUserMngmt, name="Checkmk User", categ
 admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
 from application.modules.checkmk.views import CheckmkSettingsView, CheckmkSiteView
-admin.add_view(CheckmkSettingsView(CheckmkSettings, name="Server Settings", category="Checkmk Server"))
+admin.add_view(CheckmkSettingsView(CheckmkSettings, name="Server Settings", \
+                                                            category="Checkmk Server"))
 admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Checkmk Server"))
 
 admin.add_sub_category(name="Business Intelligence", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRule
 from application.modules.checkmk.views import CheckmkBiRuleView
-admin.add_view(CheckmkBiRuleView(CheckmkBiAggregation, name="BI Aggregation", category="Business Intelligence"))
+admin.add_view(CheckmkBiRuleView(CheckmkBiAggregation, name="BI Aggregation",\
+                                                            category="Business Intelligence"))
 admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Business Intelligence"))
 
 from application.modules.checkmk.models import CheckmkFolderPool
