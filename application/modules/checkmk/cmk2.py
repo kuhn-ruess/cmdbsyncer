@@ -2,6 +2,7 @@
 Central Request Modul to CMK 2.x
 """
 #pylint: disable=logging-fstring-interpolation
+from pprint import pformat
 import requests
 from application import app, log, logger
 from application.modules.plugin import Plugin
@@ -80,8 +81,12 @@ class CMK2(Plugin):
             ]
 
             if response.status_code != 200:
+                # If the status Code is not 200,
+                # we can't sure to get Json as response
+                # so we try some failbacks and whitelist some cases
                 try:
                     response_json = response.json()
+                    logger.debug("Response Json: {pformat(response_json)}")
                 except:
                     # pylint: disable=raise-missing-from
                     # Wired but on purpose:
@@ -89,16 +94,17 @@ class CMK2(Plugin):
                     if response.status_code == 404:
                         raise CmkException(f"Page not Found: {url}")
                     raise CmkException("Cant parse Checkmk Response")
-                logger.debug(f"Response Json {response_json}")
+
                 if response_json['title'] not in error_whitelist:
                     raise CmkException(f"{response_json['title']} {response_json.get('detail')}")
                 return {}, {'status_code': response.status_code}
             resp_header = response.headers
             resp_header['status_code'] = response.status_code
-            return response.json(), resp_header
+
+            response_json = response.json()
+            logger.debug(f"Response Json: {pformat(response_json)}")
+            return response_json, resp_header
         except (ConnectionResetError, requests.exceptions.ProxyError):
             if response:
-                logger.debug(f"Response Error {response.text}")
-                print(response.text)
                 return {}, {'status_code': response.status_code}
             return {}, {"error": "Checkmk Connections broken"}
