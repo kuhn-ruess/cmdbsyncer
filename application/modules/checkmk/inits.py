@@ -82,6 +82,10 @@ def inventorize_hosts(account):
         for attribute in attributes:
             if attribute in inventory_target or attribute.startswith('tag_'):
                 host_inventory[attribute] = attributes[attribute]
+        for label_key, label_value in attributes['labels'].items():
+            if label_key.startswith('cmk/'):
+                label_key = label_key.replace('cmk/','')
+                host_inventory['label_'+label_key] = label_value
 
         config_inventory[hostname] = host_inventory
 
