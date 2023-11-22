@@ -24,7 +24,8 @@ def load_rules():
     attribute_filter = False
 
     attribute_rewrite = Rewrite()
-    attribute_filter.cache_name = "netbox_filter"
+    attribute_rewrite.cache_name = 'netbox_rewrite'
+
     attribute_rewrite.rules = \
             NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
 
