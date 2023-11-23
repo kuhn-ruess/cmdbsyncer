@@ -29,7 +29,6 @@ class AccountModelView(DefaultModelView):
        'enabled',
     )
 
-
     column_labels = {
         'password': 'Attributes',
     }
