@@ -36,6 +36,10 @@ class CronGroupView(DefaultModelView):
        'enabled',
     )
 
+    column_editable_list = [
+        'enabled',
+    ]
+
     column_formatters = {
         'render_jobs': _render_cronjob,
     }
