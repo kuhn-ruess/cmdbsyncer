@@ -309,12 +309,15 @@ class SyncConfiguration(CMK2):
             cmks_groups = self.request(url, method="GET")
             syncers_groups_in_cmk = []
             syncers_groups_needing_update = []
+            yet_external_groups_in_cmk = []
 
             cache = self.get_cache_object(group=group_type)
 
-            group_list = cache.content.get('list', [])
+            cached_group_list = cache.content.get('list', [])
 
 
+
+            # Check which CMK Groups are in our CACHE
             for cmk_group in cmks_groups[0]['value']:
                 if 'id' in cmk_group:
                     cmk_name = cmk_group['id']
@@ -322,11 +325,15 @@ class SyncConfiguration(CMK2):
                     # Support Checkmk 2.1x
                     cmk_name = cmk_group['href'].split('/')[-1]
                 cmk_title = cmk_group['title']
+
                 # From Cache we get Lists not tuple
-                if [cmk_title, cmk_name] in group_list:
+                if [cmk_title, cmk_name] in cached_group_list:
                     syncers_groups_in_cmk.append(cmk_name)
-                elif cmk_name in [x[1] for x in group_list]:
+                elif cmk_name in [x[1] for x in cached_group_list]:
                     syncers_groups_needing_update.append(cmk_name)
+                else:
+                    # The Group is not known yet, but maybe we need to controll it
+                    yet_external_groups_in_cmk.append(cmk_name)
 
             cache.content['list'] = configured_groups
             cache.save()
@@ -340,13 +347,15 @@ class SyncConfiguration(CMK2):
                 handeled_groups.append(new_group)
                 alias = new_group[0]
                 name = new_group[1]
+                if "None" in (alias, name):
+                    continue
                 if name not in syncers_groups_in_cmk and name not in syncers_groups_needing_update:
                     print(f"{CC.OKBLUE}  *{CC.ENDC} Added {new_group}")
                     new_entries.append({
                         'alias' : alias,
                         'name' : name,
                     })
-                elif name in syncers_groups_needing_update:
+                elif name in syncers_groups_needing_update or name in yet_external_groups_in_cmk:
                     print(f"{CC.OKBLUE}  *{CC.ENDC} Updated {new_group}")
                     update_entries.append({
                         'name' : name,
