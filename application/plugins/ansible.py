@@ -95,7 +95,7 @@ def _inner_udpate_cache():
     Update Cache of Ansible
     """
     print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
-    for host in Host.objects():
+    for host in Host.get_export_hosts():
         if 'ansible' in host.cache:
             del host.cache['ansible']
             host.save()

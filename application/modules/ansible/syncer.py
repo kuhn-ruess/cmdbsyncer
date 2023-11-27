@@ -61,7 +61,7 @@ class SyncAnsible(Plugin):
             },
         }
         #pylint: disable=no-member
-        for db_host in Host.objects(available=True):
+        for db_host in Host.objects():
             hostname = db_host.hostname
 
             attributes = self.get_host_attributes(db_host, 'ansible')

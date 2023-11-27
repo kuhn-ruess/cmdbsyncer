@@ -65,7 +65,7 @@ def show_hosts(disabled_only=False):
     syncer.actions = rules['actions']
 
 
-    for db_host in Host.objects(available=True):
+    for db_host in Host.get_export_hosts():
         attributes = syncer.get_host_attributes(db_host, 'checkmk')
         if not attributes:
             if disabled_only:
@@ -90,7 +90,7 @@ def show_labels():
     syncer.actions = rules['actions']
 
     outcome = []
-    for db_host in Host.objects(available=True):
+    for db_host in Host.get_export_hosts():
         attributes = syncer.get_host_attributes(db_host, 'checkmk')
         if not attributes:
             continue

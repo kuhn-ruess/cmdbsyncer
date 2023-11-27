@@ -55,7 +55,7 @@ class SyncCMK2(CMK2):
 
         ## Start SYNC of Hosts into CMK
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
-        db_objects = Host.objects(available=True)
+        db_objects = Host.get_export_hosts()
         total = len(db_objects)
         counter = 0
         clusters = []

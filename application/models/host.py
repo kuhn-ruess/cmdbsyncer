@@ -29,6 +29,8 @@ class Host(db.Document):
     labels = db.DictField()
     inventory = db.DictField()
 
+    is_object = db.BooleanField(default=False)
+
     force_update = db.BooleanField(default=False)
 
     source_account_id = db.StringField()
@@ -57,6 +59,14 @@ class Host(db.Document):
         'strict': False,
     }
 
+
+
+    @staticmethod
+    def get_export_hosts():
+        """
+        Return all Objects for Exports
+        """
+        return Host.objects(available=True, is_object__ne=True)
 
     @staticmethod
     def get_host(hostname, create=True):
@@ -209,9 +219,9 @@ class Host(db.Document):
 
         """
         if not account_id and not account_dict:
-            print(2)
             raise ValueError("Either Set account_id or pass account_dict")
 
+        is_object = False
         # That is the legacy behavior: Raise if not equal
         if not account_dict:
             if self.source_account_id and self.source_account_id != account_id:
@@ -220,6 +230,11 @@ class Host(db.Document):
             # Get Name from Full dict
             account_id = account_dict['id']
             account_name = account_dict['name']
+            is_object = account_dict.get('is_object', False)
+
+        self.is_object = is_object
+
+        self.inventory['syncer_account'] = account_name
 
         # Everthing Match already, make it short
         if self.source_account_id and self.source_account_id == account_id \

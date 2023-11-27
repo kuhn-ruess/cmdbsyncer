@@ -5,7 +5,6 @@ Host Model View
 import re
 from mongoengine.errors import DoesNotExist
 from flask_login import current_user
-from flask_admin.actions import action
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 
 from flask import flash
@@ -126,17 +125,71 @@ def get_export_values():
 
 
 
+class ObjectModelView(DefaultModelView):
+    """
+    Onlye show objects
+    """
+
+    can_edit = False
+    can_create = False
+    can_view_details = True
+
+    def get_query(self):
+        """
+        Limit Objects
+        """
+        return Host.objects(is_object=True)
+
+
+    column_labels = {
+        'hostname': "Object Name",
+        'source_account_name': "Account"
+    }
+
+    column_exclude_list = (
+        'source_account_id',
+        'sync_id',
+        'labels',
+        'inventory',
+        'log',
+        'folder',
+        'raw',
+        'cache',
+        'is_object',
+        'last_import_seen',
+        'last_import_sync',
+        'last_export',
+        'available',
+        'force_update',
+    )
+
+    column_details_list = [
+        'hostname', 'inventory', 'labels', 'cache'
+    ]
+
+    column_formatters = {
+        'labels': format_labels,
+        'inventory': format_inventory,
+    }
+
 
 class HostModelView(DefaultModelView):
     """
     Host Model
     """
     can_edit = False
+    can_create = False
     can_view_details = True
     can_export = True
 
     export_types = ['xlsx', 'csv']
 
+
+    def get_query(self):
+        """
+        Limit Objects
+        """
+        return Host.objects(is_object__ne=True)
 
     column_details_list = [
         'hostname', 'folder', 'available', 'force_update', 'labels', 'inventory', 'log',
@@ -178,6 +231,7 @@ class HostModelView(DefaultModelView):
         'folder',
         'raw',
         'cache',
+        'is_object',
     )
 
     column_editable_list = (
