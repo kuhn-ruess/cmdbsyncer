@@ -123,7 +123,8 @@ cmk_groups = [
 
 foreach_types = [
  ('label', "Foreach Attribute"),
- ('value', "Foreach Attribute Value")
+ ('value', "Foreach Attribute Value"),
+ ('object', "Foreach Object from Account (empty for all)"),
 ]
 
 class CmkGroupOutcome(db.EmbeddedDocument):
@@ -155,7 +156,7 @@ class CmkGroupOutcome(db.EmbeddedDocument):
     """
     group_name = db.StringField(choices=cmk_groups)
     foreach_type = db.StringField(choices=foreach_types)
-    foreach = db.StringField(required=True)
+    foreach = db.StringField(required=False)
     rewrite = db.StringField()
     rewrite_title = db.StringField()
 

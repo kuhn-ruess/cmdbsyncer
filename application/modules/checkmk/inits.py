@@ -137,7 +137,7 @@ def show_missing(account):
     cmk = CMK2()
     cmk.config = config
 
-    local_hosts = [x.hostname for x in Host.objects()]
+    local_hosts = [x.hostname for x in Host.get_export_hosts()]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
           f"{ColorCodes.UNDERLINE}{account}{ColorCodes.ENDC}")
     url = "domain-types/host_config/collections/all?effective_attributes=false"

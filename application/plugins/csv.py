@@ -17,16 +17,19 @@ def _cli_csv():
 
 
 def compare_hosts(csv_path, delimiter, hostname_field, label_filter):
+    """
+    Compare lists from hosts which not in syncer
+    """
     #pylint: disable=no-member, consider-using-generator
     if label_filter:
         host_list = []
         # we need to load the full plugins then
         plugin = Plugin()
-        for host in Host.objects(available=True):
+        for host in Host.get_export_hosts():
             if label_filter in plugin.get_host_attributes(host, 'csv')['all']:
                 host_list.append(host.hostname)
     else:
-        host_list = list([x.hostname for x in Host.objects(available=True)])
+        host_list = list([x.hostname for x in Host.get_export_hosts()])
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
@@ -56,6 +59,9 @@ def cli_compare_hosts(csv_path, delimiter, hostname_field, label_filter):
 
 
 def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=None):
+    """
+    Impor hosts from a CSV
+    """
     #pylint: disable=no-member, consider-using-generator
     encoding = 'utf-8'
     if account:
@@ -126,6 +132,9 @@ def cli_import_hosts(csv_path, delimiter, hostname_field, account):
     import_hosts(csv_path, delimiter, hostname_field, account)
 
 def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
+    """
+    Inventorize data from a CSV
+    """
     #pylint: disable=no-member, consider-using-generator
     if account:
         account = get_account_by_name(account)
@@ -159,7 +168,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
                 hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], row)
             new_attributes[hostname] = row
 
-    for host_obj in Host.objects(available=True):
+    for host_obj in Host.get_export_hosts():
         print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {host_obj.hostname}")
         host_obj.update_inventory(key, new_attributes.get(host_obj.hostname, {}))
         host_obj.save()

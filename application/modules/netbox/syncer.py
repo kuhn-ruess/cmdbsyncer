@@ -451,7 +451,7 @@ class SyncNetbox(Plugin):
         current_netbox_devices = self.get_devices(syncer_only=True)
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
-        db_objects = Host.objects(available=True)
+        db_objects = Host.get_export_hosts()
         total = len(db_objects)
         counter = 0
         found_hosts = []

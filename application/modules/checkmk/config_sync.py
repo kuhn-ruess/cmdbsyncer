@@ -43,7 +43,7 @@ class SyncConfiguration(CMK2):
         """
         collection_keys = {}
         collection_values = {}
-        for db_host in Host.objects(available=True):
+        for db_host in Host.objects():
             if attributes := self.get_host_attributes(db_host, 'cmk_conf'):
                 for key, value in attributes['all'].items():
                     key, value = str(key), str(value)
@@ -71,7 +71,7 @@ class SyncConfiguration(CMK2):
         rulsets_by_type = {}
 
         # pylint: disable=too-many-nested-blocks
-        for db_host in Host.objects(available=True):
+        for db_host in Host.objects():
             attributes = self.get_host_attributes(db_host, 'cmk_conf')
             if not attributes:
                 continue
@@ -259,6 +259,27 @@ class SyncConfiguration(CMK2):
                     if new_group_name and (new_group_title, new_group_name) \
                                                         not in groups[group_type]:
                         groups[group_type].append((new_group_title, new_group_name))
+            elif outcome.foreach_type == "object":
+                db_filter = {
+                    'is_object': True
+                }
+                object_filter = outcome.foreach
+                if object_filter:
+                    db_filter['inventory__syncer_account'] = object_filter
+                for entry in Host.objects(**db_filter):
+                    value = entry.hostname
+                    new_group_title = value
+                    new_group_name = value
+                    if rewrite_name:
+                        new_group_name = rewrite_name_tpl.render(name=value, result=value)
+                    new_group_name = str_replace(new_group_name, replace_exceptions).strip()
+                    if rewrite_title:
+                        new_group_title = rewrite_title_tpl.render(name=value, result=value)
+                    new_group_title = str_replace(new_group_title, replace_exceptions).strip()
+                    if new_group_name and (new_group_title, new_group_name) \
+                                                        not in groups[group_type]:
+                        groups[group_type].append((new_group_title, new_group_name))
+
 
         print(f"\n{CC.HEADER}Start Sync{CC.ENDC}")
         urls = {
@@ -390,7 +411,7 @@ class SyncConfiguration(CMK2):
 
         unique_rules = {}
         related_packs = []
-        for db_host in Host.objects(available=True):
+        for db_host in Host.objects():
             attributes = self.get_host_attributes(db_host, 'cmk_conf')
             if not attributes:
                 continue
@@ -461,7 +482,7 @@ class SyncConfiguration(CMK2):
 
         unique_aggregations = {}
         related_packs = []
-        for db_host in Host.objects(available=True):
+        for db_host in Host.objects():
             attributes = self.get_host_attributes(db_host, 'cmk_conf')
             if not attributes:
                 continue

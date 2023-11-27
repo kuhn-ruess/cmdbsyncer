@@ -16,7 +16,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.4.0pre7'
+VERSION = '3.4.1pre-1'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -129,8 +129,9 @@ admin = Admin(app, name=f"CMDB Syncer {VERSION}",
 
 #   .-- Host
 from application.models.host import Host
-from application.views.host import HostModelView
+from application.views.host import HostModelView, ObjectModelView
 admin.add_view(HostModelView(Host, name="Hosts"))
+admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects"))
 #.
 #   .-- Global
 from application.modules.custom_attributes.models import CustomAttributeRule

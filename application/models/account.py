@@ -35,6 +35,7 @@ class Account(db.Document):
     name = db.StringField(required=True, unique=True)
     typ = db.StringField(choices=account_types)
     is_master = db.BooleanField(default=False)
+    is_object = db.BooleanField(default=False)
 
     address = db.StringField()
     username = db.StringField()
