@@ -86,7 +86,7 @@ class CMK2(Plugin):
                 # so we try some failbacks and whitelist some cases
                 try:
                     response_json = response.json()
-                    logger.debug("Response Json: {pformat(response_json)}")
+                    logger.debug(f"Response Json: {pformat(response_json)}")
                 except:
                     # pylint: disable=raise-missing-from
                     # Wired but on purpose:
