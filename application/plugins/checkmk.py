@@ -173,7 +173,9 @@ def debug_host(hostname):
 
     try:
         db_host = Host.objects.get(hostname=hostname)
-        db_host.cache = {}
+        for key in list(db_host.cache.keys()):
+            if key.lower().startswith('cmk'):
+                del db_host.cache[key]
         db_host.save()
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")

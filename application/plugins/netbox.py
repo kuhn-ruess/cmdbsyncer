@@ -114,7 +114,10 @@ def netbox_host_debug(hostname):
 
     try:
         db_host = Host.objects.get(hostname=hostname)
-        db_host.cache = {}
+        for key in list(db_host.cache.keys()):
+            if key.lower().startswith('netbox'):
+                del db_host.cache[key]
+        db_host.save()
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
         return
