@@ -196,7 +196,7 @@ class CustomAttribute(db.EmbeddedDocument):
     """
     attribute_name = db.StringField()
     attribute_value = db.StringField()
-    sensitive_value = db.BooleanField(default=False)
+    #sensitive_value = db.BooleanField(default=False)
     meta = {
         'strict': False
     }

@@ -69,8 +69,9 @@ def debug_ansible_rules(hostname):
 
     try:
         db_host = Host.objects.get(hostname=hostname)
-        if 'ansible' in db_host.cache:
-            del db_host.cache['ansible']
+        for key in list(db_host.cache.keys()):
+            if key.lower().startswith('ansible'):
+                del db_host.cache[key]
         db_host.save()
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
@@ -82,7 +83,13 @@ def debug_ansible_rules(hostname):
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY RULE{ColorCodes.ENDC}")
         return
 
+
+    hidden_fields = ['ansible_password', 'ansible_ssh_pass']
+
     extra_attributes = syncer.get_host_data(db_host, attributes['all'])
+    for attr in list(extra_attributes.keys()):
+        if attr in hidden_fields:
+            extra_attributes[attr] = "HIDDEN..."+ extra_attributes[attr][-3:]
     attribute_table("Full Attributes", attributes['all'])
     attributes['filtered'].update(extra_attributes)
     attribute_table("Final Attributes", attributes['filtered'])
