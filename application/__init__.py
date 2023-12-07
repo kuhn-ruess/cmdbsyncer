@@ -160,6 +160,10 @@ from application.modules.checkmk.views import CheckmkMngmtRuleView
 admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
                                     name="Checkmk Rules Management", category="Checkmk"))
 
+from application.modules.checkmk.models import CheckmkTagMngmt
+from application.modules.checkmk.views import CheckmkTagMngmtView
+admin.add_view(CheckmkTagMngmtView(CheckmkTagMngmt, name="Checkmk Tags", category="Checkmk"))
+
 from application.modules.checkmk.models import CheckmkUserMngmt
 from application.modules.checkmk.views import CheckmkUserMngmtView
 admin.add_view(CheckmkUserMngmtView(CheckmkUserMngmt, name="Checkmk User", category="Checkmk"))

@@ -12,6 +12,7 @@ from application.modules.rule.models import filter_actions
 condition_types={
     'equal': "is equal",
     'in': "contains",
+    'not_in': "not contains",
     'in_list': "found in list",
     'ewith': "endswith",
     'swith': "startswith",

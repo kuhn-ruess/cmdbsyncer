@@ -22,4 +22,8 @@ with warnings.catch_warnings():
         sys.exit(1)
 
     if __name__ == '__main__':
-        app.cli()
+        try:
+            app.cli()
+        except Exception as exp: #pylint: disable=broad-except
+            print(f"ERROR: {exp}")
+            sys.exit(1)

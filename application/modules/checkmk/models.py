@@ -248,6 +248,30 @@ class CheckmkRuleMngmt(db.Document):
     }
 
 #.
+#   .-- Checkmk Tag Managment
+
+class CheckmkTagMngmt(db.Document):
+    """
+    Manage Checkmk Users
+    """
+    group_topic_name = db.StringField()
+    group_title = db.StringField()
+    group_id = db.StringField()
+    group_help = db.StringField()
+
+    foreach_type = db.StringField(choices=foreach_types)
+    foreach = db.StringField(required=False)
+
+    rewrite_id = db.StringField(default="{{name}}")
+    rewrite_title = db.StringField(default="{{name}}")
+
+    enabled = db.BooleanField(default=False)
+    meta = {
+        'strict': False
+    }
+
+
+#.
 #   .-- Checkmk User Management
 class CheckmkUserMngmt(db.Document):
     """

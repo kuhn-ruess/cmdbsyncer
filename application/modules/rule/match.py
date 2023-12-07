@@ -47,6 +47,9 @@ def match(value, needle, condition, negate=False):
             elif condition == 'in':
                 if needle not in value:
                     return True
+            elif condition == 'not_in':
+                if needle in value:
+                    return True
             elif condition == 'in_list':
                 if value not in [x.strip() for x in needle.split(',')]:
                     return True
@@ -71,6 +74,9 @@ def match(value, needle, condition, negate=False):
                 return True
         elif condition == 'in':
             if needle in value:
+                return True
+        elif condition == 'not_in':
+            if needle not in value:
                 return True
         elif condition == 'in_list':
             if value in [x.strip() for x in needle.split(',')]:
