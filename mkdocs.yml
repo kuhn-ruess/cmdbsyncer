@@ -42,6 +42,7 @@ nav:
           - Export Rules: checkmk/export_rules.md
           - Groups Management: checkmk/groups_management.md
           - Rules Management: checkmk/rules_management.md
+          - Hosttag Management: checkmk/create_hosttags.md
           - Folder Pools: checkmk/folder_pools.md
           - Recipes Checkmk:
               - Custom Attributes: checkmk/cmk_attributes.md

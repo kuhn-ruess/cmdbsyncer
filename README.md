@@ -36,6 +36,7 @@ This is runs a Development Version which you can use to test everthing
 - Creation of Host-, Contact- and Service Groups
 - Creation of all types of Checkmk Rules
 - Creation of BI Rules
+- Creation of Tags
 - Management of Checkmk (Fallback) users (Create/ Delete/ Reset Password/ Disable Login)
 - Integrated options to prevent to many Updates in Checkmk
 - Command to Active Configuration
@@ -56,6 +57,18 @@ This is runs a Development Version which you can use to test everthing
 ### CSV
 - Manage Hosts based on CSV File (Import Source)
 - Add Addional Informationen from CSV Files to your Hosts (eg. Overwrite IP Addresses)
+
+### MSSQL
+- Import
+
+### MySQL
+- Import
+
+### LDAP
+- Import
+
+### Rest APIs/ Json Files
+- Import
 
 ## Other
 - [Documentation](https://cmdbsyncer.readthedocs.io/en/latest/)

@@ -506,6 +506,9 @@ class SyncConfiguration(CMK2):
         for syncer_group_id, syncer_group_data in groups.items():
             payload = syncer_group_data
             payload['tags'] = [{'ident':x, 'title': y} for x,y in syncer_group_data['tags']]
+            if not payload['tags']:
+                print(f"{CC.WARNING} *{CC.ENDC} Group {syncer_group_id} has no tags")
+                continue
             if syncer_group_id not in checkmk_ids:
                 # Create the group
                 self.request(create_url, method="POST", data=payload)
@@ -513,7 +516,7 @@ class SyncConfiguration(CMK2):
             else:
                 # Check if we need to update it
                 checkmk_tags = checkmk_ids[syncer_group_id]
-                flat = [(x['id'], x['title']) for x in checkmk_tags]
+                flat = [ {'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
                 if flat == syncer_group_data['tags']:
                     print(f"{CC.OKBLUE} *{CC.ENDC} Group {syncer_group_id} already up to date.")
                 else:
@@ -521,12 +524,18 @@ class SyncConfiguration(CMK2):
                     update_headers = {
                         'if-match': etag
                     }
+                    del payload['ident']
                     payload['repair'] = False
-                    self.request(url,
-                        method="PUT",
-                        data=payload,
-                        additional_header=update_headers)
-                    print(f"{CC.OKCYAN} *{CC.ENDC} Group {syncer_group_id} updated.")
+                    try:
+                        self.request(url,
+                            method="PUT",
+                            data=payload,
+                            additional_header=update_headers)
+                    except Exception as error:
+                        print(f"{CC.WARNING} *{CC.ENDC} Group {syncer_group_id} can't be updated.")
+                        print(error)
+                    else:
+                        print(f"{CC.OKCYAN} *{CC.ENDC} Group {syncer_group_id} updated.")
 
 
 
