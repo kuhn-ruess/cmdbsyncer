@@ -12,6 +12,27 @@ from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
 from application.modules.checkmk.models import CheckmkRuleMngmt, CheckmkBiRule, CheckmkBiAggregation
 from application.plugins.checkmk import _load_rules
 
+
+#   .-- Export Tags
+def export_tags(account):
+    """
+    Export Tags to Checkmk
+    """
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            syncer = SyncConfiguration()
+            syncer.account_id = str(target_config['_id'])
+            syncer.account_name = target_config['name']
+            syncer.config = target_config
+            syncer.export_tags()
+        else:
+            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+
+#.
+
 #   .-- Export BI Rules
 def export_bi_rules(account):
     """

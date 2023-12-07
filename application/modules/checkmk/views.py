@@ -346,6 +346,12 @@ class CheckmkSiteView(DefaultModelView):
     """
     Checkmk Site Management Config
     """
+class CheckmkTagMngmtView(DefaultModelView):
+    """
+    Checkmk Tag Management
+    """
+
+    column_exclude_list = []
 
 
 class CheckmkUserMngmtView(DefaultModelView):

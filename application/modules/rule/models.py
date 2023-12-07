@@ -9,6 +9,7 @@ from application import db
 condition_types = [
     ('equal', "String Equal (x == y)"),
     ('in', "String Contains (in)"),
+    ('no_in', "String not Contains (not in)"),
     ('in_list', "String in list (comma seperated) (x in [y,y,y])"),
     ('ewith', "String ends with (x.endswith(y)"),
     ('swith', "String starts with (x.startswith(y)"),

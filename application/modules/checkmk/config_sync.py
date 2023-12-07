@@ -11,6 +11,7 @@ from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.checkmk.models import (
         CheckmkGroupRule,
         CheckmkObjectCache,
+        CheckmkTagMngmt,
         CheckmkUserMngmt
         )
 from application.modules.debug import ColorCodes as CC
@@ -187,7 +188,7 @@ class SyncConfiguration(CMK2):
         log.log(f"Checkmk Rules synced with {self.account_name}", \
                         source="CMK_RULE_SYNC", details=messages)
 #.
-#   .-- Export Group
+#location   .-- Export Group
 
     def export_cmk_groups(self, test_run):
         """
@@ -408,6 +409,128 @@ class SyncConfiguration(CMK2):
 
         log.log(f"Checkmk Group synced with {self.account_name}",
                     source="CMK_GROUP_SYNC", details=messages)
+#.
+
+#   . Export Tags
+    def export_tags(self):
+        """
+        Export Tags to Checkmk
+        """
+        print(f"\n{CC.HEADER}Read Internal Configuration{CC.ENDC}")
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attributes")
+        attributes = self.parse_attributes()
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
+        groups = {}
+        replace_exceptions = ['-', '_']
+        for rule in CheckmkTagMngmt.objects(enabled=True):
+            group_id = rule.group_id
+            groups.setdefault(group_id, {'tags':[]})
+            groups[group_id]['topic'] = rule.group_topic_name
+            groups[group_id]['title'] = rule.group_title
+            groups[group_id]['help'] = rule.group_help
+            groups[group_id]['ident'] = group_id # set here to use it directly later
+
+            rewrite_id_tpl = jinja2.Template(rule.rewrite_id)
+            rewrite_title_tpl = jinja2.Template(rule.rewrite_title)
+
+            if rule.foreach_type == 'value':
+                if rule.foreach.endswith('*'):
+                    keys = []
+                    search = rule.foreach[:-1]
+                    for key, keys_values in attributes[0].items():
+                        if key.startswith(search):
+                            keys += keys_values
+                else:
+                    keys = attributes[1].get(rule.foreach, [])
+
+
+                for key in keys:
+                    new_group_title = key
+                    new_group_id = key
+
+                    new_group_id = rewrite_id_tpl.render(name=key, result=key)
+                    new_group_id = str_replace(new_group_id, replace_exceptions).strip()
+                    new_group_title = rewrite_title_tpl.render(name=key, result=key)
+
+                    if new_group_id and (new_group_id, new_group_title) \
+                                                            not in groups[group_id]['tags']:
+                        groups[group_id]['tags'].append((new_group_id, new_group_title))
+            elif rule.foreach_type == 'label':
+                if rule.foreach.endswith('*'):
+                    values = []
+                    search = rule.foreach[:-1]
+                    for label, label_values in attributes[0].items():
+                        if label.startswith(search):
+                            values += label_values
+                else:
+                    values = attributes[0].get(rule.foreach, [])
+
+                for value in values:
+                    new_group_title = value
+                    new_group_id = value
+                    new_group_id = rewrite_id_tpl.render(name=value, result=value)
+                    new_group_id = str_replace(new_group_id, replace_exceptions).strip()
+                    new_group_title = rewrite_title_tpl.render(name=value, result=value)
+                    if new_group_id and (new_group_id, new_group_title) \
+                                                            not in groups[group_id]['tags']:
+                        groups[group_id]['tags'].append((new_group_id, new_group_title))
+            elif rule.foreach_type == "object":
+                db_filter = {
+                    'is_object': True
+                }
+                object_filter = rule.foreach
+                if object_filter:
+                    db_filter['inventory__syncer_account'] = object_filter
+                for entry in Host.objects(**db_filter):
+                    value = entry.hostname
+                    new_group_title = value
+                    new_group_id = value
+                    new_group_id = rewrite_id_tpl.render(name=value, result=value)
+                    new_group_id = str_replace(new_group_id, replace_exceptions).strip()
+                    new_group_title = rewrite_title_tpl.render(name=value, result=value)
+                    new_group_title = str_replace(new_group_title, replace_exceptions).strip()
+                    if new_group_id and (new_group_id, new_group_title) \
+                                                            not in groups[group_id]['tags']:
+                        groups[group_id]['tags'].append((new_group_id, new_group_title))
+
+
+        url = "/domain-types/host_tag_group/collections/all"
+        response = self.request(url, method="GET")
+        etag = response[1]['ETag']
+
+        checkmk_ids = {}
+        for group in response[0]['value']:
+            checkmk_ids[group['id']] = group['extensions']['tags']
+
+        create_url = "/domain-types/host_tag_group/collections/all"
+        for syncer_group_id, syncer_group_data in groups.items():
+            payload = syncer_group_data
+            payload['tags'] = [{'ident':x, 'title': y} for x,y in syncer_group_data['tags']]
+            if syncer_group_id not in checkmk_ids:
+                # Create the group
+                self.request(create_url, method="POST", data=payload)
+                print(f"{CC.OKGREEN} *{CC.ENDC} Group {syncer_group_id} created.")
+            else:
+                # Check if we need to update it
+                checkmk_tags = checkmk_ids[syncer_group_id]
+                flat = [(x['id'], x['title']) for x in checkmk_tags]
+                if flat == syncer_group_data['tags']:
+                    print(f"{CC.OKBLUE} *{CC.ENDC} Group {syncer_group_id} already up to date.")
+                else:
+                    url = f"/objects/host_tag_group/{syncer_group_id}"
+                    update_headers = {
+                        'if-match': etag
+                    }
+                    payload['repair'] = False
+                    self.request(url,
+                        method="PUT",
+                        data=payload,
+                        additional_header=update_headers)
+                    print(f"{CC.OKCYAN} *{CC.ENDC} Group {syncer_group_id} updated.")
+
+
+
+
 #.
 #   .-- Export Bi Rules
     def export_bi_rules(self):
