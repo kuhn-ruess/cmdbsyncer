@@ -26,3 +26,11 @@ Create a new entry.
 
 
 Note: that {{ name }} is replaced by the found attributes name.
+
+
+
+## Special Mode
+If you use the Foreach Type "Object", you can leave the foreach feld empty. Otherwise it acts as a filter for the Account Name given for all objects which are used as source for the following rewrites. In the Rewrite Fields, {{name}} now refers to the host or object name. And you can 
+add now all these Attributes as Variables, by surrounding them with {{ }}.
+
+If as a result, the rewrite ID is not unique any more, the first occurrence is used. 
