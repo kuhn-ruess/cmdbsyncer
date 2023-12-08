@@ -481,14 +481,25 @@ class SyncConfiguration(CMK2):
                 object_filter = rule.foreach
                 if object_filter:
                     db_filter['inventory__syncer_account'] = object_filter
+                found_ids = []
                 for entry in Host.objects(**db_filter):
+                    host_attributes = self.get_host_attributes(entry, 'cmk_conf')
                     value = entry.hostname
                     new_group_title = value
                     new_group_id = value
-                    new_group_id = rewrite_id_tpl.render(name=value, result=value)
+
+                    new_group_id = rewrite_id_tpl.render(name=value,
+                                                         result=value, **host_attributes['all'])
                     new_group_id = str_replace(new_group_id, replace_exceptions).strip()
-                    new_group_title = rewrite_title_tpl.render(name=value, result=value)
-                    new_group_title = str_replace(new_group_title, replace_exceptions).strip()
+
+                    if new_group_id not in found_ids:
+                        found_ids.append(new_group_id)
+                    else:
+                        # we can't add a id twice
+                        continue
+
+                    new_group_title = rewrite_title_tpl.render(name=value, result=value,
+                                                               **host_attributes['all'])
                     if new_group_id and (new_group_id, new_group_title) \
                                                             not in groups[group_id]['tags']:
                         groups[group_id]['tags'].append((new_group_id, new_group_title))

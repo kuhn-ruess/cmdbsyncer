@@ -25,5 +25,6 @@ with warnings.catch_warnings():
         try:
             app.cli()
         except Exception as exp: #pylint: disable=broad-except
+            raise
             print(f"ERROR: {exp}")
             sys.exit(1)
