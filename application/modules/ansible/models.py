@@ -3,8 +3,7 @@ Ansible Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
-from application.modules.rule.models import rule_types, CustomAttribute, \
-                                            FilterAction, FullCondition, AttributeRewriteAction
+from application.modules.rule.models import rule_types
 
 class AnsibleCustomVariablesRule(db.Document):
     """
@@ -14,10 +13,10 @@ class AnsibleCustomVariablesRule(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(CustomAttribute))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="CustomAttribute"))
     render_attribute_outcomes = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
@@ -38,10 +37,10 @@ class AnsibleFilterRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(FilterAction))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="FilterAction"))
     render_filter_outcome = db.StringField()
 
     last_match = db.BooleanField(default=False)
@@ -60,9 +59,9 @@ class AnsibleRewriteAttributesRule(db.Document):
     """
     name = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(db.EmbeddedDocumentField(AttributeRewriteAction))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="AttributeRewriteAction"))
     render_attribute_rewrite = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()

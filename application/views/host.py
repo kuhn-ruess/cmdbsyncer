@@ -7,8 +7,7 @@ from mongoengine.errors import DoesNotExist
 from flask_login import current_user
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 
-from flask import flash
-from flask import Markup
+from markupsafe import Markup
 
 from application.views.default import DefaultModelView
 from application.models.host import Host

@@ -41,7 +41,7 @@ class Account(db.Document):
     username = db.StringField()
     password = db.StringField()
 
-    custom_fields = db.ListField(db.EmbeddedDocumentField(CustomEntry))
+    custom_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CustomEntry"))
 
 
     enabled = db.BooleanField()

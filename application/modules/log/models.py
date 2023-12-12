@@ -25,7 +25,7 @@ class LogEntry(db.Document): #pylint: disable=too-few-public-methods
     message = db.StringField()
     has_error = db.BooleanField(default=False)
     source = db.StringField()
-    details = db.ListField(db.EmbeddedDocumentField(DetailEntry))
+    details = db.ListField(field=db.EmbeddedDocumentField(document_type="DetailEntry"))
     traceback = db.StringField()
 
 

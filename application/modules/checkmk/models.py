@@ -3,8 +3,7 @@ Checkmk Rules
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from application import db
-from application.modules.rule.models import rule_types, FullCondition, FilterAction, \
-                                            AttributeRewriteAction
+from application.modules.rule.models import rule_types
 
 #   .-- Checkmk Attribute Filter
 class CheckmkFilterRule(db.Document):
@@ -13,10 +12,10 @@ class CheckmkFilterRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(FilterAction))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="FilterAction"))
     render_filter_outcome = db.StringField()
 
     last_match = db.BooleanField(default=False)
@@ -99,10 +98,10 @@ class CheckmkRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(CheckmkRuleOutcome))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="CheckmkRuleOutcome"))
     render_checkmk_outcome = db.StringField()
 
     last_match = db.BooleanField(default=False)
@@ -172,7 +171,7 @@ class CheckmkGroupRule(db.Document):
 
 
     name = db.StringField(required=True, unique=True)
-    outcome = db.EmbeddedDocumentField(CmkGroupOutcome)
+    outcome = db.EmbeddedDocumentField(document_type="CmkGroupOutcome")
     render_checkmk_group_outcome = db.StringField()
     enabled = db.BooleanField()
 
@@ -236,10 +235,10 @@ class CheckmkRuleMngmt(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(RuleMngmtOutcome))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="RuleMngmtOutcome"))
     render_cmk_rule_mngmt = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
@@ -282,8 +281,8 @@ class CheckmkUserMngmt(db.Document):
     email = db.StringField()
     pager_address = db.StringField()
 
-    roles = db.ListField(db.StringField(), default=['admin'])
-    contact_groups = db.ListField(db.StringField(), default=['all'])
+    roles = db.ListField(field=db.StringField(), default=['admin'])
+    contact_groups = db.ListField(field=db.StringField(), default=['all'])
 
     password = db.StringField()
     overwrite_password = db.BooleanField()
@@ -327,9 +326,9 @@ class CheckmkRewriteAttributeRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(db.EmbeddedDocumentField(AttributeRewriteAction))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="AttributeRewriteAction"))
     render_attribute_rewrite = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
@@ -374,7 +373,7 @@ class CheckmkSite(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     server_address = db.StringField(required=True, unique=True)
-    settings_master = db.ReferenceField(CheckmkSettings, required=True)
+    settings_master = db.ReferenceField(document_type="CheckmkSettings", required=True)
 
     enabled = db.BooleanField()
 
@@ -400,10 +399,10 @@ class CheckmkBiAggregation(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(BiAggregationOutcome))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="BiAggregationOutcome"))
     render_cmk_bi_rule = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
@@ -432,10 +431,10 @@ class CheckmkBiRule(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(BiRuleOutcome))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="BiRuleOutcome"))
     render_cmk_bi_rule = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
@@ -452,7 +451,7 @@ class CheckmkObjectCache(db.Document):
     """
 
     cache_group = db.StringField()
-    account = db.ReferenceField('Account')
+    account = db.ReferenceField(document_type='Account')
     content = db.DictField()
 
     meta = {
