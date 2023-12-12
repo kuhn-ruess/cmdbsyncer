@@ -43,7 +43,7 @@ class GroupEntry(db.EmbeddedDocument):
     """
     name = db.StringField()
     command = db.StringField(choices=cron_register.keys())
-    account = db.ReferenceField('Account')
+    account = db.ReferenceField(document_type='Account')
 
 
 class CronGroup(db.Document):
@@ -56,7 +56,7 @@ class CronGroup(db.Document):
     interval = db.StringField(choices=intervals)
     timerange_from = db.StringField(choices=hours, default='0')
     timerange_to = db.StringField(choices=hours, default='24')
-    jobs = db.ListField(db.EmbeddedDocumentField("GroupEntry"))
+    jobs = db.ListField(field=db.EmbeddedDocumentField(document_type="GroupEntry"))
 
     render_jobs = db.StringField()
 

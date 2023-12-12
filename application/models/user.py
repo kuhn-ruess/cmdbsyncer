@@ -24,7 +24,7 @@ class User(db.Document, UserMixin):
     pwdhash = db.StringField()
     name = db.StringField()
     global_admin = db.BooleanField(default=False)
-    roles = db.ListField(db.StringField(choices=roles))
+    roles = db.ListField(field=db.StringField(choices=roles))
 
     tfa_secret = db.StringField()
 
@@ -69,7 +69,6 @@ class User(db.Document, UserMixin):
             'userid': str(self.id),
             'exp' : dt
         }
-        data.update(**kwargs)
 
         return jwt.encode(header=header, payload=data, key=key)
 

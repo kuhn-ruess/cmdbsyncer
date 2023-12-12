@@ -50,7 +50,7 @@ class Host(db.Document):
 
     export_problem = False
 
-    log = db.ListField(db.StringField())
+    log = db.ListField(field=db.StringField())
 
     cache = db.DictField()
 

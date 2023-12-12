@@ -3,7 +3,7 @@ Model
 """
 # pylint: disable=no-member, too-few-public-methods
 from application import db
-from application.modules.rule.models import FullCondition, CustomAttribute, rule_types
+from application.modules.rule.models import rule_types
 
 
 class CustomAttributeRule(db.Document):
@@ -12,10 +12,10 @@ class CustomAttributeRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(CustomAttribute))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="CustomAttribute"))
     render_attribute_outcomes = db.StringField()
 
     last_match = db.BooleanField(default=False)

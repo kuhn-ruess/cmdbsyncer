@@ -3,8 +3,7 @@ Netbox Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes, import-error
 from application import db
-from application.modules.rule.models import rule_types, FullCondition, \
-                                            AttributeRewriteAction
+from application.modules.rule.models import rule_types
 
 #   .-- Rewrite Attribute
 class NetboxRewriteAttributeRule(db.Document):
@@ -13,9 +12,9 @@ class NetboxRewriteAttributeRule(db.Document):
     """
     name = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(db.EmbeddedDocumentField(AttributeRewriteAction))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="AttributeRewriteAction"))
     render_attribute_rewrite = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
@@ -65,10 +64,10 @@ class NetboxCustomAttributes(db.Document):
     name = db.StringField(required=True, unique=True)
 
     condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(db.EmbeddedDocumentField(FullCondition))
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview
 
-    outcomes = db.ListField(db.EmbeddedDocumentField(NetboxOutcome))
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="NetboxOutcome"))
     render_netbox_outcome = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
