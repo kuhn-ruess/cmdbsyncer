@@ -121,17 +121,25 @@ def inventorize_hosts(account):
            '{ "op": "=", "left": "description", "right": "Check_MK Discovery"}'\
            '] }',
         "columns":
-           ['host_name', 'description', 'state', 'plugin_output'],
+           ['host_name', 'description', 'state', 'plugin_output', 'host_labels'],
     }
     print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Status Data")
     api_response = cmk.request(url, data=params, method="GET")
     status_inventory = {}
+    label_inventory = {}
     for service in api_response[0]['value']:
         host_name = service['extensions']['host_name']
         service_description = service['extensions']['description'].lower().replace(' ', '_')
         service_state = service['extensions']['state']
         service_output = service['extensions']['plugin_output']
+        labels = service['extensions']['host_labels']
         status_inventory.setdefault(host_name, {})
+        label_inventory.setdefault(host_name, {})
+        for label, label_value in labels.items():
+            if not label.startswith('cmk/'):
+                continue
+            label_inventory[host_name][label.replace('cmk/','')] = label_value
+
         status_inventory[host_name][f"{service_description}_state"] = service_state
         status_inventory[host_name][f"{service_description}_output"] = service_output
 
@@ -144,6 +152,7 @@ def inventorize_hosts(account):
         if db_host:
             db_host.update_inventory('cmk', config_inventory[hostname])
             db_host.update_inventory('cmk_svc', status_inventory.get(hostname, {}))
+            db_host.update_inventory('cmk_label', label_inventory.get(hostname, {}))
             db_host.save()
             print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
         else:
