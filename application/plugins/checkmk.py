@@ -174,7 +174,7 @@ def debug_host(hostname):
     try:
         db_host = Host.objects.get(hostname=hostname)
         for key in list(db_host.cache.keys()):
-            if key.lower().startswith('cmk'):
+            if key.lower().startswith('checkmk'):
                 del db_host.cache[key]
         db_host.save()
     except DoesNotExist:
