@@ -90,7 +90,7 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                         outcomes[f'add_{attribute_name}'] = splited[int(index)]
                     except:
                         logger.debug("Cant Split Value")
-                elif value_mode == '':
+                elif value_mode == 'jinja':
                     tpl = jinja2.Template(new_value)
                     new_value = tpl.render(HOSTNAME=self.hostname, **self.attributes)
                     outcomes[f'add_{attribute_name}'] = new_value
