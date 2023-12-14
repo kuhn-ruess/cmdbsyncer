@@ -27,8 +27,7 @@ class ConfigModelView(DefaultModelView):
         for host in Host.objects():
             host.cache = {}
             host.save()
-        flash("Cache deleted")
-        return redirect(f"{app.config['BASE_PREFIX']}admin")
+        return "Activation Done"
 
     def is_accessible(self):
         return current_user.is_authenticated and current_user.global_admin
