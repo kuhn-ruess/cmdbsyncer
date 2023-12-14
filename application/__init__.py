@@ -260,4 +260,5 @@ from application.modules.log.views import LogView
 admin.add_view(LogView(LogEntry, name="Log"))
 #.
 admin.add_link(MenuLink(name='Commit Changes',
-                        url=f"{app.config['BASE_PREFIX']}admin/config/commit_changes"))
+                        url="#activate_changes",
+                        class_name="toggle_activate_modal"))

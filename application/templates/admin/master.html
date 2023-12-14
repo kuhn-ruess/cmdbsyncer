@@ -57,11 +57,48 @@
 
         {% block body %}{% endblock %}
     </div>
+
+    <div id="activate_changes" class="modal" tabindex="-1" role="dialog">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Activate Changes running</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p id="activate_result"></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
 {% endblock %}
 
 {% block tail %}
     {{ super() }}
     <script type="text/javascript">
-    $("a#enabled>span.icon-minus-sign").parents('tr').css("background-color", "#f0f0f0").css("color", "grey");
+    $( document ).ready(function() {
+        $("a#enabled>span.icon-minus-sign").parents('tr').css("background-color", "#f0f0f0").css("color", "grey");
+
+        $('.toggle_activate_modal').click(function(){
+            $("#activate_result").html("Activation Started");
+            $('#activate_changes').modal();
+            $.get("{{config['BASE_PREFIX']}}admin/config/commit_changes", function(data) {
+                $("#activate_result").html(data);
+                setTimeout(function() {
+                    $('#activate_changes').modal('hide');
+                }, 1000);
+
+            })
+        });
+    });
+
+
+
     </script>
 {% endblock %}
