@@ -252,6 +252,10 @@ class CheckmkBiRuleView(DefaultModelView):
         'render_full_conditions': "Conditions",
     }
 
+    column_exclude_list = [
+        'conditions', 'outcomes',
+    ]
+
     form_overrides = {
         'render_cmk_bi_rule': HiddenField,
     }

@@ -2,7 +2,7 @@ Authlib==1.2.1
 docutils==0.20.1
 email-validator==2.1.0.post1
 Flask==3.0.0
-Flask-Admin==1.6.1
+Flask-Admin @ git+https://github.com/kuhn-ruess/flask-admin.git@master
 Flask-Bootstrap4==4.0.2
 Flask-Login==0.6.3
 flask-mongoengine @ git+https://github.com/kuhn-ruess/flask-mongoengine.git@master
