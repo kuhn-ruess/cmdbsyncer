@@ -158,6 +158,7 @@ class RuleModelView(DefaultModelView):
 
 
     column_default_sort = "sort_field"
+
     column_filters = (
        'name',
        'enabled',
@@ -183,6 +184,12 @@ class RuleModelView(DefaultModelView):
         'render_full_conditions': "Conditions",
         'render_attribute_outcomes': "New Attributes",
     }
+
+    column_exclude_list = [
+        'conditions', 'outcomes'
+    ]
+
+
 
     def is_accessible(self):
         """ Overwrite """

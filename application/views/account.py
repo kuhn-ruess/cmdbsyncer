@@ -29,6 +29,10 @@ class AccountModelView(DefaultModelView):
        'enabled',
     )
 
+    column_exclude_list = ['custom_fields', ]
+
+
+
     column_labels = {
         'password': 'Attributes',
     }

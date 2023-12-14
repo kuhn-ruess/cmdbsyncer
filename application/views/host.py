@@ -155,10 +155,7 @@ class ObjectModelView(DefaultModelView):
         'raw',
         'cache',
         'is_object',
-        'last_import_seen',
-        'last_import_sync',
         'last_export',
-        'available',
         'force_update',
     )
 
@@ -209,6 +206,10 @@ class HostModelView(DefaultModelView):
        ),
     )
 
+    column_labels = {
+        'source_account_name': "Account"
+    }
+
     page_size = 25
     can_set_page_size = True
 
@@ -231,26 +232,13 @@ class HostModelView(DefaultModelView):
         'raw',
         'cache',
         'is_object',
+        'last_export',
+        'force_update',
     )
 
     column_editable_list = (
         'force_update',
     )
-
-    #column_extra_row_actions = [LinkRowAction('fa fa-heartbeat', '/debug_rules?hostid={row_id}')]
-
-
-    #@action('force_update', 'Force Update')
-    #def action_update(self, ids):
-    #    """
-    #    Set force Update Attribute
-    #    """
-    #    for host_id in ids:
-    #        host = Host.objects.get(id=host_id)
-    #        host.force_update = True
-    #        host.save()
-    #    flash(f"Updated {len(ids)} hosts")
-    #    return self.index_view()
 
     def is_accessible(self):
         """ Overwrite """
