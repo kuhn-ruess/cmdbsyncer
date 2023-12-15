@@ -21,7 +21,8 @@ def _render_cronjob(_view, _context, model, _name):
     """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.jobs):
-        html += f"<tr><td>{idx}</td><td>{entry['name']}</td><td>{entry['command']}</td><td>{entry['account']}</td></tr>"
+        html += f"<tr><td>{idx}</td><td>{entry['name']}</td>"\
+                f"<td>{entry['command']}</td><td>{entry['account']}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -30,6 +31,11 @@ class CronGroupView(DefaultModelView):
     Cron Group View
     """
     column_default_sort = "folder_name"
+
+    column_exclude_list = [
+        'jobs',
+    ]
+
 
     column_filters = (
        'name',
