@@ -3,9 +3,8 @@ Netbox Rule Views
 """
 from markupsafe import Markup
 from wtforms import HiddenField, StringField
-from flask_admin.form import rules
 
-from application.modules.rule.views import RuleModelView, divider
+from application.modules.rule.views import RuleModelView
 from application.modules.netbox.models import netbox_outcome_types
 
 def _render_netbox_outcome(_view, _context, model, _name):
@@ -26,40 +25,6 @@ class NetboxCustomAttributesView(RuleModelView):
     """
     Custom Rule Model View
     """
-    #@TODO: Fix that it's not possible just to reference to from_subdocuments_template
-    form_subdocuments = {
-        'conditions': {
-            'form_subdocuments' : {
-                None: {
-                    'form_widget_args': {
-                        'hostname_match': {'style': 'background-color: #2EFE9A;' },
-                        'hostname': { 'style': 'background-color: #2EFE9A;', 'size': 50},
-                        'tag_match': { 'style': 'background-color: #81DAF5;' },
-                        'tag': { 'style': 'background-color: #81DAF5;' },
-                        'value_match': { 'style': 'background-color: #81DAF5;' },
-                        'value': { 'style': 'background-color: #81DAF5;'},
-                    },
-                    'form_overrides' : {
-                        'hostname': StringField,
-                        'tag': StringField,
-                        'value': StringField,
-                    },
-                'form_rules' : [
-                    rules.FieldSet(('match_type',), "Condition Match Type"),
-                    rules.HTML(divider % "Match on Host"),
-                    rules.FieldSet(
-                        ('hostname_match', 'hostname', 'hostname_match_negate'), "Host Match"),
-                    rules.HTML(divider % "Match on Attribute"),
-                    rules.FieldSet(
-                        (
-                            'tag_match', 'tag', 'tag_match_negate',
-                            'value_match', 'value', 'value_match_negate',
-                        ), "Attribute Match"),
-                ]
-                }
-            }
-        }
-    }
 
     def __init__(self, model, **kwargs):
         """
@@ -77,5 +42,20 @@ class NetboxCustomAttributesView(RuleModelView):
         self.column_labels.update({
             'render_netbox_outcome': "Netbox Actions",
         })
+
+        #pylint: disable=access-member-before-definition
+        base_config = dict(self.form_subdocuments)
+        base_config.update({
+            'outcomes': {
+                'form_subdocuments' : {
+                    '': {
+                        'form_overrides' : {
+                            'param': StringField,
+                        }
+                    },
+                }
+            }
+        })
+        self.form_subdocuments = base_config
 
         super().__init__(model, **kwargs)

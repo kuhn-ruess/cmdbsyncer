@@ -6,13 +6,13 @@ from wtforms import HiddenField, StringField
 from wtforms.validators import ValidationError
 from flask import request
 from flask_admin import expose
-from flask_admin.form import rules
 from mongoengine.errors import DoesNotExist
 
 from flask_login import current_user
 from application.views.default import DefaultModelView
 
-from application.modules.rule.views import RuleModelView, divider, _render_full_conditions
+from application.modules.rule.views import RuleModelView, \
+                    form_subdocuments_template, _render_full_conditions
 from application.modules.checkmk.models import action_outcome_types, CheckmkSite
 from application.plugins.checkmk import _load_rules
 from application.modules.checkmk.syncer import SyncCMK2
@@ -134,6 +134,20 @@ class CheckmkRuleView(RuleModelView):
             'render_checkmk_outcome': "Checkmk Outcomes",
         })
 
+        base_config = dict(self.form_subdocuments)
+        base_config.update({
+            'outcomes': {
+                'form_subdocuments' : {
+                    '': {
+                        'form_overrides' : {
+                            'action_param': StringField,
+                        }
+                    },
+                }
+            }
+        })
+        self.form_subdocuments = base_config
+
         super().__init__(model, **kwargs)
 
 def _render_rule_mngmt_outcome(_view, _context, model, _name):
@@ -161,15 +175,22 @@ class CheckmkGroupRuleView(RuleModelView):
     Custom Group Model View
     """
 
+
+    form_subdocuments = {
+        'outcome': {
+            'form_overrides' : {
+                'foreach': StringField,
+                'rewrite': StringField,
+                'rewrite_title': StringField,
+            }
+        },
+    }
+
+
     def __init__(self, model, **kwargs):
         """
         Update elements
         """
-        # Evil hack: Field not exists here,
-        # but RuleModelView defines it -> Error
-        if 'conditions' in self.form_subdocuments:
-            del self.form_subdocuments['conditions']
-
         # Default Form rules not match for the Fields of this Form
         self.form_rules = []
 
@@ -179,7 +200,9 @@ class CheckmkGroupRuleView(RuleModelView):
 
         self.form_overrides.update({
             'render_checkmk_group_outcome': HiddenField,
+            'name': StringField,
         })
+
 
         self.column_labels.update({
             'render_checkmk_group_outcome': "Create following Groups",
@@ -187,6 +210,19 @@ class CheckmkGroupRuleView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+
+bi_rule_template = form_subdocuments_template.copy()
+bi_rule_template.update({
+        'outcomes' : {
+            'form_subdocuments' : {
+                '': {
+                    'form_widget_args': {
+                        'rule_template' : {"rows": 10},
+                    },
+                }
+            }
+        }
+    })
 
 class CheckmkBiRuleView(DefaultModelView):
     """
@@ -198,49 +234,7 @@ class CheckmkBiRuleView(DefaultModelView):
         'render_cmk_bi_aggregation',
     )
 
-    #@TODO: Fix that it's not possible just to reference to from_subdocuments_template
-    form_subdocuments = {
-        'conditions': {
-            'form_subdocuments' : {
-                None: {
-                    'form_widget_args': {
-                        'hostname_match': {'style': 'background-color: #2EFE9A;' },
-                        'hostname': { 'style': 'background-color: #2EFE9A;' },
-                        'tag_match': { 'style': 'background-color: #81DAF5;' },
-                        'tag': { 'style': 'background-color: #81DAF5;' },
-                        'value_match': { 'style': 'background-color: #81DAF5;' },
-                        'value': { 'style': 'background-color: #81DAF5;'},
-                    },
-                    'form_overrides' : {
-                        'hostname': StringField,
-                        'tag': StringField,
-                        'value': StringField,
-                    },
-                    'form_rules' : [
-                        rules.FieldSet(('match_type',), "Condition Match Type"),
-                        rules.HTML(divider % "Match on Host"),
-                        rules.FieldSet(
-                            ('hostname_match', 'hostname', 'hostname_match_negate'), "Host Match"),
-                        rules.HTML(divider % "Match on Attribute"),
-                        rules.FieldSet(
-                            (
-                                'tag_match', 'tag', 'tag_match_negate',
-                                'value_match', 'value', 'value_match_negate',
-                            ), "Attribute Match"),
-                    ]
-                }
-            }
-        },
-        'outcomes' : {
-            'form_subdocuments' : {
-                None: {
-                    'form_widget_args': {
-                        'rule_template' : {"rows": 10},
-                    },
-                }
-            }
-        }
-    }
+    form_subdocuments = bi_rule_template
 
     column_formatters = {
         'render_full_conditions': _render_full_conditions,
@@ -271,46 +265,17 @@ class CheckmkBiRuleView(DefaultModelView):
 
         return super().on_model_change(form, model, is_created)
 
+    def __init__(self, model, **kwargs):
+        """
+        """
+        #self.form_subdocuments = bi_rule_template
+        super().__init__(model, **kwargs)
+
 
 class CheckmkMngmtRuleView(RuleModelView):
     """
     Custom Group Model View
     """
-
-    #@TODO: Fix that it's not possible just to reference to from_subdocuments_template
-    form_subdocuments = {
-        'conditions': {
-            'form_subdocuments' : {
-                None: {
-                    'form_widget_args': {
-                        'hostname_match': { 'style': 'background-color: #2EFE9A' },
-                        'hostname': { 'style': 'background-color: #2EFE9A' },
-                        'tag_match': { 'style': 'background-color: #81DAF5' },
-                        'tag': { 'style': 'background-color: #81DAF5' },
-                        'value_match': { 'style': 'background-color: #81DAF5' },
-                        'value': { 'style': 'background-color: #81DAF5' },
-                    },
-                    'form_overrides' : {
-                        'hostname': StringField,
-                        'tag': StringField,
-                        'value': StringField,
-                    },
-                    'form_rules' : [
-                        rules.FieldSet(('match_type',), "Condition Match Type"),
-                        rules.HTML(divider % "Match on Host"),
-                        rules.FieldSet(
-                            ('hostname_match', 'hostname', 'hostname_match_negate'), "Host Match"),
-                        rules.HTML(divider % "Match on Attribute"),
-                        rules.FieldSet(
-                            (
-                                'tag_match', 'tag', 'tag_match_negate',
-                                'value_match', 'value', 'value_match_negate',
-                            ), "Attribute Match"),
-                    ]
-                }
-            }
-        }
-    }
 
     def __init__(self, model, **kwargs):
         """
@@ -330,6 +295,24 @@ class CheckmkMngmtRuleView(RuleModelView):
         self.column_labels.update({
             'render_cmk_rule_mngmt': "Create following Rules",
         })
+
+        #pylint: disable=access-member-before-definition
+        base_config = dict(self.form_subdocuments)
+        base_config.update({
+            'outcomes': {
+                'form_subdocuments' : {
+                    '': {
+                        'form_overrides' : {
+                            'ruleset': StringField,
+                            'folder': StringField,
+                            'condition_host': StringField,
+                        }
+                    },
+                }
+            }
+        })
+        self.form_subdocuments = base_config
+
 
         super().__init__(model, **kwargs)
 
