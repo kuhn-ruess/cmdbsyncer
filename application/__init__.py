@@ -222,6 +222,19 @@ admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite At
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
                                     name="Custom Attributes", category="Netbox"))
 #.
+#   .-- Idoit
+admin.add_sub_category(name="Idoit", parent_name="Rules")
+
+from application.modules.idoit.views import IdoitCustomAttributesView
+from application.modules.idoit.models import IdoitCustomAttributes, \
+                                            IdoitRewriteAttributeRule
+admin.add_view(RewriteAttributeView(IdoitRewriteAttributeRule, name="Rewrite Attributes",
+                                                            category="Idoit"))
+admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
+                                    name="Custom Attributes", category="Idoit"))
+#.
+
+
 #   .-- Config
 from application.models.account import Account
 from application.views.account import AccountModelView
