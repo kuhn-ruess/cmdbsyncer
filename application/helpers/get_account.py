@@ -5,6 +5,12 @@ from mongoengine.errors import DoesNotExist
 from application.models.account import Account
 
 
+class AccountNotFoundError(Exception):
+    """
+    Raise if Account not found
+    """
+
+
 def get_account_by_name(name):
     """
     Get Account by Name or Return False
@@ -20,8 +26,7 @@ def get_account_by_name(name):
         account_dict['id'] = str(account_dict['_id'])
         return account_dict
     except DoesNotExist:
-        raise Exception("Account not found")
-
+        raise AccountNotFoundError("Account not found")
 
 def get_account_variable(macro):
     """
