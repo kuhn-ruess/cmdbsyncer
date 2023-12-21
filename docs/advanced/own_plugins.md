@@ -16,3 +16,7 @@ I recommend using the file plugins/example_source.py as base. Inside this file a
 1. Save the object
 1. Add some Print Output if needed
 1. Done :) 
+
+
+Notes:
+- Only Import syncer functions from syncerapi.v1, otherwise Updates can break your plugins
