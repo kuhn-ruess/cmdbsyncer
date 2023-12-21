@@ -101,6 +101,21 @@ def delete_cache():
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
 #.
+#   .-- Command: Delete Caches
+
+@_cli_sys.command('delete_inventory')
+def delete_cache():
+    """
+    Delete the inventory of all hosts
+    """
+    print(f"{CC.HEADER} ***** Delete Inventory ***** {CC.ENDC}")
+    for host in Host.objects():
+        logger.debug(f"Handling Host {host.hostname}")
+        host.inventory = {}
+        host.save()
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
+
+#.
 #   .-- Command: Delete all Hosts
 @_cli_sys.command('delete_all_hosts')
 def delete_all_hosts():

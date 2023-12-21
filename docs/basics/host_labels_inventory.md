@@ -17,9 +17,9 @@ can inventory data come from multiple sources. Inventory Keys share their source
 
 Example:
 
-- csv_ipaddress:127.0.0.1
-- csv_alias:Test Server
-- srctest_service_name: Test Service
+- csv/ipaddress:127.0.0.1
+- csv/alias:Test Server
+- srctest/service_name: Test Service
 
-In this example, you see Inventory Data of two sources, one is csv_, the other is srctest_.
-So, the plugin using the key csv_, will control all keys with csv_ and the plugin with srctest as key, the others.
+In this example, you see Inventory Data of two sources, one is csv, the other is srctest.
+So, the plugin using the key csv, will control all keys with csv/ and the plugin with srctest as key, the others.

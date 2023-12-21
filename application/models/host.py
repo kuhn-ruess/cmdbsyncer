@@ -162,7 +162,7 @@ class Host(db.Document):
         """
         Updates all inventory entries, with names who starting with given key.
         Ones not existing any more in new_data will be removed.
-        Will also reset the Cache for the Host.
+        Will also reset the Cache for the Host if some changes are detected.
 
 
         Args:
@@ -171,12 +171,18 @@ class Host(db.Document):
         """
         # pylint: disable=unnecessary-comprehension
         # Prevent runtime error
-        for name in [x for x in self.inventory.keys()]:
+        check_dict = {}
+        for name, value in [(x,y) for x,y in self.inventory.items()]:
             # Delete all existing keys of type
-            if name.startswith(key):
+            if name.startswith(key+"/"):
+                check_dict[name] = value
                 del self.inventory[name]
-        self.inventory.update({f"{key}_{x}":y for x, y in new_data.items()})
-        self.cache = {}
+
+        update_dict = {f"{key}/{x}":y for x, y in new_data.items()}
+        self.inventory.update(update_dict)
+
+        if check_dict != update_dict:
+            self.cache = {}
 
     def get_inventory(self, key_filter=False):
         """
