@@ -27,6 +27,8 @@ nav:
         - Rewrite Hostnames: basics/rewrite_hostnames.md
         - Filter: basics/filter.md
         - Debug Rules: basics/debug_rules.md
+      - Updates:
+        - Update to 3.5: updates/3-5.md
 
 
   - "Modules":

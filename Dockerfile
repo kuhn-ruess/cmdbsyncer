@@ -26,10 +26,13 @@ ENV TZ=Etc/Universal
 RUN ln -sf /usr/share/zoneinfo/Ect/Universal /etc/localtime
 
 COPY requirements.txt ./
-COPY ansible/requirements.txt ./ansible_reqirements.txt
+COPY requirements-extras.txt ./
+COPY requirements-ansible.txt ./
+
 RUN pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir -r requirements.txt
-RUN pip3 install --no-cache-dir -r ansible_reqirements.txt
+RUN pip3 install --no-cache-dir -r requirements-extras.txt
+RUN pip3 install --no-cache-dir -r requirements-ansible.txt
 
 
 ARG config
