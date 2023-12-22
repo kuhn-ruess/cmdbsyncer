@@ -341,6 +341,18 @@ class SyncCMK2(CMK2):
         update_reasons = []
         cmk_attributes = cmk_host['extensions']['attributes']
         cmk_labels = cmk_attributes.get('labels', {})
+
+
+        # Tags in labels would always lead to changes
+        # since they are not in the cmk labels
+        cmk_tags = {}
+        for label_key, label_value in list(labels.items()):
+            if label_key.startswith('cmk_tag_'):
+                cmk_tags[label_key] = label_value
+                del labels[label_key]
+
+        additional_attributes.update(cmk_tags)
+
         if labels != cmk_labels:
             do_update = True
             update_reasons.append("Labels not match")
