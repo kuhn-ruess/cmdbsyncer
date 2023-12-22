@@ -81,8 +81,8 @@ def inventorize_hosts(account):
     """
     Inventorize information from Checkmk Installation
     """
-    inventory_target = [
-        'site', 'inventory_failed','is_offline',
+    inventory_blacklist = [
+        'labels', 'locked_by', 'locked_attributes', 'network_scan'
     ]
     config = get_account_by_name(account)
     cmk = CMK2()
@@ -101,7 +101,7 @@ def inventorize_hosts(account):
         attributes = host['extensions']['effective_attributes']
         host_inventory = {}
         for attribute in attributes:
-            if attribute in inventory_target or attribute.startswith('tag_'):
+            if attribute not in inventory_blacklist:
                 host_inventory[attribute] = attributes[attribute]
         for label_key, label_value in attributes['labels'].items():
             if label_key.startswith('cmk/'):
@@ -276,6 +276,7 @@ def export_rules(account):
             syncer.account_name = target_config['name']
             syncer.config = target_config
             syncer.filter = rules['filter']
+
             syncer.rewrite = rules['rewrite']
             actions = CheckmkRulesetRule()
             actions.rules = CheckmkRuleMngmt.objects(enabled=True)

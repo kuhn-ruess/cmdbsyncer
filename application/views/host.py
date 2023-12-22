@@ -192,6 +192,7 @@ class HostModelView(DefaultModelView):
         'last_import_seen', 'last_import_sync', 'last_export', "export_problem",
         'source_account_name', 'raw', 'cache'
     ]
+
     column_filters = (
        'hostname',
        FilterHostnameRegex(
