@@ -149,12 +149,15 @@ class SyncIdoit(Plugin):
         Import objects from i-doit
         """
 
-        for device, data in self.get_server()().items():
-            host_obj = Host.get_host(device)
-            print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
-            labels = data
-            host_obj.update_host(labels)
-            do_save = host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
+        if self.get_server():
+            for device, data in self.get_server()().items():
+                host_obj = Host.get_host(device)
+                print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
+                labels = data
+                host_obj.update_host(labels)
+                do_save = host_obj.set_account(account_dict=self.config)
+                if do_save:
+                    host_obj.save()
+        else:
+            print(f"\n{CC.HEADER}no devices found{CC.ENDC}")
 #.
