@@ -117,7 +117,7 @@ class AccountModelView(DefaultModelView):
                 ('rewrite_hostname', ""),
                 ('driver', "ODBC Driver 18 for SQL Server"),
             ]
-        elif form.typ.data == 'idoit':
+        elif form.typ.data == 'i-doit':
             default_fields = [
                 ('api_token', ""),
             ]

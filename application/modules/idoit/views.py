@@ -1,5 +1,5 @@
 """
-Idoit Rule Views
+i-doit rule views
 """
 from markupsafe import Markup
 from wtforms import HiddenField, StringField
@@ -9,8 +9,9 @@ from application.modules.idoit.models import idoit_outcome_types
 
 def _render_idoit_outcome(_view, _context, model, _name):
     """
-    Render Netbox outcomes
+    Render i-doit outcome
     """
+
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcomes):
         html += f"<tr><td>{idx}</td><td>{dict(idoit_outcome_types)[entry.action]}</td>"
@@ -23,7 +24,7 @@ def _render_idoit_outcome(_view, _context, model, _name):
 #pylint: disable=too-few-public-methods
 class IdoitCustomAttributesView(RuleModelView):
     """
-    Custom Rule Model View
+    Custom rule model view
     """
 
     def __init__(self, model, **kwargs):
@@ -40,7 +41,7 @@ class IdoitCustomAttributesView(RuleModelView):
         })
 
         self.column_labels.update({
-            'render_idoit_outcome': "Idoit Actions",
+            'render_idoit_outcome': "i-doit actions",
         })
 
         #pylint: disable=access-member-before-definition
