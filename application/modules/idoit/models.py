@@ -1,5 +1,5 @@
 """
-Idoit Model
+i-doit Model
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes, import-error
 from application import db
@@ -10,6 +10,7 @@ class IdoitRewriteAttributeRule(db.Document):
     """
     Rule to rewrite existing Attributes
     """
+
     name = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -26,14 +27,15 @@ class IdoitRewriteAttributeRule(db.Document):
 
 
 idoit_outcome_types = [
-  ('id_device_type_sync', "Syncronise Device Type"),
-  ('ignore_host', "Ignore Host(s)"),
+  ('id_device_type_sync', "Syncronise device type"),
+  ('ignore_host', "Ignore host(s)"),
 ]
 
 class IdoitOutcome(db.EmbeddedDocument):
     """
-    Idoit Outcome
+    i-doit Outcome
     """
+
     action = db.StringField(choices=idoit_outcome_types)
     param = db.StringField()
     meta = {
@@ -42,7 +44,7 @@ class IdoitOutcome(db.EmbeddedDocument):
 
 class IdoitCustomAttributes(db.Document):
     """
-    Define Rule based Custom Idoit Variables
+    Define rule based custom i-doit variables
     """
 
     name = db.StringField(required=True, unique=True)
@@ -55,7 +57,6 @@ class IdoitCustomAttributes(db.Document):
     render_idoit_outcome = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
-
 
     enabled = db.BooleanField()
     sort_field = db.IntField(default=0)

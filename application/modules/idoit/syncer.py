@@ -1,5 +1,5 @@
 """
-Sync Objects with Idoit
+Sync objects with i-doit
 """
 #pylint: disable=no-member, too-many-locals, import-error
 import requests
@@ -18,28 +18,34 @@ if app.config.get("DISABLE_SSL_ERRORS"):
 
 class SyncIdoit(Plugin):
     """
-    Idoit Sync Options 
+    i-doit sync options
     """
+
 #   .-- Init
     def __init__(self):
         """
         Inital
         """
+
         self.log = log
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 #.
+
 #   .-- Get Host Data
     def get_host_data(self, db_host, attributes):
         """
         Return commands for fullfilling of the netbox params
         """
+
         return self.actions.get_outcomes(db_host, attributes)
 #.
+
 #   . -- Request
     def request(self, data, method='POST'):
         """
-        Handle Request to Idoit
+        Handle request to i-doit
         """
+
         address = self.config['address']
         url = f"{address}/src/jsonrpc.php"
 
@@ -54,7 +60,7 @@ class SyncIdoit(Plugin):
 
             logger.debug(f"Response Text: {response.text}")
             if response.status_code == 403:
-                raise Exception("Invalid Login, you may need to create a login token")
+                raise Exception("Invalid login, you may need to create a login token")
             try:
                 response_json = response.json()
             except:
@@ -63,12 +69,14 @@ class SyncIdoit(Plugin):
             return {}
         return response_json
 #.
+
 #   .-- Get Devices
     def get_server(self, syncer_only=False):
         """
         Read full list of devices
         """
-        print(f"{CC.OKGREEN} -- {CC.ENDC}Idoit: "\
+
+        print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: "\
               f"Read all servers")
 
         #TODO: Implement Filter for Objects manged by syncer
@@ -88,11 +96,13 @@ class SyncIdoit(Plugin):
         servers = self.request(json_data)['result']
         return {x['title']:x for x in servers}
 #.
+
 #   .--- Export Hosts
     def export_hosts(self):
         """
         Update Devices Table in Netbox
         """
+
         #pylint: disable=too-many-locals
         current_idoit_server = self.get_server(syncer_only=True)
 
@@ -132,10 +142,11 @@ class SyncIdoit(Plugin):
                 print(f"{CC.OKBLUE} *{CC.ENDC} Delete {hostname}")
                 print(host_data)
 #.
+
 #   .--- Import Hosts
     def import_hosts(self):
         """
-        Import Objects from Netbox to the Syncer
+        Import objects from i-doit
         """
 
         for device, data in self.get_server()().items():

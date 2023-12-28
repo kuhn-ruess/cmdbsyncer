@@ -1,5 +1,5 @@
 """
-idoit
+i-doit
 """
 #pylint: disable=too-many-arguments
 import click
@@ -34,43 +34,44 @@ def load_rules():
     }
 
 
-@app.cli.group(name='idoit')
+@app.cli.group(name='i-doit')
 def _cli_idoit():
-    """idoit related commands"""
+    """
+    i-doit related commands
+    """
 
 
+#   .-- Command: import hosts
 def import_hosts(account):
     """
-    Impor hosts from idoit
+    Import hosts from i-doit
     """
+    #pylint: disable=no-member, consider-using-generator
+
     target_config = get_account_by_name(account)
     syncer = SyncIdoit()
     syncer.config = target_config
     syncer.import_hosts()
 
-    #pylint: disable=no-member, consider-using-generator
 
 @_cli_idoit.command('import_hosts')
 @click.option("--account")
 def cli_import_hosts(account):
     """
-    ## Import Hosts from Idoit
-    ### Example
-    _./cmdbsyncer idoit import_hosts --account idoit
-
-
-    Args:
-        account (string): --account, Name of Account to read config from
+    Import hosts from i-doit
     """
+
     import_hosts(account)
+#.
 
 
+#   .-- Command: export hosts
 def export_hosts(account):
     """
-    Export Hosts
+    Export hosts to i-doit
     """
-    rules = load_rules()
 
+    rules = load_rules()
 
     target_config = get_account_by_name(account)
 
@@ -80,18 +81,26 @@ def export_hosts(account):
     syncer.config = target_config
     syncer.export_hosts()
 
+
 @_cli_idoit.command('export_hosts')
 @click.option("--account")
 def cli_export_hosts(account):
-    """ Export Hosts to idoit """
+    """
+    Export hosts to i-doit
+    """
+
     export_hosts(account)
+#.
 
 
-#   .-- Command: Debug Hosts
+#   .-- Command: debug hosts
 @_cli_idoit.command('debug_host')
 @click.argument("hostname")
 def idoit_host_debug(hostname):
-    """Debug Host Rules"""
+    """
+    Debug host rules
+    """
+
     print(f"{ColorCodes.HEADER} ***** Run Rules ***** {ColorCodes.ENDC}")
 
     rules = load_rules()
@@ -124,9 +133,9 @@ def idoit_host_debug(hostname):
     rules = syncer.get_host_data(db_host, attributes['all'])
 
     attribute_table("Full Attribute List", attributes['all'])
-    attribute_table("Filtered Attribute for Idoit Rules", attributes['filtered'])
+    attribute_table("Filtered Attribute for i-doit Rules", attributes['filtered'])
     attribute_table("Attributes for Rules ", rules)
 #.
 
-register_cronjob('idoit: Import Hosts', import_hosts)
-register_cronjob('idoit: Export Hosts', export_hosts)
+register_cronjob('i-doit: Import hosts', import_hosts)
+register_cronjob('i-doit: Export hosts', export_hosts)
