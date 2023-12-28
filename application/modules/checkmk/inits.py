@@ -84,6 +84,10 @@ def inventorize_hosts(account):
     inventory_blacklist = [
         'labels', 'locked_by', 'locked_attributes', 'network_scan'
     ]
+
+    pull_extra_values = [
+        'folder', 'is_cluster', 'is_offline'
+    ]
     config = get_account_by_name(account)
     cmk = CMK2()
     cmk.config = config
@@ -107,6 +111,9 @@ def inventorize_hosts(account):
             if label_key.startswith('cmk/'):
                 label_key = label_key.replace('cmk/','')
                 host_inventory['label_'+label_key] = label_value
+
+        for extra in pull_extra_values:
+            host_inventory[extra] = host['extensions'][extra]
 
         config_inventory[hostname] = host_inventory
 
