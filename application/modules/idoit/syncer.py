@@ -80,7 +80,7 @@ class SyncIdoit(Plugin):
               f"Read all servers")
 
         #TODO: Implement Filter for Objects manged by syncer
-        json_data ={
+        json_data = {
             "version": "2.0",
             "method": "cmdb.objects.read",
             "params": {
@@ -135,6 +135,77 @@ class SyncIdoit(Plugin):
                 print(f"Device type with {target_name}")
 
             print(custom_rules)
+            json_data = {
+                "version": "2.0",
+                "method": "cmdb.object.create",
+                "params": {
+                    "type": "C__OBJTYPE__SERVER",
+                    "title": hostname,
+                    "description": all_attributes["all"]["cmk/alias"],
+                    "apikey": self.config["api_token"],
+                    "language": "de",
+                    "categories": {
+                        "C__CATG__IP": [
+                            {
+                                "net_type": 1,
+                                "ipv4_assignment": 2,
+                                "primary": 1,
+                                "active": 1,
+                                "ipv4_address": all_attributes["all"]["cmk/ipaddress"],
+                                "primary_hostaddress": all_attributes["all"]["cmk/ipaddress"],
+                                "hostname": hostname,
+                                "domain": "domain.name",
+                                "id": 245
+                            }
+                        ],
+                        "C__CATG__MODEL": [
+                            {
+                                "manufacturer": "Hersteller",
+                                "title": "Hersteller Title",
+                                "serial":"1234",
+                                #"productid": "",
+                                #"service_tag": "",
+                                #"firmware": "",
+                            }
+                        ],
+                    },
+                },
+                # TENANT-ID
+                "id": 1
+            }
+            created = self.request(json_data)['result']
+
+            if created["success"]:
+                print("Host erstellt")
+            else:
+                print(f"Fehler: {created['message']}")
+
+            #json_data = {
+            #    "version": "2.0",
+            #    "method": "cmdb.category.save",
+            #    "params": {
+            #        "category": "C__CATG__IP",
+            #        "apikey": self.config["api_token"],
+            #        "object": created["id"],
+            #        "data": {
+            #            "ipv4_address": all_attributes["all"]["cmk/ipaddress"],
+            #            "hostname": hostname,
+            #            "domain": "domain.name",
+            #            "primary": 1,
+            #            "ipv4_assignment": 2,
+            #            "net_type": 1,
+            #            "active": 1,
+            #            "id": 245
+            #        }
+            #    },
+            #    "id": 1
+            #}
+            #ip = self.request(json_data)["result"]
+
+            #if ip["success"]:
+            #    print("IP erstellt")
+            #else:
+            #    print(f"Fehler: {ip['message']}")
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
         for hostname, host_data in current_idoit_server.items():
