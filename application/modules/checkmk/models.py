@@ -5,6 +5,23 @@ Checkmk Rules
 from application import db
 from application.modules.rule.models import rule_types
 
+
+
+attriubte_sources = [
+    ("cmk_inventory",  "HW/SW Inventory"),
+    ("cmk_services", "Service Plugin Output"),
+    ("cmk_attributes", "Attributes of Host"),
+    ("cmk_labels", "Labels of Host"),
+]
+
+class CheckmkInventorizeAttributes(db.Document):
+    """
+    Attributes to be inventorized from Checkmk
+    """
+    attribute_names = db.StringField(required=True)
+    attribute_source = db.StringField(choices=attriubte_sources)
+
+
 #   .-- Checkmk Attribute Filter
 class CheckmkFilterRule(db.Document):
     """

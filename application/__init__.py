@@ -16,7 +16,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.5.1'
+VERSION = '3.5.2'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -154,6 +154,10 @@ admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter", category="Chec
 admin.add_view(CheckmkRuleView(CheckmkRule, name="Export Rules", category="Checkmk"))
 admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
                                     name="Checkmk Groups Management", category="Checkmk"))
+
+from application.modules.checkmk.models import CheckmkInventorizeAttributes
+admin.add_view(DefaultModelView(CheckmkInventorizeAttributes, name="Inventorize Settings",
+                                                            category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkRuleMngmt
 from application.modules.checkmk.views import CheckmkMngmtRuleView
