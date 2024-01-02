@@ -173,6 +173,89 @@ class SyncIdoit(Plugin):
                 # TENANT-ID
                 "id": 1
             }
+
+            ###
+            # Batch request
+            #json_data = {
+            #    "version": "2.0",
+            #    "method": "cmdb.object.create",
+            #    "params": [
+            #        {
+            #            "type": "C__OBJTYPE__SERVER",
+            #            "title": hostname,
+            #            "description": all_attributes["all"]["cmk/alias"],
+            #            "apikey": self.config["api_token"],
+            #            "language": "de",
+            #            "categories": {
+            #                "C__CATG__IP": [
+            #                    {
+            #                        "net_type": 1,
+            #                        "ipv4_assignment": 2,
+            #                        "primary": 1,
+            #                        "active": 1,
+            #                        "ipv4_address": all_attributes["all"]["cmk/ipaddress"],
+            #                        "primary_hostaddress": all_attributes["all"]["cmk/ipaddress"],
+            #                        "hostname": hostname,
+            #                        "domain": "domain.name",
+            #                        "id": 245
+            #                    }
+            #                ],
+            #                "C__CATG__MODEL": [
+            #                    {
+            #                        "manufacturer": "Hersteller",
+            #                        "title": "Hersteller Title",
+            #                        "serial":"1234",
+            #                        #"productid": "",
+            #                        #"service_tag": "",
+            #                        #"firmware": "",
+            #                    }
+            #                ],
+            #            },
+            #            # ID of request
+            #            "id": 1,
+            #        },
+            #        {
+            #            "type": "C__OBJTYPE__SERVER",
+            #            "title": hostname,
+            #            "description": all_attributes["all"]["cmk/alias"],
+            #            "apikey": self.config["api_token"],
+            #            "language": "de",
+            #            "categories": {
+            #                "C__CATG__IP": [
+            #                    {
+            #                        "net_type": 1,
+            #                        "ipv4_assignment": 2,
+            #                        "primary": 1,
+            #                        "active": 1,
+            #                        "ipv4_address": all_attributes["all"]["cmk/ipaddress"],
+            #                        "primary_hostaddress": all_attributes["all"]["cmk/ipaddress"],
+            #                        "hostname": hostname,
+            #                        "domain": "domain.name",
+            #                        "id": 245
+            #                    }
+            #                ],
+            #                "C__CATG__MODEL": [
+            #                    {
+            #                        "manufacturer": "Hersteller",
+            #                        "title": "Hersteller Title",
+            #                        "serial":"1234",
+            #                        #"productid": "",
+            #                        #"service_tag": "",
+            #                        #"firmware": "",
+            #                    }
+            #                ],
+            #            },
+            #            # ID of request
+            #            "id": 2,
+            #        },
+            #    ],
+            #    # TENANT-ID
+            #    "id": 1
+            #}
+
+            ### Response batch request
+            # Array of all responses with id
+
             created = self.request(json_data)['result']
 
             if created["success"]:
@@ -198,6 +281,7 @@ class SyncIdoit(Plugin):
             #            "id": 245
             #        }
             #    },
+            #    # TENANT-ID
             #    "id": 1
             #}
             #ip = self.request(json_data)["result"]
