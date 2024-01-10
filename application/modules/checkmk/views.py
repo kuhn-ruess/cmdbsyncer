@@ -234,6 +234,10 @@ class CheckmkBiRuleView(DefaultModelView):
         'render_cmk_bi_aggregation',
     )
 
+    column_editable_list = [
+        'enabled',
+    ]
+
     form_subdocuments = bi_rule_template
 
     column_formatters = {
@@ -333,12 +337,20 @@ class CheckmkSiteView(DefaultModelView):
     """
     Checkmk Site Management Config
     """
+
+    column_editable_list = [
+        'enabled',
+    ]
+
 class CheckmkTagMngmtView(DefaultModelView):
     """
     Checkmk Tag Management
     """
 
     column_exclude_list = []
+    column_editable_list = [
+        'enabled',
+    ]
 
 
 class CheckmkUserMngmtView(DefaultModelView):
@@ -349,6 +361,12 @@ class CheckmkUserMngmtView(DefaultModelView):
     column_exclude_list = [
         'password', 'email',
         'pager_address'
+    ]
+
+    column_editable_list = [
+        'disabled',
+        'remove_if_found',
+        'disable_login'
     ]
 
 
@@ -376,6 +394,10 @@ class CheckmkFolderPoolView(DefaultModelView):
     Folder Pool Model
     """
     column_default_sort = "folder_name"
+
+    column_editable_list = [
+        'enabled',
+    ]
 
     column_filters = (
        'folder_name',
