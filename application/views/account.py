@@ -81,6 +81,9 @@ class AccountModelView(DefaultModelView):
             default_fields = [
                 ('hostname_field', ''),
                 ('rewrite_hostname', ""),
+                ('table', ""),
+                ('fields', ""),
+                ('database', ""),
             ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
