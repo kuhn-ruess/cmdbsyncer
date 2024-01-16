@@ -3,7 +3,6 @@ Sync objects with i-doit
 """
 #pylint: disable=no-member, too-many-locals, import-error
 import requests
-from pprint import pprint
 from requests.auth import HTTPBasicAuth
 
 from application.models.host import Host
@@ -42,7 +41,7 @@ class SyncIdoit(Plugin):
 
     def get_host_data(self, db_host, attributes):
         """
-        Return commands for fullfilling of the netbox params
+        Return commands for fullfilling of the idoit params
         """
 
         return self.actions.get_outcomes(db_host, attributes)
@@ -121,7 +120,6 @@ class SyncIdoit(Plugin):
         }
 
         response = self.request(json_data)['result']
-        pprint(response)
         blacklist = [
             'C__CATG__LOGBOOK',
         ]
@@ -135,7 +133,6 @@ class SyncIdoit(Plugin):
                 self.category_cache[cache_name] = \
                         self.get_category_attributes(obj_id, cat['const'])
                 self.category_cache['const'] = cat['const']
-                pprint(self.category_cache[cache_name])
 
             yield self.category_cache[cache_name]
 
@@ -158,12 +155,11 @@ class SyncIdoit(Plugin):
         }
         response = self.request(json_data)
         if 'result' in response:
-            pprint(response)
             return response['result']
         return {}
 #.
 #   .-- Get I-doit Objects
-    def get_objects(self):
+    def get_objects(self, get_categories=False):
         """
         Read full list of devices
         """
@@ -187,78 +183,57 @@ class SyncIdoit(Plugin):
         servers = {}
         for server in self.request(json_data)['result']:
             title = server['title']
-            categories = [x for x in self.get_object_categories(server['id']) if x]
-
-            if title in servers:
-                servers[title]['categories'] += categories
-            else:
-                servers[title] = {}
+            if get_categories:
+                categories = [x for x in self.get_object_categories(server['id']) if x]
                 server['categories'] = categories
-            servers[title].update(server)
+            servers[title] = server
         return servers.items()
 #.
 #   .--- Get Object Payload
 
-    def get_object_payload(self, db_host, attributes):
+    def get_object_payload(self, db_host, attributes, rules, obj_id=False):
         """
         Get the Basic Object Payload to create or Update a object
         """
+
+        if obj_id:
+            method = "cmdb.object.update"
+            #method = "cmdb.category.save"
+        else:
+            method = "cmdb.object.create"
+
         hostname = db_host.hostname
-        return {
+        payload =  {
            "version": "2.0",
-           "method": "cmdb.object.create",
+           "method": method,
            "params": {
                "type": "C__OBJTYPE__SERVER",
                "title": hostname,
-               "description": attributes["cmk/alias"],
+               "description": attributes["cmk__alias"], #@TODO
                "apikey": self.config["api_token"],
                "language": "de",
-               "categories": {
-                   "C__CATG__IP": [
-                       {
-                           "net_type": 1,
-                           "ipv4_assignment": 2,
-                           "primary": 1,
-                           "active": 1,
-                           "ipv4_address": attributes["cmk/ipaddress"],
-                           "primary_hostaddress": attributes["cmk/ipaddress"],
-                           "hostname": hostname,
-                           "domain": "domain.name",
-                           "id": 245
-                       }
-                   ],
-                   "C__CATG__MODEL": [
-                       {
-                           "manufacturer": "Hersteller",
-                           "title": "Hersteller Title",
-                           "serial":"1234",
-                           #"productid": "",
-                           #"service_tag": "",
-                           #"firmware": "",
-                       }
-                   ],
-               },
+               "categories": rules.get('id_category', {})
            },
            # TENANT-ID
            "id": 1
         }
 
-#. 
+        if obj_id:
+            payload['params']['entry'] = obj_id
 
-
-
+        print(payload)
+        return payload
+#.
 #   .--- Export Hosts
     def export_hosts(self):
         """
-        Update Devices Table in Netbox
+        Update Devices Table in Idoit
         """
 
         #pylint: disable=too-many-locals
 
         print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read all objects from I-doit")
         current_idoit_objects = dict(self.get_objects())
-
-
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
         db_objects = Host.get_export_hosts()
@@ -282,70 +257,27 @@ class SyncIdoit(Plugin):
                 continue
 
             print(f"\n{CC.HEADER}({process:.0f}%) {objectname}{CC.ENDC}")
-            current_idoit_object = current_idoit_objects[objectname]
-            object_payload = self.get_object_payload(db_host, all_attributes['all'])
+            #current_idoit_object = current_idoit_objects[objectname]
 
-
-
-        return
-
-        if False:
-            if custom_rules.get('id_device_type_sync'):
-                attribute_to_sync = custom_rules['id_device_type_sync']
-                target_name = all_attributes['all'].get(attribute_to_sync)
-                print(f"Device type with {target_name}")
-
-            print(custom_rules)
-
-
-            created = self.request(json_data)['result']
-
-            if created["success"]:
-                print("Host erstellt")
+            current_id = False
+            if objectname in current_idoit_objects:
+                current_id = current_idoit_objects[objectname]['id']
+                print(f"{CC.OKBLUE} *{CC.ENDC} Update Host id {current_id}")
             else:
-                print(f"Fehler: {created['message']}")
+                print(f"{CC.OKBLUE} *{CC.ENDC} Create Host")
 
-            #json_data = {
-            #    "version": "2.0",
-            #    "method": "cmdb.category.save",
-            #    "params": {
-            #        "category": "C__CATG__IP",
-            #        "apikey": self.config["api_token"],
-            #        "object": created["id"],
-            #        "data": {
-            #            "ipv4_address": all_attributes["all"]["cmk/ipaddress"],
-            #            "hostname": hostname,
-            #            "domain": "domain.name",
-            #            "primary": 1,
-            #            "ipv4_assignment": 2,
-            #            "net_type": 1,
-            #            "active": 1,
-            #            "id": 245
-            #        }
-            #    },
-            #    # TENANT-ID
-            #    "id": 1
-            #}
-            #ip = self.request(json_data)["result"]
+            payload = self.get_object_payload(db_host,
+                                              all_attributes['all'],
+                                              custom_rules, current_id)
+            self.request(payload)
 
-            #if ip["success"]:
-            #    print("IP erstellt")
-            #else:
-            #    print(f"Fehler: {ip['message']}")
-
-        print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
-        for hostname, host_data in current_idoit_server.items():
-            if hostname not in found_hosts:
-                print(f"{CC.OKBLUE} *{CC.ENDC} Delete {hostname}")
-                print(host_data)
-#.
 #   .--- Import Hosts
     def import_hosts(self):
         """
         Import objects from i-doit
         """
 
-        if objects := self.get_objects():
+        if objects := self.get_objects(get_categories=True):
             for device, labels in objects:
                 host_obj = Host.get_host(device)
                 print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
