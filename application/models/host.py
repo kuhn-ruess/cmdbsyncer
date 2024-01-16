@@ -171,6 +171,8 @@ class Host(db.Document):
         """
         # pylint: disable=unnecessary-comprehension
         # Prevent runtime error
+        if not new_data:
+            return
         check_dict = {}
         for name, value in [(x,y) for x,y in self.inventory.items()]:
             # Delete all existing keys of type
@@ -181,6 +183,8 @@ class Host(db.Document):
         update_dict = {f"{key}/{x}":y for x, y in new_data.items()}
         self.inventory.update(update_dict)
 
+        # If the inventory is changed, the cache 
+        # is not longer valid
         if check_dict != update_dict:
             self.cache = {}
 
