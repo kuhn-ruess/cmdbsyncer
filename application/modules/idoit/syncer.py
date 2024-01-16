@@ -3,6 +3,7 @@ Sync objects with i-doit
 """
 #pylint: disable=no-member, too-many-locals, import-error
 import requests
+from pprint import pprint
 from requests.auth import HTTPBasicAuth
 
 from application.models.host import Host
@@ -16,10 +17,19 @@ if app.config.get("DISABLE_SSL_ERRORS"):
     disable_warnings(InsecureRequestWarning)
 
 
+CATEGORY_TEMPLATES = {
+    'C__CATG__MODEL' : {'key': 'manufacturer'},
+    'C__CATG__CPU' : {},
+    'C__CATG__IP' : {},
+}
+
+
 class SyncIdoit(Plugin):
     """
     i-doit sync options
     """
+
+    category_cache = {}
 
 #   .-- Init
     def __init__(self):
@@ -29,9 +39,7 @@ class SyncIdoit(Plugin):
 
         self.log = log
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
-#.
 
-#   .-- Get Host Data
     def get_host_data(self, db_host, attributes):
         """
         Return commands for fullfilling of the netbox params
@@ -39,7 +47,6 @@ class SyncIdoit(Plugin):
 
         return self.actions.get_outcomes(db_host, attributes)
 #.
-
 #   . -- Request
     def request(self, data, method='POST'):
         """
@@ -69,9 +76,94 @@ class SyncIdoit(Plugin):
             return {}
         return response_json
 #.
+#   .-- Get I-Doit Category
+    def get_object_categories(self, obj_id):
+        """
+        Get all Categories for a Object in I-Doit
+        {'id': 1,
+         'jsonrpc': '2.0',
+         'result': {'catg': [{'const': 'C__CATG__RELATION',
+                              'id': '82',
+                              'multi_value': '1',
+                              'source_table': 'isys_catg_relation',
+                              'title': 'Relationship'},
+                             {'const': 'C__CATG__GLOBAL',
+                              'id': '1',
+                              'multi_value': '0',
+                              'source_table': 'isys_catg_global',
+                              'title': 'General'},
+                             {'const': 'C__CATG__LOGBOOK',
+                              'id': '22',
+                              'multi_value': '1',
+                              'source_table': 'isys_catg_logb',
+                              'title': 'Logbook'}],
+                    'cats': [{'const': 'C__CATS__REPLICATION',
+                              'id': '71',
+                              'multi_value': '0',
+                              'source_table': 'isys_cats_replication_list',
+                              'title': 'Replication'},
+                             {'const': 'C__CATS__REPLICATION_PARTNER',
+                              'id': '72',
+                              'multi_value': '1',
+                              'parent': '71',
+                              'source_table': 'isys_cats_replication_partner_list',
+                              'title': 'Replication partner'}]}}
+        """
+        json_data = {
+            'id': 1,
+            'version': '2.0',
+            'method': 'cmdb.object_type_categories.read',
+            'params': {
+                'apikey': self.config['api_token'],
+                'language': 'de',
+                'type': obj_id,
+            },
+        }
 
-#   .-- Get Devices
-    def get_server(self, syncer_only=False):
+        response = self.request(json_data)['result']
+        pprint(response)
+        blacklist = [
+            'C__CATG__LOGBOOK',
+        ]
+        for cat in response['catg']:
+            if cat['const'] in blacklist:
+                continue
+            if cat['const'] not in CATEGORY_TEMPLATES.keys():
+                continue
+            cache_name = f"{cat['id']}_{cat['const']}"
+            if cache_name not in self.category_cache:
+                self.category_cache[cache_name] = \
+                        self.get_category_attributes(obj_id, cat['const'])
+                self.category_cache['const'] = cat['const']
+                pprint(self.category_cache[cache_name])
+
+            yield self.category_cache[cache_name]
+
+#.
+#   .-- Get I-Doit Category Attributes
+    def get_category_attributes(self, obj_id, const_id):
+        """
+        Get the the Attributes for a Category
+        """
+        json_data = {
+            'id': 1,
+            'version': '2.0',
+            'method': 'cmdb.category.read',
+            'params': {
+                'apikey': self.config['api_token'],
+                'language': 'de',
+                'category': const_id,
+                'objID': obj_id,
+            },
+        }
+        response = self.request(json_data)
+        if 'result' in response:
+            pprint(response)
+            return response['result']
+        return {}
+#.
+#   .-- Get I-doit Objects
+    def get_objects(self):
         """
         Read full list of devices
         """
@@ -79,7 +171,6 @@ class SyncIdoit(Plugin):
         print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: "\
               f"Read all servers")
 
-        #TODO: Implement Filter for Objects manged by syncer
         json_data = {
             "version": "2.0",
             "method": "cmdb.objects.read",
@@ -93,9 +184,68 @@ class SyncIdoit(Plugin):
             },
             "id": 1
         }
-        servers = self.request(json_data)['result']
-        return {x['title']:x for x in servers}
+        servers = {}
+        for server in self.request(json_data)['result']:
+            title = server['title']
+            categories = [x for x in self.get_object_categories(server['id']) if x]
+
+            if title in servers:
+                servers[title]['categories'] += categories
+            else:
+                servers[title] = {}
+                server['categories'] = categories
+            servers[title].update(server)
+        return servers.items()
 #.
+#   .--- Get Object Payload
+
+    def get_object_payload(self, db_host, attributes):
+        """
+        Get the Basic Object Payload to create or Update a object
+        """
+        hostname = db_host.hostname
+        return {
+           "version": "2.0",
+           "method": "cmdb.object.create",
+           "params": {
+               "type": "C__OBJTYPE__SERVER",
+               "title": hostname,
+               "description": attributes["cmk/alias"],
+               "apikey": self.config["api_token"],
+               "language": "de",
+               "categories": {
+                   "C__CATG__IP": [
+                       {
+                           "net_type": 1,
+                           "ipv4_assignment": 2,
+                           "primary": 1,
+                           "active": 1,
+                           "ipv4_address": attributes["cmk/ipaddress"],
+                           "primary_hostaddress": attributes["cmk/ipaddress"],
+                           "hostname": hostname,
+                           "domain": "domain.name",
+                           "id": 245
+                       }
+                   ],
+                   "C__CATG__MODEL": [
+                       {
+                           "manufacturer": "Hersteller",
+                           "title": "Hersteller Title",
+                           "serial":"1234",
+                           #"productid": "",
+                           #"service_tag": "",
+                           #"firmware": "",
+                       }
+                   ],
+               },
+           },
+           # TENANT-ID
+           "id": 1
+        }
+
+#. 
+
+
 
 #   .--- Export Hosts
     def export_hosts(self):
@@ -104,7 +254,11 @@ class SyncIdoit(Plugin):
         """
 
         #pylint: disable=too-many-locals
-        current_idoit_server = self.get_server(syncer_only=True)
+
+        print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read all objects from I-doit")
+        current_idoit_objects = dict(self.get_objects())
+
+
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
         db_objects = Host.get_export_hosts()
@@ -113,7 +267,7 @@ class SyncIdoit(Plugin):
         found_hosts = []
 
         for db_host in db_objects:
-            hostname = db_host.hostname
+            objectname = db_host.hostname
             counter += 1
             process = 100.0 * counter / total
 
@@ -121,140 +275,28 @@ class SyncIdoit(Plugin):
             if not all_attributes:
                 continue
 
-            found_hosts.append(db_host.hostname)
+            found_hosts.append(objectname)
 
             custom_rules = self.get_host_data(db_host, all_attributes['all'])
             if custom_rules.get('ignore_host'):
                 continue
 
-            print(f"\n{CC.HEADER}({process:.0f}%) {hostname}{CC.ENDC}")
+            print(f"\n{CC.HEADER}({process:.0f}%) {objectname}{CC.ENDC}")
+            current_idoit_object = current_idoit_objects[objectname]
+            object_payload = self.get_object_payload(db_host, all_attributes['all'])
 
+
+
+        return
+
+        if False:
             if custom_rules.get('id_device_type_sync'):
                 attribute_to_sync = custom_rules['id_device_type_sync']
                 target_name = all_attributes['all'].get(attribute_to_sync)
                 print(f"Device type with {target_name}")
 
             print(custom_rules)
-            json_data = {
-                "version": "2.0",
-                "method": "cmdb.object.create",
-                "params": {
-                    "type": "C__OBJTYPE__SERVER",
-                    "title": hostname,
-                    "description": all_attributes["all"]["cmk/alias"],
-                    "apikey": self.config["api_token"],
-                    "language": "de",
-                    "categories": {
-                        "C__CATG__IP": [
-                            {
-                                "net_type": 1,
-                                "ipv4_assignment": 2,
-                                "primary": 1,
-                                "active": 1,
-                                "ipv4_address": all_attributes["all"]["cmk/ipaddress"],
-                                "primary_hostaddress": all_attributes["all"]["cmk/ipaddress"],
-                                "hostname": hostname,
-                                "domain": "domain.name",
-                                "id": 245
-                            }
-                        ],
-                        "C__CATG__MODEL": [
-                            {
-                                "manufacturer": "Hersteller",
-                                "title": "Hersteller Title",
-                                "serial":"1234",
-                                #"productid": "",
-                                #"service_tag": "",
-                                #"firmware": "",
-                            }
-                        ],
-                    },
-                },
-                # TENANT-ID
-                "id": 1
-            }
 
-            ###
-            # Batch request
-            #json_data = {
-            #    "version": "2.0",
-            #    "method": "cmdb.object.create",
-            #    "params": [
-            #        {
-            #            "type": "C__OBJTYPE__SERVER",
-            #            "title": hostname,
-            #            "description": all_attributes["all"]["cmk/alias"],
-            #            "apikey": self.config["api_token"],
-            #            "language": "de",
-            #            "categories": {
-            #                "C__CATG__IP": [
-            #                    {
-            #                        "net_type": 1,
-            #                        "ipv4_assignment": 2,
-            #                        "primary": 1,
-            #                        "active": 1,
-            #                        "ipv4_address": all_attributes["all"]["cmk/ipaddress"],
-            #                        "primary_hostaddress": all_attributes["all"]["cmk/ipaddress"],
-            #                        "hostname": hostname,
-            #                        "domain": "domain.name",
-            #                        "id": 245
-            #                    }
-            #                ],
-            #                "C__CATG__MODEL": [
-            #                    {
-            #                        "manufacturer": "Hersteller",
-            #                        "title": "Hersteller Title",
-            #                        "serial":"1234",
-            #                        #"productid": "",
-            #                        #"service_tag": "",
-            #                        #"firmware": "",
-            #                    }
-            #                ],
-            #            },
-            #            # ID of request
-            #            "id": 1,
-            #        },
-            #        {
-            #            "type": "C__OBJTYPE__SERVER",
-            #            "title": hostname,
-            #            "description": all_attributes["all"]["cmk/alias"],
-            #            "apikey": self.config["api_token"],
-            #            "language": "de",
-            #            "categories": {
-            #                "C__CATG__IP": [
-            #                    {
-            #                        "net_type": 1,
-            #                        "ipv4_assignment": 2,
-            #                        "primary": 1,
-            #                        "active": 1,
-            #                        "ipv4_address": all_attributes["all"]["cmk/ipaddress"],
-            #                        "primary_hostaddress": all_attributes["all"]["cmk/ipaddress"],
-            #                        "hostname": hostname,
-            #                        "domain": "domain.name",
-            #                        "id": 245
-            #                    }
-            #                ],
-            #                "C__CATG__MODEL": [
-            #                    {
-            #                        "manufacturer": "Hersteller",
-            #                        "title": "Hersteller Title",
-            #                        "serial":"1234",
-            #                        #"productid": "",
-            #                        #"service_tag": "",
-            #                        #"firmware": "",
-            #                    }
-            #                ],
-            #            },
-            #            # ID of request
-            #            "id": 2,
-            #        },
-            #    ],
-            #    # TENANT-ID
-            #    "id": 1
-            #}
-
-            ### Response batch request
-            # Array of all responses with id
 
             created = self.request(json_data)['result']
 
@@ -297,18 +339,16 @@ class SyncIdoit(Plugin):
                 print(f"{CC.OKBLUE} *{CC.ENDC} Delete {hostname}")
                 print(host_data)
 #.
-
 #   .--- Import Hosts
     def import_hosts(self):
         """
         Import objects from i-doit
         """
 
-        if self.get_server():
-            for device, data in self.get_server()().items():
+        if objects := self.get_objects():
+            for device, labels in objects:
                 host_obj = Host.get_host(device)
                 print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
-                labels = data
                 host_obj.update_host(labels)
                 do_save = host_obj.set_account(account_dict=self.config)
                 if do_save:
