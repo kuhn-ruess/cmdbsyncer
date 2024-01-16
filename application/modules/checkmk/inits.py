@@ -95,6 +95,14 @@ def inventorize_hosts(account):
     cmk = CMK2()
     cmk.config = config
 
+
+    # Check if Rules are set,
+    # If not, abort to prevent loss of data
+    if not fields:
+        raise CmkException("No Inventory Rules configured")
+
+
+
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
           f"{ColorCodes.UNDERLINE}{account}{ColorCodes.ENDC}")
 
