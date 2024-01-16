@@ -27,7 +27,7 @@ class IdoitRewriteAttributeRule(db.Document):
 
 
 idoit_outcome_types = [
-  ('id_device_type_sync', "Syncronise device type"),
+  ('id_category', "Category Template"),
   ('ignore_host', "Ignore host(s)"),
 ]
 
