@@ -3,13 +3,15 @@
 Inits for the Plugins
 """
 #pylint: disable=too-many-locals
+import base64
+import ast
 from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 from application.models.host import Host
 from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
-from application.modules.checkmk.models import CheckmkRuleMngmt, CheckmkBiRule, CheckmkBiAggregation
+from application.modules.checkmk.models import CheckmkRuleMngmt, CheckmkBiRule, CheckmkBiAggregation, CheckmkInventorizeAttributes
 from application.plugins.checkmk import _load_rules
 
 
@@ -81,77 +83,138 @@ def inventorize_hosts(account):
     """
     Inventorize information from Checkmk Installation
     """
-    inventory_blacklist = [
-        'labels', 'locked_by', 'locked_attributes', 'network_scan'
-    ]
 
-    pull_extra_values = [
-        'folder', 'is_cluster', 'is_offline'
-    ]
+    fields = {}
+
+    for rule in CheckmkInventorizeAttributes.objects():
+        fields.setdefault(rule.attribute_source, [])
+        field_list = [x.strip() for x in rule.attribute_names.split(',')]
+        fields[rule.attribute_source] += field_list
+
     config = get_account_by_name(account)
     cmk = CMK2()
     cmk.config = config
 
+
+    # Check if Rules are set,
+    # If not, abort to prevent loss of data
+    if not fields:
+        raise CmkException("No Inventory Rules configured")
+
+
+
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
           f"{ColorCodes.UNDERLINE}{account}{ColorCodes.ENDC}")
 
-
-    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Config Data")
-    url = "domain-types/host_config/collections/all?effective_attributes=true"
-    api_hosts = cmk.request(url, method="GET")
-    config_inventory = {}
-    for host in api_hosts[0]['value']:
-        hostname = host['id']
-        attributes = host['extensions']['effective_attributes']
-        host_inventory = {}
-        for attribute in attributes:
-            if attribute not in inventory_blacklist:
-                host_inventory[attribute] = attributes[attribute]
-        for label_key, label_value in attributes['labels'].items():
-            if label_key.startswith('cmk/'):
-                label_key = label_key.replace('cmk/','')
-                host_inventory['label_'+label_key] = label_value
-
-        for extra in pull_extra_values:
-            host_inventory[extra] = host['extensions'][extra]
-
-        config_inventory[hostname] = host_inventory
-
-
     # Inventory for Status Information
-    url = "domain-types/service/collections/all"
-    params={
-        "query":
-           '{"op": "or", "expr": ['\
-           '{ "op": "=", "left": "description", "right": "Check_MK"}, '\
-           '{ "op": "=", "left": "description", "right": "Check_MK Agent"},'\
-           '{ "op": "=", "left": "description", "right": "Check_MK Discovery"}'\
-           '] }',
-        "columns":
-           ['host_name', 'description', 'state', 'plugin_output', 'host_labels'],
-    }
     print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Status Data")
+    url = "domain-types/service/collections/all"
+
+    columns = ['host_name', 'description', 'state', 'plugin_output', 'host_labels']
+
+    if fields.get('cmk_inventory'):
+        columns.append('host_mk_inventory')
+    if fields.get('cmk_services'):
+        expr = ''
+        for field in fields['cmk_services']:
+            expr += f'{{ "op": "=", "left": "description", "right": "{field}"}},'
+        expr = expr[:-1]
+        params={
+            "query":
+               '{"op": "or",'\
+               f' "expr": [{expr}]'\
+               '}',
+
+            "columns": columns
+        }
+    else:
+        params={
+            "query":
+               '{ "op": "=", "left": "description", "right": "Check_MK"}',
+            "columns": columns
+        }
+
     api_response = cmk.request(url, data=params, method="GET")
     status_inventory = {}
     label_inventory = {}
+    hw_sw_inventory = {}
     for service in api_response[0]['value']:
-        host_name = service['extensions']['host_name']
+        hostname = service['extensions']['host_name']
         service_description = service['extensions']['description'].lower().replace(' ', '_')
         service_state = service['extensions']['state']
         service_output = service['extensions']['plugin_output']
         labels = service['extensions']['host_labels']
-        status_inventory.setdefault(host_name, {})
-        label_inventory.setdefault(host_name, {})
+        status_inventory.setdefault(hostname, {})
+        label_inventory.setdefault(hostname, {})
         for label, label_value in labels.items():
-            if not label.startswith('cmk/'):
-                continue
-            label_inventory[host_name][label.replace('cmk/','')] = label_value
+            label_inventory[hostname][label] = label_value
+        if fields.get('cmk_inventory'):
+            hw_sw_inventory.setdefault(hostname, {})
+            raw_inventory = service['extensions']['host_mk_inventory']['value'].encode('ascii')
+            hw_sw_inventory[hostname] = base64.b64decode(raw_inventory).decode('utf-8')
 
-        status_inventory[host_name][f"{service_description}_state"] = service_state
-        status_inventory[host_name][f"{service_description}_output"] = service_output
+        status_inventory[hostname][f"{service_description}_state"] = service_state
+        status_inventory[hostname][f"{service_description}_output"] = service_output
+
+    if fields.get('cmk_attributes') or fields.get('cmk_labels'):
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Config Data")
+        url = "domain-types/host_config/collections/all?effective_attributes=true"
+        api_hosts = cmk.request(url, method="GET")
+        config_inventory = {}
+        for host in api_hosts[0]['value']:
+            hostname = host['id']
+            attributes = host['extensions']
+            attributes.update(host['extensions']['effective_attributes'])
+
+            host_inventory = {}
+
+            if fields.get('cmk_attributes'):
+                for attribute_key, attribute_value in attributes.items():
+                    if attribute_key in fields['cmk_attributes']:
+                        host_inventory[attribute_key] = attribute_value
+                for search in fields['cmk_attributes']:
+                    if search.endswith('*'):
+                        needle = search[:-1]
+                        for attribute_key, attribute_value in attributes.items():
+                            if attribute_key.startswith(needle):
+                                host_inventory[attribute_key] = attribute_value
+
+            if fields.get('cmk_labels'):
+                labels = label_inventory[hostname]
+                labels.update(attributes['labels'])
+                for label_key, label_value in labels.items():
+                    if label_key in fields['cmk_labels']:
+                        label_key = label_key.replace('cmk/','')
+                        host_inventory['label_'+label_key] = label_value
+
+                for search in fields['cmk_labels']:
+                    if search.endswith('*'):
+                        needle = search[:-1]
+                        for label in labels.keys():
+                            if label.startswith(needle):
+                                label_name = label.replace('cmk/','')
+                                host_inventory['label_'+label_name] = labels[label]
+
+            config_inventory[hostname] = host_inventory
+
+
+            if hw_sw_inventory.get(hostname):
+                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
+                inv_data = ast.literal_eval(hw_sw_inventory[hostname])
+                hw_sw_inventory[hostname] = {}
+                for field in fields['cmk_inventory']:
+                    paths = field.split('.')
+                    if len(paths) == 1:
+                        inv_pairs = inv_data['Nodes'][paths[0]]['Attributes']['Pairs']
+                    elif len(paths) == 2:
+                        inv_pairs = \
+                            inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Attributes']['Pairs']
+
+                    for key, value in inv_pairs.items():
+                        hw_sw_inventory[hostname][f'{paths[0]}/{key}'] = value
+
 
     print(f"{ColorCodes.UNDERLINE}Write to DB{ColorCodes.ENDC}")
-
 
     # pylint: disable=consider-using-dict-items
     for hostname in config_inventory:
@@ -159,7 +222,7 @@ def inventorize_hosts(account):
         if db_host:
             db_host.update_inventory('cmk', config_inventory[hostname])
             db_host.update_inventory('cmk_svc', status_inventory.get(hostname, {}))
-            db_host.update_inventory('cmk_label', label_inventory.get(hostname, {}))
+            db_host.update_inventory('cmk_hw_sw_inv', hw_sw_inventory.get(hostname, {}))
             db_host.save()
             print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
         else:
