@@ -44,19 +44,4 @@ class IdoitCustomAttributesView(RuleModelView):
             'render_idoit_outcome': "i-doit actions",
         })
 
-        #pylint: disable=access-member-before-definition
-        base_config = dict(self.form_subdocuments)
-        base_config.update({
-            'outcomes': {
-                'form_subdocuments' : {
-                    '': {
-                        'form_overrides' : {
-                            'param': StringField,
-                        }
-                    },
-                }
-            }
-        })
-        self.form_subdocuments = base_config
-
         super().__init__(model, **kwargs)
