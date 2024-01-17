@@ -197,7 +197,6 @@ def inventorize_hosts(account):
 
             config_inventory[hostname] = host_inventory
 
-
             if hw_sw_inventory.get(hostname):
                 print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
                 inv_data = ast.literal_eval(hw_sw_inventory[hostname])
@@ -206,12 +205,24 @@ def inventorize_hosts(account):
                     paths = field.split('.')
                     if len(paths) == 1:
                         inv_pairs = inv_data['Nodes'][paths[0]]['Attributes']['Pairs']
-                    elif len(paths) == 2:
-                        inv_pairs = \
-                            inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Attributes']['Pairs']
 
-                    for key, value in inv_pairs.items():
-                        hw_sw_inventory[hostname][f'{paths[0]}/{key}'] = value
+                    elif len(paths) == 2:
+                        try:
+                            inv_pairs = \
+                                inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Attributes']['Pairs']
+
+
+                        except KeyError:
+                            inv_pairs = \
+                                inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Table']['Rows']
+
+
+                    if isinstance(inv_pairs, dict):
+                        for key, value in inv_pairs.items():
+                            hw_sw_inventory[hostname][f'{paths[0]}__{key}'] = value
+                    elif isinstance(inv_pairs, list):
+                        hw_sw_inventory[hostname][f'{paths[0]}__{paths[1]}'] = inv_pairs
+
 
 
     print(f"{ColorCodes.UNDERLINE}Write to DB{ColorCodes.ENDC}")
