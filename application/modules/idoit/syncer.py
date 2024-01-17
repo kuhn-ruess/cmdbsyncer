@@ -191,16 +191,12 @@ class SyncIdoit(Plugin):
 #.
 #   .--- Get Object Payload
 
-    def get_object_payload(self, db_host, attributes, rules, obj_id=False):
+    def get_object_payload(self, db_host, attributes, rules):
         """
         Get the Basic Object Payload to create or Update a object
         """
 
-        if obj_id:
-            method = "cmdb.object.update"
-            #method = "cmdb.category.save"
-        else:
-            method = "cmdb.object.create"
+        method = "cmdb.object.create"
 
         hostname = db_host.hostname
         payload =  {
@@ -218,10 +214,6 @@ class SyncIdoit(Plugin):
            "id": 1
         }
 
-        if obj_id:
-            payload['params']['entry'] = obj_id
-
-        print(payload)
         return payload
 #.
 #   .--- Export Hosts
@@ -260,15 +252,14 @@ class SyncIdoit(Plugin):
             #current_idoit_object = current_idoit_objects[objectname]
 
             current_id = False
-            if objectname in current_idoit_objects:
-                current_id = current_idoit_objects[objectname]['id']
-                print(f"{CC.OKBLUE} *{CC.ENDC} Update Host id {current_id}")
+            if objectname not in current_idoit_objects:
+                payload = self.get_object_payload(db_host,
+                                                  all_attributes['all'],
+                                                  custom_rules)
+                print(f"{CC.OKBLUE} *{CC.ENDC} Create Host id {current_id}")
             else:
-                print(f"{CC.OKBLUE} *{CC.ENDC} Create Host")
+                print(f"{CC.WARNING} *{CC.ENDC}  Host already existed")
 
-            payload = self.get_object_payload(db_host,
-                                              all_attributes['all'],
-                                              custom_rules, current_id)
             self.request(payload)
 
 #   .--- Import Hosts
