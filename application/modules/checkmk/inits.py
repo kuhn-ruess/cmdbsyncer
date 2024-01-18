@@ -180,7 +180,7 @@ def inventorize_hosts(account):
                                 host_inventory[attribute_key] = attribute_value
 
             if fields.get('cmk_labels'):
-                labels = label_inventory[hostname]
+                labels = label_inventory.get(hostname, {})
                 labels.update(attributes['labels'])
                 for label_key, label_value in labels.items():
                     if label_key in fields['cmk_labels']:
