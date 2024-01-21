@@ -211,17 +211,35 @@ def inventorize_hosts(account):
                             inv_pairs = \
                                 inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Attributes']['Pairs']
 
-
                         except KeyError:
                             inv_pairs = \
                                 inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Table']['Rows']
 
+                    elif len(paths) == 3:
+                        try:
+                            inv_pairs = \
+                                inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Nodes'][paths[2]]['Attributes']['Pairs']
+
+                        except KeyError:
+                            inv_pairs = \
+                                inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Nodes'][paths[2]]['Table']['Rows']
 
                     if isinstance(inv_pairs, dict):
                         for key, value in inv_pairs.items():
-                            hw_sw_inventory[hostname][f'{paths[0]}__{key}'] = value
+                            if len(paths) == 1:
+                                hw_sw_inventory[hostname][f'{paths[0]}__{key}'] = value
+                            elif len(paths) == 2:
+                                hw_sw_inventory[hostname][f'{paths[0]}__{paths[1]}__{key}'] = value
+                            elif len(paths) == 3:
+                                hw_sw_inventory[hostname][f'{paths[0]}__{paths[1]}__{paths[2]}__{key}'] = value
+
                     elif isinstance(inv_pairs, list):
-                        hw_sw_inventory[hostname][f'{paths[0]}__{paths[1]}'] = inv_pairs
+                        if len(paths) == 1:
+                            hw_sw_inventory[hostname][f'{paths[0]}'] = inv_pairs
+                        elif len(paths) == 2:
+                            hw_sw_inventory[hostname][f'{paths[0]}__{paths[1]}'] = inv_pairs
+                        elif len(paths) == 3:
+                            hw_sw_inventory[hostname][f'{paths[0]}__{paths[1]}__{paths[2]}'] = inv_pairs
 
 
 
