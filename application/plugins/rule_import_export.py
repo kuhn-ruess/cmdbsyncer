@@ -13,7 +13,8 @@ from application import app
 from application.modules.rule.models import CustomAttribute, FullCondition, FilterAction
 
 enabled_rules = {
-    'ansible_customvars': ('application.modules.ansible.models', 'AnsibleCustomVariablesRule')
+    'ansible_customvars': ('application.modules.ansible.models', 'AnsibleCustomVariablesRule'),
+    'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
 }
 
 
