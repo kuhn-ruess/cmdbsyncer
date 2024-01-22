@@ -37,6 +37,8 @@ class IdoitVariableRule(Rule):# pylint: disable=too-few-public-methods
                 hostname = self.db_host.hostname
                 new_value = tpl.render(HOSTNAME=hostname, **self.attributes)
                 outcomes['description'] = new_value
+            elif action == "ignore_host":
+                outcomes['ignore_host'] = True
             else:
                 outcomes[outcome['action']] = outcome['param']
         return outcomes

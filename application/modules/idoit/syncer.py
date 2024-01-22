@@ -260,10 +260,10 @@ class SyncIdoit(Plugin):
                 payload = self.get_object_payload(db_host,
                                                   custom_rules)
                 print(f"{CC.OKBLUE} *{CC.ENDC} Create Host id {current_id}")
+                self.request(payload)
             else:
                 print(f"{CC.WARNING} *{CC.ENDC}  Host already existed")
 
-            self.request(payload)
 
 #   .--- Import Hosts
     def import_hosts(self):
