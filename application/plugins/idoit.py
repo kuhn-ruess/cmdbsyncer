@@ -2,6 +2,7 @@
 i-doit
 """
 #pylint: disable=too-many-arguments
+import pprint
 import click
 from mongoengine.errors import DoesNotExist
 
@@ -117,7 +118,7 @@ def idoit_host_debug(hostname):
     try:
         db_host = Host.objects.get(hostname=hostname)
         for key in list(db_host.cache.keys()):
-            if key.lower().startswith('netbox'):
+            if key.lower().startswith('idoit'):
                 del db_host.cache[key]
         db_host.save()
     except DoesNotExist:
@@ -131,6 +132,8 @@ def idoit_host_debug(hostname):
         return
 
     rules = syncer.get_host_data(db_host, attributes['all'])
+
+    pprint.pprint(syncer.get_object_payload(db_host, rules))
 
     attribute_table("Full Attribute List", attributes['all'])
     attribute_table("Filtered Attribute for i-doit Rules", attributes['filtered'])
