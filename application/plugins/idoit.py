@@ -128,10 +128,13 @@ def idoit_host_debug(hostname):
     attributes = syncer.get_host_attributes(db_host, 'netbox')
 
     if not attributes:
-        print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY RULE{ColorCodes.ENDC}")
+        print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY Global RULE{ColorCodes.ENDC}")
         return
 
     rules = syncer.get_host_data(db_host, attributes['all'])
+    if rules.get('ignore_host'):
+        print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY local RULE{ColorCodes.ENDC}")
+        return
 
     pprint.pprint(syncer.get_object_payload(db_host, rules))
 
