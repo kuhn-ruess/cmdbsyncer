@@ -191,10 +191,13 @@ class SyncIdoit(Plugin):
 #.
 #   .--- Get Object Payload
 
-    def get_object_payload(self, db_host, attributes, rules):
+    def get_object_payload(self, db_host, rules):
         """
         Get the Basic Object Payload to create or Update a object
         """
+
+        object_type = rules.get('id_object_type', 'C__OBJTYPE__SERVER')
+        object_description = rules.get('id_object_description', 'undefined')
 
         method = "cmdb.object.create"
 
@@ -203,9 +206,9 @@ class SyncIdoit(Plugin):
            "version": "2.0",
            "method": method,
            "params": {
-               "type": "C__OBJTYPE__SERVER",
+               "type": object_type,
                "title": hostname,
-               "description": attributes["cmk__alias"], #@TODO
+               "description": object_description,
                "apikey": self.config["api_token"],
                "language": "de",
                "categories": rules.get('id_category', {})
@@ -254,7 +257,6 @@ class SyncIdoit(Plugin):
             current_id = False
             if objectname not in current_idoit_objects:
                 payload = self.get_object_payload(db_host,
-                                                  all_attributes['all'],
                                                   custom_rules)
                 print(f"{CC.OKBLUE} *{CC.ENDC} Create Host id {current_id}")
             else:
