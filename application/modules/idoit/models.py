@@ -28,6 +28,8 @@ class IdoitRewriteAttributeRule(db.Document):
 
 idoit_outcome_types = [
   ('id_category', "Category Template"),
+  ('id_object_type', "Define Objects Object Type"),
+  ('id_object_description', "Define Attribute to use as Objects Description"),
   ('ignore_host', "Ignore host(s)"),
 ]
 
