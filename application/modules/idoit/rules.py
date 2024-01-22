@@ -2,9 +2,9 @@
 """
 i-doit Rules
 """
+from ast import literal_eval
 import jinja2
 from application.modules.rule.rule import Rule
-from ast import literal_eval
 
 class IdoitVariableRule(Rule):# pylint: disable=too-few-public-methods
     """
@@ -23,12 +23,20 @@ class IdoitVariableRule(Rule):# pylint: disable=too-few-public-methods
             action = outcome['action']
 
             if action == 'id_category':
+                try:
+                    tpl = jinja2.Template(outcome['param'], undefined=jinja2.StrictUndefined)
+                    hostname = self.db_host.hostname
+                    new_value = tpl.render(HOSTNAME=hostname, **self.attributes)
+                    as_dict = literal_eval(new_value)
+                    outcomes.setdefault('id_category', {})
+                    outcomes['id_category'].update(as_dict)
+                except jinja2.exceptions.UndefinedError:
+                    pass
+            elif action == 'id_object_description':
                 tpl = jinja2.Template(outcome['param'])
                 hostname = self.db_host.hostname
                 new_value = tpl.render(HOSTNAME=hostname, **self.attributes)
-                as_dict = literal_eval(new_value)
-                outcomes.setdefault('id_category', {})
-                outcomes['id_category'].update(as_dict)
+                outcomes['description'] = new_value
             else:
                 outcomes[outcome['action']] = outcome['param']
         return outcomes

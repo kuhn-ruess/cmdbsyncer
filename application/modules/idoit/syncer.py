@@ -29,6 +29,7 @@ class SyncIdoit(Plugin):
     """
 
     category_cache = {}
+    config = {}
 
 #   .-- Init
     def __init__(self):
@@ -209,7 +210,7 @@ class SyncIdoit(Plugin):
                "type": object_type,
                "title": hostname,
                "description": object_description,
-               "apikey": self.config["api_token"],
+               "apikey": self.config.get("api_token", "DEFINE API TOKEN"),
                "language": "de",
                "categories": rules.get('id_category', {})
            },
