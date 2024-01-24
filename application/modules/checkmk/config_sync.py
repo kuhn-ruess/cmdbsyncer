@@ -416,9 +416,6 @@ class SyncConfiguration(CMK2):
         """
         Export Tags to Checkmk
         """
-        print(f"\n{CC.HEADER}Read Internal Configuration{CC.ENDC}")
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attributes")
-        attributes = self.parse_attributes()
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
         groups = {}
         replace_exceptions = ['-', '_']
@@ -433,80 +430,32 @@ class SyncConfiguration(CMK2):
             rewrite_id_tpl = jinja2.Template(rule.rewrite_id)
             rewrite_title_tpl = jinja2.Template(rule.rewrite_title)
 
-            if rule.foreach_type == 'value':
-                if rule.foreach.endswith('*'):
-                    keys = []
-                    search = rule.foreach[:-1]
-                    for key, keys_values in attributes[0].items():
-                        if key.startswith(search):
-                            keys += keys_values
+            db_filter = {
+            }
+            if rule.filter_by_account:
+                db_filter['inventory__syncer_account'] = rule.filter_by_account
+            found_ids = []
+            for entry in Host.objects(**db_filter):
+                object_attributes = self.get_host_attributes(entry, 'cmk_conf')
+                value = entry.hostname
+                new_group_title = value
+                new_group_id = value
+
+                new_group_id = rewrite_id_tpl.render(name=value,
+                                                     result=value, **object_attributes['all'])
+                new_group_id = str_replace(new_group_id, replace_exceptions).strip()
+
+                if new_group_id not in found_ids:
+                    found_ids.append(new_group_id)
                 else:
-                    keys = attributes[1].get(rule.foreach, [])
+                    # we can't add a id twice
+                    continue
 
-
-                for key in keys:
-                    new_group_title = key
-                    new_group_id = key
-
-                    new_group_id = rewrite_id_tpl.render(name=value,
-                                                         result=value, **attributes['all'])
-                    new_group_id = str_replace(new_group_id, replace_exceptions).strip()
-                    new_group_title = rewrite_title_tpl.render(name=value, result=value,
-                                                               **attributes['all'])
-
-                    if new_group_id and (new_group_id, new_group_title) \
-                                                            not in groups[group_id]['tags']:
-                        groups[group_id]['tags'].append((new_group_id, new_group_title))
-            elif rule.foreach_type == 'label':
-                if rule.foreach.endswith('*'):
-                    values = []
-                    search = rule.foreach[:-1]
-                    for label, label_values in attributes[0].items():
-                        if label.startswith(search):
-                            values += label_values
-                else:
-                    values = attributes[0].get(rule.foreach, [])
-
-                for value in values:
-                    new_group_title = value
-                    new_group_id = value
-                    new_group_id = rewrite_id_tpl.render(name=value,
-                                                         result=value, **attributes['all'])
-                    new_group_id = str_replace(new_group_id, replace_exceptions).strip()
-                    new_group_title = rewrite_title_tpl.render(name=value, result=value,
-                                                               **attributes['all'])
-                    if new_group_id and (new_group_id, new_group_title) \
-                                                            not in groups[group_id]['tags']:
-                        groups[group_id]['tags'].append((new_group_id, new_group_title))
-            elif rule.foreach_type == "object":
-                db_filter = {
-                    'is_object': True
-                }
-                object_filter = rule.foreach
-                if object_filter:
-                    db_filter['inventory__syncer_account'] = object_filter
-                found_ids = []
-                for entry in Host.objects(**db_filter):
-                    object_attributes = self.get_host_attributes(entry, 'cmk_conf')
-                    value = entry.hostname
-                    new_group_title = value
-                    new_group_id = value
-
-                    new_group_id = rewrite_id_tpl.render(name=value,
-                                                         result=value, **object_attributes['all'])
-                    new_group_id = str_replace(new_group_id, replace_exceptions).strip()
-
-                    if new_group_id not in found_ids:
-                        found_ids.append(new_group_id)
-                    else:
-                        # we can't add a id twice
-                        continue
-
-                    new_group_title = rewrite_title_tpl.render(name=value, result=value,
-                                                               **object_attributes['all'])
-                    if new_group_id and (new_group_id, new_group_title) \
-                                                            not in groups[group_id]['tags']:
-                        groups[group_id]['tags'].append((new_group_id, new_group_title))
+                new_group_title = rewrite_title_tpl.render(name=value, result=value,
+                                                           **object_attributes['all'])
+                if new_group_id and (new_group_id, new_group_title) \
+                                                        not in groups[group_id]['tags']:
+                    groups[group_id]['tags'].append((new_group_id, new_group_title))
 
 
         url = "/domain-types/host_tag_group/collections/all"

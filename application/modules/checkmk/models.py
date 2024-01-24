@@ -275,8 +275,7 @@ class CheckmkTagMngmt(db.Document):
     group_id = db.StringField()
     group_help = db.StringField()
 
-    foreach_type = db.StringField(choices=foreach_types)
-    foreach = db.StringField(required=False)
+    filter_by_account = db.StringField(required=False)
 
     rewrite_id = db.StringField(default="{{name}}")
     rewrite_title = db.StringField(default="{{name}}")
