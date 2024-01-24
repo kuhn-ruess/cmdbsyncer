@@ -27,3 +27,15 @@ The Command you need to start is:
 ./cmdbsyncer cron run_jobs
 ```
 
+And here is the Example including loading the local environment:
+
+```
+*/5 * * * * cd /var/www/cmdbsyncer && source /var/www/cmdbsyncer/ENV/bin/activate && ./cmdbsyncer cron run_jobs
+```
+
+Or all in Docker:
+
+```
+*/5 * * * * docker exec CONTAINER_ID /srv/cmdbsyncer cron run_jobs
+```
+
