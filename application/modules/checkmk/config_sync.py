@@ -449,10 +449,10 @@ class SyncConfiguration(CMK2):
                     new_group_id = key
 
                     new_group_id = rewrite_id_tpl.render(name=value,
-                                                         result=value, **host_attributes['all'])
+                                                         result=value, **attributes['all'])
                     new_group_id = str_replace(new_group_id, replace_exceptions).strip()
                     new_group_title = rewrite_title_tpl.render(name=value, result=value,
-                                                               **host_attributes['all'])
+                                                               **attributes['all'])
 
                     if new_group_id and (new_group_id, new_group_title) \
                                                             not in groups[group_id]['tags']:
@@ -471,10 +471,10 @@ class SyncConfiguration(CMK2):
                     new_group_title = value
                     new_group_id = value
                     new_group_id = rewrite_id_tpl.render(name=value,
-                                                         result=value, **host_attributes['all'])
+                                                         result=value, **attributes['all'])
                     new_group_id = str_replace(new_group_id, replace_exceptions).strip()
                     new_group_title = rewrite_title_tpl.render(name=value, result=value,
-                                                               **host_attributes['all'])
+                                                               **attributes['all'])
                     if new_group_id and (new_group_id, new_group_title) \
                                                             not in groups[group_id]['tags']:
                         groups[group_id]['tags'].append((new_group_id, new_group_title))
@@ -487,13 +487,13 @@ class SyncConfiguration(CMK2):
                     db_filter['inventory__syncer_account'] = object_filter
                 found_ids = []
                 for entry in Host.objects(**db_filter):
-                    host_attributes = self.get_host_attributes(entry, 'cmk_conf')
+                    object_attributes = self.get_host_attributes(entry, 'cmk_conf')
                     value = entry.hostname
                     new_group_title = value
                     new_group_id = value
 
                     new_group_id = rewrite_id_tpl.render(name=value,
-                                                         result=value, **host_attributes['all'])
+                                                         result=value, **object_attributes['all'])
                     new_group_id = str_replace(new_group_id, replace_exceptions).strip()
 
                     if new_group_id not in found_ids:
@@ -503,7 +503,7 @@ class SyncConfiguration(CMK2):
                         continue
 
                     new_group_title = rewrite_title_tpl.render(name=value, result=value,
-                                                               **host_attributes['all'])
+                                                               **object_attributes['all'])
                     if new_group_id and (new_group_id, new_group_title) \
                                                             not in groups[group_id]['tags']:
                         groups[group_id]['tags'].append((new_group_id, new_group_title))
