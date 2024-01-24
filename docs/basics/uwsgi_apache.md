@@ -4,7 +4,7 @@
 - Python Version >= 3.9 must be installed
 - MongoDB Server must be Installed
 - Apache Mod UWSGI must be Installed and activated
-- uWSGI and the python3 Plugin of uWSGI must be installed in version 3.9
+- uWSGI and the python3 Plugin of uWSGI must be installed in version at least 3.9
 
 ## First Steps:
 [Checkout](setup_code.md) the Code into /var/www/cmdbsyncer.
@@ -12,8 +12,12 @@ We will define a Path in Apache which will proxy to the uWSGI daemon. For this E
 Update application/config.py and adjust the BASE_PREFIX to that path. For example, https://checkmk-server.de/hostapi would be BASE_PREFIX='/hostapi/'
 
 ## Setup uWSGI
-In ./deploy_configs you will find the example_apache/ Folder. Use the uwsgi-config.ini and copy it to /etc/uwsgi.d/ or depending on your Linux Distribution to the Folder for the config files. You should rename the file like hostapi.ini
+In ./deploy_configs you will find the example_apache/ Folder. Use the uwsgi-config.ini and copy it to /etc/uwsgi.d/ or depending on your Linux Distribution to the Folder for the config files. You should rename the file like cmdbsyncer.ini
 If you used different Paths, you need to update them the ini file.
+
+Please note that in the uwsgi-config.py you find a plugin = python39.
+This refers to python3.9. In newer Versions of Debian or Redhat you may have python3.10,
+or python3.11, so you need to change that to plugin = python310 or python311
 
 Restart UWSGI with service uwsgi restart.
 
