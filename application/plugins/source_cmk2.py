@@ -51,23 +51,10 @@ class DataGeter():
             raise CmkException(response.json()['title'])
         return response.json()
 
-    @staticmethod
-    def get_links(data, rel='self'):
-        """
-        Return Links by method
-        """
-        links = {}
-        for link in data:
-            if link['rel'] == rel:
-                links[link['method']] = link['href']
-        return links
-
     def run(self):
         """Run Actual Job"""
         for hostdata in self.request()['value']:
             hostname = hostdata['id']
-            links = self.get_links(hostdata['links'])
-            host_details = self.request(links['GET'])
             print(f"\n{CC.HEADER} Process: {hostname}{CC.ENDC}")
 
             try:
@@ -83,7 +70,7 @@ class DataGeter():
             do_save = host.set_account(account_dict=self.config)
             labels = {}
             try:
-                attributes = host_details['extensions']['attributes']
+                attributes = hostdata['extensions']['attributes']
                 if 'labels' in attributes:
                     labels.update(attributes['labels'])
                 host.update_host(labels)
