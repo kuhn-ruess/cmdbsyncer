@@ -4,7 +4,6 @@ CronJobs
 #pylint: disable=too-many-arguments
 import os
 from datetime import datetime, timedelta
-import click
 from mongoengine.errors import DoesNotExist
 
 from application import app, cron_register
@@ -86,12 +85,12 @@ def calc_next_possible_run(job):
     now = datetime.now()
     current_hour = now.hour
     t_from = int(job.timerange_from)
+    #pylint: disable=line-too-long
     if current_hour >= t_from:
         # Next is tomorrw
         return datetime.strptime(f"{now.day+1:02d}.{now.month:02d}.{now.year} {t_from:02d}:00", "%d.%m.%Y %H:%M")
-    else:
-        # Still today
-        return datetime.strptime(f"{now.day:02d}.{now.month:02d}.{now.year} {t_from:02d}:00", "%d.%m.%Y %H:%M")
+    # Still today
+    return datetime.strptime(f"{now.day:02d}.{now.month:02d}.{now.year} {t_from:02d}:00", "%d.%m.%Y %H:%M")
 
 
 
@@ -101,14 +100,27 @@ def run_jobs(): #pylint: disable=invalid-name
     Run all configured Jobs
     """
     now = datetime.now()
-    for job in CronGroup.objects(enabled=True):
+    for job in CronGroup.objects(enabled=True).order_by('sort_field'):
         stats = get_stats(job.name)
 
+
+        force_run = False
         if not stats.next_run:
             stats.next_run = calc_next_run(job, stats.last_start)
+            next_run = stats
             stats.save()
-        if not stats.is_running and stats.next_run <= now + timedelta(minutes=1):
-            if not in_timerange(job):
+
+        next_run = stats.next_run
+
+        if job.run_once_next:
+            # Manualy trigger job just one time
+            next_run = now
+            force_run = True
+            job.run_once_next = False
+            job.save()
+
+        if not stats.is_running and next_run <= now + timedelta(minutes=1):
+            if not force_run and not in_timerange(job):
                 stats.next_run = calc_next_possible_run(job)
                 stats.save()
                 continue
@@ -139,6 +151,8 @@ def run_jobs(): #pylint: disable=invalid-name
                     raise
 
             stats.last_ended = datetime.now()
-            stats.next_run = calc_next_run(job, stats.last_start)
+            if not force_run:
+                # Do not touch next runtime if job was triggered Manualy
+                stats.next_run = calc_next_run(job, stats.last_start)
             stats.is_running = False
             stats.save()

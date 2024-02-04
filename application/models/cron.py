@@ -61,6 +61,8 @@ class CronGroup(db.Document):
     render_jobs = db.StringField()
 
     enabled = db.BooleanField()
+    run_once_next = db.BooleanField(default=False)
+    sort_field = db.IntField(default=0)
 
     meta = {
         'strict': False,

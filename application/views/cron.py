@@ -44,6 +44,7 @@ class CronGroupView(DefaultModelView):
 
     column_editable_list = [
         'enabled',
+        'run_once_next',
     ]
 
     column_formatters = {
