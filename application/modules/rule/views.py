@@ -166,6 +166,13 @@ class RuleModelView(DefaultModelView):
                          'in order that the rule apply',
     }
 
+
+    column_sortable_list = (
+        'name',
+        'enabled',
+        'sort_field',
+    )
+
     column_default_sort = "sort_field"
 
     column_filters = (

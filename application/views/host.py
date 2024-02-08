@@ -181,6 +181,11 @@ class HostModelView(DefaultModelView):
     export_types = ['xlsx', 'csv']
 
 
+    column_sortable_list = ('hostname',
+                            'last_import_seen', 
+                            'last_import_sync')
+
+
     def get_query(self):
         """
         Limit Objects
@@ -192,6 +197,9 @@ class HostModelView(DefaultModelView):
         'last_import_seen', 'last_import_sync', 'last_export', "export_problem",
         'source_account_name', 'raw', 'cache'
     ]
+    column_sortable_list = ('hostname',
+                            'last_import_seen', 
+                            'last_import_sync')
 
     column_filters = (
        'hostname',
@@ -208,7 +216,8 @@ class HostModelView(DefaultModelView):
     )
 
     column_labels = {
-        'source_account_name': "Account"
+        'source_account_name': "Account",
+        'folder': "CMK Pool Folder",
     }
 
     page_size = 25
