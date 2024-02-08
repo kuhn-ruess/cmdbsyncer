@@ -13,7 +13,8 @@ from application import app
 from application.modules.rule.models import CustomAttribute, FullCondition, FilterAction
 
 enabled_rules = {
-    'ansible_customvars': ('application.modules.ansible.models', 'AnsibleCustomVariablesRule')
+    'ansible_customvars': ('application.modules.ansible.models', 'AnsibleCustomVariablesRule'),
+    'custom_attributes': ('application.modules.custom_attributes.models', 'CustomAttributeRule'),
 }
 
 
@@ -71,6 +72,6 @@ def import_rules(rulefile_path):
         rule_json_field = rules_obj['rules_json']
         if rule_type not in enabled_rules:
             print("Ruletype not supported")
-            print(f"Currently supported: {','.join(enabled_rules.keys())}")
+            print(f"Currently supported: {', '.join(enabled_rules.keys())}")
         else:
             import_rules_to_model(rule_type, rule_json_field)

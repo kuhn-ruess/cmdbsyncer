@@ -16,6 +16,8 @@ nav:
         - Fileadmin: basics/fileadmin.md
         - Recipes:
             - UWSGI and Apache: basics/uwsgi_apache.md
+            - Debug Requests: basics/debug.md
+            - Change GUI Colors: basics/config_colors.md
       - Principles:
         - Import Systems: basics/import.md
         - Export Systems: basics/export.md

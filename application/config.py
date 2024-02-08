@@ -33,6 +33,10 @@ class BaseConfig():
 
     BOOTSTRAP_SERVE_LOCAL = True
 
+    STYLE_NAV_BACKGROUND_COLOR = "#000"
+    STYLE_NAV_LINK_COLOR = "#fff"
+    HEADER_HINT = ""
+
     REPLACERS = [
       (' ', '_'),
       (',', ''),

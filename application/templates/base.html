@@ -1,9 +1,9 @@
 {% extends "bootstrap/base.html" %}
 
-{% block title %}CMDB Syncer{% endblock %}
+{% block title %}CMDB Syncer {{config['HEADER_HINT'] }}{% endblock %}
 
 {% block navbar %}
-<nav id="top-nav" class="navbar navbar-expand-lg sticky-top navbar-dark bg-dark">
+<nav id="top-nav" class="navbar navbar-expand-lg sticky-top navbar-light" style="background-color: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }}">
   <a class="navbar-brand" href="{{ url_for('admin.index') }}">Backend</a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
