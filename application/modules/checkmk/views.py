@@ -338,6 +338,8 @@ class CheckmkSiteView(DefaultModelView):
     Checkmk Site Management Config
     """
 
+    column_default_sort = "name"
+
     column_editable_list = [
         'enabled',
     ]

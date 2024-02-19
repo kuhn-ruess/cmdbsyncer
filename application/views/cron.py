@@ -30,12 +30,12 @@ class CronGroupView(DefaultModelView):
     """
     Cron Group View
     """
-    column_default_sort = "folder_name"
 
     column_exclude_list = [
         'jobs',
     ]
 
+    column_default_sort = ("sort_field", True), ("name", True)
 
     column_filters = (
        'name',
@@ -70,8 +70,9 @@ class CronStatsView(DefaultModelView):
 
     export_types = ['xlsx', 'csv']
 
+    column_default_sort = ("group", True), ("next_run", True)
+
     page_size = 50
-    can_set_page_size = True
 
     column_formatters = {
         'next_run': format_date,

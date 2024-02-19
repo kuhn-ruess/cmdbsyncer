@@ -173,7 +173,9 @@ class RuleModelView(DefaultModelView):
         'sort_field',
     )
 
-    column_default_sort = "sort_field", "name"
+    column_default_sort = ("sort_field", True), ("name", True)
+
+    page_size = 300
 
     column_filters = (
        'name',
@@ -229,7 +231,10 @@ class FiltereModelView(DefaultModelView):
         'conditions', 'outcomes',
     ]
 
-    column_default_sort = "sort_field"
+    column_default_sort = ("sort_field", True), ("name", True)
+
+
+    page_size = 300
 
     column_filters = (
        'name',
