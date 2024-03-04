@@ -37,6 +37,19 @@ class CronGroupView(DefaultModelView):
 
     column_default_sort = ("sort_field", True), ("name", True)
 
+    column_sortable_list = (
+        'name',
+        'sort_field',
+        'timerange_from',
+        'timerange_to',
+        'interval',
+        'enabled'
+    )
+
+    column_labels = {
+        'render_jobs': "Cronjobs",
+    }
+
     column_filters = (
        'name',
        'enabled',
@@ -71,6 +84,14 @@ class CronStatsView(DefaultModelView):
     export_types = ['xlsx', 'csv']
 
     column_default_sort = ("group", True), ("next_run", True)
+
+    column_sortable_list = (
+        'group',
+        'next_run',
+        'last_start',
+        'last_ended',
+        'failure',
+    )
 
     page_size = 50
 

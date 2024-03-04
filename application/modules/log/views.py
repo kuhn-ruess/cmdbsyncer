@@ -34,6 +34,12 @@ class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
 
     column_default_sort = ('id', True)
 
+    column_sortable_list = (
+        'datetime',
+        'message',
+        'has_error'
+    )
+
     column_formatters = {
         'details': format_log,
     }

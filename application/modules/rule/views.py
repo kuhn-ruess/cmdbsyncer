@@ -233,6 +233,11 @@ class FiltereModelView(DefaultModelView):
 
     column_default_sort = ("sort_field", True), ("name", True)
 
+    column_sortable_list = (
+        'name',
+        'sort_field',
+        'enabled',
+    )
 
     page_size = 300
 

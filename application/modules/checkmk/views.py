@@ -340,6 +340,7 @@ class CheckmkSiteView(DefaultModelView):
 
     column_default_sort = "name"
 
+
     column_editable_list = [
         'enabled',
     ]
@@ -382,6 +383,10 @@ class CheckmkSettingsView(DefaultModelView):
         'subscription_username',
         'subscription_password',
     ]
+
+    column_sortable_list = (
+        'name',
+    )
 
     def on_model_delete(self, model):
         """
