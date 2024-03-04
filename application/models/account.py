@@ -4,6 +4,7 @@ Account
 from application import db
 
 account_types = [
+
     ('cmkv1', "Checkmk Version 1.x"),
     ('cmkv2', "Checkmk Version 2.x"),
     ('csv', "CSV File"),
@@ -13,6 +14,7 @@ account_types = [
     ('ldap', "Ldap Connect"),
     ('netbox', "Netbox Account"),
     ('cisco_dna', "Cisco DNA Account"),
+    ('bmc_remedy', "BMC Remedy (WIP)"),
     ('restapi', "Internal Rest API Credentials"),
     ('external_restapi', "Remote Rest API"),
     ('maintenance', "Maintanence Jobs"),
