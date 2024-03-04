@@ -117,6 +117,7 @@ def netbox_host_debug(hostname):
         for key in list(db_host.cache.keys()):
             if key.lower().startswith('netbox'):
                 del db_host.cache[key]
+        del db_host.cache['CustomAttributeRule']
         db_host.save()
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
