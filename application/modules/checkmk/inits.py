@@ -2,9 +2,10 @@
 #pylint: disable=too-many-locals
 Inits for the Plugins
 """
-#pylint: disable=too-many-locals
+#pylint: disable=too-many-locals, too-many-nested-blocks
 import base64
 import ast
+import json
 from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
@@ -115,16 +116,16 @@ def inventorize_hosts(account):
     if fields.get('cmk_inventory'):
         columns.append('host_mk_inventory')
     if fields.get('cmk_services'):
-        expr = ''
+        expr = []
         for field in fields['cmk_services']:
-            expr += f'{{ "op": "=", "left": "description", "right": "{field}"}},'
-        expr = expr[:-1]
-        params={
-            "query":
-               '{"op": "or",'\
-               f' "expr": [{expr}]'\
-               '}',
+            expr.append({"op": "=", "left": "description", "right": field})
 
+        query = {
+            "op": "or",
+            "expr": expr,
+        }
+        params={
+            "query": str(json.dumps(query)),
             "columns": columns
         }
     else:
@@ -137,6 +138,7 @@ def inventorize_hosts(account):
     api_response = cmk.request(url, data=params, method="GET")
     status_inventory = {}
     label_inventory = {}
+    service_label_inventory = {}
     hw_sw_inventory = {}
     for service in api_response[0]['value']:
         hostname = service['extensions']['host_name']
@@ -155,6 +157,31 @@ def inventorize_hosts(account):
 
         status_inventory[hostname][f"{service_description}_state"] = service_state
         status_inventory[hostname][f"{service_description}_output"] = service_output
+
+
+    if fields.get('cmk_service_labels'):
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Service Labels")
+        columns = ['host_name','label_names', 'label_values']
+        expr = []
+        for field in fields['cmk_service_labels']:
+            expr.append({"op": "~", "left": "description", "right": field})
+        query = {
+            "op": "or",
+            "expr": expr,
+        }
+        params={
+            "query": str(json.dumps(query)),
+            "columns": columns
+        }
+        api_response = cmk.request(url, data=params, method="GET")
+        for service in api_response[0]['value']:
+            names = service['extensions']['label_names']
+            values = service['extensions']['label_values']
+            service_labels = zip(names, values)
+            hostname = service['extensions']['host_name']
+            service_label_inventory.setdefault(hostname, {})
+            for name, value in service_labels:
+                service_label_inventory[hostname][name] = value
 
     if fields.get('cmk_attributes') or fields.get('cmk_labels'):
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Config Data")
@@ -233,6 +260,7 @@ def inventorize_hosts(account):
         if db_host:
             db_host.update_inventory('cmk', config_inventory[hostname])
             db_host.update_inventory('cmk_svc', status_inventory.get(hostname, {}))
+            db_host.update_inventory('cmk_svc_labels', service_label_inventory.get(hostname, {}))
             db_host.update_inventory('cmk_hw_sw_inv', hw_sw_inventory.get(hostname, {}))
             db_host.save()
             print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
