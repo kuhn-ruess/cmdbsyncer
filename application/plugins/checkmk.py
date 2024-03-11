@@ -176,7 +176,8 @@ def debug_host(hostname):
         for key in list(db_host.cache.keys()):
             if key.lower().startswith('checkmk'):
                 del db_host.cache[key]
-        del db_host.cache['CustomAttributeRule']
+        if 'CustomAttributeRule' in db_host.cache:
+            del db_host.cache['CustomAttributeRule']
         db_host.save()
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")

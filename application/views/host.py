@@ -9,6 +9,7 @@ from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 
 from markupsafe import Markup
 
+from application import app
 from application.views.default import DefaultModelView
 from application.models.host import Host
 from application.models.config import Config
@@ -249,6 +250,17 @@ class HostModelView(DefaultModelView):
     column_editable_list = (
         'force_update',
     )
+
+    def __init__(self, model, **kwargs):
+        """
+        Overwrite based on status
+
+        """
+
+        if app.config['DEBUG'] == True:
+            self.can_edit = True
+
+        super().__init__(model, **kwargs)
 
     def is_accessible(self):
         """ Overwrite """
