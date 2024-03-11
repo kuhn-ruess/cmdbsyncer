@@ -81,6 +81,7 @@ class SyncCMK2(CMK2):
                 continue
             next_actions = self.get_host_actions(db_host, attributes['all'])
 
+
             labels = {k:str(v) for k,v in attributes['filtered'].items()}
 
             synced_hosts.append(db_host.hostname)
@@ -106,6 +107,9 @@ class SyncCMK2(CMK2):
                 existing_folders.append(folder)
 
             additional_attributes = {}
+            if 'parents' in next_actions:
+                additional_attributes['parents'] = next_actions['parents']
+
             remove_attributes = []
             if 'remove_attributes' in next_actions:
                 remove_attributes = next_actions['remove_attributes']

@@ -62,6 +62,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     def add_outcomes(self, rule, outcomes):
         """ Handle the Outcomes """
         #pylint: disable=too-many-branches, too-many-statements
+        #pylint: disable=too-many-locals, too-many-nested-blocks
 
         for outcome in rule:
             # We add only the outcome of the
@@ -71,11 +72,13 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             # Prepare empty string to add later on subfolder if needed
             # We delete it anyway at the end, if it's stays empty
 
+
             outcomes.setdefault('move_folder',"")
             outcomes.setdefault('attributes', [])
             outcomes.setdefault('custom_attributes', [])
             outcomes.setdefault('remove_attributes', [])
             outcomes.setdefault('create_cluster', [])
+            outcomes.setdefault('parents', [])
             outcomes.setdefault('dont_move', False)
 
             if outcome['action'] == 'move_folder':
@@ -95,7 +98,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                         only_pools = [x.strip() for x in outcome['action_param'].split(',')]
                     folder = poolfolder.get_folder(only_pools)
                     if not folder:
-                        raise Exception(f"No Pool Folder left for {self.db_host.hostname}")
+                        raise ValueError(f"No Pool Folder left for {self.db_host.hostname}")
                     folder = self.format_foldername(folder)
                     self.db_host.lock_to_folder(folder)
                     outcomes['move_folder'] += folder
@@ -117,6 +120,16 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                     outcomes['remove_attributes'].append(new_key)
                 else:
                     outcomes['custom_attributes'].append({new_key: new_value})
+
+            if outcome['action'] == "set_parent":
+                value = outcome['action_param']
+                tpl = jinja2.Template(value)
+                hostname = self.db_host.hostname
+                new_value = tpl.render(HOSTNAME=hostname, **self.attributes)
+                for parent in new_value.split(','):
+                    parent = parent.strip()
+                    if parent and parent not in outcomes['parents']:
+                        outcomes['parents'].append(parent)
 
             print_debug(self.debug,
                         "- Handle Special options")

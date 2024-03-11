@@ -96,7 +96,9 @@ class CMK2(Plugin):
                     raise CmkException("Cant parse Checkmk Response")
 
                 if response_json['title'] not in error_whitelist:
-                    raise CmkException(f"{response_json['title']} {response_json.get('detail')}")
+                    raise CmkException(f"{response_json['title']} "\
+                                       f"{response_json.get('detail')}"\
+                                       f"{response_json.get('fields')}")
                 return {}, {'status_code': response.status_code}
             resp_header = response.headers
             resp_header['status_code'] = response.status_code
