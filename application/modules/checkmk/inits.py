@@ -177,6 +177,10 @@ def inventorize_hosts(account):
         for service in api_response[0]['value']:
             names = service['extensions']['label_names']
             values = service['extensions']['label_values']
+            if not names:
+                continue
+            names = service['extensions']['label_names']
+            values = service['extensions']['label_values']
             service_labels = zip(names, values)
             hostname = service['extensions']['host_name']
             service_label_inventory.setdefault(hostname, {})
