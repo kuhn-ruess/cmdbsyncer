@@ -12,6 +12,7 @@ attriubte_sources = [
     ("cmk_services", "Service Plugin Output"),
     ("cmk_attributes", "Attributes of Host"),
     ("cmk_labels", "Labels of Host"),
+    ("cmk_service_labels", "Labels of Service"),
 ]
 
 class CheckmkInventorizeAttributes(db.Document):
