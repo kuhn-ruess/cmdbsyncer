@@ -179,6 +179,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 del outcomes['move_folder']
             if not outcomes['remove_attributes']:
                 del outcomes['remove_attributes']
+            if not outcomes['parents']:
+                del outcomes['parents']
 
         print_debug(self.debug, "")
         return outcomes
