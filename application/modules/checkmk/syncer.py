@@ -3,6 +3,7 @@ Add Hosts into CMK Version 2 Installations
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member, too-many-locals, too-many-branches
 #pylint: disable=logging-fstring-interpolation
+from application import app
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes as CC
@@ -13,6 +14,14 @@ class SyncCMK2(CMK2):
     """
     Sync Functions
     """
+
+    @staticmethod
+    def chunks(lst, n):
+        """Yield successive n-sized chunks from lst."""
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
+
+    bulk_creates = []
 
 
 #   .-- Get Host Actions
@@ -162,6 +171,16 @@ class SyncCMK2(CMK2):
 
             db_host.save()
 
+        # Final Call to create missing hosts via bulk
+
+        chunks = list(self.chunks(self.bulk_creates, app.config['CMK_BULK_CREATE_OPERATIONS']))
+        total = len(chunks)
+        count = 1
+        for chunk in chunks:
+            print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Request {count}/{total}")
+            self.send_create_host(chunk)
+            count += 1
+
         if self.limit:
             print(f"\n{CC.OKGREEN} -- {CC.ENDC}Stop processing in limit mode")
             return
@@ -175,14 +194,23 @@ class SyncCMK2(CMK2):
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Check if we need to cleanup hosts")
+        delete_list = []
         for host, host_data in cmk_hosts.items():
             host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
                 if host not in synced_hosts:
                     # Delete host
-                    url = f"objects/host_config/{host}"
-                    self.request(url, method="DELETE")
-                    print(f"{CC.WARNING} *{CC.ENDC} Deleted host {host}")
+                    delete_list.append(host)
+                    print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
+
+        url = "/domain-types/host_config/actions/bulk-delete/invoke"
+        chunks = list(self.chunks(delete_list, app.config['CMK_BULK_DELETE_OPERATIONS']))
+        total = len(chunks)
+        count = 1
+        for chunk in chunks:
+            print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Request {count}/{total}")
+            self.request(url, data={'entries': chunk }, method="POST")
+            count += 1
         print(f"{CC.OKGREEN} *{CC.ENDC} Cleanup Done")
 #.
 #   .-- Create Folder
@@ -225,11 +253,18 @@ class SyncCMK2(CMK2):
 #.
 #   .-- Create Host
 
+
+    def send_create_host(self, entries):
+        """
+        Send Process to create hosts
+        """
+        url = "/domain-types/host_config/actions/bulk-create/invoke"
+        self.request(url, method="POST", data={'entries': entries})
+
     def create_host(self, db_host, folder, labels, additional_attributes=None):
         """
         Create the not yet existing host in CMK
         """
-        url = "/domain-types/host_config/collections/all"
         body = {
             'host_name' : db_host.hostname,
             'folder' : '/' if not folder else folder,
@@ -240,8 +275,9 @@ class SyncCMK2(CMK2):
         if additional_attributes:
             body['attributes'].update(additional_attributes)
 
-        self.request(url, method="POST", data=body)
-        print(f"{CC.OKGREEN} *{CC.ENDC} Created Host {db_host.hostname}")
+        self.bulk_creates.append(body)
+        print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk List: {db_host.hostname}")
+
 
 #.
 #   .-- Create Cluster

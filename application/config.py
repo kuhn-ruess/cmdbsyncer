@@ -67,7 +67,8 @@ class BaseConfig():
 
     FILEADMIN_PATH = '/srv/cmdbsyncer-files'
 
-    CMK_BULK_OPERATIONS = 300
+    CMK_BULK_CREATE_OPERATIONS = 3000
+    CMK_BULK_DELETE_OPERATIONS = 100
 
 class ProductionConfig(BaseConfig):
     """
