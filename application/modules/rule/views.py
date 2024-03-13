@@ -175,8 +175,6 @@ class RuleModelView(DefaultModelView):
 
     column_default_sort = ("sort_field", True), ("name", True)
 
-    page_size = 300
-
     column_filters = (
        'name',
        'enabled',
@@ -238,8 +236,6 @@ class FiltereModelView(DefaultModelView):
         'sort_field',
         'enabled',
     )
-
-    page_size = 300
 
     column_filters = (
        'name',

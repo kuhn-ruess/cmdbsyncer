@@ -56,7 +56,8 @@ def maintenance(account):
         print(f"{CC.WARNING} Days set to 0, exiting {CC.ENDC}")
         return
 
-    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days, Filter: {account_filter_name}{CC.ENDC}")
+    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days," \
+          f"Filter: {account_filter_name}{CC.ENDC}")
 
     now = datetime.datetime.now()
     delta = datetime.timedelta(days)
@@ -104,7 +105,7 @@ def delete_cache():
 #   .-- Command: Delete Caches
 
 @_cli_sys.command('delete_inventory')
-def delete_cache():
+def delete_inventory():
     """
     Delete the inventory of all hosts
     """
@@ -118,15 +119,20 @@ def delete_cache():
 #.
 #   .-- Command: Delete all Hosts
 @_cli_sys.command('delete_all_hosts')
-def delete_all_hosts():
+@click.argument("account", default=False)
+def delete_all_hosts(account):
     """
     Deletes All hosts from DB
     """
     print(f"{CC.HEADER} ***** Delete Hosts ***** {CC.ENDC}")
-    answer = input(" - Enter 'y' and hit enter to procceed: ")
+    answer = input(" - Enter 'y' and hit enter to procceed (Account Filter: {{account}}): ")
     if answer.lower() in ['y', 'z']:
+        db_filter = {
+        }
+        if account:
+            db_filter['inventory__syncer_account'] = account
         print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
-        for host in Host.objects():
+        for host in Host.objects(**db_filter):
             logger.debug(f"Handling Host {host.hostname}")
             host.delete()
     else:

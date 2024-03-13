@@ -107,6 +107,8 @@ class CheckmkRuleView(RuleModelView):
     Custom Rule Model View
     """
 
+
+
     @expose('/debug')
     def debug(self):
         """
