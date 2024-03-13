@@ -438,7 +438,7 @@ class SyncConfiguration(CMK2):
 
             for group_id in groups.keys(): # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
                 if obj_filter := groups[group_id]['object_filter']:
-                    if entry.inventory.syncer_account != obj_filter:
+                    if entry.get_inventory()['syncer_account'] != obj_filter:
                         continue
                 found_ids = []
 

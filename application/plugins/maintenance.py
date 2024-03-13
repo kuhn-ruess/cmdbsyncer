@@ -119,7 +119,7 @@ def delete_inventory():
 #.
 #   .-- Command: Delete all Hosts
 @_cli_sys.command('delete_all_hosts')
-@click.argument("account", default=False)
+@click.argument("account", default="")
 def delete_all_hosts(account):
     """
     Deletes All hosts from DB
