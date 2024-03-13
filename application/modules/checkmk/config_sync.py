@@ -426,23 +426,30 @@ class SyncConfiguration(CMK2):
             groups[group_id]['title'] = rule.group_title
             groups[group_id]['help'] = rule.group_help
             groups[group_id]['ident'] = group_id # set here to use it directly later
+            groups[group_id]['rw_id_tpl'] = jinja2.Template(rule.rewrite_id)
+            groups[group_id]['rw_title_tpl'] = jinja2.Template(rule.rewrite_title)
+            groups[group_id]['object_filter'] = rule.filter_by_account
 
-            rewrite_id_tpl = jinja2.Template(rule.rewrite_id)
-            rewrite_title_tpl = jinja2.Template(rule.rewrite_title)
 
-            db_filter = {
-            }
-            if rule.filter_by_account:
-                db_filter['inventory__syncer_account'] = rule.filter_by_account
-            found_ids = []
-            for entry in Host.objects(**db_filter):
-                object_attributes = self.get_host_attributes(entry, 'cmk_conf')
-                value = entry.hostname
-                new_group_title = value
-                new_group_id = value
+        for entry in Host.objects():
 
-                new_group_id = rewrite_id_tpl.render(name=value,
-                                                     result=value, **object_attributes['all'])
+            object_attributes = self.get_host_attributes(entry, 'cmk_conf')
+            hostname = entry.hostname
+
+            for group_id in groups.keys(): # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
+                if obj_filter := groups[group_id]['object_filter']:
+                    if entry.inventory.syncer_account != obj_filter:
+                        continue
+                found_ids = []
+
+                new_group_title = ""
+                new_group_id = ""
+
+                rewrite_id_tpl = groups[group_id]['rw_id_tpl']
+                rewrite_title_tpl = groups[group_id]['rw_title_tpl']
+
+                new_group_id = rewrite_id_tpl.render(name=hostname,
+                                                     result=hostname, **object_attributes['all'])
                 new_group_id = str_replace(new_group_id, replace_exceptions).strip()
 
                 if new_group_id not in found_ids:
@@ -451,7 +458,7 @@ class SyncConfiguration(CMK2):
                     # we can't add a id twice
                     continue
 
-                new_group_title = rewrite_title_tpl.render(name=value, result=value,
+                new_group_title = rewrite_title_tpl.render(name=hostname, result=hostname,
                                                            **object_attributes['all'])
                 if new_group_id and (new_group_id, new_group_title) \
                                                         not in groups[group_id]['tags']:
