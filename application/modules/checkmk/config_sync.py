@@ -4,7 +4,7 @@ Checkmk Configuration
 #pylint: disable=import-error, too-many-locals, too-many-branches, too-many-statements, no-member
 #pylint: disable=logging-fstring-interpolation
 import ast
-import jinja2
+from flask import render_template_string
 from mongoengine.errors import DoesNotExist
 from application import log, logger
 from application.modules.checkmk.cmk2 import CMK2, CmkException
@@ -82,20 +82,19 @@ class SyncConfiguration(CMK2):
                     for rule_params in rules:
                         # Render Template Value
                         condition_tpl = {"host_tags": [], "service_labels": []}
-                        value_tpl = jinja2.Template(rule_params['value_template'])
                         value = \
-                            value_tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
+                            render_template_string(rule_params['value_template'],
+                                                   HOSTNAME=db_host.hostname, **attributes['all'])
 
                         # Overwrite the Params again
                         rule_params['value'] = value
                         del rule_params['value_template']
 
                         if rule_params['condition_label_template']:
-                            label_condition_tpl = \
-                                jinja2.Template(rule_params['condition_label_template'])
                             label_condition = \
-                                label_condition_tpl.render(HOSTNAME=db_host.hostname, \
-                                                                **attributes['all'])
+                                render_template_string(rule_params['condition_label_template'],
+                                                       HOSTNAME=db_host.hostname,
+                                                       **attributes['all'])
 
                             label_key, label_value = label_condition.split(':')
                             # Fix bug in case of empty Labels in store
@@ -109,12 +108,10 @@ class SyncConfiguration(CMK2):
                         del rule_params['condition_label_template']
 
                         if rule_params['condition_host']:
-                            host_condition_tpl = \
-                                jinja2.Template(rule_params['condition_host'])
-
                             host_condition = \
-                                host_condition_tpl.render(HOSTNAME=db_host.hostname, \
-                                                                **attributes['all'])
+                                render_template_string(rule_params['condition_host'],
+                                                       HOSTNAME=db_host.hostname,
+                                                       **attributes['all'])
                             if host_condition:
                                 condition_tpl["host_name"]= {
                                                 "match_on": host_condition.split(','),
@@ -209,10 +206,8 @@ class SyncConfiguration(CMK2):
             rewrite_title = False
             if outcome.rewrite:
                 rewrite_name = True
-                rewrite_name_tpl = jinja2.Template(outcome.rewrite)
             if outcome.rewrite_title:
                 rewrite_title = True
-                rewrite_title_tpl = jinja2.Template(outcome.rewrite_title)
             if outcome.foreach_type == 'value':
 
                 if outcome.foreach.endswith('*'):
@@ -229,10 +224,12 @@ class SyncConfiguration(CMK2):
                     new_group_title = key
                     new_group_name = key
                     if rewrite_name:
-                        new_group_name = rewrite_name_tpl.render(name=key, result=key)
+                        new_group_name = render_template_string(outcome.rewrite,
+                                                                name=key, result=key)
                     new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = rewrite_title_tpl.render(name=key, result=key)
+                        new_group_title = render_template_string(outcome.rewrite_title,
+                                                                 name=key, result=key)
                     new_group_title = str_replace(new_group_title, replace_exceptions).strip()
 
                     if new_group_name and (new_group_title, new_group_name) \
@@ -252,10 +249,12 @@ class SyncConfiguration(CMK2):
                     new_group_title = value
                     new_group_name = value
                     if rewrite_name:
-                        new_group_name = rewrite_name_tpl.render(name=value, result=value)
+                        new_group_name = render_template_string(outcome.rewrite,
+                                                                name=value, result=value)
                     new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = rewrite_title_tpl.render(name=value, result=value)
+                        new_group_title = render_template_string(outcome.rewrite_title,
+                                                                 name=value, result=value)
                     new_group_title = str_replace(new_group_title, replace_exceptions).strip()
                     if new_group_name and (new_group_title, new_group_name) \
                                                         not in groups[group_type]:
@@ -272,10 +271,12 @@ class SyncConfiguration(CMK2):
                     new_group_title = value
                     new_group_name = value
                     if rewrite_name:
-                        new_group_name = rewrite_name_tpl.render(name=value, result=value)
+                        new_group_name = render_template_string(outcome.rewrite_name,
+                                                                name=value, result=value)
                     new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = rewrite_title_tpl.render(name=value, result=value)
+                        new_group_title = render_template_string(outcome.rewrite_title,
+                                                                 name=value, result=value)
                     new_group_title = str_replace(new_group_title, replace_exceptions).strip()
                     if new_group_name and (new_group_title, new_group_name) \
                                                         not in groups[group_type]:
@@ -419,54 +420,81 @@ class SyncConfiguration(CMK2):
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
         groups = {}
         replace_exceptions = ['-', '_']
-        for rule in CheckmkTagMngmt.objects(enabled=True):
+        db_objects = CheckmkTagMngmt.objects(enabled=True)
+        total = len(db_objects)
+        counter = 0
+        for rule in db_objects:
+            counter += 1
+            logger.debug(f"Get Rule {rule.group_id}")
             group_id = rule.group_id
             groups.setdefault(group_id, {'tags':[]})
             groups[group_id]['topic'] = rule.group_topic_name
             groups[group_id]['title'] = rule.group_title
             groups[group_id]['help'] = rule.group_help
             groups[group_id]['ident'] = group_id # set here to use it directly later
-            groups[group_id]['rw_id_tpl'] = jinja2.Template(rule.rewrite_id)
-            groups[group_id]['rw_title_tpl'] = jinja2.Template(rule.rewrite_title)
+            groups[group_id]['rw_id'] = rule.rewrite_id
+            groups[group_id]['rw_title'] = rule.rewrite_title
             groups[group_id]['object_filter'] = rule.filter_by_account
+            process = 100.0 * counter / total
+            print(f"\n{CC.HEADER}({process:.0f}%) {rule.group_id}{CC.ENDC}")
 
 
-        for entry in Host.objects():
-
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attribute and Build Tag list")
+        db_objects = Host.objects()
+        total = len(db_objects)
+        counter = 0
+        found_tag_ids_by_group = {}
+        for entry in db_objects:
+            counter += 1
             object_attributes = self.get_host_attributes(entry, 'cmk_conf')
             hostname = entry.hostname
+            logger.debug(f"Work Host {hostname}")
 
             for group_id in groups.keys(): # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
+                logger.debug(f"Work Group {group_id}")
+
+                cache_name = f"cmk_tags_{group_id}"
+
                 if obj_filter := groups[group_id]['object_filter']:
                     if entry.get_inventory()['syncer_account'] != obj_filter:
                         continue
-                del groups[group_id]['object_filter']
-                found_ids = []
 
-                new_group_title = ""
-                new_group_id = ""
-
-                rewrite_id_tpl = groups[group_id]['rw_id_tpl']
-                rewrite_title_tpl = groups[group_id]['rw_title_tpl']
-
-                del groups[group_id]['rw_id_tpl']
-                del groups[group_id]['rw_title_tpl']
-
-                new_group_id = rewrite_id_tpl.render(name=hostname,
-                                                     result=hostname, **object_attributes['all'])
-                new_group_id = str_replace(new_group_id, replace_exceptions).strip()
-
-                if new_group_id not in found_ids:
-                    found_ids.append(new_group_id)
+                if cache_name in entry.cache:
+                    logger.debug(" -- Using  Cache for Group")
+                    new_tag_id, new_tag_title = entry.cache[cache_name]
                 else:
-                    # we can't add a id twice
-                    continue
 
-                new_group_title = rewrite_title_tpl.render(name=hostname, result=hostname,
+                    rewrite_id = groups[group_id]['rw_id']
+                    rewrite_title = groups[group_id]['rw_title']
+
+                    new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
+                                                        **object_attributes['all'])
+                    if new_tag_id:
+                        # Do not replace emptry strings with _
+                        new_tag_id = str_replace(new_tag_id, replace_exceptions).strip()
+
+                    new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
                                                            **object_attributes['all'])
-                if new_group_id and (new_group_id, new_group_title) \
+
+                    logger.debug(" -- Build  Cache for Group")
+
+                    # We store empty data also to chache, no need to
+                    # Re calculate something if there is nothing
+                    entry.cache[cache_name] = (new_tag_id, new_tag_title)
+                    entry.save()
+
+                # Either Cached or live Data now:
+                if new_tag_id and (new_tag_id, new_tag_title) \
                                                         not in groups[group_id]['tags']:
-                    groups[group_id]['tags'].append((new_group_id, new_group_title))
+                    found_tag_ids_by_group.setdefault(group_id, [])
+                    # we check not only, if the combination is uniue,
+                    # but also if also the id is not duplicate even with diffrent name
+                    if new_tag_id not in found_tag_ids_by_group[group_id]:
+                        groups[group_id]['tags'].append((new_tag_id, new_tag_title))
+                        found_tag_ids_by_group[group_id].append(new_tag_id)
+
+            process = 100.0 * counter / total
+            print(f"\n{CC.HEADER}({process:.0f}%) {entry.hostname}{CC.ENDC}")
 
 
         url = "/domain-types/host_tag_group/collections/all"
@@ -480,6 +508,13 @@ class SyncConfiguration(CMK2):
         create_url = "/domain-types/host_tag_group/collections/all"
         for syncer_group_id, syncer_group_data in groups.items():
             payload = syncer_group_data
+            del payload['object_filter']
+            del payload['rw_id']
+            del payload['rw_title']
+
+            syncer_group_data['tags'].sort(key=lambda tup: tup[1])
+            syncer_group_data['tags'].insert(0, ("", "Not set"))
+
             payload['tags'] = [{'ident':x, 'title': y} for x,y in syncer_group_data['tags']]
             if not payload['tags']:
                 print(f"{CC.WARNING} *{CC.ENDC} Group {syncer_group_id} has no tags")
@@ -536,9 +571,9 @@ class SyncConfiguration(CMK2):
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
                         # Render Template Value
-                        tpl = jinja2.Template(rule_params['rule_template'])
                         rule_body = \
-                            tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
+                            render_template_string(rule_params['rule_template'],
+                                                   HOSTNAME=db_host.hostname, **attributes['all'])
                         rule_dict = ast.literal_eval(rule_body.replace('null', 'None'))
                         unique_rules[rule_dict['id']] = rule_dict
                         pack_id = rule_dict['pack_id']
@@ -607,9 +642,9 @@ class SyncConfiguration(CMK2):
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
                         # Render Template Value
-                        tpl = jinja2.Template(rule_params['rule_template'])
                         rule_body = \
-                            tpl.render(HOSTNAME=db_host.hostname, **attributes['all'])
+                            render_template_string(rule_params['rule_template'],
+                                                   HOSTNAME=db_host.hostname, **attributes['all'])
                         aggregation_dict = ast.literal_eval(rule_body.replace('null', 'None'))
                         unique_aggregations[aggregation_dict['id']] = aggregation_dict
                         pack_id = aggregation_dict['pack_id']
