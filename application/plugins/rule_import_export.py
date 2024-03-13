@@ -3,18 +3,31 @@ Rule Import/ Export
 """
 #pylint: disable=too-many-arguments
 import json
-import click
 import importlib
 from ast import literal_eval
+import click
 
 from mongoengine.errors import NotUniqueError
 from application import app
 
 from application.modules.rule.models import CustomAttribute, FullCondition, FilterAction
+from application.modules.checkmk.models import *
 
 enabled_rules = {
     'ansible_customvars': ('application.modules.ansible.models', 'AnsibleCustomVariablesRule'),
     'custom_attributes': ('application.modules.custom_attributes.models', 'CustomAttributeRule'),
+    'cmk_tags': ('application.modules.checkmk.models', 'CheckmkTagMngmt'),
+    'cmk_filter': ('application.modules.checkmk.models', 'CheckmkFilterRule'),
+    'cmk_inventory': ('application.modules.checkmk.models', 'CheckmkInventorizeAttributes'),
+    'cmk_export_rules': ('application.modules.checkmk.models', 'CheckmkRule'),
+    'cmk_rules': ('application.modules.checkmk.models', 'CheckmkRuleMngmt'),
+    'cmk_groups': ('application.modules.checkmk.models', 'CheckmkGroupRule'),
+    'cmk_user': ('application.modules.checkmk.models', 'CheckmkUserMngmt'),
+    'cmk_rewrite': ('application.modules.checkmk.models', 'CheckmkRewriteAttributeRule'),
+    'cmk_sites': ('application.modules.checkmk.models', 'CheckmkSite'),
+    'cmk_site_settings': ('application.modules.checkmk.models', 'CheckmkSettings'),
+    'cmk_bi_aggregation': ('application.modules.checkmk.models', 'CheckmkBiAggregation'),
+    'cmk_bi_rule': ('application.modules.checkmk.models', 'CheckmkBiRule'),
 }
 
 

@@ -440,6 +440,7 @@ class SyncConfiguration(CMK2):
                 if obj_filter := groups[group_id]['object_filter']:
                     if entry.get_inventory()['syncer_account'] != obj_filter:
                         continue
+                del groups[group_id]['obj_filter']
                 found_ids = []
 
                 new_group_title = ""
@@ -447,6 +448,9 @@ class SyncConfiguration(CMK2):
 
                 rewrite_id_tpl = groups[group_id]['rw_id_tpl']
                 rewrite_title_tpl = groups[group_id]['rw_title_tpl']
+
+                del groups[group_id]['rw_id_tpl']
+                del groups[group_id]['rw_title_tpl']
 
                 new_group_id = rewrite_id_tpl.render(name=hostname,
                                                      result=hostname, **object_attributes['all'])
