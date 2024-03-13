@@ -440,7 +440,7 @@ class SyncConfiguration(CMK2):
                 if obj_filter := groups[group_id]['object_filter']:
                     if entry.get_inventory()['syncer_account'] != obj_filter:
                         continue
-                del groups[group_id]['obj_filter']
+                del groups[group_id]['object_filter']
                 found_ids = []
 
                 new_group_title = ""

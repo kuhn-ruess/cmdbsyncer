@@ -10,9 +10,6 @@ import click
 from mongoengine.errors import NotUniqueError
 from application import app
 
-from application.modules.rule.models import CustomAttribute, FullCondition, FilterAction
-from application.modules.checkmk.models import *
-
 enabled_rules = {
     'ansible_customvars': ('application.modules.ansible.models', 'AnsibleCustomVariablesRule'),
     'custom_attributes': ('application.modules.custom_attributes.models', 'CustomAttributeRule'),
@@ -28,6 +25,7 @@ enabled_rules = {
     'cmk_site_settings': ('application.modules.checkmk.models', 'CheckmkSettings'),
     'cmk_bi_aggregation': ('application.modules.checkmk.models', 'CheckmkBiAggregation'),
     'cmk_bi_rule': ('application.modules.checkmk.models', 'CheckmkBiRule'),
+    'host_objects': ('application.models.host', 'Host'),
 }
 
 
