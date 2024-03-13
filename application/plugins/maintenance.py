@@ -125,7 +125,7 @@ def delete_all_hosts(account):
     Deletes All hosts from DB
     """
     print(f"{CC.HEADER} ***** Delete Hosts ***** {CC.ENDC}")
-    answer = input(" - Enter 'y' and hit enter to procceed (Account Filter: {{account}}): ")
+    answer = input(f" - Enter 'y' and hit enter to procceed (Account Filter: {{account}}): ")
     if answer.lower() in ['y', 'z']:
         db_filter = {
         }
