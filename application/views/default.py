@@ -10,6 +10,7 @@ class DefaultModelView(ModelView):
     """
     Default Model View Overwrite
     """
+    page_size = 300
 
     def is_accessible(self):
         """ Overwrite """
