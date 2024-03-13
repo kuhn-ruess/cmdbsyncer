@@ -4,8 +4,10 @@
 # pylint: disable=ungrouped-imports
 import os
 import logging
+import ast
 from datetime import datetime
 from pprint import pformat
+from re import I
 from flask import Flask, url_for, redirect
 from flask_admin import Admin
 from flask_admin.menu import MenuLink
@@ -35,6 +37,8 @@ try:
     app.config.update(config)
 except ModuleNotFoundError:
     pass
+
+## Logging
 logger.setLevel(logging.DEBUG)
 
 ch = app.config['LOG_CHANNEL']
@@ -46,7 +50,7 @@ logger.addHandler(ch)
 if app.config['DEBUG']:
     logger.info('Loaded Debug Mode')
 
-
+## Sentry
 if app.config['SENTRY_ENABLED']:
     import sentry_sdk
     from sentry_sdk.integrations.flask import FlaskIntegration
@@ -102,6 +106,16 @@ login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message = False
 
+def merge_list_of_dicts(input_list):
+    """
+    Merge a list of dicts to single dict
+    """
+    if isinstance(input_list, str):
+        input_list = ast.literal_eval(input_list.replace('\n',''))
+    return {k: v for d in input_list for k, v in d.items()}
+
+app.jinja_env.globals.update(merge_list_of_dicts=merge_list_of_dicts)
+
 cron_register = {}
 from plugins import *
 from application.plugins import *
@@ -119,6 +133,7 @@ def page_redirect():
     Redirect to admin Panel
     """
     return redirect(url_for("admin.index"))
+
 
 from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")

@@ -45,7 +45,7 @@ def import_rules_to_model(rule_type, json_raw):
     model = importlib.import_module(enabled_rules[rule_type][0])
     for json_rule_raw in json_raw:
         json_dict = json.loads(json_rule_raw)
-        print(f"* Import {json_dict['name']}")
+        print(f"* Import {json_dict['_id']}")
         db_ref = getattr(model, enabled_rules[rule_type][1])()
         new = db_ref.from_json(json.dumps(json_dict))
         try:
