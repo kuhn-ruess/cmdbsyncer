@@ -419,7 +419,7 @@ class SyncConfiguration(CMK2):
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
         groups = {}
-        replace_exceptions = ['-', '_']
+        replace_exceptions = ['-', '_', ' ']
         db_objects = CheckmkTagMngmt.objects(enabled=True)
         total = len(db_objects)
         counter = 0
@@ -472,7 +472,7 @@ class SyncConfiguration(CMK2):
                                                         **object_attributes['all'])
                     if new_tag_id:
                         # Do not replace emptry strings with _
-                        new_tag_id = str_replace(new_tag_id, replace_exceptions).strip()
+                        new_tag_id = str_replace(new_tag_id, replace_exceptions).lower().strip()
 
                     new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
                                                            **object_attributes['all'])
@@ -518,7 +518,7 @@ class SyncConfiguration(CMK2):
             syncer_group_data['tags'].insert(0, ("", "Not set"))
 
             payload['tags'] = [{'ident':x, 'title': y} for x,y in syncer_group_data['tags']]
-            if not payload['tags']:
+            if not payload['tags'] or len(payload['tags']) == 1:
                 print(f"{CC.WARNING} *{CC.ENDC} Group {syncer_group_id} has no tags")
                 continue
             if syncer_group_id not in checkmk_ids:
