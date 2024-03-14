@@ -3,7 +3,7 @@
 Checkmk Rules
 """
 #pylint: disable=import-error
-import jinja2
+from flask import render_template_string
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
@@ -110,8 +110,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 new_key, new_value = outcome['action_param'].split(':')
                 hostname = self.db_host.hostname
                 new_value = new_value.replace('{{hostname}}', hostname) # Legacy, Removed in 4.0
-                tpl = jinja2.Template(new_value)
-                new_value = tpl.render(HOSTNAME=hostname, **self.attributes)
+                new_value = render_template_string(new_value, HOSTNAME=hostname, **self.attributes)
                 new_value = self.replace(new_value, exceptions=[
                                                         " ", '/'
                                                     ]) # Replace Chars not working in Checkmk
@@ -123,9 +122,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == "set_parent":
                 value = outcome['action_param']
-                tpl = jinja2.Template(value)
                 hostname = self.db_host.hostname
-                new_value = tpl.render(HOSTNAME=hostname, **self.attributes)
+                new_value = render_template_string(value, HOSTNAME=hostname, **self.attributes)
                 for parent in new_value.split(','):
                     parent = parent.strip()
                     if parent and parent not in outcomes['parents']:

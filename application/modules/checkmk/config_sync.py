@@ -515,7 +515,7 @@ class SyncConfiguration(CMK2):
             del payload['rw_title']
 
             syncer_group_data['tags'].sort(key=lambda tup: tup[1])
-            syncer_group_data['tags'].insert(0, ("", "Not set"))
+            syncer_group_data['tags'].insert(0, (None, "Not set"))
 
             payload['tags'] = [{'ident':x, 'title': y} for x,y in syncer_group_data['tags']]
             if not payload['tags'] or len(payload['tags']) == 1:
