@@ -5,6 +5,7 @@
 import os
 import logging
 import ast
+import re
 from datetime import datetime
 from pprint import pformat
 from re import I
@@ -114,7 +115,15 @@ def merge_list_of_dicts(input_list):
         input_list = ast.literal_eval(input_list.replace('\n',''))
     return {k: v for d in input_list for k, v in d.items()}
 
+def cleanup_tag_id(input_str):
+    """
+    Cleans Invalid Chars out
+    of strings you wan't to use as tag_id in cmk
+    """
+    return re.sub('[^a-zA-Z0-9_-]', '_', input_str.strip()).lower()
+
 app.jinja_env.globals.update(merge_list_of_dicts=merge_list_of_dicts)
+app.jinja_env.globals.update(cleanup_tag_id=cleanup_tag_id)
 
 cron_register = {}
 from plugins import *
