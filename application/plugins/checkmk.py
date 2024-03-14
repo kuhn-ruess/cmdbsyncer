@@ -202,7 +202,7 @@ def debug_host(hostname):
         if attr_value := attributes['all'].get(additional_attr):
             additional_attributes[additional_attr] = attr_value
 
-    if 'remove_attributes' in actions:
+    if 'remove_attributes' in actions and 'remove_attributes' in additional_attributes:
         # Do not show Removed Attributes in the Custom Attributes list
         for del_attr in additional_attributes['remove_attributes']:
             try:
