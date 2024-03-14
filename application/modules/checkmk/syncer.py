@@ -188,7 +188,7 @@ class SyncCMK2(CMK2):
             count = 1
             for chunk in chunks:
                 print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Update Requests {count}/{total}")
-                self.send_create_host(chunk)
+                self.send_update_host(chunk)
                 count += 1
 
         if self.limit:
@@ -321,11 +321,11 @@ class SyncCMK2(CMK2):
 #.
 #   .-- Get Etag
 
-    def get_etag(self, db_host):
+    def get_etag(self, db_host, reason=""):
         """
         Return ETAG of host
         """
-        print(f"{CC.OKGREEN} *{CC.ENDC} Read ETAG in CMK")
+        print(f"{CC.OKGREEN} *{CC.ENDC} Read ETAG in CMK -> {reason}")
         url = f"objects/host_config/{db_host.hostname}"
         _, headers = self.request(url, "GET")
         return headers.get('ETag')
@@ -359,7 +359,7 @@ class SyncCMK2(CMK2):
 
         url = "/domain-types/host_config/actions/bulk-update/invoke"
         self.request(url, method="PUT",
-                     data=entries,
+                     data={'entries': entries},
                     )
 
     def update_host(self, db_host, cmk_host, folder, \
@@ -385,7 +385,7 @@ class SyncCMK2(CMK2):
         # Check if we really need to move
         if not dont_move_host and current_folder != folder:
             print(f"{CC.OKGREEN} *{CC.ENDC} Host Moved from Folder: {current_folder} to {folder}")
-            etag = self.get_etag(db_host)
+            etag = self.get_etag(db_host, "Move Host")
             update_headers = {
                 'if-match': etag
             }
@@ -406,11 +406,15 @@ class SyncCMK2(CMK2):
             print(f"{CC.WARNING} *{CC.ENDC} Folder Move to {folder} disabled. ")
 
         do_update = False
+        do_update_labels = False
+        do_update_attributes = False
+        do_remove_attributes = False
         update_reasons = []
         cmk_attributes = cmk_host['extensions']['attributes']
         cmk_labels = cmk_attributes.get('labels', {})
         if labels != cmk_labels:
             do_update = True
+            do_update_labels = True
             update_reasons.append("Labels not match")
 
         for key, value in additional_attributes.items():
@@ -418,6 +422,7 @@ class SyncCMK2(CMK2):
             if attr != value:
                 update_reasons.append(f"Update Extra Attribute: {key} Currently: {attr} != {value}")
                 do_update = True
+                do_update_attributes = True
                 break
 
 
@@ -426,6 +431,7 @@ class SyncCMK2(CMK2):
             if attr in cmk_attributes:
                 update_reasons.append(f"Remove Extra Attribute: {attr}")
                 do_update = True
+                do_remove_attributes = True
             else:
                 not_existing.append(attr)
         for attr in not_existing:
@@ -438,34 +444,51 @@ class SyncCMK2(CMK2):
         if do_update:
             # We may already got the Etag by the folder move action
             if not etag and not app.config['CMK_BULK_UPDATE_HOSTS']:
-                etag = self.get_etag(db_host)
+                etag = self.get_etag(db_host, "Update Host")
 
-            update_headers = {
-                'if-match': etag,
-            }
             update_url = f"objects/host_config/{db_host.hostname}"
             update_body = {
-                'update_attributes': {
-                    'labels' : labels,
-                }
+                'update_attributes': {},
             }
-            if additional_attributes:
+
+            if do_update_labels:
+                update_body['labels'] = labels
+            if do_update_attributes and additional_attributes:
                 update_body['update_attributes'].update(additional_attributes)
 
-            if remove_attributes:
+            if do_remove_attributes and remove_attributes:
                 update_body['remove_attributes'] = remove_attributes
 
 
             logger.debug(f"Syncer Update Body: {update_body}")
-            if not app.config['CMK_BULK_UPDATE_HOSTS']:
-                self.request(update_url, method="PUT",
-                             data=update_body,
-                             additional_header=update_headers)
-                print(f"{CC.OKGREEN} *{CC.ENDC} Updated Host in Checkmk")
-                print(f"   Reasons: {', '.join(update_reasons)}")
-            else:
-                self.bulk_updates.append(update_body)
-                print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk Update List")
+
+
+            # CHeckmk currently fails if you send labels and tags the same time
+            # and you cant send update and remove attributes at the same time
+            for what in ['attributes', 'update_attributes', 'remove_attributes', 'labels']:
+                if what in update_body:
+                    payload = {
+                        what: update_body[what],
+                    }
+                    if what == 'labels':
+                        payload = {
+                            "update_attributes": {'labels': update_body[what]},
+                        }
+
+                    if not app.config['CMK_BULK_UPDATE_HOSTS']:
+                        update_headers = {
+                            'if-match': etag,
+                        }
+                        self.request(update_url, method="PUT",
+                                     data=payload,
+                                     additional_header=update_headers)
+                        etag = self.get_etag(db_host, "After last Update")
+                        print(f"{CC.OKGREEN} *{CC.ENDC} Updated Host in Checkmk")
+                        print(f"   Reasons: {what}: {', '.join(update_reasons)}")
+                    else:
+                        payload['host_name'] = db_host.hostname
+                        self.bulk_updates.append(payload)
+                        print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk Update List for {what} update")
             db_host.set_export_sync()
 
 
