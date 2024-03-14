@@ -436,7 +436,8 @@ class SyncConfiguration(CMK2):
             groups[group_id]['rw_title'] = rule.rewrite_title
             groups[group_id]['object_filter'] = rule.filter_by_account
             process = 100.0 * counter / total
-            print(f"\n{CC.HEADER}({process:.0f}%) {rule.group_id}{CC.ENDC}")
+            print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {rule.group_id}", end="")
+        print()
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attribute and Build Tag list")
@@ -494,7 +495,8 @@ class SyncConfiguration(CMK2):
                         found_tag_ids_by_group[group_id].append(new_tag_id)
 
             process = 100.0 * counter / total
-            print(f"\n{CC.HEADER}({process:.0f}%) {entry.hostname}{CC.ENDC}")
+            print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {entry.hostname}", end="")
+        print()
 
 
         url = "/domain-types/host_tag_group/collections/all"
