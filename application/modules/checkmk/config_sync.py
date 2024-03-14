@@ -6,7 +6,7 @@ Checkmk Configuration
 import ast
 from flask import render_template_string
 from mongoengine.errors import DoesNotExist
-from application import log, logger
+from application import log, logger, cleanup_tag_id
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.checkmk.models import (
         CheckmkGroupRule,
@@ -419,7 +419,6 @@ class SyncConfiguration(CMK2):
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
         groups = {}
-        replace_exceptions = ['-', '_', ' ']
         db_objects = CheckmkTagMngmt.objects(enabled=True)
         total = len(db_objects)
         counter = 0
@@ -470,9 +469,9 @@ class SyncConfiguration(CMK2):
 
                     new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
                                                         **object_attributes['all'])
+                    new_tag_id = new_tag_id.strip()
                     if new_tag_id:
-                        # Do not replace emptry strings with _
-                        new_tag_id = str_replace(new_tag_id, replace_exceptions).lower().strip()
+                        new_tag_id = cleanup_tag_id(new_tag_id)
 
                     new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
                                                            **object_attributes['all'])
@@ -537,7 +536,7 @@ class SyncConfiguration(CMK2):
                         'if-match': etag
                     }
                     del payload['ident']
-                    payload['repair'] = False
+                    payload['repair'] = True
                     try:
                         self.request(url,
                             method="PUT",
