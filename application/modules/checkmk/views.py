@@ -31,11 +31,12 @@ def _render_bi_rule(_view, _context, model, _name):
 
 def _render_checkmk_outcome(_view, _context, model, _name):
     """
-    Render Label outcomes
+    Render Checkmk outcomes
     """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{dict(action_outcome_types)[entry.action]}</td>"
+        name = dict(action_outcome_types)[entry.action].split('_',1)[0]
+        html += f"<tr><td>{idx}</td><td>{name}</td>"
         if entry.action_param:
             html += f"<td><b>{entry.action_param}</b></td></tr>"
     html += "</table>"

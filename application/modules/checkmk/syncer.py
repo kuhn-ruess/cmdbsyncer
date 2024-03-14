@@ -82,7 +82,7 @@ class SyncCMK2(CMK2):
 
             # Actions
             process = 100.0 * counter / total
-            print(f"\n{CC.HEADER}({process:.0f}%) {db_host.hostname}{CC.ENDC}")
+            print(f"\n{CC.HEADER}({process:.0f}%){CC.ENDC} {db_host.hostname}")
             attributes = self.get_host_attributes(db_host, 'checkmk')
 
 
@@ -171,6 +171,7 @@ class SyncCMK2(CMK2):
 
 
             db_host.save()
+        print()
 
         # Final Call to create missing hosts via bulk
 
