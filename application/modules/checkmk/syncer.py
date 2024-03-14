@@ -22,6 +22,7 @@ class SyncCMK2(CMK2):
             yield lst[i:i + n]
 
     bulk_creates = []
+    bulk_updates = []
 
 
 #   .-- Get Host Actions
@@ -63,7 +64,7 @@ class SyncCMK2(CMK2):
 
 
         ## Start SYNC of Hosts into CMK
-        print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
+        print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
         db_objects = Host.get_export_hosts()
         total = len(db_objects)
         counter = 0
@@ -177,15 +178,24 @@ class SyncCMK2(CMK2):
         total = len(chunks)
         count = 1
         for chunk in chunks:
-            print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Request {count}/{total}")
+            print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Create Requests {count}/{total}")
             self.send_create_host(chunk)
             count += 1
 
+        if app.config['CMK_BULK_UPDATE_HOSTS']:
+            chunks = list(self.chunks(self.bulk_updates, app.config['CMK_BULK_UPDATE_OPERATIONS']))
+            total = len(chunks)
+            count = 1
+            for chunk in chunks:
+                print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Update Requests {count}/{total}")
+                self.send_create_host(chunk)
+                count += 1
+
         if self.limit:
-            print(f"\n{CC.OKGREEN} -- {CC.ENDC}Stop processing in limit mode")
+            print(f"\n{CC.OKCYAN} -- {CC.ENDC}Stop processing in limit mode")
             return
         ## Create the Clusters
-        print(f"\n{CC.OKGREEN} -- {CC.ENDC}Check if we need to handle Clusters")
+        print(f"\n{CC.OKBLUE} -- {CC.ENDC}Check if we need to handle Clusters")
         for cluster in clusters:
             self.create_cluster(*cluster)
         for cluster in cluster_updates:
@@ -193,25 +203,33 @@ class SyncCMK2(CMK2):
 
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
-        print(f"\n{CC.OKGREEN} -- {CC.ENDC}Check if we need to cleanup hosts")
+        print(f"\n{CC.OKBLUE} -- {CC.ENDC}Check if we need to cleanup hosts")
         delete_list = []
         for host, host_data in cmk_hosts.items():
             host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
                 if host not in synced_hosts:
                     # Delete host
-                    delete_list.append(host)
-                    print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
 
-        url = "/domain-types/host_config/actions/bulk-delete/invoke"
-        chunks = list(self.chunks(delete_list, app.config['CMK_BULK_DELETE_OPERATIONS']))
-        total = len(chunks)
-        count = 1
-        for chunk in chunks:
-            print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Request {count}/{total}")
-            self.request(url, data={'entries': chunk }, method="POST")
-            count += 1
-        print(f"{CC.OKGREEN} *{CC.ENDC} Cleanup Done")
+                    if app.config['CMK_BULK_DELETE_HOSTS']:
+                        delete_list.append(host)
+                        print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
+                    else:
+                        url = f"/objects/host_ocnfig/{host}"
+                        self.request(url, method="DELETE")
+                        print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
+
+
+        if app.config['CMK_BULK_DELETE_HOSTS']:
+            url = "/domain-types/host_config/actions/bulk-delete/invoke"
+            chunks = list(self.chunks(delete_list, app.config['CMK_BULK_DELETE_OPERATIONS']))
+            total = len(chunks)
+            count = 1
+            for chunk in chunks:
+                print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Request {count}/{total}")
+                self.request(url, data={'entries': chunk }, method="POST")
+                count += 1
+        print(f"{CC.OKCYAN} *{CC.ENDC} Cleanup Done")
 #.
 #   .-- Create Folder
     def _create_folder(self, parent, subfolder):
@@ -276,7 +294,7 @@ class SyncCMK2(CMK2):
             body['attributes'].update(additional_attributes)
 
         self.bulk_creates.append(body)
-        print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk List: {db_host.hostname}")
+        print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk List")
 
 
 #.
@@ -297,8 +315,8 @@ class SyncCMK2(CMK2):
         if additional_attributes:
             body['attributes'].update(additional_attributes)
 
+        print(f"{CC.OKGREEN} *{CC.ENDC} Create Cluster {db_host.hostname}")
         self.request(url, method="POST", data=body)
-        print(f"{CC.OKGREEN} *{CC.ENDC} Created Cluster {db_host.hostname}")
 
 #.
 #   .-- Get Etag
@@ -307,7 +325,7 @@ class SyncCMK2(CMK2):
         """
         Return ETAG of host
         """
-        print(f"{CC.OKBLUE} *{CC.ENDC} Read ETAG in CMK")
+        print(f"{CC.OKGREEN} *{CC.ENDC} Read ETAG in CMK")
         url = f"objects/host_config/{db_host.hostname}"
         _, headers = self.request(url, "GET")
         return headers.get('ETag')
@@ -319,7 +337,7 @@ class SyncCMK2(CMK2):
         Update the Nodes of Cluster in case of change
         """
         if cmk_nodes != syncer_nodes:
-            print(f"{CC.OKBLUE} *{CC.ENDC} Cluster has new Nodes {syncer_nodes}")
+            print(f"{CC.OKGREEN} *{CC.ENDC} Cluster has new Nodes {syncer_nodes}")
             etag = self.get_etag(db_host)
             update_headers = {
                 'if-match': etag
@@ -334,6 +352,16 @@ class SyncCMK2(CMK2):
 
 #.
 #   .-- Update Host
+    def send_update_host(self, entries):
+        """
+        Send Update requests to CMK
+        """
+
+        url = "/domain-types/host_config/actions/bulk-update/invoke"
+        self.request(url, method="PUT",
+                     data=entries,
+                    )
+
     def update_host(self, db_host, cmk_host, folder, \
                     labels, additional_attributes, remove_attributes, \
                     dont_move_host):
@@ -356,7 +384,7 @@ class SyncCMK2(CMK2):
         etag = False
         # Check if we really need to move
         if not dont_move_host and current_folder != folder:
-            print(f"{CC.OKBLUE} *{CC.ENDC} Host Moved from Folder: {current_folder} to {folder}")
+            print(f"{CC.OKGREEN} *{CC.ENDC} Host Moved from Folder: {current_folder} to {folder}")
             etag = self.get_etag(db_host)
             update_headers = {
                 'if-match': etag
@@ -409,7 +437,7 @@ class SyncCMK2(CMK2):
 
         if do_update:
             # We may already got the Etag by the folder move action
-            if not etag:
+            if not etag and not app.config['CMK_BULK_UPDATE_HOSTS']:
                 etag = self.get_etag(db_host)
 
             update_headers = {
@@ -427,12 +455,18 @@ class SyncCMK2(CMK2):
             if remove_attributes:
                 update_body['remove_attributes'] = remove_attributes
 
+
             logger.debug(f"Syncer Update Body: {update_body}")
-            self.request(update_url, method="PUT",
-                         data=update_body,
-                         additional_header=update_headers)
-            print(f"{CC.OKBLUE} *{CC.ENDC} Updated Host in Checkmk")
-            print(f"   Reasons: {', '.join(update_reasons)}")
+            if not app.config['CMK_BULK_UPDATE_HOSTS']:
+                self.request(update_url, method="PUT",
+                             data=update_body,
+                             additional_header=update_headers)
+                print(f"{CC.OKGREEN} *{CC.ENDC} Updated Host in Checkmk")
+                print(f"   Reasons: {', '.join(update_reasons)}")
+            else:
+                self.bulk_updates.append(update_body)
+                print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk Update List")
             db_host.set_export_sync()
+
 
 #.

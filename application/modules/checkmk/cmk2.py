@@ -93,7 +93,7 @@ class CMK2(Plugin):
                     # API 404 has JSON Response, every webserver 404 has not
                     if response.status_code == 404:
                         raise CmkException(f"Page not Found: {url}")
-                    raise CmkException("Cant parse Checkmk Response")
+                    raise CmkException(f"Cant parse Checkmk Response {response.text}")
 
                 if response_json['title'] not in error_whitelist:
                     raise CmkException(f"{response_json['title']} "\

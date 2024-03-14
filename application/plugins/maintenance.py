@@ -132,9 +132,7 @@ def delete_all_hosts(account):
         if account:
             db_filter['inventory__syncer_account'] = account
         print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
-        for host in Host.objects(**db_filter):
-            logger.debug(f"Handling Host {host.hostname}")
-            host.delete()
+        Host.objects(**db_filter).delete()
     else:
         print(f"{CC.OKGREEN}  ** {CC.ENDC}Aborted")
 
