@@ -69,7 +69,7 @@ class BaseConfig():
 
     CMK_BULK_CREATE_OPERATIONS = 300
 
-    CMK_BULK_DELETE_HOSTS = True
+    CMK_BULK_DELETE_HOSTS = False
     CMK_BULK_DELETE_OPERATIONS = 100
 
     CMK_BULK_UPDATE_HOSTS = True # So no ETag Checking
