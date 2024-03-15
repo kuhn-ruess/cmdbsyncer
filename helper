@@ -22,6 +22,9 @@ case "$1" in
 "down")
     docker-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER down --rmi local --remove-orphans
     ;;
+"cmdbsyncer")
+    docker exec -it $APPLICATION ./"$@"
+    ;;
 "logs")
     echo "Start Container Logs"
     docker logs -f $APPLICATION

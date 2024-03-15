@@ -3,7 +3,9 @@
 Checkmk Rules
 """
 #pylint: disable=import-error
+#pylint: disable=logging-fstring-interpolation
 from flask import render_template_string
+from application import logger
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
@@ -119,6 +121,23 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                     outcomes['remove_attributes'].append(new_key)
                 elif new_key and new_value:
                     outcomes['custom_attributes'].append({new_key: new_value})
+
+            if outcome['action'] == 'multiple_custom_attribute':
+                param = outcome['action_param']
+                for attr_pair in render_template_string(param,
+                                                        HOSTNAME=hostname,
+                                                        **self.attributes).split(','):
+
+                    if not attr_pair:
+                        continue
+                    try:
+                        new_key, new_value = attr_pair.split(':')
+                        if new_value.lower() in ['none', 'false']:
+                            outcomes['remove_attributes'].append(new_key)
+                        elif new_key and new_value:
+                            outcomes['custom_attributes'].append({new_key: new_value})
+                    except ValueError:
+                        logger.debug(f"Cant split '{attr_pair}'")
 
             if outcome['action'] == "set_parent":
                 value = outcome['action_param']
