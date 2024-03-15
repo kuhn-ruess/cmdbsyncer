@@ -65,8 +65,8 @@ def export_rules(rule_type):
     """
     if rule_type.lower() in enabled_rules:
         rules = list(export_rules_from_model(rule_type))
-        print({'rule_type': rule_type,
-               'rules_json': rules})
+        print({"rule_type": rule_type,
+               "rules_json": rules})
     else:
         print("Ruletype not supported")
         print(f"Currently supported: {','.join(enabled_rules.keys())}")

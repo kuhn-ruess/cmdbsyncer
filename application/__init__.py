@@ -107,6 +107,16 @@ login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message = False
 
+
+def get_list(input_list):
+    """
+    Convert a List which is a 
+    string to real object
+    """
+    if isinstance(input_list, str):
+        input_list = ast.literal_eval(input_list.replace('\n',''))
+    return input_list
+
 def merge_list_of_dicts(input_list):
     """
     Merge a list of dicts to single dict
@@ -115,15 +125,16 @@ def merge_list_of_dicts(input_list):
         input_list = ast.literal_eval(input_list.replace('\n',''))
     return {k: v for d in input_list for k, v in d.items()}
 
-def cleanup_tag_id(input_str):
+def cmk_cleanup_tag_id(input_str):
     """
     Cleans Invalid Chars out
     of strings you wan't to use as tag_id in cmk
     """
     return re.sub('[^a-zA-Z0-9_-]', '_', input_str.strip()).lower()
 
+app.jinja_env.globals.update(get_list=get_list)
 app.jinja_env.globals.update(merge_list_of_dicts=merge_list_of_dicts)
-app.jinja_env.globals.update(cleanup_tag_id=cleanup_tag_id)
+app.jinja_env.globals.update(cmk_cleanup_tag_id=cmk_cleanup_tag_id)
 
 cron_register = {}
 from plugins import *

@@ -6,7 +6,7 @@ Checkmk Configuration
 import ast
 from flask import render_template_string
 from mongoengine.errors import DoesNotExist
-from application import log, logger, cleanup_tag_id
+from application import log, logger, cmk_cleanup_tag_id
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.checkmk.models import (
         CheckmkGroupRule,
@@ -425,7 +425,7 @@ class SyncConfiguration(CMK2):
         for rule in db_objects:
             counter += 1
             logger.debug(f"Get Rule {rule.group_id}")
-            group_id = rule.group_id
+            group_id = cmk_cleanup_tag_id(rule.group_id)
             groups.setdefault(group_id, {'tags':[]})
             groups[group_id]['topic'] = rule.group_topic_name
             groups[group_id]['title'] = rule.group_title
@@ -434,6 +434,12 @@ class SyncConfiguration(CMK2):
             groups[group_id]['rw_id'] = rule.rewrite_id
             groups[group_id]['rw_title'] = rule.rewrite_title
             groups[group_id]['object_filter'] = rule.filter_by_account
+            groups[group_id]['single_choice'] = rule.group_single_choice
+            if rule.group_multiply_by_list:
+                groups[group_id]['multiply_list'] = rule.group_multiply_list
+
+
+
             process = 100.0 * counter / total
             print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {rule.group_id}", end="")
         print()
@@ -450,52 +456,86 @@ class SyncConfiguration(CMK2):
             hostname = entry.hostname
             logger.debug(f"Work Host {hostname}")
 
-            for group_id in groups.keys(): # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
-                logger.debug(f"Work Group {group_id}")
+            tempalte_groups = []
+            loop_group_list = list(groups.keys())
+            for group_id_org in loop_group_list: # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
+                logger.debug(f"Work Group {group_id_org}")
+                all_groups =[]
 
-                cache_name = f"cmk_tags_{group_id}"
-
-                if obj_filter := groups[group_id]['object_filter']:
-                    if entry.get_inventory()['syncer_account'] != obj_filter:
-                        continue
-
-                if cache_name in entry.cache:
-                    logger.debug(" -- Using  Cache for Group")
-                    new_tag_id, new_tag_title = entry.cache[cache_name]
+                if multi_list := groups[group_id_org].get('multiply_list'):
+                    tempalte_groups.append(group_id_org)
+                    new_choices = ast.literal_eval(
+                                    render_template_string(
+                                        multi_list, **object_attributes['all']))
+                    for newone in new_choices:
+                        data = {
+                            'name': newone,
+                        }
+                        new_group_id = \
+                            cmk_cleanup_tag_id(render_template_string(group_id_org, **data))
+                        all_groups.append(new_group_id)
+                        curr = groups[group_id_org]
+                        groups.setdefault(new_group_id, {'tags':[]})
+                        groups[new_group_id]['topic'] = \
+                            render_template_string(curr['topic'], **data)
+                        groups[new_group_id]['title'] = \
+                            render_template_string(curr['title'], **data)
+                        groups[new_group_id]['help'] = curr['help']
+                        groups[new_group_id]['ident'] = cmk_cleanup_tag_id(new_group_id)
+                        groups[new_group_id]['rw_id'] = cmk_cleanup_tag_id(newone)
+                        groups[new_group_id]['rw_title'] = newone
+                        groups[new_group_id]['object_filter'] = curr['object_filter']
+                        groups[new_group_id]['single_choice'] = curr['single_choice']
                 else:
+                    all_groups.append(group_id_org)
 
-                    rewrite_id = groups[group_id]['rw_id']
-                    rewrite_title = groups[group_id]['rw_title']
+                for group_id in all_groups:
+                    cache_name = f"cmk_tags_{group_id}"
 
-                    new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
-                                                        **object_attributes['all'])
-                    new_tag_id = new_tag_id.strip()
-                    if new_tag_id:
-                        new_tag_id = cleanup_tag_id(new_tag_id)
+                    if obj_filter := groups[group_id]['object_filter']:
+                        if entry.get_inventory()['syncer_account'] != obj_filter:
+                            continue
 
-                    new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
-                                                           **object_attributes['all'])
+                    if cache_name in entry.cache:
+                        logger.debug(" -- Using  Cache for Group")
+                        new_tag_id, new_tag_title = entry.cache[cache_name]
+                    else:
 
-                    logger.debug(" -- Build  Cache for Group")
+                        rewrite_id = groups[group_id]['rw_id']
+                        rewrite_title = groups[group_id]['rw_title']
 
-                    # We store empty data also to chache, no need to
-                    # Re calculate something if there is nothing
-                    entry.cache[cache_name] = (new_tag_id, new_tag_title)
-                    entry.save()
+                        new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
+                                                            **object_attributes['all'])
+                        new_tag_id = new_tag_id.strip()
+                        if new_tag_id:
+                            new_tag_id = cmk_cleanup_tag_id(new_tag_id)
 
-                # Either Cached or live Data now:
-                if new_tag_id and (new_tag_id, new_tag_title) \
-                                                        not in groups[group_id]['tags']:
-                    found_tag_ids_by_group.setdefault(group_id, [])
-                    # we check not only, if the combination is uniue,
-                    # but also if also the id is not duplicate even with diffrent name
-                    if new_tag_id not in found_tag_ids_by_group[group_id]:
-                        groups[group_id]['tags'].append((new_tag_id, new_tag_title))
-                        found_tag_ids_by_group[group_id].append(new_tag_id)
+                        new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
+                                                               **object_attributes['all'])
+
+                        logger.debug(" -- Build  Cache for Group")
+
+                        # We store empty data also to chache, no need to
+                        # Re calculate something if there is nothing
+                        entry.cache[cache_name] = (new_tag_id, new_tag_title)
+                        entry.save()
+
+                    # Either Cached or live Data now:
+                    if new_tag_id and (new_tag_id, new_tag_title) \
+                                                            not in groups[group_id]['tags']:
+                        found_tag_ids_by_group.setdefault(group_id, [])
+                        # we check not only, if the combination is uniue,
+                        # but also if also the id is not duplicate even with diffrent name
+                        if new_tag_id not in found_tag_ids_by_group[group_id]:
+                            groups[group_id]['tags'].append((new_tag_id, new_tag_title))
+                            found_tag_ids_by_group[group_id].append(new_tag_id)
 
             process = 100.0 * counter / total
             print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {entry.hostname}", end="")
         print()
+
+        for group_id in tempalte_groups:
+            del groups[group_id]
 
 
         url = "/domain-types/host_tag_group/collections/all"
@@ -512,12 +552,18 @@ class SyncConfiguration(CMK2):
             del payload['object_filter']
             del payload['rw_id']
             del payload['rw_title']
+            if 'multiply_list' in payload:
+                del payload['multiply_list']
 
             syncer_group_data['tags'].sort(key=lambda tup: tup[1])
-            syncer_group_data['tags'].insert(0, (None, "Not set"))
+            if not payload['single_choice']:
+                syncer_group_data['tags'].insert(0, (None, "Not set"))
+            else:
+                syncer_group_data['tags'] = [syncer_group_data['tags'][0]]
+            del payload['single_choice']
 
             payload['tags'] = [{'ident':x, 'title': y} for x,y in syncer_group_data['tags']]
-            if not payload['tags'] or len(payload['tags']) == 1:
+            if not payload['tags'] or len(payload['tags']) == 0:
                 print(f"{CC.WARNING} *{CC.ENDC} Group {syncer_group_id} has no tags")
                 continue
             if syncer_group_id not in checkmk_ids:
@@ -528,6 +574,7 @@ class SyncConfiguration(CMK2):
                 # Check if we need to update it
                 checkmk_tags = checkmk_ids[syncer_group_id]
                 flat = [ {'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
+
                 if flat == syncer_group_data['tags']:
                     print(f"{CC.OKBLUE} *{CC.ENDC} Group {syncer_group_id} already up to date.")
                 else:

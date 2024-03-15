@@ -53,6 +53,7 @@ action_outcome_types = [
     ("folder_pool", "Pool Folder: __ Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute", "CMK attr. by syncer attr: __ Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
     ("custom_attribute", "CMK attr. Custom: __ Create Custom Checkmk Attribute: Set key:value, Placeholders: {{HOSTNAME}} and all Host Attributes in Jinja Syntax"),
+    ("multiple_custom_attribute", "CMK Multiple attr. Custom: __ Create Multiple Custom Attributes based on given list. Use for loop with get_list() function"),
     ("create_cluster", "Cluster: __ Create Cluster. Specify Tags with Nodes as Wildcard (*) and or Comma separated"),
     ("set_parent", "Parents: __ Comma Seperated list for parents, with Jinja Syntax"),
     ("dont_move", "Move Optout: __ Don't Move host to another Folder after inital creation"),
@@ -276,6 +277,9 @@ class CheckmkTagMngmt(db.Document):
     group_title = db.StringField()
     group_id = db.StringField()
     group_help = db.StringField()
+    group_single_choice = db.BooleanField(default=False)
+    group_multiply_by_list = db.BooleanField(default=False)
+    group_multiply_list = db.StringField()
 
 
     filter_by_account = db.StringField(required=False)
