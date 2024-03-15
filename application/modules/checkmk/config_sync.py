@@ -467,6 +467,8 @@ class SyncConfiguration(CMK2):
                     new_choices = ast.literal_eval(
                                     render_template_string(
                                         multi_list, **object_attributes['all']))
+                    if not new_choices:
+                        continue
                     for newone in new_choices:
                         data = {
                             'name': newone,
