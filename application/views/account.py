@@ -117,6 +117,13 @@ class AccountModelView(DefaultModelView):
                 ('rewrite_hostname', ""),
                 ('driver', "ODBC Driver 18 for SQL Server"),
             ]
+        elif form.typ.data == 'bmc_remedy':
+            default_fields = [
+                #('attributes', "address,systemname,dnshostname"),
+                ('hostname_field', 'dnshostname'),
+                ('namespace', ""),
+                ('class_name', ""),
+            ]
 
 
 
