@@ -31,6 +31,7 @@ class RemedySyncer():
         self.user = config['username']
         self.password = config['password']
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
+        self.config = config
 
 #   .-- get_auth_token
     def get_auth_token(self):
@@ -48,8 +49,7 @@ class RemedySyncer():
             'Content-Type': 'application/x-www-form-urlencoded'
         }
 
-        response = requests.request(
-             "POST",
+        response = requests.post(
               url,
               data=auth_data,
               headers=headers,
@@ -68,8 +68,22 @@ class RemedySyncer():
         Get Hosts from Remedy
         """
 
-        print(self.get_auth_token())
+        auth_token = self.get_auth_token()
+        url = f"{self.address}/api/cmdb/v1.0/attributes/"\
+              f"{self.config['namespace']}/{self.config['class_name']}"
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'AR-JWT {auth_token}'
+        }
 
+        response = requests.get(
+              url,
+              headers=headers,
+              verify=self.verify,
+              timeout=30,
+        )
+
+        print(response.text)
         print("Not yet implemented")
 #.
 
