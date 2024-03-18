@@ -16,7 +16,11 @@ def _render_custom_data(_view, _context, model, _name):
     """
     html = "<table width=100%>"
     for entry in model.custom_fields:
-        html += f"<tr><td>{entry.name}</td><td>{entry.value}</td></tr>"
+        max_len = 80
+        value = entry.value[:max_len]
+        if len(entry.value) > max_len:
+            value += "..."
+        html += f"<tr><td>{entry.name}</td><td>{value}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -65,6 +69,7 @@ class AccountModelView(DefaultModelView):
                 ('delimiter', ';'),
                 ('encoding', 'utf-8'),
                 ('rewrite_hostname', ""),
+                ('inventorize_key', ""),
             ]
         elif form.typ.data == 'json':
             default_fields = [
@@ -84,6 +89,7 @@ class AccountModelView(DefaultModelView):
                 ('table', ""),
                 ('fields', ""),
                 ('database', ""),
+                ('inventorize_key', ""),
             ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
