@@ -146,6 +146,8 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
             csv_path = account['csv_path']
         if 'path' in account:
             csv_path = account['path']
+        if 'inventorize_key' in account:
+            key = account['inventorize_key']
 
     if not csv_path:
         raise ValueError("No path given in account config")
@@ -182,7 +184,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
 def cli_inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
     """
     ## Add Inventory Information to hosts
-    Source is a CSV. Every other Column then the host Column, will translate
+    Source is a CSV. Every other Column then the hostname Column, will translate
     into key:value attributes.
 
     ### Example
