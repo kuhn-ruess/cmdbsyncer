@@ -464,9 +464,12 @@ class SyncConfiguration(CMK2):
 
                 if multi_list := groups[group_id_org].get('multiply_list'):
                     tempalte_groups.append(group_id_org)
-                    new_choices = ast.literal_eval(
-                                    render_template_string(
-                                        multi_list, **object_attributes['all']))
+                    rendering = render_template_string(multi_list, **object_attributes['all'])
+                    logger.debug(f"Render: {rendering}")
+                    if not rendering:
+                        continue
+                    new_choices = ast.literal_eval(rendering)
+
                     if not new_choices:
                         continue
                     for newone in new_choices:
