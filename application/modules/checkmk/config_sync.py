@@ -446,11 +446,10 @@ class SyncConfiguration(CMK2):
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attribute and Build Tag list")
-        db_objects = Host.objects()
-        total = len(db_objects)
+        total = Host.objects.count()
         counter = 0
         found_tag_ids_by_group = {}
-        for entry in db_objects:
+        for entry in Host.objects():
             counter += 1
             object_attributes = self.get_host_attributes(entry, 'cmk_conf')
             hostname = entry.hostname

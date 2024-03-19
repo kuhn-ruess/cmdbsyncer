@@ -452,7 +452,7 @@ class SyncNetbox(Plugin):
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
         db_objects = Host.get_export_hosts()
-        total = len(db_objects)
+        total = db_objects.count()
         counter = 0
         found_hosts = []
         for db_host in db_objects:
@@ -468,7 +468,7 @@ class SyncNetbox(Plugin):
                 continue
 
             process = 100.0 * counter / total
-            print(f"\n{CC.HEADER}({process:.0f}%) {hostname}{CC.ENDC}")
+            print(f"\n{CC.OKBLUE}({process:.0f}%){{CC.ENDC}} {hostname}")
 
             payload = self.get_payload(db_host, custom_rules, all_attributes['all'])
             url = 'dcim/devices/'

@@ -66,7 +66,7 @@ class SyncCMK2(CMK2):
         ## Start SYNC of Hosts into CMK
         print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
         db_objects = Host.get_export_hosts()
-        total = len(db_objects)
+        total = db_objects.count()
         counter = 0
         clusters = []
         cluster_updates = []
@@ -82,7 +82,7 @@ class SyncCMK2(CMK2):
 
             # Actions
             process = 100.0 * counter / total
-            print(f"\n{CC.HEADER}({process:.0f}%){CC.ENDC} {db_host.hostname}")
+            print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {db_host.hostname}")
             attributes = self.get_host_attributes(db_host, 'checkmk')
 
 
