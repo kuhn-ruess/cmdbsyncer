@@ -425,7 +425,7 @@ class SyncConfiguration(CMK2):
         for rule in db_objects:
             counter += 1
             logger.debug(f"Get Rule {rule.group_id}")
-            group_id = cmk_cleanup_tag_id(rule.group_id)
+            group_id = rule.group_id
             groups.setdefault(group_id, {'tags':[]})
             groups[group_id]['topic'] = rule.group_topic_name
             groups[group_id]['title'] = rule.group_title
@@ -456,20 +456,21 @@ class SyncConfiguration(CMK2):
             hostname = entry.hostname
             logger.debug(f"Work Host {hostname}")
 
-            tempalte_groups = []
+            template_groups = []
             loop_group_list = list(groups.keys())
             for group_id_org in loop_group_list: # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
                 logger.debug(f"Work Group {group_id_org}")
                 all_groups =[]
 
                 if multi_list := groups[group_id_org].get('multiply_list'):
-                    tempalte_groups.append(group_id_org)
+                    template_groups.append(group_id_org)
                     rendering = render_template_string(multi_list, **object_attributes['all'])
                     logger.debug(f"Render: {rendering}")
                     if not rendering:
                         continue
                     new_choices = ast.literal_eval(rendering)
 
+                    logger.debug(f"Ast Literal: {rendering}")
                     if not new_choices:
                         continue
                     for newone in new_choices:
@@ -539,7 +540,8 @@ class SyncConfiguration(CMK2):
             print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {entry.hostname}", end="")
         print()
 
-        for group_id in tempalte_groups:
+        for group_id in template_groups:
+            logger.debug(f"Delte Template {group_id}")
             del groups[group_id]
 
 
@@ -552,6 +554,7 @@ class SyncConfiguration(CMK2):
             checkmk_ids[group['id']] = group['extensions']['tags']
 
         create_url = "/domain-types/host_tag_group/collections/all"
+        logger.debug(f"All Groups: {groups}")
         for syncer_group_id, syncer_group_data in groups.items():
             payload = syncer_group_data
             del payload['object_filter']
