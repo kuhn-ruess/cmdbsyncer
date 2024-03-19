@@ -18,6 +18,8 @@ def make_bool(value):
         return True
     if value.lower() == 'none':
         return False
+    if not value:
+        return False
 
 
 def match(value, needle, condition, negate=False):

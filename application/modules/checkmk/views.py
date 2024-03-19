@@ -109,7 +109,6 @@ class CheckmkRuleView(RuleModelView):
     """
 
 
-
     @expose('/debug')
     def debug(self):
         """

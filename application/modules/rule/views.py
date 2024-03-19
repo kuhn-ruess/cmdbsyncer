@@ -173,7 +173,7 @@ class RuleModelView(DefaultModelView):
         'sort_field',
     )
 
-    column_default_sort = ("sort_field", True), ("name", True)
+    column_default_sort = ("sort_field", False)
 
     column_filters = (
        'name',
