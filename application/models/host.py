@@ -176,7 +176,7 @@ class Host(db.Document):
         check_dict = {}
         for name, value in [(x,y) for x,y in self.inventory.items()]:
             # Delete all existing keys of type
-            if name.startswith(key+"__"):
+            if name and name.startswith(key+"__"):
                 check_dict[name] = value
                 del self.inventory[name]
 
