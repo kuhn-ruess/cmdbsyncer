@@ -420,7 +420,7 @@ class SyncConfiguration(CMK2):
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
         groups = {}
         db_objects = CheckmkTagMngmt.objects(enabled=True)
-        total = len(db_objects)
+        total = db_object.count()
         counter = 0
         for rule in db_objects:
             counter += 1
