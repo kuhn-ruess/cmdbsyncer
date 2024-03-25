@@ -4,6 +4,7 @@ Checkmk Configuration
 #pylint: disable=import-error, too-many-locals, no-member
 #pylint: disable=logging-fstring-interpolation
 import ast
+import time
 from flask import render_template_string
 from mongoengine.errors import DoesNotExist
 from application import log, logger, cmk_cleanup_tag_id
@@ -313,9 +314,9 @@ class SyncConfiguration(CMK2):
             syncers_groups_needing_update = []
             yet_external_groups_in_cmk = []
 
-            cache = self.get_cache_object(group=group_type)
+            group_cache = self.get_cache_object(group=group_type)
 
-            cached_group_list = cache.content.get('list', [])
+            cached_group_list = group_cache.content.get('list', [])
 
 
 
@@ -337,8 +338,8 @@ class SyncConfiguration(CMK2):
                     # The Group is not known yet, but maybe we need to controll it
                     yet_external_groups_in_cmk.append(cmk_name)
 
-            cache.content['list'] = configured_groups
-            cache.save()
+            group_cache.content['list'] = configured_groups
+            group_cache.save()
 
 
             print(f"{CC.OKBLUE} *{CC.ENDC} Create {group_type} if needed")
@@ -650,38 +651,94 @@ class CheckmkTagSync(SyncConfiguration):
     Syncronize Checkmk Tags
     """
     groups = {}
+    _groups_used_as_template = []
+
 
     def export_tags(self):
         """
         Export Tags to Checkmk
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
+        start_time = time.time()
         db_objects = CheckmkTagMngmt.objects(enabled=True)
         total = db_objects.count()
         counter = 0
+        logger.debug(f"-- {time.time() - start_time} seconds")
         for rule in db_objects:
+            start_time = time.time()
             counter += 1
             self.create_inital_groups(rule)
             process = 100.0 * counter / total
+            logger.debug(f"-- {time.time() - start_time} seconds")
             print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {rule.group_id}", end="")
         print()
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attribute and Build Tag list")
+        start_time = time.time()
         total = Host.objects.count()
         counter = 0
+        logger.debug(f"-- {time.time() - start_time} seconds")
         for entry in Host.objects():
+            start_time = time.time()
             counter += 1
-            object_attributes = self.get_host_attributes(entry, 'cmk_conf')
-            self.check_for_multi_groups(object_attributes)
-            self.update_groups_with_tags(entry, object_attributes)
+
+            self.update_hosts_multigroups(entry)
+            self.update_hosts_tags(entry)
 
             process = 100.0 * counter / total
+            logger.debug(f"{time.time() - start_time} seconds")
+            entry.save()
             print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {entry.hostname}", end="")
         print()
 
+        # Delete Templates
+        for group_id in self._groups_used_as_template:
+            del self.groups[group_id]
         self.sync_to_checkmk()
 
+
+    def update_hosts_multigroups(self, db_host):
+        """
+        Update the groups ob
+        """
+
+        cache_name = 'cmk_tags_multigroups'
+        if cache_name in db_host.cache:
+            logger.debug(f" -- Use Cache {cache_name}")
+            multi_groups = db_host.cache[cache_name]
+        else:
+            logger.debug(f" -- Build Cache {cache_name}")
+            object_attributes = self.get_host_attributes(db_host, 'cmk_conf')
+            multi_groups = self.check_for_multi_groups(object_attributes)
+            db_host.cache[cache_name] = multi_groups
+
+        self.groups.update(multi_groups)
+
+
+    def update_hosts_tags(self, db_host):
+        """
+        Update the Tags provided by the Host
+        """
+
+        object_attributes = self.get_host_attributes(db_host, 'cmk_conf')
+        cache_name = 'cmk_tags_tag_choices'
+        if cache_name in db_host.cache:
+            logger.debug(f" -- Use Cache {cache_name}")
+            hosts_tags = db_host.cache[cache_name]
+        else:
+            logger.debug(f" -- Build Cache {cache_name}")
+            hosts_tags = self.update_groups_with_tags(db_host, object_attributes)
+            db_host.cache[cache_name] = hosts_tags
+
+        for group_id, tags in hosts_tags.items():
+            tag_id, tag_title = tags
+            if tag_id and (tag_id, tag_title) \
+                        not in self.groups[group_id]['tags']:
+                # we check not only, if the combination is uniue,
+                # but also if also the id is not duplicate even with diffrent name
+                if tag_id not in [x[0] for x in self.groups[group_id]['tags']]:
+                    self.groups[group_id]['tags'].append((tag_id, tag_title))
 
     def create_inital_groups(self, rule):
         """
@@ -708,23 +765,16 @@ class CheckmkTagSync(SyncConfiguration):
         render special options
         """
 
-        # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
-        # We Update the Groups, specially also delete them in case there was
-        # a rendering alreayd to speed things up
-        loop_group_list = list(self.groups.keys())
-        for group_id_org in loop_group_list:
-            logger.debug(f"Work Group {group_id_org}")
+        outcome = {}
+        for group_id_org in list(self.groups.keys()):
+            logger.debug(f"-- Work on Group {group_id_org}")
 
             if multi_list := self.groups[group_id_org].get('multiply_list'):
-
                 rendering = render_template_string(multi_list, **object_attributes['all'])
-                logger.debug(f"Render: {rendering}")
+                logger.debug(f" --- New Render: {rendering}")
 
-                if not rendering:
-                    continue
                 new_choices = ast.literal_eval(rendering)
 
-                logger.debug(f"Ast Literal: {rendering}")
                 if not new_choices:
                     continue
 
@@ -740,29 +790,31 @@ class CheckmkTagSync(SyncConfiguration):
                         continue
 
                     curr = self.groups[group_id_org]
-                    self.groups.setdefault(new_group_id, {'tags':[]})
-                    self.groups[new_group_id]['topic'] = \
-                        render_template_string(curr['topic'], **data)
-                    self.groups[new_group_id]['title'] = \
-                        render_template_string(curr['title'], **data)
-                    self.groups[new_group_id]['help'] = curr['help']
-                    self.groups[new_group_id]['ident'] = cmk_cleanup_tag_id(new_group_id)
-                    self.groups[new_group_id]['rw_id'] = cmk_cleanup_tag_id(newone)
-                    self.groups[new_group_id]['rw_title'] = newone
-                    self.groups[new_group_id]['object_filter'] = curr['object_filter']
-                    self.groups[new_group_id]['single_choice'] = curr['single_choice']
+
+                    outcome[new_group_id] = {}
+                    outcome[new_group_id]['tags'] = []
+                    outcome[new_group_id]['topic'] = render_template_string(curr['topic'], **data)
+                    outcome[new_group_id]['title'] = render_template_string(curr['title'], **data)
+                    outcome[new_group_id]['help'] = curr['help']
+                    outcome[new_group_id]['ident'] = cmk_cleanup_tag_id(new_group_id)
+                    outcome[new_group_id]['rw_id'] = cmk_cleanup_tag_id(newone)
+                    outcome[new_group_id]['rw_title'] = newone
+                    outcome[new_group_id]['object_filter'] = curr['object_filter']
+                    outcome[new_group_id]['single_choice'] = curr['single_choice']
 
                 # It's a Tempalte Group,
                 # So we directly delete the old one
-                del self.groups[group_id_org]
+                if group_id_org not in self._groups_used_as_template:
+                    self._groups_used_as_template.append(group_id_org)
+        return outcome
 
     def update_groups_with_tags(self, db_object, object_attributes):
         """
-        Update the Groups with Tags and render alles
+        Search all tags which this Host can provide
         """
-
         hostname = db_object.hostname
-        logger.debug(f"Work Host {hostname}")
+        tags = {}
+        logger.debug(f"Update Tags from {hostname}")
 
         for group_id, group_data in self.groups.items():
 
@@ -771,39 +823,22 @@ class CheckmkTagSync(SyncConfiguration):
                 if db_object.get_inventory()['syncer_account'] != obj_filter:
                     continue
 
-            cache_name = f"cmk_tags_{group_id}"
 
-            if cache_name in db_object.cache:
-                logger.debug(" -- Using  Cache for Group")
-                new_tag_id, new_tag_title = db_object.cache[cache_name]
-            else:
+            rewrite_id = group_data['rw_id']
+            rewrite_title = group_data['rw_title']
 
-                rewrite_id = group_data['rw_id']
-                rewrite_title = group_data['rw_title']
+            new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
+                                                **object_attributes['all'])
+            new_tag_id = new_tag_id.strip()
+            if new_tag_id:
+                new_tag_id = cmk_cleanup_tag_id(new_tag_id)
 
-                new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
-                                                    **object_attributes['all'])
-                new_tag_id = new_tag_id.strip()
-                if new_tag_id:
-                    new_tag_id = cmk_cleanup_tag_id(new_tag_id)
+            new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
+                                                   **object_attributes['all'])
 
-                new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
-                                                       **object_attributes['all'])
+            tags[group_id] = (new_tag_id, new_tag_title)
+        return tags
 
-                logger.debug(" -- Build  Cache for Group")
-
-                # We store empty data also to chache, no need to
-                # Re calculate something if there is nothing
-                db_object.cache[cache_name] = (new_tag_id, new_tag_title)
-                db_object.save()
-
-            # Update the Tags in the groups object diretly
-            if new_tag_id and (new_tag_id, new_tag_title) \
-                                                    not in self.groups[group_id]['tags']:
-                # we check not only, if the combination is uniue,
-                # but also if also the id is not duplicate even with diffrent name
-                if new_tag_id not in [x[0] for x in self.groups[group_id]['tags']]:
-                    self.groups[group_id]['tags'].append((new_tag_id, new_tag_title))
 
 
     def sync_to_checkmk(self):
