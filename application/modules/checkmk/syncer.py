@@ -216,7 +216,7 @@ class SyncCMK2(CMK2):
                         delete_list.append(host)
                         print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
                     else:
-                        url = f"/objects/host_ocnfig/{host}"
+                        url = f"/objects/host_config/{host}"
                         self.request(url, method="DELETE")
                         print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
 
