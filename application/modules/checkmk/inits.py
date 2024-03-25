@@ -10,7 +10,7 @@ from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 from application.models.host import Host
-from application.modules.checkmk.config_sync import SyncConfiguration
+from application.modules.checkmk.config_sync import SyncConfiguration, CheckmkTagSync
 from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
 from application.modules.checkmk.models import (
    CheckmkRuleMngmt,
@@ -29,7 +29,7 @@ def export_tags(account):
     try:
         target_config = get_account_by_name(account)
         if target_config:
-            syncer = SyncConfiguration()
+            syncer = CheckmkTagSync()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.config = target_config
