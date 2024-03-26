@@ -277,7 +277,6 @@ class CheckmkTagMngmt(db.Document):
     group_title = db.StringField()
     group_id = db.StringField()
     group_help = db.StringField()
-    group_single_choice = db.BooleanField(default=False)
     group_multiply_by_list = db.BooleanField(default=False)
     group_multiply_list = db.StringField()
 

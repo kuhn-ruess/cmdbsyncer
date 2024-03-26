@@ -694,6 +694,7 @@ class CheckmkTagSync(SyncConfiguration):
 
         # Delete Templates
         for group_id in self._groups_used_as_template:
+            logger.debug(f"Delete Template {group_id}")
             del self.groups[group_id]
         self.sync_to_checkmk()
 
@@ -754,7 +755,6 @@ class CheckmkTagSync(SyncConfiguration):
         self.groups[group_id]['rw_id'] = rule.rewrite_id
         self.groups[group_id]['rw_title'] = rule.rewrite_title
         self.groups[group_id]['object_filter'] = rule.filter_by_account
-        self.groups[group_id]['single_choice'] = rule.group_single_choice
         if rule.group_multiply_by_list:
             self.groups[group_id]['multiply_list'] = rule.group_multiply_list
 
@@ -767,15 +767,18 @@ class CheckmkTagSync(SyncConfiguration):
 
         outcome = {}
         for group_id_org in list(self.groups.keys()):
-            logger.debug(f"-- Work on Group {group_id_org}")
 
             if multi_list := self.groups[group_id_org].get('multiply_list'):
+                logger.debug(f"-- Work on Multi Group {group_id_org}")
                 rendering = render_template_string(multi_list, **object_attributes['all'])
                 logger.debug(f" --- New Render: {rendering}")
+                if not rendering:
+                    continue
 
                 new_choices = ast.literal_eval(rendering)
 
                 if not new_choices:
+                    logger.debug(" --- No Choices")
                     continue
 
                 for newone in new_choices:
@@ -787,6 +790,7 @@ class CheckmkTagSync(SyncConfiguration):
 
                     if new_group_id in self.groups:
                         # No need to Render Again and Again
+                        logger.debug(f" --- Group Already Rendered: {new_group_id}")
                         continue
 
                     curr = self.groups[group_id_org]
@@ -800,10 +804,9 @@ class CheckmkTagSync(SyncConfiguration):
                     outcome[new_group_id]['rw_id'] = cmk_cleanup_tag_id(newone)
                     outcome[new_group_id]['rw_title'] = newone
                     outcome[new_group_id]['object_filter'] = curr['object_filter']
-                    outcome[new_group_id]['single_choice'] = curr['single_choice']
 
-                # It's a Tempalte Group,
-                # So we directly delete the old one
+                # Mark as  'Template' Group,
+                # So that we later can delete it
                 if group_id_org not in self._groups_used_as_template:
                     self._groups_used_as_template.append(group_id_org)
         return outcome
@@ -819,8 +822,9 @@ class CheckmkTagSync(SyncConfiguration):
         for group_id, group_data in self.groups.items():
 
             # Check if we use data from the object
-            if obj_filter := group_data['object_filter']:
-                if db_object.get_inventory()['syncer_account'] != obj_filter:
+            if object_filter := group_data['object_filter']:
+                if db_object.get_inventory()['syncer_account'] != object_filter:
+                    logger.debug(f" --- Not matching object filter: {object_filter}")
                     continue
 
 
@@ -835,18 +839,16 @@ class CheckmkTagSync(SyncConfiguration):
 
             new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
                                                    **object_attributes['all'])
-
-            tags[group_id] = (new_tag_id, new_tag_title)
+            if new_tag_id and new_tag_title:
+                tags[group_id] = (new_tag_id, new_tag_title)
         return tags
 
 
 
-    def sync_to_checkmk(self):
+    def get_checkmk_tags(self):
         """
-        Use generated configuration to Sync
-        Everhting to Checkmk
+        Get list of current Tags in Checkmk
         """
-
         url = "/domain-types/host_tag_group/collections/all"
         response = self.request(url, method="GET")
         etag = response[1]['ETag']
@@ -854,27 +856,43 @@ class CheckmkTagSync(SyncConfiguration):
         checkmk_ids = {}
         for group in response[0]['value']:
             checkmk_ids[group['id']] = group['extensions']['tags']
+        return etag, checkmk_ids
+
+    def prepare_tags_for_checkmk(self, config_tags):
+        """
+        Prepare the Tag Payload for Checkmk
+        """
+        if not config_tags:
+            return False
+        config_tags.sort(key=lambda tup: tup[1])
+        if len(config_tags) > 1:
+            config_tags.insert(0, (None, "Not set"))
+
+        tags = [{'ident':x, 'title': y} for x,y in config_tags]
+        if not tags or len(tags) == 0:
+            print(f"{CC.WARNING} *{CC.ENDC} Group has no tags")
+            return False
+        return tags
+
+    def sync_to_checkmk(self):
+        """
+        Use generated configuration to Sync
+        Everhting to Checkmk
+        """
+        etag, checkmk_ids = self.get_checkmk_tags()
 
         create_url = "/domain-types/host_tag_group/collections/all"
         logger.debug(f"All Groups: {self.groups}")
         for syncer_group_id, syncer_group_data in self.groups.items():
-            payload = syncer_group_data
-            del payload['object_filter']
-            del payload['rw_id']
-            del payload['rw_title']
-            if 'multiply_list' in payload:
-                del payload['multiply_list']
+            payload = syncer_group_data.copy()
+            for what in ['object_filter', 'rw_id',
+                         'rw_title', 'multiply_list']:
+                if what in payload:
+                    del payload[what]
 
-            syncer_group_data['tags'].sort(key=lambda tup: tup[1])
-            if not payload['single_choice']:
-                syncer_group_data['tags'].insert(0, (None, "Not set"))
+            if tags := self.prepare_tags_for_checkmk(payload['tags'].copy()):
+                payload['tags'] = tags
             else:
-                syncer_group_data['tags'] = [syncer_group_data['tags'][0]]
-            del payload['single_choice']
-
-            payload['tags'] = [{'ident':x, 'title': y} for x,y in syncer_group_data['tags']]
-            if not payload['tags'] or len(payload['tags']) == 0:
-                print(f"{CC.WARNING} *{CC.ENDC} Group {syncer_group_id} has no tags")
                 continue
             if syncer_group_id not in checkmk_ids:
                 # Create the group
@@ -885,7 +903,7 @@ class CheckmkTagSync(SyncConfiguration):
                 checkmk_tags = checkmk_ids[syncer_group_id]
                 flat = [ {'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
 
-                if flat == syncer_group_data['tags']:
+                if flat == payload['tags']:
                     print(f"{CC.OKBLUE} *{CC.ENDC} Group {syncer_group_id} already up to date.")
                 else:
                     url = f"/objects/host_tag_group/{syncer_group_id}"
@@ -901,7 +919,7 @@ class CheckmkTagSync(SyncConfiguration):
                             additional_header=update_headers)
                     except Exception as error:
                         print(f"{CC.WARNING} *{CC.ENDC} Group {syncer_group_id} can't be updated.")
-                        print(error)
+                        logger.debug(error)
                     else:
                         print(f"{CC.OKCYAN} *{CC.ENDC} Group {syncer_group_id} updated.")
 
