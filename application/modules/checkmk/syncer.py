@@ -15,18 +15,17 @@ class SyncCMK2(CMK2):
     Sync Functions
     """
 
-    @staticmethod
-    def chunks(lst, n):
-        """Yield successive n-sized chunks from lst."""
-        for i in range(0, len(lst), n):
-            yield lst[i:i + n]
-
     bulk_creates = []
     bulk_updates = []
 
     checkmk_hosts = {}
     existing_folders = []
 
+    @staticmethod
+    def chunks(lst, n):
+        """Yield successive n-sized chunks from lst."""
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
 
 #   .-- Get Host Actions
     def get_host_actions(self, db_host, attributes):
@@ -189,23 +188,10 @@ class SyncCMK2(CMK2):
         print()
 
         # Final Call to create missing hosts via bulk
-
-        chunks = list(self.chunks(self.bulk_creates, app.config['CMK_BULK_CREATE_OPERATIONS']))
-        total = len(chunks)
-        count = 1
-        for chunk in chunks:
-            print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Create Requests {count}/{total}")
-            self.send_bulk_create_host(chunk)
-            count += 1
-
-        if app.config['CMK_BULK_UPDATE_HOSTS']:
-            chunks = list(self.chunks(self.bulk_updates, app.config['CMK_BULK_UPDATE_OPERATIONS']))
-            total = len(chunks)
-            count = 1
-            for chunk in chunks:
-                print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Update Requests {count}/{total}")
-                self.send_bluk_update_host(chunk)
-                count += 1
+        if self.bulk_creates:
+            self.send_bulk_create_host(self.bulk_creates)
+        if self.bulk_updates:
+            self.send_bulk_update_host(self.bulk_updates)
 
         if self.limit:
             print(f"\n{CC.OKCYAN} -- {CC.ENDC}Stop processing in limit mode")
@@ -293,8 +279,26 @@ class SyncCMK2(CMK2):
         """
         Send Process to create hosts
         """
+        print()
+        print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Create Request")
         url = "/domain-types/host_config/actions/bulk-create/invoke"
-        self.request(url, method="POST", data={'entries': entries})
+        try:
+            self.request(url, method="POST", data={'entries': entries})
+        except CmkException as error:
+            print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+
+    def add_bulk_create_host(self, body):
+        """
+        Add a Host to bulk list, and Send
+        """
+        self.bulk_creates.append(body)
+        if len(self.bulk_creates) >= app.config['CMK_BULK_CREATE_OPERATIONS']:
+            try:
+                self.send_bulk_create_host(self.bulk_creates)
+            except CmkException as error:
+                print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+
+            self.bulk_creates = []
 
     def create_host(self, db_host, folder, labels, additional_attributes=None):
         """
@@ -316,11 +320,15 @@ class SyncCMK2(CMK2):
 
             body['attributes'].update(additional_attributes)
         if app.config['CMK_BULK_CREATE_HOSTS']:
-            self.bulk_creates.append(body)
+            self.add_bulk_create_host(body)
             print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk List")
         else:
             url = "/domain-types/host_config/collections/all"
-            self.request(url, method="POST", data=body)
+
+            try:
+                self.request(url, method="POST", data=body)
+            except CmkException as error:
+                print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
             print(f"{CC.OKGREEN} *{CC.ENDC} Created Host {db_host.hostname}")
 
 
@@ -385,10 +393,24 @@ class SyncCMK2(CMK2):
         Send Update requests to CMK
         """
 
+        print()
+        print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Update Request")
         url = "/domain-types/host_config/actions/bulk-update/invoke"
-        self.request(url, method="PUT",
-                     data={'entries': entries},
-                    )
+        try:
+            self.request(url, method="PUT",
+                         data={'entries': entries},
+                        )
+        except CmkException as error:
+            print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+
+    def add_bulk_update_host(self, body):
+        """
+        Add a Host to bulk list, and Send
+        """
+        self.bulk_updates.append(body)
+        if len(self.bulk_updates) >= app.config['CMK_BULK_UPDATE_OPERATIONS']:
+            self.send_bulk_update_host(self.bulk_updates)
+            self.bulk_updates = []
 
     def update_host(self, db_host, cmk_host, folder, \
                     labels, additional_attributes, remove_attributes, \
@@ -507,14 +529,18 @@ class SyncCMK2(CMK2):
                         update_headers = {
                             'if-match': etag,
                         }
-                        self.request(update_url, method="PUT",
-                                     data=payload,
-                                     additional_header=update_headers)
-                        print(f"{CC.OKGREEN} *{CC.ENDC} Updated Host in Checkmk")
-                        print(f"   Reasons: {what}: {', '.join(update_reasons)}")
+                        try:
+                            self.request(update_url, method="PUT",
+                                         data=payload,
+                                         additional_header=update_headers)
+                        except CmkException as error:
+                            print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+                        else:
+                            print(f"{CC.OKGREEN} *{CC.ENDC} Updated Host in Checkmk")
+                            print(f"   Reasons: {what}: {', '.join(update_reasons)}")
                     else:
                         payload['host_name'] = db_host.hostname
-                        self.bulk_updates.append(payload)
+                        self.add_bulk_update_host(payload)
                         print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk Update List for {what} update")
             db_host.set_export_sync()
 

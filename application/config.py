@@ -75,8 +75,8 @@ class BaseConfig():
     CMK_BULK_DELETE_HOSTS = False
     CMK_BULK_DELETE_OPERATIONS = 100
 
-    CMK_BULK_UPDATE_HOSTS = True # So no ETag Checking
-    CMK_BULK_UPDATE_OPERATIONS = 200
+    CMK_BULK_UPDATE_HOSTS = False # So no ETag Checking
+    CMK_BULK_UPDATE_OPERATIONS = 10
 
 class ProductionConfig(BaseConfig):
     """
