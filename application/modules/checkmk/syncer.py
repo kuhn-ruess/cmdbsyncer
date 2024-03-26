@@ -1,7 +1,7 @@
 """
 Add Hosts into CMK Version 2 Installations
 """
-#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member, too-many-locals, too-many-branches
+#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 #pylint: disable=logging-fstring-interpolation
 from application import app
 from application.models.host import Host
@@ -24,6 +24,9 @@ class SyncCMK2(CMK2):
     bulk_creates = []
     bulk_updates = []
 
+    checkmk_hosts = {}
+    existing_folders = []
+
 
 #   .-- Get Host Actions
     def get_host_actions(self, db_host, attributes):
@@ -33,35 +36,54 @@ class SyncCMK2(CMK2):
         return self.actions.get_outcomes(db_host, attributes)
 
 #.
-#   .-- Run Sync
-    def run(self): #pylint: disable=too-many-locals, too-many-branches
-        """Run Job"""
-        # In Order to delete Hosts from Checkmk, we collect the ones we sync
-        synced_hosts = []
 
-        # Get all current folders in order that we later now,
-        # which we need to create
+    def fetch_checkmk_folders(self):
+        """
+        Fetch list of Folders in Checkmk
+        """
         print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read all folders from cmk")
         url = "domain-types/folder_config/collections/all"
         url += "?parent=/&recursive=true&show_hosts=false"
         api_folders = self.request(url, method="GET")
-        existing_folders = []
         if not api_folders[0]:
             raise CmkException("Cant connect or auth with CMK")
         for folder in api_folders[0]['value']:
-            existing_folders.append(folder['extensions']['path'])
+            self.existing_folders.append(folder['extensions']['path'])
 
-
-
-        # Get ALL hosts in order to compare them
+    def fetch_checkmk_hosts(self):
+        """
+        Fetch all host currently in Checkmk
+        """
         print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read all hosts from cmk")
         url = "domain-types/host_config/collections/all"
         api_hosts = self.request(url, method="GET")
-        cmk_hosts = {}
         for host in api_hosts[0]['value']:
-            cmk_hosts[host['id']] = host
+            self.checkmk_hosts[host['id']] = host
 
 
+    def use_host(self, db_host):
+        """
+        Return if the Host is to be used 
+        for export or not
+        """
+        if self.limit:
+            if db_host.hostname not in self.limit:
+                return False
+        if self.account_filter:
+            filters = [x.strip() for x in self.account_filter.split(',')]
+            if db_host.source_account_name not in filters:
+                return False
+
+        return True
+
+#   .-- Run Sync
+    def run(self):
+        """Run Job"""
+        # In Order to delete Hosts from Checkmk, we collect the ones we sync
+        synced_hosts = []
+
+        self.fetch_checkmk_hosts()
+        self.fetch_checkmk_folders()
 
         ## Start SYNC of Hosts into CMK
         print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
@@ -72,20 +94,14 @@ class SyncCMK2(CMK2):
         cluster_updates = []
         for db_host in db_objects:
             counter += 1
-            if self.limit:
-                if db_host.hostname not in self.limit:
-                    continue
-            if self.account_filter:
-                filters = [x.strip() for x in self.account_filter.split(',')]
-                if db_host.source_account_name not in filters:
-                    continue
 
-            # Actions
+            if not self.use_host(db_host):
+                continue
+
             process = 100.0 * counter / total
             print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {db_host.hostname}")
+
             attributes = self.get_host_attributes(db_host, 'checkmk')
-
-
             if not attributes:
                 print(f"{CC.WARNING} *{CC.ENDC} Host ignored by rules")
                 continue
@@ -111,10 +127,10 @@ class SyncCMK2(CMK2):
             if 'create_cluster' in next_actions:
                 cluster_nodes = next_actions['create_cluster']
 
-            if folder not in existing_folders:
+            if folder not in self.existing_folders:
                 # We may need to create them later
                 self.create_folder(folder)
-                existing_folders.append(folder)
+                self.existing_folders.append(folder)
 
             additional_attributes = {}
             if 'parents' in next_actions:
@@ -139,7 +155,7 @@ class SyncCMK2(CMK2):
                     additional_attributes[additional_attr] = attr_value
 
 
-            if db_host.hostname not in cmk_hosts:
+            if db_host.hostname not in self.checkmk_hosts:
                 # Create since missing
                 if cluster_nodes:
                     print(f"{CC.OKBLUE} *{CC.ENDC} Will be created as Cluster")
@@ -151,7 +167,7 @@ class SyncCMK2(CMK2):
                     self.create_host(db_host, folder, labels, additional_attributes)
                 # Add Host information to the dict, for later cleanup.
                 # So no need to query all the hosta again
-                cmk_hosts[db_host.hostname] = \
+                self.checkmk_hosts[db_host.hostname] = \
                             {'extensions': {
                                 'attributes':{
                                      'labels': {
@@ -159,7 +175,7 @@ class SyncCMK2(CMK2):
                                 }}
                              }}
             else:
-                cmk_host = cmk_hosts[db_host.hostname]
+                cmk_host = self.checkmk_hosts[db_host.hostname]
                 # Update if needed
                 self.update_host(db_host, cmk_host, folder,
                                 labels, additional_attributes, remove_attributes,
@@ -167,7 +183,6 @@ class SyncCMK2(CMK2):
                 if cluster_nodes:
                     cmk_cluster = cmk_host['extensions']['cluster_nodes']
                     cluster_updates.append((db_host, cmk_cluster, cluster_nodes))
-
 
 
             db_host.save()
@@ -180,7 +195,7 @@ class SyncCMK2(CMK2):
         count = 1
         for chunk in chunks:
             print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Create Requests {count}/{total}")
-            self.send_create_host(chunk)
+            self.send_bulk_create_host(chunk)
             count += 1
 
         if app.config['CMK_BULK_UPDATE_HOSTS']:
@@ -189,7 +204,7 @@ class SyncCMK2(CMK2):
             count = 1
             for chunk in chunks:
                 print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Update Requests {count}/{total}")
-                self.send_update_host(chunk)
+                self.send_bluk_update_host(chunk)
                 count += 1
 
         if self.limit:
@@ -206,7 +221,7 @@ class SyncCMK2(CMK2):
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
         print(f"\n{CC.OKBLUE} -- {CC.ENDC}Check if we need to cleanup hosts")
         delete_list = []
-        for host, host_data in cmk_hosts.items():
+        for host, host_data in self.checkmk_hosts.items():
             host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
                 if host not in synced_hosts:
@@ -253,6 +268,7 @@ class SyncCMK2(CMK2):
     def create_folder(self, folder):
         """ Create given folder if not yet exsisting """
         folder_parts = folder.split('/')[1:]
+        print(f"{CC.GREEN} *{CC.ENDC} Create Folder in Checkmk {folder}")
         if len(folder_parts) == 1:
             if folder_parts[0] == '':
                 # we are in page root
@@ -273,7 +289,7 @@ class SyncCMK2(CMK2):
 #   .-- Create Host
 
 
-    def send_create_host(self, entries):
+    def send_bulk_create_host(self, entries):
         """
         Send Process to create hosts
         """
@@ -292,10 +308,21 @@ class SyncCMK2(CMK2):
             }
         }
         if additional_attributes:
-            body['attributes'].update(additional_attributes)
+            # CMK BUG
+            if app.config['CMK_22_23_HANDLE_TAG_LABEL_BUG']:
+                print(f"{CC.WARNING} *{CC.ENDC} Removed TAGS because of CMK BUG")
+                additional_attributes = {x:y for x,y in additional_attributes.items() \
+                                            if not x.startswith('tag_')}
 
-        self.bulk_creates.append(body)
-        print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk List")
+            body['attributes'].update(additional_attributes)
+        if app.config['CMK_BULK_CREATE_HOSTS']:
+            self.bulk_creates.append(body)
+            print(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk List")
+        else:
+            url = "/domain-types/host_config/collections/all"
+            self.request(url, method="POST", data=body)
+            print(f"{CC.OKGREEN} *{CC.ENDC} Created Host {db_host.hostname}")
+
 
 
 #.
@@ -353,7 +380,7 @@ class SyncCMK2(CMK2):
 
 #.
 #   .-- Update Host
-    def send_update_host(self, entries):
+    def send_bulk_update_host(self, entries):
         """
         Send Update requests to CMK
         """
@@ -483,7 +510,6 @@ class SyncCMK2(CMK2):
                         self.request(update_url, method="PUT",
                                      data=payload,
                                      additional_header=update_headers)
-                        etag = self.get_etag(db_host, "After last Update")
                         print(f"{CC.OKGREEN} *{CC.ENDC} Updated Host in Checkmk")
                         print(f"   Reasons: {what}: {', '.join(update_reasons)}")
                     else:
