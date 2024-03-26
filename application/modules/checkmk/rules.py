@@ -124,9 +124,13 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == 'multiple_custom_attribute':
                 param = outcome['action_param']
-                attrs = render_template_string(param,
-                                               HOSTNAME=hostname,
-                                               **self.attributes).split(',')
+                try:
+                    attrs = render_template_string(param,
+                                                   HOSTNAME=hostname,
+                                                   **self.attributes).split(',')
+                except TypeError:
+                    continue
+
                 if not attrs:
                     continue
 
