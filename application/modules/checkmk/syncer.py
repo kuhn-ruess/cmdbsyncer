@@ -254,7 +254,7 @@ class SyncCMK2(CMK2):
     def create_folder(self, folder):
         """ Create given folder if not yet exsisting """
         folder_parts = folder.split('/')[1:]
-        print(f"{CC.GREEN} *{CC.ENDC} Create Folder in Checkmk {folder}")
+        print(f"{CC.OKGREEN} *{CC.ENDC} Create Folder in Checkmk {folder}")
         if len(folder_parts) == 1:
             if folder_parts[0] == '':
                 # we are in page root
