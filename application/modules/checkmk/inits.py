@@ -274,14 +274,13 @@ def inventorize_hosts(account):
 
 
 
-
     print(f"{ColorCodes.UNDERLINE}Write to DB{ColorCodes.ENDC}")
 
     # pylint: disable=consider-using-dict-items
     for hostname in found_hosts:
         db_host = Host.get_host(hostname, False)
         if db_host:
-            db_host.update_inventory('cmk', config_inventory[hostname])
+            db_host.update_inventory('cmk', config_inventory.get(hostname, {}))
             db_host.update_inventory('cmk_svc', status_inventory.get(hostname, {}))
             db_host.update_inventory('cmk_svc_labels', service_label_inventory.get(hostname, {}))
             db_host.update_inventory('cmk_hw_sw_inv', hw_sw_inventory.get(hostname, {}))
