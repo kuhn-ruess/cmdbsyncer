@@ -492,10 +492,6 @@ class SyncCMK2(CMK2):
 
 
         if do_update:
-            # We may already got the Etag by the folder move action
-            if not etag and not app.config['CMK_BULK_UPDATE_HOSTS']:
-                etag = self.get_etag(db_host, "Update Host (1)")
-
             update_url = f"objects/host_config/{db_host.hostname}"
             update_body = {
                 'update_attributes': {},
@@ -526,8 +522,8 @@ class SyncCMK2(CMK2):
                         }
 
                     if not app.config['CMK_BULK_UPDATE_HOSTS']:
-                        if not etag:
-                            etag = self.get_etag(db_host, "Update Host (2)")
+                        if not etag: # We may already have one
+                            etag = self.get_etag(db_host, "Update Host (1)")
                         update_headers = {
                             'if-match': etag,
                         }
