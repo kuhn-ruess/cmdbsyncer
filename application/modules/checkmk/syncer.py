@@ -535,6 +535,7 @@ class SyncCMK2(CMK2):
                             self.request(update_url, method="PUT",
                                          data=payload,
                                          additional_header=update_headers)
+                            etag = False
                         except CmkException as error:
                             print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
                         else:
