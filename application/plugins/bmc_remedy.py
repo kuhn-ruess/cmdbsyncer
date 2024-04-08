@@ -69,7 +69,7 @@ class RemedySyncer():
         """
 
         auth_token = self.get_auth_token()
-        url = f"{self.address}/api/cmdb/v1.0/attributes/"\
+        url = f"{self.address}/api/cmdb/v1.0/classqueries/"\
               f"{self.config['namespace']}/{self.config['class_name']}"
         headers = {
             'Content-Type': 'application/json',

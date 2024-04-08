@@ -84,7 +84,10 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             outcomes.setdefault('dont_move', False)
 
             if outcome['action'] == 'move_folder':
-                outcomes['move_folder'] += self.format_foldername(outcome['action_param'])
+                new_value = outcome['action_param']
+                hostname = self.db_host.hostname
+                new_value = render_template_string(new_value, HOSTNAME=hostname, **self.attributes)
+                outcomes['move_folder'] += self.format_foldername(new_value)
 
             if outcome['action'] == 'dont_move':
                 outcomes['dont_move'] = True
