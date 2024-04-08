@@ -47,8 +47,8 @@ class CheckmkFilterRule(db.Document):
 #.
 #   .-- Checkmk Actions
 action_outcome_types = [
-    ("move_folder", "Move: __ Move Host to specified Folder"),
-    ('value_as_folder', "Folder Value: __ Use Value of given Attribute Name as Folder"),
+    ("move_folder", "Move: __ Move Host to specified Folder, Jinja Support"),
+    ('value_as_folder', "Deprecated: Use move_folder with Jinja"), # 2024-04-08
     ("tag_as_folder", "Folder Attribute: __ Use Attribute Name of given Attribute Value as Folder"),
     ("folder_pool", "Pool Folder: __ Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute", "CMK attr. by syncer attr: __ Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
