@@ -831,6 +831,7 @@ class CheckmkTagSync(SyncConfiguration):
             rewrite_id = group_data['rw_id']
             rewrite_title = group_data['rw_title']
 
+            print(object_attributes['all'])
             new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
                                                 **object_attributes['all'])
             new_tag_id = new_tag_id.strip()
