@@ -90,7 +90,7 @@ def cli_maintenance(days):
 #   .-- Command: Delete Caches
 
 @_cli_sys.command('delete_cache')
-@click.argument("days", cache_name="")
+@click.argument("cache_name", default="")
 def delete_cache(cache_name):
     """
     Delete object Cache
