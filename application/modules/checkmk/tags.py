@@ -4,12 +4,13 @@ Checkmk Tag Syncronize
 #pylint: disable=logging-fstring-interpolation
 import ast
 import time
-from flask import render_template_string
-from application import logger, cmk_cleanup_tag_id
+from application import logger
 from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.debug import ColorCodes as CC
 from application.modules.checkmk.models import CheckmkTagMngmt
 from application.models.host import Host
+from application.helpers.syncer_jinja import render_jinja
+from application.modules.checkmk.helpers import cmk_cleanup_tag_id
 
 class CheckmkTagSync(SyncConfiguration):
     """
@@ -135,7 +136,7 @@ class CheckmkTagSync(SyncConfiguration):
 
             if multi_list := self.groups[group_id_org].get('multiply_list'):
                 logger.debug(f"-- Work on Multi Group {group_id_org}")
-                rendering = render_template_string(multi_list, **object_attributes['all'])
+                rendering = render_jinja(multi_list, **object_attributes['all'])
                 logger.debug(f" --- New Render: {rendering}")
                 if not rendering:
                     continue
@@ -151,7 +152,7 @@ class CheckmkTagSync(SyncConfiguration):
                         'name': newone,
                     }
                     new_group_id = \
-                        cmk_cleanup_tag_id(render_template_string(group_id_org, **data))
+                        cmk_cleanup_tag_id(render_jinja(group_id_org, **data))
 
                     if new_group_id in self.groups:
                         # No need to Render Again and Again
@@ -162,13 +163,13 @@ class CheckmkTagSync(SyncConfiguration):
 
                     outcome[new_group_id] = {}
                     outcome[new_group_id]['tags'] = []
-                    outcome[new_group_id]['topic'] = render_template_string(curr['topic'], **data)
-                    outcome[new_group_id]['title'] = render_template_string(curr['title'], **data)
+                    outcome[new_group_id]['topic'] = render_jinja(curr['topic'], **data)
+                    outcome[new_group_id]['title'] = render_jinja(curr['title'], **data)
                     outcome[new_group_id]['help'] = curr['help']
                     outcome[new_group_id]['ident'] = cmk_cleanup_tag_id(new_group_id)
-                    outcome[new_group_id]['rw_id'] = render_template_string(curr['rw_id'], **data)
+                    outcome[new_group_id]['rw_id'] = render_jinja(curr['rw_id'], **data)
                     outcome[new_group_id]['rw_title'] = \
-                                    render_template_string(curr['rw_title'], **data)
+                                    render_jinja(curr['rw_title'], **data)
                     outcome[new_group_id]['object_filter'] = curr['object_filter']
 
                 # Mark as  'Template' Group,
@@ -188,7 +189,6 @@ class CheckmkTagSync(SyncConfiguration):
 
         for group_id, group_data in self.groups.items():
             if group_id in self._groups_used_as_template:
-                print(f"pass {group_id}")
                 continue
 
             # Check if we use data from the object
@@ -201,13 +201,13 @@ class CheckmkTagSync(SyncConfiguration):
             rewrite_id = group_data['rw_id']
             rewrite_title = group_data['rw_title']
 
-            new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
+            new_tag_id = render_jinja(rewrite_id, HOSTNAME=hostname,
                                                 **object_attributes['all'])
             new_tag_id = new_tag_id.strip()
             if new_tag_id:
                 new_tag_id = cmk_cleanup_tag_id(new_tag_id)
 
-            new_tag_title = render_template_string(rewrite_title, HOSTNAME=hostname,
+            new_tag_title = render_jinja(rewrite_title, HOSTNAME=hostname,
                                                    **object_attributes['all'])
             if new_tag_id and new_tag_title:
                 tags[group_id] = (new_tag_id, new_tag_title)

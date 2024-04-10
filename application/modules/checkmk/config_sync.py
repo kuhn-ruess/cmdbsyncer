@@ -4,7 +4,6 @@ Checkmk Configuration
 #pylint: disable=import-error, too-many-locals, no-member
 #pylint: disable=logging-fstring-interpolation
 import ast
-from flask import render_template_string
 from mongoengine.errors import DoesNotExist
 from application import log, logger
 from application.modules.checkmk.cmk2 import CMK2, CmkException
@@ -16,6 +15,7 @@ from application.modules.checkmk.models import (
 from application.modules.debug import ColorCodes as CC
 from application.models.host import Host
 from application.modules.rule.rule import Rule
+from application.helpers.syncer_jinja import render_jinja
 
 
 str_replace = Rule.replace
@@ -82,8 +82,8 @@ class SyncConfiguration(CMK2):
                         # Render Template Value
                         condition_tpl = {"host_tags": [], "service_labels": []}
                         value = \
-                            render_template_string(rule_params['value_template'],
-                                                   HOSTNAME=db_host.hostname, **attributes['all'])
+                            render_jinja(rule_params['value_template'],
+                                         HOSTNAME=db_host.hostname, **attributes['all'])
 
                         # Overwrite the Params again
                         rule_params['value'] = value
@@ -91,9 +91,9 @@ class SyncConfiguration(CMK2):
 
                         if rule_params['condition_label_template']:
                             label_condition = \
-                                render_template_string(rule_params['condition_label_template'],
-                                                       HOSTNAME=db_host.hostname,
-                                                       **attributes['all'])
+                                render_jinja(rule_params['condition_label_template'],
+                                             HOSTNAME=db_host.hostname,
+                                             **attributes['all'])
 
                             label_key, label_value = label_condition.split(':')
                             # Fix bug in case of empty Labels in store
@@ -108,9 +108,9 @@ class SyncConfiguration(CMK2):
 
                         if rule_params['condition_host']:
                             host_condition = \
-                                render_template_string(rule_params['condition_host'],
-                                                       HOSTNAME=db_host.hostname,
-                                                       **attributes['all'])
+                                render_jinja(rule_params['condition_host'],
+                                             HOSTNAME=db_host.hostname,
+                                             **attributes['all'])
                             if host_condition:
                                 condition_tpl["host_name"]= {
                                                 "match_on": host_condition.split(','),
@@ -223,12 +223,12 @@ class SyncConfiguration(CMK2):
                     new_group_title = key
                     new_group_name = key
                     if rewrite_name:
-                        new_group_name = render_template_string(outcome.rewrite,
+                        new_group_name = render_jinja(outcome.rewrite,
                                                                 name=key, result=key)
                     new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = render_template_string(outcome.rewrite_title,
-                                                                 name=key, result=key)
+                        new_group_title = render_jinja(outcome.rewrite_title,
+                                                       name=key, result=key)
                     new_group_title = str_replace(new_group_title, replace_exceptions).strip()
 
                     if new_group_name and (new_group_title, new_group_name) \
@@ -248,12 +248,12 @@ class SyncConfiguration(CMK2):
                     new_group_title = value
                     new_group_name = value
                     if rewrite_name:
-                        new_group_name = render_template_string(outcome.rewrite,
-                                                                name=value, result=value)
+                        new_group_name = render_jinja(outcome.rewrite,
+                                                      name=value, result=value)
                     new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = render_template_string(outcome.rewrite_title,
-                                                                 name=value, result=value)
+                        new_group_title = render_jinja(outcome.rewrite_title,
+                                                       name=value, result=value)
                     new_group_title = str_replace(new_group_title, replace_exceptions).strip()
                     if new_group_name and (new_group_title, new_group_name) \
                                                         not in groups[group_type]:
@@ -270,12 +270,12 @@ class SyncConfiguration(CMK2):
                     new_group_title = value
                     new_group_name = value
                     if rewrite_name:
-                        new_group_name = render_template_string(outcome.rewrite_name,
-                                                                name=value, result=value)
+                        new_group_name = render_jinja(outcome.rewrite_name,
+                                                      name=value, result=value)
                     new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
-                        new_group_title = render_template_string(outcome.rewrite_title,
-                                                                 name=value, result=value)
+                        new_group_title = render_jinja(outcome.rewrite_title,
+                                                       name=value, result=value)
                     new_group_title = str_replace(new_group_title, replace_exceptions).strip()
                     if new_group_name and (new_group_title, new_group_name) \
                                                         not in groups[group_type]:
@@ -432,8 +432,8 @@ class SyncConfiguration(CMK2):
                     for rule_params in rules:
                         # Render Template Value
                         rule_body = \
-                            render_template_string(rule_params['rule_template'],
-                                                   HOSTNAME=db_host.hostname, **attributes['all'])
+                            render_jinja(rule_params['rule_template'],
+                                         HOSTNAME=db_host.hostname, **attributes['all'])
                         rule_dict = ast.literal_eval(rule_body.replace('null', 'None'))
                         unique_rules[rule_dict['id']] = rule_dict
                         pack_id = rule_dict['pack_id']
@@ -503,8 +503,8 @@ class SyncConfiguration(CMK2):
                     for rule_params in rules:
                         # Render Template Value
                         rule_body = \
-                            render_template_string(rule_params['rule_template'],
-                                                   HOSTNAME=db_host.hostname, **attributes['all'])
+                            render_jinja(rule_params['rule_template'],
+                                         HOSTNAME=db_host.hostname, **attributes['all'])
                         aggregation_dict = ast.literal_eval(rule_body.replace('null', 'None'))
                         unique_aggregations[aggregation_dict['id']] = aggregation_dict
                         pack_id = aggregation_dict['pack_id']
