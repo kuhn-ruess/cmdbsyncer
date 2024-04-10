@@ -4,11 +4,9 @@
 # pylint: disable=ungrouped-imports
 import os
 import logging
-import ast
-import re
 from datetime import datetime
 from pprint import pformat
-from re import I
+from jinja2 import StrictUndefined
 from flask import Flask, url_for, redirect
 from flask_admin import Admin
 from flask_admin.menu import MenuLink
@@ -19,7 +17,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.5.15'
+VERSION = '3.5.16'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -108,33 +106,6 @@ login_manager.login_view = 'auth.login'
 login_manager.login_message = False
 
 
-def get_list(input_list):
-    """
-    Convert a List which is a 
-    string to real object
-    """
-    if isinstance(input_list, str):
-        input_list = ast.literal_eval(input_list.replace('\n',''))
-    return input_list
-
-def merge_list_of_dicts(input_list):
-    """
-    Merge a list of dicts to single dict
-    """
-    if isinstance(input_list, str):
-        input_list = ast.literal_eval(input_list.replace('\n',''))
-    return {k: v for d in input_list for k, v in d.items()}
-
-def cmk_cleanup_tag_id(input_str):
-    """
-    Cleans Invalid Chars out
-    of strings you wan't to use as tag_id in cmk
-    """
-    return re.sub('[^a-zA-Z0-9_-]', '_', input_str.strip()).lower()
-
-app.jinja_env.globals.update(get_list=get_list)
-app.jinja_env.globals.update(merge_list_of_dicts=merge_list_of_dicts)
-app.jinja_env.globals.update(cmk_cleanup_tag_id=cmk_cleanup_tag_id)
 
 cron_register = {}
 from plugins import *

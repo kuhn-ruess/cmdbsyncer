@@ -4,7 +4,7 @@ Checkmk Rules
 """
 #pylint: disable=import-error
 #pylint: disable=logging-fstring-interpolation
-from flask import render_template_string
+from application.helpers.syncer_jinja import render_jinja
 from application import logger
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
@@ -86,7 +86,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             if outcome['action'] == 'move_folder':
                 new_value = outcome['action_param']
                 hostname = self.db_host.hostname
-                new_value = render_template_string(new_value, HOSTNAME=hostname, **self.attributes)
+                new_value = render_jinja(new_value, mode="nullify",
+                                         HOSTNAME=hostname, **self.attributes)
                 outcomes['move_folder'] += self.format_foldername(new_value)
 
             if outcome['action'] == 'dont_move':
@@ -114,25 +115,25 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             if outcome['action'] == 'custom_attribute':
                 new_key, new_value_pre = outcome['action_param'].split(':')
                 hostname = self.db_host.hostname
-                new_value = new_value_pre.replace('{{hostname}}', hostname) # Legacy, Removed in 4.0
-                new_value = render_template_string(new_value, HOSTNAME=hostname, **self.attributes)
+                new_value = new_value_pre.replace('{{hostname}}',
+                                                  hostname) # Legacy, Removed in 4.0
+                new_value = render_jinja(new_value, mode="nullify",
+                                         HOSTNAME=hostname, **self.attributes)
                 new_value = self.replace(new_value, exceptions=[
                                                         " ", '/'
                                                     ]) # Replace Chars not working in Checkmk
                 #new_value = new_value.encode('ascii', 'ignore')
                 if new_value.lower() in ['none', 'false']:
                     outcomes['remove_attributes'].append(new_key)
-                elif new_key and new_value and new_value > new_value_pre:
-                    # We check if new_value is longer then the previos one.
-                    # It would be shorter if a template varialbe is not replaced
+                elif new_key and new_value:
                     outcomes['custom_attributes'].append({new_key: new_value})
 
             if outcome['action'] == 'multiple_custom_attribute':
                 param = outcome['action_param']
                 try:
-                    attrs = render_template_string(param,
-                                                   HOSTNAME=hostname,
-                                                   **self.attributes).split(',')
+                    attrs = render_jinja(param,
+                                         HOSTNAME=hostname,
+                                         **self.attributes).split(',')
                 except TypeError:
                     continue
 
@@ -154,7 +155,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             if outcome['action'] == "set_parent":
                 value = outcome['action_param']
                 hostname = self.db_host.hostname
-                new_value = render_template_string(value, HOSTNAME=hostname, **self.attributes)
+                new_value = render_jinja(value, HOSTNAME=hostname, **self.attributes)
                 for parent in new_value.split(','):
                     parent = parent.strip()
                     if parent and parent not in outcomes['parents']:
