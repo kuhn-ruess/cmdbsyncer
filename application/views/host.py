@@ -47,6 +47,15 @@ def format_log(v, c, m, p):
     html += "</ul>"
     return Markup(html)
 
+def format_cache(v, c, m, p):
+    """ Format cache"""
+    # pylint: disable=invalid-name, unused-argument
+    html = "<table>"
+    for key, value in m.cache.items():
+        html += f"<tr><th>{key}</th><td>{value}</td></tr>"
+    html += "</table>"
+    return Markup(html)
+
 def format_labels(v, c, m, p):
     """ Format Labels view"""
     # pylint: disable=invalid-name, unused-argument
@@ -231,6 +240,7 @@ class HostModelView(DefaultModelView):
         'log': format_log,
         'labels': format_labels,
         'inventory': format_inventory,
+        'cache': format_cache,
     }
 
     column_exclude_list = (

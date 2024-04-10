@@ -5,7 +5,8 @@ from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 from application.models.host import Host
-from application.modules.checkmk.config_sync import SyncConfiguration, CheckmkTagSync
+from application.modules.checkmk.config_sync import SyncConfiguration
+from application.modules.checkmk.tags import CheckmkTagSync
 from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
 from application.modules.rule.filter import Filter
 from application.modules.checkmk.inventorize import InventorizeHosts

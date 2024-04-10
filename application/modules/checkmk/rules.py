@@ -112,9 +112,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 outcomes['attributes'].append(outcome['action_param'])
 
             if outcome['action'] == 'custom_attribute':
-                new_key, new_value = outcome['action_param'].split(':')
+                new_key, new_value_pre = outcome['action_param'].split(':')
                 hostname = self.db_host.hostname
-                new_value = new_value.replace('{{hostname}}', hostname) # Legacy, Removed in 4.0
+                new_value = new_value_pre.replace('{{hostname}}', hostname) # Legacy, Removed in 4.0
                 new_value = render_template_string(new_value, HOSTNAME=hostname, **self.attributes)
                 new_value = self.replace(new_value, exceptions=[
                                                         " ", '/'
@@ -122,7 +122,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 #new_value = new_value.encode('ascii', 'ignore')
                 if new_value.lower() in ['none', 'false']:
                     outcomes['remove_attributes'].append(new_key)
-                elif new_key and new_value:
+                elif new_key and new_value and new_value > new_value_pre:
+                    # We check if new_value is longer then the previos one.
+                    # It would be shorter if a template varialbe is not replaced
                     outcomes['custom_attributes'].append({new_key: new_value})
 
             if outcome['action'] == 'multiple_custom_attribute':
