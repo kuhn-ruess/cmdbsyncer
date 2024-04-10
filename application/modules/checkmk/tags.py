@@ -202,13 +202,14 @@ class CheckmkTagSync(SyncConfiguration):
             rewrite_title = group_data['rw_title']
 
             new_tag_id = render_jinja(rewrite_id, HOSTNAME=hostname,
-                                                **object_attributes['all'])
+                                      **object_attributes['all'])
             new_tag_id = new_tag_id.strip()
+
             if new_tag_id:
                 new_tag_id = cmk_cleanup_tag_id(new_tag_id)
 
             new_tag_title = render_jinja(rewrite_title, HOSTNAME=hostname,
-                                                   **object_attributes['all'])
+                                         **object_attributes['all'])
             if new_tag_id and new_tag_title:
                 tags[group_id] = (new_tag_id, new_tag_title)
         return tags
