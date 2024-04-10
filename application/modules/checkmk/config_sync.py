@@ -801,8 +801,9 @@ class CheckmkTagSync(SyncConfiguration):
                     outcome[new_group_id]['title'] = render_template_string(curr['title'], **data)
                     outcome[new_group_id]['help'] = curr['help']
                     outcome[new_group_id]['ident'] = cmk_cleanup_tag_id(new_group_id)
-                    outcome[new_group_id]['rw_id'] = cmk_cleanup_tag_id(newone)
-                    outcome[new_group_id]['rw_title'] = newone
+                    outcome[new_group_id]['rw_id'] = render_template_string(curr['rw_id'], **data)
+                    outcome[new_group_id]['rw_title'] = \
+                                    render_template_string(curr['rw_title'], **data)
                     outcome[new_group_id]['object_filter'] = curr['object_filter']
 
                 # Mark as  'Template' Group,
@@ -831,7 +832,6 @@ class CheckmkTagSync(SyncConfiguration):
             rewrite_id = group_data['rw_id']
             rewrite_title = group_data['rw_title']
 
-            print(object_attributes['all'])
             new_tag_id = render_template_string(rewrite_id, HOSTNAME=hostname,
                                                 **object_attributes['all'])
             new_tag_id = new_tag_id.strip()
