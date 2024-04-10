@@ -90,14 +90,20 @@ def cli_maintenance(days):
 #   .-- Command: Delete Caches
 
 @_cli_sys.command('delete_cache')
-def delete_cache():
+@click.argument("days", cache_name="")
+def delete_cache(cache_name):
     """
     Delete object Cache
     """
     print(f"{CC.HEADER} ***** Delete Cache ***** {CC.ENDC}")
     for host in Host.objects():
         logger.debug(f"Handling Host {host.hostname}")
-        host.cache = {}
+        if cache_name:
+            for key in list(host.cache.keys()):
+                if key.lower().startswith(cache_name):
+                    del host.cache[key]
+        else:
+            host.cache = {}
         host.save()
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
