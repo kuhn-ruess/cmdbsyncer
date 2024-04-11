@@ -50,6 +50,12 @@ class Rule(): # pylint: disable=too-few-public-methods
         value_match = condition['value_match']
         value_match_negate = condition['value_match_negate']
 
+
+        if tag_match == 'ignore' and tag_match_negate:
+            # This Case Checks that Tag NOT Exists
+            if needed_tag not in self.attributes.keys():
+                return True
+            return False
         # Wee need to find out if tag AND tag value match
         for tag, value in self.attributes.items():
             # Check if Tag matchs

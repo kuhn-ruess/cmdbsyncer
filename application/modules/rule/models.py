@@ -15,7 +15,7 @@ condition_types = [
     ('swith', "String starts with (x.startswith(y)"),
     ('regex', "Regex Match"),
     ('bool', "Match Bool, True or False bool(value)"),
-    ('ignore', "Match All (*)"),
+    ('ignore', "Match All (*) (Negate for Not exist)"),
 ]
 
 class FullCondition(db.EmbeddedDocument):
@@ -77,7 +77,7 @@ class FullCondition(db.EmbeddedDocument):
     ----------
     Boolean match against True or False. Please enter True oder False in the Field.
 
-    Match All
+    Match All (Negate for: Does not Exist)
     ---------
     Match anyway
     """
