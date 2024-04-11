@@ -11,6 +11,7 @@ class AnsibleCustomVariablesRule(db.Document):
     """
 
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -36,6 +37,7 @@ class AnsibleFilterRule(db.Document):
     Filter Attributes
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
@@ -58,6 +60,8 @@ class AnsibleRewriteAttributesRule(db.Document):
     Rule to Attributes existing Attributes
     """
     name = db.StringField()
+    documentation = db.StringField()
+
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview

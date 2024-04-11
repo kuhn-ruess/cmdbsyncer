@@ -146,6 +146,7 @@ class RuleModelView(DefaultModelView):
     form_rules = [
         rules.FieldSet((
             rules.Field('name'),
+            rules.Field('documentation'),
             div_open,
             rules.NestedRule(('enabled', 'last_match')),
             ), "1. Main Options"),

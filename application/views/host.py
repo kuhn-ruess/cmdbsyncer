@@ -52,7 +52,12 @@ def format_cache(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for key, value in m.cache.items():
-        html += f"<tr><th>{key}</th><td>{value}</td></tr>"
+        html += f"<tr><th>{key}</th><td>"
+        html += "<table>"
+        for sub_key, sub_value in value.items():
+            html += f"<tr><td>{sub_key}</td><td>{sub_value}</td></tr>"
+        html += "</table>"
+        html += "</td></tr>"
     html += "</table>"
     return Markup(html)
 
