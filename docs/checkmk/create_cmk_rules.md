@@ -1,2 +1,0 @@
-# Create Checkmk Rules
-
