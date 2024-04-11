@@ -29,6 +29,7 @@ class CheckmkFilterRule(db.Document):
     Filter Attributes
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
@@ -117,6 +118,7 @@ class CheckmkRule(db.Document):
     Checkmk Actions
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
@@ -191,6 +193,7 @@ class CheckmkGroupRule(db.Document):
 
 
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
     outcome = db.EmbeddedDocumentField(document_type="CmkGroupOutcome")
     render_checkmk_group_outcome = db.StringField()
     enabled = db.BooleanField()
@@ -253,6 +256,7 @@ class CheckmkRuleMngmt(db.Document):
     Manage Checkmk Rules
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -273,6 +277,7 @@ class CheckmkTagMngmt(db.Document):
     """
     Manage Checkmk Users
     """
+    documentation = db.StringField()
     group_topic_name = db.StringField()
     group_title = db.StringField()
     group_id = db.StringField()
@@ -298,6 +303,7 @@ class CheckmkUserMngmt(db.Document):
     """
     Manage Checkmk Users
     """
+    documentation = db.StringField()
     user_id = db.StringField()
     full_name = db.StringField()
     email = db.StringField()
@@ -322,6 +328,7 @@ class CheckmkFolderPool(db.Document):
     """
 
 
+    documentation = db.StringField()
     folder_name = db.StringField(required=True, unique=True)
     folder_seats = db.IntField(required=True)
     folder_seats_taken = db.IntField(default=0)
@@ -347,6 +354,7 @@ class CheckmkRewriteAttributeRule(db.Document):
     Rewrite all Attributes
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview
@@ -373,6 +381,7 @@ class CheckmkSettings(db.Document):
     Checkmk Settings
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
     server_user = db.StringField()
     cmk_version = db.StringField()
     cmk_edition = db.StringField(choices=editions)
@@ -394,6 +403,7 @@ class CheckmkSite(db.Document):
     Checkmk Site
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
     server_address = db.StringField(required=True, unique=True)
     settings_master = db.ReferenceField(document_type="CheckmkSettings", required=True)
 
@@ -419,6 +429,7 @@ class CheckmkBiAggregation(db.Document):
     BI Aggregation
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -438,6 +449,7 @@ class BiRuleOutcome(db.EmbeddedDocument):
     """
     BI Aggregation
     """
+    documentation = db.StringField()
     description = db.StringField()
     rule_template = db.StringField()
 
@@ -451,6 +463,7 @@ class CheckmkBiRule(db.Document):
     BI Rule
     """
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
