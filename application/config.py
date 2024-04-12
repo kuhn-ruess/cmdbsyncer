@@ -67,7 +67,7 @@ class BaseConfig():
 
     FILEADMIN_PATH = '/srv/cmdbsyncer-files'
 
-    CMK_22_23_HANDLE_TAG_LABEL_BUG = True
+    CMK_22_23_HANDLE_TAG_LABEL_BUG = False
 
     CMK_BULK_CREATE_HOSTS = True
     CMK_BULK_CREATE_OPERATIONS = 300
