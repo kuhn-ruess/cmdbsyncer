@@ -113,6 +113,7 @@ class SyncCMK2(CMK2):
             labels['cmdb_syncer'] = self.account_id
 
             dont_move_host = next_actions.get('dont_move', False)
+            dont_update_host = next_actions.get('dont_update', False)
 
             folder = '/'
 
@@ -173,7 +174,7 @@ class SyncCMK2(CMK2):
                                           'cmdb_syncer': self.account_id
                                 }}
                              }}
-            else:
+            elif not dont_update_host:
                 cmk_host = self.checkmk_hosts[db_host.hostname]
                 # Update if needed
                 self.update_host(db_host, cmk_host, folder,
@@ -182,6 +183,8 @@ class SyncCMK2(CMK2):
                 if cluster_nodes:
                     cmk_cluster = cmk_host['extensions']['cluster_nodes']
                     cluster_updates.append((db_host, cmk_cluster, cluster_nodes))
+            else:
+                print(f"{CC.OKBLUE} *{CC.ENDC} Host is not to be updated")
 
 
             db_host.save()

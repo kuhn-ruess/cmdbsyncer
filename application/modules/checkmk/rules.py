@@ -82,6 +82,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             outcomes.setdefault('create_cluster', [])
             outcomes.setdefault('parents', [])
             outcomes.setdefault('dont_move', False)
+            outcomes.setdefault('dont_update', False)
 
             if outcome['action'] == 'move_folder':
                 new_value = outcome['action_param']
@@ -92,6 +93,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == 'dont_move':
                 outcomes['dont_move'] = True
+
+            if outcome['action'] == 'dont_update':
+                outcomes['dont_update'] = True
 
             if outcome['action'] == 'folder_pool':
                 self.found_poolfolder_rule = True
@@ -113,44 +117,31 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 outcomes['attributes'].append(outcome['action_param'])
 
             if outcome['action'] == 'custom_attribute':
-                new_key, new_value_pre = outcome['action_param'].split(':')
+                action_param = outcome['action_param']
                 hostname = self.db_host.hostname
-                new_value = new_value_pre.replace('{{hostname}}',
+
+                action_render = action_param.replace('{{hostname}}',
                                                   hostname) # Legacy, Removed in 4.0
-                new_value = render_jinja(new_value, mode="nullify",
+
+                action_render = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
-                new_value = self.replace(new_value, exceptions=[
+                action_render = self.replace(action_render, exceptions=[
                                                         " ", '/'
                                                     ]) # Replace Chars not working in Checkmk
-                #new_value = new_value.encode('ascii', 'ignore')
-                if new_value.lower() in ['none', 'false']:
-                    outcomes['remove_attributes'].append(new_key)
-                elif new_key and new_value:
-                    outcomes['custom_attributes'].append({new_key: new_value})
 
-            if outcome['action'] == 'multiple_custom_attribute':
-                param = outcome['action_param']
-                try:
-                    attrs = render_jinja(param,
-                                         HOSTNAME=hostname,
-                                         **self.attributes).split(',')
-                except TypeError:
-                    continue
-
-                if not attrs:
-                    continue
-
-                for attr_pair in attrs:
-                    if not attr_pair:
-                        continue
-                    try:
-                        new_key, new_value = attr_pair.split(':')
-                        if new_value.lower() in ['none', 'false']:
-                            outcomes['remove_attributes'].append(new_key)
-                        elif new_key and new_value:
-                            outcomes['custom_attributes'].append({new_key: new_value})
-                    except ValueError:
-                        logger.debug(f"Cant split '{attr_pair}'")
+                if action_render:
+                    attrs = action_render.split(',')
+                    for attr_pair in attrs:
+                        if not attr_pair:
+                            continue
+                        try:
+                            new_key, new_value = attr_pair.split(':')
+                            if new_value.lower() in ['none', 'false']:
+                                outcomes['remove_attributes'].append(new_key)
+                            elif new_key and new_value:
+                                outcomes['custom_attributes'].append({new_key: new_value})
+                        except ValueError:
+                            logger.debug(f"Cant split '{attr_pair}'")
 
             if outcome['action'] == "set_parent":
                 value = outcome['action_param']
