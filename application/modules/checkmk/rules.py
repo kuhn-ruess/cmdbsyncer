@@ -136,6 +136,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                             continue
                         try:
                             new_key, new_value = attr_pair.split(':')
+                            new_key = new_key.strip()
+                            new_value = new_value.strip()
                             if new_value.lower() in ['none', 'false']:
                                 outcomes['remove_attributes'].append(new_key)
                             elif new_key and new_value:
