@@ -20,7 +20,8 @@ RUN apk add --no-cache python3 \
     krb5-pkinit \
     krb5-dev \
     krb5 \
-    openldap-dev
+    openldap-dev \
+    unixodbc-dev
 
 ENV TZ=Europe/Berlin
 RUN ln -sf /usr/share/zoneinfo/Europe/Berlin /etc/localtime

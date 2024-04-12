@@ -20,7 +20,8 @@ RUN apk add --no-cache python3 \
     krb5-pkinit \
     krb5-dev \
     krb5 \
-    openldap-dev
+    openldap-dev \
+    unixodbc-dev
 
 ENV TZ=Etc/Universal
 RUN ln -sf /usr/share/zoneinfo/Ect/Universal /etc/localtime
