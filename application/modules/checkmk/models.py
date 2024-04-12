@@ -48,64 +48,33 @@ class CheckmkFilterRule(db.Document):
 #.
 #   .-- Checkmk Actions
 action_outcome_types = [
-    ("move_folder", "Move: __ Move Host to specified Folder, Jinja Support"),
+    ("move_folder", "Move to Folder: __ Move Host to specified Folder, Jinja Support"),
     ('value_as_folder', "Deprecated: Use move_folder with Jinja"), # 2024-04-08
-    ("tag_as_folder", "Folder by Attribute  Name: __ Use Attribute Name of given Attribute Value as Folder"),
-    ("folder_pool", "Pool Folder: __ Use Pool Folder (please make sure this matches just once to a host)"),
-    ("attribute", "CMK attr. by syncer attr: __ Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
-    ("custom_attribute", "CMK attr. Custom: __ Create Custom Checkmk Attribute: Set key:value, Placeholders: {{HOSTNAME}} and all Host Attributes in Jinja Syntax"),
-    ("multiple_custom_attribute", "CMK Multiple attr. Custom: __ Create Multiple Custom Attributes based on given list. Use for loop with get_list() function"),
-    ("create_cluster", "Cluster: __ Create Cluster. Specify Tags with Nodes as Wildcard (*) and or Comma separated"),
-    ("set_parent", "Parents: __ Comma Seperated list for parents, with Jinja Syntax"),
-    ("dont_move", "Move Optout: __ Don't Move host to another Folder after inital creation"),
+    ("tag_as_folder",
+     "Folder by Attribute  Name: __ Use Attribute Name of given Attribute Value as Folder"),
+    ("folder_pool",
+     "Pool Folder: __ Use Pool Folder (please make sure this matches just once to a host)"),
+    ("attribute",
+     "CMK attr. by syncer attr: __ "\
+     "Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
+    ("custom_attribute",
+     "Custom CMK Attribute. Custom: __ "\
+     "Create Custom Checkmk Attribute: "\
+     "Set key:value, Placeholders: {{HOSTNAME}} and all Host Attributes in Jinja Syntax"),
+    ("multiple_custom_attribute","Deprecated: Just switch to normal Custom Attribute"),
+    ("create_cluster",
+     "Cluster: __ Create Cluster. Specify Tags with Nodes as Wildcard (*) and or Comma separated"),
+    ("set_parent",
+     "Parents: __ Comma Seperated list for parents, with Jinja Syntax"),
+    ("dont_move",
+     "Move Optout: __ Don't Move host to another Folder after inital creation"),
+    ("dont_update",
+     "Update Optout: __ Don't update host Attributes after initial creation"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
     """
-    ### Move Host to specified Folder
-
-    Hardcode a custom Folder Name in _action_param_ field.
-
-    ### Use Value of given Attribute Name as Folder
-
-    Define an Attribute in _action_param_. The value of it, will be used
-    as a Folder name for the matching host
-
-    ### Use Attribute Name of given Attribute Value as Folder
-
-    Same like the option before, but just Attribute Name and Attribute Value swapped.
-    So you can pick by the attributes value.
-
-    ### Use Pool Folder
-
-    Matching Host will use a Pool Folder. If not action_param is given,
-    the system will query from all folders. Otherwise you can provide a comma seperated list
-    of Folder Pool Names.
-    For more Details, please refer to the [Folder Pool Documentation](folder_pools.md).
-
-    ### Create Checkmk-Attribute
-
-    The given Attribute Name will be sent as Checkmk Attribute. This way you can set
-    every Attribute you want like ipaddress of management board. Please refer to the [documentation in
-    Recipes](cmk_attributes.md).
-
-    ### Create Custom Checkmk Attribute
-
-    You can specify a new Attribute as key value pair, separated by double point.
-    You can use {{hostname}} as placeholder to create for example:
-    managmentboard:rib-{{hostname}} as new attribute
-
-    ### Create Cluster
-    The Matching Host will be created as a Cluster in Checkmk.
-    Since Cluster have Nodes, you need to tell syncer in witch attribute he will find
-    their Names. You can add the Attributes comma seperated, and use * as Wildcard add the
-    end of the Name. See also the [Documentation](create_cluster.md).
-
-
-    ### Don't Move hosts
-    Host will be created matching the Folder Rules, but not moved anymore.
-    When something changes like Data in the CMDB, or he is moved manual in WATO,
-    the move operation is skipped on export.
+    Checkmk Rule Outcome
     """
     action = db.StringField(choices=action_outcome_types)
     action_param = db.StringField()
