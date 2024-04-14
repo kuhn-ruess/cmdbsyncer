@@ -66,23 +66,28 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         #pylint: disable=too-many-branches, too-many-statements
         #pylint: disable=too-many-locals, too-many-nested-blocks
 
+        possible_outcomes = [
+            ('move_folder',""),
+            ('attributes', []),
+            ('custom_attributes', []),
+            ('remove_attributes', []),
+            ('create_cluster', []),
+            ('prefix_labels', False),
+            ('only_update_prefixed_labels', False),
+            ('parents', []),
+            ('dont_move', False),
+            ('dont_update', False),
+        ]
+        for choice, default in possible_outcomes:
+            outcomes.setdefault(choice, default)
+
         for outcome in rule:
             # We add only the outcome of the
             # first matching rule action
             # exception are the folders
 
-            # Prepare empty string to add later on subfolder if needed
-            # We delete it anyway at the end, if it's stays empty
 
 
-            outcomes.setdefault('move_folder',"")
-            outcomes.setdefault('attributes', [])
-            outcomes.setdefault('custom_attributes', [])
-            outcomes.setdefault('remove_attributes', [])
-            outcomes.setdefault('create_cluster', [])
-            outcomes.setdefault('parents', [])
-            outcomes.setdefault('dont_move', False)
-            outcomes.setdefault('dont_update', False)
 
             if outcome['action'] == 'move_folder':
                 new_value = outcome['action_param']
@@ -91,11 +96,18 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                          HOSTNAME=hostname, **self.attributes)
                 outcomes['move_folder'] += self.format_foldername(new_value)
 
+
             if outcome['action'] == 'dont_move':
                 outcomes['dont_move'] = True
 
             if outcome['action'] == 'dont_update':
                 outcomes['dont_update'] = True
+
+            if outcome['action'] == 'prefix_labels':
+                outcomes['label_prefix'] = outcome['action_param']
+
+            if outcome['action'] == 'only_update_prefixed_labels':
+                outcomes['only_update_prefixed_labels'] = outcome['action_param']
 
             if outcome['action'] == 'folder_pool':
                 self.found_poolfolder_rule = True
@@ -196,14 +208,11 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                         if node := self.attributes.get(node_tag):
                             outcomes['create_cluster'].append(node)
 
-            # Cleanup in case not folder rule applies,
-            # we have nothing to return to the plugins
-            if not outcomes['move_folder']:
-                del outcomes['move_folder']
-            if not outcomes['remove_attributes']:
-                del outcomes['remove_attributes']
-            if not outcomes['parents']:
-                del outcomes['parents']
+        # Cleanup in case not folder rule applies,
+        # we have nothing to return to the plugins
+        for choice, _ in possible_outcomes:
+            if not outcomes[choice]:
+                del outcomes[choice]
 
         print_debug(self.debug, "")
         return outcomes

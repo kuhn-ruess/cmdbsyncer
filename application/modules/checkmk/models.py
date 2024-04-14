@@ -70,6 +70,10 @@ action_outcome_types = [
      "Move Optout: __ Don't Move host to another Folder after inital creation"),
     ("dont_update",
      "Update Optout: __ Don't update host Attributes after initial creation"),
+    ("prefix_labels",
+     "Prefix Labels: __ Prefix all labels with given String"),
+    ("only_update_prefixed_labels",
+     "Update only Prefixed Labels: __ Only Update Labels with given prefix"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):

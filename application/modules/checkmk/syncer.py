@@ -18,8 +18,16 @@ class SyncCMK2(CMK2):
     bulk_creates = []
     bulk_updates = []
 
+    synced_hosts = []
+
+    clusters = []
+    cluster_updates = []
+
     checkmk_hosts = {}
     existing_folders = []
+
+    label_prefix = False
+    only_update_prefixed_labels = False
 
     @staticmethod
     def chunks(lst, n):
@@ -62,7 +70,7 @@ class SyncCMK2(CMK2):
 
     def use_host(self, db_host):
         """
-        Return if the Host is to be used 
+        Return if the Host is to be used
         for export or not
         """
         if self.limit:
@@ -75,11 +83,51 @@ class SyncCMK2(CMK2):
 
         return True
 
+    def handle_clusters(self):
+        """ Create the Clusters """
+        print(f"\n{CC.OKBLUE} -- {CC.ENDC}Check if we need to handle Clusters")
+        for cluster in self.clusters:
+            self.create_cluster(*cluster)
+        for cluster in self.cluster_updates:
+            self.update_cluster_nodes(*cluster)
+
+    def cleanup_hosts(self):
+        """ Cleanup Deleted hosts """
+
+        ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
+        # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
+        print(f"\n{CC.OKBLUE} -- {CC.ENDC}Check if we need to cleanup hosts")
+        delete_list = []
+        for host, host_data in self.checkmk_hosts.items():
+            host_labels = host_data['extensions']['attributes'].get('labels',{})
+            if host_labels.get('cmdb_syncer') == self.account_id:
+                if host not in self.synced_hosts:
+                    # Delete host
+
+                    if app.config['CMK_BULK_DELETE_HOSTS']:
+                        delete_list.append(host)
+                        print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
+                    else:
+                        url = f"/objects/host_config/{host}"
+                        self.request(url, method="DELETE")
+                        print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
+
+
+        if app.config['CMK_BULK_DELETE_HOSTS']:
+            url = "/domain-types/host_config/actions/bulk-delete/invoke"
+            chunks = list(self.chunks(delete_list, app.config['CMK_BULK_DELETE_OPERATIONS']))
+            total = len(chunks)
+            count = 1
+            for chunk in chunks:
+                print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Request {count}/{total}")
+                self.request(url, data={'entries': chunk }, method="POST")
+                count += 1
+        print(f"{CC.OKCYAN} *{CC.ENDC} Cleanup Done")
+
 #   .-- Run Sync
     def run(self):
         """Run Job"""
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
-        synced_hosts = []
 
         self.fetch_checkmk_hosts()
         self.fetch_checkmk_folders()
@@ -89,8 +137,6 @@ class SyncCMK2(CMK2):
         db_objects = Host.get_export_hosts()
         total = db_objects.count()
         counter = 0
-        clusters = []
-        cluster_updates = []
         for db_host in db_objects:
             counter += 1
 
@@ -106,16 +152,24 @@ class SyncCMK2(CMK2):
                 continue
             next_actions = self.get_host_actions(db_host, attributes['all'])
 
+            self.label_prefix = next_actions.get('label_prefix')
 
-            labels = {k:str(v) for k,v in attributes['filtered'].items()}
+            label_prefix = ""
+            if self.label_prefix:
+                label_prefix = self.label_prefix
+            labels = {f"{label_prefix}{k}":str(v) for k,v in attributes['filtered'].items()}
 
-            synced_hosts.append(db_host.hostname)
+            self.only_update_prefixed_labels = next_actions.get('only_update_prefixed_labels')
+
+            self.synced_hosts.append(db_host.hostname)
             labels['cmdb_syncer'] = self.account_id
 
             dont_move_host = next_actions.get('dont_move', False)
             dont_update_host = next_actions.get('dont_update', False)
 
             folder = '/'
+
+
 
             if 'move_folder' in next_actions:
                 # Get the Folder where we move to
@@ -160,7 +214,7 @@ class SyncCMK2(CMK2):
                 if cluster_nodes:
                     print(f"{CC.OKBLUE} *{CC.ENDC} Will be created as Cluster")
                     # We need to create them Later, since we not know that we have all nodes
-                    clusters.append((db_host, folder, labels, \
+                    self.clusters.append((db_host, folder, labels, \
                                         cluster_nodes, additional_attributes))
                 else:
                     print(f"{CC.OKBLUE} *{CC.ENDC} Need to created in Checkmk")
@@ -182,10 +236,9 @@ class SyncCMK2(CMK2):
                                 dont_move_host)
                 if cluster_nodes:
                     cmk_cluster = cmk_host['extensions']['cluster_nodes']
-                    cluster_updates.append((db_host, cmk_cluster, cluster_nodes))
+                    self.cluster_updates.append((db_host, cmk_cluster, cluster_nodes))
             else:
                 print(f"{CC.OKBLUE} *{CC.ENDC} Host is not to be updated")
-
 
             db_host.save()
         print()
@@ -199,42 +252,10 @@ class SyncCMK2(CMK2):
         if self.limit:
             print(f"\n{CC.OKCYAN} -- {CC.ENDC}Stop processing in limit mode")
             return
-        ## Create the Clusters
-        print(f"\n{CC.OKBLUE} -- {CC.ENDC}Check if we need to handle Clusters")
-        for cluster in clusters:
-            self.create_cluster(*cluster)
-        for cluster in cluster_updates:
-            self.update_cluster_nodes(*cluster)
 
-        ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
-        # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
-        print(f"\n{CC.OKBLUE} -- {CC.ENDC}Check if we need to cleanup hosts")
-        delete_list = []
-        for host, host_data in self.checkmk_hosts.items():
-            host_labels = host_data['extensions']['attributes'].get('labels',{})
-            if host_labels.get('cmdb_syncer') == self.account_id:
-                if host not in synced_hosts:
-                    # Delete host
+        self.handle_clusters()
+        self.cleanup_hosts()
 
-                    if app.config['CMK_BULK_DELETE_HOSTS']:
-                        delete_list.append(host)
-                        print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
-                    else:
-                        url = f"/objects/host_config/{host}"
-                        self.request(url, method="DELETE")
-                        print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
-
-
-        if app.config['CMK_BULK_DELETE_HOSTS']:
-            url = "/domain-types/host_config/actions/bulk-delete/invoke"
-            chunks = list(self.chunks(delete_list, app.config['CMK_BULK_DELETE_OPERATIONS']))
-            total = len(chunks)
-            count = 1
-            for chunk in chunks:
-                print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Request {count}/{total}")
-                self.request(url, data={'entries': chunk }, method="POST")
-                count += 1
-        print(f"{CC.OKCYAN} *{CC.ENDC} Cleanup Done")
 #.
 #   .-- Create Folder
     def _create_folder(self, parent, subfolder):
@@ -465,6 +486,16 @@ class SyncCMK2(CMK2):
         update_reasons = []
         cmk_attributes = cmk_host['extensions']['attributes']
         cmk_labels = cmk_attributes.get('labels', {})
+        if self.only_update_prefixed_labels:
+            # In this case, we secure all labels without the prefix
+            for label, value in cmk_labels.items():
+                if label != 'cmdb_syncer' \
+                    and not label.startswith(self.only_update_prefixed_labels):
+                    if label not in labels:
+                        # Of course only update if not already there,
+                        # otherwise we have maybe old data
+                        labels[label] = value
+
         if labels != cmk_labels:
             do_update = True
             do_update_labels = True
