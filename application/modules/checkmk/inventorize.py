@@ -76,6 +76,7 @@ class InventorizeHosts():
             columns.append('host_mk_inventory')
         if self.fields.get('cmk_services'):
             expr = []
+            expr.append({"op": "=", "left": "description", "right": "Check_MK"})
             for field in self.fields['cmk_services']:
                 expr.append({"op": "=", "left": "description", "right": field})
 
@@ -99,6 +100,7 @@ class InventorizeHosts():
         label_inventory = {}
         service_label_inventory = {}
         hw_sw_inventory = {}
+        got_inventory = False
         for service in api_response[0]['value']:
             hostname = service['extensions']['host_name']
             self.add_host(hostname)
@@ -110,13 +112,16 @@ class InventorizeHosts():
             label_inventory.setdefault(hostname, {})
             for label, label_value in labels.items():
                 label_inventory[hostname][label] = label_value
-            if self.fields.get('cmk_inventory'):
+            if not got_inventory and self.fields.get('cmk_inventory'):
+                # We run that only on first line, thats the Checkmk_Service
+                got_inventory = True
                 hw_sw_inventory.setdefault(hostname, {})
                 raw_inventory = service['extensions']['host_mk_inventory']['value'].encode('ascii')
                 raw_decoded_inventory = base64.b64decode(raw_inventory).decode('utf-8')
 
                 print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
                 inv_data = ast.literal_eval(raw_decoded_inventory)
+                #print(inv_data)
                 for field in self.fields['cmk_inventory']:
                     paths = field.split('.')
                     if len(paths) == 1:
