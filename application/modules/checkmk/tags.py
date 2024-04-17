@@ -136,7 +136,7 @@ class CheckmkTagSync(SyncConfiguration):
 
             if multi_list := self.groups[group_id_org].get('multiply_list'):
                 logger.debug(f"-- Work on Multi Group {group_id_org}")
-                rendering = render_jinja(multi_list, **object_attributes['all'])
+                rendering = render_jinja(multi_list, mode="nullify", **object_attributes['all'])
                 logger.debug(f" --- New Render: {rendering}")
                 if not rendering:
                     continue

@@ -110,6 +110,9 @@ def _render_full_conditions(_view, _context, model, _name):
             html += f"{condition_types[entry.hostname_match]}</td>"\
                     f"<td><b>{entry.hostname}</b></td></tr>"
         else:
+            value = entry.value_match
+            if len(value) > 160:
+                value = value[:160] + "..."
             html += f"<tr><td>{idx}</td><td><b>Attribute</b></td><td>"\
                 "<table width=100%>"\
                 "<tr>"\
@@ -122,7 +125,7 @@ def _render_full_conditions(_view, _context, model, _name):
                 "<td><b>Value</b></td>"\
                 f"<td>{condition_types[entry.value_match]}</td>"\
                 f"<td><b>{entry.value}</b></td>"\
-                f"<td>Negate: <b>{entry.value_match_negate}</b></td>"\
+                f"<td>Negate: <b>{value}</b></td>"\
                 "</tr>"\
                 "</table>"\
                 "</td></tr>"
