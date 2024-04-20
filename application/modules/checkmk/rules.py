@@ -4,6 +4,7 @@ Checkmk Rules
 """
 #pylint: disable=import-error
 #pylint: disable=logging-fstring-interpolation
+import ast
 from application.helpers.syncer_jinja import render_jinja
 from application import logger
 from application.modules.rule.rule import Rule
@@ -137,20 +138,28 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
                 action_render = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
+
                 action_render = self.replace(action_render, exceptions=[
-                                                        " ", '/'
+                                                        " ", '/', ',','|'
                                                     ]) # Replace Chars not working in Checkmk
 
                 if action_render:
-                    attrs = action_render.split(',')
+                    if '[' in action_render:
+                        # In this case, the param is a list,
+                        # So we cant't split at comma and use a fallback
+                        attrs = action_render.split('|')
+                    else:
+                        attrs = action_render.split(',')
                     for attr_pair in attrs:
                         if not attr_pair:
                             continue
                         try:
                             new_key, new_value = attr_pair.split(':')
                             new_key = new_key.strip()
-                            new_value = new_value.strip()
-                            if new_value.lower() in ['none', 'false']:
+                            new_value = new_value.strip().lower()
+                            if '[' in new_value:
+                                new_value = ast.literal_eval(new_value)
+                            if new_value in ['none', 'false']:
                                 outcomes['remove_attributes'].append(new_key)
                             elif new_key and new_value:
                                 outcomes['custom_attributes'].append({new_key: new_value})

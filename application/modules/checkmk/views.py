@@ -142,7 +142,7 @@ class CheckmkRuleView(RuleModelView):
                 'form_subdocuments' : {
                     '': {
                         'form_overrides' : {
-                            'action_param': StringField,
+                            #'action_param': StringField,
                         }
                     },
                 }
