@@ -67,16 +67,16 @@ class BaseConfig():
 
     FILEADMIN_PATH = '/srv/cmdbsyncer-files'
 
-    CMK_22_23_HANDLE_TAG_LABEL_BUG = False
+    CMK_22_23_HANDLE_TAG_LABEL_BUG = True
 
     CMK_BULK_CREATE_HOSTS = True
     CMK_BULK_CREATE_OPERATIONS = 300
 
-    CMK_BULK_DELETE_HOSTS = False
-    CMK_BULK_DELETE_OPERATIONS = 100
+    CMK_BULK_DELETE_HOSTS = True
+    CMK_BULK_DELETE_OPERATIONS = 50
 
-    CMK_BULK_UPDATE_HOSTS = False # So no ETag Checking
-    CMK_BULK_UPDATE_OPERATIONS = 10
+    CMK_BULK_UPDATE_HOSTS = True
+    CMK_BULK_UPDATE_OPERATIONS = 50
 
 class ProductionConfig(BaseConfig):
     """

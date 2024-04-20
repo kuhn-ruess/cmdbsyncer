@@ -529,12 +529,16 @@ class SyncCMK2(CMK2):
             update_url = f"objects/host_config/{db_host.hostname}"
             update_body = {
                 'update_attributes': {},
+                'tags': {},
             }
 
             if do_update_labels:
                 update_body['labels'] = labels
             if do_update_attributes and additional_attributes:
-                update_body['update_attributes'].update(additional_attributes)
+                update_body['update_attributes'].update({x:y for x,y in \
+                                additional_attributes.items() if not x.startswith('tag_')})
+                update_body['tags'] = {x:y for x,y in additional_attributes.items() \
+                                                if x.startswith('tag_')}
 
             if do_remove_attributes and remove_attributes:
                 update_body['remove_attributes'] = remove_attributes
@@ -545,11 +549,17 @@ class SyncCMK2(CMK2):
 
             # CHeckmk currently fails if you send labels and tags the same time
             # and you cant send update and remove attributes at the same time
-            for what in ['attributes', 'update_attributes', 'remove_attributes', 'labels']:
+            for what in ['attributes', 'update_attributes',
+                         'remove_attributes', 'labels', 'tags']:
                 if what in update_body:
                     payload = {
                         what: update_body[what],
                     }
+
+                    if what == 'tags' and update_body['tags']:
+                        payload = {
+                            "update_attributes": update_body['tags']
+                        }
                     if what == 'labels':
                         payload = {
                             "update_attributes": {'labels': update_body[what]},
