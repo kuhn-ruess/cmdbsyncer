@@ -135,8 +135,11 @@ class InventorizeHosts():
 
 
                         except KeyError:
-                            inv_pairs = \
-                                inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Table']['Rows']
+                            try:
+                                inv_pairs = \
+                                    inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Table']['Rows']
+                            except KeyError:
+                                inv_pairs = False
 
 
                     if isinstance(inv_pairs, dict):

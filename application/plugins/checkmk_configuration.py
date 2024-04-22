@@ -16,9 +16,29 @@ from application.modules.checkmk.inits import (
     show_missing,
     export_users,
     export_tags,
+    export_downtimes,
 )
 
 
+#   .-- Command: Export Downtimes
+@cli_cmk.command('export_downtimes')
+@click.argument('account')
+#pylint: disable=too-many-locals
+def cli_export_downtimes(account):
+    """
+    ## Export Dowtimes to Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_downtimes SITEACCOUNT_
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_downtimes(account)
+
+
+
+#.
 #   .-- Command: Export Tags
 @cli_cmk.command('export_tags')
 @click.argument('account')
@@ -206,3 +226,4 @@ register_cronjob('Checkmk: Activate Changes', activate_changes)
 register_cronjob('Checkmk: Bake and Sign Agents', bake_and_sign_agents)
 register_cronjob('Checkmk: Export Users', export_users)
 register_cronjob('Checkmk: Export Tags', export_tags)
+register_cronjob('Checkmk: Export Downtimes', export_downtimes)

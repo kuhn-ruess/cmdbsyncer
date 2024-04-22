@@ -178,6 +178,10 @@ from application.modules.checkmk.models import CheckmkUserMngmt
 from application.modules.checkmk.views import CheckmkUserMngmtView
 admin.add_view(CheckmkUserMngmtView(CheckmkUserMngmt, name="Checkmk User", category="Checkmk"))
 
+from application.modules.checkmk.models import CheckmkDowntimeRule
+from application.modules.checkmk.views import CheckmkDowntimeView
+admin.add_view(CheckmkDowntimeView(CheckmkDowntimeRule, name="Checkmk Downtimes", category="Checkmk"))
+
 
 admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
@@ -192,6 +196,7 @@ from application.modules.checkmk.views import CheckmkBiRuleView
 admin.add_view(CheckmkBiRuleView(CheckmkBiAggregation, name="BI Aggregation",\
                                                             category="Business Intelligence"))
 admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Business Intelligence"))
+
 
 from application.modules.checkmk.models import CheckmkFolderPool
 from application.modules.checkmk.views import CheckmkFolderPoolView

@@ -19,6 +19,18 @@ from application.modules.checkmk.syncer import SyncCMK2
 
 from application.models.host import Host
 
+def _render_dw_rule(_view, _context, model, _name):
+    """
+    Render Downtime Rule
+    """
+    html = "<table width=100%>"
+    for idx, entry in enumerate(model.outcomes):
+        html += f"<tr><td>{idx}</td>"\
+                f"<td>{entry['every']} {entry['start_day']} "\
+                f"{entry['start_time_h']}:{entry['start_time_m']}</td></tr>"
+    html += "</table>"
+    return Markup(html)
+
 def _render_bi_rule(_view, _context, model, _name):
     """
     Render BI Rule
@@ -431,6 +443,38 @@ class CheckmkFolderPoolView(DefaultModelView):
             model.folder_name = "/" + model.folder_name
 
         return super().on_model_change(form, model, is_created)
+
+class CheckmkDowntimeView(RuleModelView):
+    """
+    Checkmk Downtimes
+    """
+
+    column_labels = {
+        'render_cmk_downtime_rule': "Downtimes",
+        'render_full_conditions': "Conditions",
+    }
+
+    def __init__(self, model, **kwargs):
+        """
+        Update elements
+        """
+        # Default Form rules not match for the Fields of this Form
+        self.form_rules = []
+
+        self.column_formatters.update({
+            'render_cmk_downtime_rule': _render_dw_rule,
+        })
+
+        self.form_overrides.update({
+            'render_cmk_downtime_rule': HiddenField,
+            'name': StringField,
+        })
+
+        super().__init__(model, **kwargs)
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated
 
 class CheckmkCacheView(DefaultModelView):
     """
