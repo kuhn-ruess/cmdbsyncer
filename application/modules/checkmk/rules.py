@@ -143,8 +143,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                                         " ", '/', ',','|'
                                                     ]) # Replace Chars not working in Checkmk
 
+                python_detectors = ['[', '{']
                 if action_render:
-                    if '[' in action_render:
+                    if any(x in action_render for x in python_detectors):
                         # In this case, the param is a list,
                         # So we cant't split at comma and use a fallback
                         attrs = action_render.split('|')
@@ -156,10 +157,13 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                         try:
                             new_key, new_value = attr_pair.split(':')
                             new_key = new_key.strip()
-                            new_value = new_value.strip().lower()
-                            if '[' in new_value:
-                                new_value = ast.literal_eval(new_value)
-                            if new_value in ['none', 'false']:
+                            new_value = new_value.strip()
+                            if any(x in new_value for x in python_detectors):
+                                try:
+                                    new_value = ast.literal_eval(new_value)
+                                except SyntaxError:
+                                    pass
+                            if new_value.lower() in ['none', 'false']:
                                 outcomes['remove_attributes'].append(new_key)
                             elif new_key and new_value:
                                 outcomes['custom_attributes'].append({new_key: new_value})
