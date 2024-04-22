@@ -7,6 +7,7 @@ from application.modules.debug import ColorCodes
 from application.models.host import Host
 from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.checkmk.tags import CheckmkTagSync
+from application.modules.checkmk.downtimes import CheckmkDowntimeSync
 from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
 from application.modules.rule.filter import Filter
 from application.modules.checkmk.inventorize import InventorizeHosts
@@ -18,6 +19,7 @@ from application.modules.checkmk.models import (
    CheckmkRuleMngmt,
    CheckmkBiRule,
    CheckmkBiAggregation,
+   CheckmkDowntimeRule,
 )
 
 def _load_rules():
@@ -245,6 +247,30 @@ def export_rules(account):
             actions.rules = CheckmkRuleMngmt.objects(enabled=True)
             syncer.actions = actions
             syncer.export_cmk_rules()
+        else:
+            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+#.
+#    .-- Export Downtimes
+def export_downtimes(account):
+    """
+    Create Rules in Checkmk
+    """
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            rules = _load_rules()
+            syncer = CheckmkDowntimeSync()
+            syncer.account_id = str(target_config['_id'])
+            syncer.account_name = target_config['name']
+            syncer.config = target_config
+            syncer.rewrite = rules['rewrite']
+
+            actions = DefaultRule()
+            actions.rules = CheckmkDowntimeRule.objects(enabled=True)
+            syncer.actions = actions
+            syncer.export_downtimes()
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:

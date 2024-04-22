@@ -451,6 +451,59 @@ class CheckmkBiRule(db.Document):
     }
 
 #.
+#   .-- Checkmk Downtimes
+
+downtime_repeats = [
+   ('onces', 'Only Onces'),
+   ('day', 'Day'),
+   ('workday', 'Workday'),
+   ('week', 'Week'),
+   ('2nd_week', "2nd Week"),
+]
+
+days = [
+    ('mon', 'Monday'),
+    ('tue', 'Tuesday'),
+    ('wed', 'Wednesday'),
+    ('thu', 'Thursday'),
+    ('fri', 'Friday'),
+    ('sat', 'Saturday'),
+    ('sun', 'Sunday'),
+]
+class DowtimeRuleOutcome(db.EmbeddedDocument):
+    """
+    Checkmk Downtime
+    """
+    start_day = db.StringField(choices=days)
+    every = db.StringField(choices=downtime_repeats)
+    start_time_h = db.IntField()
+    start_time_m = db.IntField()
+    duration_h =db.IntField()
+
+    meta = {
+        'strict': False
+    }
+
+
+class CheckmkDowntimeRule(db.Document):
+    """
+    Downtime Rule
+    """
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
+    render_full_conditions = db.StringField() # Helper for Preview
+
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="DowtimeRuleOutcome"))
+    render_cmk_downtime_rule = db.StringField()
+    last_match = db.BooleanField(default=False)
+    enabled = db.BooleanField()
+    meta = {
+        'strict': False
+    }
+#.
 #   .-- Object Cache
 
 class CheckmkObjectCache(db.Document):
