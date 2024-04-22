@@ -163,7 +163,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                     new_value = ast.literal_eval(new_value)
                                 except SyntaxError:
                                     pass
-                            if new_value.lower() in ['none', 'false']:
+
+                            if str(new_value).lower() in ['none', 'false']:
                                 outcomes['remove_attributes'].append(new_key)
                             elif new_key and new_value:
                                 outcomes['custom_attributes'].append({new_key: new_value})
