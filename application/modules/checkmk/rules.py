@@ -155,7 +155,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                         if not attr_pair:
                             continue
                         try:
-                            new_key, new_value = attr_pair.split(':')
+                            new_key, new_value = attr_pair.split(':', 1)
                             new_key = new_key.strip()
                             new_value = new_value.strip()
                             if any(x in new_value for x in python_detectors):
