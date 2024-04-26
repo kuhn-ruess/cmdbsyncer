@@ -27,6 +27,7 @@ class SyncCMK2(CMK2):
 
     checkmk_hosts = {}
     existing_folders = []
+    existing_folders_attributes = {}
     custom_folder_attributes = {}
 
     label_prefix = False
@@ -73,7 +74,76 @@ class SyncCMK2(CMK2):
         if not api_folders[0]:
             raise CmkException("Cant connect or auth with CMK")
         for folder in api_folders[0]['value']:
-            self.existing_folders.append(folder['extensions']['path'])
+            path = folder['extensions']['path']
+            attributes = folder['extensions']['attributes']
+            self.existing_folders_attributes[path] = attributes
+            self.existing_folders_attributes[path].update({'title': folder['title']})
+            self.existing_folders.append(path)
+
+    def handle_folders(self):
+        """
+        Check if Folders need Update
+        """
+
+        print(f"{CC.OKGREEN} -- {CC.ENDC}Check if we need to update Folders")
+        for folder_name, target_attributes in self.custom_folder_attributes.items():
+            add_attributes = {}
+            update_attributes = {}
+            for attr_name, attr_value in target_attributes.items():
+                cmk_attributes = self.existing_folders_attributes.get(folder_name, {})
+                if attr_name not in cmk_attributes:
+                    add_attributes[attr_name] = attr_value
+                else:
+                    cmk_attr_value = cmk_attributes[attr_name]
+                    if cmk_attr_value !=  attr_value:
+                        update_attributes[attr_name] = attr_value
+            folder_name_url = folder_name.replace('/', '~')
+            url = f'/objects/folder_config/{folder_name_url}'
+            if add_attributes or update_attributes:
+                # get current E-Tag
+                curren_folder, headers = self.request(url)
+                etag = headers['etag']
+            if 'title' in update_attributes and \
+                curren_folder['title'] != update_attributes['title']:
+                new_title = update_attributes['title']
+                print(f"{CC.OKGREEN} *{CC.ENDC} Update Title: {folder_name} to '{new_title}'")
+                payload = {
+                    'title' : new_title,
+                }
+                update_headers = {
+                    'if-match': etag,
+                }
+                _, headers = self.request(url, method="PUT",
+                             data=payload,
+                             additional_header=update_headers)
+                del update_attributes['title']
+                etag = headers['etag']
+            if add_attributes:
+                print(f"{CC.OKGREEN} *{CC.ENDC} Add Attributes to Folder: "\
+                      f"{folder_name} ({add_attributes})")
+                payload = {
+                    'attributes' : add_attributes
+                }
+                update_headers = {
+                    'if-match': etag,
+                }
+                _, headers = self.request(url, method="PUT",
+                             data=payload,
+                             additional_header=update_headers)
+                etag = headers['etag']
+            if update_attributes:
+                payload = {
+                    'update_attributes' : update_attributes
+                }
+                update_headers = {
+                    'if-match': etag,
+                }
+                self.request(url, method="PUT",
+                             data=payload,
+                             additional_header=update_headers)
+                print(f"{CC.OKGREEN} *{CC.ENDC} Update Attributes on Folder: {folder_name} "\
+                      f"({update_attributes})")
+
 
     def fetch_checkmk_hosts(self):
         """
@@ -195,7 +265,7 @@ class SyncCMK2(CMK2):
                 # We need that even dont_move is set, because could be for the
                 # inital creation
                 folder = next_actions['move_folder']
-                if '{' in next_actions['extra_folder_options']:
+                if '{' in next_actions.get('extra_folder_options', ''):
                     self.handle_extra_folder_options(next_actions['extra_folder_options'])
 
             cluster_nodes = [] # if true, we have a cluster
@@ -279,6 +349,7 @@ class SyncCMK2(CMK2):
 
         self.handle_clusters()
         self.cleanup_hosts()
+        self.handle_folders()
         log.log(f"Finished Sync to Checkmk Account: {self.account_name}", source="Checkmk",
                 details=self.log_details)
 
