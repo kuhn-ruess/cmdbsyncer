@@ -54,13 +54,29 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
     found_poolfolder_rule = False # Spcific Helper for this kind of action
     db_host = False
 
+    def fix_and_format_foldername(self, folder):
+        """ Format Foldername
+        Remove Extra Folder Attributes
+        """
+        parts = []
+        for folder_part in folder.split('/'):
+            splitted = folder_part.split('|')
+            parts.append(splitted[0])
+        new_folder = "/" + "/".join(parts)
+        return self.replace(new_folder.lower(), regex='[^a-z A-Z 0-9/]')
+
     def format_foldername(self, folder):
-        """ Format Foldername """
-        if not folder.startswith('/'):
-            folder = "/" + folder
-        if folder.endswith('/'):
-            folder = folder[:-1]
-        return self.replace(folder.lower(), exceptions=['/'])
+        """
+        Fix invalid chars in Folder Path
+        """
+        parts = []
+        for folder_part in folder.split('/'):
+            splitted = folder_part.split('|')
+            folder_name = self.replace(splitted[0].lower(), regex='[^a-z A-Z 0-9/]')
+            if len(splitted) == 2:
+                folder_name += "|" + splitted[1]
+            parts.append(folder_name)
+        return "/" + "/".join(parts)
 
     def add_outcomes(self, rule, outcomes):
         """ Handle the Outcomes """
@@ -69,6 +85,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
         possible_outcomes = [
             ('move_folder',""),
+            ('extra_folder_options',""),
             ('attributes', []),
             ('custom_attributes', []),
             ('remove_attributes', []),
@@ -95,7 +112,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 hostname = self.db_host.hostname
                 new_value = render_jinja(new_value, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
-                outcomes['move_folder'] += self.format_foldername(new_value)
+
+                outcomes['extra_folder_options'] += self.format_foldername(new_value)
+                outcomes['move_folder'] += self.fix_and_format_foldername(new_value)
 
 
             if outcome['action'] == 'dont_move':
@@ -113,7 +132,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             if outcome['action'] == 'folder_pool':
                 self.found_poolfolder_rule = True
                 if self.db_host.get_folder():
-                    outcomes['move_folder'] += self.db_host.get_folder()
+                    pool_folder = self.db_host.get_folder()
+                    outcomes['extra_folder_options'] += pool_folder
+                    outcomes['move_folder'] += pool_folder
                 else:
                     # Find new Pool Folder
                     only_pools = None
@@ -124,6 +145,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                         raise ValueError(f"No Pool Folder left for {self.db_host.hostname}")
                     folder = self.format_foldername(folder)
                     self.db_host.lock_to_folder(folder)
+                    outcomes['extra_folder_options'] += folder
                     outcomes['move_folder'] += folder
 
             if outcome['action'] == 'attribute':
@@ -192,7 +214,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                         if value and value != 'null':
                             print_debug(self.debug, f"----- {ColorCodes.OKGREEN}Found tag"\
                                                     f"{ColorCodes.ENDC}, add folder: '{value}'")
-                            outcomes['move_folder'] += self.format_foldername(value)
+                            outcomes['extra_folder_options'] += self.format_foldername(value)
+                            outcomes['move_folder'] += self.fix_and_format_foldername(value)
                         else:
                             print_debug(self.debug, \
                                 f"----- {ColorCodes.OKGREEN}Found tag but content null")
@@ -206,7 +229,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                         if value and value != 'null':
                             print_debug(self.debug, f"------ {ColorCodes.OKGREEN}Found value"\
                                                     f"{ColorCodes.ENDC}, add folder: '{tag}'")
-                            outcomes['move_folder'] += self.format_foldername(tag)
+                            outcomes['extra_folder_options'] += self.format_foldername(tag)
+                            outcomes['move_folder'] += self.fix_and_format_foldername(tag)
                         else:
                             print_debug(self.debug, \
                                 f"----- {ColorCodes.OKGREEN}Found value but content null")
