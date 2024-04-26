@@ -4,6 +4,7 @@ Central Request Modul to CMK 2.x
 #pylint: disable=logging-fstring-interpolation
 from pprint import pformat
 import requests
+from requests.exceptions import ConnectionError
 from application import app, log, logger
 from application.modules.plugin import Plugin
 
@@ -110,3 +111,5 @@ class CMK2(Plugin):
             if response:
                 return {}, {'status_code': response.status_code}
             return {}, {"error": "Checkmk Connections broken"}
+        except ConnectionError:
+            raise CmkException("Can't connect to Checkmk")
