@@ -50,7 +50,11 @@ def _render_checkmk_outcome(_view, _context, model, _name):
         name = dict(action_outcome_types)[entry.action].split('_',1)[0]
         html += f"<tr><td>{idx}</td><td>{name}</td>"
         if entry.action_param:
-            html += f"<td><b>{entry.action_param}</b></td></tr>"
+            points = ""
+            if len(entry.action_param) > 150:
+                points ="..."
+
+            html += f"<td><b>{entry.action_param[:150]}</b>{points}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -364,7 +368,10 @@ class CheckmkTagMngmtView(DefaultModelView):
     Checkmk Tag Management
     """
 
-    column_exclude_list = []
+    column_exclude_list = [
+        'documentation', 'group_help',
+
+    ]
     column_editable_list = [
         'enabled',
     ]
