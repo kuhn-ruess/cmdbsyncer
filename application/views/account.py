@@ -89,6 +89,7 @@ class AccountModelView(DefaultModelView):
                 ('table', ""),
                 ('fields', ""),
                 ('database', ""),
+                ('custom_query', ""),
                 ('inventorize_key', ""),
             ]
         elif form.typ.data == 'external_restapi':
@@ -118,7 +119,7 @@ class AccountModelView(DefaultModelView):
                 ('table', ""),
                 ('instance', ""),
                 ('database', ""),
-                ('where', ""),
+                ('custom_query', ""),
                 ('hostname_field', 'host'),
                 ('rewrite_hostname', ""),
                 ('driver', "ODBC Driver 18 for SQL Server"),

@@ -31,7 +31,10 @@ def mysql_import(account):
       database=config["database"]
     )
     mycursor = mydb.cursor()
-    mycursor.execute(f"SELECT {config['fields']} FROM {config['table']};")
+    query = f"SELECT {config['fields']} FROM {config['table']};"
+    if "custom_query" in config:
+        query = config['custom_query']
+    mycursor.execute(query)
     all_hosts = mycursor.fetchall()
     field_names = config['fields'].split(',')
     for line in all_hosts:
@@ -72,7 +75,10 @@ def mysql_inventorize(account):
       database=config["database"]
     )
     mycursor = mydb.cursor()
-    mycursor.execute(f"SELECT {config['fields']} FROM {config['table']};")
+    query = f"SELECT {config['fields']} FROM {config['table']};"
+    if "custom_query" in config:
+        query = config['custom_query']
+    mycursor.execute(query)
     field_names = config['fields'].split(',')
     for line in mycursor.fetchall():
         labels = dict(zip(field_names, line))
