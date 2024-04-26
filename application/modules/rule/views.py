@@ -104,28 +104,34 @@ def _render_full_conditions(_view, _context, model, _name):
     html = "<table width=100%>"
     for idx, entry in enumerate(model.conditions):
         if entry.match_type == 'host':
+            points = ""
+            if len(entry.hostname) > 50:
+                points = "..."
             html += f"<tr><td>{idx}</td> <td><b>Hostname</b></td><td>"
             if entry.hostname_match_negate:
                 html += "<b>NOT</b> "
             html += f"{condition_types[entry.hostname_match]}</td>"\
-                    f"<td><b>{entry.hostname}</b></td></tr>"
+                    f"<td><b>{entry.hostname[:50]}{points}</b></td></tr>"
         else:
-            value = entry.value_match
-            if len(value) > 160:
-                value = value[:160] + "..."
+            value_points = ""
+            tag_points = ""
+            if len(entry.tag) > 50:
+                tag_points = "..."
+            if len(entry.value) > 50:
+                value_points = "..."
             html += f"<tr><td>{idx}</td><td><b>Attribute</b></td><td>"\
                 "<table width=100%>"\
                 "<tr>"\
                 "<td><b>Key</b></td>"\
                 f"<td>{condition_types[entry.tag_match]}</td>"\
-                f"<td><b>{entry.tag}</b></td>"\
+                f"<td><b>{entry.tag[:50]}{tag_points}</b></td>"\
                 f"<td>Negate: <b>{entry.tag_match_negate}</b></td>"\
                 "</tr>"\
                 "<tr>"\
                 "<td><b>Value</b></td>"\
                 f"<td>{condition_types[entry.value_match]}</td>"\
-                f"<td><b>{entry.value}</b></td>"\
-                f"<td>Negate: <b>{value}</b></td>"\
+                f"<td><b>{entry.value[:50]}{value_points}</b></td>"\
+                f"<td>Negate: <b>{entry.value_match_negate}</b></td>"\
                 "</tr>"\
                 "</table>"\
                 "</td></tr>"
