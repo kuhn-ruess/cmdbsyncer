@@ -3,6 +3,7 @@ Add Hosts into CMK Version 2 Installations
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 #pylint: disable=logging-fstring-interpolation
+import ast
 from application import app
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
@@ -25,6 +26,7 @@ class SyncCMK2(CMK2):
 
     checkmk_hosts = {}
     existing_folders = []
+    custom_folder_attributes = {}
 
     label_prefix = False
     only_update_prefixed_labels = False
@@ -43,6 +45,21 @@ class SyncCMK2(CMK2):
         return self.actions.get_outcomes(db_host, attributes)
 
 #.
+
+    def handle_extra_folder_options(self, full_path):
+        """
+        We need to set extra Options to a Folder.
+        So we try to find the paths of them and add them to the list
+        """
+        config_path = ""
+        for current_path in full_path.split('/'):
+            splitted = current_path.split('|')
+            folder = splitted[0]
+            if folder:
+                config_path += "/" + folder
+                if len(splitted) == 2:
+                    if config_path not in self.custom_folder_attributes:
+                        self.custom_folder_attributes[config_path] = ast.literal_eval(splitted[1])
 
     def fetch_checkmk_folders(self):
         """
@@ -176,6 +193,8 @@ class SyncCMK2(CMK2):
                 # We need that even dont_move is set, because could be for the
                 # inital creation
                 folder = next_actions['move_folder']
+                if '{' in next_actions['extra_folder_options']:
+                    self.handle_extra_folder_options(next_actions['extra_folder_options'])
 
             cluster_nodes = [] # if true, we have a cluster
             if 'create_cluster' in next_actions:
@@ -268,11 +287,19 @@ class SyncCMK2(CMK2):
             "title": subfolder,
             "parent": parent,
         }
+        mid_char = ""
+        if parent != '/':
+            mid_char = '/'
+        full_foldername = f'{parent}{mid_char}{subfolder}'
+        print(full_foldername)
+        if extra_opts := self.custom_folder_attributes.get(full_foldername):
+            body.update(extra_opts)
+            print(full_foldername, body)
         try:
             self.request(url, method="POST", data=body)
-        except CmkException:
-            # We ignore an existing folder
-            pass
+        except CmkException as error:
+            # We have may an existing folder in 2.0 cmk
+            logger.debug(f"Error creating Folder {error}")
 
 
     def create_folder(self, folder):

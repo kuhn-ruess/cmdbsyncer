@@ -4,6 +4,7 @@ Handle Rule Matching
 """
 # pylint: disable=import-error
 # pylint: disable=logging-fstring-interpolation
+import re
 from rich.console import Console
 from rich.table import Table
 from rich import box
@@ -25,10 +26,13 @@ class Rule(): # pylint: disable=too-few-public-methods
     cache_name = False
 
     @staticmethod
-    def replace(input_raw, exceptions=None):
+    def replace(input_raw, exceptions=None, regex=None):
         """
         Replace all given inputs
         """
+        if regex:
+            result = re.sub(regex, '', input_raw.strip()).lower()
+            return result
         if not exceptions:
             exceptions = []
         input_str = str(input_raw)
