@@ -5,6 +5,7 @@ Commands to handle Checkmk Sync
 
 import click
 from mongoengine.errors import DoesNotExist
+from application import log
 from application.modules.checkmk.syncer import SyncCMK2
 from application.modules.checkmk.cmk2 import cli_cmk, CmkException
 from application.helpers.get_account import get_account_by_name
@@ -123,6 +124,8 @@ def _inner_export_hosts(account, limit=False):
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
+        log.log(f"Export to Checkmk Account: {target_config['name']} FAILED",
+        source="Checkmk", details=[('error', error_obj)])
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
 
 
