@@ -8,13 +8,14 @@ from application import app
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes as CC
-from application import logger
+from application import logger, log
 
 
 class SyncCMK2(CMK2):
     """
     Sync Functions
     """
+    log_details = []
 
     bulk_creates = []
     bulk_updates = []
@@ -151,6 +152,7 @@ class SyncCMK2(CMK2):
 
         ## Start SYNC of Hosts into CMK
         print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
+        log.log(f"Started Sync to Checkmk Account: {self.account_name}", source="Checkmk")
         db_objects = Host.get_export_hosts()
         total = db_objects.count()
         counter = 0
@@ -268,12 +270,17 @@ class SyncCMK2(CMK2):
         if self.bulk_updates:
             self.send_bulk_update_host(self.bulk_updates)
 
+        self.log_details.append(('info', f"Proccesed: {counter} of {total}"))
         if self.limit:
+            log.log(f"Finished Sync to Checkmk Account: {self.account_name} because LIMIT",
+                    source="Checkmk", details=self.log_details)
             print(f"\n{CC.OKCYAN} -- {CC.ENDC}Stop processing in limit mode")
             return
 
         self.handle_clusters()
         self.cleanup_hosts()
+        log.log(f"Finished Sync to Checkmk Account: {self.account_name}", source="Checkmk",
+                details=self.log_details)
 
 #.
 #   .-- Create Folder
@@ -291,10 +298,8 @@ class SyncCMK2(CMK2):
         if parent != '/':
             mid_char = '/'
         full_foldername = f'{parent}{mid_char}{subfolder}'
-        print(full_foldername)
         if extra_opts := self.custom_folder_attributes.get(full_foldername):
             body.update(extra_opts)
-            print(full_foldername, body)
         try:
             self.request(url, method="POST", data=body)
         except CmkException as error:
@@ -336,6 +341,7 @@ class SyncCMK2(CMK2):
         try:
             self.request(url, method="POST", data={'entries': entries})
         except CmkException as error:
+            self.log_details.append(('error', f"Bulk Create Error: {error}"))
             print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
 
     def add_bulk_create_host(self, body):
@@ -347,6 +353,7 @@ class SyncCMK2(CMK2):
             try:
                 self.send_bulk_create_host(self.bulk_creates)
             except CmkException as error:
+                self.log_details.append(('error', f"Bulk Update Error: {error}"))
                 print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
 
             self.bulk_creates = []
@@ -365,6 +372,7 @@ class SyncCMK2(CMK2):
         if additional_attributes:
             # CMK BUG
             if app.config['CMK_22_23_HANDLE_TAG_LABEL_BUG']:
+                self.log_details.append(('info', "CMK Tag bug workarround active"))
                 print(f"{CC.WARNING} *{CC.ENDC} Removed TAGS because of CMK BUG")
                 additional_attributes = {x:y for x,y in additional_attributes.items() \
                                             if not x.startswith('tag_')}
@@ -379,6 +387,7 @@ class SyncCMK2(CMK2):
             try:
                 self.request(url, method="POST", data=body)
             except CmkException as error:
+                self.log_details.append(('error', f"Host Create Error: {error}"))
                 print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
             print(f"{CC.OKGREEN} *{CC.ENDC} Created Host {db_host.hostname}")
 
@@ -452,6 +461,7 @@ class SyncCMK2(CMK2):
                          data={'entries': entries},
                         )
         except CmkException as error:
+            self.log_details.append(('error', f"CMK API Error: {error}"))
             print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
 
     def add_bulk_update_host(self, body):
@@ -604,6 +614,7 @@ class SyncCMK2(CMK2):
                                          additional_header=update_headers)
                             etag = False
                         except CmkException as error:
+                            self.log_details.append(('error', f"CMK API Error: {error}"))
                             print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
                         else:
                             print(f"{CC.OKGREEN} *{CC.ENDC} Updated Host in Checkmk")

@@ -1,6 +1,7 @@
 """
 Inits for the Plugins
 """
+from application import log
 from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
@@ -46,6 +47,7 @@ def export_tags(account):
     Export Tags to Checkmk
     """
     try:
+        details = []
         target_config = get_account_by_name(account)
         if target_config:
             rules = _load_rules()
@@ -55,10 +57,14 @@ def export_tags(account):
             syncer.config = target_config
             syncer.rewrite = rules['rewrite']
             syncer.export_tags()
+            details.append(("info", "Succsessfull"))
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'CMK Error: {error_obj}'))
+    log.log(f"Export Tags to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
 
 #.
 #   .-- Export BI Rules
@@ -66,6 +72,7 @@ def export_bi_rules(account):
     """
     Export BI Rules to Checkmk
     """
+    details = []
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -83,13 +90,17 @@ def export_bi_rules(account):
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
+        details.append(('error', f'CMK Error: {error_obj}'))
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+    log.log(f"Export BI Rules to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
 #.
 #   .-- Export BI Aggregations
 def export_bi_aggregations(account):
     """
     Export BI Aggregations to Checkmk
     """
+    details = []
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -106,7 +117,10 @@ def export_bi_aggregations(account):
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
+        details.append(('error', f'CMK Error: {error_obj}'))
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+    log.log(f"Export BI Aggregations to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
 
 #.
 #   .-- Inventorize Hosts
@@ -211,6 +225,7 @@ def export_groups(account, test_run=False):
     """
     Manage Groups in Checkmk
     """
+    details = []
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -226,12 +241,16 @@ def export_groups(account, test_run=False):
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'CMK Error: {error_obj}'))
+    log.log(f"Export Groups to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
 #.
 #   .-- Export Rules
 def export_rules(account):
     """
     Create Rules in Checkmk
     """
+    details = []
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -251,12 +270,16 @@ def export_rules(account):
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'CMK Error: {error_obj}'))
+    log.log(f"Export Rules to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
 #.
 #    .-- Export Downtimes
 def export_downtimes(account):
     """
     Create Rules in Checkmk
     """
+    details = []
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -275,12 +298,16 @@ def export_downtimes(account):
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'CMK Error: {error_obj}'))
+    log.log(f"Export Downtimes to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
 #.
 #   . Export Users
 def export_users(account):
     """
     Export configured Users to Checkmk
     """
+    details = []
     try:
         target_config = get_account_by_name(account)
         if target_config:
@@ -293,4 +320,7 @@ def export_users(account):
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'CMK Error: {error_obj}'))
+    log.log(f"Export Users to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
 #.
