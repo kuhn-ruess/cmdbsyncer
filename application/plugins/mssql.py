@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Import mssl Data"""
 import click
-from application import app
+from application import app, logger
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
@@ -9,8 +9,8 @@ from application.helpers.cron import register_cronjob
 try:
     import pypyodbc as pyodbc
     import sqlserverport
-except:
-    pass
+except ImportError:
+    logger.debug("Info: Mssql Plugin was not able to load required modules")
 
 @app.cli.group(name='mssql')
 def cli_mssql():
@@ -28,13 +28,16 @@ def mssql_import(account):
 
         serverport = sqlserverport.lookup(config['address'], config['instance'])
         server = f'{config["address"]},{serverport}'
-        connect_str = f'DRIVER={{{config["driver"]}}};SERVER={server};DATABASE={config["database"]};UID={config["username"]};PWD={config["password"]};TrustServerCertificate=YES'
+        connect_str = f'DRIVER={{{config["driver"]}}};SERVER={server};'\
+                      f'DATABASE={config["database"]};UID={config["username"]};'\
+                      f'PWD={config["password"]};TrustServerCertificate=YES'
+        logger.debug(connect_str)
         cnxn = pyodbc.connect(connect_str)
         cursor = cnxn.cursor()
-        query = f"select {config['fields']} from {config['table']}"
-        if 'where' in config and config['where']:
-            query += f"WHERE {config['where']}"
-        query += ";"
+        query = f"select {config['fields']} from {config['table']};"
+        if "custom_query" in config:
+            query = config['custom_query']
+        logger.debug(query)
         cursor.execute(query)
         rows = cursor.fetchall()
         for row in rows:
@@ -51,8 +54,8 @@ def mssql_import(account):
                 host_obj.save()
             else:
                 print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
-    except NameError:
-        print("EXCEPTION: Missing requirements, pypyodbc or sqlserverport")
+    except NameError as error:
+        print(f"EXCEPTION: Missing requirements, pypyodbc or sqlserverport ({error})")
 
 @cli_mssql.command('import_hosts')
 @click.argument('account')
