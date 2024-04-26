@@ -22,6 +22,8 @@ def merge_list_of_dicts(input_list):
     """
     if isinstance(input_list, str):
         input_list = ast.literal_eval(input_list.replace('\n',''))
+    if not input_list:
+        return {}
     dict_obj = {k: v for d in input_list for k, v in d.items() if v}
     return dict_obj
 
