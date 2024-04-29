@@ -76,10 +76,6 @@ if app.config['SENTRY_ENABLED']:
         release=VERSION
     )
 
-# Wired new behavior in UWSGI:
-# Master Process seams not to get the db init like before
-# So we init it, try again if we are in a worker and fall back like before
-db = MongoEngine(app)
 try:
     db = MongoEngine()
     from uwsgidecorators import postfork
@@ -89,6 +85,8 @@ try:
         """db init in uwsgi"""
         db.init_app(app)
 except ImportError:
+    print("   \033[91mWARNING: STANDALONE MODE - NOT FOR PROD\033[0m")
+    print(" * HINT: uwsgi modul not loaded")
     db = MongoEngine(app)
 
 # We need the db in the Module
