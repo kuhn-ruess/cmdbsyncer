@@ -101,17 +101,19 @@ def get_export_colums():
     """
     Return list of columns to export
     """
+    # BUG with MongoDB and Forks
     columns = [
         'hostname',
     ]
 
-    try:
-        config = Config.objects.get()
-    except DoesNotExist:
-        pass
-    else:
-        columns += config.export_labels_list
-        columns += config.export_inventory_list
+    # BUG with MongoDB and Forks
+    #try:
+    #    config = Config.objects.get()
+    #except DoesNotExist:
+    #    pass
+    #else:
+    #    columns += config.export_labels_list
+    #    columns += config.export_inventory_list
 
     columns += [
         'sync_id',
@@ -124,6 +126,8 @@ def get_export_values():
     """
     Dynamic fill needed fields
     """
+    # BUG with MongoDB and Forks
+    return {}
     try:
         config = Config.objects.get()
     except DoesNotExist:
