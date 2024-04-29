@@ -79,6 +79,8 @@ if app.config['SENTRY_ENABLED']:
 try:
     db = MongoEngine()
     from uwsgidecorators import postfork
+    db.init_app(app)
+
 
     @postfork
     def setup_db():
@@ -89,6 +91,7 @@ except ImportError:
     print(" * HINT: uwsgi modul not loaded")
     db = MongoEngine(app)
 
+print(5)
 # We need the db in the Module
 from application.modules.log.log import Log
 
