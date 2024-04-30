@@ -63,7 +63,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             splitted = folder_part.split('|')
             parts.append(splitted[0])
         new_folder = "/" + "/".join(parts)
-        return self.replace(new_folder.lower(), regex='[^a-z A-Z 0-9/]')
+        return self.replace(new_folder.lower(), regex='[^a-z A-Z 0-9/_-]')
 
     def format_foldername(self, folder):
         """
