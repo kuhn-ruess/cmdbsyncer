@@ -72,7 +72,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         parts = []
         for folder_part in folder.split('/'):
             splitted = folder_part.split('|')
-            folder_name = self.replace(splitted[0].lower(), regex='[^a-z A-Z 0-9/]')
+            folder_name = self.replace(splitted[0].lower(), regex='[^a-z A-Z 0-9/_-]')
             if len(splitted) == 2:
                 folder_name += "|" + splitted[1]
             parts.append(folder_name)
