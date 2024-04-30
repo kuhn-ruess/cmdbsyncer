@@ -3,8 +3,7 @@ Checkmk Tag Syncronize
 """
 #pylint: disable=logging-fstring-interpolation
 import ast
-import time
-from application import logger
+from application import logger, log
 from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.debug import ColorCodes as CC
 from application.modules.checkmk.models import CheckmkTagMngmt
@@ -25,35 +24,27 @@ class CheckmkTagSync(SyncConfiguration):
         Export Tags to Checkmk
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
-        start_time = time.time()
         db_objects = CheckmkTagMngmt.objects(enabled=True)
         total = db_objects.count()
         counter = 0
-        logger.debug(f"-- {time.time() - start_time} seconds")
         for rule in db_objects:
-            start_time = time.time()
             counter += 1
             self.create_inital_groups(rule)
             process = 100.0 * counter / total
-            logger.debug(f"-- {time.time() - start_time} seconds")
             print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {rule.group_id}", end="")
         print()
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attribute and Build Tag list")
-        start_time = time.time()
         total = Host.objects.count()
         counter = 0
-        logger.debug(f"-- {time.time() - start_time} seconds")
         for entry in Host.objects():
-            start_time = time.time()
             counter += 1
 
             self.update_hosts_multigroups(entry)
             self.update_hosts_tags(entry)
 
             process = 100.0 * counter / total
-            logger.debug(f"{time.time() - start_time} seconds")
             entry.save()
             print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {entry.hostname}", end="")
         print()
@@ -63,6 +54,7 @@ class CheckmkTagSync(SyncConfiguration):
             logger.debug(f"Delete Template {group_id}")
             del self.groups[group_id]
         self.sync_to_checkmk()
+
 
 
     def update_hosts_multigroups(self, db_host):

@@ -1,12 +1,12 @@
 """
 API Endpoints
 """
-from functools import wraps
 from flask import Blueprint
 from flask_restx import Api
 
 from application import app
 from application.api.ansible import API as ansible
+from application.api.syncer import API as syncer
 
 API_BP = Blueprint('api', __name__)
 
@@ -46,3 +46,4 @@ if not SWAGGER_ENABLED:
 API = Api(API_BP, authorizations=AUTHORIZATIONS, security=['x-login-token'], **PARAMS)
 
 API.add_namespace(ansible, path='/ansible')
+API.add_namespace(syncer, path='/syncer')
