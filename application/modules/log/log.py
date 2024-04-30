@@ -33,14 +33,17 @@ class Log():
                 new.level = level
                 new.message = detail[1]
                 details.append(new)
+        if message['duration']:
+            log_entry.metric_duration_sec = int(message['duration'])
         log_entry.details = details
         log_entry.traceback = message['traceback']
         log_entry.save()
 
-    def log(self, message, source="SYSTEM", details=False):
+    def log(self, message, source="SYSTEM", details=False, duration=None):
         """ LOG Messages"""
         self._log_function({'message' : message,
                            'source': source,
+                           'duration': duration,
                            'traceback': traceback.format_exc(),
                            'details': details})
 

@@ -4,6 +4,7 @@ Add Hosts into CMK Version 2 Installations
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 #pylint: disable=logging-fstring-interpolation
 import ast
+import time
 from application import app
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
@@ -102,6 +103,8 @@ class SyncCMK2(CMK2):
             if add_attributes or update_attributes:
                 # get current E-Tag
                 curren_folder, headers = self.request(url)
+                if not curren_folder:
+                    continue
                 etag = headers['etag']
             if 'title' in update_attributes and \
                 curren_folder['title'] != update_attributes['title']:
@@ -217,12 +220,13 @@ class SyncCMK2(CMK2):
         """Run Job"""
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
 
+        start_time = time.time()
+
         self.fetch_checkmk_hosts()
         self.fetch_checkmk_folders()
 
         ## Start SYNC of Hosts into CMK
         print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
-        log.log(f"Started Sync to Checkmk Account: {self.account_name}", source="Checkmk")
         db_objects = Host.get_export_hosts()
         total = db_objects.count()
         counter = 0
@@ -343,15 +347,17 @@ class SyncCMK2(CMK2):
         self.log_details.append(('info', f"Proccesed: {counter} of {total}"))
         if self.limit:
             log.log(f"Finished Sync to Checkmk Account: {self.account_name} because LIMIT",
-                    source="Checkmk", details=self.log_details)
+                    source="checkmk_host_export", details=self.log_details)
             print(f"\n{CC.OKCYAN} -- {CC.ENDC}Stop processing in limit mode")
             return
 
         self.handle_clusters()
         self.cleanup_hosts()
         self.handle_folders()
-        log.log(f"Finished Sync to Checkmk Account: {self.account_name}", source="Checkmk",
-                details=self.log_details)
+
+        duration = time.time() - start_time
+        log.log(f"Synced Hosts to Account: {self.account_name}", source="checkmk_host_export",
+                details=self.log_details, duration=duration)
 
 #.
 #   .-- Create Folder

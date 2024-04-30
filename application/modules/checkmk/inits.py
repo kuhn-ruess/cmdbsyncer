@@ -1,6 +1,7 @@
 """
 Inits for the Plugins
 """
+import time
 from application import log
 from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
@@ -48,6 +49,7 @@ def export_tags(account):
     """
     try:
         details = []
+        start_time = time.time()
         target_config = get_account_by_name(account)
         if target_config:
             rules = _load_rules()
@@ -60,11 +62,12 @@ def export_tags(account):
             details.append(("info", "Succsessfull"))
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
-    except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'CMK Error: {error_obj}'))
-    log.log(f"Export Tags to Checkmk Account: {target_config['name']}",
-            source="Checkmk", details=details)
+    except Exception as error_obj:
+        print(f'C{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'Error: {error_obj}'))
+    duration = time.time() - start_time
+    log.log(f"Synced Tags to Account: {target_config['name']}", source="checkmk_tag_export",
+            details=details, duration=duration)
 
 #.
 #   .-- Export BI Rules
