@@ -666,17 +666,19 @@ class SyncCMK2(CMK2):
             for what in ['attributes', 'update_attributes',
                          'remove_attributes', 'labels', 'tags']:
                 if what in update_body:
-                    payload = {
-                        what: update_body[what],
-                    }
-
-                    if what == 'tags' and update_body['tags']:
+                    if what == 'tags':
+                        if not update_body['tags']:
+                            continue
                         payload = {
                             "update_attributes": update_body['tags']
                         }
-                    if what == 'labels':
+                    elif what == 'labels':
                         payload = {
                             "update_attributes": {'labels': update_body[what]},
+                        }
+                    else:
+                        payload = {
+                            what: update_body[what],
                         }
 
                     if not app.config['CMK_BULK_UPDATE_HOSTS']:
