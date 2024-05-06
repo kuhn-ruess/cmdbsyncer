@@ -426,7 +426,7 @@ class SyncCMK2(CMK2):
         Add a Host to bulk list, and Send
         """
         self.bulk_creates.append(body)
-        if len(self.bulk_creates) >= app.config['CMK_BULK_CREATE_OPERATIONS']:
+        if len(self.bulk_creates) >= int(app.config['CMK_BULK_CREATE_OPERATIONS']):
             try:
                 self.send_bulk_create_host(self.bulk_creates)
             except CmkException as error:
@@ -546,7 +546,7 @@ class SyncCMK2(CMK2):
         Add a Host to bulk list, and Send
         """
         self.bulk_updates.append(body)
-        if len(self.bulk_updates) >= app.config['CMK_BULK_UPDATE_OPERATIONS']:
+        if len(self.bulk_updates) >= int(app.config['CMK_BULK_UPDATE_OPERATIONS']):
             self.send_bulk_update_host(self.bulk_updates)
             self.bulk_updates = []
 
