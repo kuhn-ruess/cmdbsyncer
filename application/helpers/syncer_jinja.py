@@ -53,6 +53,6 @@ def render_jinja(value, mode="ignore", **kwargs):
     if mode == 'nullify':
         try:
             return value_tpl.render(**kwargs)
-        except jinja2.exceptions.UndefinedError:
+        except (jinja2.exceptions.UndefinedError, TypeError):
             return ""
     return value_tpl.render(**kwargs)
