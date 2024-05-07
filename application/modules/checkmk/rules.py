@@ -61,7 +61,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         parts = []
         for folder_part in folder.split('/'):
             splitted = folder_part.split('|')
-            parts.append(splitted[0])
+            if splitted[0]:
+                parts.append(splitted[0])
         new_folder = "/" + "/".join(parts)
 
         new_folder = self.replace(new_folder, exceptions=['/'])
@@ -78,7 +79,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                        regex='[^a-z A-Z 0-9/_-]')
             if len(splitted) == 2:
                 folder_name += "|" + splitted[1]
-            parts.append(folder_name)
+            if folder_name:
+                parts.append(folder_name)
         return "/" + "/".join(parts)
 
     def add_outcomes(self, rule, outcomes):
