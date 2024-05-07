@@ -32,21 +32,21 @@ class CheckmkDowntimeSync(SyncConfiguration):
                 if not 'cmk__label_site' in attributes['all']:
                     print(f"{cc.WARNING} *{cc.ENDC} Host has no cmk Site info")
                     continue
+                # This Attribute needs to be inventorized from Checkmk
+                cmk_site = attributes['all']['cmk__label_site']
 
                 for _rule_type, rules in host_actions.items():
                     print(rules)
 
-                self.get_current_cmk_downtimes(db_host.hostname, attributes['all'])
+                self.get_current_cmk_downtimes(db_host.hostname, cmk_site)
 
 
 
-    def get_current_cmk_downtimes(self, hostname, attributes):
+    def get_current_cmk_downtimes(self, hostname, cmk_site):
         """
         Read Downtimes from Checkmk
         """
 
-        # This Attribute needs to be inventorized from Checkmk
-        cmk_site = attributes['cmk__label_site']
         url = f"domain-types/downtime/collections/all?"\
               f"host_name={hostname}&downtime_type=host&site_id={cmk_site}"
         response = self.request(url, method="GET")
