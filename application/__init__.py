@@ -28,7 +28,7 @@ if env == "prod":
 elif env == "compose":
     app.config.from_object('application.config.ComposeConfig')
 else:
-    app.config.from_object('application.config.BaseConfig')
+    app.confignefrom_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
 
 try:
@@ -86,8 +86,9 @@ try:
         db.init_app(app)
 
 except ImportError:
-    print("   \033[91mWARNING: STANDALONE MODE - NOT FOR PROD\033[0m")
-    print(" * HINT: uwsgi modul not loaded")
+    #print("   \033[91mWARNING: STANDALONE MODE - NOT FOR PROD\033[0m")
+    #print(" * HINT: uwsgi modul not loaded")
+    # Output makes problems for commands
     db = MongoEngine(app)
 
 # We need the db in the Module
