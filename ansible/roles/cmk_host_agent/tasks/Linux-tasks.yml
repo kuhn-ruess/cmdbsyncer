@@ -13,7 +13,7 @@
   ansible.builtin.shell: |
     cmk-update-agent register -H {{ inventory_hostname }} \
     -s {{ cmk_server }} -i {{ cmk_site }} -p https \
-    -U {{ cmk_user }} -S {{ cmk_secret }}
+    -U {{ cmk_user }} --password {{ cmk_secret }}
   when: cmk_register_bakery | bool
   ignore_errors: yes
 
@@ -22,7 +22,7 @@
   ansible.builtin.shell: |
     cmk-update-agent register -H {{ inventory_hostname }} \
     -s {{ cmk_main_server }} -i {{ cmk_main_site }} -p https \
-    -U {{ cmk_user }} -S {{ cmk_secret }}
+    -U {{ cmk_user }} --password {{ cmk_secret }}
   when: cmk_register_central_bakery | bool
   ignore_errors: yes
 
