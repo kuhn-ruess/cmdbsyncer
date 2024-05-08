@@ -114,39 +114,53 @@ class InventorizeHosts():
                 label_inventory[hostname][label] = label_value
             if not got_inventory and self.fields.get('cmk_inventory'):
                 # We run that only on first line, thats the Checkmk_Service
-                got_inventory = True
                 hw_sw_inventory.setdefault(hostname, {})
                 raw_inventory = service['extensions']['host_mk_inventory']['value'].encode('ascii')
                 raw_decoded_inventory = base64.b64decode(raw_inventory).decode('utf-8')
 
-                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
-                inv_data = ast.literal_eval(raw_decoded_inventory)
-                #print(inv_data)
-                for field in self.fields['cmk_inventory']:
-                    paths = field.split('.')
-                    if len(paths) == 1:
-                        inv_pairs = inv_data['Nodes'][paths[0]]['Attributes']['Pairs']
+                if raw_decoded_inventory:
+                    print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
+                    inv_raw = ast.literal_eval(raw_decoded_inventory)
+                    inv_parsed = {}
+                    # Parsing 3 Levels of HW/SW Inventory
+                    for node_name, node_content in inv_raw['Nodes'].items():
+                        inv_parsed[node_name] = {}
+                        if node_content['Attributes']:
+                            for attr_name, attribute_value in \
+                                                    node_content['Attributes']['Pairs'].items():
+                                inv_parsed[node_name][attr_name] = attribute_value
+                        if node_content['Nodes']:
+                            for sub_node_name, sub_node_content in node_content['Nodes'].items():
+                                inv_parsed[node_name][sub_node_name] = {}
+                                if sub_node_attributes := sub_node_content.get('Attributes'):
+                                    for attr_name, attribute_value in \
+                                                sub_node_attributes['Pairs'].items():
+                                        inv_parsed[node_name][sub_node_name][attr_name] = \
+                                                                                    attribute_value
+                                if sub_node_nodes := sub_node_content.get('Nodes'):
+                                    for sub_sub_node_name, sub_sub_node_content in \
+                                                                            sub_node_nodes.items():
+                                        inv_parsed[node_name][sub_node_name][sub_sub_node_name] = {}
+                                        if sub_sub_node_attributes := \
+                                                            sub_sub_node_content.get('Attributes'):
+                                            for attr_name, attribute_value in \
+                                                        sub_sub_node_attributes['Pairs'].items():
+                                                inv_parsed[node_name][sub_node_name]\
+                                                    [sub_sub_node_name][attr_name] = attribute_value
+                    got_inventory = True
 
-                    elif len(paths) == 2:
-                        try:
-                            inv_pairs = \
-                                inv_data['Nodes'][paths[0]]['Nodes']\
-                                        [paths[1]]['Attributes']['Pairs']
-
-
-                        except KeyError:
-                            try:
-                                inv_pairs = \
-                                    inv_data['Nodes'][paths[0]]['Nodes'][paths[1]]['Table']['Rows']
-                            except KeyError:
-                                inv_pairs = False
-
-
-                    if isinstance(inv_pairs, dict):
-                        for key, value in inv_pairs.items():
-                            hw_sw_inventory[hostname][f'{paths[0]}__{key}'] = value
-                    elif isinstance(inv_pairs, list):
-                        hw_sw_inventory[hostname][f'{paths[0]}__{paths[1]}'] = inv_pairs
+                    # Get the wanted fiels out of the parsed data
+                    for needed_fields in self.fields['cmk_inventory']:
+                        data = inv_parsed
+                        fields = needed_fields.split('.')
+                        data_name = "_".join(fields)
+                        for path in fields:
+                            data = data[path]
+                        if isinstance(data, dict):
+                            for sub_field, sub_value in data.items():
+                                hw_sw_inventory[hostname][f"{data_name}_{sub_field}"] = sub_value
+                        else:
+                            hw_sw_inventory[hostname][data_name] = data
 
             status_inventory[hostname][f"{service_description}_state"] = service_state
             status_inventory[hostname][f"{service_description}_output"] = service_output

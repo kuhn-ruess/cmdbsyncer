@@ -121,7 +121,7 @@ def export_bi_aggregations(account):
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
         details.append(('error', f'CMK Error: {error_obj}'))
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        print(f'{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
     log.log(f"Export BI Aggregations to Checkmk Account: {target_config['name']}",
             source="Checkmk", details=details)
 
@@ -133,9 +133,16 @@ def inventorize_hosts(account):
     """
     Inventorize information from Checkmk Installation
     """
-    config = get_account_by_name(account)
-    inven = InventorizeHosts(account, config)
-    inven.run()
+    details = []
+    try:
+        config = get_account_by_name(account)
+        inven = InventorizeHosts(account, config)
+        inven.run()
+    except CmkException as error_obj:
+        details.append(('error', f'Error: {error_obj}'))
+        print(f'{ColorCodes.FAIL} Error: {error_obj} {ColorCodes.ENDC}')
+    log.log(f"Inventorize Hosts Account: {config['name']}",
+            source="Checkmk", details=details)
 
 #.
 #   . -- Show missing hosts
