@@ -81,7 +81,9 @@ class CMK2(Plugin):
                 'Precondition required If-Match header required for this operation. See documentation.',
             ]
 
-            if response.status_code != 200:
+            if response.status_code == 204: # No Content
+                return {}, {'status_code': response.status_code}
+            elif response.status_code != 200:
                 # If the status Code is not 200,
                 # we can't sure to get Json as response
                 # so we try some failbacks and whitelist some cases
