@@ -147,20 +147,24 @@ class InventorizeHosts():
                                                         sub_sub_node_attributes['Pairs'].items():
                                                 inv_parsed[node_name][sub_node_name]\
                                                     [sub_sub_node_name][attr_name] = attribute_value
-                    got_inventory = True
 
-                    # Get the wanted fiels out of the parsed data
-                    for needed_fields in self.fields['cmk_inventory']:
-                        data = inv_parsed
-                        fields = needed_fields.split('.')
-                        data_name = "_".join(fields)
-                        for path in fields:
-                            data = data[path]
-                        if isinstance(data, dict):
-                            for sub_field, sub_value in data.items():
-                                hw_sw_inventory[hostname][f"{data_name}_{sub_field}"] = sub_value
-                        else:
-                            hw_sw_inventory[hostname][data_name] = data
+
+
+                    if inv_parsed:
+                        got_inventory = True
+
+                        # Get the wanted fiels out of the parsed data
+                        for needed_fields in self.fields['cmk_inventory']:
+                            data = inv_parsed
+                            fields = needed_fields.split('.')
+                            data_name = "_".join(fields)
+                            for path in fields:
+                                data = data[path]
+                            if isinstance(data, dict):
+                                for sub_field, sub_value in data.items():
+                                    hw_sw_inventory[hostname][f"{data_name}_{sub_field}"] = sub_value
+                            else:
+                                hw_sw_inventory[hostname][data_name] = data
 
             status_inventory[hostname][f"{service_description}_state"] = service_state
             status_inventory[hostname][f"{service_description}_output"] = service_output
