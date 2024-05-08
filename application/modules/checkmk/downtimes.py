@@ -2,6 +2,7 @@
 Checkmk Downtime Sync
 """
 
+import datetime
 
 from application.modules.checkmk.config_sync import SyncConfiguration
 from syncerapi.v1 import Host, cc
@@ -10,6 +11,22 @@ class CheckmkDowntimeSync(SyncConfiguration):
     """
     Sync Checkmk Downtimes
     """
+
+    def set_downtime(self, cmk_site, host, start, end):
+        """
+        host: Hostname as in Checkmk
+        start: Downtime start as a datetime object
+        end: Downtime end as a datetime object
+        """
+        url = "domain-types/downtime/collections/host"
+        data = {
+            "host_name" : host,
+            "downtime_type" : "host",
+            "comment" : "Set by cmdbsyncer",
+            "start_time" : start.isoformat(timespec='seconds'),
+            "end_time" : end.isoformat(timespec='seconds'),
+        }
+        self.request(url, method="POST", data=data)
 
     def export_downtimes(self):
         """
