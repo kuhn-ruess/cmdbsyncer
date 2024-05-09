@@ -58,8 +58,11 @@ class CheckmkDowntimeSync(SyncConfiguration):
                 self.get_current_cmk_downtimes(db_host.hostname, cmk_site)
 
 
+                self.get_current_cmk_downtimes(cmk_site, db_host.hostname)
 
-    def get_current_cmk_downtimes(self, hostname, cmk_site):
+
+
+    def get_current_cmk_downtimes(self, cmk_site, hostname):
         """
         Read Downtimes from Checkmk
         """
@@ -67,4 +70,11 @@ class CheckmkDowntimeSync(SyncConfiguration):
         url = f"domain-types/downtime/collections/all?"\
               f"host_name={hostname}&downtime_type=host&site_id={cmk_site}"
         response = self.request(url, method="GET")
-        print(response[0]['value'])
+        downtimes = response[0]['value']
+        for downtime in downtimes:
+            yield {
+                "start_time" : datetime.datetime.fromisoformat(
+                        downtime["extensions"]["start_time"]),
+                "end_time" : datetime.datetime.fromisoformat(
+                        downtime["extensions"]["end_time"]),
+            }
