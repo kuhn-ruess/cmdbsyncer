@@ -97,11 +97,16 @@ class CheckmkDowntimeSync(SyncConfiguration):
                             continue
                         configured_downtimes += list(self.calculate_configured_downtimes(rule))
 
+                current_downtimes = list(
+                        self.get_current_cmk_downtimes(cmk_site, db_host.hostname)
+                        )
+
                 for downtime in configured_downtimes:
+                    for existing_dt in current_downtimes:
+                        if not existing_dt["start"] - downtime["start"]:
+                            if not existing_dt["end"] - downtime["end"]:
+                                continue
                     self.set_downtime(cmk_site, db_host.hostname, downtime["start"], downtime["end"])
-
-
-                self.get_current_cmk_downtimes(cmk_site, db_host.hostname)
 
 
 
@@ -116,8 +121,8 @@ class CheckmkDowntimeSync(SyncConfiguration):
         downtimes = response[0]['value']
         for downtime in downtimes:
             yield {
-                "start_time" : datetime.datetime.fromisoformat(
+                "start" : datetime.datetime.fromisoformat(
                         downtime["extensions"]["start_time"]),
-                "end_time" : datetime.datetime.fromisoformat(
+                "end" : datetime.datetime.fromisoformat(
                         downtime["extensions"]["end_time"]),
             }
