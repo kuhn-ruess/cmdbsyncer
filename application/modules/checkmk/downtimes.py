@@ -7,10 +7,47 @@ import datetime
 from application.modules.checkmk.config_sync import SyncConfiguration
 from syncerapi.v1 import Host, cc
 
+_weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
 class CheckmkDowntimeSync(SyncConfiguration):
     """
     Sync Checkmk Downtimes
     """
+
+    def timezone(self):
+        return datetime.timezone.utc #TODO: implement localtime
+
+    def ahead_days(self):
+        today = datetime.date.today()
+        one_day = datetime.timedelta(days=1)
+        return [ today + i * one_day for i in range(14) ]
+
+    def calculate_downtime_days(self, start_day, every):
+        ahead_days = self.ahead_days()
+        if every == "day":
+            return ahead_days
+        elif every == "workday":
+            return [ day for day in ahead_days if day.isoweekday() not in [6, 7] ]
+        elif every == "week":
+            return [ day for day in ahead_days if _weekdays[day.weekday()] == start_day]
+        else:
+            return []
+
+    def calculate_configured_downtimes(self, rule):
+        now = datetime.datetime.now(datetime.timezone.utc)
+        dt_time = datetime.time(hour=rule["start_time_h"],
+                                minute=rule["start_time_m"],
+                                tzinfo=self.timezone())
+        dt_length = datetime.timedelta(hours=rule["duration_h"])
+        for day in self.calculate_downtime_days(rule["start_day"], rule["every"]):
+            dt_start = datetime.datetime.combine(day, dt_time)
+            if dt_start < now:
+                continue
+            dt_end = dt_start + dt_length
+            yield {
+                "start" : dt_start,
+                "end" : dt_end,
+            }
 
     def set_downtime(self, cmk_site, host, start, end):
         """
@@ -52,10 +89,16 @@ class CheckmkDowntimeSync(SyncConfiguration):
                 # This Attribute needs to be inventorized from Checkmk
                 cmk_site = attributes['all']['cmk__label_site']
 
+                configured_downtimes = []
                 for _rule_type, rules in host_actions.items():
-                    print(rules)
+                    for rule in rules:
+                        if rule["every"] in [ "onces", "2nd_week" ]:
+                            print(f"{cc.WARNING} *{cc.ENDC} Not implemented, need absolute starting point for this to work properly")
+                            continue
+                        configured_downtimes += list(self.calculate_configured_downtimes(rule))
 
-                self.get_current_cmk_downtimes(db_host.hostname, cmk_site)
+                for downtime in configured_downtimes:
+                    self.set_downtime(cmk_site, db_host.hostname, downtime["start"], downtime["end"])
 
 
                 self.get_current_cmk_downtimes(cmk_site, db_host.hostname)
