@@ -114,11 +114,13 @@ class InventorizeHosts(CMK2):
                     fields = needed_fields.split('.')
                     data_name = "_".join(fields)
                     for path in fields:
-                        data = data[path]
+                        if not data:
+                            continue
+                        data = data.get(path)
                     if isinstance(data, dict):
                         for sub_field, sub_value in data.items():
                             self.hw_sw_inventory[hostname][f"{data_name}_{sub_field}"] = sub_value
-                    else:
+                    elif data:
                         self.hw_sw_inventory[hostname][data_name] = data
 
     def get_cmk_services(self):
