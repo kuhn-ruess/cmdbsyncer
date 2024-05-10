@@ -70,6 +70,7 @@ class InventorizeHosts(CMK2):
         # We run that only on first line, thats the Checkmk_Service
 
         api_response = self.request(url, data=params, method="GET")
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
         for service in api_response[0]['value']:
             hostname = service['extensions']['host_name']
             self.add_host(hostname)
@@ -78,7 +79,6 @@ class InventorizeHosts(CMK2):
             raw_decoded_inventory = base64.b64decode(raw_inventory).decode('utf-8')
 
             if raw_decoded_inventory:
-                print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
                 inv_raw = ast.literal_eval(raw_decoded_inventory)
                 inv_parsed = {}
                 # Parsing 3 Levels of HW/SW Inventory
