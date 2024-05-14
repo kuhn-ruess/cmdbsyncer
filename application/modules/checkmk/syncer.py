@@ -148,15 +148,39 @@ class SyncCMK2(CMK2):
                       f"({update_attributes})")
 
 
-    def fetch_checkmk_hosts(self):
+    def _fetch_all_checkmk_hosts(self):
         """
-        Fetch all host currently in Checkmk
+        Classic full Fetch
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read all hosts from cmk")
         url = "domain-types/host_config/collections/all"
         api_hosts = self.request(url, method="GET")
         for host in api_hosts[0]['value']:
             self.checkmk_hosts[host['id']] = host
+
+    def _fetch_checkmk_host_by_folder(self):
+        """
+        Check the folder Structure and get hosts
+        whit multiple request
+        """
+        print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read hosts Folder by Folder from cmk")
+        for folder in self.existing_folders:
+            folder = folder.replace('/','~')
+            url = f"objects/folder_config/{folder}/collections/hosts"
+            api_hosts = self.request(url, method="GET")
+            for host in api_hosts[0]['value']:
+                self.checkmk_hosts[host['id']] = host
+
+
+
+    def fetch_checkmk_hosts(self):
+        """
+        Fetch all host currently in Checkmk
+        """
+        if app.config['CMK_GET_HOST_BY_FOLDER']:
+            self._fetch_checkmk_host_by_folder()
+        else:
+            self._fetch_all_checkmk_hosts()
 
 
     def use_host(self, db_host):
@@ -222,8 +246,8 @@ class SyncCMK2(CMK2):
 
         start_time = time.time()
 
-        self.fetch_checkmk_hosts()
         self.fetch_checkmk_folders()
+        self.fetch_checkmk_hosts()
 
         ## Start SYNC of Hosts into CMK
         print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
