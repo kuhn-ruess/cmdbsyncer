@@ -37,6 +37,7 @@ class BaseConfig():
     STYLE_NAV_LINK_COLOR = "#fff"
     HEADER_HINT = ""
 
+
     REPLACERS = [
       (' ', '_'),
       (',', ''),
@@ -67,6 +68,7 @@ class BaseConfig():
 
     FILEADMIN_PATH = '/srv/cmdbsyncer-files'
 
+    ### Checkmk Stuff
     CMK_22_23_HANDLE_TAG_LABEL_BUG = True
 
     CMK_BULK_CREATE_HOSTS = True
@@ -77,6 +79,14 @@ class BaseConfig():
 
     CMK_BULK_UPDATE_HOSTS = True
     CMK_BULK_UPDATE_OPERATIONS = 50
+
+    # Checkmk API will break for get_hosts at some point
+    # In the example it was at 50k hosts.
+    # Activating this, Syncer will query Hosts Folder by Folder.
+    # That will take longer, but will not break Checkmk.
+    CMK_GET_HOST_BY_FOLDER = False
+    # Which Level of the Folder to use.
+    CMK_GET_HOST_BY_FOLDER_LEVEL = 2
 
 class ProductionConfig(BaseConfig):
     """
