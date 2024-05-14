@@ -85,8 +85,6 @@ class BaseConfig():
     # Activating this, Syncer will query Hosts Folder by Folder.
     # That will take longer, but will not break Checkmk.
     CMK_GET_HOST_BY_FOLDER = False
-    # Which Level of the Folder to use.
-    CMK_GET_HOST_BY_FOLDER_LEVEL = 2
 
 class ProductionConfig(BaseConfig):
     """
