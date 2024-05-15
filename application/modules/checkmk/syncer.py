@@ -399,12 +399,12 @@ class SyncCMK2(CMK2):
         if parent != '/':
             mid_char = '/'
         full_foldername = f'{parent}{mid_char}{subfolder}'
+        self.existing_folders.append(full_foldername)
         if extra_opts := self.custom_folder_attributes.get(full_foldername):
             body.update(extra_opts)
         try:
             self.request(url, method="POST", data=body)
         except CmkException as error:
-            # We have may an existing folder in 2.0 cmk
             logger.debug(f"Error creating Folder {error}")
 
 
@@ -417,12 +417,14 @@ class SyncCMK2(CMK2):
                 # we are in page root
                 return
             parent = '/'
-            subfolder = folder_parts[0]
-            self._create_folder(parent, subfolder)
+            sub_folder = folder_parts[0]
+            if sub_folder not in self.existing_folders:
+                self._create_folder(parent, sub_folder)
         else:
             next_parent = '/'
             for sub_folder in folder_parts:
-                self._create_folder(next_parent, sub_folder)
+                if next_parent + sub_folder not in self.existing_folders:
+                    self._create_folder(next_parent, sub_folder)
                 if next_parent == '/':
                     next_parent += sub_folder
                 else:
@@ -437,20 +439,26 @@ class SyncCMK2(CMK2):
         Send Process to create hosts
         """
         print()
-        print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Create Request")
-        url = "/domain-types/host_config/actions/bulk-create/invoke"
-        try:
-            self.request(url, method="POST", data={'entries': entries})
-        except CmkException as error:
-            self.log_details.append(('error', f"Bulk Create Error: {error}"))
-            print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+        chunks = list(self.chunks(entries, app.config['CMK_BULK_CREATE_OPERATIONS']))
+        total = len(chunks)
+        count = 1
+        for chunk in chunks:
+            print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Create Request {count}/{total}")
+            count += 1
+            url = "/domain-types/host_config/actions/bulk-create/invoke"
+            try:
+                self.request(url, method="POST", data={'entries': chunk})
+            except CmkException as error:
+                self.log_details.append(('error', f"Bulk Create Error: {error}"))
+                print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
 
     def add_bulk_create_host(self, body):
         """
         Add a Host to bulk list, and Send
         """
         self.bulk_creates.append(body)
-        if len(self.bulk_creates) >= int(app.config['CMK_BULK_CREATE_OPERATIONS']):
+        if not app.config['CMK_COLLECT_BULK_OPERATIONS'] and \
+                len(self.bulk_creates) >= int(app.config['CMK_BULK_CREATE_OPERATIONS']):
             try:
                 self.send_bulk_create_host(self.bulk_creates)
             except CmkException as error:
@@ -471,13 +479,12 @@ class SyncCMK2(CMK2):
             }
         }
         if additional_attributes:
-            # CMK BUG
+            # @TODO CMK BUG
             if app.config['CMK_22_23_HANDLE_TAG_LABEL_BUG']:
                 self.log_details.append(('info', "CMK Tag bug workarround active"))
                 print(f"{CC.WARNING} *{CC.ENDC} Removed TAGS because of CMK BUG")
                 additional_attributes = {x:y for x,y in additional_attributes.items() \
                                             if not x.startswith('tag_')}
-
             body['attributes'].update(additional_attributes)
         if app.config['CMK_BULK_CREATE_HOSTS']:
             self.add_bulk_create_host(body)
@@ -553,24 +560,28 @@ class SyncCMK2(CMK2):
         """
         Send Update requests to CMK
         """
-
         print()
-        print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Update Request")
-        url = "/domain-types/host_config/actions/bulk-update/invoke"
-        try:
-            self.request(url, method="PUT",
-                         data={'entries': entries},
-                        )
-        except CmkException as error:
-            self.log_details.append(('error', f"CMK API Error: {error}"))
-            print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+        chunks = list(self.chunks(entries, app.config['CMK_BULK_UPDATE_OPERATIONS']))
+        total = len(chunks)
+        count = 1
+        for chunk in chunks:
+            print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Update Request {count}/{total}")
+            url = "/domain-types/host_config/actions/bulk-update/invoke"
+            try:
+                self.request(url, method="PUT",
+                             data={'entries': chunk},
+                            )
+            except CmkException as error:
+                self.log_details.append(('error', f"CMK API Error: {error}"))
+                print(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
 
     def add_bulk_update_host(self, body):
         """
         Add a Host to bulk list, and Send
         """
         self.bulk_updates.append(body)
-        if len(self.bulk_updates) >= int(app.config['CMK_BULK_UPDATE_OPERATIONS']):
+        if not app.config['CMK_COLLECT_BULK_OPERATIONS'] and \
+                len(self.bulk_updates) >= int(app.config['CMK_BULK_UPDATE_OPERATIONS']):
             self.send_bulk_update_host(self.bulk_updates)
             self.bulk_updates = []
 

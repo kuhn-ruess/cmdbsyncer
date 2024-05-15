@@ -69,7 +69,12 @@ class BaseConfig():
     FILEADMIN_PATH = '/srv/cmdbsyncer-files'
 
     ### Checkmk Stuff
-    CMK_22_23_HANDLE_TAG_LABEL_BUG = True
+
+    #Checkmk has a bug:
+    # Bad Request These fields have problems: entries{'entries': {'0': {'attributes': {'labels': ['Not a string, but a dict', "Tag group name must start with 'tag_'", 'Unknown field.']}}}}
+    # Always when sending Labels with Tags together. This workarround splits request  into multiple
+    # Could be related to invalid tags 
+    CMK_22_23_HANDLE_TAG_LABEL_BUG = False
 
     CMK_BULK_CREATE_HOSTS = True
     CMK_BULK_CREATE_OPERATIONS = 300
@@ -79,6 +84,12 @@ class BaseConfig():
 
     CMK_BULK_UPDATE_HOSTS = True
     CMK_BULK_UPDATE_OPERATIONS = 50
+
+    # If set, the Syncer will first calculate everhting,
+    # and then send bulk operations finally.
+    # This should prevent db timeouts for slow cmk operations.
+    # but needs more RAM.
+    CMK_COLLECT_BULK_OPERATIONS = False
 
     # Checkmk API will break for get_hosts at some point
     # In the example it was at 50k hosts.
