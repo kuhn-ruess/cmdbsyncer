@@ -496,12 +496,13 @@ class DowtimeRuleOutcome(db.EmbeddedDocument):
     every = db.StringField(choices=downtime_repeats)
     every_template = db.StringField(max_length=120)
     offset_days = db.StringField(choices=offsets)
+    offset_days_template = db.StringField()
     start_time_h = db.StringField()
     start_time_m = db.StringField()
     end_time_h = db.StringField()
     end_time_m = db.StringField()
     downtime_comment = db.StringField(max_length=120)
-    duration_h =db.StringField()
+    duration_h =db.StringField(max_length=30)
 
     meta = {
         'strict': False
