@@ -454,12 +454,19 @@ class CheckmkBiRule(db.Document):
 #   .-- Checkmk Downtimes
 
 downtime_repeats = [
+   ('', 'Use Template'),
    ('day', 'Day'),
    ('workday', 'Workday'),
    ('week', 'Week'),
+   ('1.', '1. Selected Start Day of month'),
+   ('2.', '2. Selected Start Day of month'),
+   ('3.', '3. Selected Start Day of month'),
+   ('4.', '4. Selected Start Day of month'),
+   ('5.', '5. Selected Start Day of month'),
 ]
 
 days = [
+    ('', 'Use Template'),
     ('mon', 'Monday'),
     ('tue', 'Tuesday'),
     ('wed', 'Wednesday'),
@@ -468,15 +475,33 @@ days = [
     ('sat', 'Saturday'),
     ('sun', 'Sunday'),
 ]
+
+
+offsets = [
+    ('', "On date"),
+    ('1', "1 day later"),
+    ('2', "2 day later"),
+    ('3', "3 day later"),
+    ('4', "4 day later"),
+    ('5', "5 day later"),
+    ('6', "6 day later"),
+    ('7', "7 day later"),
+]
 class DowtimeRuleOutcome(db.EmbeddedDocument):
     """
     Checkmk Downtime
     """
     start_day = db.StringField(choices=days)
+    start_day_template = db.StringField(max_length=120)
     every = db.StringField(choices=downtime_repeats)
-    start_time_h = db.IntField()
-    start_time_m = db.IntField()
-    duration_h =db.IntField()
+    every_template = db.StringField(max_length=120)
+    offset_days = db.StringField(choices=offsets)
+    start_time_h = db.StringField()
+    start_time_m = db.StringField()
+    end_time_h = db.StringField()
+    end_time_m = db.StringField()
+    downtime_comment = db.StringField(max_length=120)
+    duration_h =db.StringField()
 
     meta = {
         'strict': False
