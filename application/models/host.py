@@ -140,6 +140,14 @@ class Host(db.Document):
             self.set_labels(labels)
         self.set_import_seen()
 
+    def _fix_key(self, key):
+        if app.config['LOWERCASE_ATTRIBUTE_KEYS']:
+            key = key.lower()
+        if app.config['REPLACE_ATTRIBUTE_KEYS']:
+            for needle, replacer in app.config['REPLACERS']:
+                key = key.replace(needle, replacer)
+        return key.replace(" ", "_").strip()
+
     def set_labels(self, label_dict):
         """
         Overwrite all Labels on host
@@ -148,7 +156,7 @@ class Host(db.Document):
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
-        self.labels=dict({x:str(y) for x, y in label_dict.items()})
+        self.labels=dict({self._fix_key(x):str(y) for x, y in label_dict.items()})
         self.cache = {}
 
     def get_labels(self):
@@ -180,7 +188,7 @@ class Host(db.Document):
                 check_dict[name] = value
                 del self.inventory[name]
 
-        update_dict = {f"{key}__{x}":y for x, y in new_data.items()}
+        update_dict = {f"{key}__{self._fix_key(x)}":y for x, y in new_data.items()}
         self.inventory.update(update_dict)
 
         # If the inventory is changed, the cache

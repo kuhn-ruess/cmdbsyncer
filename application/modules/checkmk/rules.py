@@ -5,6 +5,7 @@ Checkmk Rules
 #pylint: disable=import-error
 #pylint: disable=logging-fstring-interpolation
 import ast
+from application import app
 from application.helpers.syncer_jinja import render_jinja
 from application import logger
 from application.modules.rule.rule import Rule
@@ -66,7 +67,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         new_folder = "/" + "/".join(parts)
 
         new_folder = self.replace(new_folder, exceptions=['/'])
-        return self.replace(new_folder.lower(), regex='[^a-z A-Z 0-9/_-]')
+        if app.config['CMK_LOWERCASE_FOLDERNAMES']:
+            new_folder = new_folder.lower()
+        return self.replace(new_folder, regex='[^a-z A-Z 0-9/_-]')
 
     def format_foldername(self, folder):
         """
@@ -75,7 +78,10 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         parts = []
         for folder_part in folder.split('/'):
             splitted = folder_part.split('|')
-            folder_name = self.replace(self.replace(splitted[0].lower(), exceptions=['/']),
+            path = splitted[0]
+            if app.config['CMK_LOWERCASE_FOLDERNAMES']:
+                path = path.lower()
+            folder_name = self.replace(self.replace(path, exceptions=['/']),
                                        regex='[^a-z A-Z 0-9/_-]')
             if len(splitted) == 2:
                 folder_name += "|" + splitted[1]

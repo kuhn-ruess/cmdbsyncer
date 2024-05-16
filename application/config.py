@@ -39,10 +39,12 @@ class BaseConfig():
     HEADER_HINT = ""
 
 
+    REPLACE_ATTRIBUTE_KEYS = False
+    LOWERCASE_ATTRIBUTE_KEYS = True
+
     REPLACERS = [
       (' ', '_'),
-      (',', ''),
-      ('/', '-'),
+      (',', '-'),
       ('&', '-'),
       ('(', '-'),
       (')', '-'),
@@ -87,6 +89,8 @@ class BaseConfig():
 
     CMK_BULK_UPDATE_HOSTS = True
     CMK_BULK_UPDATE_OPERATIONS = 50
+
+    CMK_LOWERCASE_FOLDERNAMES = True
 
     # If set, the Syncer will first calculate everhting,
     # and then send bulk operations finally.
