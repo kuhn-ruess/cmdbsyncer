@@ -1,5 +1,6 @@
 """ Config File """
 #pylint: disable=too-few-public-methods
+import datetime
 import logging
 
 class BaseConfig():
@@ -66,6 +67,8 @@ class BaseConfig():
 
     }
 
+    TIMEZONE = datetime.timezone.utc
+
     FILEADMIN_PATH = '/srv/cmdbsyncer-files'
 
     ### Checkmk Stuff
@@ -73,7 +76,7 @@ class BaseConfig():
     #Checkmk has a bug:
     # Bad Request These fields have problems: entries{'entries': {'0': {'attributes': {'labels': ['Not a string, but a dict', "Tag group name must start with 'tag_'", 'Unknown field.']}}}}
     # Always when sending Labels with Tags together. This workarround splits request  into multiple
-    # Could be related to invalid tags 
+    # Could be related to invalid tags
     CMK_22_23_HANDLE_TAG_LABEL_BUG = False
 
     CMK_BULK_CREATE_HOSTS = True

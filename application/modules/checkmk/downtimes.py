@@ -3,9 +3,10 @@ Checkmk Downtime Sync
 """
 
 import datetime
-
+import calendar
+from application import app
 from application.modules.checkmk.config_sync import SyncConfiguration
-from syncerapi.v1 import Host, cc
+from syncerapi.v1 import Host, cc, render_jinja
 
 _weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
@@ -15,41 +16,133 @@ class CheckmkDowntimeSync(SyncConfiguration):
     """
 
     def timezone(self):
-        return datetime.timezone.utc #TODO: implement localtime
+        """
+        Define the used Timezone
+        """
+        return app.config['TIMEZONE']
 
-    def ahead_days(self):
-        today = datetime.date.today()
-        one_day = datetime.timedelta(days=1)
-        return [ today + i * one_day for i in range(14) ]
+    def ahead_days(self, offset):
+        """
+        Calculate how many times ahead we start
+        """
+        today = datetime.datetime.now()
+        if offset:
+            today = today + datetime.timedelta(days=offset)
+        return [ today + datetime.timedelta(days=i)  for i in range(14) ]
 
-    def calculate_downtime_days(self, start_day, every):
-        ahead_days = self.ahead_days()
+    def calculate_downtime_days(self, start_day, every, offset):
+        """
+        Calculate the number of days for the downtime
+        """
+        ahead_days = self.ahead_days(offset)
         if every == "day":
             return ahead_days
-        elif every == "workday":
+        if every == "workday":
             return [ day for day in ahead_days if day.isoweekday() not in [6, 7] ]
-        elif every == "week":
+        if every == "week":
             return [ day for day in ahead_days if _weekdays[day.weekday()] == start_day]
+        return []
+
+    def calculate_downtime_dates(self, start_day, every, offset):
+        """
+        Calculate configured day for a datime,
+        like first of month
+        """
+        if offset:
+            start_day = _weekdays[_weekdays.index(start_day)+offset]
+
+        every = int(every.replace('.', ''))
+
+        now = datetime.datetime.now(self.timezone())
+        year = now.year
+        month = now.month
+        next_year = year
+        if month == 12:
+            next_year = year+1
+        next_month = month % 12 + 1
+
+        this_month_dates = [datetime.date(year, month, day) \
+                            for day in range(1, calendar.monthrange(year, month)[1] + 1)]
+        next_month_dates = [datetime.date(next_year, next_month, day) \
+                        for day in range(1, calendar.monthrange(next_year, next_month)[1] + 1)]
+
+        this_month_day_strings = [x.strftime('%a').lower() for x in this_month_dates]
+        next_month_day_strings = [x.strftime('%a').lower() for x in next_month_dates]
+
+        hit = 0
+        for idx, day in enumerate(this_month_day_strings):
+            if day == start_day:
+                hit += 1
+                if hit == every:
+                    yield this_month_dates[idx]
+                    break
+        hit = 0
+        for idx, day in enumerate(next_month_day_strings):
+            if day == start_day:
+                hit += 1
+                if hit == every:
+                    yield next_month_dates[idx]
+                    break
+
+
+
+    def calculate_configured_downtimes(self, rule, attributes):
+        """
+        Calculate the Downtime payload
+        """
+        start_hour = int(render_jinja(rule['start_time_h'], **attributes))
+        start_minute = int(render_jinja(rule['start_time_m'], **attributes))
+        end_hour = int(render_jinja(rule['end_time_h'], **attributes))
+        end_minute = int(render_jinja(rule['end_time_m'], **attributes))
+        start_day = rule['start_day']
+        if rule['start_day_template']:
+            start_day = render_jinja(rule['start_day_template'], **attributes)
+        every = rule['every']
+        if rule['every_template']:
+            every = render_jinja(rule['every_template'], **attributes)
+
+        duration = False
+        if rule['duration_h']:
+            duration = int(render_jinja(rule['duration_h']))
+
+        offset = False
+        if rule['offset_days']:
+            offset = int(rule['offset_days'])
+
+        now = datetime.datetime.now(self.timezone())
+        dt_start_time = datetime.time(start_hour, start_minute, 0, tzinfo=self.timezone())
+        dt_end_time = datetime.time(end_hour, end_minute, 0, tzinfo=self.timezone())
+
+
+        if every in ['day', 'workday', 'week']:
+            for day in self.calculate_downtime_days(start_day, every, offset):
+                dt_start = datetime.datetime.combine(day, dt_start_time)
+                dt_end = datetime.datetime.combine(day, dt_end_time)
+
+                if dt_start < now:
+                    continue
+                yield {
+                    "start" : dt_start,
+                    "end" : dt_end,
+                    "duration": duration,
+                    "comment": rule['downtime_comment'],
+                }
         else:
-            return []
+            # Fancy Mode
+            for day in self.calculate_downtime_dates(start_day, every, offset):
+                dt_start = datetime.datetime.combine(day, dt_start_time)
+                dt_end = datetime.datetime.combine(day, dt_end_time)
+                if dt_start < now:
+                    continue
+                yield {
+                    "start" : dt_start,
+                    "end" : dt_end,
+                    "duration": duration,
+                    "comment": rule['downtime_comment'],
+                }
 
-    def calculate_configured_downtimes(self, rule):
-        now = datetime.datetime.now(datetime.timezone.utc)
-        dt_time = datetime.time(hour=rule["start_time_h"],
-                                minute=rule["start_time_m"],
-                                tzinfo=self.timezone())
-        dt_length = datetime.timedelta(hours=rule["duration_h"])
-        for day in self.calculate_downtime_days(rule["start_day"], rule["every"]):
-            dt_start = datetime.datetime.combine(day, dt_time)
-            if dt_start < now:
-                continue
-            dt_end = dt_start + dt_length
-            yield {
-                "start" : dt_start,
-                "end" : dt_end,
-            }
 
-    def set_downtime(self, cmk_site, host, start, end):
+    def set_downtime(self, host, downtime):
         """
         host: Hostname as in Checkmk
         start: Downtime start as a datetime object
@@ -59,11 +152,15 @@ class CheckmkDowntimeSync(SyncConfiguration):
         data = {
             "host_name" : host,
             "downtime_type" : "host",
-            "comment" : "Set by cmdbsyncer",
-            "start_time" : start.isoformat(timespec='seconds'),
-            "end_time" : end.isoformat(timespec='seconds'),
+            "comment" : downtime['comment'],
+            "start_time" : downtime['start'].isoformat(timespec='seconds'),
+            "end_time" : downtime['end'].isoformat(timespec='seconds'),
         }
+        if downtime['duration']:
+            data['duration'] = int(downtime['duration'])
         self.request(url, method="POST", data=data)
+        print(f"\n{cc.OKGREEN} *{cc.ENDC} Set Downtime for "\
+              f"{data['start_time']} ({data['comment']})")
 
     def export_downtimes(self):
         """
@@ -83,32 +180,25 @@ class CheckmkDowntimeSync(SyncConfiguration):
 
                 print(f"\n{cc.OKBLUE}({process:.0f}%){cc.ENDC} {db_host.hostname}")
                 counter += 1
-                if not 'cmk__label_site' in attributes['all']:
+                if not 'cmk__site' in attributes['all']:
                     print(f"{cc.WARNING} *{cc.ENDC} Host has no cmk Site info")
                     continue
                 # This Attribute needs to be inventorized from Checkmk
-                cmk_site = attributes['all']['cmk__label_site']
+                cmk_site = attributes['all']['cmk__site']
 
                 configured_downtimes = []
                 for _rule_type, rules in host_actions.items():
                     for rule in rules:
-                        if rule["every"] in [ "onces", "2nd_week" ]:
-                            print(f"{cc.WARNING} *{cc.ENDC} Not implemented, need absolute starting point for this to work properly")
-                            continue
-                        configured_downtimes += list(self.calculate_configured_downtimes(rule))
+                        configured_downtimes += \
+                                list(self.calculate_configured_downtimes(rule, attributes['all']))
 
                 current_downtimes = list(
-                        self.get_current_cmk_downtimes(cmk_site, db_host.hostname)
+                            self.get_current_cmk_downtimes(cmk_site, db_host.hostname)
                         )
 
                 for downtime in configured_downtimes:
-                    for existing_dt in current_downtimes:
-                        if not existing_dt["start"] - downtime["start"]:
-                            if not existing_dt["end"] - downtime["end"]:
-                                continue
-                    self.set_downtime(cmk_site, db_host.hostname, downtime["start"], downtime["end"])
-
-
+                    if downtime not in current_downtimes:
+                        self.set_downtime(db_host.hostname, downtime)
 
     def get_current_cmk_downtimes(self, cmk_site, hostname):
         """
@@ -125,4 +215,6 @@ class CheckmkDowntimeSync(SyncConfiguration):
                         downtime["extensions"]["start_time"]),
                 "end" : datetime.datetime.fromisoformat(
                         downtime["extensions"]["end_time"]),
+                "comment" : downtime["extensions"]["comment"],
+                "duration" : downtime["extensions"].get("duration", False),
             }
