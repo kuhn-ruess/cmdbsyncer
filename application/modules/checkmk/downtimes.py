@@ -108,6 +108,8 @@ class CheckmkDowntimeSync(SyncConfiguration):
         offset = False
         if rule['offset_days']:
             offset = int(rule['offset_days'])
+        if rule['offset_days_template']:
+            offset = int(render_jinja(rule['offset_days_template'], **attributes))
 
         now = datetime.datetime.now(self.timezone())
         dt_start_time = datetime.time(start_hour, start_minute, 0, tzinfo=self.timezone())
