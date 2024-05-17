@@ -40,7 +40,7 @@ class BaseConfig():
 
 
     REPLACE_ATTRIBUTE_KEYS = False
-    LOWERCASE_ATTRIBUTE_KEYS = True
+    LOWERCASE_ATTRIBUTE_KEYS = False
 
     REPLACERS = [
       (' ', '_'),
