@@ -286,12 +286,11 @@ class SyncCMK2(CMK2):
         self.fetch_checkmk_hosts()
 
         ## Start SYNC of Hosts into CMK
-        print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
         db_objects = Host.get_export_hosts()
         total = db_objects.count()
 
         with Progress() as progress:
-            task1 = progress.add_task("Calculating Host  Rule", total=total)
+            task1 = progress.add_task("Calculating Hostrules and Attributes", total=total)
             manager = multiprocessing.Manager()
             host_actions = manager.dict()
             with multiprocessing.Pool() as pool:
@@ -307,6 +306,7 @@ class SyncCMK2(CMK2):
 
         counter = 0
         total = len(host_actions)
+        print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
         for hostname, data in host_actions.items():
             counter += 1
             process = 100.0 * counter / total
