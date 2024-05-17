@@ -6,6 +6,7 @@ Add Hosts into CMK Version 2 Installations
 import ast
 import time
 import multiprocessing
+from rich.progress import Progress
 from application import app
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
@@ -143,8 +144,8 @@ class SyncCMK2(CMK2):
                     'if-match': etag,
                 }
                 self.request(url, method="PUT",
-                             data=payload,
-                             additional_header=update_headers)
+                         data=payload,
+                         additional_header=update_headers)
                 print(f"{CC.OKGREEN} *{CC.ENDC} Update Attributes on Folder: {folder_name} "\
                       f"({update_attributes})")
 
@@ -155,9 +156,14 @@ class SyncCMK2(CMK2):
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read all hosts from cmk")
         url = "domain-types/host_config/collections/all"
-        api_hosts = self.request(url, method="GET")
-        for host in api_hosts[0]['value']:
-            self.checkmk_hosts[host['id']] = host
+        with Progress() as progress:
+            task1 = progress.add_task("Fetching Hosts")
+            api_hosts = self.request(url, method="GET")
+            progress.update(task1, advance=50)
+            for host in api_hosts[0]['value']:
+                self.checkmk_hosts[host['id']] = host
+                progress.update(task1, advance=1)
+
 
 
     def _get_hosts_of_folder(self, folder, return_dict):
@@ -174,16 +180,20 @@ class SyncCMK2(CMK2):
         whit multiple request
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read hosts Folder by Folder from cmk")
-        manager = multiprocessing.Manager()
-        return_dict = manager.dict()
-        pool = multiprocessing.Pool()
-        for folder in self.existing_folders:
-            pool.apply_async(self._get_hosts_of_folder,
-                             args=(folder, return_dict,))
+        with Progress() as progress:
+            num_folders = len(self.existing_folders)
+            task1 = progress.add_task("Fetching Hosts", total=num_folders)
+            manager = multiprocessing.Manager()
+            return_dict = manager.dict()
+            with multiprocessing.Pool() as pool:
+                for folder in self.existing_folders:
+                    pool.apply_async(self._get_hosts_of_folder,
+                                     args=(folder, return_dict,),
+                                     callback=lambda x: progress.advance(task1))
 
-        pool.close()
-        pool.join()
-        self.checkmk_hosts.update(return_dict)
+                pool.close()
+                pool.join()
+                self.checkmk_hosts.update(return_dict)
 
 
     def fetch_checkmk_hosts(self):
@@ -279,25 +289,21 @@ class SyncCMK2(CMK2):
         print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
         db_objects = Host.get_export_hosts()
         total = db_objects.count()
-        counter = 0
 
-        manager = multiprocessing.Manager()
-        host_actions = manager.dict()
-        pool = multiprocessing.Pool()
+        with Progress() as progress:
+            task1 = progress.add_task("Calculating Host  Rule", total=total)
+            manager = multiprocessing.Manager()
+            host_actions = manager.dict()
+            with multiprocessing.Pool() as pool:
+                for db_host in db_objects:
+                    if not self.use_host(db_host):
+                        continue
+                    pool.apply_async(self.handle_host,
+                                     args=(db_host, host_actions,),
+                                     callback=lambda x: progress.advance(task1))
 
-        for db_host in db_objects:
-            counter += 1
-
-            if not self.use_host(db_host):
-                continue
-
-            process = 100.0 * counter / total
-            print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} Calculate {db_host.hostname}")
-            pool.apply_async(self.handle_host, args=(db_host, host_actions))
-
-        print("Wait for Procceses to finish...")
-        pool.close()
-        pool.join()
+                pool.close()
+                pool.join()
 
         counter = 0
         total = len(host_actions)
@@ -405,8 +411,6 @@ class SyncCMK2(CMK2):
             self.send_bulk_create_host(self.bulk_creates)
         if self.bulk_updates:
             self.send_bulk_update_host(self.bulk_updates)
-
-        print(self.bulk_creates)
 
         self.log_details.append(('info', f"Proccesed: {counter} of {total}"))
         if self.limit:
