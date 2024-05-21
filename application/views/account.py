@@ -123,6 +123,8 @@ class AccountModelView(DefaultModelView):
                 ('hostname_field', 'host'),
                 ('rewrite_hostname', ""),
                 ('driver', "ODBC Driver 18 for SQL Server"),
+                ('inventorize_key', ""),
+                ('inventorize_match_by_domain', ""),
             ]
         elif form.typ.data == 'bmc_remedy':
             default_fields = [
