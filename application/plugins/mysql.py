@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Import Mysql Data"""
 import click
-from application import app
+from application import app, logger
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
@@ -34,6 +34,7 @@ def mysql_import(account):
     query = f"SELECT {config['fields']} FROM {config['table']};"
     if "custom_query" in config:
         query = config['custom_query']
+    logger.debug(query)
     mycursor.execute(query)
     all_hosts = mycursor.fetchall()
     field_names = config['fields'].split(',')
