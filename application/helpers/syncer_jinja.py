@@ -4,6 +4,7 @@ Syncers Jinja Functions
 
 import ast
 import jinja2
+from jinja2 import StrictUndefined
 from application.modules.checkmk.helpers import cmk_cleanup_tag_id
 
 
@@ -48,7 +49,7 @@ def render_jinja(value, mode="ignore", **kwargs):
     })
 
     if mode in ["raise", "nullify"]:
-        value_tpl.undefined = jinja2.StrictUndefined
+        value_tpl.undefined = StrictUndefined
 
     if mode == 'nullify':
         try:
