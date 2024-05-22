@@ -4,7 +4,7 @@ Checkmk Tag Syncronize
 #pylint: disable=logging-fstring-interpolation
 import ast
 import multiprocessing
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import logger
 from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.debug import ColorCodes as CC
@@ -20,22 +20,36 @@ class CheckmkTagSync(SyncConfiguration):
     groups = {}
 
 
-    def build_caches(self, db_host, groups):
+    def build_caches(self, db_host, groups, multiply_expressions):
         """
         Calculation of rules and Host Tags
         """
-        db_host.reload()
         object_attributes = self.get_host_attributes(db_host, 'cmk_conf')
-        cache_name = 'cmk_tags_multigroups'
-        if cache_name not in db_host.cache:
-            logger.debug(f" -- Build Cache {cache_name}")
-            multi_groups = self.check_for_multi_groups(object_attributes, groups)
-            db_host.cache[cache_name] = multi_groups
+
+        tags_of_host = {}
+        addional_groups = {}
+        if multiply_expressions:
+            cache_name_tags = 'cmk_tags_multiply_tags'
+            cache_name_groups = 'cmk_tags_multiply_groups'
+            if cache_name_tags not in db_host.cache or \
+                    cache_name_groups not in db_host.cache:
+                tags_of_host, addional_groups = \
+                            self.check_for_multi_groups(object_attributes,
+                                                        groups,
+                                                        multiply_expressions)
+                db_host.cache[cache_name_tags] = tags_of_host
+                db_host.cache[cache_name_groups] = addional_groups
+
+            tags_of_host = db_host.cache[cache_name_tags]
+            addional_groups = db_host.cache[cache_name_groups]
+            groups.update(addional_groups)
+
 
         cache_name = 'cmk_tags_tag_choices'
         if cache_name not in db_host.cache:
-            logger.debug(f" -- Build Cache {cache_name}")
-            hosts_tags = self.update_groups_with_tags(db_host, object_attributes, groups)
+            logger.debug(f" -- Build Tag Cache {cache_name}")
+            hosts_tags = self.get_tags_for_host(db_host, object_attributes,
+                                                      groups, tags_of_host)
             db_host.cache[cache_name] = hosts_tags
         db_host.save()
 
@@ -46,89 +60,99 @@ class CheckmkTagSync(SyncConfiguration):
         """
         db_objects = CheckmkTagMngmt.objects(enabled=True)
         total = db_objects.count()
-        has_multigroup = False
-        with Progress() as progress:
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Calculating Needed Rules", total=total)
             manager = multiprocessing.Manager()
             base_groups = manager.dict()
+            multiply_expressions = manager.list()
             with multiprocessing.Pool() as pool:
                 for rule in db_objects:
-                    if rule.group_multiply_by_list:
-                        has_multigroup = True
                     pool.apply_async(self.create_inital_groups,
-                                     args=(rule, base_groups),
+                                     args=(rule, base_groups, multiply_expressions),
                                      callback=lambda x: progress.advance(task1))
                 pool.close()
                 pool.join()
-        return base_groups, has_multigroup
+        return base_groups, multiply_expressions
 
 
     def export_tags(self):
         """
         Export Tags to Checkmk
         """
-        base_groups, has_multigroup = self.calculate_rules()
+        base_groups, multiply_expressions = self.calculate_rules()
 
         total = Host.objects.count()
-        with Progress() as progress:
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
             manager = multiprocessing.Manager()
             groups = manager.dict()
-            groups = base_groups
+            groups.update(base_groups)
+
+            mlt_expressions = manager.list()
+            mlt_expressions += multiply_expressions
+
+            task1 = progress.add_task("Calculating Caches", total=total)
             with multiprocessing.Pool() as pool:
-                task1 = progress.add_task("Calculating Caches", total=total)
                 for entry in Host.objects():
                     pool.apply_async(self.build_caches,
-                                     args=(entry, groups),
-                                           callback=lambda x: progress.advance(task1))
+                                     args=(entry, groups, mlt_expressions),
+                                     callback=lambda x: progress.advance(task1))
                 pool.close()
                 pool.join()
 
             task2 = progress.add_task("Apply Hosttags to objects", total=total)
-            for entry in Host.objects():
-                if has_multigroup:
-                    self.update_hosts_multigroups(entry, groups)
-                self.update_hosts_tags(entry, groups)
-                progress.advance(task2)
+            with multiprocessing.Pool() as pool:
+                tags = manager.list()
+                for entry in Host.objects():
+                    pool.apply_async(self.update_hosts_tags,
+                                     args=(entry, tags),
+                                     callback=lambda x: progress.advance(task2))
+                pool.close()
+                pool.join()
+
         # Delete Templates
         for group_id, group in list(groups.items()):
             if group.get('is_template'):
                 logger.debug(f"Delete Template {group_id}")
                 del groups[group_id]
-        self.sync_to_checkmk(groups)
 
 
+        self.sync_to_checkmk(groups, tags)
 
     def update_hosts_multigroups(self, db_host, groups):
         """
         Update the groups ob
         """
         cache_name = 'cmk_tags_multigroups'
+        if cache_name not in db_host.cache:
+            return
         multi_groups = db_host.cache[cache_name]
 
         for group_id, group_data in multi_groups.items():
             group_data['is_template'] = False
             groups[group_id] = group_data
 
-    def update_hosts_tags(self, db_host, groups):
+    def update_hosts_tags(self, db_host, global_tags):
         """
         Update the Tags provided by the Host
         """
         cache_name = 'cmk_tags_tag_choices'
+        if cache_name not in db_host.cache:
+            return
         hosts_tags = db_host.cache[cache_name]
 
         for group_id, tags in hosts_tags.items():
             tag_id, tag_title = tags
-            if tag_id and (tag_id, tag_title) \
-                        not in groups[group_id]['tags']:
-                # we check not only, if the combination is uniue,
-                # but also if also the id is not duplicate even with diffrent name
-                group = groups[group_id]# Dance becaue of the managed.Dict()
-                if tag_id not in [x[0] for x in group['tags']]:
-                    group['tags'].append((tag_id, tag_title))
-                    groups[group_id]= group
+            tag_tuple = (group_id, tag_id, tag_title)
+            if tag_tuple not in global_tags:
+                global_tags.append(tag_tuple)
 
-
-    def create_inital_groups(self, rule, groups):
+    def create_inital_groups(self, rule, groups, multiply_expressions):
         """
         Create inital group Object
         """
@@ -144,51 +168,46 @@ class CheckmkTagSync(SyncConfiguration):
             'rw_title': rule.rewrite_title,
             'object_filter': rule.filter_by_account,
             'multiply_list': rule.group_multiply_list,
-            'is_template': bool(rule.group_multiply_list),
+            'is_template': bool(rule.group_multiply_by_list),
         }
+        if rule.group_multiply_by_list:
+            expr_tuple = (group_id, rule.group_multiply_list)
+            if expr_tuple not in multiply_expressions:
+                multiply_expressions.append(expr_tuple)
 
-    def check_for_multi_groups(self, object_attributes, groups):
+    def check_for_multi_groups(self, object_attributes, groups, multiply_expressions):
         """
         Update the Group Config to,
         render special options
         """
         #pylint: disable=too-many-locals
 
-        outcome = {}
-        for group_id_org in list(groups.keys()):
+        tags_of_host = {}
+        addional_groups = {}
 
-            if multi_list := groups[group_id_org].get('multiply_list'):
-                logger.debug(f"-- Work on Multi Group {group_id_org}")
-                rendering = render_jinja(multi_list, mode="raise", **object_attributes['all'])
-                logger.debug(f" --- New Render: {rendering}")
+        data = object_attributes['all']
+        for group_id_org, expression in multiply_expressions:
+            try:
+                rendering = render_jinja(expression, mode="raise", **data)
                 if not rendering:
                     continue
 
                 new_choices = ast.literal_eval(rendering)
-
                 if not new_choices:
                     logger.debug(" --- No Choices")
                     continue
-
-                for newone in new_choices:
-                    data = {
-                        'name': newone,
-                    }
+                for new_group_name in new_choices:
+                    data['name'] = new_group_name
                     new_group_id = \
                         cmk_cleanup_tag_id(render_jinja(group_id_org, **data, mode="raise"))
 
-
-                    if new_group_id in groups:
-                        # No need to Render Again and Again
-                        logger.debug(f" --- Group Already Rendered: {new_group_id}")
-                        continue
                     curr = groups[group_id_org]
                     topic = render_jinja(curr['topic'], mode="raise",  **data)
                     title = render_jinja(curr['title'], mode="raise",  **data)
                     rw_id = render_jinja(curr['rw_id'], mode="raise",  **data)
                     rw_title = render_jinja(curr['rw_title'], mode="raise", **data)
 
-                    outcome[new_group_id] = {
+                    addional_groups[new_group_id] = {
                         'tags': [],
                         'topic': topic,
                         'title': title,
@@ -197,12 +216,15 @@ class CheckmkTagSync(SyncConfiguration):
                         'rw_id': rw_id,
                         'rw_title': rw_title,
                         'object_filter': curr['object_filter'],
-                        'is_template': True,
                     }
 
-        return outcome
+                    tags_of_host[new_group_id] = (rw_id, rw_title)
+            except Exception as _error:
+                continue
+        return tags_of_host, addional_groups
 
-    def update_groups_with_tags(self, db_object, object_attributes, groups):
+    def get_tags_for_host(self, db_object, object_attributes,
+                                groups, tags_of_host):
         """
         Search all tags which this Host can provide
         """
@@ -210,32 +232,42 @@ class CheckmkTagSync(SyncConfiguration):
         tags = {}
         logger.debug(f"Update Tags from {hostname}")
 
+
         for group_id, group_data in groups.items():
             if group_data.get('is_template'):
                 continue
 
-            # Check if we use data from the object
-            if object_filter := group_data.get('object_filter'):
-                if db_object.get_inventory().get('syncer_account') != object_filter:
-                    logger.debug(f" --- Not matching object filter: {object_filter}")
-                    continue
+            new_tag_id, new_tag_title = False, False
+
+            if tags_of_host.get(group_id):
+                new_tag_id, new_tag_title = tags_of_host[group_id]
+            else:
+                # Check if we use data from the object
+                if object_filter := group_data.get('object_filter'):
+                    if db_object.get_inventory().get('syncer_account') != object_filter:
+                        logger.debug(f" --- Not matching object filter: {object_filter}")
+                        continue
 
 
-            rewrite_id = group_data['rw_id']
-            rewrite_title = group_data['rw_title']
+                try:
+                    rewrite_id = group_data['rw_id']
+                    rewrite_title = group_data['rw_title']
 
-            new_tag_id = render_jinja(rewrite_id, HOSTNAME=hostname,
-                                      **object_attributes['all'])
-            new_tag_id = new_tag_id.strip()
+                    new_tag_id = render_jinja(rewrite_id, HOSTNAME=hostname,
+                                              **object_attributes['all'])
+                    new_tag_id = new_tag_id.strip()
 
 
 
-            if new_tag_id:
-                new_tag_id = cmk_cleanup_tag_id(new_tag_id)
+                    if new_tag_id:
+                        new_tag_id = cmk_cleanup_tag_id(new_tag_id)
 
-            new_tag_title = render_jinja(rewrite_title, HOSTNAME=hostname,
-                                         **object_attributes['all'])
-            new_tag_title.strip()
+                    new_tag_title = render_jinja(rewrite_title, HOSTNAME=hostname,
+                                                 **object_attributes['all'])
+                    new_tag_title.strip()
+                except Exception:
+                    new_tag_id, new_tag_title = False, False
+
             if new_tag_id and new_tag_title:
                 tags[group_id] = (new_tag_id, new_tag_title)
         return tags
@@ -264,14 +296,19 @@ class CheckmkTagSync(SyncConfiguration):
         config_tags.sort(key=lambda tup: tup[1])
         if len(config_tags) > 1:
             config_tags.insert(0, (None, "Not set"))
+        found_ids = []
+        tags = []
+        for x, y in config_tags:
+            if x not in found_ids:
+                tags.append({'ident':x, 'title': y})
+                found_ids.append(x)
 
-        tags = [{'ident':x, 'title': y} for x,y in config_tags]
         if not tags or len(tags) == 0:
             print(f"{CC.WARNING} *{CC.ENDC} Group has no tags")
             return False
         return tags
 
-    def sync_to_checkmk(self, groups):
+    def sync_to_checkmk(self, groups, tag_group_list):
         """
         Use generated configuration to Sync
         Everhting to Checkmk
@@ -289,7 +326,8 @@ class CheckmkTagSync(SyncConfiguration):
                     if what in payload:
                         del payload[what]
 
-                if tags := self.prepare_tags_for_checkmk(payload['tags'].copy()):
+                tag_list = [(x[1], x[2]) for x in tag_group_list if x[0] == syncer_group_id]
+                if tags := self.prepare_tags_for_checkmk(tag_list):
                     payload['tags'] = tags
                 else:
                     continue
@@ -303,7 +341,7 @@ class CheckmkTagSync(SyncConfiguration):
                     flat = [ {'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
 
                     if flat == payload['tags']:
-                        progress.console.print(f"* Group {syncer_group_id} already up to date.")
+                        progress.console.print(f" * Group {syncer_group_id} already up to date.")
                     else:
                         url = f"/objects/host_tag_group/{syncer_group_id}"
                         update_headers = {
@@ -317,6 +355,7 @@ class CheckmkTagSync(SyncConfiguration):
                                 data=payload,
                                 additional_header=update_headers)
                         except Exception as error:
+                            print(error)
                             progress.console.print(f" ! Group {syncer_group_id} can't be updated.")
                             logger.debug(error)
                         else:
