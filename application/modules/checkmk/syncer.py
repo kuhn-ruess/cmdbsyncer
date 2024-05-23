@@ -6,7 +6,7 @@ Add Hosts into CMK Version 2 Installations
 import ast
 import time
 import multiprocessing
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import app
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
@@ -72,7 +72,10 @@ class SyncCMK2(CMK2):
         """
         url = "domain-types/folder_config/collections/all"
         url += "?parent=/&recursive=true&show_hosts=false"
-        with Progress() as progress:
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Fetching Current Folders", start=False)
             api_folders = self.request(url, method="GET")
             progress.update(task1, total=len(api_folders), start=True)
@@ -158,7 +161,10 @@ class SyncCMK2(CMK2):
         Classic full Fetch
         """
         url = "domain-types/host_config/collections/all"
-        with Progress() as progress:
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Fetching Hosts", start=False)
             progress.console.print("Waiting for Checkmk Response")
             api_hosts = self.request(url, method="GET")
@@ -182,7 +188,10 @@ class SyncCMK2(CMK2):
         Check the folder Structure and get hosts
         whit multiple request
         """
-        with Progress() as progress:
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
             num_folders = len(self.existing_folders)
             task1 = progress.add_task("Fetching Hosts folder by folder", total=num_folders)
             manager = multiprocessing.Manager()
@@ -375,7 +384,10 @@ class SyncCMK2(CMK2):
         db_objects = Host.get_export_hosts()
         total = db_objects.count()
 
-        with Progress() as progress:
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Calculating Hostrules and Attributes", total=total)
             manager = multiprocessing.Manager()
             host_actions = manager.dict()
@@ -410,7 +422,10 @@ class SyncCMK2(CMK2):
 
         total = len(host_actions)
         print(f"\n{CC.OKCYAN} -- {CC.ENDC}Start Sync")
-        with Progress() as progress:
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Handling Checkmk Actions", total=total)
             for hostname, data in host_actions.items():
                 progress.console.print(f"* {hostname}")
