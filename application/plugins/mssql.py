@@ -35,7 +35,7 @@ def _innter_sql(config):
         cnxn = pyodbc.connect(connect_str)
         cursor = cnxn.cursor()
         query = f"select {config['fields']} from {config['table']};"
-        if "custom_query" in config:
+        if "custom_query" in config and config['custom_query']:
             query = config['custom_query']
         logger.debug(query)
         cursor.execute(query)
