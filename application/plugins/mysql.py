@@ -32,7 +32,7 @@ def mysql_import(account):
     )
     mycursor = mydb.cursor()
     query = f"SELECT {config['fields']} FROM {config['table']};"
-    if "custom_query" in config:
+    if "custom_query" in config['custom_query']:
         query = config['custom_query']
     logger.debug(query)
     mycursor.execute(query)
@@ -77,7 +77,7 @@ def mysql_inventorize(account):
     )
     mycursor = mydb.cursor()
     query = f"SELECT {config['fields']} FROM {config['table']};"
-    if "custom_query" in config:
+    if "custom_query" in config['custom_query']:
         query = config['custom_query']
     mycursor.execute(query)
     field_names = config['fields'].split(',')
