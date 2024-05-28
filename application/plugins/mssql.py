@@ -39,8 +39,11 @@ def _innter_sql(config):
             query = config['custom_query']
         logger.debug(query)
         cursor.execute(query)
+        cursor.execute(query)
+        logger.debug("Cursor Executed")
         rows = cursor.fetchall()
         for row in rows:
+            logger.debug(f"Found row: {row}")
             labels=dict(zip(config['fields'].split(","),row))
             hostname = labels[config['hostname_field']].strip().lower()
             if 'rewrite_hostname' in config and config['rewrite_hostname']:
