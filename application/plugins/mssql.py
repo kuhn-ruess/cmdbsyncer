@@ -38,7 +38,7 @@ def _innter_sql(config):
         cursor = cnxn.cursor()
         logger.debug(config)
         query = f"select {config['fields']} from {config['table']};"
-        if "custom_query" in config['custom_query']:
+        if "custom_query" in config and config['custom_query']:
             query = config['custom_query']
         logger.debug(query)
         cursor.execute(query)
