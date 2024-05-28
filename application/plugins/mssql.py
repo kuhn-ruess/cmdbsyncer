@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Import mssl Data"""
+#pylint: disable=logging-fstring-interpolation
 import click
 from application import app, logger
 from application.models.host import Host
@@ -26,6 +27,7 @@ def _innter_sql(config):
         print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
               f"{ColorCodes.UNDERLINE}{config['name']}{ColorCodes.ENDC}")
 
+
         serverport = sqlserverport.lookup(config['address'], config['instance'])
         server = f'{config["address"]},{serverport}'
         connect_str = f'DRIVER={{{config["driver"]}}};SERVER={server};'\
@@ -34,11 +36,11 @@ def _innter_sql(config):
         logger.debug(connect_str)
         cnxn = pyodbc.connect(connect_str)
         cursor = cnxn.cursor()
+        logger.debug(config)
         query = f"select {config['fields']} from {config['table']};"
-        if "custom_query" in config and config['custom_query'] != "":
+        if "custom_query" in config['custom_query']:
             query = config['custom_query']
         logger.debug(query)
-        cursor.execute(query)
         cursor.execute(query)
         logger.debug("Cursor Executed")
         rows = cursor.fetchall()
