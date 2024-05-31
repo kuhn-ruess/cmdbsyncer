@@ -28,6 +28,7 @@ def _innter_sql(config):
               f"{ColorCodes.UNDERLINE}{config['name']}{ColorCodes.ENDC}")
 
 
+        logger.debug(config)
         serverport = sqlserverport.lookup(config['address'], config['instance'])
         server = f'{config["address"]},{serverport}'
         connect_str = f'DRIVER={{{config["driver"]}}};SERVER={server};'\
@@ -36,7 +37,6 @@ def _innter_sql(config):
         logger.debug(connect_str)
         cnxn = pyodbc.connect(connect_str)
         cursor = cnxn.cursor()
-        logger.debug(config)
         query = f"select {config['fields']} from {config['table']};"
         if "custom_query" in config and config['custom_query']:
             query = config['custom_query']
