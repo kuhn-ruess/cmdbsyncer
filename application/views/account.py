@@ -118,6 +118,7 @@ class AccountModelView(DefaultModelView):
                 ('fields', ""),
                 ('table', ""),
                 ('instance', ""),
+                ('serverport', ""),
                 ('database', ""),
                 ('custom_query', ""),
                 ('hostname_field', 'host'),
