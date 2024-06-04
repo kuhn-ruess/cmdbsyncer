@@ -40,7 +40,6 @@ class Host(db.Document):
 
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
-    last_export = db.DateTimeField()
 
 
     raw = db.StringField()
@@ -77,6 +76,8 @@ class Host(db.Document):
         Args:
             create (bool): Create a object if not yet existing (default)
         """
+        if app.config['LOWERCASE_HOSTNAMES']:
+            hostname = hostname.lower()
         try:
             return Host.objects.get(hostname=hostname)
         except DoesNotExist:
@@ -304,8 +305,8 @@ class Host(db.Document):
         """
         Mark that the host was updated on export
         """
-        self.last_export = datetime.datetime.now()
-        self.save()
+        print("Use of deprecated function")
+        return
 
     def need_import_sync(self, hours=24):
         """
@@ -331,14 +332,15 @@ class Host(db.Document):
         Args:
             hours (int): Time in which no update is needed
         """
-        last_export = self.last_export
-        if not last_export:
-            return True
-        if self.force_update:
-            self.force_update = False
-            self.save()
-            return True
-        timediff = datetime.datetime.now() - self.last_export
-        if divmod(timediff.total_seconds(), 3600)[0] > hours:
-            return True
-        return False
+        print("Use of deprecated function")
+        #last_export = self.last_export
+        #if not last_export:
+        #    return True
+        #if self.force_update:
+        #    self.force_update = False
+        #    self.save()
+        #    return True
+        #timediff = datetime.datetime.now() - self.last_export
+        #if divmod(timediff.total_seconds(), 3600)[0] > hours:
+        #    return True
+        #return False

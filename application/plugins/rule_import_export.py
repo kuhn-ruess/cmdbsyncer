@@ -26,6 +26,7 @@ enabled_rules = {
     'cmk_bi_aggregation': ('application.modules.checkmk.models', 'CheckmkBiAggregation'),
     'cmk_bi_rule': ('application.modules.checkmk.models', 'CheckmkBiRule'),
     'host_objects': ('application.models.host', 'Host'),
+    'accounts': ('application.models.account', 'Account'),
 }
 
 

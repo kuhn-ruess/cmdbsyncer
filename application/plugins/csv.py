@@ -86,7 +86,7 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
     with open(csv_path, newline='', encoding=encoding) as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
-            hostname = row[hostname_field].strip().lower()
+            hostname = row[hostname_field].strip()
             keys = list(row.keys())
             for dkey in keys:
                 if not row[dkey]:
@@ -155,11 +155,10 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
     filename = csv_path.split('/')[-1]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
           f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
-    new_attributes = {}
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
-            hostname = row[hostname_field].strip().lower()
+            hostname = row[hostname_field].strip()
             keys = list(row.keys())
             for dkey in keys:
                 if not row[dkey]:
@@ -168,12 +167,14 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
             del row[hostname_field]
             if 'rewrite_hostname' in account and account['rewrite_hostname']:
                 hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], row)
-            new_attributes[hostname] = row
 
-    for host_obj in Host.get_export_hosts():
-        print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {host_obj.hostname}")
-        host_obj.update_inventory(key, new_attributes.get(host_obj.hostname, {}))
-        host_obj.save()
+            host_obj = Host.get_host(hostname, create=False)
+            if host_obj:
+                host_obj.update_inventory(key, row)
+                print(f" {ColorCodes.OKBLUE} * {ColorCodes.ENDC} Updated Inventory")
+                host_obj.save()
+            else:
+                print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Syncer does not have this Host")
 
 @_cli_csv.command('inventorize_hosts')
 @click.argument("csv_path", default="")
