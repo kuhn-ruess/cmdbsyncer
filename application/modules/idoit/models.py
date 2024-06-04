@@ -12,6 +12,8 @@ class IdoitRewriteAttributeRule(db.Document):
     """
 
     name = db.StringField()
+    documentation = db.StringField()
+
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview
@@ -50,6 +52,7 @@ class IdoitCustomAttributes(db.Document):
     """
 
     name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
