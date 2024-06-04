@@ -85,6 +85,10 @@ class SyncConfiguration(CMK2):
                             render_jinja(rule_params['value_template'],
                                          HOSTNAME=db_host.hostname, **attributes['all'])
 
+                        rule_params['folder'] =\
+                            render_jinja(rule_params['folder'],
+                                         HOSTNAME=db_host.hostname, **attributes['all'])
+
                         # Overwrite the Params again
                         rule_params['value'] = value
                         del rule_params['value_template']
