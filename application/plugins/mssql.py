@@ -29,7 +29,8 @@ def _innter_sql(config):
 
 
         logger.debug(config)
-        if not serverport := config.get('serverport'):
+        serverport = config.get('serverport')
+        if not serverport:
             serverport = sqlserverport.lookup(config['address'], config['instance'])
         server = f'{config["address"]},{serverport}'
         connect_str = f'DRIVER={{{config["driver"]}}};SERVER={server};'\
