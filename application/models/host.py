@@ -76,6 +76,8 @@ class Host(db.Document):
         Args:
             create (bool): Create a object if not yet existing (default)
         """
+        if app.config['LOWERCASE_HOSTNAMES']:
+            hostname = hostname.lower()
         try:
             return Host.objects.get(hostname=hostname)
         except DoesNotExist:

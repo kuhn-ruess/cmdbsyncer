@@ -86,7 +86,7 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
     with open(csv_path, newline='', encoding=encoding) as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
-            hostname = row[hostname_field].strip().lower()
+            hostname = row[hostname_field].strip()
             keys = list(row.keys())
             for dkey in keys:
                 if not row[dkey]:
@@ -158,7 +158,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
-            hostname = row[hostname_field].strip().lower()
+            hostname = row[hostname_field].strip()
             keys = list(row.keys())
             for dkey in keys:
                 if not row[dkey]:
@@ -169,9 +169,8 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
                 hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], row)
 
             host_obj = Host.get_host(hostname, create=False)
-            host_obj.update_inventory(key, row)
             if host_obj:
-                host_obj.update_inventory(key, labels)
+                host_obj.update_inventory(key, row)
                 print(f" {ColorCodes.OKBLUE} * {ColorCodes.ENDC} Updated Inventory")
                 host_obj.save()
             else:
