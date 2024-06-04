@@ -31,7 +31,7 @@ class Rule(): # pylint: disable=too-few-public-methods
         Replace all given inputs
         """
         if regex:
-            result = re.sub(regex, '', input_raw.strip()).lower()
+            result = re.sub(regex, '', input_raw.strip())
             return result
         if not exceptions:
             exceptions = []
