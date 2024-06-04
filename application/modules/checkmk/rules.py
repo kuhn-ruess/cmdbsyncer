@@ -101,6 +101,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             ('custom_attributes', []),
             ('remove_attributes', []),
             ('create_cluster', []),
+            ('create_folder', ""),
             ('prefix_labels', False),
             ('only_update_prefixed_labels', False),
             ('parents', []),
@@ -110,11 +111,13 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         for choice, default in possible_outcomes:
             outcomes.setdefault(choice, default)
 
+        print_debug(self.debug,
+                    "- Handle Special options")
+
         for outcome in rule:
             # We add only the outcome of the
             # first matching rule action
             # exception are the folders
-
 
 
 
@@ -139,6 +142,15 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == 'only_update_prefixed_labels':
                 outcomes['only_update_prefixed_labels'] = outcome['action_param']
+
+            if outcome['action'] == 'create_folder':
+                new_value = outcome['action_param']
+                hostname = self.db_host.hostname
+                new_value = render_jinja(new_value, mode="nullify",
+                                         HOSTNAME=hostname, **self.attributes)
+
+                outcomes['extra_folder_options'] += self.format_foldername(new_value)
+                outcomes['create_folder'] += self.fix_and_format_foldername(new_value)
 
             if outcome['action'] == 'folder_pool':
                 self.found_poolfolder_rule = True
@@ -165,9 +177,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             if outcome['action'] == 'custom_attribute':
                 action_param = outcome['action_param']
                 hostname = self.db_host.hostname
-
-                action_render = action_param.replace('{{hostname}}',
-                                                  hostname) # Legacy, Removed in 4.0
 
                 action_render = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
@@ -213,8 +222,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                     if parent and parent not in outcomes['parents']:
                         outcomes['parents'].append(parent)
 
-            print_debug(self.debug,
-                        "- Handle Special options")
 
             if outcome['action'] == 'value_as_folder':
                 search_tag = outcome['action_param']

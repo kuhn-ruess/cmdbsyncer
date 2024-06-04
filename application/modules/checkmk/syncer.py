@@ -291,18 +291,26 @@ class SyncCMK2(CMK2):
         """
         folder = '/'
 
+        if '{' in next_actions.get('extra_folder_options', ''):
+            self.handle_extra_folder_options(next_actions['extra_folder_options'])
+        
+        if 'create_folder' in next_actions:
+            create_folder = next_actions['create_folder']
+            if create_folder not in self.existing_folders:
+                # We may need to create them later
+                self.create_folder(create_folder)
+                self.existing_folders.append(create_folder)
+
         if 'move_folder' in next_actions:
             # Get the Folder where we move to
             # We need that even dont_move is set, because could be for the
             # inital creation
             folder = next_actions['move_folder']
-            if '{' in next_actions.get('extra_folder_options', ''):
-                self.handle_extra_folder_options(next_actions['extra_folder_options'])
 
-        if folder not in self.existing_folders:
-            # We may need to create them later
-            self.create_folder(folder)
-            self.existing_folders.append(folder)
+            if folder not in self.existing_folders:
+                # We may need to create them later
+                self.create_folder(folder)
+                self.existing_folders.append(folder)
 
         return folder
 
