@@ -42,7 +42,7 @@ def mysql_import(account):
         labels = dict(zip(field_names, line))
         if not labels[config['hostname_field']]:
             continue
-        hostname = labels[config['hostname_field']].strip().lower()
+        hostname = labels[config['hostname_field']].strip()
         if 'rewrite_hostname' in config and config['rewrite_hostname']:
             hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
         if not hostname:
@@ -85,7 +85,7 @@ def mysql_inventorize(account):
         labels = dict(zip(field_names, line))
         if not labels[config['hostname_field']]:
             continue
-        hostname = labels[config['hostname_field']].strip().lower()
+        hostname = labels[config['hostname_field']].strip()
         if not hostname:
             continue
         print(f" {ColorCodes.OKCYAN}* {ColorCodes.ENDC} Check {hostname}")

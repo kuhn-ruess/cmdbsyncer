@@ -48,7 +48,7 @@ def _innter_sql(config):
         for row in rows:
             logger.debug(f"Found row: {row}")
             labels=dict(zip(config['fields'].split(","),row))
-            hostname = labels[config['hostname_field']].strip().lower()
+            hostname = labels[config['hostname_field']].strip()
             if 'rewrite_hostname' in config and config['rewrite_hostname']:
                 hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
             yield hostname, labels

@@ -10,19 +10,25 @@ from application.modules.checkmk.helpers import cmk_cleanup_tag_id
 
 def get_list(input_list):
     """
-    Convert a List which is a 
+    Convert a List which is a
     string to real object
     """
-    if isinstance(input_list, str):
-        input_list = ast.literal_eval(input_list.replace('\n',''))
-    return input_list
+    try:
+        if isinstance(input_list, str):
+            input_list = ast.literal_eval(input_list.replace('\n',''))
+        return input_list
+    except ValueError:
+        return []
 
 def merge_list_of_dicts(input_list):
     """
     Merge a list of dicts to single dict
     """
     if isinstance(input_list, str):
-        input_list = ast.literal_eval(input_list.replace('\n',''))
+        try:
+            input_list = ast.literal_eval(input_list.replace('\n',''))
+        except ValueError:
+            return {}
     if not input_list:
         return {}
     dict_obj = {k: v for d in input_list for k, v in d.items() if v}
