@@ -52,6 +52,8 @@ action_outcome_types = [
     ('value_as_folder', "Deprecated: Use move_folder with Jinja"), # 2024-04-08
     ("tag_as_folder",
      "Folder by Attribute  Name: __ Use Attribute Name of given Attribute Value as Folder"),
+    ("create_folder",
+    "Create a Folder by Attributes, but do not Move the a Host in. Does not work with Objects"),
     ("folder_pool",
      "Pool Folder: __ Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute",
