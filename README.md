@@ -51,6 +51,9 @@ This is runs a Development Version which you can use to test everthing
 ### Netbox
 - Rulebased Export and Import Devices to Netbox
 
+### I-Doit
+- Rulebased Export and Import Devices to Netbox
+
 ### Cisco DNA
 - Import devices and their Interface Information
 
