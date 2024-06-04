@@ -41,6 +41,7 @@ class BaseConfig():
 
     REPLACE_ATTRIBUTE_KEYS = False
     LOWERCASE_ATTRIBUTE_KEYS = False
+    LOWERCASE_HOSTNAMES = False
 
     REPLACERS = [
       (' ', '_'),

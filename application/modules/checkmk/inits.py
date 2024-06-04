@@ -63,7 +63,7 @@ def export_tags(account):
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except Exception as error_obj:
-        print(f'C{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
+        print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'Error: {error_obj}'))
     duration = time.time() - start_time
     log.log(f"Synced Tags to Account: {target_config['name']}", source="checkmk_tag_export",

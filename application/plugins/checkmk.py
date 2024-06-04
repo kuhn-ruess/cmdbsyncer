@@ -7,7 +7,7 @@ import click
 from mongoengine.errors import DoesNotExist
 from application import log
 from application.modules.checkmk.syncer import SyncCMK2
-from application.modules.checkmk.cmk2 import cli_cmk, CmkException
+from application.modules.checkmk.cmk2 import cli_cmk
 from application.helpers.get_account import get_account_by_name
 from application.helpers.cron import register_cronjob
 from application.modules.debug import ColorCodes, attribute_table
@@ -126,7 +126,7 @@ def _inner_export_hosts(account, limit=False):
     except Exception as error_obj:
         log.log(f"Export to Checkmk Account: {target_config['name']} FAILED",
         source="checkmk_host_export", details=[('error', str(error_obj))])
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        print(f'{ColorCodes.FAIL}CMK Connection Error: {error_obj} {ColorCodes.ENDC}')
 
 
 @cli_cmk.command('export_hosts')
