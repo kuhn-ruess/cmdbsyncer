@@ -13,6 +13,7 @@ account_types = [
     ('mssql', "MSSQL Table"),
     ('ldap', "Ldap Connect"),
     ('netbox', "Netbox Account"),
+    ('i-doit', "i-doit API"),
     ('cisco_dna', "Cisco DNA Account"),
     ('bmc_remedy', "BMC Remedy (WIP)"),
     ('restapi', "Internal Rest API Credentials"),
