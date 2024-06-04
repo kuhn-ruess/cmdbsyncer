@@ -135,7 +135,10 @@ class AccountModelView(DefaultModelView):
                 ('class_name', ""),
             ]
 
-
+        elif form.typ.data == 'i-doit':
+            default_fields = [
+                ('api_token', ""),
+            ]
 
         if default_fields:
             for field, content in default_fields:
