@@ -183,7 +183,7 @@ class Host(db.Document):
         if not new_data:
             return
         check_dict = {}
-        for name, value in [(x,y for x,y in self.inventory.items()]:
+        for name, value in [(x,y) for x,y in self.inventory.items()]:
             # Delete all existing keys of type
             if name and name.startswith(key+"__"):
                 check_dict[name] = value
