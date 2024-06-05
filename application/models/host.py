@@ -183,13 +183,13 @@ class Host(db.Document):
         if not new_data:
             return
         check_dict = {}
-        for name, value in [(x,y) for x,y in self.inventory.items()]:
+        for name, value in [(x,y for x,y in self.inventory.items()]:
             # Delete all existing keys of type
             if name and name.startswith(key+"__"):
                 check_dict[name] = value
                 del self.inventory[name]
 
-        update_dict = {f"{key}__{self._fix_key(x)}":y for x, y in new_data.items()}
+        update_dict = {f"{key}__{self._fix_key(x)}":str(y) for x, y in new_data.items()}
         self.inventory.update(update_dict)
 
         # If the inventory is changed, the cache
@@ -301,13 +301,6 @@ class Host(db.Document):
         self.available = False
         self.add_log("Not found on Source anymore")
 
-    def set_export_sync(self):
-        """
-        Mark that the host was updated on export
-        """
-        print("Use of deprecated function")
-        return
-
     def need_import_sync(self, hours=24):
         """
         Check when the last sync on import happend,
@@ -324,23 +317,3 @@ class Host(db.Document):
         if divmod(timediff.total_seconds(), 3600)[0] > hours:
             return True
         return False
-
-
-    def need_update(self, hours=24*7):
-        """
-        Check if we want to force an Update on a possible Targe.
-        Args:
-            hours (int): Time in which no update is needed
-        """
-        print("Use of deprecated function")
-        #last_export = self.last_export
-        #if not last_export:
-        #    return True
-        #if self.force_update:
-        #    self.force_update = False
-        #    self.save()
-        #    return True
-        #timediff = datetime.datetime.now() - self.last_export
-        #if divmod(timediff.total_seconds(), 3600)[0] > hours:
-        #    return True
-        #return False
