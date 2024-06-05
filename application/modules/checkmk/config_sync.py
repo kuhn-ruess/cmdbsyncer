@@ -145,8 +145,12 @@ class SyncConfiguration(CMK2):
                 cmk_condition = cmk_rule['extensions']['conditions']
                 rule_found = False
                 for rule in rules:
-                    cmk_value = ast.literal_eval(rule['value'])
-                    check_value = ast.literal_eval(value)
+                    try:
+                        cmk_value = ast.literal_eval(rule['value'])
+                        check_value = ast.literal_eval(value)
+                    except (SyntaxError, KeyError):
+                        logger.debug(f"Invalid Value: '{rule['value']}' or '{value}'")
+                        continue
                     if rule['condition'] == cmk_condition and cmk_value == check_value:
                         rule_found = True
                         # Remove from list, so that it not will be created in the next step
