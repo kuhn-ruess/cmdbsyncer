@@ -678,6 +678,7 @@ class SyncCMK2(CMK2):
             print(f"{CC.OKGREEN} *{CC.ENDC} Send Bulk Update Request {count}/{total}")
             url = "/domain-types/host_config/actions/bulk-update/invoke"
             try:
+                count += 1
                 self.request(url, method="PUT",
                              data={'entries': chunk},
                             )
