@@ -9,6 +9,7 @@ from application.modules.debug import ColorCodes
 from application.models.host import Host
 from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.checkmk.tags import CheckmkTagSync
+from application.modules.checkmk.cmk_rules import CheckmkRuleSync
 from application.modules.checkmk.downtimes import CheckmkDowntimeSync
 from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
 from application.modules.rule.filter import Filter
@@ -265,7 +266,7 @@ def export_rules(account):
         target_config = get_account_by_name(account)
         if target_config:
             rules = _load_rules()
-            syncer = SyncConfiguration()
+            syncer = CheckmkRuleSync()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.config = target_config
