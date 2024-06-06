@@ -1,4 +1,4 @@
-FROM python:3.10-alpine3.19
+FROM python:3.10-alpine3.20
 WORKDIR /srv
 
 RUN addgroup -S uwsgi && adduser -S uwsgi -G uwsgi
