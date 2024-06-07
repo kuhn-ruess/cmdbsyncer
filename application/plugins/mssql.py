@@ -5,7 +5,7 @@ import click
 from application import app, logger
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes as CC
 from application.helpers.cron import register_cronjob
 try:
     import pypyodbc as pyodbc
@@ -24,8 +24,8 @@ def _innter_sql(config):
     """
     try:
 
-        print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
-              f"{ColorCodes.UNDERLINE}{config['name']}{ColorCodes.ENDC}")
+        print(f"{CC.OKBLUE}Started {CC.ENDC} with account "\
+              f"{CC.UNDERLINE}{config['name']}{CC.ENDC}")
 
 
         logger.debug(config)
@@ -62,7 +62,7 @@ def mssql_import(account):
     """
     config = get_account_by_name(account)
     for hostname, labels in _innter_sql(config):
-        print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
+        print(f" {CC.OKGREEN}* {CC.ENDC} Check {hostname}")
         del labels[config['hostname_field']]
         host_obj = Host.get_host(hostname)
         host_obj.update_host(labels)
@@ -70,19 +70,30 @@ def mssql_import(account):
         if do_save:
             host_obj.save()
         else:
-            print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
+            print(f" {CC.WARNING} * {CC.ENDC} Managed by diffrent master")
 
 
-def _innter_inventorize(host_obj, labels, key):
+def _innter_inventorize(host_obj, labels, key, config):
     """
     Add Inventorize Information to host
     """
     if host_obj:
+        attr_match = config.get('inventorize_match_attribute')
+        if attr_match:
+            try:
+                attr_value = host_obj.get_labels()[attr_match]
+                inv_attr_value= labels[attr_match]
+                if attr_value != inv_attr_value:
+                    print(f" {CC.WARNING} * {CC.ENDC} Attribute does not match")
+                    return
+            except KeyError:
+                print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute")
+
         host_obj.update_inventory(key, labels)
-        print(f" {ColorCodes.OKBLUE} * {ColorCodes.ENDC} Updated Inventory")
+        print(f" {CC.OKBLUE} * {CC.ENDC} Updated Inventory")
         host_obj.save()
     else:
-        print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Syncer does not have this Host")
+        print(f" {CC.WARNING} * {CC.ENDC} Syncer does not have this Host")
 
 @cli_mssql.command('import_hosts')
 @click.argument('account')
@@ -97,12 +108,12 @@ def mssql_inventorize(account):
     config = get_account_by_name(account)
     key = config['inventorize_key']
     for hostname, labels in _innter_sql(config):
-        if config['inventorize_match_by_domain']:
+        if config.get('inventorize_match_by_domain'):
             for host_obj in Host.objects(hostname__endswith=hostname):
-                _innter_inventorize(host_obj, labels, key)
+                _innter_inventorize(host_obj, labels, key, config)
         else:
             host_obj = Host.get_host(hostname, create=False)
-            _innter_inventorize(host_obj, labels, key)
+            _innter_inventorize(host_obj, labels, key, config)
 
 
 @cli_mssql.command('inventorize_hosts')
