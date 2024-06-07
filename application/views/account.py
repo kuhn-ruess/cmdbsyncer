@@ -126,6 +126,7 @@ class AccountModelView(DefaultModelView):
                 ('driver', "ODBC Driver 18 for SQL Server"),
                 ('inventorize_key', ""),
                 ('inventorize_match_by_domain', ""),
+                ('inventorize_match_attribute', ""),
             ]
         elif form.typ.data == 'bmc_remedy':
             default_fields = [
