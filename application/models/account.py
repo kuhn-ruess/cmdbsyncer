@@ -11,6 +11,7 @@ account_types = [
     ('json', "Json File"),
     ('mysql', "Mysql Table"),
     ('mssql', "MSSQL Table"),
+    ('odbc', "ODBC Conenctions like FreeTDS"),
     ('ldap', "Ldap Connect"),
     ('netbox', "Netbox Account"),
     ('i-doit', "i-doit API"),

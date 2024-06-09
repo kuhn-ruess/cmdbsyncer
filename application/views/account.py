@@ -128,6 +128,21 @@ class AccountModelView(DefaultModelView):
                 ('inventorize_match_by_domain', ""),
                 ('inventorize_match_attribute', ""),
             ]
+        elif form.typ.data == 'odbc':
+            default_fields = [
+                ('fields', ""),
+                ('table', ""),
+                ('instance', ""),
+                ('serverport', ""),
+                ('database', ""),
+                ('custom_query', ""),
+                ('hostname_field', 'host'),
+                ('rewrite_hostname', ""),
+                ('driver', "FreeTDS"),
+                ('inventorize_key', ""),
+                ('inventorize_match_by_domain', ""),
+                ('inventorize_match_attribute', ""),
+            ]
         elif form.typ.data == 'bmc_remedy':
             default_fields = [
                 #('attributes', "address,systemname,dnshostname"),
