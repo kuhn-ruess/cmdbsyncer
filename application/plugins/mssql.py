@@ -87,8 +87,9 @@ def _innter_inventorize(host_obj, labels, key, config):
                     print(f" {CC.WARNING} * {CC.ENDC} Attribute '{attr_match}' "\
                           f"is '{attr_value}' but '{inv_attr_value}' in source.")
                     return
-            except KeyError:
-                print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute")
+            except KeyError as error:
+                print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
+                      f" Host has no Label {attr_match} ({error})")
 
         host_obj.update_inventory(key, labels)
         print(f" {CC.OKBLUE} * {CC.ENDC} Updated Inventory")
