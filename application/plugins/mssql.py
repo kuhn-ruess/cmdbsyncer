@@ -78,18 +78,23 @@ def _innter_inventorize(host_obj, labels, key, config):
     Add Inventorize Information to host
     """
     if host_obj:
-        attr_match = config.get('inventorize_match_attribute')
+        attr_match = config.get('inventorize_match_attribute').split('=')
+
         if attr_match:
+            if len(attr_match) == 2:
+                host_attr, inv_attr = attr_match
+            else:
+                host_attr, inv_attr = attr_match[0], attr_match[0]
             try:
-                attr_value = host_obj.get_labels()[attr_match]
-                inv_attr_value= labels[attr_match]
+                attr_value = host_obj.get_labels()[host_attr]
+                inv_attr_value= labels[inv_attr]
                 if attr_value != inv_attr_value:
-                    print(f" {CC.WARNING} * {CC.ENDC} Attribute '{attr_match}' "\
-                          f"is '{attr_value}' but '{inv_attr_value}' in source.")
+                    print(f" {CC.WARNING} * {CC.ENDC} Attribute '{host_attr}' "\
+                          f"is '{attr_value}' but '{inv_attr}' is '{inv_attr_value}'")
                     return
-            except KeyError as error:
+            except KeyError:
                 print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
-                      f" Host has no Label {attr_match} ({error})")
+                      f" Host has no Label {host_attr}")
 
         host_obj.update_inventory(key, labels)
         print(f" {CC.OKBLUE} * {CC.ENDC} Updated Inventory")
