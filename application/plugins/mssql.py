@@ -84,7 +84,8 @@ def _innter_inventorize(host_obj, labels, key, config):
                 attr_value = host_obj.get_labels()[attr_match]
                 inv_attr_value= labels[attr_match]
                 if attr_value != inv_attr_value:
-                    print(f" {CC.WARNING} * {CC.ENDC} Attribute does not match")
+                    print(f" {CC.WARNING} * {CC.ENDC} Attribute '{attr_match}' "\
+                          f"is '{attr_value}' but '{inv_attr_value}' in source.")
                     return
             except KeyError:
                 print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute")
