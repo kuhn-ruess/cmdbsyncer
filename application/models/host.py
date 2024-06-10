@@ -110,6 +110,7 @@ class Host(db.Document):
 
     def get_folder(self):
         """ Returns Folder if System is locked to one, else False """
+        #@TODO make this CMK specific
         if self.folder:
             return self.folder
         return False
@@ -122,13 +123,12 @@ class Host(db.Document):
             key (string): Label Name
             value (string): Label Value
         """
-        hit = False
-        for label in self.labels:
-            if label == key:
-                self.labels[label] = value
-                hit = True
-        if not hit:
-            self.labels[key] = str(value)
+        key = self._fix_key(key)
+        if current_value := self.labels.get(key):
+            if current_value == value:
+                return
+        self.labels[key] = str(value).strip()
+        self.cache = {}
 
     def update_host(self, labels):
         """
@@ -152,13 +152,14 @@ class Host(db.Document):
     def set_labels(self, label_dict):
         """
         Overwrite all Labels on host
-        Will reset the cache, so check if realy needed before using
 
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
-        self.labels=dict({self._fix_key(x):str(y) for x, y in label_dict.items()})
-        self.cache = {}
+        new_labels =dict({self._fix_key(x):str(y).strip() for x, y in label_dict.items()})
+        if new_labels != self.labels:
+            self.labels = new_labels
+            self.cache = {}
 
     def get_labels(self):
         """
@@ -189,7 +190,7 @@ class Host(db.Document):
                 check_dict[name] = value
                 del self.inventory[name]
 
-        update_dict = {f"{key}__{self._fix_key(x)}":str(y) for x, y in new_data.items()}
+        update_dict = {f"{key}__{self._fix_key(x)}":str(y).strip() for x, y in new_data.items()}
         self.inventory.update(update_dict)
 
         # If the inventory is changed, the cache
