@@ -143,7 +143,7 @@ class CheckmkDowntimeSync(SyncConfiguration):
                     "start" : dt_start,
                     "end" : dt_end,
                     "duration": duration,
-                    "comment": rule['downtime_comment'],
+                    "comment": downtime_comment,
                 }
 
 
