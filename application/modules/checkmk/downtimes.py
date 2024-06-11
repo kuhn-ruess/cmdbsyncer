@@ -116,6 +116,9 @@ class CheckmkDowntimeSync(SyncConfiguration):
         dt_end_time = datetime.time(end_hour, end_minute, 0, tzinfo=self.timezone())
 
 
+        downtime_comment = render_jinja(rule['downtime_comment'], **attributes)
+
+
         if every in ['day', 'workday', 'week']:
             for day in self.calculate_downtime_days(start_day, every, offset):
                 dt_start = datetime.datetime.combine(day, dt_start_time)
@@ -127,7 +130,7 @@ class CheckmkDowntimeSync(SyncConfiguration):
                     "start" : dt_start,
                     "end" : dt_end,
                     "duration": duration,
-                    "comment": rule['downtime_comment'],
+                    "comment": downtime_comment,
                 }
         else:
             # Fancy Mode
