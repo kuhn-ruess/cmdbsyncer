@@ -182,11 +182,12 @@ class CheckmkDowntimeSync(SyncConfiguration):
 
                 print(f"\n{cc.OKBLUE}({process:.0f}%){cc.ENDC} {db_host.hostname}")
                 counter += 1
-                if not 'cmk__site' in attributes['all']:
-                    print(f"{cc.WARNING} *{cc.ENDC} Host has no cmk Site info")
-                    continue
-                # This Attribute needs to be inventorized from Checkmk
-                cmk_site = attributes['all']['cmk__site']
+                #if not 'cmk__site' in attributes['all']:
+                #    print(f"{cc.WARNING} *{cc.ENDC} Host has no cmk Site info")
+                #    continue
+                ## This Attribute needs to be inventorized from Checkmk
+                #cmk_site = attributes['all']['cmk__site']
+                cmk_site  = "not needed"
 
                 configured_downtimes = []
                 for _rule_type, rules in host_actions.items():
@@ -207,8 +208,10 @@ class CheckmkDowntimeSync(SyncConfiguration):
         Read Downtimes from Checkmk
         """
 
+        #url = f"domain-types/downtime/collections/all?"\
+        #      f"host_name={hostname}&downtime_type=host&site_id={cmk_site}"
         url = f"domain-types/downtime/collections/all?"\
-              f"host_name={hostname}&downtime_type=host&site_id={cmk_site}"
+              f"host_name={hostname}&downtime_type=host"
         response = self.request(url, method="GET")
         downtimes = response[0]['value']
         for downtime in downtimes:
