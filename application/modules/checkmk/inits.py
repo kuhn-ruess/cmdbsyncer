@@ -176,7 +176,7 @@ def bake_and_sign_agents(account):
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
         return False
     if "backery_key_id" not in account_config and "bakery_passphrase" not in account_config:
-        print(f"{ColorCodes.FAIL} Please set baker_key_id and "\
+        print(f"{ColorCodes.FAIL} Please set bakery_key_id and "\
               f"bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
         return False
     cmk = CMK2()
