@@ -14,6 +14,36 @@
   {% if output %}
   <br>
 
+    {% for rule_name, rule_raw in rules.items() %}
+    <div class="card">
+    <div class="card-header">
+    Rules: {{ rule_name }}
+    </div>
+    <div class="card-body">
+    <table class="table table-bordered">
+      <thead>
+         <tr>
+           <th scope="col" style="width:300px">Rule Name</th>
+	   <th scope="col">Hit</th>
+	   <th scope="col">Condition Type</th>
+	   <th scope="col">Last Match</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for rule in rule_raw %}
+         <tr {% if rule['hit'] %} class="table-success" {%endif%}>
+           <td>{{rule['name']}}</td>
+           <td>{{rule['hit']}}</td>
+           <td>{{rule['condition_type']}}</td>
+           <td>{{rule['last_match']}}</td>
+         </tr>
+	 {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    </div>
+
+  {% endfor %}
   {% for header, content in output.items() %}
     <div class="card">
     <div class="card-header">
@@ -44,8 +74,6 @@
     </div>
     <br>
   {% endfor %}
-	
-
   {% endif %}
  </div>
 {% endblock %}

@@ -14,8 +14,7 @@ from application.views.default import DefaultModelView
 from application.modules.rule.views import RuleModelView, \
                     form_subdocuments_template, _render_full_conditions
 from application.modules.checkmk.models import action_outcome_types, CheckmkSite
-from application.plugins.checkmk import _load_rules
-from application.modules.checkmk.syncer import SyncCMK2
+from application.plugins.checkmk import get_debug_data
 
 from application.models.host import Host
 
@@ -77,28 +76,18 @@ def get_host_debug(hostname):
     Get Output for Host Debug Page
     """
 
-    debug_rules = _load_rules()
-
-    syncer = SyncCMK2()
-    syncer.filter = debug_rules['filter']
-
-    syncer.rewrite = debug_rules['rewrite']
-
-    syncer.actions = debug_rules['actions']
-
-    output = {}
-
     try:
         db_host = Host.objects.get(hostname=hostname)
     except DoesNotExist:
         return {'Error': "Host not found in Database"}
 
-    attributes = syncer.get_host_attributes(db_host, 'checkmk')
+    output = {}
+    output_rules = {}
 
-    if not attributes:
-        return {"Error": "This host is ignored by a rule"}
+    attributes, actions, debug_log, db_host = get_debug_data(hostname)
 
-    actions = syncer.get_host_actions(db_host, attributes['all'])
+    for type_name, data in debug_log.items():
+        output_rules[type_name] = data
 
 
     output["Full Attribute List"] = attributes['all']
@@ -116,7 +105,7 @@ def get_host_debug(hostname):
     # Otherwise, if a rule with folder pools is executed at first time here,
     # the seat will be locked, but not saved by the host
     db_host.save()
-    return output
+    return output, output_rules
 
 #pylint: disable=too-few-public-methods
 class CheckmkRuleView(RuleModelView):
@@ -133,8 +122,8 @@ class CheckmkRuleView(RuleModelView):
         hostname = request.args.get('hostname','')
         output= {}
         if hostname:
-            output = get_host_debug(hostname)
-        return self.render('debug.html', hostname=hostname, output=output)
+            output, output_rules = get_host_debug(hostname)
+        return self.render('debug.html', hostname=hostname, output=output, rules=output_rules)
 
     def __init__(self, model, **kwargs):
         """

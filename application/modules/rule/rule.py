@@ -18,6 +18,7 @@ class Rule(): # pylint: disable=too-few-public-methods
     Base Rule Class
     """
     debug = False
+    debug_lines = []
     rules = []
     name = ""
     attributes = {}
@@ -133,6 +134,14 @@ class Rule(): # pylint: disable=too-few-public-methods
                 rule_hit = True
 
             if self.debug:
+                debug_data = {
+                    "hit": rule_hit,
+                    "condition_type": rule_descriptions[rule['condition_typ']],
+                    "name": rule['name'],
+                    "id": str(rule['_id']),
+                    "last_match": str(rule['last_match'])
+                }
+                self.debug_lines.append(debug_data)
                 table.add_row(str(rule_hit), rule_descriptions[rule['condition_typ']],\
                               rule['name'][:30], str(rule['_id']), str(rule['last_match']))
             if rule_hit:
