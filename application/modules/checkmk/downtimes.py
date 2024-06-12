@@ -4,8 +4,11 @@ Checkmk Downtime Sync
 
 import datetime
 import calendar
+import multiprocessing
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
+
 from application import app
-from application.modules.checkmk.cmk2 import CmkException 
+from application.modules.checkmk.cmk2 import CmkException
 from application.modules.checkmk.config_sync import SyncConfiguration
 from syncerapi.v1 import Host, cc, render_jinja
 
@@ -172,52 +175,55 @@ class CheckmkDowntimeSync(SyncConfiguration):
             print(f"\n{cc.WARNING} *{cc.ENDC} Downtime failed: "\
                   f"{error}")
 
+    def do_hosts_downtimes(self, db_host):
+        """
+        Calls for one Hosts Downtime
+        """
+        attributes = self.get_host_attributes(db_host, 'cmk_conf')
+        if not attributes:
+            return
+
+        host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+        if host_actions:
+            configured_downtimes = []
+            for _rule_type, rules in host_actions.items():
+                for rule in rules:
+                    configured_downtimes += \
+                            list(self.calculate_configured_downtimes(rule, attributes['all']))
+
+            current_downtimes = list(
+                        self.get_current_cmk_downtimes(db_host.hostname)
+                    )
+            for downtime in configured_downtimes:
+                if downtime not in current_downtimes:
+                    self.set_downtime(db_host.hostname, downtime)
+
     def export_downtimes(self):
         """
         Export Downtimes
         """
         # Collect Rules
         total = Host.objects.count()
-        counter = 0
-        for db_host in Host.objects():
-            attributes = self.get_host_attributes(db_host, 'cmk_conf')
-            if not attributes:
-                continue
-            process = 100.0 * counter / total
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            task1 = progress.add_task("Calculating Downtimes", total=total)
+            for db_host in Host.objects():
+                with multiprocessing.Pool() as pool:
+                    pool.apply_async(self.do_hosts_downtimes,
+                                     args=(db_host,),
+                                     callback=lambda x: progress.advance(task1))
+                    progress.console.print(f"- Started for {db_host.hostname}")
 
-            host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-            if host_actions:
+            pool.close()
+            pool.join()
 
-                print(f"\n{cc.OKBLUE}({process:.0f}%){cc.ENDC} {db_host.hostname}")
-                counter += 1
-                #if not 'cmk__site' in attributes['all']:
-                #    print(f"{cc.WARNING} *{cc.ENDC} Host has no cmk Site info")
-                #    continue
-                ## This Attribute needs to be inventorized from Checkmk
-                #cmk_site = attributes['all']['cmk__site']
-                cmk_site  = "not needed"
-
-                configured_downtimes = []
-                for _rule_type, rules in host_actions.items():
-                    for rule in rules:
-                        configured_downtimes += \
-                                list(self.calculate_configured_downtimes(rule, attributes['all']))
-
-                current_downtimes = list(
-                            self.get_current_cmk_downtimes(cmk_site, db_host.hostname)
-                        )
-
-                for downtime in configured_downtimes:
-                    if downtime not in current_downtimes:
-                        self.set_downtime(db_host.hostname, downtime)
-
-    def get_current_cmk_downtimes(self, cmk_site, hostname):
+    def get_current_cmk_downtimes(self, hostname):
         """
         Read Downtimes from Checkmk
         """
 
-        #url = f"domain-types/downtime/collections/all?"\
-        #      f"host_name={hostname}&downtime_type=host&site_id={cmk_site}"
         url = f"domain-types/downtime/collections/all?"\
               f"host_name={hostname}&downtime_type=host"
         response = self.request(url, method="GET")
