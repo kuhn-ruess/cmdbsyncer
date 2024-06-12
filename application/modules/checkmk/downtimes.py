@@ -5,6 +5,7 @@ Checkmk Downtime Sync
 import datetime
 import calendar
 from application import app
+from application.modules.checkmk.cmk2 import CmkException 
 from application.modules.checkmk.config_sync import SyncConfiguration
 from syncerapi.v1 import Host, cc, render_jinja
 
@@ -163,9 +164,13 @@ class CheckmkDowntimeSync(SyncConfiguration):
         }
         if downtime['duration']:
             data['duration'] = int(downtime['duration'])
-        self.request(url, method="POST", data=data)
-        print(f"\n{cc.OKGREEN} *{cc.ENDC} Set Downtime for "\
-              f"{data['start_time']} ({data['comment']})")
+        try:
+            self.request(url, method="POST", data=data)
+            print(f"\n{cc.OKGREEN} *{cc.ENDC} Set Downtime for "\
+                  f"{data['start_time']} ({data['comment']})")
+        except CmkException as error:
+            print(f"\n{cc.WARNING} *{cc.ENDC} Downtime failed: "\
+                  f"{error}")
 
     def export_downtimes(self):
         """
