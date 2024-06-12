@@ -149,6 +149,48 @@ def export_hosts(account, limit):
     _inner_export_hosts(account, limit_list)
 #.
 #   .-- Command: Host Debug
+
+def get_debug_data(hostname):
+    """
+    Returns Debug Data
+    """
+    rules = _load_rules()
+
+    rule_logs = {}
+
+    syncer = SyncCMK2()
+    syncer.debug = True
+    rules['filter'].debug = True
+    syncer.filter = rules['filter']
+    rule_logs['filter'] = rules['filter'].debug_lines
+
+    rules['rewrite'].debug = True
+    syncer.rewrite = rules['rewrite']
+    rule_logs['rewrite'] = rules['rewrite'].debug_lines
+
+    rules['actions'].debug=True
+    syncer.actions = rules['actions']
+    rule_logs['actions'] = rules['actions'].debug_lines
+
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+        for key in list(db_host.cache.keys()):
+            if key.lower().startswith('checkmk'):
+                del db_host.cache[key]
+        if 'CustomAttributeRule' in db_host.cache:
+            del db_host.cache['CustomAttributeRule']
+        db_host.save()
+    except DoesNotExist:
+        print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
+        raise
+
+    attributes = syncer.get_host_attributes(db_host, 'checkmk')
+
+    actions = syncer.get_host_actions(db_host, attributes['all'])
+
+    return attributes, actions, rule_logs, db_host
+
+
 @cli_cmk.command('debug_host')
 @click.argument("hostname")
 def debug_host(hostname):
@@ -161,38 +203,12 @@ def debug_host(hostname):
     Args:
         hostname (string): Name of Host
     """
-    rules = _load_rules()
 
-    syncer = SyncCMK2()
-    syncer.debug = True
-    rules['filter'].debug = True
-    syncer.filter = rules['filter']
-
-    rules['rewrite'].debug = True
-    syncer.rewrite = rules['rewrite']
-
-    rules['actions'].debug=True
-    syncer.actions = rules['actions']
-
-    try:
-        db_host = Host.objects.get(hostname=hostname)
-        for key in list(db_host.cache.keys()):
-            if key.lower().startswith('checkmk'):
-                del db_host.cache[key]
-        if 'CustomAttributeRule' in db_host.cache:
-            del db_host.cache['CustomAttributeRule']
-        db_host.save()
-    except DoesNotExist:
-        print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
-        return
-
-    attributes = syncer.get_host_attributes(db_host, 'checkmk')
+    attributes, actions, _debug_log, db_host = get_debug_data(hostname)
 
     if not attributes:
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY RULE{ColorCodes.ENDC}")
         return
-
-    actions = syncer.get_host_actions(db_host, attributes['all'])
 
     attribute_table("Full Attribute List", attributes['all'])
     attribute_table("Filtered Labels for Checkmk", attributes['filtered'])
