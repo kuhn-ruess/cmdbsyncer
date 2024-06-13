@@ -25,6 +25,7 @@ class Plugin():
     verify = True
 
     dry_run = False
+    save_requests = False
 
 
     def inner_request(self, method, url, data, headers):
@@ -65,7 +66,10 @@ class Plugin():
             'delete': requests.delete(url, **payload),
         }
         resp = jobs[method]
-        resp_json = resp.json()
+        try:
+            resp_json = resp.json()
+        except requests.exceptions.JSONDecodeError:
+            resp_json = {}
         return jobs[method], resp_json
 
 
