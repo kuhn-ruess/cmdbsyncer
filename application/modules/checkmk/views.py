@@ -79,7 +79,7 @@ def get_host_debug(hostname):
     try:
         db_host = Host.objects.get(hostname=hostname)
     except DoesNotExist:
-        return {'Error': "Host not found in Database"}
+        return {'Error': "Host not found in Database"}, {}
 
     output = {}
     output_rules = {}
@@ -121,6 +121,7 @@ class CheckmkRuleView(RuleModelView):
         """
         hostname = request.args.get('hostname','')
         output= {}
+        output_rules = {}
         if hostname:
             output, output_rules = get_host_debug(hostname)
         return self.render('debug.html', hostname=hostname, output=output, rules=output_rules)
