@@ -142,10 +142,10 @@ admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects"))
 #   .-- Global
 from application.modules.custom_attributes.models import CustomAttributeRule
 from application.modules.custom_attributes.views import CustomAttributeView
-admin.add_view(CustomAttributeView(CustomAttributeRule, name="Custom Attributes", category="Rules"))
+admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Module Rules"))
 #.
 #   .-- Checkmk
-admin.add_sub_category(name="Checkmk", parent_name="Rules")
+admin.add_sub_category(name="Checkmk", parent_name="Module Rules")
 admin.add_link(MenuLink(name='Debug Config', category='Checkmk',
                         url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
 
@@ -154,7 +154,7 @@ from application.modules.checkmk.views import CheckmkRuleView, CheckmkGroupRuleV
 
 
 from application.modules.checkmk.models import CheckmkRewriteAttributeRule
-admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite Syncer Attributes",
+admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite and Custom Syncer Attributes",
                                                             category="Checkmk"))
 admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter Hosts and Labels", category="Checkmk"))
 admin.add_view(CheckmkRuleView(CheckmkRule, name="Set Folders and Checkmk Attributes", category="Checkmk"))
@@ -213,7 +213,7 @@ admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Chec
 
 #.
 #   .-- Ansible
-admin.add_sub_category(name="Ansible", parent_name="Rules")
+admin.add_sub_category(name="Ansible", parent_name="Module Rules")
 from application.modules.ansible.models import AnsibleCustomVariablesRule, \
                                         AnsibleFilterRule, AnsibleRewriteAttributesRule
 from application.modules.ansible.views import AnsibleCustomVariablesView
@@ -225,7 +225,7 @@ admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
                                     name="Custom Variables", category="Ansible"))
 #.
 #   .-- Netbox
-admin.add_sub_category(name="Netbox", parent_name="Rules")
+admin.add_sub_category(name="Netbox", parent_name="Module Rules")
 
 from application.modules.netbox.views import NetboxCustomAttributesView
 from application.modules.netbox.models import NetboxCustomAttributes, \
@@ -236,7 +236,7 @@ admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
                                     name="Custom Attributes", category="Netbox"))
 #.
 #   .-- i-doit
-admin.add_sub_category(name="i-doit", parent_name="Rules")
+admin.add_sub_category(name="i-doit", parent_name="Module Rules")
 
 from application.modules.idoit.views import IdoitCustomAttributesView
 from application.modules.idoit.models import IdoitCustomAttributes, \
@@ -251,7 +251,7 @@ admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
 #   .-- Config
 from application.models.account import Account
 from application.views.account import AccountModelView
-admin.add_view(AccountModelView(Account, name="Accounts", category="Config"))
+admin.add_view(AccountModelView(Account, name="Account Settings"))
 
 from application.models.user import User
 from application.views.user import UserView
