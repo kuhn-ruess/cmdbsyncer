@@ -154,59 +154,61 @@ from application.modules.checkmk.views import CheckmkRuleView, CheckmkGroupRuleV
 
 
 from application.modules.checkmk.models import CheckmkRewriteAttributeRule
-admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite Attributes",
+admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite Syncer Attributes",
                                                             category="Checkmk"))
-admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter", category="Checkmk"))
-admin.add_view(CheckmkRuleView(CheckmkRule, name="Export Rules", category="Checkmk"))
+admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter Hosts and Labels", category="Checkmk"))
+admin.add_view(CheckmkRuleView(CheckmkRule, name="Set Folders and Checkmk Attributes", category="Checkmk"))
 admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
-                                    name="Checkmk Groups Management", category="Checkmk"))
+                                    name="Manage Host-/Contact-/Service- Groups", category="Checkmk"))
 
-from application.modules.checkmk.models import CheckmkInventorizeAttributes
-admin.add_view(DefaultModelView(CheckmkInventorizeAttributes, name="Inventorize Settings",
-                                                            category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkRuleMngmt
 from application.modules.checkmk.views import CheckmkMngmtRuleView
 admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
-                                    name="Checkmk Rules Management", category="Checkmk"))
+                                    name="Create Setup Rules", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkTagMngmt
 from application.modules.checkmk.views import CheckmkTagMngmtView
-admin.add_view(CheckmkTagMngmtView(CheckmkTagMngmt, name="Checkmk Tags", category="Checkmk"))
+admin.add_view(CheckmkTagMngmtView(CheckmkTagMngmt, name="Manage Hosttags", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkUserMngmt
 from application.modules.checkmk.views import CheckmkUserMngmtView
-admin.add_view(CheckmkUserMngmtView(CheckmkUserMngmt, name="Checkmk User", category="Checkmk"))
+admin.add_view(CheckmkUserMngmtView(CheckmkUserMngmt, name="Manage Checkmk Users", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkDowntimeRule
 from application.modules.checkmk.views import CheckmkDowntimeView
-admin.add_view(CheckmkDowntimeView(CheckmkDowntimeRule, name="Checkmk Downtimes", category="Checkmk"))
+admin.add_view(CheckmkDowntimeView(CheckmkDowntimeRule, name="Manage Downtimes", category="Checkmk"))
 
 
-admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
-from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
-from application.modules.checkmk.views import CheckmkSettingsView, CheckmkSiteView
-admin.add_view(CheckmkSettingsView(CheckmkSettings, name="Server Settings", \
-                                                            category="Checkmk Server"))
-admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Checkmk Server"))
 
-admin.add_sub_category(name="Business Intelligence", parent_name="Checkmk")
+admin.add_sub_category(name="Manage Business Intelligence", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRule
 from application.modules.checkmk.views import CheckmkBiRuleView
 admin.add_view(CheckmkBiRuleView(CheckmkBiAggregation, name="BI Aggregation",\
-                                                            category="Business Intelligence"))
-admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Business Intelligence"))
+                                                            category="Manage Business Intelligence"))
+admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Manage Business Intelligence"))
 
 
 from application.modules.checkmk.models import CheckmkFolderPool
 from application.modules.checkmk.views import CheckmkFolderPoolView
 admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
 
+from application.modules.checkmk.models import CheckmkInventorizeAttributes
+admin.add_view(DefaultModelView(CheckmkInventorizeAttributes, name="Inventorize from Checkmk Settings",
+                                                            category="Checkmk"))
+
 from application.modules.checkmk.models import CheckmkObjectCache
 from application.modules.checkmk.views import CheckmkCacheView
 
 admin.add_view(CheckmkCacheView(CheckmkObjectCache, \
                                     name="Object Cache", category="Checkmk"))
+
+admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
+from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
+from application.modules.checkmk.views import CheckmkSettingsView, CheckmkSiteView
+admin.add_view(CheckmkSettingsView(CheckmkSettings, name="Checkmk Site Updates and Creation", \
+                                                            category="Checkmk Server"))
+admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Checkmk Server"))
 
 
 #.
