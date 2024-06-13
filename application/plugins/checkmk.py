@@ -166,15 +166,14 @@ def get_debug_data(hostname):
     syncer.debug = True
     rules['filter'].debug = True
     syncer.filter = rules['filter']
-    rule_logs['filter'] = rules['filter'].debug_lines
 
     rules['rewrite'].debug = True
     syncer.rewrite = rules['rewrite']
-    rule_logs['rewrite'] = rules['rewrite'].debug_lines
 
     rules['actions'].debug=True
     syncer.actions = rules['actions']
-    rule_logs['actions'] = rules['actions'].debug_lines
+
+
 
     try:
         db_host = Host.objects.get(hostname=hostname)
@@ -191,6 +190,10 @@ def get_debug_data(hostname):
     attributes = syncer.get_host_attributes(db_host, 'checkmk')
 
     actions = syncer.get_host_actions(db_host, attributes['all'])
+
+    rule_logs['filter'] = rules['filter'].debug_lines
+    rule_logs['rewrite'] = rules['rewrite'].debug_lines
+    rule_logs['actions'] = rules['actions'].debug_lines
 
     return attributes, actions, rule_logs, db_host
 

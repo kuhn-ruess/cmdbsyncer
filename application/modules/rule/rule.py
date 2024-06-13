@@ -26,6 +26,10 @@ class Rule(): # pylint: disable=too-few-public-methods
     db_host = False
     cache_name = False
 
+
+    def __init__(self):
+        self.debug_lines = []
+
     @staticmethod
     def replace(input_raw, exceptions=None, regex=None):
         """
@@ -135,6 +139,7 @@ class Rule(): # pylint: disable=too-few-public-methods
 
             if self.debug:
                 debug_data = {
+                    "group": self.name,
                     "hit": rule_hit,
                     "condition_type": rule_descriptions[rule['condition_typ']],
                     "name": rule['name'],

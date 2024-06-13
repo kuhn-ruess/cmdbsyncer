@@ -40,7 +40,7 @@
       <tbody>
       {% for rule in rule_raw %}
          <tr {% if rule['hit'] %} class="table-success" {%endif%}>
-           <td>{{rule['name']}}</td>
+           <td><a href="{{rule['rule_url']}}">{{rule['name']}}</a></td>
            <td>{{rule['hit']}}</td>
            <td>{{rule['condition_type']}}</td>
            <td>{{rule['last_match']}}</td>
