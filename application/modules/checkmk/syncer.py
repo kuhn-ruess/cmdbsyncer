@@ -279,7 +279,7 @@ class SyncCMK2(CMK2):
         """
         attributes = self.get_host_attributes(db_host, 'checkmk')
         if not attributes:
-            print(f"{CC.WARNING} *{CC.ENDC} Host ignored by rules")
+            logger.debug("Host ignored by rules")
             return
         next_actions = self.get_host_actions(db_host, attributes['all'])
         host_actions[db_host.hostname] = (next_actions, attributes)

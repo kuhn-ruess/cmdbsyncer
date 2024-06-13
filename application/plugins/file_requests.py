@@ -2,18 +2,32 @@
 Rule Import/ Export
 """
 #pylint: disable=too-many-arguments
-from application import app
 from ast import literal_eval
+import requests
 import click
+from application import app
 
 @app.cli.group(name='request-runner')
 def cli_requests():
-    """Request related commands"""
+    """Action Versioning System"""
+
+def run(method, url, payload):
+    """
+    Run requests
+    """
+    jobs = {
+        'get': requests.get(url, **payload),
+        'post': requests.post(url, **payload),
+        'put': requests.put(url, **payload),
+        'delete': requests.delete(url, **payload),
+    }
+    resp = jobs[method]
+
+    print(f"({resp.status_code}) {url}")
 
 @cli_requests.command('run_request_file')
 @click.argument("file_path")
-@click.argument("account")
-def run_requests(file_path, account):
+def run_requests(file_path):
     """
     Run a File of requests
     """
@@ -22,5 +36,5 @@ def run_requests(file_path, account):
             if not line:
                 continue
             method, url, data = line.split('||')
-            data = literal_eval(data)
-            print(method, url, data)
+            payload = literal_eval(data)
+            run(method, url, payload)

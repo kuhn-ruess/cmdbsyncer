@@ -105,12 +105,14 @@ def show_labels():
 #.
 #   .-- Command: Export Hosts
 
-def _inner_export_hosts(account, limit=False):
+def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False):
     try:
         target_config = get_account_by_name(account)
         if target_config:
             rules = _load_rules()
             syncer = SyncCMK2()
+            syncer.dry_run = dry_run
+            syncer.save_requests = save_requests
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.limit = limit
@@ -133,7 +135,9 @@ def _inner_export_hosts(account, limit=False):
 @click.argument("account")
 @click.option("--limit", default='')
 #@click.option("--debug", default=False, is_flag=True)
-def export_hosts(account, limit):
+@click.option("--dry-run", default=False, is_flag=True)
+@click.option("--save-requests", default='')
+def export_hosts(account, limit, dry_run, save_requests):
     """
     ## Export Hosts to Checkmk
 
@@ -146,7 +150,7 @@ def export_hosts(account, limit):
     """
 
     limit_list = [x.strip() for x in limit.split(',') if x]
-    _inner_export_hosts(account, limit_list)
+    _inner_export_hosts(account, limit_list, dry_run, save_requests)
 #.
 #   .-- Command: Host Debug
 

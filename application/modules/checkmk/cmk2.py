@@ -4,7 +4,7 @@ Central Request Modul to CMK 2.x
 #pylint: disable=logging-fstring-interpolation
 from pprint import pformat
 import requests
-from requests.exceptions import ConnectionError
+#from requests.exceptions import ConnectionError
 from application import app, log, logger
 from application.modules.plugin import Plugin
 
@@ -50,27 +50,15 @@ class CMK2(Plugin):
         response = False
         if additional_header:
             headers.update(additional_header)
-        try:
-            method = method.lower()
-            #pylint: disable=missing-timeout
-            logger.debug(f"Request ({method.upper()}) to {url}")
-            logger.debug(f"Request Body: {data}")
-            logger.debug(f"Request Headers: {headers}")
-            if method == 'get':
-                response = requests.get(url,
-                                        headers=headers,
-                                        params=data,
-                                        verify=self.verify,
-                                       )
-            elif method == 'post':
-                response = requests.post(url, json=data, headers=headers, verify=self.verify)
-            elif method == 'put':
-                response = requests.put(url, json=data, headers=headers, verify=self.verify)
-            elif method == 'delete':
-                response = requests.delete(url, headers=headers, verify=self.verify)
-                # Checkmk gives no json response here, so we directly return
-                return True, response.status_code
 
+        if method.lower() in ['post', 'put', 'delete']:
+            headers['Content-Type'] = 'application/json'
+
+
+        try:
+            #pylint: disable=missing-timeout
+
+            response, response_json = self.inner_request(method, url, data, headers)
 
             #pylint: disable=line-too-long
             error_whitelist = [
@@ -83,12 +71,11 @@ class CMK2(Plugin):
 
             if response.status_code == 204: # No Content
                 return {}, {'status_code': response.status_code}
-            elif response.status_code != 200:
+            if response.status_code != 200:
                 # If the status Code is not 200,
                 # we can't sure to get Json as response
                 # so we try some failbacks and whitelist some cases
                 try:
-                    response_json = response.json()
                     logger.debug(f"Response Json: {pformat(response_json)}")
                 except:
                     # pylint: disable=raise-missing-from
@@ -106,7 +93,6 @@ class CMK2(Plugin):
             resp_header = response.headers
             resp_header['status_code'] = response.status_code
 
-            response_json = response.json()
             logger.debug(f"Response Json: {pformat(response_json)}")
             return response_json, resp_header
         except (ConnectionResetError, requests.exceptions.ProxyError):
@@ -114,4 +100,5 @@ class CMK2(Plugin):
                 return {}, {'status_code': response.status_code}
             return {}, {"error": "Checkmk Connections broken"}
         except ConnectionError:
+            #pylint: disable=raise-missing-from
             raise CmkException("Can't connect to Checkmk")
