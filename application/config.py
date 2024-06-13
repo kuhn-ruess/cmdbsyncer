@@ -1,6 +1,5 @@
 """ Config File """
 #pylint: disable=too-few-public-methods
-import datetime
 import logging
 
 class BaseConfig():
@@ -70,7 +69,6 @@ class BaseConfig():
 
     }
 
-    TIMEZONE = datetime.timezone.utc
 
     FILEADMIN_PATH = '/srv/cmdbsyncer-files'
 

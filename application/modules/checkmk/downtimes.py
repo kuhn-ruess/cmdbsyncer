@@ -7,7 +7,6 @@ import calendar
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from application import app
 from application.modules.checkmk.cmk2 import CmkException
 from application.modules.checkmk.config_sync import SyncConfiguration
 from syncerapi.v1 import Host, cc, render_jinja
@@ -18,12 +17,6 @@ class CheckmkDowntimeSync(SyncConfiguration):
     """
     Sync Checkmk Downtimes
     """
-
-    def timezone(self):
-        """
-        Define the used Timezone
-        """
-        return app.config['TIMEZONE']
 
     def ahead_days(self, offset):
         """
@@ -58,7 +51,7 @@ class CheckmkDowntimeSync(SyncConfiguration):
 
         every = int(every.replace('.', ''))
 
-        now = datetime.datetime.now(self.timezone())
+        now = datetime.datetime.now(datetime.timezone.utc)
         year = now.year
         month = now.month
         next_year = year
@@ -117,9 +110,9 @@ class CheckmkDowntimeSync(SyncConfiguration):
         if rule['offset_days_template']:
             offset = int(render_jinja(rule['offset_days_template'], **attributes))
 
-        now = datetime.datetime.now(self.timezone())
-        dt_start_time = datetime.time(start_hour, start_minute, 0, tzinfo=self.timezone())
-        dt_end_time = datetime.time(end_hour, end_minute, 0, tzinfo=self.timezone())
+        now = datetime.datetime.now(datetime.timezone.utc)
+        dt_start_time = datetime.time(start_hour, start_minute, 0)
+        dt_end_time = datetime.time(end_hour, end_minute, 0)
 
 
         downtime_comment = render_jinja(rule['downtime_comment'], **attributes)
@@ -127,8 +120,12 @@ class CheckmkDowntimeSync(SyncConfiguration):
 
         if every in ['day', 'workday', 'week']:
             for day in self.calculate_downtime_days(start_day, every, offset):
-                dt_start = datetime.datetime.combine(day, dt_start_time)
-                dt_end = datetime.datetime.combine(day, dt_end_time)
+                dt_start = \
+                        datetime.datetime.combine(day, dt_start_time)\
+                            .astimezone(datetime.timezone.utc)
+                dt_end = \
+                        datetime.datetime.combine(day, dt_end_time)\
+                            .astimezone(datetime.timezone.utc)
 
                 if dt_start < now:
                     continue
@@ -141,8 +138,12 @@ class CheckmkDowntimeSync(SyncConfiguration):
         else:
             # Fancy Mode
             for day in self.calculate_downtime_dates(start_day, every, offset):
-                dt_start = datetime.datetime.combine(day, dt_start_time)
-                dt_end = datetime.datetime.combine(day, dt_end_time)
+                dt_start = \
+                        datetime.datetime.combine(day, dt_start_time)\
+                            .astimezone(datetime.timezone.utc)
+                dt_end = \
+                        datetime.datetime.combine(day, dt_end_time)\
+                        .astimezone(datetime.timezone.utc)
                 if dt_start < now:
                     continue
                 yield {
@@ -219,10 +220,11 @@ class CheckmkDowntimeSync(SyncConfiguration):
                         progress.advance(task1)
                         continue
 
-                    pool.apply_async(self.do_hosts_downtimes,
+                    x= pool.apply_async(self.do_hosts_downtimes,
                                      args=(hostname, host_actions, attributes),
                                      callback=lambda x: progress.advance(task1))
 
+                    x.get()
                 pool.close()
                 pool.join()
 
