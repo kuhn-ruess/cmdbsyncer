@@ -11,7 +11,7 @@
     <button type="submit" class="btn btn-primary">Submit</button>
   </form>
 
-  {% if output %}
+  {% if output is mapping%}
   <br>
 
 
@@ -91,6 +91,9 @@
     </div>
   {% endfor %}
  </div>
+ {% else %}
+ {{output}}
   {% endif %}
+
    </div>
 {% endblock %}
