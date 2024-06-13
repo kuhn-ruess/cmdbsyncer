@@ -52,6 +52,7 @@ class CheckmkDowntimeSync(SyncConfiguration):
         Calculate configured day for a datime,
         like first of month
         """
+        #pylint: disable=too-many-locals
         if offset:
             start_day = _weekdays[_weekdays.index(start_day)+offset]
 
@@ -94,6 +95,7 @@ class CheckmkDowntimeSync(SyncConfiguration):
         """
         Calculate the Downtime payload
         """
+        #pylint: disable=too-many-locals
         start_hour = int(render_jinja(rule['start_time_h'], **attributes))
         start_minute = int(render_jinja(rule['start_time_m'], **attributes))
         end_hour = int(render_jinja(rule['end_time_h'], **attributes))
@@ -175,28 +177,22 @@ class CheckmkDowntimeSync(SyncConfiguration):
             print(f"\n{cc.WARNING} *{cc.ENDC} Downtime failed: "\
                   f"{error}")
 
-    def do_hosts_downtimes(self, db_host):
+    def do_hosts_downtimes(self, hostname, host_actions, attributes):
         """
         Calls for one Hosts Downtime
         """
-        attributes = self.get_host_attributes(db_host, 'cmk_conf')
-        if not attributes:
-            return
+        configured_downtimes = []
+        for _rule_type, rules in host_actions.items():
+            for rule in rules:
+                configured_downtimes += \
+                        list(self.calculate_configured_downtimes(rule, attributes['all']))
 
-        host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-        if host_actions:
-            configured_downtimes = []
-            for _rule_type, rules in host_actions.items():
-                for rule in rules:
-                    configured_downtimes += \
-                            list(self.calculate_configured_downtimes(rule, attributes['all']))
-
-            current_downtimes = list(
-                        self.get_current_cmk_downtimes(db_host.hostname)
-                    )
-            for downtime in configured_downtimes:
-                if downtime not in current_downtimes:
-                    self.set_downtime(db_host.hostname, downtime)
+        current_downtimes = list(
+                    self.get_current_cmk_downtimes(hostname)
+                )
+        for downtime in configured_downtimes:
+            if downtime not in current_downtimes:
+                self.set_downtime(hostname, downtime)
 
     def export_downtimes(self):
         """
@@ -209,12 +205,23 @@ class CheckmkDowntimeSync(SyncConfiguration):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Calculating Downtimes", total=total)
-            for db_host in Host.objects():
-                with multiprocessing.Pool() as pool:
+            with multiprocessing.Pool() as pool:
+                for db_host in Host.objects():
+                    hostname = db_host.hostname
+                    progress.console.print(f"- Started for {hostname}")
+                    attributes = self.get_host_attributes(db_host, 'cmk_conf')
+                    if not attributes:
+                        progress.advance(task1)
+                        continue
+
+                    host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+                    if not host_actions:
+                        progress.advance(task1)
+                        continue
+
                     pool.apply_async(self.do_hosts_downtimes,
-                                     args=(db_host,),
+                                     args=(hostname, host_actions, attributes),
                                      callback=lambda x: progress.advance(task1))
-                    progress.console.print(f"- Started for {db_host.hostname}")
 
             pool.close()
             pool.join()
