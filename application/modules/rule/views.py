@@ -368,6 +368,17 @@ class RewriteAttributeView(RuleModelView):
                             'overwrite_value': { 'style': 'background-color: #81DAF5;' },
                             'new_value': { 'style': 'background-color: #81DAF5;' },
                         },
+                        'form_rules' : [
+                            rules.HTML("<div class='form-row'><div class='col'>"),
+                            rules.FieldSet(
+                                ('old_attribute_name', 'overwrite_name', 'new_attribute_name'),
+                                 "Attribute Name"),
+                            rules.HTML("</div><div class='col tag'>"),
+                            rules.FieldSet(
+                                ( 'overwrite_value', 'new_value'
+                                ), "Attribute Value"),
+                            rules.HTML("</div>"),
+                        ]
                     },
                 },
             }
