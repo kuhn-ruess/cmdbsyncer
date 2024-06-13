@@ -46,16 +46,19 @@ form_subdocuments_template = {
                     'value': StringField,
                 },
                 'form_rules' : [
-                    rules.FieldSet(('match_type',), "Condition Match Type"),
-                    rules.HTML(DIVIDER % "Match on Host"),
+                    rules.Field('match_type',),
+                    rules.HTML("<div class='form-row'><div class='col host'>"),
                     rules.FieldSet(
-                        ('hostname_match', 'hostname', 'hostname_match_negate'), "Host Match"),
-                    rules.HTML(DIVIDER % "Match on Attribute"),
+                        ('hostname_match', 'hostname', 'hostname_match_negate'),
+                         "Match for Hostname"),
+                    rules.HTML("</div><div class='col tag'>"),
+
                     rules.FieldSet(
                         (
                             'tag_match', 'tag', 'tag_match_negate',
                             'value_match', 'value', 'value_match_negate',
-                        ), "Attribute Match"),
+                        ), "Match for Attribute"),
+                    rules.HTML("</div>"),
                 ]
             }
         }
