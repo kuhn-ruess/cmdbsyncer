@@ -4,11 +4,13 @@ Alle Stuff shared by the plugins
 #pylint: disable=too-few-public-methods
 #pylint: disable=logging-fstring-interpolation
 
+from pprint import pformat
+from collections import namedtuple
+import requests
 from application import logger
 from application.modules.custom_attributes.models import CustomAttributeRule as \
     CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
-
 
 
 class Plugin():
@@ -20,6 +22,51 @@ class Plugin():
     custom_attributes = False
     debug = False
     account = False
+    verify = True
+
+    dry_run = False
+
+
+    def inner_request(self, method, url, data, headers):
+        """
+        Requst Module for all HTTP Requests
+        by Plugin
+        """
+        logger.debug(f"Request ({method.upper()}) to {url}")
+        logger.debug(f"Request Body: {pformat(data)}")
+        logger.debug(f"Request Headers: {headers}")
+
+        method = method.lower()
+        payload = {
+            'headers': headers,
+            'params': data,
+            'verify': self.verify,
+            'timeout': 20,
+        }
+
+        if headers.get('Content-Type') == "application/json":
+            del payload['params']
+            payload['json'] = data
+
+        if path := self.save_requests:
+            open(path, "a").write(f"{method}||{url}||{payload}\n")
+
+        if self.dry_run:
+            logger.info(f"Body: {pformat(data)}")
+            Struct = namedtuple('response', ['status_code', 'headers'])
+            if method != 'get':
+                return Struct(status_code=200, headers={}), {}
+
+
+        jobs = {
+            'get': requests.get(url, **payload),
+            'post': requests.post(url, **payload),
+            'put': requests.put(url, **payload),
+            'delete': requests.delete(url, **payload),
+        }
+        resp = jobs[method]
+        resp_json = resp.json()
+        return jobs[method], resp_json
 
 
     def init_custom_attributes(self):
