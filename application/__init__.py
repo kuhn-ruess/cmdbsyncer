@@ -157,10 +157,10 @@ from application.modules.checkmk.views import CheckmkRuleView, CheckmkGroupRuleV
 
 
 from application.modules.checkmk.models import CheckmkRewriteAttributeRule
-admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite and Custom Syncer Attributes",
+admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite and Create Custom Syncer Attributes",
                                                             category="Checkmk"))
-admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter Hosts and Labels", category="Checkmk"))
-admin.add_view(CheckmkRuleView(CheckmkRule, name="Set Folders and Checkmk Attributes", category="Checkmk"))
+admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter Hosts and Whiteliste Checkmk Labels", category="Checkmk"))
+admin.add_view(CheckmkRuleView(CheckmkRule, name="Set Folder and  Attributes of Host", category="Checkmk"))
 admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
                                     name="Manage Host-/Contact-/Service- Groups", category="Checkmk"))
 
@@ -168,7 +168,7 @@ admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
 from application.modules.checkmk.models import CheckmkRuleMngmt
 from application.modules.checkmk.views import CheckmkMngmtRuleView
 admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
-                                    name="Create Setup Rules", category="Checkmk"))
+                                    name="Create Checkmk Setup Rules", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkTagMngmt
 from application.modules.checkmk.views import CheckmkTagMngmtView
@@ -204,7 +204,7 @@ from application.modules.checkmk.models import CheckmkObjectCache
 from application.modules.checkmk.views import CheckmkCacheView
 
 admin.add_view(CheckmkCacheView(CheckmkObjectCache, \
-                                    name="Object Cache", category="Checkmk"))
+                                    name="Cache", category="Checkmk"))
 
 admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
