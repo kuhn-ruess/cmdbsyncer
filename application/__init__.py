@@ -130,7 +130,9 @@ from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
 
 admin = Admin(app, name=f"CMDB Syncer {VERSION}{app.config['HEADER_HINT']}",
-                   template_mode='bootstrap4', index_view=IndexView())
+                   template_mode='bootstrap4', index_view=IndexView(),
+                   category_icon_classes={
+                       })
 
 
 #   .-- Host
@@ -142,10 +144,11 @@ admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects"))
 #   .-- Global
 from application.modules.custom_attributes.models import CustomAttributeRule
 from application.modules.custom_attributes.views import CustomAttributeView
-admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Module Rules"))
+admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules"))
+
 #.
 #   .-- Checkmk
-admin.add_sub_category(name="Checkmk", parent_name="Module Rules")
+admin.add_sub_category(name="Checkmk", parent_name="Modules")
 admin.add_link(MenuLink(name='Debug Config', category='Checkmk',
                         url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
 
@@ -211,9 +214,21 @@ admin.add_view(CheckmkSettingsView(CheckmkSettings, name="Checkmk Site Updates a
 admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Checkmk Server"))
 
 
+from application.models.account import Account
+from application.views.account import AccountModelView
+admin.add_view(AccountModelView(Account, name="Accounts"))
+
+
+if os.path.exists(app.config['FILEADMIN_PATH']):
+    admin.add_view(FileAdmin(app.config['FILEADMIN_PATH'], name="Filemanager"))
+
+from application.modules.log.models import LogEntry
+from application.modules.log.views import LogView
+admin.add_view(LogView(LogEntry, name="Log"))
+
 #.
 #   .-- Ansible
-admin.add_sub_category(name="Ansible", parent_name="Module Rules")
+admin.add_sub_category(name="Ansible", parent_name="Modules")
 from application.modules.ansible.models import AnsibleCustomVariablesRule, \
                                         AnsibleFilterRule, AnsibleRewriteAttributesRule
 from application.modules.ansible.views import AnsibleCustomVariablesView
@@ -225,7 +240,7 @@ admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
                                     name="Custom Variables", category="Ansible"))
 #.
 #   .-- Netbox
-admin.add_sub_category(name="Netbox", parent_name="Module Rules")
+admin.add_sub_category(name="Netbox", parent_name="Modules")
 
 from application.modules.netbox.views import NetboxCustomAttributesView
 from application.modules.netbox.models import NetboxCustomAttributes, \
@@ -236,7 +251,7 @@ admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
                                     name="Custom Attributes", category="Netbox"))
 #.
 #   .-- i-doit
-admin.add_sub_category(name="i-doit", parent_name="Module Rules")
+admin.add_sub_category(name="i-doit", parent_name="Modules")
 
 from application.modules.idoit.views import IdoitCustomAttributesView
 from application.modules.idoit.models import IdoitCustomAttributes, \
@@ -247,35 +262,24 @@ admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
                                     name="Custom Attributes", category="i-doit"))
 #.
 
-
-#   .-- Config
-from application.models.account import Account
-from application.views.account import AccountModelView
-admin.add_view(AccountModelView(Account, name="Account Settings"))
-
-from application.models.user import User
-from application.views.user import UserView
-admin.add_view(UserView(User, category='Config'))
-
-from application.models.config import Config
-from application.views.config import ConfigModelView
-
-admin.add_view(ConfigModelView(Config, name="System Config", category="Config"))
-
-if os.path.exists(app.config['FILEADMIN_PATH']):
-    admin.add_view(FileAdmin(app.config['FILEADMIN_PATH'], name="Files", category="Config"))
-#.
-#   .-- Cron
-
-admin.add_sub_category(name="Cronjobs", parent_name="Config")
+admin.add_sub_category(name="Cronjobs", parent_name="Modules")
 from application.models.cron import CronGroup, CronStats
 from application.views.cron import CronStatsView, CronGroupView
 admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs"))
 admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs"))
 
+#   .-- Config
+
+from application.models.user import User
+from application.views.user import UserView
+admin.add_view(UserView(User, category='Syncer Config'))
+
+from application.models.config import Config
+from application.views.config import ConfigModelView
+
+admin.add_view(ConfigModelView(Config, name="System Config", category="Syncer Config"))
+
 #.
-
-
 
 #   .-- Rest
 admin.add_link(MenuLink(name='Change Password', category='Profil',
@@ -285,10 +289,7 @@ admin.add_link(MenuLink(name='Set 2FA Code', category='Profil',
 admin.add_link(MenuLink(name='Logout', category='Profil',
                         url=f"{app.config['BASE_PREFIX']}logout"))
 
-from application.modules.log.models import LogEntry
-from application.modules.log.views import LogView
-admin.add_view(LogView(LogEntry, name="Log"))
 #.
 admin.add_link(MenuLink(name='Commit Changes',
                         url="#activate_changes",
-                        class_name="toggle_activate_modal"))
+                        class_name="toggle_activate_modal btn btn-primary"))
