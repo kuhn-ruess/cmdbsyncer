@@ -88,6 +88,9 @@ def get_host_debug(hostname):
         for type_name, data in debug_log.items():
             output_rules[type_name] = data
 
+        if not attributes:
+            return {'Error': "Host is on Filterlist"}, {}
+
 
         output["Full Attribute List"] = attributes['all']
         output["Filtered Labels for Checkmk"] = attributes['filtered']
