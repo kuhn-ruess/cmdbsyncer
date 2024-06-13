@@ -199,7 +199,12 @@ def get_debug_data(hostname):
     rule_logs['rewrite'] = rules['rewrite'].debug_lines
     rule_logs['actions'] = rules['actions'].debug_lines
 
-    return attributes, actions, rule_logs, db_host
+    # We need to save the host,
+    # Otherwise, if a rule with folder pools is executed at first time here,
+    # the seat will be locked, but not saved by the host
+    db_host.save()
+
+    return attributes, actions, rule_logs
 
 
 @cli_cmk.command('debug_host')
@@ -215,7 +220,7 @@ def debug_host(hostname):
         hostname (string): Name of Host
     """
 
-    attributes, actions, _debug_log, db_host = get_debug_data(hostname)
+    attributes, actions, _debug_log = get_debug_data(hostname)
 
     if not attributes:
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY RULE{ColorCodes.ENDC}")
@@ -241,10 +246,6 @@ def debug_host(hostname):
                 pass
     attribute_table("Custom Attributes", additional_attributes)
 
-    # We need to save the host,
-    # Otherwise, if a rule with folder pools is executed at first time here,
-    # the seat will be locked, but not saved by the host
-    db_host.save()
 
 #.
 

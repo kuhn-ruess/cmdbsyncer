@@ -78,35 +78,31 @@ def get_host_debug(hostname):
     """
 
     try:
-        db_host = Host.objects.get(hostname=hostname)
+        Host.objects.get(hostname=hostname)
+
+        output = {}
+        output_rules = {}
+
+        attributes, actions, debug_log = get_debug_data(hostname)
+
+        for type_name, data in debug_log.items():
+            output_rules[type_name] = data
+
+
+        output["Full Attribute List"] = attributes['all']
+        output["Filtered Labels for Checkmk"] = attributes['filtered']
+        output["Actions"] =  actions
+        additional_attributes = {}
+        for custom_attr in actions.get('custom_attributes', []):
+            additional_attributes.update(custom_attr)
+
+        for additional_attr in actions.get('attributes',[]):
+            if attr_value := attributes['all'].get(additional_attr):
+                additional_attributes[additional_attr] = attr_value
+        output["Custom Attributes"] = additional_attributes
+        return output, output_rules
     except DoesNotExist:
         return {'Error': "Host not found in Database"}, {}
-
-    output = {}
-    output_rules = {}
-
-    attributes, actions, debug_log, db_host = get_debug_data(hostname)
-
-    for type_name, data in debug_log.items():
-        output_rules[type_name] = data
-
-
-    output["Full Attribute List"] = attributes['all']
-    output["Filtered Labels for Checkmk"] = attributes['filtered']
-    output["Actions"] =  actions
-    additional_attributes = {}
-    for custom_attr in actions.get('custom_attributes', []):
-        additional_attributes.update(custom_attr)
-
-    for additional_attr in actions.get('attributes',[]):
-        if attr_value := attributes['all'].get(additional_attr):
-            additional_attributes[additional_attr] = attr_value
-    output["Custom Attributes"] = additional_attributes
-    # We need to save the host,
-    # Otherwise, if a rule with folder pools is executed at first time here,
-    # the seat will be locked, but not saved by the host
-    db_host.save()
-    return output, output_rules
 
 #pylint: disable=too-few-public-methods
 class CheckmkRuleView(RuleModelView):
@@ -120,9 +116,10 @@ class CheckmkRuleView(RuleModelView):
         """
         Checkmk specific Debug Page
         """
-        hostname = request.args.get('hostname','')
+        hostname = request.args.get('hostname','').strip()
         output= {}
         output_rules = {}
+
         if hostname:
             output, output_rules = get_host_debug(hostname)
 
@@ -135,8 +132,12 @@ class CheckmkRuleView(RuleModelView):
         for rule_group, rule_data in output_rules.items():
             new_rules.setdefault(rule_group, [])
             for rule in rule_data:
-                rule['rule_url'] = f"{base_urls[rule_group]}{rule['id']}"
+                if rule_group in base_urls:
+                    rule['rule_url'] = f"{base_urls[rule_group]}{rule['id']}"
                 new_rules[rule_group].append(rule)
+
+        if "Error" in output:
+            output = f"Error: {output['Error']}"
 
         return self.render('debug.html', hostname=hostname, output=output, rules=new_rules)
 
