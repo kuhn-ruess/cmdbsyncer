@@ -15,7 +15,8 @@
   <br>
 
 
-<h2>Rules</h2>
+<h2>Export Rules</h2>
+  <div id="accordion-1">
    <p>
     {% for rule_name in rules.keys() %}
      <a class="btn btn-info" data-toggle="collapse" href="#rule_{{rule_name}}" role="button" aria-expanded="false" aria-controls="rule_{{rule_name}}">{{rule_name.capitalize()}}</a>
@@ -25,9 +26,9 @@
     {% for rule_name, rule_raw in rules.items() %}
     <div class="card">
     <div class="card-header">
-    Rules: {{ rule_name.capitalize() }}
+    Rule: {{ rule_name.capitalize() }}
     </div>
-    <div class="card-body collapse" id="rule_{{rule_name}}">
+    <div class="card-body collapse" id="rule_{{rule_name}}" data-parent="#accordion-1">
     <table class="table table-bordered">
       <thead>
          <tr>
@@ -51,10 +52,12 @@
     </div>
     </div>
   {% endfor %}
+  </div>
 <h2>Attributes</h2>
+<div id="accordion-2">
 <p>
     {% for header in output.keys() %}
-     <a class="btn btn-info" data-toggle="collapse" href="#rule_{{header.replace(' ',"_")}}" role="button" aria-expanded="false" aria-controls="rule_{{header.replace(' ', "_")}}">{{header.capitalize()}}</a>
+     <a class="btn btn-info" data-toggle="collapse" href="#rule_{{header.replace(' ',"_")}}" role="button" aria-expanded="true" aria-controls="rule_{{header.replace(' ', "_")}}">{{header.capitalize()}}</a>
    {% endfor %}
  </p>
 
@@ -63,7 +66,7 @@
     <div class="card-header">
     {{ header }}
     </div>
-    <div class="card-body collapse" id="rule_{{header.replace(' ', "_")}}">
+    <div class="card-body collapse" id="rule_{{header.replace(' ', "_")}}" data-parent="#accordion-2">
     {%if content is mapping %}
     <table class="table table-bordered">
       <thead>
@@ -87,6 +90,7 @@
     </div>
     </div>
   {% endfor %}
-  {% endif %}
  </div>
+  {% endif %}
+   </div>
 {% endblock %}
