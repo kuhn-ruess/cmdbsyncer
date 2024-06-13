@@ -88,21 +88,20 @@ def get_host_debug(hostname):
         for type_name, data in debug_log.items():
             output_rules[type_name] = data
 
-        if not attributes:
-            return {'Error': "Host is on Filterlist"}, {}
+        if attributes:
+            output["Full Attribute List"] = attributes['all']
+            output["Filtered Labels for Checkmk"] = attributes['filtered']
+            output["Actions"] =  actions
+            additional_attributes = {}
+            for custom_attr in actions.get('custom_attributes', []):
+                additional_attributes.update(custom_attr)
 
-
-        output["Full Attribute List"] = attributes['all']
-        output["Filtered Labels for Checkmk"] = attributes['filtered']
-        output["Actions"] =  actions
-        additional_attributes = {}
-        for custom_attr in actions.get('custom_attributes', []):
-            additional_attributes.update(custom_attr)
-
-        for additional_attr in actions.get('attributes',[]):
-            if attr_value := attributes['all'].get(additional_attr):
-                additional_attributes[additional_attr] = attr_value
-        output["Custom Attributes"] = additional_attributes
+            for additional_attr in actions.get('attributes',[]):
+                if attr_value := attributes['all'].get(additional_attr):
+                    additional_attributes[additional_attr] = attr_value
+            output["Custom Attributes"] = additional_attributes
+        else:
+            output["Info: Host disabled by Filter"] = None
         return output, output_rules
     except DoesNotExist:
         return {'Error': "Host not found in Database"}, {}
