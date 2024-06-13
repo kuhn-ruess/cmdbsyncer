@@ -223,8 +223,8 @@ class CheckmkDowntimeSync(SyncConfiguration):
                                      args=(hostname, host_actions, attributes),
                                      callback=lambda x: progress.advance(task1))
 
-            pool.close()
-            pool.join()
+                pool.close()
+                pool.join()
 
     def get_current_cmk_downtimes(self, hostname):
         """
