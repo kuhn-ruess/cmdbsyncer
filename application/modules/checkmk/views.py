@@ -9,6 +9,7 @@ from flask_admin import expose
 from mongoengine.errors import DoesNotExist
 
 from flask_login import current_user
+from application import app
 from application.views.default import DefaultModelView
 
 from application.modules.rule.views import RuleModelView, \
@@ -124,7 +125,22 @@ class CheckmkRuleView(RuleModelView):
         output_rules = {}
         if hostname:
             output, output_rules = get_host_debug(hostname)
-        return self.render('debug.html', hostname=hostname, output=output, rules=output_rules)
+
+        base_urls = {
+            'filter': f"{app.config['BASE_PREFIX']}admin/checkmkfilterrule/edit/?id=",
+            'rewrite': f"{app.config['BASE_PREFIX']}admin/checkmkrewriteattributerule/edit/?id=",
+            'actions': f"{app.config['BASE_PREFIX']}admin/checkmkrule/edit/?id=",
+        }
+        new_rules = {}
+        for rule_group, rule_data in output_rules.items():
+            new_rules.setdefault(rule_group, [])
+            for rule in rule_data:
+                rule['rule_url'] = f"{base_urls[rule_group]}{rule['id']}"
+                new_rules[rule_group].append(rule)
+
+        return self.render('debug.html', hostname=hostname, output=output, rules=new_rules)
+
+
 
     def __init__(self, model, **kwargs):
         """
