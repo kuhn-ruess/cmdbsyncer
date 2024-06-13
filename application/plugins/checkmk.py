@@ -189,7 +189,11 @@ def get_debug_data(hostname):
 
     attributes = syncer.get_host_attributes(db_host, 'checkmk')
 
-    actions = syncer.get_host_actions(db_host, attributes['all'])
+    if attributes:
+        actions = syncer.get_host_actions(db_host, attributes['all'])
+    else:
+        actions = {}
+
 
     rule_logs['filter'] = rules['filter'].debug_lines
     rule_logs['rewrite'] = rules['rewrite'].debug_lines
