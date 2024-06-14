@@ -7,7 +7,7 @@ Alle Stuff shared by the plugins
 from pprint import pformat
 from collections import namedtuple
 import requests
-from application import logger
+from application import logger, app
 from application.modules.custom_attributes.models import CustomAttributeRule as \
     CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
@@ -42,7 +42,7 @@ class Plugin():
             'headers': headers,
             'params': data,
             'verify': self.verify,
-            'timeout': 20,
+            'timeout': app.config['HTTP_REQUEST_TIMEOUT'],
         }
 
         if headers.get('Content-Type') == "application/json":
@@ -50,7 +50,8 @@ class Plugin():
             payload['json'] = data
 
         if path := self.save_requests:
-            open(path, "a").write(f"{method}||{url}||{payload}\n")
+            #pylint: disable=consider-using-with
+            open(path, "a", encoding="utf-8").write(f"{method}||{url}||{payload}\n")
 
         if self.dry_run:
             logger.info(f"Body: {pformat(data)}")

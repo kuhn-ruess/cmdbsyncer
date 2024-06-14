@@ -59,6 +59,8 @@ class BaseConfig():
 
 
     DISABLE_SSL_ERRORS = True
+    HTTP_REQUEST_TIMEOUT = 30
+
     SWAGGER_ENABLED = True
     DEBUG = True
     MONGODB_SETTINGS = {
@@ -75,9 +77,6 @@ class BaseConfig():
     ### Checkmk Stuff
 
     #Checkmk has a bug:
-    # Bad Request These fields have problems: entries{'entries': {'0': {'attributes': {'labels': ['Not a string, but a dict', "Tag group name must start with 'tag_'", 'Unknown field.']}}}}
-    # Always when sending Labels with Tags together. This workarround splits request  into multiple
-    # Could be related to invalid tags
     CMK_22_23_HANDLE_TAG_LABEL_BUG = False
 
     CMK_BULK_CREATE_HOSTS = True
