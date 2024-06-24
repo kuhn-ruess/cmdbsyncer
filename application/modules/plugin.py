@@ -33,21 +33,21 @@ class Plugin():
         Requst Module for all HTTP Requests
         by Plugin
         """
+        logger.debug('\n************ HTTP DEBUG ************')
         logger.debug(f"Request ({method.upper()}) to {url}")
-        logger.debug(f"Request Body: {pformat(data)}")
-        logger.debug(f"Request Headers: {headers}")
 
         method = method.lower()
         payload = {
             'headers': headers,
-            'params': data,
             'verify': self.verify,
             'timeout': app.config['HTTP_REQUEST_TIMEOUT'],
         }
-
-        if headers.get('Content-Type') == "application/json":
-            del payload['params']
+        if headers.get('Content-Type') == "application/json" and data:
             payload['json'] = data
+        elif data:
+            payload['params'] = data
+
+        logger.debug(f"Payload: {pformat(payload)}")
 
         if path := self.save_requests:
             #pylint: disable=consider-using-with
@@ -65,13 +65,15 @@ class Plugin():
             'post': requests.post(url, **payload),
             'put': requests.put(url, **payload),
             'delete': requests.delete(url, **payload),
+            'head': requests.head(url, **payload),
+            'options': requests.options(url, **payload),
         }
         resp = jobs[method]
         try:
-            resp_json = resp.json()
+            logger.debug(f"Response Json: {pformat(resp.json())}")
         except requests.exceptions.JSONDecodeError:
-            resp_json = {}
-        return jobs[method], resp_json
+            logger.debug(f"Response Text: {pformat(resp.text)}")
+        return resp
 
 
     def init_custom_attributes(self):
