@@ -58,7 +58,7 @@ form_subdocuments_template = {
                             'tag_match', 'tag', 'tag_match_negate',
                             'value_match', 'value', 'value_match_negate',
                         ), "Match for Attribute"),
-                    rules.HTML("</div>"),
+                    rules.HTML("</div></div>"),
                 ]
             }
         }
