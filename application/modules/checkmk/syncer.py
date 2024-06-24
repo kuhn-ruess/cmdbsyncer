@@ -381,7 +381,7 @@ class SyncCMK2(CMK2):
                 cmk_cluster = cmk_host['extensions']['cluster_nodes']
                 self.cluster_updates.append((hostname, cmk_cluster, cluster_nodes))
         else:
-            self.console(f"{CC.OKBLUE} *{CC.ENDC} Host is not to be updated")
+            self.console(f" * Host is not to be updated")
 
 
 
@@ -522,7 +522,7 @@ class SyncCMK2(CMK2):
     def create_folder(self, folder):
         """ Create given folder if not yet exsisting """
         folder_parts = folder.split('/')[1:]
-        self.console(f"{CC.OKGREEN} *{CC.ENDC} Create Folder in Checkmk {folder}")
+        self.console(f" * Create Folder in Checkmk {folder}")
         if len(folder_parts) == 1:
             if folder_parts[0] == '':
                 # we are in page root
@@ -573,7 +573,7 @@ class SyncCMK2(CMK2):
                 self.send_bulk_create_host(self.bulk_creates)
             except CmkException as error:
                 self.log_details.append(('error', f"Bulk Update Error: {error}"))
-                self.console(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+                self.console(f" * CMK API ERROR {error}")
 
             self.bulk_creates = []
 
@@ -592,7 +592,7 @@ class SyncCMK2(CMK2):
             # @TODO CMK BUG
             if app.config['CMK_22_23_HANDLE_TAG_LABEL_BUG']:
                 self.log_details.append(('info', "CMK Tag bug workarround active"))
-                self.console(f"{CC.WARNING} *{CC.ENDC} Removed TAGS because of CMK BUG")
+                self.console(f" * Removed TAGS because of CMK BUG")
                 additional_attributes = {x:y for x,y in additional_attributes.items() \
                                             if not x.startswith('tag_')}
             body['attributes'].update(additional_attributes)
@@ -606,8 +606,8 @@ class SyncCMK2(CMK2):
                 self.request(url, method="POST", data=body)
             except CmkException as error:
                 self.log_details.append(('error', f"Host Create Error: {error}"))
-                self.console(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
-            self.console(f"{CC.OKGREEN} *{CC.ENDC} Created Host {hostname}")
+                self.console(f" * CMK API ERROR {error}")
+            self.console(f" * Created Host {hostname}")
 
 
 
@@ -685,7 +685,7 @@ class SyncCMK2(CMK2):
                             )
             except CmkException as error:
                 self.log_details.append(('error', f"CMK API Error: {error}"))
-                self.console(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+                self.console(f" * CMK API ERROR {error}")
 
     def add_bulk_update_host(self, body):
         """
@@ -847,14 +847,14 @@ class SyncCMK2(CMK2):
                             etag = False
                         except CmkException as error:
                             self.log_details.append(('error', f"CMK API Error: {error}"))
-                            self.console(f"{CC.WARNING} *{CC.ENDC} CMK API ERROR {error}")
+                            self.console(f" * CMK API ERROR {error}")
                         else:
-                            self.console(f"{CC.OKGREEN} *{CC.ENDC} Updated Host in Checkmk")
+                            self.console(f" * Updated Host in Checkmk")
                             self.console(f"   Reasons: {what}: {', '.join(update_reasons)}")
                     else:
                         payload['host_name'] = hostname
                         self.add_bulk_update_host(payload)
-                        self.console(f"{CC.OKBLUE} *{CC.ENDC} Add to Bulk Update List for {what} update")
+                        self.console(f" * Add to Bulk Update List for {what} update")
 
 
 #.
