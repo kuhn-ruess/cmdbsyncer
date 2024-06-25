@@ -150,6 +150,10 @@ class AccountModelView(DefaultModelView):
                 ('namespace', ""),
                 ('class_name', ""),
             ]
+        elif form.typ.data == 'jira':
+            default_fields = [
+                ('page_size', "1000"),
+            ]
 
         elif form.typ.data == 'i-doit':
             default_fields = [
