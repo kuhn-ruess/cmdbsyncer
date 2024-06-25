@@ -26,7 +26,7 @@ from application.modules.checkmk.inits import (
 #pylint: disable=too-many-locals
 def cli_export_downtimes(account):
     """
-    ## Export Dowtimes to Checkmk
+    Export Dowtimes to Checkmk
 
     ### Example
     _./cmdbsyncer checkmk export_downtimes SITEACCOUNT_
@@ -45,7 +45,7 @@ def cli_export_downtimes(account):
 #pylint: disable=too-many-locals
 def cli_export_tags(account):
     """
-    ## Export Hosttags Groups to Checkmk
+    Export Hosttags Groups to Checkmk
 
     ### Example
     _./cmdbsyncer checkmk show_missing_hosts SITEACCOUNT_
@@ -63,7 +63,7 @@ def cli_export_tags(account):
 #pylint: disable=too-many-locals
 def cli_missing_hosts(account):
     """
-    ## Check which Hosts are in Checkmk but not in Syncer
+    Check which Hosts are in Checkmk but not in Syncer
 
     ### Example
     _./cmdbsyncer checkmk show_missing_hosts SITEACCOUNT_
@@ -99,7 +99,7 @@ def cli_export_rules(account):
 #pylint: disable=too-many-locals, too-many-branches
 def cli_export_groups(account, test_run):
     """
-    ## Create Groups in Checkmk
+    Create Groups in Checkmk
 
     ### Example
     _./cmdbsyncer checkmk export_groups SITEACCOUNT_
@@ -119,7 +119,7 @@ def cli_export_groups(account, test_run):
 #pylint: disable=too-many-locals, too-many-branches
 def cli_activate_changes(account):
     """
-    ## Activate Changes in given Checkmk Instance
+    Activate Changes in given Checkmk Instance
 
     ### Example
     _./cmdbsyncer checkmk activate_changes SITEACCOUNT_
@@ -139,7 +139,7 @@ def cli_activate_changes(account):
 #pylint: disable=too-many-locals, too-many-branches
 def cli_bake_and_sign_agents(account):
     """
-    ## Bake and Sign Agents for given Checkmk Instance
+    Bake and Sign Agents for given Checkmk Instance
 
     ### Example
     _./cmdbsyncer checkmk bake_and_sign_agents SITEACCOUNT_
@@ -158,7 +158,7 @@ def cli_bake_and_sign_agents(account):
 #pylint: disable=too-many-locals
 def cli_inventorize_hosts(account):
     """
-    ## Do an Status Data inventory on given Checkmk Instance.
+    Do an Status Data inventory on given Checkmk Instance.
     Requires CMK Version greater then 2.1p9
 
     ### Example
