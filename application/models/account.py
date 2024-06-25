@@ -9,6 +9,7 @@ account_types = [
     ('cmkv2', "Checkmk Version 2.x"),
     ('csv', "CSV File"),
     ('json', "Json File"),
+    ('jira', "Jira CMDB"),
     ('mysql', "Mysql Table"),
     ('mssql', "MSSQL Table"),
     ('odbc', "ODBC Conenctions like FreeTDS"),
