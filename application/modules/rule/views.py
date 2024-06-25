@@ -377,7 +377,7 @@ class RewriteAttributeView(RuleModelView):
                             rules.FieldSet(
                                 ( 'overwrite_value', 'new_value'
                                 ), "Attribute Value"),
-                            rules.HTML("</div>"),
+                            rules.HTML("</div></div>"),
                         ]
                     },
                 },
