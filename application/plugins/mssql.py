@@ -101,7 +101,7 @@ def mssql_inventorize(account):
         if collect_key := config.get('inventorize_collect_by_key'):
             if value := labels.get(collect_key):
                 collected_by_key.setdefault(value, [])
-                collected_by_key[collect_key].append(hostname)
+                collected_by_key[value].append(hostname)
 
         if config.get('inventorize_match_by_domain'):
             for host_obj in Host.objects(hostname__endswith=hostname):
