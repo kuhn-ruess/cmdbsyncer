@@ -180,6 +180,8 @@ class Host(db.Document):
            key (string): Identifier for Inventory Attributes
            new_data (dict): Key:Value of Attributes.
         """
+        if not key:
+            raise Exception("Inventory Key not set")
         if config:
             # Feature: Inventorize Match Attribute
 
@@ -206,7 +208,6 @@ class Host(db.Document):
         check_dict = {}
         for name, value in [(x,y) for x,y in self.inventory.items()]:
             # Delete all existing keys of type
-            name = str(name)
             if name and name.startswith(key+"__"):
                 check_dict[name] = value
                 del self.inventory[name]
