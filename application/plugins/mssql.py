@@ -119,7 +119,7 @@ def mssql_inventorize(account):
 
         for hostname, subs in collected_by_key.items():
             host_obj = Host.get_host(hostname, create=False)
-            _innter_inventorize(host_obj, enumerate(subs), f"{inv_key}_collection", False)
+            _innter_inventorize(host_obj, dict(enumerate(subs)), f"{inv_key}_collection", False)
 
 
 
