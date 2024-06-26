@@ -95,20 +95,20 @@ def mssql_inventorize(account):
     Mssql Inventorize
     """
     config = get_account_by_name(account)
-    key = config['inventorize_key']
+    inv_key = config['inventorize_key']
     collected_by_key = {}
     for hostname, labels in _innter_sql(config):
-        if key := config.get('inventorize_collect_by_key'):
-            if value := labels.get(key):
+        if collect_key := config.get('inventorize_collect_by_key'):
+            if value := labels.get(collect_key):
                 collected_by_key.setdefault(value, [])
-                collected_by_key[key].append(hostname)
+                collected_by_key[collect_key].append(hostname)
 
         if config.get('inventorize_match_by_domain'):
             for host_obj in Host.objects(hostname__endswith=hostname):
-                _innter_inventorize(host_obj, labels, key, config)
+                _innter_inventorize(host_obj, labels, inv_key, config)
         else:
             host_obj = Host.get_host(hostname, create=False)
-            _innter_inventorize(host_obj, labels, key, config)
+            _innter_inventorize(host_obj, labels, inv_key, config)
 
     if collected_by_key:
         print(f"{CC.OKBLUE}Run 2: {CC.ENDC} Add extra collected data")
