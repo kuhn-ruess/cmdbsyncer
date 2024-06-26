@@ -70,6 +70,7 @@ class AccountModelView(DefaultModelView):
                 ('encoding', 'utf-8'),
                 ('rewrite_hostname', ""),
                 ('inventorize_key', ""),
+                ('inventorize_match_attribute', ""),
             ]
         elif form.typ.data == 'json':
             default_fields = [
@@ -91,6 +92,7 @@ class AccountModelView(DefaultModelView):
                 ('database', ""),
                 ('custom_query', ""),
                 ('inventorize_key', ""),
+                ('inventorize_match_attribute', ""),
             ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
@@ -142,6 +144,7 @@ class AccountModelView(DefaultModelView):
                 ('inventorize_key', ""),
                 ('inventorize_match_by_domain', ""),
                 ('inventorize_match_attribute', ""),
+                ('inventorize_collect_by_key', ""),
             ]
         elif form.typ.data == 'bmc_remedy':
             default_fields = [
