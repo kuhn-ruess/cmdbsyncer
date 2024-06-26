@@ -143,6 +143,7 @@ class Host(db.Document):
         self.set_import_seen()
 
     def _fix_key(self, key):
+        key = str(key)
         if app.config['LOWERCASE_ATTRIBUTE_KEYS']:
             key = key.lower()
         if app.config['REPLACE_ATTRIBUTE_KEYS']:
