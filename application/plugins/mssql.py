@@ -54,6 +54,8 @@ def _innter_sql(config):
             hostname = labels[config['hostname_field']].strip()
             if 'rewrite_hostname' in config and config['rewrite_hostname']:
                 hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
+            if app.config['LOWERCASE_HOSTNAMES']:
+                hostname = hostname.lower()
             yield hostname, labels
     except NameError as error:
         print(f"EXCEPTION: Missing requirements, pypyodbc or sqlserverport ({error})")
