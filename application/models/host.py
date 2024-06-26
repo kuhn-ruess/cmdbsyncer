@@ -6,6 +6,7 @@ import datetime
 import jinja2
 from mongoengine.errors import DoesNotExist
 from application import db, app
+from application.modules.debug import ColorCodes as CC
 
 class HostError(Exception):
     """
@@ -168,7 +169,7 @@ class Host(db.Document):
         return self.labels
 
 
-    def update_inventory(self, key, new_data):
+    def update_inventory(self, key, new_data, config=False):
         """
         Updates all inventory entries, with names who starting with given key.
         Ones not existing any more in new_data will be removed.
@@ -179,6 +180,25 @@ class Host(db.Document):
            key (string): Identifier for Inventory Attributes
            new_data (dict): Key:Value of Attributes.
         """
+        if config:
+            # Feature: Inventorize Match Attribute
+
+            if attr_match := config.get('inventorize_match_attribute'):
+                attr_match = attr_match.split('=')
+                if len(attr_match) == 2:
+                    host_attr, inv_attr = attr_match
+                else:
+                    host_attr, inv_attr = attr_match[0], attr_match[0]
+                try:
+                    attr_value = self.get_labels()[host_attr]
+                    inv_attr_value= new_data[inv_attr].strip()
+                    if attr_value != inv_attr_value:
+                        print(f" {CC.WARNING} * {CC.ENDC} Attribute '{host_attr}' "\
+                              f"is '{attr_value}' but '{inv_attr}' is '{inv_attr_value}'")
+                        return
+                except KeyError:
+                    print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
+                          f" Host has no Label {host_attr}")
         # pylint: disable=unnecessary-comprehension
         # Prevent runtime error
         if not new_data:

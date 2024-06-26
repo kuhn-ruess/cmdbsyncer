@@ -78,25 +78,7 @@ def _innter_inventorize(host_obj, labels, key, config):
     Add Inventorize Information to host
     """
     if host_obj:
-        attr_match = config.get('inventorize_match_attribute').split('=')
-
-        if attr_match:
-            if len(attr_match) == 2:
-                host_attr, inv_attr = attr_match
-            else:
-                host_attr, inv_attr = attr_match[0], attr_match[0]
-            try:
-                attr_value = host_obj.get_labels()[host_attr]
-                inv_attr_value= labels[inv_attr].strip()
-                if attr_value != inv_attr_value:
-                    print(f" {CC.WARNING} * {CC.ENDC} Attribute '{host_attr}' "\
-                          f"is '{attr_value}' but '{inv_attr}' is '{inv_attr_value}'")
-                    return
-            except KeyError:
-                print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
-                      f" Host has no Label {host_attr}")
-
-        host_obj.update_inventory(key, labels)
+        host_obj.update_inventory(key, labels, config)
         print(f" {CC.OKBLUE} * {CC.ENDC} Updated Inventory")
         host_obj.save()
     else:
@@ -114,7 +96,13 @@ def mssql_inventorize(account):
     """
     config = get_account_by_name(account)
     key = config['inventorize_key']
+    collected_by_key = {}
     for hostname, labels in _innter_sql(config):
+        if key := config.get('inventorize_collect_by_key'):
+            if value := labels.get(key):
+                collected_by_key.setdefault(value, [])
+                collected_by_key[key].append(hostname)
+
         if config.get('inventorize_match_by_domain'):
             for host_obj in Host.objects(hostname__endswith=hostname):
                 _innter_inventorize(host_obj, labels, key, config)
@@ -122,12 +110,21 @@ def mssql_inventorize(account):
             host_obj = Host.get_host(hostname, create=False)
             _innter_inventorize(host_obj, labels, key, config)
 
+    if collected_by_key:
+        print(f"{CC.OKBLUE}Run 2: {CC.ENDC} Add extra collected data")
+
+        for hostname, subs in collected_by_key.items():
+            host_obj = Host.get_host(hostname, create=False)
+            _innter_inventorize(host_obj, enumerate(subs), "collection", False)
+
+
+
 
 @cli_mssql.command('inventorize_hosts')
 @click.argument('account')
-def cli_mssql_inveninveninveninveninveninveninveninveninventorize(account):
+def cli_mssql_inventorize(account):
     """Inventorize MSSQL Data"""
     mssql_inventorize(account)
 
-register_cronjob("MSSql: Import Hosts", mssql_import)
-register_cronjob("MSSql: Inventorize Data", mssql_inventorize)
+register_cronjob("MsSQL: Import Hosts", mssql_import)
+register_cronjob("MsSQL: Inventorize Data", mssql_inventorize)
