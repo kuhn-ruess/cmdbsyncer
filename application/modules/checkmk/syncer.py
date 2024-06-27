@@ -351,10 +351,12 @@ class SyncCMK2(CMK2):
         """
         Do creation or update actions
         """
-
+        is_cluster = False
+        if cluster_nodes:
+            is_cluster = True
         if hostname not in self.checkmk_hosts:
             # Create since missing
-            if cluster_nodes:
+            if is_cluster:
                 print(f"{CC.OKBLUE} *{CC.ENDC} Will be created as Cluster")
                 # We need to create them Later, since we not know that we have all nodes
                 self.clusters.append((hostname, folder, labels, \
@@ -377,7 +379,7 @@ class SyncCMK2(CMK2):
             self.update_host(hostname, cmk_host, folder,
                             labels, additional_attributes, remove_attributes,
                             dont_move_host)
-            if cluster_nodes:
+            if is_cluster:
                 cmk_cluster = cmk_host['extensions']['cluster_nodes']
                 self.cluster_updates.append((hostname, cmk_cluster, cluster_nodes))
         else:
@@ -701,7 +703,7 @@ class SyncCMK2(CMK2):
                     labels, additional_attributes, remove_attributes, \
                     dont_move_host):
         """
-        Update a Existing Host in Checkmk
+        Update an Existing Host in Checkmk
         """
         current_folder = cmk_host['extensions']['folder']
         # Hack slash in front, quick solution before redesign
