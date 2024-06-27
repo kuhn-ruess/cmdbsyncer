@@ -106,8 +106,9 @@ def mssql_inventorize(account):
             if value := labels.get(collect_key):
                 if rewrite := config.get('inventorize_rewrite_collect_by_key'):
                     value = render_jinja(rewrite, **labels)
-                collected_by_key.setdefault(value, [])
-                collected_by_key[value].append(hostname)
+                if value != hostname:
+                    collected_by_key.setdefault(value, [])
+                    collected_by_key[value].append(hostname)
 
         if config.get('inventorize_match_by_domain'):
             for host_obj in Host.objects(hostname__endswith=hostname):
