@@ -146,9 +146,9 @@ class CheckmkRuleSync(SyncConfiguration):
                         self.messages.append(("INFO",
                                               f"Created Rule in {ruleset_name}: {rule['value']}"))
                     except CmkException as error:
-                        self.messages.append("ERROR",
+                        self.messages.append(("ERROR",
                                              "Could not create Rules: "\
-                                             f"{template}, Response: {error}")
+                                             f"{template}, Response: {error}"))
                         print(f"{CC.FAIL} Failue: {error} {CC.ENDC}")
                 progress.advance(task1)
 
