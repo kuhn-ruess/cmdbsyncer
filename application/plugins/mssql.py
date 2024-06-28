@@ -126,7 +126,7 @@ def mssql_inventorize(account):
         for hostname in all_hosts:
             # Loop ALL hosts to delete empty collections if not found anymore
             host_obj = Host.get_host(hostname, create=False)
-            sub = collected_by_key.get(hostname, {})
+            subs = collected_by_key.get(hostname, {})
             _innter_inventorize(host_obj, dict(enumerate(subs)), f"{inv_key}_collection", False)
 
 
