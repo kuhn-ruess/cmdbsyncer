@@ -202,19 +202,19 @@ class Host(db.Document):
                 except KeyError:
                     print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
                           f" Host has no Label {host_attr}")
-        # pylint: disable=unnecessary-comprehension
-        # Prevent runtime error
-        if not new_data:
             return
+
         check_dict = {}
         for name, value in [(x,y) for x,y in self.inventory.items()]:
             # Delete all existing keys of type
             if name and name.startswith(key+"__"):
                 check_dict[name] = value
                 del self.inventory[name]
-
-        update_dict = {f"{key}__{self._fix_key(x)}":str(y).strip() for x, y in new_data.items()}
-        self.inventory.update(update_dict)
+        if not new_data:
+            update_dict = {}
+        else:
+            update_dict = {f"{key}__{self._fix_key(x)}":str(y).strip() for x, y in new_data.items()}
+            self.inventory.update(update_dict)
 
         # If the inventory is changed, the cache
         # is not longer valid
