@@ -101,7 +101,9 @@ def mssql_inventorize(account):
     config = get_account_by_name(account)
     inv_key = config['inventorize_key']
     collected_by_key = {}
+    all_hosts = []
     for hostname, labels in _innter_sql(config):
+        all_hosts.append(hostname)
         if collect_key := config.get('inventorize_collect_by_key'):
             if value := labels.get(collect_key):
                 if rewrite := config.get('inventorize_rewrite_collect_by_key'):
@@ -121,8 +123,10 @@ def mssql_inventorize(account):
     if collected_by_key:
         print(f"{CC.OKBLUE}Run 2: {CC.ENDC} Add extra collected data")
 
-        for hostname, subs in collected_by_key.items():
+        for hostname in all_hosts:
+            # Loop ALL hosts to delete empty collections if not found anymore
             host_obj = Host.get_host(hostname, create=False)
+            sub = collected_by_key.get(hostname, {})
             _innter_inventorize(host_obj, dict(enumerate(subs)), f"{inv_key}_collection", False)
 
 
