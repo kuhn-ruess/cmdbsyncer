@@ -6,6 +6,7 @@ Add Hosts into CMK Version 2 Installations
 import ast
 import time
 import multiprocessing
+from datetime import datetime
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import app
 from application.models.host import Host
@@ -35,6 +36,12 @@ class SyncCMK2(CMK2):
 
     label_prefix = False
     only_update_prefixed_labels = False
+
+    num_created = 0
+    num_updated  = 0
+    num_deleted  = 0
+
+    console = None
 
     @staticmethod
     def chunks(lst, n):
@@ -257,6 +264,7 @@ class SyncCMK2(CMK2):
                         delete_list.append(host)
                         print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
                     else:
+                        self.num_deleted += 1
                         url = f"/objects/host_config/{host}"
                         self.request(url, method="DELETE")
                         print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
@@ -268,9 +276,11 @@ class SyncCMK2(CMK2):
             total = len(chunks)
             count = 1
             for chunk in chunks:
+                self.num_deleted += len(chunk)
                 print(f" * Send Bulk Request {count}/{total}")
                 self.request(url, data={'entries': chunk }, method="POST")
                 count += 1
+                self.num_deleted += len(chunk)
 
 
     def handle_host(self, db_host, host_actions):
@@ -293,7 +303,6 @@ class SyncCMK2(CMK2):
 
         if '{' in next_actions.get('extra_folder_options', ''):
             self.handle_extra_folder_options(next_actions['extra_folder_options'])
-        
         if 'create_folder' in next_actions:
             create_folder = next_actions['create_folder']
             if create_folder not in self.existing_folders:
@@ -383,7 +392,7 @@ class SyncCMK2(CMK2):
                 cmk_cluster = cmk_host['extensions']['cluster_nodes']
                 self.cluster_updates.append((hostname, cmk_cluster, cluster_nodes))
         else:
-            self.console(f" * Host is not to be updated")
+            self.console(" * Host is not to be updated")
 
 
 
@@ -421,6 +430,7 @@ class SyncCMK2(CMK2):
         """Run Job"""
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
 
+        self.log_details.append(('process_started', str(datetime.now())))
         start_time = time.time()
 
         self.fetch_checkmk_folders()
@@ -439,6 +449,7 @@ class SyncCMK2(CMK2):
             task1 = progress.add_task("Handling Checkmk Actions", total=total)
             self.console = progress.console.print
             for hostname, data in host_actions.items():
+                export_details = []
                 progress.console.print(f"* {hostname}")
 
                 next_actions = data[0]
@@ -459,6 +470,7 @@ class SyncCMK2(CMK2):
                 dont_update_host = next_actions.get('dont_update', False)
 
                 folder = self.handle_cmk_folder(next_actions)
+                export_details.append(("folder", folder))
 
 
                 cluster_nodes = [] # if true, we have a cluster
@@ -467,6 +479,15 @@ class SyncCMK2(CMK2):
 
                 additional_attributes, remove_attributes = \
                         self.handle_attributes(next_actions, attributes)
+
+                export_details += [
+                  ('add_attributes', str(additional_attributes)),
+                  ('remove_attributes', str(additional_attributes)),
+                ]
+
+                if app.config['CMK_DETAILED_LOG']:
+                    log.log("", affected_hosts=hostname,
+                        source="checkmk_host_export_details", details=export_details)
 
 
                 self.create_or_update_host(hostname, folder, labels,
@@ -493,6 +514,11 @@ class SyncCMK2(CMK2):
         self.handle_folders()
 
         duration = time.time() - start_time
+        self.log_details.append(('num_total', str(total)))
+        self.log_details.append(('num_created', str(self.num_created)))
+        self.log_details.append(('num_updated', str(self.num_updated)))
+        self.log_details.append(('num_delted', str(self.num_deleted)))
+        self.log_details.append(('process_finished', str(datetime.now())))
         log.log(f"Synced Hosts to Account: {self.account_name}", source="checkmk_host_export",
                 details=self.log_details, duration=duration)
 
@@ -519,6 +545,7 @@ class SyncCMK2(CMK2):
             self.request(url, method="POST", data=body)
         except CmkException as error:
             logger.debug(f"Error creating Folder {error}")
+            self.log_details.append(('error', f"Folder create problem {error}"))
 
 
     def create_folder(self, folder):
@@ -560,8 +587,10 @@ class SyncCMK2(CMK2):
             url = "/domain-types/host_config/actions/bulk-create/invoke"
             try:
                 self.request(url, method="POST", data={'entries': chunk})
+                self.num_created += len(chunk)
             except CmkException as error:
                 self.log_details.append(('error', f"Bulk Create Error: {error}"))
+                self.log_details.append(('error_affected', str(chunk)))
                 self.console(f" * CMK API ERROR {error}")
 
     def add_bulk_create_host(self, body):
@@ -591,12 +620,6 @@ class SyncCMK2(CMK2):
             }
         }
         if additional_attributes:
-            # @TODO CMK BUG
-            if app.config['CMK_22_23_HANDLE_TAG_LABEL_BUG']:
-                self.log_details.append(('info', "CMK Tag bug workarround active"))
-                self.console(f" * Removed TAGS because of CMK BUG")
-                additional_attributes = {x:y for x,y in additional_attributes.items() \
-                                            if not x.startswith('tag_')}
             body['attributes'].update(additional_attributes)
         if app.config['CMK_BULK_CREATE_HOSTS']:
             self.add_bulk_create_host(body)
@@ -606,6 +629,7 @@ class SyncCMK2(CMK2):
 
             try:
                 self.request(url, method="POST", data=body)
+                self.num_created += 1
             except CmkException as error:
                 self.log_details.append(('error', f"Host Create Error: {error}"))
                 self.console(f" * CMK API ERROR {error}")
@@ -641,6 +665,7 @@ class SyncCMK2(CMK2):
         """
         Return ETAG of host
         """
+        # pylint: disable=unused-argument
         # 2.2 and 2.3p6: This Call here is deleting the host...
         #self.console(f" * Read ETAG in CMK -> {reason}")
         #url = f"/objects/host_config/{hostname}?effective_attributes=false"
@@ -655,7 +680,7 @@ class SyncCMK2(CMK2):
         Update the Nodes of Cluster in case of change
         """
         if cmk_nodes != syncer_nodes:
-            print(f"{CC.OKGREEN} *{CC.ENDC} Cluster has new Nodes {syncer_nodes}")
+            print(f"{CC.OKGREEN} *{CC.ENDC} Cluster has new Nodes {syncer_nodes} vs {cmk_nodes}")
             etag = self.get_etag(hostname)
             update_headers = {
                 'if-match': etag
@@ -685,8 +710,10 @@ class SyncCMK2(CMK2):
                 self.request(url, method="PUT",
                              data={'entries': chunk},
                             )
+                self.num_updated += chunk
             except CmkException as error:
                 self.log_details.append(('error', f"CMK API Error: {error}"))
+                self.log_details.append(('affected_hosts', f"{chunk}"))
                 self.console(f" * CMK API ERROR {error}")
 
     def add_bulk_update_host(self, body):
@@ -735,9 +762,10 @@ class SyncCMK2(CMK2):
                          additional_header=update_headers)
             if 'error' in header:
                 self.console(f" * Host Move Problem: {header['error']}")
+                self.log_details.append(('error', f"Move Error: {hostname} {header['error']}"))
                 return
-            else:
-                self.console(f" * Host Moved from Folder: {current_folder} to {folder}")
+            self.console(f" * Host Moved from Folder: {current_folder} to {folder}")
+
             # Need to update the header after last request
             if new_etag := header.get('ETag'):
                 etag = new_etag
@@ -846,9 +874,11 @@ class SyncCMK2(CMK2):
                             self.request(update_url, method="PUT",
                                          data=payload,
                                          additional_header=update_headers)
+                            self.num_updated += 1
                             etag = False
                         except CmkException as error:
                             self.log_details.append(('error', f"CMK API Error: {error}"))
+                            self.log_details.append(('affected_hosts', hostname))
                             self.console(f" * CMK API ERROR {error}")
                         else:
                             self.console(f" * Updated Host in Checkmk")

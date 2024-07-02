@@ -21,14 +21,14 @@ class SyncerLogsApi(Resource):
         """Return latest 100 Log Messages"""
         limit = 100
         response = []
-        for entry in LogEntry.objects()[:limit]:
+        for entry in LogEntry.objects().order_by('-id')[:limit]:
             response.append({
                 'entry_id': str(entry.id),
                 'time': entry.datetime.strftime('%Y-%m-%d %H:%M:%S'),
                 'message': entry.message,
                 'source': entry.source,
                 'duration_sec': entry.metric_duration_sec,
-                'details': [ {'level': x.level, 'message': x.message} for x in entry.details],
+                'details': [ {'name': x.level, 'message': x.message} for x in entry.details],
                 'traceback': str(entry.traceback.strip()),
             })
         return {
@@ -43,14 +43,14 @@ class SyncerLogsApi(Resource):
     def get(self, service_name):
         """Return latest Message of given Service"""
         try:
-            entry = LogEntry.objects(source=service_name)[0]
+            entry = LogEntry.objects(source=service_name).order_by('-id').first()
             response = {
                 'entry_id': str(entry.id),
                 'time': entry.datetime.strftime('%Y-%m-%d %H:%M:%S'),
                 'message': entry.message,
                 'source': entry.source,
                 'duration_sec': entry.metric_duration_sec,
-                'details': [ {'level': x.level, 'message': x.message} for x in entry.details],
+                'details': [ {'name': x.level, 'message': x.message} for x in entry.details],
                 'traceback': str(entry.traceback.strip()),
             }
             return {
@@ -70,7 +70,7 @@ class SyncerHostsApi(Resource):
         """Get Status of Imported Hosts"""
         ago_24h = datetime.now() - timedelta(hours=24)
         return {
-            'check' : str(ago_24h),
+            '24h_checkpoint' : str(ago_24h),
             'num_hosts': Host.objects(is_object=False).count(),
             'num_objects': Host.objects(is_object=True).count(),
             'not_updated_last_24h': Host.objects(is_object=False,

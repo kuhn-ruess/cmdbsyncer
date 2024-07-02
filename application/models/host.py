@@ -160,6 +160,7 @@ class Host(db.Document):
         """
         new_labels =dict({self._fix_key(x):str(y).strip() for x, y in label_dict.items()})
         if new_labels != self.labels:
+            self.add_log(f"Label Change: {self.labels} to {new_labels}")
             self.labels = new_labels
             self.cache = {}
 
@@ -182,7 +183,7 @@ class Host(db.Document):
            new_data (dict): Key:Value of Attributes.
         """
         if not key:
-            raise Exception("Inventory Key not set")
+            raise ValueError("Inventory Key not set")
         if config:
             # Feature: Inventorize Match Attribute
 
@@ -205,7 +206,7 @@ class Host(db.Document):
             return
 
         check_dict = {}
-        for name, value in [(x,y) for x,y in self.inventory.items()]:
+        for name, value in self.inventory.items():
             # Delete all existing keys of type
             if name and name.startswith(key+"__"):
                 check_dict[name] = value
@@ -214,11 +215,12 @@ class Host(db.Document):
             update_dict = {}
         else:
             update_dict = {f"{key}__{self._fix_key(x)}":str(y).strip() for x, y in new_data.items()}
-            self.inventory.update(update_dict)
 
         # If the inventory is changed, the cache
         # is not longer valid
         if check_dict != update_dict:
+            self.inventory.update(update_dict)
+            self.add_log(f"Inventory Change: {check_dict} to {update_dict}")
             self.cache = {}
 
     def get_inventory(self, key_filter=False):

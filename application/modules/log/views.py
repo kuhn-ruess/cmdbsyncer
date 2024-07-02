@@ -30,6 +30,7 @@ class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
 
     column_details_list = [
         'datetime', 'message', 'details', 'has_error', 'source', 'traceback',
+        'metric_duration_sec',
     ]
 
     column_default_sort = ('id', True)
@@ -45,7 +46,7 @@ class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
     }
 
     column_filters = (
-        'source', 'message',
+        'source', 'message', 'affected_hosts',
     )
     page_size = 100
 

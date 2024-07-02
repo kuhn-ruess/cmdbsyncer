@@ -23,6 +23,7 @@ class Log():
         log_entry.datetime = datetime.now()
         log_entry.message = message['message']
         log_entry.source = message['source']
+        log_entry.affected_hosts = message['affected_hosts']
         details = []
         if message['details']:
             for detail in message['details']:
@@ -39,9 +40,10 @@ class Log():
         log_entry.traceback = message['traceback']
         log_entry.save()
 
-    def log(self, message, source="SYSTEM", details=False, duration=None):
+    def log(self, message, affected_hosts=None, source="SYSTEM", details=False, duration=None):
         """ LOG Messages"""
         self._log_function({'message' : message,
+                           'affected_hosts': affected_hosts,
                            'source': source,
                            'duration': duration,
                            'traceback': traceback.format_exc(),
