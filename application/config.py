@@ -102,6 +102,9 @@ class BaseConfig():
     # That will take longer, but will not break Checkmk.
     CMK_GET_HOST_BY_FOLDER = False
 
+    # Log all Changed done on Hosts
+    CMK_DETAILED_LOG = False
+
 class ProductionConfig(BaseConfig):
     """
     Production Configuration.

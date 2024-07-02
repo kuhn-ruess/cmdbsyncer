@@ -4,18 +4,12 @@ Log Entry
 
 from application import db
 
-
-levels = [
- ('info', "Info"),
- ('error', "Error"),
- ('debug', "Debug")
-]
-
 class DetailEntry(db.EmbeddedDocument):
     """
     Detail Log Entry
     """
-    level = db.StringField(choices=levels)
+    #@TODO: Level should be something like entry_name
+    level = db.StringField()
     message = db.StringField()
 
 class LogEntry(db.Document): #pylint: disable=too-few-public-methods
@@ -23,6 +17,7 @@ class LogEntry(db.Document): #pylint: disable=too-few-public-methods
 
     datetime = db.DateTimeField()
     message = db.StringField()
+    affected_hosts = db.StringField()
     has_error = db.BooleanField(default=False)
     source = db.StringField()
     metric_duration_sec = db.IntField(default=None)
