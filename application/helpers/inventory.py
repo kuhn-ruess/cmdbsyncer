@@ -45,8 +45,7 @@ def run_inventory(config, objects):
     if collected_by_key:
         print(f"{CC.OKBLUE}Run 2: {CC.ENDC} Add extra collected data")
 
-        for hostname in [x for x,y in objects]:
+        for hostname, subs in collected_by_key.items():
             # Loop ALL hosts to delete empty collections if not found anymore
             host_obj = Host.get_host(hostname, create=False)
-            subs = collected_by_key.get(hostname, {})
             _innter_inventorize(host_obj, dict(enumerate(subs)), f"{inv_key}_collection", False)
