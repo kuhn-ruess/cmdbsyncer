@@ -384,6 +384,17 @@ class SyncCMK2(CMK2):
                          }}
         elif not dont_update_host:
             cmk_host = self.checkmk_hosts[hostname]
+
+            if is_cluster and not cmk_host['extensions']['is_cluster']:
+                url = f"/objects/host_config/{hostname}"
+                self.request(url, method="DELETE")
+                print(f"{CC.WARNING} *{CC.ENDC} Deleted host to create it as Cluster")
+                # Make sure it's added again
+                self.clusters.append((hostname, folder, labels, \
+                                    cluster_nodes, additional_attributes))
+                return
+
+
             # Update if needed
             self.update_host(hostname, cmk_host, folder,
                             labels, additional_attributes, remove_attributes,
