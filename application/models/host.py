@@ -217,11 +217,13 @@ class Host(db.Document):
             update_dict = {}
         else:
             update_dict = {f"{key}__{self._fix_key(x)}":str(y).strip() for x, y in new_data.items()}
+        
+        # We always set that, because we deleted before all with the key
+        self.inventory.update(update_dict)
 
         # If the inventory is changed, the cache
         # is not longer valid
         if check_dict != update_dict:
-            self.inventory.update(update_dict)
             self.add_log(f"Inventory Change: {check_dict} to {update_dict}")
             self.cache = {}
 
