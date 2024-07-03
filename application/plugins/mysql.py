@@ -6,6 +6,7 @@ from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
 from application.helpers.cron import register_cronjob
+from application.helpers.inventory import run_inventory
 try:
     import mysql.connector
 except ImportError:
@@ -68,7 +69,6 @@ def mysql_inventorize(account):
           f"{ColorCodes.UNDERLINE}{config['name']}{ColorCodes.ENDC}")
 
 
-    key = config['inventorize_key']
     mydb = mysql.connector.connect(
       host=config["address"],
       user=config["username"],
@@ -81,6 +81,8 @@ def mysql_inventorize(account):
         query = config['custom_query']
     mycursor.execute(query)
     field_names = config['fields'].split(',')
+
+    objects = []
     for line in mycursor.fetchall():
         labels = dict(zip(field_names, line))
         if not labels[config['hostname_field']]:
@@ -88,16 +90,11 @@ def mysql_inventorize(account):
         hostname = labels[config['hostname_field']].strip()
         if not hostname:
             continue
-        print(f" {ColorCodes.OKCYAN}* {ColorCodes.ENDC} Check {hostname}")
         del labels[config['hostname_field']]
 
-        host_obj = Host.get_host(hostname, create=False)
-        if host_obj:
-            host_obj.update_inventory(key, labels)
-            print(f" {ColorCodes.OKBLUE} * {ColorCodes.ENDC} Updated Inventory")
-            host_obj.save()
-        else:
-            print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Syncer does not have this Host")
+        objects.append((hostname, labels))
+    run_inventory(config, objects)
+
 
 
 
