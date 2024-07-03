@@ -710,7 +710,7 @@ class SyncCMK2(CMK2):
                 self.request(url, method="PUT",
                              data={'entries': chunk},
                             )
-                self.num_updated += chunk
+                self.num_updated += len(chunk)
             except CmkException as error:
                 self.log_details.append(('error', f"CMK API Error: {error}"))
                 self.log_details.append(('affected_hosts', f"{chunk}"))
