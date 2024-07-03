@@ -7,7 +7,7 @@ from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes as CC
 from application.helpers.cron import register_cronjob
-from application.helpers.syncer_jinja import render_jinja
+from application.helpers.inventory import run_inventory
 
 try:
     import pypyodbc as pyodbc
@@ -77,16 +77,6 @@ def mssql_import(account):
             print(f" {CC.WARNING} * {CC.ENDC} Managed by diffrent master")
 
 
-def _innter_inventorize(host_obj, labels, key, config):
-    """
-    Add Inventorize Information to host
-    """
-    if host_obj:
-        host_obj.update_inventory(key, labels, config)
-        print(f" {CC.OKBLUE} * {CC.ENDC} Updated Inventory")
-        host_obj.save()
-    else:
-        print(f" {CC.WARNING} * {CC.ENDC} Syncer does not have this Host")
 
 @cli_mssql.command('import_hosts')
 @click.argument('account')
@@ -99,35 +89,7 @@ def mssql_inventorize(account):
     Mssql Inventorize
     """
     config = get_account_by_name(account)
-    inv_key = config['inventorize_key']
-    collected_by_key = {}
-    all_hosts = []
-    for hostname, labels in _innter_sql(config):
-        all_hosts.append(hostname)
-        if collect_key := config.get('inventorize_collect_by_key'):
-            if value := labels.get(collect_key):
-                if rewrite := config.get('inventorize_rewrite_collect_by_key'):
-                    value = render_jinja(rewrite, **labels)
-                value = value.strip()
-                if value != hostname:
-                    collected_by_key.setdefault(value, [])
-                    collected_by_key[value].append(hostname)
-
-        if config.get('inventorize_match_by_domain'):
-            for host_obj in Host.objects(hostname__endswith=hostname):
-                _innter_inventorize(host_obj, labels, inv_key, config)
-        else:
-            host_obj = Host.get_host(hostname, create=False)
-            _innter_inventorize(host_obj, labels, inv_key, config)
-
-    if collected_by_key:
-        print(f"{CC.OKBLUE}Run 2: {CC.ENDC} Add extra collected data")
-
-        for hostname in all_hosts:
-            # Loop ALL hosts to delete empty collections if not found anymore
-            host_obj = Host.get_host(hostname, create=False)
-            subs = collected_by_key.get(hostname, {})
-            _innter_inventorize(host_obj, dict(enumerate(subs)), f"{inv_key}_collection", False)
+    run_inventory(config, _innter_sql(config))
 
 
 

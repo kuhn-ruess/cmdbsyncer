@@ -7,6 +7,8 @@ from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes as CC
 from application.helpers.cron import register_cronjob
+from application.helpers.inventory import run_inventory
+
 try:
     import pypyodbc as pyodbc
 except ImportError:
@@ -70,35 +72,6 @@ def odbc_import(account):
             print(f" {CC.WARNING} * {CC.ENDC} Managed by diffrent master")
 
 
-def _innter_inventorize(host_obj, labels, key, config):
-    """
-    Add Inventorize Information to host
-    """
-    if host_obj:
-        attr_match = config.get('inventorize_match_attribute').split('=')
-
-        if attr_match:
-            if len(attr_match) == 2:
-                host_attr, inv_attr = attr_match
-            else:
-                host_attr, inv_attr = attr_match[0], attr_match[0]
-            try:
-                attr_value = host_obj.get_labels()[host_attr]
-                inv_attr_value= labels[inv_attr].strip()
-                if attr_value != inv_attr_value:
-                    print(f" {CC.WARNING} * {CC.ENDC} Attribute '{host_attr}' "\
-                          f"is '{attr_value}' but '{inv_attr}' is '{inv_attr_value}'")
-                    return
-            except KeyError:
-                print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
-                      f" Host has no Label {host_attr}")
-
-        host_obj.update_inventory(key, labels)
-        print(f" {CC.OKBLUE} * {CC.ENDC} Updated Inventory")
-        host_obj.save()
-    else:
-        print(f" {CC.WARNING} * {CC.ENDC} Syncer does not have this Host")
-
 @cli_odbc.command('import_hosts')
 @click.argument('account')
 def cli_odbc_import(account):
@@ -110,15 +83,7 @@ def odbc_inventorize(account):
     ODBC Inventorize
     """
     config = get_account_by_name(account)
-    key = config['inventorize_key']
-    for hostname, labels in _innter_sql(config):
-        if config.get('inventorize_match_by_domain'):
-            for host_obj in Host.objects(hostname__endswith=hostname):
-                _innter_inventorize(host_obj, labels, key, config)
-        else:
-            host_obj = Host.get_host(hostname, create=False)
-            _innter_inventorize(host_obj, labels, key, config)
-
+    run_inventory(config, _innter_sql(config))
 
 @cli_odbc.command('inventorize_hosts')
 @click.argument('account')

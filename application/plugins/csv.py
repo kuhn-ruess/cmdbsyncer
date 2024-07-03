@@ -10,6 +10,7 @@ from application.modules.plugin import Plugin
 from application.modules.debug import ColorCodes
 from application.helpers.get_account import get_account_by_name
 from application.helpers.cron import register_cronjob
+from application.helpers.inventory import run_inventory
 
 @app.cli.group(name='csv')
 def _cli_csv():
@@ -146,8 +147,8 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
             csv_path = account['csv_path']
         if 'path' in account:
             csv_path = account['path']
-        if 'inventorize_key' in account:
-            key = account['inventorize_key']
+        if 'inventorize_key' not in account:
+            account['inventorize_key'] = key
 
     if not csv_path:
         raise ValueError("No path given in account config")
@@ -155,26 +156,17 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
     filename = csv_path.split('/')[-1]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
           f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
+    objects = []
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
-        for row in reader:
-            hostname = row[hostname_field].strip()
-            keys = list(row.keys())
-            for dkey in keys:
-                if not row[dkey]:
-                    del row[dkey]
-            print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Got Data for {hostname}")
-            del row[hostname_field]
-            if 'rewrite_hostname' in account and account['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], row)
+        for labels in reader:
+            hostname = labels[hostname_field].strip()
+            objects.append((hostname, labels))
 
-            host_obj = Host.get_host(hostname, create=False)
-            if host_obj:
-                host_obj.update_inventory(key, row)
-                print(f" {ColorCodes.OKBLUE} * {ColorCodes.ENDC} Updated Inventory")
-                host_obj.save()
-            else:
-                print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Syncer does not have this Host")
+    run_inventory(account, objects)
+
+
+
 
 @_cli_csv.command('inventorize_hosts')
 @click.argument("csv_path", default="")
