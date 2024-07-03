@@ -131,7 +131,6 @@ def mssql_inventorize(account):
 
 
 
-
 @cli_mssql.command('inventorize_hosts')
 @click.argument('account')
 def cli_mssql_inventorize(account):
