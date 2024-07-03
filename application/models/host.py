@@ -186,7 +186,6 @@ class Host(db.Document):
             raise ValueError("Inventory Key not set")
         if config:
             # Feature: Inventorize Match Attribute
-
             if attr_match := config.get('inventorize_match_attribute'):
                 attr_match = attr_match.split('=')
                 if len(attr_match) == 2:
@@ -203,7 +202,7 @@ class Host(db.Document):
                 except KeyError:
                     print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
                           f" Host has no Label {host_attr}")
-            return
+                    return
 
         check_dict = {}
         #pylint: disable=unnecessary-comprehension
@@ -217,7 +216,6 @@ class Host(db.Document):
             update_dict = {}
         else:
             update_dict = {f"{key}__{self._fix_key(x)}":str(y).strip() for x, y in new_data.items()}
-        
         # We always set that, because we deleted before all with the key
         self.inventory.update(update_dict)
 
