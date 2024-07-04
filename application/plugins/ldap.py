@@ -7,6 +7,7 @@ from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
 from application.helpers.cron import register_cronjob
 
+from application.helpers.inventory import run_inventory
 
 try:
     import ldap
@@ -17,11 +18,11 @@ except ImportError:
 def cli_ldap():
     """LDAP Related commands"""
 
-def ldap_import(account):
+
+def _inner_import(config):
     """
-    LDAP Import
+    Base LDAP Connect and Query
     """
-    config = get_account_by_name(account)
     if not config['address'].startswith('ldap'):
         raise Exception("Address needs to start with ldap:// or ldaps://")
 
@@ -43,14 +44,14 @@ def ldap_import(account):
     if config['attributes']:
         attributes = list([x.strip() for x in config['attributes'].split(',')])
 
-    result = connect.search_s(base_dn,
-                              scope,
-                              search_filter,
-                              attributes)
-    for _dn, entry in result:
+    for _dn, entry in connect.search_s(base_dn,
+                                       scope,
+                                       search_filter,
+                                       attributes):
         labels = {}
         if not isinstance(entry, dict):
             continue
+
         for key, content in entry.items():
             content = content[0].decode(config['encoding'])
             if key  == config['hostname_field']:
@@ -58,6 +59,16 @@ def ldap_import(account):
             else:
                 labels[key] = content
 
+        yield hostname, labels
+
+
+
+def ldap_import(account):
+    """
+    LDAP Import
+    """
+    config = get_account_by_name(account)
+    for hostname, labels in _inner_import(config):
         print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
         host_obj = Host.get_host(hostname)
         do_save = host_obj.set_account(account_dict=config)
@@ -71,7 +82,22 @@ def ldap_import(account):
 @cli_ldap.command('import_hosts')
 @click.argument('account')
 def cli_ldap_import(account):
-    """Import LDAP Objects"""
+    """Inventorize LDAP Objects"""
     ldap_import(account)
 
+def ldap_inventorize(account):
+    """
+    LDAP Inventorize
+    """
+    config = get_account_by_name(account)
+    run_inventory(config, _inner_import(config))
+
+
+@cli_mssql.command('inventorize_hosts')
+@click.argument('account')
+def cli_ldap_inventorize(account):
+    """Inventorize LDAP Data"""
+    ldap_inventorize(account)
+
+register_cronjob("LDAP: Inventorize Data", ldap_inventorize)
 register_cronjob("LDAP: Import Objects", ldap_import)
