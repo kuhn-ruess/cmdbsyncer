@@ -11,6 +11,7 @@ from application.helpers.inventory import run_inventory
 
 try:
     import ldap
+    from ldap.controls.libldap import SimplePagedResultsControl
 except ImportError:
     pass
 
@@ -44,20 +45,44 @@ def _inner_import(config):
     if config['attributes']:
         attributes = list([x.strip() for x in config['attributes'].split(',')])
 
-    for _dn, entry in connect.search_s(base_dn,
-                                       scope,
-                                       search_filter,
-                                       attributes):
-        labels = {}
+    page_control = SimplePagedResultsControl(True, size=1000, cookie='')
+
+    response = connect.search_ext(base_dn,
+                                  scope,
+                                  search_filter,
+                                  attributes,
+                                  serverctrls=[page_control])
+    results = []
+    pages = 0
+    while True:
+        pages += 1
+        _rtype, rdata, _rmsgid, srvctrls = connect.result3(response)
+        results.extend(rdata)
+        controls = [ctl for ctl in srvctrls \
+                       if ctl.controlType == SimplePagedResultsControl.controlType]
+        if not controls:
+            raise ValueError("The server ignores RFC 2696 control")
+        if not controls[0].cookie:
+            break
+
+        page_control.cookie = controls[0].cookie
+        response = connect.search_ext(base_dn,
+                                      scope,
+                                      search_filter,
+                                      attributes,
+                                      serverctrls=[page_control])
+    for dn, entry in results:
+        labels = {
+            'dn': dn,
+        }
         if not isinstance(entry, dict):
             continue
 
         for key, content in entry.items():
             content = content[0].decode(config['encoding'])
-            if key  == config['hostname_field']:
-                hostname = content
-            else:
-                labels[key] = content
+            labels[key] = content
+
+        hostname = labels[config['hostname_field']]
 
         yield hostname, labels
 
