@@ -26,6 +26,10 @@ def run_inventory(config, objects):
     inv_key = config['inventorize_key']
     collected_by_key = {}
     for hostname, labels in objects:
+        if config['rewrite_hostname']:
+            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'],{})
+
+        print(f"{CC.OKGREEN}* {CC.ENDC} Data for {hostname}")
         if collect_key := config.get('inventorize_collect_by_key'):
             if value := labels.get(collect_key):
                 if rewrite := config.get('inventorize_rewrite_collect_by_key'):
