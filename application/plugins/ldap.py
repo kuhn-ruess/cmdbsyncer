@@ -93,7 +93,7 @@ def ldap_inventorize(account):
     run_inventory(config, _inner_import(config))
 
 
-@cli_mssql.command('inventorize_hosts')
+@cli_ldap.command('inventorize_hosts')
 @click.argument('account')
 def cli_ldap_inventorize(account):
     """Inventorize LDAP Data"""
