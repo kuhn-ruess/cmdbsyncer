@@ -503,3 +503,19 @@ class CheckmkCacheView(DefaultModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated
+
+class CheckmkDCDView(DefaultModelView):
+    """
+    Custom DCD Rule View
+    """
+
+    column_editable_list = [
+        'enabled',
+
+    ]
+
+    column_exclude_list = [
+        'documentation_url', 'resticted_source_hosts', 'creation_rules',
+        'activate_changes_interval', 'discover_on_creation', 'exclude_time_ranges',
+        'no_deletion_time_after_init', 'max_cache_age', 'validation_period',
+    ]

@@ -7,22 +7,25 @@ from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 from application.models.host import Host
+from application.modules.rule.filter import Filter
+
 from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.checkmk.tags import CheckmkTagSync
 from application.modules.checkmk.cmk_rules import CheckmkRuleSync
 from application.modules.checkmk.downtimes import CheckmkDowntimeSync
 from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
-from application.modules.rule.filter import Filter
 from application.modules.checkmk.inventorize import InventorizeHosts
-from application.modules.checkmk.models import CheckmkFilterRule
+from application.modules.checkmk.dcd import CheckmkDCDRuleSync
+
 
 from application.modules.rule.rewrite import Rewrite
-from application.modules.checkmk.models import CheckmkRewriteAttributeRule
 from application.modules.checkmk.models import (
    CheckmkRuleMngmt,
    CheckmkBiRule,
    CheckmkBiAggregation,
    CheckmkDowntimeRule,
+   CheckmkRewriteAttributeRule,
+   CheckmkFilterRule,
 )
 
 def _load_rules():
@@ -311,6 +314,28 @@ def export_downtimes(account):
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
     log.log(f"Export Downtimes to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
+#.
+#   . DCD Rules
+def export_dcd_rules(account):
+    """
+    Export DCD Rules to Checkmk
+    """
+    details = []
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            syncer = CheckmkDCDRuleSync()
+            syncer.account_id = str(target_config['_id'])
+            syncer.account_name = target_config['name']
+            syncer.config = target_config
+            syncer.export_rules()
+        else:
+            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'CMK Error: {error_obj}'))
+    log.log(f"Export DCD Rules to Checkmk Account: {target_config['name']}",
             source="Checkmk", details=details)
 #.
 #   . Export Users
