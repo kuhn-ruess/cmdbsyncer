@@ -17,7 +17,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.7b1.9'
+VERSION = '3.7b1.10'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -168,7 +168,7 @@ admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
 from application.modules.checkmk.models import CheckmkRuleMngmt
 from application.modules.checkmk.views import CheckmkMngmtRuleView
 admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
-                                    name="Create Checkmk Setup Rules", category="Checkmk"))
+                                    name="Manage Checkmk Setup Rules", category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkTagMngmt
 from application.modules.checkmk.views import CheckmkTagMngmtView
@@ -183,6 +183,9 @@ from application.modules.checkmk.views import CheckmkDowntimeView
 admin.add_view(CheckmkDowntimeView(CheckmkDowntimeRule, name="Manage Downtimes", category="Checkmk"))
 
 
+from application.modules.checkmk.models import CheckmkDCDRule
+from application.modules.checkmk.views import CheckmkDCDView
+admin.add_view(CheckmkDCDView(CheckmkDCDRule, name="Manage DCD Rules", category="Checkmk"))
 
 admin.add_sub_category(name="Manage Business Intelligence", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRule

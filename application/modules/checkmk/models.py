@@ -15,6 +15,15 @@ attriubte_sources = [
     ("cmk_service_labels", "Labels of Service"),
 ]
 
+
+class CheckmkHostAttribute(db.EmbeddedDocument):
+    """
+    Common Checkmk Host Attribute
+    """
+    attribute_name = db.StringField()
+    attribute_value = db.StringField()
+
+
 class CheckmkInventorizeAttributes(db.Document):
     """
     Attributes to be inventorized from Checkmk
@@ -417,6 +426,61 @@ class CheckmkBiAggregation(db.Document):
     meta = {
         'strict': False
     }
+#.
+#   .-- Checkmk DCD Rules
+
+
+class DCDCreationRule(db.EmbeddedDocument):
+    """
+    DCD Creation Rule
+    """
+    folder_path = db.StringField()
+    host_attributes = \
+            db.ListField(field=db.EmbeddedDocumentField(document_type="CheckmkHostAttribute"))
+    delete_hosts = db.BooleanField()
+
+
+class DCDTimerange(db.EmbeddedDocument):
+    """
+    DCD Timerange
+    """
+    start_hour = db.IntField()
+    start_minute = db.IntField()
+    end_hour = db.IntField()
+    end_minute = db.IntField()
+
+
+class CheckmkDCDRule(db.Document):
+    """
+    DCD Rule
+    """
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    dcd_id = db.StringField(required=True)
+    title = db.StringField(required=True)
+    comment = db.StringField()
+    documentation_url = db.StringField()
+    disabled = db.BooleanField(default=False)
+    site = db.StringField(required=True)
+    connector_type = db.StringField(required=True, default="piggyback")
+    restricted_source_hosts = db.ListField(field=db.StringField())
+    interval = db.IntField(default=60)
+    creation_rules = db.ListField(field=db.EmbeddedDocumentField(document_type="DCDCreationRule"))
+    activate_changes_interval = db.IntField(required=True, default=600)
+    discover_on_creation = db.BooleanField()
+    exclude_time_ranges = db.ListField(field=db.EmbeddedDocumentField(document_type="DCDTimerange"))
+    no_deletion_time_after_init = db.IntField(default=6000, required=True)
+    max_cache_age = db.IntField(default=3600, required=True)
+    validity_period = db.IntField(default=60, required=True)
+
+
+
+    enabled = db.BooleanField()
+    meta = {
+        'strict': False
+    }
+
 #.
 #   .-- Checkmk BI Rules
 
