@@ -2,10 +2,11 @@
 Checkmk Rule Views
 """
 from markupsafe import Markup
-from wtforms import HiddenField, StringField
+from wtforms import HiddenField, StringField, PasswordField
 from wtforms.validators import ValidationError
 from flask import request
 from flask_admin import expose
+from flask_admin.form import rules
 from mongoengine.errors import DoesNotExist
 
 from flask_login import current_user
@@ -18,6 +19,9 @@ from application.modules.checkmk.models import action_outcome_types, CheckmkSite
 from application.plugins.checkmk import get_debug_data
 
 from application.models.host import Host
+
+div_open = rules.HTML('<div class="form-check form-check-inline">')
+div_close = rules.HTML("</div>")
 
 def _render_dw_rule(_view, _context, model, _name):
     """
@@ -213,13 +217,22 @@ class CheckmkGroupRuleView(RuleModelView):
         },
     }
 
+    form_rules = [
+        rules.FieldSet(
+           ('name', 'documentation', 'enabled'),
+            "1. Main Options"),
+        rules.FieldSet(
+           ( 'outcome',
+           ), "2. Rule"),
+    ]
+
 
     def __init__(self, model, **kwargs):
         """
         Update elements
         """
         # Default Form rules not match for the Fields of this Form
-        self.form_rules = []
+        #self.form_rules = []
 
         self.column_formatters.update({
             'render_checkmk_group_outcome': _render_group_outcome,
@@ -255,6 +268,23 @@ class CheckmkBiRuleView(DefaultModelView):
     """
     Custom BI Rule View
     """
+
+    form_rules = [
+        rules.FieldSet((
+            rules.Field('name'),
+            rules.Field('documentation'),
+            div_open,
+            rules.NestedRule(('enabled', 'last_match')),
+            ), "1. Main Options"),
+            div_close,
+
+       rules.FieldSet(
+           ( 'condition_typ', 'conditions',
+           ), "2. Conditions"),
+       rules.FieldSet(
+           ( 'outcomes',
+           ), "3. BI Rule"),
+    ]
 
     form_excluded_columns = (
         'render_full_conditions',
@@ -308,12 +338,27 @@ class CheckmkMngmtRuleView(RuleModelView):
     Custom Group Model View
     """
 
+    form_rules = [
+        rules.FieldSet((
+            rules.Field('name'),
+            rules.Field('documentation'),
+            div_open,
+            rules.NestedRule(('enabled', 'last_match')),
+            ), "1. Main Options"),
+            div_close,
+
+       rules.FieldSet(
+           ( 'condition_typ', 'conditions',
+           ), "2. Conditions"),
+       rules.FieldSet(
+           ( 'outcomes',
+           ), "3. Rule"),
+    ]
+
     def __init__(self, model, **kwargs):
         """
         Update elements
         """
-        # Default Form rules not match for the Fields of this Form
-        self.form_rules = []
 
         self.column_formatters.update({
             'render_cmk_rule_mngmt': _render_rule_mngmt_outcome,
@@ -465,6 +510,23 @@ class CheckmkDowntimeView(RuleModelView):
     Checkmk Downtimes
     """
 
+    form_rules = [
+        rules.FieldSet((
+            rules.Field('name'),
+            rules.Field('documentation'),
+            div_open,
+            rules.NestedRule(('enabled', 'last_match')),
+            ), "1. Main Options"),
+            div_close,
+
+       rules.FieldSet(
+           ( 'condition_typ', 'conditions',
+           ), "2. Conditions"),
+       rules.FieldSet(
+           ( 'outcomes',
+           ), "3. Downtime"),
+    ]
+
     column_labels = {
         'render_cmk_downtime_rule': "Downtimes",
         'render_full_conditions': "Conditions",
@@ -474,8 +536,6 @@ class CheckmkDowntimeView(RuleModelView):
         """
         Update elements
         """
-        # Default Form rules not match for the Fields of this Form
-        self.form_rules = []
 
         self.column_formatters.update({
             'render_cmk_downtime_rule': _render_dw_rule,
@@ -509,13 +569,70 @@ class CheckmkDCDView(DefaultModelView):
     Custom DCD Rule View
     """
 
+    form_rules = [
+       rules.FieldSet(
+           ('name', 'documentation', 'enabled'),
+            "1. Main Options"),
+       rules.FieldSet(
+           ( 'dcd_id', 'title', 'comment', 'documentation_url',
+             'disabled', 'site', 'connector_type', 'restricted_source_hosts',
+             'interval', 'creation_rules', 'activate_changes_interval',
+             'discover_on_creation', 'exclude_time_ranges',
+             'no_deletion_time_after_init', 'max_cache_age',
+             'validity_period', 
+           ), "2. Rule Settings"),
+    ]
+
     column_editable_list = [
-        'enabled',
+        'enabled', 'disabled'
 
     ]
 
     column_exclude_list = [
-        'documentation_url', 'resticted_source_hosts', 'creation_rules',
+        'documentation_url', 'restricted_source_hosts', 'creation_rules',
         'activate_changes_interval', 'discover_on_creation', 'exclude_time_ranges',
-        'no_deletion_time_after_init', 'max_cache_age', 'validation_period',
+        'no_deletion_time_after_init', 'max_cache_age', 'validity_period', 'interval'
     ]
+
+class CheckmkPasswordView(DefaultModelView):
+    """
+    Checkmk Password View
+    """
+
+    form_rules = [
+       rules.FieldSet(
+           ('name', 'documentation', 'enabled'),
+            "1. Main Options"),
+       rules.FieldSet(
+           ( 'title', 'comment', 'documentation_url', 'owner', 'password', 'shared',
+           ), "2. Password Settings"),
+    ]
+
+    column_filters = [
+        'title',
+        'comment',
+    ]
+
+    column_editable_list = [
+        'enabled'
+
+    ]
+
+    form_excluded_columns = [
+       "password_crypted"
+    ]
+
+    column_exclude_list = [
+        'password_crypted', 'shared', 'documentation_url',
+        'owner',
+    ]
+
+    def scaffold_form(self):
+        form_class = super().scaffold_form()
+        form_class.password = PasswordField("Password")
+        return form_class
+
+    def on_model_change(self, form, model, is_created):
+        if form.password.data:
+            model.set_password(form.password.data)
+        return super().on_model_change(form, model, is_created)

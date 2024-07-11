@@ -16,6 +16,7 @@ from application.modules.checkmk.downtimes import CheckmkDowntimeSync
 from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
 from application.modules.checkmk.inventorize import InventorizeHosts
 from application.modules.checkmk.dcd import CheckmkDCDRuleSync
+from application.modules.checkmk.passwords import CheckmkPasswordSync
 
 
 from application.modules.rule.rewrite import Rewrite
@@ -330,6 +331,28 @@ def export_dcd_rules(account):
             syncer.account_name = target_config['name']
             syncer.config = target_config
             syncer.export_rules()
+        else:
+            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'CMK Error: {error_obj}'))
+    log.log(f"Export DCD Rules to Checkmk Account: {target_config['name']}",
+            source="Checkmk", details=details)
+#.
+#   . Passwords
+def export_passwords(account):
+    """
+    Export Passwords to Checkmk
+    """
+    details = []
+    try:
+        target_config = get_account_by_name(account)
+        if target_config:
+            syncer = CheckmkPasswordSync()
+            syncer.account_id = str(target_config['_id'])
+            syncer.account_name = target_config['name']
+            syncer.config = target_config
+            syncer.export_passwords()
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:

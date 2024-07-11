@@ -18,6 +18,7 @@ from application.modules.checkmk.inits import (
     export_tags,
     export_downtimes,
     export_dcd_rules,
+    export_passwords,
 )
 
 
@@ -233,6 +234,20 @@ def cli_cmk_dcd(account):
     """
     export_dcd_rules(account)
 
+@cli_cmk.command('export_passwords')
+@click.argument("account")
+def cli_cmk_passwords(account):
+    """
+    Export Rules for Password Export
+
+    ### Example
+    _./cmdbsyncer checkmk export_passwords SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_passwords(account)
 
 
 register_cronjob('Checkmk: Export Rules', export_rules)
@@ -246,3 +261,4 @@ register_cronjob('Checkmk: Export Users', export_users)
 register_cronjob('Checkmk: Export Tags', export_tags)
 register_cronjob('Checkmk: Export Downtimes', export_downtimes)
 register_cronjob('Checkmk: Export DCD Rules', export_dcd_rules)
+register_cronjob('Checkmk: Export Passwords', export_passwords)

@@ -7,7 +7,9 @@ class BaseConfig():
     Generel System white Configuration.
     Can be overwritten later if needed.
     """
-    SECRET_KEY = "j+}[56_c$%u5F5PH)P4s~q(.H'mZH!dFkn?e!@{,f)Zj9Cd<Dj@DG"
+    SECRET_KEY = "[1dmBlwnsY788wI3x<[R34qlUF2Xc/>2o7grl{L9C9Yj)8£/O3/2l="
+    CRYPTOGRAPHY_KEY = b'nto4ioGgQDlJ-r5jqvyEtTpUQC2fkOAG4Df-E8OlVm8='
+
     TIME_STAMP_FORMAT = "%d.%m.%Y %H:%M"
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
