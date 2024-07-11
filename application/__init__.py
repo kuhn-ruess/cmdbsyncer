@@ -23,8 +23,7 @@ logger = logging.getLogger('cmdb_syncer')
 
 app = Flask(__name__)
 env = os.environ.get('config')
-if env == "prod":
-    app.config.from_object('application.config.ProductionConfig')
+if env == "prod": app.config.from_object('application.config.ProductionConfig')
 elif env == "compose":
     app.config.from_object('application.config.ComposeConfig')
 else:
@@ -186,6 +185,10 @@ admin.add_view(CheckmkDowntimeView(CheckmkDowntimeRule, name="Manage Downtimes",
 from application.modules.checkmk.models import CheckmkDCDRule
 from application.modules.checkmk.views import CheckmkDCDView
 admin.add_view(CheckmkDCDView(CheckmkDCDRule, name="Manage DCD Rules", category="Checkmk"))
+
+from application.modules.checkmk.models import CheckmkPassword
+from application.modules.checkmk.views import CheckmkPasswordView
+admin.add_view(CheckmkPasswordView(CheckmkPassword, name="Manage Password Store", category="Checkmk"))
 
 admin.add_sub_category(name="Manage Business Intelligence", parent_name="Checkmk")
 from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRule

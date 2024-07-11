@@ -2,7 +2,8 @@
 Checkmk Rules
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
-from application import db
+from cryptography.fernet import Fernet
+from application import db, app
 from application.modules.rule.models import rule_types
 
 
@@ -427,6 +428,39 @@ class CheckmkBiAggregation(db.Document):
         'strict': False
     }
 #.
+#   .-- Checkmk Passwords
+class CheckmkPassword(db.Document):
+    """
+    Checkmk Passwords
+    """
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    title = db.StringField(required=True)
+    comment = db.StringField()
+    documentation_url = db.StringField()
+    password_crypted = db.StringField()
+    owner = db.StringField(default="admin", required=True)
+    shared = db.ListField(field=db.StringField())
+
+    def set_password(self, password):
+        """
+        Encryp Password
+        """
+        f = Fernet(app.config['CRYPTOGRAPHY_KEY'])
+        self.password_crypted = f.encrypt(str.encode(password)).decode('utf-8')
+
+
+    def get_password(self):
+        """
+        Decrypt Password
+        """
+        f = Fernet(app.config['CRYPTOGRAPHY_KEY'])
+        return f.decrypt(str.encode(self.password_crypted)).decode('utf-8')
+
+
+    enabled = db.BooleanField()
+#.
 #   .-- Checkmk DCD Rules
 
 
@@ -474,9 +508,8 @@ class CheckmkDCDRule(db.Document):
     max_cache_age = db.IntField(default=3600, required=True)
     validity_period = db.IntField(default=60, required=True)
 
-
-
     enabled = db.BooleanField()
+
     meta = {
         'strict': False
     }

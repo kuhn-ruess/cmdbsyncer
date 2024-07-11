@@ -60,15 +60,19 @@ class Plugin():
                 return Struct(status_code=200, headers={}), {}
 
 
-        jobs = {
-            'get': requests.get(url, **payload),
-            'post': requests.post(url, **payload),
-            'put': requests.put(url, **payload),
-            'delete': requests.delete(url, **payload),
-            'head': requests.head(url, **payload),
-            'options': requests.options(url, **payload),
-        }
-        resp = jobs[method]
+        match method: 
+            case "get":
+                resp = requests.get(url, **payload)
+            case 'post':
+                resp = requests.post(url, **payload)
+            case 'put':
+                resp = requests.put(url, **payload)
+            case 'delete':
+                resp = requests.delete(url, **payload)
+            case 'head':
+                resp = requests.head(url, **payload),
+            case 'options':
+                resp = requests.options(url, **payload)
         try:
             logger.debug(f"Response Json: {pformat(resp.json())}")
         except requests.exceptions.JSONDecodeError:

@@ -238,6 +238,24 @@ class FiltereModelView(DefaultModelView):
 
     form_subdocuments = form_subdocuments_template
 
+    form_rules = [
+        rules.FieldSet((
+            rules.Field('name'),
+            rules.Field('documentation'),
+            div_open,
+            rules.NestedRule(('enabled', 'last_match')),
+            ), "1. Main Options"),
+            div_close,
+            rules.Field('sort_field'),
+
+       rules.FieldSet(
+           ( 'condition_typ', 'conditions',
+           ), "2. Conditions"),
+       rules.FieldSet(
+           ( 'outcomes',
+           ), "3. Filter"),
+    ]
+
     column_exclude_list = [
         'conditions', 'outcomes',
     ]
