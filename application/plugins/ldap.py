@@ -82,7 +82,10 @@ def _inner_import(config):
             content = content[0].decode(config['encoding'])
             labels[key] = content
 
-        hostname = labels[config['hostname_field']]
+        try:
+            hostname = labels[config['hostname_field']]
+        except KeyError:
+            continue
 
         yield hostname, labels
 
