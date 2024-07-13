@@ -60,19 +60,33 @@ class Plugin():
                 return Struct(status_code=200, headers={}), {}
 
 
-        match method: 
-            case "get":
-                resp = requests.get(url, **payload)
-            case 'post':
-                resp = requests.post(url, **payload)
-            case 'put':
-                resp = requests.put(url, **payload)
-            case 'delete':
-                resp = requests.delete(url, **payload)
-            case 'head':
-                resp = requests.head(url, **payload),
-            case 'options':
-                resp = requests.options(url, **payload)
+        #match method:
+        #    case "get":
+        #        resp = requests.get(url, **payload)
+        #    case 'post':
+        #        resp = requests.post(url, **payload)
+        #    case 'put':
+        #        resp = requests.put(url, **payload)
+        #    case 'delete':
+        #        resp = requests.delete(url, **payload)
+        #    case 'head':
+        #        resp = requests.head(url, **payload),
+        #    case 'options':
+        #        resp = requests.options(url, **payload)
+        # Python pre 3.10 suppport.....:
+        if method == "get":
+            resp = requests.get(url, **payload)
+        elif method == 'post':
+            resp = requests.post(url, **payload)
+        elif method == 'put':
+            resp = requests.put(url, **payload)
+        elif method == 'delete':
+            resp = requests.delete(url, **payload)
+        elif method ==  'head':
+            resp = requests.head(url, **payload),
+        elif method ==  'options':
+            resp = requests.options(url, **payload)
+
         try:
             logger.debug(f"Response Json: {pformat(resp.json())}")
         except requests.exceptions.JSONDecodeError:
