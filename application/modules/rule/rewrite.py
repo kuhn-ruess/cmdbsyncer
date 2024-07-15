@@ -4,9 +4,9 @@ Rewrite
 """
 #pylint: disable=logging-fstring-interpolation, bare-except, too-many-branches, too-many-locals
 import re
-import jinja2
 from application.modules.rule.rule import Rule
 from application import logger
+from application.helpers.syncer_jinja import render_jinja
 
 class Rewrite(Rule):# pylint: disable=too-few-public-methods
     """
@@ -14,7 +14,7 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
     """
 
     name = "Rewrite"
-    rewrite_cache = {}
+    regex_cache = {}
 
     def add_outcomes(self, rule, outcomes):
         """
@@ -32,10 +32,10 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                     pattern = attribute_name
                     # Can may be simplified since i heared Python
                     # Handles the cache anyway
-                    if not self.rewrite_cache.get(pattern):
-                        self.rewrite_cache[pattern] = re.compile(pattern)
+                    if not self.regex_cache.get(pattern):
+                        self.regex_cache[pattern] = re.compile(pattern)
                     for key, value in self.attributes.items():
-                        if self.rewrite_cache[pattern].match(key):
+                        if self.regex_cache[pattern].match(key):
                             outcomes[f'add_{new_attribute_name}'] = value
                             outcomes[f'del_{key}'] = True
                 elif mode == 'string':
@@ -52,8 +52,8 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                         except:
                             logger.debug("Cant Split Rewrite Attribute")
                 elif mode == 'jinja':
-                    tpl = jinja2.Template(new_attribute_name)
-                    new_attribute_name = tpl.render(HOSTNAME=self.hostname, **self.attributes)
+                    new_attribute_name = render_jinja(new_attribute_name, mode="nullify",
+                                                      HOSTNAME=self.hostname, **self.attributes)
                     if self.attributes.get(attribute_name):
                         outcomes[f'add_{new_attribute_name}'] = self.attributes[attribute_name]
                         outcomes[f'del_{attribute_name}'] = True
@@ -76,10 +76,10 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                     pattern = new_value
                     # Can may be simplified since i heared Python
                     # Handles the cache anyway
-                    if not self.rewrite_cache.get(pattern):
-                        self.rewrite_cache[pattern] = re.compile(pattern)
+                    if not self.regex_cache.get(pattern):
+                        self.regex_cache[pattern] = re.compile(pattern)
                     for key, value in self.attributes.items():
-                        if self.rewrite_cache[pattern].match(key):
+                        if self.regex_cache[pattern].match(key):
                             outcomes[f'add_{attribute_name}'] = value
                 elif value_mode == 'string':
                     outcomes[f'add_{attribute_name}'] = new_value
@@ -91,7 +91,7 @@ class Rewrite(Rule):# pylint: disable=too-few-public-methods
                     except:
                         logger.debug("Cant Split Value")
                 elif value_mode == 'jinja':
-                    tpl = jinja2.Template(new_value)
-                    new_value = tpl.render(HOSTNAME=self.hostname, **self.attributes)
+                    new_value = render_jinja(new_value, mode="nullify",
+                                             HOSTNAME=self.hostname, **self.attributes)
                     outcomes[f'add_{attribute_name}'] = new_value
         return outcomes
