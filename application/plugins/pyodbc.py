@@ -70,7 +70,7 @@ class ODBC(Plugin):
                     hostname = hostname.lower()
                 found_hosts += 1
                 yield hostname, labels
-            self.log_details.append(("found_hosts": found_hosts))
+            self.log_details.append(("found_hosts", found_hosts))
         except NameError as error:
             print(f"EXCEPTION: Missing requirements, pypyodbc or sqlserverport ({error})")
 
