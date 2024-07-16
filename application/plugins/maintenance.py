@@ -8,7 +8,7 @@ import string
 import secrets
 import click
 from mongoengine.errors import DoesNotExist, ValidationError
-from application import app, logger
+from application import app, logger, log
 from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
 from application.modules.checkmk.poolfolder import remove_seat
@@ -29,13 +29,14 @@ def _cli_sys():
     """
 
 
-#   .-- Command: Maintanence
+#   .-- Command: Maintenance
 
 def maintenance(account):
     """
     Inner Maintenance Mode
     """
     print(f"{CC.HEADER} ***** Run Tasks ***** {CC.ENDC}")
+    details = []
 
     account_filter = False
     account_filter_name = False
@@ -56,7 +57,7 @@ def maintenance(account):
         print(f"{CC.WARNING} Days set to 0, exiting {CC.ENDC}")
         return
 
-    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days," \
+    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days, " \
           f"Filter: {account_filter_name}{CC.ENDC}")
 
     now = datetime.datetime.now()
@@ -67,6 +68,7 @@ def maintenance(account):
                                source_account_id=str(account_filter['id']))
     else:
         objects = Host.objects(last_import_seen__lte=timedelta)
+    deleted_hosts = 0
     for host in objects:
         print(f"{CC.WARNING}  ** {CC.ENDC}Deleted host {host.hostname}")
         if host.get_folder():
@@ -74,6 +76,10 @@ def maintenance(account):
             remove_seat(folder)
             print(f"{CC.WARNING}  *** {CC.ENDC}Seat in Pool {folder} free now")
         host.delete()
+        deleted_hosts += 1
+    details.append(('hosts_deleted', deleted_hosts))
+    log.log(f"Database Maintenance {account}",
+            source="Maintenance", details=details)
 
 @_cli_sys.command('maintenance')
 @click.argument("days", default=7)
@@ -230,4 +236,4 @@ def self_configure():
     print("- done")
 
 #.
-register_cronjob("Syncer: Maintanence", maintenance)
+register_cronjob("Syncer: Maintenence", maintenance)
