@@ -3,14 +3,20 @@ Alle Stuff shared by the plugins
 """
 #pylint: disable=too-few-public-methods
 #pylint: disable=logging-fstring-interpolation
+from datetime import datetime
+import time
 
 from pprint import pformat
 from collections import namedtuple
 import requests
-from application import logger, app
+from application import logger, app, log
 from application.modules.custom_attributes.models import CustomAttributeRule as \
     CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
+
+from syncerapi.v1 import (
+    get_account,
+)
 
 
 class Plugin():
@@ -26,6 +32,25 @@ class Plugin():
 
     dry_run = False
     save_requests = False
+
+    config = {}
+    log_details = []
+
+    def __init__(self, account=False):
+        self.start_time = time.time()
+        self.log_details.append(('started', datetime.now()))
+        if account:
+            self.self.config = get_account(account)
+
+    def save_log(self, name, source):
+        """
+        Save Details to log
+        """
+        duration = time.time() - self.start_time
+        self.log_details.append(('duration', duration))
+        self.log_details.append(('ended', datetime.now()))
+
+        log.log(name, source=source, details=self.log_details)
 
 
     def inner_request(self, method, url, data, headers):
@@ -70,7 +95,7 @@ class Plugin():
         #    case 'delete':
         #        resp = requests.delete(url, **payload)
         #    case 'head':
-        #        resp = requests.head(url, **payload),
+        #        resp = requests.head(url, **payload)
         #    case 'options':
         #        resp = requests.options(url, **payload)
         # Python pre 3.10 suppport.....:
@@ -83,7 +108,7 @@ class Plugin():
         elif method == 'delete':
             resp = requests.delete(url, **payload)
         elif method ==  'head':
-            resp = requests.head(url, **payload),
+            resp = requests.head(url, **payload)
         elif method ==  'options':
             resp = requests.options(url, **payload)
 
