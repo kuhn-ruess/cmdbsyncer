@@ -40,7 +40,7 @@ class ODBC(Plugin):
             print(f"{cc.OKBLUE}Started {cc.ENDC} with account "\
                   f"{cc.UNDERLINE}{self.self.config['name']}{cc.ENDC}")
 
-
+            found_hosts = 0
             logger.debug(self.config)
             serverport = self.config.get('serverport')
             if not serverport:
@@ -68,7 +68,9 @@ class ODBC(Plugin):
                                                      self.config['rewrite_hostname'], labels)
                 if app_config['LOWERCASE_HOSTNAMES']:
                     hostname = hostname.lower()
+                found_hosts += 1
                 yield hostname, labels
+            self.log_details.append(("found_hosts": found_hosts))
         except NameError as error:
             print(f"EXCEPTION: Missing requirements, pypyodbc or sqlserverport ({error})")
 
