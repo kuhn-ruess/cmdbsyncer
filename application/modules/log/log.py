@@ -32,20 +32,17 @@ class Log():
                 if level == 'error':
                     log_entry.has_error = True
                 new.level = level
-                new.message = detail[1]
+                new.message = str(detail[1])
                 details.append(new)
-        if message['duration']:
-            log_entry.metric_duration_sec = int(message['duration'])
         log_entry.details = details
         log_entry.traceback = message['traceback']
         log_entry.save()
 
-    def log(self, message, affected_hosts=None, source="SYSTEM", details=False, duration=None):
+    def log(self, message, affected_hosts=None, source="SYSTEM", details=False):
         """ LOG Messages"""
         self._log_function({'message' : message,
                            'affected_hosts': affected_hosts,
                            'source': source,
-                           'duration': duration,
                            'traceback': traceback.format_exc(),
                            'details': details})
 

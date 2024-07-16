@@ -4,9 +4,7 @@ Add Hosts into CMK Version 2 Installations
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 #pylint: disable=logging-fstring-interpolation
 import ast
-import time
 import multiprocessing
-from datetime import datetime
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import app
 from application.models.host import Host
@@ -441,8 +439,6 @@ class SyncCMK2(CMK2):
         """Run Job"""
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
 
-        self.log_details.append(('process_started', str(datetime.now())))
-        start_time = time.time()
 
         self.fetch_checkmk_folders()
         self.fetch_checkmk_hosts()
@@ -524,14 +520,11 @@ class SyncCMK2(CMK2):
         self.cleanup_hosts()
         self.handle_folders()
 
-        duration = time.time() - start_time
         self.log_details.append(('num_total', str(total)))
         self.log_details.append(('num_created', str(self.num_created)))
         self.log_details.append(('num_updated', str(self.num_updated)))
         self.log_details.append(('num_delted', str(self.num_deleted)))
-        self.log_details.append(('process_finished', str(datetime.now())))
-        log.log(f"Synced Hosts to Account: {self.account_name}", source="checkmk_host_export",
-                details=self.log_details, duration=duration)
+        self.save_log(name=f"Synced Hosts to Account: {self.account_name}", source="checkmk_host_export")
 
 #.
 #   .-- Create Folder
@@ -892,7 +885,7 @@ class SyncCMK2(CMK2):
                             self.log_details.append(('affected_hosts', hostname))
                             self.console(f" * CMK API ERROR {error}")
                         else:
-                            self.console(f" * Updated Host in Checkmk")
+                            self.console(" * Updated Host in Checkmk")
                             self.console(f"   Reasons: {what}: {', '.join(update_reasons)}")
                     else:
                         payload['host_name'] = hostname
