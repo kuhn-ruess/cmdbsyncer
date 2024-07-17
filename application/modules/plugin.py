@@ -40,7 +40,7 @@ class Plugin():
         self.start_time = time.time()
         self.log_details.append(('started', datetime.now()))
         if account:
-            self.self.config = get_account(account)
+            self.config = get_account(account)
 
     def save_log(self, name, source):
         """
