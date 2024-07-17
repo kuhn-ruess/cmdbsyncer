@@ -4,7 +4,7 @@
 
 {% block navbar %}
 <nav id="top-nav" class="navbar navbar-expand-lg sticky-top navbar-light" style="background-color: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }}">
-  <a class="navbar-brand" href="{{ url_for('admin.index') }}">Backend</a>
+    <a class="navbar-brand" style="color: white;" href="{{ url_for('admin.index') }}">CMDBSyncer {{config['HEADER_HINT']}}</a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
   </button>
@@ -22,6 +22,30 @@
 
 {% block styles %}
    {{super()}}
+<style>
+        body {
+            padding-top: 0px;
+        }
+        .container {
+            width: 100% !important;
+            max-width: 100%;
+        }
+
+        .icon-minus-sign {
+            color: red;
+        }
+        .icon-ok-circle {
+            color: green;
+        }
+
+       .navbar {
+           background-color: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }} !important;
+       }
+
+       .navbar .nav-link {
+           color: {{ config['STYLE_NAV_LINK_COLOR'] }} !important;
+       }
+</style>
    <link rel="stylesheet" href="{{url_for('static', filename="css/main.css")}}">
 {% endblock %}
 

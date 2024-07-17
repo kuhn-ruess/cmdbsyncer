@@ -14,6 +14,7 @@ class BaseConfig():
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
     BASE_PREFIX = '/'
+    SESSION_COOKIE_NAME = "syncer"
 
     LOG_LEVEL = logging.INFO
     LOG_CHANNEL = logging.StreamHandler()
