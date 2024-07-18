@@ -38,7 +38,7 @@ class ODBC(Plugin):
         """
         try:
             print(f"{cc.OKBLUE}Started {cc.ENDC} with account "\
-                  f"{cc.UNDERLINE}{self.self.config['name']}{cc.ENDC}")
+                  f"{cc.UNDERLINE}{self.config['name']}{cc.ENDC}")
 
             found_hosts = 0
             logger.debug(self.config)
