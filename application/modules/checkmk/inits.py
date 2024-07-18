@@ -71,8 +71,9 @@ def export_tags(account):
         print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'Error: {error_obj}'))
     duration = time.time() - start_time
+    details.append(('duration', duration))
     log.log(f"Synced Tags to Account: {target_config['name']}", source="checkmk_tag_export",
-            details=details, duration=duration)
+            details=details)
 
 #.
 #   .-- Export BI Rules
