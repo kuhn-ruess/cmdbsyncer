@@ -34,6 +34,7 @@ class SyncCMK2(CMK2):
 
     label_prefix = False
     only_update_prefixed_labels = False
+    dont_update_prefixed_labels = False
 
     num_created = 0
     num_updated  = 0
@@ -469,6 +470,8 @@ class SyncCMK2(CMK2):
                 labels = {f"{label_prefix}{k}":str(v) for k,v in attributes['filtered'].items()}
 
                 self.only_update_prefixed_labels = next_actions.get('only_update_prefixed_labels')
+                self.dont_update_prefixed_labels = next_actions.get('dont_update_prefixed_labels')
+
 
                 self.synced_hosts.append(hostname)
                 labels['cmdb_syncer'] = self.account_id
@@ -787,9 +790,17 @@ class SyncCMK2(CMK2):
         update_reasons = []
         cmk_attributes = cmk_host['extensions']['attributes']
         cmk_labels = cmk_attributes.get('labels', {})
-        if self.only_update_prefixed_labels:
-            # In this case, we secure all labels without the prefix
+
+        if self.dont_update_prefixed_labels:
             for label, value in cmk_labels.items():
+                # in this case, we keep the original cmk label
+                for chk_label in self.dont_update_prefixed_labels:
+                    if label.startswith(chk_label):
+                        labels[label] = value
+
+        if self.only_update_prefixed_labels:
+            for label, value in cmk_labels.items():
+                # In this case, we secure all labels without the prefix
                 if label != 'cmdb_syncer' \
                     and not label.startswith(self.only_update_prefixed_labels):
                     if label not in labels:

@@ -104,6 +104,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             ('create_folder', ""),
             ('prefix_labels', False),
             ('only_update_prefixed_labels', False),
+            ('dont_update_prefixed_labels', []),
             ('parents', []),
             ('dont_move', False),
             ('dont_update', False),
@@ -121,8 +122,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
 
 
+            action_param = outcome['action_param']
             if outcome['action'] == 'move_folder':
-                new_value = outcome['action_param']
+                new_value = action_param
                 hostname = self.db_host.hostname
                 new_value = render_jinja(new_value, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
@@ -138,13 +140,17 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 outcomes['dont_update'] = True
 
             if outcome['action'] == 'prefix_labels':
-                outcomes['label_prefix'] = outcome['action_param']
+                outcomes['label_prefix'] = action_param
 
             if outcome['action'] == 'only_update_prefixed_labels':
-                outcomes['only_update_prefixed_labels'] = outcome['action_param']
+                outcomes['only_update_prefixed_labels'] = action_param
+
+            if outcome['action'] == 'dont_update_prefixed_labels':
+                if action_param not in outcomes['dont_update_prefixed_labels']:
+                    outcomes['dont_update_prefixed_labels'].append(action_param)
 
             if outcome['action'] == 'create_folder':
-                new_value = outcome['action_param']
+                new_value = action_param
                 hostname = self.db_host.hostname
                 new_value = render_jinja(new_value, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
@@ -161,8 +167,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 else:
                     # Find new Pool Folder
                     only_pools = None
-                    if outcome['action_param']:
-                        only_pools = [x.strip() for x in outcome['action_param'].split(',')]
+                    if action_param:
+                        only_pools = [x.strip() for x in action_param.split(',')]
                     folder = poolfolder.get_folder(only_pools)
                     if not folder:
                         raise ValueError(f"No Pool Folder left for {self.db_host.hostname}")
@@ -172,10 +178,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                     outcomes['move_folder'] += folder
 
             if outcome['action'] == 'attribute':
-                outcomes['attributes'].append(outcome['action_param'])
+                outcomes['attributes'].append(action_param)
 
             if outcome['action'] == 'custom_attribute':
-                action_param = outcome['action_param']
                 hostname = self.db_host.hostname
 
                 action_render = render_jinja(action_param, mode="nullify",
@@ -214,7 +219,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                             logger.debug(f"Cant split '{attr_pair}'")
 
             if outcome['action'] == "set_parent":
-                value = outcome['action_param']
+                value = action_param
                 hostname = self.db_host.hostname
                 new_value = render_jinja(value, HOSTNAME=hostname, **self.attributes)
                 for parent in new_value.split(','):
@@ -224,7 +229,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
 
             if outcome['action'] == 'value_as_folder':
-                search_tag = outcome['action_param']
+                search_tag = action_param
                 print_debug(self.debug,
                             f"---- value_as_folder matched, search tag '{search_tag}'")
                 for tag, value in self.attributes.items():
@@ -239,7 +244,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                 f"----- {ColorCodes.OKGREEN}Found tag but content null")
 
             if outcome['action'] == 'tag_as_folder':
-                search_value = outcome['action_param']
+                search_value = action_param
                 print_debug(self.debug,
                             f"---- tag_as_folder matched, search value '{search_value}'")
                 for tag, value in self.attributes.items():
@@ -254,7 +259,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                 f"----- {ColorCodes.OKGREEN}Found value but content null")
 
             if outcome['action'] == 'create_cluster':
-                params = [x.strip() for x in outcome['action_param'].split(',')]
+                params = [x.strip() for x in action_param.split(',')]
                 for node_tag in params:
                     if node_tag.endswith('*'):
                         for tag, value in self.attributes.items():

@@ -63,7 +63,7 @@ action_outcome_types = [
     ("tag_as_folder",
      "Folder by Attribute  Name: __ Use Attribute Name of given Attribute Value as Folder"),
     ("create_folder",
-    "Create a Folder by Attributes, but do not Move the a Host in. Does not work with Objects"),
+    "Create a Empty Folder by Attribute: __ Do not Move the a Host in. Will not work with Objects"),
     ("folder_pool",
      "Pool Folder: __ Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute",
@@ -86,6 +86,8 @@ action_outcome_types = [
      "Prefix Labels: __ Prefix all labels with given String"),
     ("only_update_prefixed_labels",
      "Update only Prefixed Labels: __ Only Update Labels with given prefix"),
+    ("dont_update_prefixed_labels",
+     "Dont update Prefixed Labels: __ Dont Update Labels with given prefix"),
 ]
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
