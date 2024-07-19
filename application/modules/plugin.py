@@ -80,9 +80,10 @@ class Plugin():
 
         if self.dry_run:
             logger.info(f"Body: {pformat(data)}")
-            Struct = namedtuple('response', ['status_code', 'headers'])
+            Struct = namedtuple('response', ['status_code', 'headers', 'json'])
+            json_obj = lambda: {} #pylint: disable=unnecessary-lambda-assignment
             if method != 'get':
-                return Struct(status_code=200, headers={}), {}
+                return Struct(status_code=200, headers={}, json=json_obj)
 
 
         #match method:

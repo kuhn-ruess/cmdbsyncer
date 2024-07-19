@@ -224,6 +224,10 @@ from application.models.account import Account
 from application.views.account import AccountModelView
 admin.add_view(AccountModelView(Account, name="Accounts"))
 
+from application.models.cron import CronGroup, CronStats
+from application.views.cron import CronStatsView, CronGroupView
+admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs"))
+admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs"))
 
 if os.path.exists(app.config['FILEADMIN_PATH']):
     admin.add_view(FileAdmin(app.config['FILEADMIN_PATH'], name="Filemanager"))
@@ -268,11 +272,6 @@ admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
                                     name="Custom Attributes", category="i-doit"))
 #.
 
-admin.add_sub_category(name="Cronjobs", parent_name="Modules")
-from application.models.cron import CronGroup, CronStats
-from application.views.cron import CronStatsView, CronGroupView
-admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs"))
-admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs"))
 
 #   .-- Config
 
