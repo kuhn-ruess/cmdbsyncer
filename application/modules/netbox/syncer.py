@@ -531,18 +531,22 @@ class SyncNetbox(Plugin):
             return labels
 
         for device, data in self.get_devices().items():
-            host_obj = Host.get_host(device)
-            print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
             labels = extract_data(data)
+            if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
+                hostname = Host.rewrite_hostname(device, self.config['rewrite_hostname'], labels)
+            host_obj = Host.get_host(hostname)
+            print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
             host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)
             if do_save:
                 host_obj.save()
 
         for device, data in self.get_vms().items():
-            host_obj = Host.get_host(device)
-            print(f"\n{CC.HEADER}Process VM: {device}{CC.ENDC}")
             labels = extract_data(data)
+            if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
+                hostname = Host.rewrite_hostname(device, self.config['rewrite_hostname'], labels)
+            host_obj = Host.get_host(hostname)
+            print(f"\n{CC.HEADER}Process VM: {device}{CC.ENDC}")
             host_obj.update_host(labels)
             do_save = host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)
