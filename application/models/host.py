@@ -3,10 +3,10 @@ Host Model
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 import datetime
-import jinja2
 from mongoengine.errors import DoesNotExist
 from application import db, app
 from application.modules.debug import ColorCodes as CC
+from application.helpers.syncer_jinja import render_jinja
 
 class HostError(Exception):
     """
@@ -95,8 +95,7 @@ class Host(db.Document):
         """
         Build a new Hostname based on Jinja Template
         """
-        tpl = jinja2.Template(template)
-        return tpl.render(HOSTNAME=old_name, **attributes)
+        return render_jinja(template, HOSTNAME=old_name, **attributes)
 
     def lock_to_folder(self, folder_name):
         """

@@ -176,6 +176,10 @@ class AccountModelView(DefaultModelView):
             default_fields = [
                 ('api_token', ""),
             ]
+        elif form.typ.data == 'netbox':
+            default_fields = [
+                ('rewrite_hostname', ""),
+            ]
 
         if default_fields:
             for field, content in default_fields:
