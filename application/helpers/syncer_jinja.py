@@ -5,7 +5,7 @@ Syncers Jinja Functions
 import ast
 import jinja2
 from jinja2 import StrictUndefined
-from application.modules.checkmk.helpers import cmk_cleanup_tag_id
+from application.modules.checkmk.helpers import cmk_cleanup_tag_id, cmk_cleanup_hostname
 
 
 def get_list(input_list):
@@ -51,6 +51,7 @@ def render_jinja(value, mode="ignore", **kwargs):
         'get_list': get_list,
         'merge_list_of_dicts': merge_list_of_dicts,
         'cmk_cleanup_tag_id': cmk_cleanup_tag_id,
+        'cmk_cleanup_hostname': cmk_cleanup_hostname,
 
     })
 
