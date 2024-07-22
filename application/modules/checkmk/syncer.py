@@ -22,6 +22,8 @@ class SyncCMK2(CMK2):
     bulk_creates = []
     bulk_updates = []
 
+    disabled_hosts = []
+
     synced_hosts = []
 
     clusters = []
@@ -423,6 +425,7 @@ class SyncCMK2(CMK2):
             with multiprocessing.Pool() as pool:
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
+                        self.disabled_hosts.append(db_host.hostname)
                         continue
                     pool.apply_async(self.handle_host,
                                      args=(db_host, host_actions,),
@@ -527,6 +530,7 @@ class SyncCMK2(CMK2):
         self.log_details.append(('num_created', str(self.num_created)))
         self.log_details.append(('num_updated', str(self.num_updated)))
         self.log_details.append(('num_delted', str(self.num_deleted)))
+        self.log_details.append(('disabled_hosts', str(self.disabled_hosts)))
         self.save_log(name=f"Synced Hosts to Account: {self.account_name}", source="checkmk_host_export")
 
 #.
