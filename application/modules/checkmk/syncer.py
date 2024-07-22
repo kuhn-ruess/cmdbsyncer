@@ -290,6 +290,7 @@ class SyncCMK2(CMK2):
         """
         attributes = self.get_host_attributes(db_host, 'checkmk')
         if not attributes:
+            self.disabled_hosts.append(db_host.hostname)
             logger.debug("Host ignored by rules")
             return
         next_actions = self.get_host_actions(db_host, attributes['all'])
@@ -425,7 +426,6 @@ class SyncCMK2(CMK2):
             with multiprocessing.Pool() as pool:
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
-                        self.disabled_hosts.append(db_host.hostname)
                         continue
                     pool.apply_async(self.handle_host,
                                      args=(db_host, host_actions,),
