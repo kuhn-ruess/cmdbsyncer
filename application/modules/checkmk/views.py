@@ -122,7 +122,10 @@ class CheckmkRuleView(RuleModelView):
         """
         Checkmk specific Debug Page
         """
-        hostname = request.args.get('hostname','').strip()
+        if obj_id := request.args.get('obj_id'):
+            hostname = Host.objects.get(id=obj_id).hostname
+        else:
+            hostname = request.args.get('hostname','').strip()
         output= {}
         output_rules = {}
 

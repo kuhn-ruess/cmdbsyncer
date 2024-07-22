@@ -200,7 +200,7 @@ class HostModelView(DefaultModelView):
     export_types = ['xlsx', 'csv']
 
     column_extra_row_actions = [
-        LinkRowAction("fa fa-rocket", "/admin/checkmkrule/debug?obj_id={row_id}"),
+        LinkRowAction("fa fa-rocket", "/admin/checkmkrule/debug?id={row_id}"),
     ]
 
 
