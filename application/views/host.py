@@ -50,7 +50,8 @@ def format_log(v, c, m, p):
 
 def format_cache(v, c, m, p):
     """ Format cache"""
-    # pylint: disable=invalid-name, unused-argument html = "<table>"
+    # pylint: disable=invalid-name, unused-argument
+    html = "<table>"
     for key, value in m.cache.items():
         html += f"<tr><th>{key}</th><td>"
         html += "<table>"
