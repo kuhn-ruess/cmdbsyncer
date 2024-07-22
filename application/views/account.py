@@ -4,6 +4,7 @@ Account Model View
 from markupsafe import Markup
 from flask_login import current_user
 from wtforms import StringField
+from flask_admin.form import rules
 from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
@@ -34,6 +35,30 @@ class AccountModelView(DefaultModelView):
     )
 
     column_exclude_list = ['custom_fields', ]
+
+    form_subdocuments = {
+        'custom_fields': {
+            'form_subdocuments' : {
+                '': {
+                'form_widget_args': {
+                    'name': { 'style': 'background-color: #81DAF5;'},
+                    'value': { 'style': 'background-color: #81DAF5;'},
+                },
+                    'form_overrides' : {
+                        'name': StringField,
+                        'value': StringField,
+                    },
+                    'form_rules' : [
+                        rules.HTML("<div class='form-row'><div class='col-3'>"),
+                        rules.Field('name'),
+                        rules.HTML("</div><div class='col-9'>"),
+                        rules.Field('value'),
+                        rules.HTML("</div></div>"),
+                    ]
+                },
+            },
+        }
+    }
 
 
 

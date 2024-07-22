@@ -29,8 +29,8 @@ class CustomEntry(db.EmbeddedDocument):
     """
     Custom Attributes for Setup
     """
-    name = db.StringField()
-    value = db.StringField()
+    name = db.StringField(max_len=155)
+    value = db.StringField(max_len=155)
 
 class Account(db.Document):
     """
