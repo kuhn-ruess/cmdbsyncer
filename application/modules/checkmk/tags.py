@@ -317,7 +317,10 @@ class CheckmkTagSync(SyncConfiguration):
 
         create_url = "/domain-types/host_tag_group/collections/all"
         logger.debug(f"All Groups: {groups}")
-        with Progress() as progress:
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Sending to Checkmk", total=len(groups))
             for syncer_group_id, syncer_group_data in groups.items():
                 payload = syncer_group_data.copy()
