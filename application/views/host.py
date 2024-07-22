@@ -6,14 +6,15 @@ import re
 from mongoengine.errors import DoesNotExist
 from flask_login import current_user
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
+from flask_admin.model.template import LinkRowAction
 
 from markupsafe import Markup
+
 
 from application import app
 from application.views.default import DefaultModelView
 from application.models.host import Host
 from application.models.config import Config
-from flask_admin.model.template import LinkRowAction
 
 
 class FilterHostnameRegex(BaseMongoEngineFilter):
@@ -201,7 +202,8 @@ class HostModelView(DefaultModelView):
     export_types = ['xlsx', 'csv']
 
     column_extra_row_actions = [
-        LinkRowAction("fa fa-rocket", "/admin/checkmkrule/debug?obj_id={row_id}"),
+        LinkRowAction("fa fa-rocket", app.config['BASE_PREFIX'] + \
+                    "admin/checkmkrule/debug?obj_id={row_id}"),
     ]
 
 
@@ -281,7 +283,7 @@ class HostModelView(DefaultModelView):
 
         """
 
-        if app.config['DEBUG'] == True:
+        if app.config['DEBUG'] is True:
             self.can_edit = True
 
         super().__init__(model, **kwargs)
