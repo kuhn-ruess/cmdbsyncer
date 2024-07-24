@@ -54,6 +54,20 @@ class DefaultModelView(ModelView):
         flash("Entry Cloned", 'success')
         return redirect(return_url)
 
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Cleanup Fields
+        """
+
+        for attr in [x for x in dir(model) if not x.startswith('_')]:
+            current = getattr(model, attr)
+            if isinstance(current, str):
+                setattr(model, attr, current.strip())
+
+        return super().on_model_change(form, model, is_created)
+
+
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated

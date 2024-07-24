@@ -35,6 +35,7 @@ class CronGroupView(DefaultModelView):
         'jobs',
     ]
 
+
     column_default_sort = ("sort_field", True), ("name", True)
 
     column_sortable_list = (
@@ -80,6 +81,8 @@ class CronStatsView(DefaultModelView):
     can_edit = True
     can_create = False
     can_export = True
+
+    column_extra_row_actions = [] # Overwrite because of clone icon
 
     export_types = ['xlsx', 'csv']
 
