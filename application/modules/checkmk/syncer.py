@@ -284,14 +284,14 @@ class SyncCMK2(CMK2):
                 self.num_deleted += len(chunk)
 
 
-    def handle_host(self, db_host, host_actions):
+    def handle_host(self, db_host, host_actions, disabled_hosts):
         """
         All Calculation for a Host
         """
         attributes = self.get_host_attributes(db_host, 'checkmk')
         if not attributes:
-            self.disabled_hosts.append(db_host.hostname)
-            logger.debug("Host ignored by rules")
+            disabled_hosts.append(db_host.hostname)
+            print(f" -- Host Disabled: {db_host.hostname}")
             return
         next_actions = self.get_host_actions(db_host, attributes['all'])
         host_actions[db_host.hostname] = (next_actions, attributes)
@@ -423,17 +423,19 @@ class SyncCMK2(CMK2):
             task1 = progress.add_task("Calculating Hostrules and Attributes", total=total)
             manager = multiprocessing.Manager()
             host_actions = manager.dict()
+            disabled_hosts = manager.list()
             with multiprocessing.Pool() as pool:
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
                         continue
                     pool.apply_async(self.handle_host,
-                                     args=(db_host, host_actions,),
+                                     args=(db_host, host_actions, disabled_hosts),
                                      callback=lambda x: progress.advance(task1))
                     progress.console.print(f"- Started on {db_host.hostname}")
 
                 pool.close()
                 pool.join()
+                self.disabled_hosts = disabled_hosts
         return host_actions
 
 
