@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timedelta
 from mongoengine.errors import DoesNotExist
 
-from application import app, cron_register
+from application import app, cron_register, log
 from application.modules.debug import ColorCodes as CC
 from application.models.cron import CronStats, CronGroup
 
@@ -146,9 +146,12 @@ def run_jobs(): #pylint: disable=invalid-name
                     stats.last_ended = None
                     stats.last_message = str(exp)
                     stats.save()
-                    # Don't Catch any exceptions. If for example the Import breaks,
-                    # there should no export of deletion of hosts
-                    raise
+                    name = "Failed Cron Group"
+                    source = f"{task.command}->{account_name}"
+                    details = [
+                      ('Exception', exp)
+                    ]
+                    log.log(name, source=source, details=details)
 
             stats.last_ended = datetime.now()
             if not force_run:
