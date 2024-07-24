@@ -26,7 +26,9 @@ class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
     can_export = True
     can_view_details = True
 
-    export_types = ['csv', 'xlsx']
+    export_types = ['csv']
+    
+    column_extra_row_actions = [] # Overwrite because of clone icon
 
     column_details_list = [
         'datetime', 'message', 'details', 'has_error', 'source', 'traceback',
