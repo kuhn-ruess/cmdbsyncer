@@ -58,7 +58,8 @@ class CheckmkRuleSync(SyncConfiguration):
         for rule_type, rules in host_actions.items():
             for rule_params in rules:
                 # Render Template Value
-                condition_tpl = {"host_tags": [], "service_labels": []}
+                condition_tpl = {"host_tags": [], "service_label_groups": [],
+                                 "host_label_groups": []}
                 value = \
                     render_jinja(rule_params['value_template'],
                                  HOSTNAME=hostname, **attributes['all'])
@@ -81,7 +82,7 @@ class CheckmkRuleSync(SyncConfiguration):
                     # Fix bug in case of empty Labels in store
                     if not label_key or not label_value:
                         continue
-                    condition_tpl['host_labels'] = [{
+                    condition_tpl['host_label_groups'] = [{
                                             "key": label_key,
                                             "operator": "is",
                                             "value": label_value
@@ -184,6 +185,7 @@ class CheckmkRuleSync(SyncConfiguration):
                         except (SyntaxError, KeyError):
                             logger.debug(f"Invalid Value: '{rule['value']}' or '{value}'")
                             continue
+
                         if rule['condition'] == cmk_condition and cmk_value == check_value:
                             rule_found = True
                             # Remove from list, so that it not will be created in the next step
