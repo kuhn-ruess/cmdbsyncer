@@ -667,7 +667,10 @@ class SyncCMK2(CMK2):
             body['attributes'].update(additional_attributes)
 
         print(f"{CC.OKGREEN} *{CC.ENDC} Create Cluster {hostname}")
-        self.request(url, method="POST", data=body)
+        try:
+            self.request(url, method="POST", data=body)
+        except CmkException as error:
+            self.log_details(('error_cluster', f"Cluster Create Error: {error}"))
 
 #.
 #   .-- Get Etag
