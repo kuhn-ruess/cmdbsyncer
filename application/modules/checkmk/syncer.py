@@ -443,6 +443,9 @@ class SyncCMK2(CMK2):
         """Run Job"""
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
 
+        self.name=f"Sync Hosts to Account: {self.account_name}"
+        self.source="checkmk_host_export"
+
 
         self.fetch_checkmk_folders()
         self.fetch_checkmk_hosts()
@@ -509,7 +512,6 @@ class SyncCMK2(CMK2):
                 progress.advance(task1)
 
 
-
         # Final Call to create missing hosts via bulk
         if self.bulk_creates:
             self.send_bulk_create_host(self.bulk_creates)
@@ -526,12 +528,12 @@ class SyncCMK2(CMK2):
         self.cleanup_hosts()
         self.handle_folders()
 
+
         self.log_details.append(('num_total', str(total)))
         self.log_details.append(('num_created', str(self.num_created)))
         self.log_details.append(('num_updated', str(self.num_updated)))
         self.log_details.append(('num_delted', str(self.num_deleted)))
         self.log_details.append(('disabled_hosts', str(self.disabled_hosts)))
-        self.save_log(name=f"Synced Hosts to Account: {self.account_name}", source="checkmk_host_export")
 
 #.
 #   .-- Create Folder
@@ -670,7 +672,7 @@ class SyncCMK2(CMK2):
         try:
             self.request(url, method="POST", data=body)
         except CmkException as error:
-            self.log_details(('error_cluster', f"Cluster Create Error: {error}"))
+            self.log_details.append(('error_cluster', f"Cluster Create Error: {error}"))
 
 #.
 #   .-- Get Etag

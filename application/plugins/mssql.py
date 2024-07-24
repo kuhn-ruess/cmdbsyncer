@@ -23,8 +23,9 @@ def mssql_import(account):
     MSSQL Inner Import
     """
     mssql = ODBC(account)
+    mssql.name = f"Import data from {account}"
+    mssql.source = "mssql_import"
     mssql.sql_import()
-    mssql.save_log(f"Import data from {account}", "mssql_import")
 
 @cli_mssql.command('import_hosts')
 @click.argument('account')
@@ -38,8 +39,9 @@ def mssql_inventorize(account):
     MSSQL Inner Inventorize
     """
     mssql = ODBC(account)
+    mssql.name = f"Inventorized data from {account}"
+    mssql.source = "mssql_inventorize"
     mssql.sql_inventorize()
-    mssql.save_log(f"Inventorized data from {account}", "mssql_inventorize")
 
 
 @cli_mssql.command('inventorize_hosts')
