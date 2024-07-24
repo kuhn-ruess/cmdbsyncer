@@ -29,7 +29,7 @@ class Log():
             for detail in message['details']:
                 new = DetailEntry()
                 level = detail[0].lower()
-                if level == 'error':
+                if 'error' in level.lower() or 'exception' in level.lower():
                     log_entry.has_error = True
                 new.level = level
                 new.message = str(detail[1])
