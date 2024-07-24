@@ -106,8 +106,9 @@ def odbc_import(account):
     ODBC Inner Import
     """
     odbc = ODBC(account)
+    odbc.name = f"Import data from {account}"
+    odbc.source = "odbc_import"
     odbc.sql_import()
-    odbc.save_log(f"Import data from {account}", "odbc_import")
 
 @cli_odbc.command('import_hosts')
 @click.argument('account')
@@ -121,8 +122,9 @@ def odbc_inventorize(account):
     ODBC Inner Inventorize
     """
     odbc = ODBC(account)
+    odbc.name = f"Inventorize data from {account}"
+    odbc.source = "odbc_inventorize"
     odbc.sql_inventorize()
-    odbc.save_log(f"Inventorized data from {account}", "odbc_inventorize")
 
 
 @cli_odbc.command('inventorize_hosts')

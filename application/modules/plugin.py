@@ -5,6 +5,7 @@ Alle Stuff shared by the plugins
 #pylint: disable=logging-fstring-interpolation
 from datetime import datetime
 import time
+import atexit
 
 from pprint import pformat
 from collections import namedtuple
@@ -36,13 +37,19 @@ class Plugin():
     config = {}
     log_details = []
 
+
+    name = "Undefined"
+    source = "Undefined"
+
     def __init__(self, account=False):
         self.start_time = time.time()
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
 
-    def save_log(self, name, source):
+        atexit.register(self.save_log)
+
+    def save_log(self):
         """
         Save Details to log
         """
@@ -50,7 +57,7 @@ class Plugin():
         self.log_details.append(('duration', duration))
         self.log_details.append(('ended', datetime.now()))
 
-        log.log(name, source=source, details=self.log_details)
+        log.log(self.name, source=self.source, details=self.log_details)
 
 
     def inner_request(self, method, url, data, headers):
