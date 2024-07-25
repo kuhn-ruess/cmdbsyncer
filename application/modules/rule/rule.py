@@ -179,7 +179,7 @@ class Rule(): # pylint: disable=too-few-public-methods
         """
         Handle Return of outcomes.
         """
-        cache = self.__class__.__qualname__
+        cache = self.__class__.__qualname__.replace('.','')
         if self.cache_name:
             cache = self.cache_name
         if cache in db_host.cache:

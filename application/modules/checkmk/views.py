@@ -35,6 +35,17 @@ def _render_dw_rule(_view, _context, model, _name):
     html += "</table>"
     return Markup(html)
 
+def _render_dcd_rule(_view, _context, model, _name):
+    """
+    Render Downtime Rule
+    """
+    html = "<table width=100%>"
+    for idx, entry in enumerate(model.outcomes):
+        html += f"<tr><td>{idx}</td>"\
+                f"<td>{entry['dcd_id']}</td><td>{entry['title']}</td></tr>"
+    html += "</table>"
+    return Markup(html)
+
 def _render_bi_rule(_view, _context, model, _name):
     """
     Render BI Rule
@@ -512,7 +523,7 @@ class CheckmkDowntimeView(RuleModelView):
     """
     Checkmk Downtimes
     """
-
+    # Custom Form Rules because default needs the sort_field which we not have
     form_rules = [
         rules.FieldSet((
             rules.Field('name'),
@@ -567,35 +578,36 @@ class CheckmkCacheView(DefaultModelView):
         """ Overwrite """
         return current_user.is_authenticated
 
-class CheckmkDCDView(DefaultModelView):
+class CheckmkDCDView(RuleModelView):
     """
     Custom DCD Rule View
     """
 
-    form_rules = [
-       rules.FieldSet(
-           ('name', 'documentation', 'enabled'),
-            "1. Main Options"),
-       rules.FieldSet(
-           ( 'dcd_id', 'title', 'comment', 'documentation_url',
-             'disabled', 'site', 'connector_type', 'restricted_source_hosts',
-             'interval', 'creation_rules', 'activate_changes_interval',
-             'discover_on_creation', 'exclude_time_ranges',
-             'no_deletion_time_after_init', 'max_cache_age',
-             'validity_period', 
-           ), "2. Rule Settings"),
-    ]
-
     column_editable_list = [
-        'enabled', 'disabled'
+        'enabled',
 
     ]
 
-    column_exclude_list = [
-        'documentation_url', 'restricted_source_hosts', 'creation_rules',
-        'activate_changes_interval', 'discover_on_creation', 'exclude_time_ranges',
-        'no_deletion_time_after_init', 'max_cache_age', 'validity_period', 'interval'
-    ]
+    column_labels = {
+        'render_cmk_dcd_rule': "DCD Rules",
+        'render_full_conditions': "Conditions",
+    }
+
+
+    def __init__(self, model, **kwargs):
+        """
+        Update elements
+        """
+
+        self.column_formatters.update({
+            'render_cmk_dcd_rule': _render_dcd_rule,
+        })
+
+        self.form_overrides.update({
+            'render_cmk_dcd_rule': HiddenField,
+        })
+
+        super().__init__(model, **kwargs)
 
 class CheckmkPasswordView(DefaultModelView):
     """

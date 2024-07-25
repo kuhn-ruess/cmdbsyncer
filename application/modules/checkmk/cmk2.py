@@ -29,11 +29,12 @@ class CMK2(Plugin):
         """
         Inital
         """
+        super().__init__()
+
         self.log = log
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
         self.config = {}
 
-        super().__init__()
 
     def request(self, params, method='GET', data=None, additional_header=None):
         """
