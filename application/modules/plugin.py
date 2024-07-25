@@ -43,11 +43,11 @@ class Plugin():
 
     def __init__(self, account=False):
         self.start_time = time.time()
+        self.log_details = []
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
 
-        self.log_details = []
 
         atexit.register(self.save_log)
 
