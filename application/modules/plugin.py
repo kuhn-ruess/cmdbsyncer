@@ -34,8 +34,8 @@ class Plugin():
     dry_run = False
     save_requests = False
 
-    config = {}
-    log_details = []
+    config = None
+    log_details = None
 
 
     name = "Undefined"
@@ -46,6 +46,8 @@ class Plugin():
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
+
+        self.log_details = []
 
         atexit.register(self.save_log)
 
