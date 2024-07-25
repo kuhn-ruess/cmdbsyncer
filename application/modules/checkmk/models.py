@@ -21,8 +21,8 @@ class CheckmkHostAttribute(db.EmbeddedDocument):
     """
     Common Checkmk Host Attribute
     """
-    attribute_name = db.StringField()
-    attribute_value = db.StringField()
+    attribute_name = db.StringField(max_length=100)
+    attribute_value = db.StringField(max_length=100)
 
 
 class CheckmkInventorizeAttributes(db.Document):
@@ -470,10 +470,11 @@ class DCDCreationRule(db.EmbeddedDocument):
     """
     DCD Creation Rule
     """
-    folder_path = db.StringField()
+    folder_path = db.StringField(max_length=100)
     host_attributes = \
             db.ListField(field=db.EmbeddedDocumentField(document_type="CheckmkHostAttribute"))
     delete_hosts = db.BooleanField()
+    host_filters = db.ListField(field=db.StringField(max_length=100))
 
 
 class DCDTimerange(db.EmbeddedDocument):
@@ -486,21 +487,18 @@ class DCDTimerange(db.EmbeddedDocument):
     end_minute = db.IntField()
 
 
-class CheckmkDCDRule(db.Document):
+class DCDRuleOutcome(db.EmbeddedDocument):
     """
-    DCD Rule
+    DCD Rule Outcome
     """
-    name = db.StringField(required=True, unique=True)
-    documentation = db.StringField()
-
-    dcd_id = db.StringField(required=True)
-    title = db.StringField(required=True)
+    dcd_id = db.StringField(required=True, max_length=100)
+    title = db.StringField(required=True, max_length=100)
     comment = db.StringField()
-    documentation_url = db.StringField()
+    documentation_url = db.StringField(max_length=100)
     disabled = db.BooleanField(default=False)
-    site = db.StringField(required=True)
-    connector_type = db.StringField(required=True, default="piggyback")
-    restricted_source_hosts = db.ListField(field=db.StringField())
+    site = db.StringField(required=True, max_length=100)
+    connector_type = db.StringField(required=True, default="piggyback", max_length=100)
+    restricted_source_hosts = db.ListField(field=db.StringField(max_length=100))
     interval = db.IntField(default=60)
     creation_rules = db.ListField(field=db.EmbeddedDocumentField(document_type="DCDCreationRule"))
     activate_changes_interval = db.IntField(required=True, default=600)
@@ -510,7 +508,29 @@ class CheckmkDCDRule(db.Document):
     max_cache_age = db.IntField(default=3600, required=True)
     validity_period = db.IntField(default=60, required=True)
 
+    meta = {
+        'strict': False
+    }
+
+
+class CheckmkDCDRule(db.Document):
+    """
+    DCD Rule
+    """
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
+    render_full_conditions = db.StringField() # Helper for Preview
+
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="DCDRuleOutcome"))
+    render_cmk_dcd_rule = db.StringField()
+    last_match = db.BooleanField(default=False)
+
+
     enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
 
     meta = {
         'strict': False

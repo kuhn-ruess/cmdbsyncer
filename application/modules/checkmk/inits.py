@@ -27,6 +27,7 @@ from application.modules.checkmk.models import (
    CheckmkDowntimeRule,
    CheckmkRewriteAttributeRule,
    CheckmkFilterRule,
+   CheckmkDCDRule,
 )
 
 def _load_rules():
@@ -92,7 +93,12 @@ def export_bi_rules(account):
             syncer.config = target_config
             syncer.rewrite = rules['rewrite']
 
-            actions = DefaultRule()
+            class ExportBiRule(DefaultRule):
+                """
+                Name overwrite 
+                """
+
+            actions = ExportBiRule()
             actions.rules = CheckmkBiRule.objects(enabled=True)
             syncer.actions = actions
             syncer.export_bi_rules()
@@ -119,7 +125,11 @@ def export_bi_aggregations(account):
             syncer.account_name = target_config['name']
             syncer.rewrite = rules['rewrite']
             syncer.config = target_config
-            actions = DefaultRule()
+            class ExportBiAggr(DefaultRule):
+                """
+                Name overwrite
+                """
+            actions = ExportBiAggr()
             actions.rules = CheckmkBiAggregation.objects(enabled=True)
             syncer.actions = actions
             syncer.export_bi_aggregations()
@@ -305,8 +315,12 @@ def export_downtimes(account):
             syncer.account_name = target_config['name']
             syncer.config = target_config
             syncer.rewrite = rules['rewrite']
+            class ExportDowntimes(DefaultRule):
+                """
+                Name overwrite
+                """
 
-            actions = DefaultRule()
+            actions = ExportDowntimes()
             actions.rules = CheckmkDowntimeRule.objects(enabled=True)
             syncer.actions = actions
             syncer.export_downtimes()
@@ -331,6 +345,13 @@ def export_dcd_rules(account):
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.config = target_config
+            class ExportDCD(DefaultRule):
+                """
+                Name overwrite
+                """
+            actions = ExportDCD()
+            actions.rules = CheckmkDCDRule.objects(enabled=True)
+            syncer.actions = actions
             syncer.export_rules()
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")

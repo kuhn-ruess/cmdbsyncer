@@ -36,6 +36,14 @@ class DefaultRule(Rule):
     """
     Just adds all to the set
     """
+
+    def __init__(self, name="default"):
+        """
+        Init
+        """
+        if not self.name:
+            self.name = name
+
     def add_outcomes(self, rule, outcomes):
         """
         Add matching Rules to the set

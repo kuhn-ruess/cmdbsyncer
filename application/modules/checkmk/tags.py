@@ -19,6 +19,9 @@ class CheckmkTagSync(SyncConfiguration):
     """
     groups = {}
 
+    name = "Synced Checkmk Tags"
+    source = "cmk_tag_sync"
+
 
     def build_caches(self, db_host, groups, multiply_expressions):
         """

@@ -44,9 +44,13 @@ def render_jinja(value, mode="ignore", **kwargs):
     - raise: Raise Error if missing Variables
     - nullify: Nullify string in nase of missing Variables
     """
+    payload = {}
+    if mode in ["raise", "nullify"]:
+        #value_tpl.undefined = StrictUndefined
+        payload['undefined'] = StrictUndefined
 
 
-    value_tpl = jinja2.Template(value)
+    value_tpl = jinja2.Template(str(value), **payload)
     value_tpl.globals.update({
         'get_list': get_list,
         'merge_list_of_dicts': merge_list_of_dicts,
@@ -55,8 +59,6 @@ def render_jinja(value, mode="ignore", **kwargs):
 
     })
 
-    if mode in ["raise", "nullify"]:
-        value_tpl.undefined = StrictUndefined
 
     if mode == 'nullify':
         try:

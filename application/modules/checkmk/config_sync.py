@@ -12,11 +12,9 @@ from application.modules.checkmk.models import (
         CheckmkObjectCache,
         CheckmkUserMngmt
         )
-from application.modules.debug import ColorCodes as CC
-from application.models.host import Host
 from application.modules.rule.rule import Rule
-from application.helpers.syncer_jinja import render_jinja
 
+from syncerapi.v1 import render_jinja, cc as CC, Host
 
 str_replace = Rule.replace
 
