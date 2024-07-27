@@ -1,10 +1,12 @@
 """
 Syncers Jinja Functions
 """
-
+#pylint: disable=logging-fstring-interpolation
 import ast
 import jinja2
 from jinja2 import StrictUndefined
+
+from application import logger
 from application.modules.checkmk.helpers import cmk_cleanup_tag_id, cmk_cleanup_hostname
 
 
@@ -44,10 +46,13 @@ def render_jinja(value, mode="ignore", **kwargs):
     - raise: Raise Error if missing Variables
     - nullify: Nullify string in nase of missing Variables
     """
+    logger.debug(f"JINJA: Rewrite String: {value}")
     payload = {}
+
     if mode in ["raise", "nullify"]:
         #value_tpl.undefined = StrictUndefined
         payload['undefined'] = StrictUndefined
+        logger.debug("JINJA: Strict Undefined defined")
 
 
     value_tpl = jinja2.Template(str(value), **payload)
@@ -64,5 +69,8 @@ def render_jinja(value, mode="ignore", **kwargs):
         try:
             return value_tpl.render(**kwargs)
         except (jinja2.exceptions.UndefinedError, TypeError):
+            logger.debug("JINJA String full nullifyed")
             return ""
-    return value_tpl.render(**kwargs)
+    final = value_tpl.render(**kwargs)
+    logger.debug(f"JINJA: String After Rewrite: {final}")
+    return final
