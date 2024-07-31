@@ -291,10 +291,12 @@ class SyncCMK2(CMK2):
         attributes = self.get_host_attributes(db_host, 'checkmk')
         if not attributes:
             disabled_hosts.append(db_host.hostname)
+            #@TODO: Cant pass Console object to here
+            #self.console(f" -- Host Disabled: {db_host.hostname}")
             print(f" -- Host Disabled: {db_host.hostname}")
-            return
-        next_actions = self.get_host_actions(db_host, attributes['all'])
-        host_actions[db_host.hostname] = (next_actions, attributes)
+        else:
+            next_actions = self.get_host_actions(db_host, attributes['all'])
+            host_actions[db_host.hostname] = (next_actions, attributes)
 
 
     def handle_cmk_folder(self, next_actions):
@@ -658,6 +660,9 @@ class SyncCMK2(CMK2):
         """
         Create a not existing Cluster in CHeckmk
         """
+        if not nodes:
+            print(f"{CC.OKGREEN} *{CC.ENDC} Cluster {hostname} not created -> No Nodes")
+            return
         url = "/domain-types/host_config/collections/clusters"
         body = {
             'host_name' : hostname,

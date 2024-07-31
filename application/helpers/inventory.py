@@ -5,6 +5,9 @@ Inventory Helpers
 from application.models.host import Host
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.debug import ColorCodes as CC
+from syncerapi.v1.core import (
+    app_config,
+)
 
 def _innter_inventorize(host_obj, labels, key, config):
     """
@@ -27,7 +30,10 @@ def run_inventory(config, objects):
     collected_by_key = {}
     for hostname, labels in objects:
         if config['rewrite_hostname']:
-            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'],{})
+            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
+        if app_config['LOWERCASE_HOSTNAMES']:
+            hostname = hostname.lower()
+
 
         print(f"{CC.OKGREEN}* {CC.ENDC} Data for {hostname}")
         if collect_key := config.get('inventorize_collect_by_key'):

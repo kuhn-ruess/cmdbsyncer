@@ -63,9 +63,6 @@ class ODBC(Plugin):
                 logger.debug(f"Found row: {row}")
                 labels=dict(zip(self.config['fields'].split(","),row))
                 hostname = labels[self.config['hostname_field']].strip()
-                if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                    hostname = Host.rewrite_hostname(hostname,
-                                                     self.config['rewrite_hostname'], labels)
                 if app_config['LOWERCASE_HOSTNAMES']:
                     hostname = hostname.lower()
                 found_hosts += 1
@@ -79,6 +76,9 @@ class ODBC(Plugin):
         ODBC Import
         """
         for hostname, labels in self._innter_sql():
+            if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
+                hostname = Host.rewrite_hostname(hostname,
+                                                 self.config['rewrite_hostname'], labels)
             print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
             del labels[self.config['hostname_field']]
             host_obj = Host.get_host(hostname)

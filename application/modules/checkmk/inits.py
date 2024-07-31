@@ -323,7 +323,7 @@ def export_downtimes(account):
             actions = ExportDowntimes()
             actions.rules = CheckmkDowntimeRule.objects(enabled=True)
             syncer.actions = actions
-            syncer.export_downtimes()
+            syncer.run()
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except CmkException as error_obj:
