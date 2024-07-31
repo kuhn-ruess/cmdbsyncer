@@ -88,7 +88,9 @@ def calc_next_possible_run(job):
     #pylint: disable=line-too-long
     if current_hour >= t_from:
         # Next is tomorrw
-        return datetime.strptime(f"{now.day+1:02d}.{now.month:02d}.{now.year} {t_from:02d}:00", "%d.%m.%Y %H:%M")
+        new = now + timedelta(days=1)
+        new.replace(hour=t_from, minute=0)
+        return new
     # Still today
     return datetime.strptime(f"{now.day:02d}.{now.month:02d}.{now.year} {t_from:02d}:00", "%d.%m.%Y %H:%M")
 
