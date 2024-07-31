@@ -7,16 +7,18 @@ import calendar
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from application.modules.checkmk.cmk2 import CmkException
-from application.modules.checkmk.config_sync import SyncConfiguration
+from application.modules.checkmk.cmk2 import CmkException, CMK2
 from syncerapi.v1 import Host, cc, render_jinja
 
 _weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
-class CheckmkDowntimeSync(SyncConfiguration):
+class CheckmkDowntimeSync(CMK2):
     """
     Sync Checkmk Downtimes
     """
+
+    name = "Synced Checkmk Downtimes"
+    source = "cmk_downtime_sync"
 
     def ahead_days(self, offset):
         """
@@ -195,10 +197,37 @@ class CheckmkDowntimeSync(SyncConfiguration):
             if downtime not in current_downtimes:
                 self.set_downtime(hostname, downtime)
 
-    def export_downtimes(self):
+    def run(self):
         """
         Export Downtimes
         """
+        # Collect Rules
+        total = Host.objects.count()
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            task1 = progress.add_task("Calculating Downtimes", total=total)
+            for db_host in Host.objects():
+                hostname = db_host.hostname
+                progress.console.print(f"- Started for {hostname}")
+                attributes = self.get_host_attributes(db_host, 'cmk_conf')
+                if not attributes:
+                    progress.advance(task1)
+                    continue
+
+                host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+                if not host_actions:
+                    progress.advance(task1)
+                    continue
+                self.do_hosts_downtimes(hostname, host_actions, attributes)
+
+    def run_async(self):
+        """
+        Export Downtimes
+        """
+        #@TODO: Fix Error: AttributeError:
+        # Can't pickle local object 'export_downtimes.<locals>.ExportDowntimes'
         # Collect Rules
         total = Host.objects.count()
         with Progress(SpinnerColumn(),
