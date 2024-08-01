@@ -10,17 +10,19 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 
 from application import log, logger
 from application.models.host import Host
-from application.modules.checkmk.config_sync import SyncConfiguration
-from application.modules.checkmk.cmk2 import CmkException
+from application.modules.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.debug import ColorCodes as CC
 
-class CheckmkRuleSync(SyncConfiguration):
+class CheckmkRuleSync(CMK2):
     """
     Export Checkmk Rules
     """
     rulsets_by_type = {}
     messages = []
+
+    name = "Synced Configuration Rules"
+    source = "cmk_rule_sync"
 
     def export_cmk_rules(self): # pylint: disable=too-many-branches, too-many-statements
         """

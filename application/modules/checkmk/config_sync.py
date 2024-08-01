@@ -22,6 +22,8 @@ class SyncConfiguration(CMK2):
     """
     Sync jobs for Checkmk Config
     """
+    name = "Synced Configuration Module"
+    source = "cmk_rule_sync"
 
     def get_cache_object(self, group):
         """

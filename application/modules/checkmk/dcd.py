@@ -3,14 +3,14 @@ Checkmk DCD Manager
 """
 from jinja2.exceptions import UndefinedError
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application.modules.checkmk.config_sync import SyncConfiguration
+from application.modules.checkmk.cmk2 import CMK2
 
 from application import logger
 
 from syncerapi.v1 import Host, render_jinja
 
 
-class CheckmkDCDRuleSync(SyncConfiguration):
+class CheckmkDCDRuleSync(CMK2):
     """
     Sync Checkmk Downtimes
     """
