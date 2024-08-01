@@ -775,6 +775,8 @@ class SyncCMK2(CMK2):
 
         etag = False
         # Check if we really need to move
+        if folder.endswith('/'):
+            folder = folder[:-1]
         if not dont_move_host and current_folder != folder:
             etag = self.get_etag(hostname, "Move Host")
             update_headers = {
