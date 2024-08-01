@@ -29,7 +29,7 @@ def run_inventory(config, objects):
     inv_key = config['inventorize_key']
     collected_by_key = {}
     for hostname, labels in objects:
-        if config['rewrite_hostname']:
+        if config.get('rewrite_hostname'):
             hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
         if app_config['LOWERCASE_HOSTNAMES']:
             hostname = hostname.lower()
