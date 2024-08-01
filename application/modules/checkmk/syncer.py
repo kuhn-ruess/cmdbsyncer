@@ -610,7 +610,7 @@ class SyncCMK2(CMK2):
                 self.num_created += len(chunk)
             except CmkException as error:
                 self.log_details.append(('error', f"Bulk Create Error: {error}"))
-                self.log_details.append(('error_affected', str(chunk)))
+                self.log_details.append(('error_affected', str([x['hostname'] for x in chunks])))
                 self.console(f" * CMK API ERROR {error}")
 
     def add_bulk_create_host(self, body):
@@ -774,7 +774,7 @@ class SyncCMK2(CMK2):
 
         etag = False
         # Check if we really need to move
-        check_folder = folder 
+        check_folder = folder
         if app.config['CMK_SUPPORT'] == '2.2' and folder.endswith('/'):
             check_folder = folder[:-1]
         if not dont_move_host and current_folder != check_folder:
