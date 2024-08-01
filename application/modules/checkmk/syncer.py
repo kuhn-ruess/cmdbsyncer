@@ -580,7 +580,11 @@ class SyncCMK2(CMK2):
         else:
             next_parent = '/'
             for sub_folder in folder_parts:
-                if next_parent + sub_folder not in self.existing_folders:
+                extr = ""
+                if not next_parent.endswith('/') and not sub_folder.startswith('/'):
+                    extr = "/"
+
+                if f'{next_parent}{extr}{sub_folder}' not in self.existing_folders:
                     self._create_folder(next_parent, sub_folder)
                 if next_parent == '/':
                     next_parent += sub_folder
