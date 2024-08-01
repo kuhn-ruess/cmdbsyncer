@@ -6,11 +6,10 @@ Add Hosts into CMK Version 2 Installations
 import ast
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application import app
+from application import app, logger, log
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes as CC
-from application import logger, log
 
 
 class SyncCMK2(CMK2):
@@ -775,9 +774,10 @@ class SyncCMK2(CMK2):
 
         etag = False
         # Check if we really need to move
-        if folder.endswith('/'):
-            folder = folder[:-1]
-        if not dont_move_host and current_folder != folder:
+        check_folder = folder 
+        if app.config['CMK_SUPPORT'] == '2.2' and folder.endswith('/'):
+            check_folder = folder[:-1]
+        if not dont_move_host and current_folder != check_folder:
             etag = self.get_etag(hostname, "Move Host")
             update_headers = {
                 'if-match': etag
