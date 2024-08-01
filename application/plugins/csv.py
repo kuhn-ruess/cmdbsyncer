@@ -138,7 +138,9 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
     """
     #pylint: disable=no-member, consider-using-generator
     if account:
+
         account = get_account_by_name(account)
+
         if 'hostname_field' in account:
             hostname_field = account['hostname_field']
         if 'delimiter' in account:
@@ -149,6 +151,14 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
             csv_path = account['path']
         if 'inventorize_key' not in account:
             account['inventorize_key'] = key
+    else:
+        account = {
+            'hostname_field': hostname_field,
+            'delimiter': delimiter,
+            'csv_path': csv_path,
+            'inventorize_key': key,
+        }
+
 
     if not csv_path:
         raise ValueError("No path given in account config")
