@@ -21,6 +21,10 @@ class InventorizeHosts(CMK2):
     """
     Host Inventorize in Checkmk
     """
+
+    name = "Checkmk Inventory run"
+    source = "cmk_inventorize"
+
     fields = {}
     account = ""
     config = {}
