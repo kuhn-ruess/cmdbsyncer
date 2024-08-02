@@ -14,6 +14,10 @@ from application.modules.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.debug import ColorCodes as CC
 
+from syncerapi.v1.core import (
+    app_config,
+)
+
 class CheckmkRuleSync(CMK2):
     """
     Export Checkmk Rules
@@ -59,8 +63,11 @@ class CheckmkRuleSync(CMK2):
         for rule_type, rules in host_actions.items():
             for rule_params in rules:
                 # Render Template Value
-                condition_tpl = {"host_tags": [], "service_label_groups": [],
-                                 "host_label_groups": []}
+                if app_config['CMK_SUPPORT'] == '2.2':
+                    condition_tpl = {"host_tags": [], "service_labels": []}
+                else:
+                    condition_tpl = {"host_tags": [], "service_label_groups": [],
+                                     "host_label_groups": []}
                 value = \
                     render_jinja(rule_params['value_template'],
                                  HOSTNAME=hostname, **attributes['all'])
@@ -83,7 +90,10 @@ class CheckmkRuleSync(CMK2):
                     # Fix bug in case of empty Labels in store
                     if not label_key or not label_value:
                         continue
-                    condition_tpl['host_label_groups'] = [{
+                    label_key = "host_label_groups"
+                    if app_config['CMK_SUPPORT'] == '2.2':
+                        label_key = "host_labels"
+                    condition_tpl[label_key] = [{
                                             "key": label_key,
                                             "operator": "is",
                                             "value": label_value
@@ -196,5 +206,6 @@ class CheckmkRuleSync(CMK2):
                         print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in {ruleset_name} {rule_id}")
                         url = f'/objects/rule/{rule_id}'
                         self.request(url, method="DELETE")
-                        self.log_details.append(("INFO", f"Deleted Rule in {ruleset_name} {rule_id}"))
+                        self.log_details.append(("INFO",
+                                                 f"Deleted Rule in {ruleset_name} {rule_id}"))
                 progress.advance(task1)
