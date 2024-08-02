@@ -8,7 +8,7 @@ import ast
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from application import log, logger
+from application import logger
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja
@@ -19,7 +19,6 @@ class CheckmkRuleSync(CMK2):
     Export Checkmk Rules
     """
     rulsets_by_type = {}
-    messages = []
 
     name = "Synced Configuration Rules"
     source = "cmk_rule_sync"
@@ -111,8 +110,6 @@ class CheckmkRuleSync(CMK2):
                 if rule_params not in self.rulsets_by_type[rule_type]:
                     self.rulsets_by_type[rule_type].append(rule_params)
 
-        log.log(f"Checkmk Rules synced with {self.account_name}", \
-                        source="CMK_RULE_SYNC", details=self.messages)
 
 
     def create_rules(self):
@@ -146,10 +143,10 @@ class CheckmkRuleSync(CMK2):
                     url = "domain-types/rule/collections/all"
                     try:
                         self.request(url, data=template, method="POST")
-                        self.messages.append(("INFO",
+                        self.log_details.append(("INFO",
                                               f"Created Rule in {ruleset_name}: {rule['value']}"))
                     except CmkException as error:
-                        self.messages.append(("ERROR",
+                        self.log_details.append(("ERROR",
                                              "Could not create Rules: "\
                                              f"{template}, Response: {error}"))
                         print(f"{CC.FAIL} Failue: {error} {CC.ENDC}")
@@ -199,5 +196,5 @@ class CheckmkRuleSync(CMK2):
                         print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in {ruleset_name} {rule_id}")
                         url = f'/objects/rule/{rule_id}'
                         self.request(url, method="DELETE")
-                        self.messages.append(("INFO", f"Deleted Rule in {ruleset_name} {rule_id}"))
+                        self.log_details.append(("INFO", f"Deleted Rule in {ruleset_name} {rule_id}"))
                 progress.advance(task1)

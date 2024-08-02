@@ -610,7 +610,7 @@ class SyncCMK2(CMK2):
                 self.num_created += len(chunk)
             except CmkException as error:
                 self.log_details.append(('error', f"Bulk Create Error: {error}"))
-                self.log_details.append(('error_affected', str([x['hostname'] for x in chunks])))
+                self.log_details.append(('error_affected', str([x['host_name'] for x in chunk])))
                 self.console(f" * CMK API ERROR {error}")
 
     def add_bulk_create_host(self, body):
@@ -739,7 +739,7 @@ class SyncCMK2(CMK2):
                 self.num_updated += len(chunk)
             except CmkException as error:
                 self.log_details.append(('error', f"CMK API Error: {error}"))
-                self.log_details.append(('affected_hosts', f"{chunk}"))
+                self.log_details.append(('error_affected', str([x['host_name'] for x in chunk])))
                 self.console(f" * CMK API ERROR {error}")
 
     def add_bulk_update_host(self, body):
