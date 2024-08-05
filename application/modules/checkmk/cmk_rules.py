@@ -90,14 +90,20 @@ class CheckmkRuleSync(CMK2):
                     # Fix bug in case of empty Labels in store
                     if not label_key or not label_value:
                         continue
-                    label_key = "host_label_groups"
                     if app_config['CMK_SUPPORT'] == '2.2':
-                        label_key = "host_labels"
-                    condition_tpl[label_key] = [{
-                                            "key": label_key,
-                                            "operator": "is",
-                                            "value": label_value
-                                         }]
+                        condition_tpl['host_labels'] = [{
+                                                "key": label_key,
+                                                "operator": "is",
+                                                "value": label_value
+                                             }]
+                    else:
+                        condition_tpl['host_label_groups'] = [{
+                                                "operator": "and",
+                                                    "label_group": [{
+                                                        "operator": "and",
+                                                        "label": f"{label_key}:{label_value}",
+                                                        }],
+                                                    }]
                 del rule_params['condition_label_template']
 
                 if rule_params['condition_host']:
