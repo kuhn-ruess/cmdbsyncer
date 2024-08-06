@@ -97,67 +97,83 @@ def calc_next_possible_run(job):
 
 
 @_cli_cron.command('run_jobs')
-def run_jobs(): #pylint: disable=invalid-name
+def jobs(): #pylint: disable=invalid-name
     """
     Run all configured Jobs
     """
     now = datetime.now()
-    for job in CronGroup.objects(enabled=True).order_by('sort_field'):
-        stats = get_stats(job.name)
+    stats = False
+    try:
+        for job in CronGroup.objects(enabled=True).order_by('sort_field'):
+            stats = get_stats(job.name)
 
 
-        force_run = False
-        if not stats.next_run:
-            stats.next_run = calc_next_run(job, stats.last_start)
-            next_run = stats
-            stats.save()
-
-        next_run = stats.next_run
-
-        if job.run_once_next:
-            # Manualy trigger job just one time
-            next_run = now
-            force_run = True
-            job.run_once_next = False
-            job.save()
-
-        if not stats.is_running and next_run <= now + timedelta(minutes=1):
-            if not force_run and not in_timerange(job):
-                stats.next_run = calc_next_possible_run(job)
-                stats.save()
-                continue
-            print('-------------------------------------------------------------')
-            print(f"{CC.HEADER} Running Group {job.name} {CC.ENDC}")
-            stats.is_running = True
-            stats.last_start = now
-            stats.failure = False
-            stats.save()
-            for task in job.jobs:
-                print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
-                stats.last_message = f"{now}: Started {task.name} (PID: {os.getpid()})"
-                stats.save()
-                try:
-                    if task.account:
-                        account_name = task.account.name
-                        cron_register[task.command](account=account_name)
-                    else:
-                        cron_register[task.command]()
-                except Exception as exp:
-                    stats.is_running = False
-                    stats.failure = True
-                    stats.last_ended = None
-                    stats.last_message = str(exp)
-                    stats.save()
-                    name = "Failed Cron Group"
-                    source = f"{task.command}->{account_name}"
-                    details = [
-                      ('Exception', exp)
-                    ]
-                    log.log(name, source=source, details=details)
-
-            stats.last_ended = datetime.now()
-            if not force_run:
-                # Do not touch next runtime if job was triggered Manualy
+            force_run = False
+            if not stats.next_run:
                 stats.next_run = calc_next_run(job, stats.last_start)
+                next_run = stats
+                stats.save()
+
+            next_run = stats.next_run
+
+            if job.run_once_next:
+                # Manualy trigger job just one time
+                next_run = now
+                force_run = True
+                job.run_once_next = False
+                job.save()
+
+            if not stats.is_running and next_run <= now + timedelta(minutes=1):
+                if not force_run and not in_timerange(job):
+                    stats.next_run = calc_next_possible_run(job)
+                    stats.save()
+                    continue
+                print('-------------------------------------------------------------')
+                print(f"{CC.HEADER} Running Group {job.name} {CC.ENDC}")
+                stats.is_running = True
+                stats.last_start = now
+                stats.failure = False
+                stats.save()
+                for task in job.jobs:
+                    print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
+                    stats.last_message = f"{now}: Started {task.name} (PID: {os.getpid()})"
+                    stats.save()
+                    input()
+                    try:
+                        if task.account:
+                            account_name = task.account.name
+                            cron_register[task.command](account=account_name)
+                        else:
+                            cron_register[task.command]()
+                    except Exception as exp:
+                        stats.is_running = False
+                        stats.failure = True
+                        stats.last_ended = None
+                        stats.last_message = str(exp)
+                        stats.save()
+                        name = "Failed Cron Group"
+                        source = f"cron"
+                        details = [
+                          ('Exception', exp)
+                        ]
+                        log.log(name, source=source, details=details)
+
+                stats.last_ended = datetime.now()
+                if not force_run:
+                    # Do not touch next runtime if job was triggered Manualy
+                    stats.next_run = calc_next_run(job, stats.last_start)
+                stats.is_running = False
+                stats.save()
+    except (Exception, KeyboardInterrupt) as exp:
+        if stats:
             stats.is_running = False
+            stats.failure = True
+            stats.last_ended = None
+            stats.last_message = str(exp)
             stats.save()
+        name = "Failed Cron Group"
+        source = "cron"
+        details = [
+          ('Exception', exp)
+        ]
+        log.log(name, source=source, details=details)

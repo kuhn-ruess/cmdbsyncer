@@ -8,7 +8,6 @@ from application.modules.debug import ColorCodes
 from application.models.host import Host
 from application.modules.rule.filter import Filter
 
-from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.checkmk.tags import CheckmkTagSync
 from application.modules.checkmk.cmk_rules import CheckmkRuleSync
 from application.modules.checkmk.downtimes import CheckmkDowntimeSync
@@ -16,6 +15,9 @@ from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
 from application.modules.checkmk.inventorize import InventorizeHosts
 from application.modules.checkmk.dcd import CheckmkDCDRuleSync
 from application.modules.checkmk.passwords import CheckmkPasswordSync
+from application.modules.checkmk.groups import CheckmkGroupSync
+from application.modules.checkmk.users import CheckmkUserSync
+from application.modules.checkmk.bi import BI
 
 
 from application.modules.rule.rewrite import Rewrite
@@ -84,7 +86,7 @@ def export_bi_rules(account):
         target_config = get_account_by_name(account)
         if target_config:
             rules = _load_rules()
-            syncer = SyncConfiguration()
+            syncer = BI()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.config = target_config
@@ -117,7 +119,7 @@ def export_bi_aggregations(account):
         target_config = get_account_by_name(account)
         if target_config:
             rules = _load_rules()
-            syncer = SyncConfiguration()
+            syncer = BI()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.rewrite = rules['rewrite']
@@ -253,7 +255,7 @@ def export_groups(account, test_run=False):
         target_config = get_account_by_name(account)
         if target_config:
             rules = _load_rules()
-            syncer = SyncConfiguration()
+            syncer = CheckmkGroupSync()
             syncer.account = target_config['_id']
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
@@ -265,8 +267,8 @@ def export_groups(account, test_run=False):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-    log.log(f"Export Groups to Checkmk Account: {target_config['name']}",
-            source="Checkmk", details=details)
+        log.log(f"Error Exporting Groups to Checkmk Account: {target_config['name']}",
+                source="Checkmk", details=details)
 #.
 #   .-- Export Rules
 def export_rules(account):
@@ -294,8 +296,8 @@ def export_rules(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-    log.log(f"Export Rules to Checkmk Account: {target_config['name']}",
-            source="Checkmk", details=details)
+        log.log(f"Error exporting Rules to Checkmk Account: {target_config['name']}",
+                source="cmk_rule_sync", details=details)
 #.
 #    .-- Export Downtimes
 def export_downtimes(account):
@@ -355,8 +357,8 @@ def export_dcd_rules(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-    log.log(f"Export DCD Rules to Checkmk Account: {target_config['name']}",
-            source="Checkmk", details=details)
+        log.log(f"Error Exporing DCD Rules to Checkmk Account: {target_config['name']}",
+                source="cmk_dcd_rule_sync", details=details)
 #.
 #   . Passwords
 def export_passwords(account):
@@ -377,8 +379,8 @@ def export_passwords(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-    log.log(f"Export DCD Rules to Checkmk Account: {target_config['name']}",
-            source="Checkmk", details=details)
+        log.log(f"Error Exporting Passwords to Checkmk Account: {target_config['name']}",
+            source="cmk_password_sync", details=details)
 #.
 #   . Export Users
 def export_users(account):
@@ -389,7 +391,7 @@ def export_users(account):
     try:
         target_config = get_account_by_name(account)
         if target_config:
-            syncer = SyncConfiguration()
+            syncer = CheckmkUserSync()
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
             syncer.config = target_config
@@ -399,6 +401,6 @@ def export_users(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-    log.log(f"Export Users to Checkmk Account: {target_config['name']}",
-            source="Checkmk", details=details)
+        log.log(f"Error exporting Users to Checkmk Account: {target_config['name']}",
+                source="cmk_user_sync", details=details)
 #.

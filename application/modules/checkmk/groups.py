@@ -1,29 +1,25 @@
 """
-Checkmk Configuration
+Checkmk Groups Export
 """
-#pylint: disable=import-error, too-many-locals, no-member
-#pylint: disable=logging-fstring-interpolation
-import ast
 from mongoengine.errors import DoesNotExist
-from application import log, logger
+
 from application.modules.checkmk.cmk2 import CMK2, CmkException
-from application.modules.checkmk.models import (
-        CheckmkGroupRule,
-        CheckmkObjectCache,
-        CheckmkUserMngmt
-        )
 from application.modules.rule.rule import Rule
+from application.modules.checkmk.models import CheckmkGroupRule
+
+from application.modules.checkmk.models import CheckmkObjectCache
 
 from syncerapi.v1 import render_jinja, cc as CC, Host
 
+
 str_replace = Rule.replace
 
-class SyncConfiguration(CMK2):
+class CheckmkGroupSync(CMK2):
     """
-    Sync jobs for Checkmk Config
+    Syncronize Checkmk Groups
     """
-    name = "Synced Configuration Module"
-    source = "cmk_rule_sync"
+    name = "Sync Checkmk Groups"
+    source = "cmk_group_sync"
 
     def get_cache_object(self, group):
         """
@@ -59,15 +55,10 @@ class SyncConfiguration(CMK2):
         # [1] All Keys which have value
         return collection_keys, collection_values
 
-#   .-- Export Rulesets
-#.
-#location   .-- Export Group
-
     def export_cmk_groups(self, test_run):# pylint: disable=too-many-branches, too-many-statements
         """
         Export all Checkmk Groups
         """
-        messages = []
         print(f"\n{CC.HEADER}Read Internal Configuration{CC.ENDC}")
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Host Attributes")
         attributes = self.parse_attributes()
@@ -253,7 +244,7 @@ class SyncConfiguration(CMK2):
                     print(f"\n{CC.HEADER}Send {group_type} to Checkmk{CC.ENDC}")
                     try:
                         self.request(url, data=data, method="POST")
-                        messages.append(("INFO", f"Created Groups: {group_type} {data}"))
+                        self.log_details.append(("INFO", f"Created Groups: {group_type} {data}"))
                     except CmkException as error:
                         print(f"{CC.FAIL} {error} {CC.ENDC}")
                         return
@@ -268,7 +259,7 @@ class SyncConfiguration(CMK2):
                     print(f"\n{CC.HEADER}Send {group_type} to Checkmk{CC.ENDC}")
                     try:
                         self.request(url, data=data, method="PUT")
-                        messages.append(("INFO", f"Update Groups: {group_type} {data}"))
+                        self.log_details.append(("INFO", f"Update Groups: {group_type} {data}"))
                     except CmkException as error:
                         print(f"{CC.FAIL} {error} {CC.ENDC}")
                         return
@@ -281,240 +272,5 @@ class SyncConfiguration(CMK2):
                         # Checkmk is not deleting objects if the still referenced
                         url = f"{urls[group_type]['delete']}{name}"
                         self.request(url, method="DELETE")
-                        messages.append(("INFO", f"Deleted Group: {name}"))
+                        self.log_details.append(("INFO", f"Deleted Group: {name}"))
                         print(f"{CC.OKBLUE} *{CC.ENDC} Group {name} deleted")
-
-        log.log(f"Checkmk Group synced with {self.account_name}",
-                    source="CMK_GROUP_SYNC", details=messages)
-#.
-
-#   .-- Export Bi Rules
-    def export_bi_rules(self):# pylint: disable=too-many-branches, too-many-statements
-        """
-        Export BI Rules
-        """
-        print(f"\n{CC.HEADER}Build needed Rules{CC.ENDC}")
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
-
-
-        unique_rules = {}
-        related_packs = []
-        for db_host in Host.objects():
-            attributes = self.get_host_attributes(db_host, 'cmk_conf')
-            if not attributes:
-                continue
-            host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-            if host_actions:
-                for _rule_type, rules in host_actions.items():
-                    for rule_params in rules:
-                        # Render Template Value
-                        rule_body = \
-                            render_jinja(rule_params['rule_template'],
-                                         HOSTNAME=db_host.hostname, **attributes['all'])
-                        rule_dict = ast.literal_eval(rule_body.replace('null', 'None'))
-                        unique_rules[rule_dict['id']] = rule_dict
-                        pack_id = rule_dict['pack_id']
-                        if pack_id not in related_packs:
-                            related_packs.append(rule_dict['pack_id'])
-
-
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Load Rule Packs from Checkmk")
-        found_list = []
-        create_list = []
-        sync_list = []
-        delete_list = []
-        unique_rules_keys = list(unique_rules.keys())
-        for pack in related_packs:
-            print(f"{CC.HEADER}Check Pack {pack} {CC.ENDC}")
-            url = f"/objects/bi_pack/{pack}"
-            response = self.request(url, method="GET")
-            for cmk_rule in response[0]['members']['rules']['value']:
-                cmk_rule_id = cmk_rule['href'].split('/')[-1]
-                found_list.append(cmk_rule_id)
-                if cmk_rule_id not in unique_rules_keys:
-                    delete_list.append(cmk_rule_id)
-            for local_rule in unique_rules_keys:
-                if local_rule not in found_list:
-                    create_list.append(local_rule)
-                else:
-                    sync_list.append(local_rule)
-
-            for delete_id in delete_list:
-                url = f"/objects/bi_rule/{delete_id}"
-                del_response = self.request(url, method="DELETE")[1]
-                print(f"{CC.WARNING} *{CC.ENDC} Rule {delete_id} deleted. Status: {del_response}")
-
-            for create_id in create_list:
-                url = f"/objects/bi_rule/{create_id}"
-                data = unique_rules[create_id]
-                self.request(url, data=data, method="POST")
-                print(f"{CC.OKGREEN} *{CC.ENDC} Rule {create_id} created.")
-
-            for sync_id in sync_list:
-                print(f"{CC.OKGREEN} *{CC.ENDC} Check {sync_id} for Changes.")
-                url = f"/objects/bi_rule/{sync_id}"
-                cmk_rule = self.request(url, method="GET")[0]
-                if cmk_rule != unique_rules[sync_id]:
-                    print(f"{CC.WARNING}   *{CC.ENDC} Sync needed")
-                    data = unique_rules[sync_id]
-                    self.request(url, data=data,  method="PUT")
-#.
-#   .-- Export BI Aggregations
-    def export_bi_aggregations(self): #pylint: disable=too-many-branches
-        """
-        Export BI Aggregations
-        """
-        print(f"\n{CC.HEADER}Build needed Aggregations{CC.ENDC}")
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
-
-
-        unique_aggregations = {}
-        related_packs = []
-        for db_host in Host.objects():
-            attributes = self.get_host_attributes(db_host, 'cmk_conf')
-            if not attributes:
-                continue
-            host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-            if host_actions:
-                for _rule_type, rules in host_actions.items():
-                    for rule_params in rules:
-                        # Render Template Value
-                        rule_body = \
-                            render_jinja(rule_params['rule_template'],
-                                         HOSTNAME=db_host.hostname, **attributes['all'])
-                        aggregation_dict = ast.literal_eval(rule_body.replace('null', 'None'))
-                        unique_aggregations[aggregation_dict['id']] = aggregation_dict
-                        pack_id = aggregation_dict['pack_id']
-                        if pack_id not in related_packs:
-                            related_packs.append(pack_id)
-
-
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Load Rule Packs from Checkmk")
-        found_list = []
-        create_list = []
-        sync_list = []
-        delete_list = []
-        unique_aggregation_keys = list(unique_aggregations.keys())
-        for pack in related_packs:
-            print(f"{CC.HEADER}Check Pack {pack} {CC.ENDC}")
-            url = f"/objects/bi_pack/{pack}"
-            response = self.request(url, method="GET")
-            for cmk_rule in response[0]['members']['aggregations']['value']:
-                cmk_rule_id = cmk_rule['href'].split('/')[-1]
-                found_list.append(cmk_rule_id)
-                if cmk_rule_id not in unique_aggregation_keys:
-                    delete_list.append(cmk_rule_id)
-            for local_rule in unique_aggregation_keys:
-                if local_rule not in found_list:
-                    create_list.append(local_rule)
-                else:
-                    sync_list.append(local_rule)
-
-            for delete_id in delete_list:
-                url = f"/objects/bi_aggregation/{delete_id}"
-                del_response = self.request(url, method="DELETE")[1]
-                print(f"{CC.WARNING} *{CC.ENDC} Aggr. {delete_id} deleted. Resp: {del_response}")
-
-            for create_id in create_list:
-                url = f"/objects/bi_aggregation/{create_id}"
-                data = unique_aggregations[create_id]
-                self.request(url, data=data, method="POST")
-                print(f"{CC.OKGREEN} *{CC.ENDC} Aggregation {create_id} created.")
-
-            for sync_id in sync_list:
-                print(f"{CC.OKGREEN} *{CC.ENDC} Check Aggregation {sync_id} for Changes.")
-                url = f"/objects/bi_aggregation/{sync_id}"
-                cmk_rule = self.request(url, method="GET")[0]
-                if cmk_rule != unique_aggregations[sync_id]:
-                    print(f"{CC.WARNING}   *{CC.ENDC} Sync needed")
-                    data = unique_aggregations[sync_id]
-                    self.request(url, data=data,  method="PUT")
-
-#.
-#   . Export Checkmk User
-    def export_users(self):
-        """
-        Export Checkmk Users
-        """
-        checks = [
-            'fullname', 'disable_login',
-            'pager_address', 'contactgroups',
-            'roles', 'contact_options.email',
-        ]
-        for user in CheckmkUserMngmt.objects(disabled__ne=True):
-            url = f"/objects/user_config/{user.user_id}"
-            cmk_user = self.request(url, method="GET")
-            # ({}, {'status_code': 404})
-            user_template = {
-              "username": user.user_id,
-              "fullname": user.full_name,
-              "auth_option": {
-                "auth_type": "password",
-                "password": user.password
-              },
-              "disable_login": user.disable_login,
-              "contact_options": {
-                "email": user.email
-              },
-              "pager_address": user.pager_address,
-              "idle_timeout": {
-                "option": "global"
-              },
-              "roles": user.roles,
-              #"authorized_sites": [
-              #  "heute"
-              #],
-              "contactgroups": user.contact_groups,
-              "disable_notifications": {
-                "disable": False
-              },
-              "language": "en",
-              "temperature_unit": "celsius",
-              "interface_options": {
-                "interface_theme": "dark"
-              },
-            }
-            if not cmk_user[0]:
-                if user.remove_if_found:
-                    continue
-                # We need to create the user
-                print(f"{CC.OKGREEN} *{CC.ENDC} {user.user_id}: Created")
-                url = "/domain-types/user_config/collections/all"
-                response = self.request(url, data=user_template, method="POST")
-                logger.debug(f"Response {response}")
-            else:
-                # We May Update the User (or delete him)
-                if user.remove_if_found:
-                    print(f"{CC.OKGREEN} *{CC.ENDC} {user.user_id}: Deleted")
-                    self.request(url, method="DELETE")
-                    continue
-
-                etag = cmk_user[1]['ETag']
-                cmk_data = cmk_user[0]['extensions']
-                changed = False
-                for check in checks:
-                    if '.' in check:
-                        first_level, second_level = check.split('.')
-                        cmk_current = cmk_data.get(first_level,{}).get(second_level)
-                        tmpl_current = user_template[first_level][second_level]
-                    else:
-                        cmk_current = cmk_data.get(check)
-                        tmpl_current = user_template[check]
-                    if cmk_current != tmpl_current:
-                        changed = True
-                        logger.debug(f"{check}: {tmpl_current} vs {cmk_current}")
-                if changed or user.overwrite_password:
-                    if not user.overwrite_password:
-                        del user_template['auth_option']
-                    del user_template['username']
-                    update_headers = {
-                        'if-match': etag
-                    }
-                    update_url = f"/objects/user_config/{user.user_id}"
-                    print(f"{CC.OKGREEN} *{CC.ENDC} {user.user_id}: Updated")
-                    self.request(update_url, method="PUT",
-                        data=user_template,
-                        additional_header=update_headers)
-                else:
-                    print(f"{CC.OKGREEN} *{CC.ENDC} {user.user_id}: Nothing to do")
-#.

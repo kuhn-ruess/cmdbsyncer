@@ -19,7 +19,7 @@ class CheckmkTagSync(CMK2):
     """
     groups = {}
 
-    name = "Synced Checkmk Tags"
+    name = "Sync Checkmk Tags"
     source = "cmk_tag_sync"
 
 
@@ -361,7 +361,6 @@ class CheckmkTagSync(CMK2):
                                 data=payload,
                                 additional_header=update_headers)
                         except Exception as error:
-                            print(error)
                             progress.console.print(f" ! Group {syncer_group_id} can't be updated.")
                             logger.debug(error)
                         else:
