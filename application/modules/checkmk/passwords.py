@@ -4,16 +4,19 @@ Checkmk DCD Manager
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from application.modules.checkmk.config_sync import SyncConfiguration
 from application.modules.checkmk.models import CheckmkPassword
+from application.modules.checkmk.cmk2 import CMK2
 
 
-class CheckmkPasswordSync(SyncConfiguration):
+class CheckmkPasswordSync(CMK2):
     """
     Sync Checkmk Passwords
     """
     console = None
     current_password_ids = []
+
+    name = "Sync Passwords to Checkmk"
+    source = "cmk_password_sync"
 
     def get_current_passwords(self):
         """
