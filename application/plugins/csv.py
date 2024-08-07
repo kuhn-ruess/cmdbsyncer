@@ -14,7 +14,7 @@ from application.helpers.inventory import run_inventory
 
 @app.cli.group(name='csv')
 def _cli_csv():
-    """CSV related commands"""
+    """CSV Import/ Inventorize"""
 
 
 def compare_hosts(csv_path, delimiter, hostname_field, label_filter):

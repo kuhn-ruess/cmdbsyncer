@@ -13,7 +13,7 @@ from application.helpers.cron import register_cronjob
 
 @app.cli.group(name='cisco-dna')
 def _cli_cisco_dna():
-    """Cisco DNA related commands"""
+    """Cisco DNA Interface and Devices"""
 
 if app.config.get("DISABLE_SSL_ERRORS"):
     from urllib3.exceptions import InsecureRequestWarning

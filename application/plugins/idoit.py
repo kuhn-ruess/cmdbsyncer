@@ -38,7 +38,7 @@ def load_rules():
 @app.cli.group(name='i-doit')
 def _cli_idoit():
     """
-    i-doit related commands
+    i-doit Import/ Export
     """
 
 

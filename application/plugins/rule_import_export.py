@@ -57,7 +57,7 @@ def import_rules_to_model(rule_type, json_raw):
 
 @app.cli.group(name='rules')
 def cli_rules():
-    """Rule related commands"""
+    """Syner Rules import and Export"""
 
 @cli_rules.command('export_rules')
 @click.argument("rule_type", default="")

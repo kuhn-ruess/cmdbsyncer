@@ -14,7 +14,7 @@ from syncerapi.v1 import (
 
 @app.cli.group(name='bmc-remedy')
 def _cli_bmc_remedy():
-    """BMC Remedy related commands"""
+    """BMC Remedy Import"""
 
 class RemedySyncer():
     """

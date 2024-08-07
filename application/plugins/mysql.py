@@ -14,7 +14,7 @@ except ImportError:
 
 @app.cli.group(name='mysql')
 def cli_mysql():
-    """MYSQL Related commands"""
+    """MYSQL Import/ Inventorize"""
 
 def mysql_import(account):
     """
