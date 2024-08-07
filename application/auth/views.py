@@ -11,9 +11,11 @@ from flask_login import current_user, login_user, logout_user, login_required
 from authlib.jose import jwt, JoseError
 
 from application import login_manager
+
 from application.models.user import User
 from application.models.forms import LoginForm, RequestPasswordForm, ResetPasswordForm
 from application.modules.email import send_email
+from mongoengine.errors import DoesNotExist
 
 
 AUTH = Blueprint('auth', __name__)
@@ -23,7 +25,10 @@ def load_user(user_id):
     """
     Flask Login: Load User
     """
-    return User.objects.get(id=user_id)
+    try:
+        return User.objects.get(id=user_id)
+    except DoesNotExist:
+        return None
 
 @AUTH.route('/login', methods=['GET', 'POST'])
 def login():
