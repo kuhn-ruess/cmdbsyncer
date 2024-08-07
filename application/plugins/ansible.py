@@ -22,7 +22,7 @@ from application.helpers.cron import register_cronjob
 
 @app.cli.group(name='ansible')
 def cli_ansible():
-    """Ansible related commands"""
+    """Ansible Datasource and Debug"""
 
 #   .-- Load Rules
 def load_rules():

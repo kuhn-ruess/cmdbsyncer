@@ -17,7 +17,7 @@ except ImportError:
 
 @app.cli.group(name='ldap')
 def cli_ldap():
-    """LDAP Related commands"""
+    """LDAP Import/ Inventorize"""
 
 
 def _inner_import(config):

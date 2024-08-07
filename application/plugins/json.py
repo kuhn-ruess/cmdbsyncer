@@ -17,7 +17,7 @@ from application.helpers.cron import register_cronjob
 
 @app.cli.group(name='json')
 def _cli_json():
-    """JSON related Commands"""
+    """JSON File Import/ Inventorize"""
 
 @_cli_json.command('import_hosts')
 @click.argument("json_path", default=False)

@@ -40,7 +40,7 @@ def load_rules():
 
 @app.cli.group(name='netbox')
 def cli_netbox():
-    """Netbox Commands"""
+    """Netbox Import and Syncronisation"""
 
 
 #   .-- Command: Export Hosts

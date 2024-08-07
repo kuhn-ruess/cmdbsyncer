@@ -14,7 +14,7 @@ from application.plugins.pyodbc import ODBC
 
 @cli.group(name='mssql')
 def cli_mssql():
-    """Mssql Related commands"""
+    """Microsoft SQL Server Import/ Inventorize"""
 
 
 #   . CLI and Cron

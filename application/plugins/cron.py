@@ -12,7 +12,7 @@ from application.models.cron import CronStats, CronGroup
 
 @app.cli.group(name='cron')
 def _cli_cron():
-    """Cron Jobs"""
+    """Cronjob Runner"""
 
 def get_stats(group):
     """
