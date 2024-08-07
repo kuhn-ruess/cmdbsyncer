@@ -126,7 +126,6 @@ def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False
         else:
             print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
     except Exception as error_obj:
-        raise
         log.log(f"Export to Checkmk Account: {target_config['name']} FAILED",
         source="checkmk_host_export", details=[('error', str(error_obj))])
         print(f'{ColorCodes.FAIL}CMK Connection Error: {error_obj} {ColorCodes.ENDC}')
@@ -221,7 +220,10 @@ def debug_host(hostname):
         hostname (string): Name of Host
     """
 
-    attributes, actions, _debug_log = get_debug_data(hostname)
+    try:
+        attributes, actions, _debug_log = get_debug_data(hostname)
+    except DoesNotExist:
+        return
 
     if not attributes:
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY RULE{ColorCodes.ENDC}")
