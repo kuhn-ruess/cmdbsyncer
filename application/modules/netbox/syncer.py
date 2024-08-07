@@ -530,12 +530,12 @@ class SyncNetbox(Plugin):
                         labels[key] = value['label']
             return labels
 
-        for device, data in self.get_devices().items():
+        for hostname, data in self.get_devices().items():
             labels = extract_data(data)
             if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(device, self.config['rewrite_hostname'], labels)
+                hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], labels)
             host_obj = Host.get_host(hostname)
-            print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
+            print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
             host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)
             if do_save:
