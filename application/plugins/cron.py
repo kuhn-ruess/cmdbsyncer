@@ -138,7 +138,6 @@ def jobs(): #pylint: disable=invalid-name
                     print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
                     stats.last_message = f"{now}: Started {task.name} (PID: {os.getpid()})"
                     stats.save()
-                    input()
                     try:
                         if task.account:
                             account_name = task.account.name
