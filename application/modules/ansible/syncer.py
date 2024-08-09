@@ -13,6 +13,10 @@ class SyncAnsible(Plugin):
     """
 
 
+    name = "Ansible"
+    source = "ansible_jobs"
+
+
     def bypass_host(self, attributes1, attributes2):
         """
         Check if we should ignore a host

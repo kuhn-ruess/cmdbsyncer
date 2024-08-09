@@ -111,6 +111,7 @@ def _inner_udpate_cache():
     print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
     rules = load_rules()
     syncer = SyncAnsible()
+    syncer.name = "Rebuild Ansible Cache"
     syncer.filter = rules['filter']
     syncer.rewrite = rules['rewrite']
     syncer.actions = rules['actions']
