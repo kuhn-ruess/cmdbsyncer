@@ -27,7 +27,7 @@ if env == "prod": app.config.from_object('application.config.ProductionConfig')
 elif env == "compose":
     app.config.from_object('application.config.ComposeConfig')
 else:
-    app.confignefrom_object('application.config.BaseConfig')
+    app.config.from_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
 
 try:
