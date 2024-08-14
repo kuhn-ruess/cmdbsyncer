@@ -34,3 +34,4 @@
     - /var/lib/check_mk_agent/cache/plugins_3600\cmk-update-agent.cache
     - /var/lib/check_mk_agent/cache/plugins_cmk-update-agent.cache
   when: cmk_register_central_bakery or cmk_register_bakery
+  ignore_errors: yes
