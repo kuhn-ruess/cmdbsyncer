@@ -3,13 +3,13 @@
 # See Docu there about how to use
 - hosts: all
   gather_facts: false
-  tasks:
-    - name: Check SSH Access
-      command: echo "Access working"
-      become: true
-      run_once: true
-      tags:
-        - always
+  #tasks:
+  #  - name: Check SSH Access
+  #    command: echo "Access working"
+  #    become: true
+  #    run_once: true
+  #    tags:
+  #      - always
 
 - hosts: all
   roles:
