@@ -705,7 +705,7 @@ class SyncCMK2(CMK2):
         """
         Update the Nodes of Cluster in case of change
         """
-        if cmk_nodes != syncer_nodes:
+        if sorted(cmk_nodes) != sorted(syncer_nodes):
             print(f"{CC.OKGREEN} *{CC.ENDC} Cluster has new Nodes {syncer_nodes} vs {cmk_nodes}")
             etag = self.get_etag(hostname)
             update_headers = {
