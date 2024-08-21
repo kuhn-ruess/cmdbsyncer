@@ -27,16 +27,16 @@ class SyncerLogsApi(Resource):
                 'time': entry.datetime.strftime('%Y-%m-%d %H:%M:%S'),
                 'message': entry.message,
                 'source': entry.source,
-                'duration_sec': entry.metric_duration_sec,
                 'details': [ {'name': x.level, 'message': x.message} for x in entry.details],
                 'traceback': str(entry.traceback.strip()),
+                'has_error': entry.has_error,
             })
         return {
-            'entries': response,
+            'result': response,
         }, 200
 
 @API.route('/services/<service_name>')
-class SyncerLogsApi(Resource):
+class SyncerServiceApi(Resource):
     """ Handle Actions """
 
     @require_token
@@ -44,17 +44,19 @@ class SyncerLogsApi(Resource):
         """Return latest Message of given Service"""
         try:
             entry = LogEntry.objects(source=service_name).order_by('-id').first()
+            if not entry:
+                raise IndexError
             response = {
                 'entry_id': str(entry.id),
                 'time': entry.datetime.strftime('%Y-%m-%d %H:%M:%S'),
                 'message': entry.message,
                 'source': entry.source,
-                'duration_sec': entry.metric_duration_sec,
                 'details': [ {'name': x.level, 'message': x.message} for x in entry.details],
                 'traceback': str(entry.traceback.strip()),
+                'has_error': entry.has_error,
             }
             return {
-                'value': response,
+                'result': response,
             }, 200
         except IndexError:
             return {
