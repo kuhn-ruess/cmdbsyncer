@@ -92,8 +92,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             folder_name = self.replace(self.replace(path, exceptions=['/']),
                                        regex='[^a-z A-Z 0-9/_-]')
             if len(splitted) == 2:
-                print("############")
-                print(splitted)
                 folder_name += "|" + splitted[1]
             if folder_name:
                 parts.append(folder_name)

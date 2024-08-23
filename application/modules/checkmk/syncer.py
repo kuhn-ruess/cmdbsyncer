@@ -290,12 +290,10 @@ class SyncCMK2(CMK2):
         attributes = self.get_host_attributes(db_host, 'checkmk')
         if not attributes:
             disabled_hosts.append(db_host.hostname)
-            #@TODO: Cant pass Console object to here
-            #self.console(f" -- Host Disabled: {db_host.hostname}")
-            print(f" -- Host Disabled: {db_host.hostname}")
-        else:
-            next_actions = self.get_host_actions(db_host, attributes['all'])
-            host_actions[db_host.hostname] = (next_actions, attributes)
+            return False
+        next_actions = self.get_host_actions(db_host, attributes['all'])
+        host_actions[db_host.hostname] = (next_actions, attributes)
+        return True
 
 
     def handle_cmk_folder(self, next_actions):
@@ -429,10 +427,14 @@ class SyncCMK2(CMK2):
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
                         continue
-                    pool.apply_async(self.handle_host,
+                    x = pool.apply_async(self.handle_host,
                                      args=(db_host, host_actions, disabled_hosts),
                                      callback=lambda x: progress.advance(task1))
                     progress.console.print(f"- Started on {db_host.hostname}")
+                    result = x.get()
+                    if not result:
+                        progress.console.print("--> !! Host Disabled")
+
 
                 pool.close()
                 pool.join()
