@@ -9,7 +9,6 @@
             width: 100% !important;
             max-width: 100%;
         }
-
         .icon-minus-sign {
             color: red;
         }
@@ -132,6 +131,18 @@
                 }, 1000);
 
             })
+        });
+
+        var password_field = $("#password").get(0);
+        var password_input = $("#password")
+        password_field.type = 'password';
+        password_input.on('click', function(x) {
+            if( password_field.type == 'text') {
+                password_field.type = 'password';
+            } else {
+                password_field.type = 'text';
+            }
+
         });
     });
 
