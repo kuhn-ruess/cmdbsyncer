@@ -38,6 +38,9 @@ class Plugin():
     log_details = None
 
 
+    debug_lines = [] # Used for GUI Debuging
+
+
     name = "Undefined"
     source = "Undefined"
 

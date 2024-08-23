@@ -159,7 +159,8 @@ class CheckmkRuleView(RuleModelView):
         if "Error" in output:
             output = f"Error: {output['Error']}"
 
-        return self.render('debug.html', hostname=hostname, output=output, rules=new_rules)
+        return self.render('debug.html', hostname=hostname, output=output,
+                           rules=new_rules)
 
 
 

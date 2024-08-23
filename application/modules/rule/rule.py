@@ -28,7 +28,13 @@ class Rule(): # pylint: disable=too-few-public-methods
 
 
     def __init__(self):
+        """
+        Init
+        """
+        # Reset Debug Lines in Order for each child
+        # of this class having a new log
         self.debug_lines = []
+
 
     @staticmethod
     def replace(input_raw, exceptions=None, regex=None):
@@ -183,7 +189,7 @@ class Rule(): # pylint: disable=too-few-public-methods
         if self.cache_name:
             cache = self.cache_name
         if cache in db_host.cache:
-            logger.debug(f"Using Rule Cache Cache for {db_host.hostname}")
+            logger.debug(f"Using Rule Cache for {db_host.hostname}")
             return db_host.cache[cache]
 
         self.attributes = attributes
