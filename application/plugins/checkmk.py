@@ -195,6 +195,7 @@ def get_debug_data(hostname):
         actions = {}
 
 
+    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_lines
     rule_logs['filter'] = rules['filter'].debug_lines
     rule_logs['rewrite'] = rules['rewrite'].debug_lines
     rule_logs['actions'] = rules['actions'].debug_lines
@@ -221,7 +222,7 @@ def debug_host(hostname):
     """
 
     try:
-        attributes, actions, _debug_log = get_debug_data(hostname)
+        attributes, actions, _debug_log  = get_debug_data(hostname)
     except DoesNotExist:
         return
 
