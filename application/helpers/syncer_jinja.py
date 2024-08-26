@@ -71,6 +71,9 @@ def render_jinja(value, mode="ignore", **kwargs):
         except (jinja2.exceptions.UndefinedError, TypeError):
             logger.debug("JINJA String full nullifyed")
             return ""
+        except SyntaxError as exc:
+            logger.debug(f"Jina Syntax error: {exc}")
+            return ""
     final = value_tpl.render(**kwargs)
     logger.debug(f"JINJA: String After Rewrite: {final}")
     return final

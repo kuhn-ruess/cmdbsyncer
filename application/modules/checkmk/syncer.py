@@ -430,10 +430,13 @@ class SyncCMK2(CMK2):
                     x = pool.apply_async(self.handle_host,
                                      args=(db_host, host_actions, disabled_hosts),
                                      callback=lambda x: progress.advance(task1))
-                    progress.console.print(f"- Started on {db_host.hostname}")
-                    result = x.get()
-                    if not result:
-                        progress.console.print("--> !! Host Disabled")
+                    #@TODO
+                    # .get() slows the process, console print is not up to date
+                    # New concept will be needed for outputs
+                    #progress.console.print(f"- Started on {db_host.hostname}")
+                    #result = x.get()
+                    #if not result:
+                    #    progress.console.print("--> !! Host Disabled")
 
 
                 pool.close()
