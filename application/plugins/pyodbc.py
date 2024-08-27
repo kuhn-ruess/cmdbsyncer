@@ -51,6 +51,15 @@ class ODBC(Plugin):
                           f'PWD={self.config["password"]};TrustServerCertificate=YES'
             logger.debug(connect_str)
             cnxn = pyodbc.connect(connect_str)
+            #@TODO
+            cnxn.setdecoding(pyodbc.SQL_CHAR, encoding='utf8')
+            cnxn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf8')
+            cnxn.setencoding(encoding='utf8')
+            #@TODO Alternative:
+            #cnxn.setdecoding(pyodbc.SQL_CHAR, encoding='iso-8859-1')
+            #cnxn.setdecoding(pyodbc.SQL_WCHAR, encoding='iso-8859-1')
+            #cnxn.setencoding(encoding='iso-8859-1')
+
             cursor = cnxn.cursor()
             query = f"select {self.config['fields']} from {self.config['table']};"
             if "custom_query" in self.config and self.config['custom_query']:
