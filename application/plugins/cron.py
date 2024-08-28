@@ -4,6 +4,7 @@ CronJobs
 #pylint: disable=too-many-arguments
 import os
 from datetime import datetime, timedelta
+import click
 from mongoengine.errors import DoesNotExist
 
 from application import app, cron_register, log
@@ -95,6 +96,24 @@ def calc_next_possible_run(job):
     return datetime.strptime(f"{now.day:02d}.{now.month:02d}.{now.year} {t_from:02d}:00", "%d.%m.%Y %H:%M")
 
 
+@_cli_cron.command('force_run_group')
+@click.argument("group_name")
+def run_job(group_name):
+    """
+    Run Given Group directly
+    Raise on errors
+    """
+    try:
+        job = CronGroup.objects.get(enabled=True, name=group_name)
+        for task in job.jobs:
+            print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
+            if task.account:
+                account_name = task.account.name
+                cron_register[task.command](account=account_name)
+            else:
+                cron_register[task.command]()
+    except DoesNotExist:
+        print("Group does not exist")
 
 @_cli_cron.command('run_jobs')
 def jobs(): #pylint: disable=invalid-name
@@ -151,7 +170,7 @@ def jobs(): #pylint: disable=invalid-name
                         stats.last_message = str(exp)
                         stats.save()
                         name = "Failed Cron Group"
-                        source = f"cron"
+                        source = "cron"
                         details = [
                           ('Exception', exp)
                         ]
