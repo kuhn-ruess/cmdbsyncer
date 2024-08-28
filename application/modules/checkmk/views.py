@@ -108,8 +108,7 @@ def get_host_debug(hostname):
             output["Filtered Labels for Checkmk"] = attributes['filtered']
             output["Actions"] =  actions
             additional_attributes = {}
-            for custom_attr in actions.get('custom_attributes', []):
-                additional_attributes.update(custom_attr)
+            additional_attributes =  actions.get('custom_attributes', {})
 
             for additional_attr in actions.get('attributes',[]):
                 if attr_value := attributes['all'].get(additional_attr):
