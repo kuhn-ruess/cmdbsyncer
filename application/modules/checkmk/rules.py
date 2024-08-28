@@ -106,7 +106,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             ('move_folder',""),
             ('extra_folder_options',""),
             ('attributes', []),
-            ('custom_attributes', []),
+            ('custom_attributes', {}),
             ('remove_attributes', []),
             ('create_cluster', []),
             ('create_folder', ""),
@@ -222,7 +222,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                             if str(new_value).lower() in ['none', 'false']:
                                 outcomes['remove_attributes'].append(new_key)
                             elif new_key and new_value:
-                                outcomes['custom_attributes'].append({new_key: new_value})
+                                outcomes['custom_attributes'][new_key] = new_value
                         except ValueError:
                             logger.debug(f"Cant split '{attr_pair}'")
 

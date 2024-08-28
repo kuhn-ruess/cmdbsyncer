@@ -339,13 +339,14 @@ class SyncCMK2(CMK2):
             remove_attributes = next_actions['remove_attributes']
         logger.debug(f'Attributes will be removed: {remove_attributes}')
 
-        for custom_attr in next_actions.get('custom_attributes', []):
+        for custom_attr, custom_value in next_actions.get('custom_attributes', {}).items():
             logger.debug(f"Check to add Custom Attribute: {custom_attr}")
-            for attr_key in list(custom_attr):
-                if attr_key in remove_attributes:
-                    del custom_attr[attr_key]
-                    logger.debug(f"Don't add Attribute {attr_key}, its in remove_attributes")
-            additional_attributes.update(custom_attr)
+
+            if custom_attr in remove_attributes:
+                logger.debug(f"Don't add Attribute {custom_attr}, its in remove_attributes")
+                continue
+
+            additional_attributes[custom_attr] = custom_value
 
         for additional_attr in next_actions.get('attributes', []):
             logger.debug(f"Check to add Attribute: {additional_attr}")
@@ -427,7 +428,7 @@ class SyncCMK2(CMK2):
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
                         continue
-                    x = pool.apply_async(self.handle_host,
+                    pool.apply_async(self.handle_host,
                                      args=(db_host, host_actions, disabled_hosts),
                                      callback=lambda x: progress.advance(task1))
                     #@TODO
