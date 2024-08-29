@@ -200,6 +200,7 @@ class SyncCMK2(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             num_folders = len(self.existing_folders)
+
             task1 = progress.add_task("Fetching Hosts folder by folder", total=num_folders)
             manager = multiprocessing.Manager()
             return_dict = manager.dict()
@@ -266,8 +267,13 @@ class SyncCMK2(CMK2):
                     else:
                         self.num_deleted += 1
                         url = f"/objects/host_config/{host}"
-                        self.request(url, method="DELETE")
-                        print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
+                        try:
+                            self.request(url, method="DELETE")
+                        except CmkException as exp:
+                            self.log_details.append(("error", f"Host deletion failed: {exp}"))
+                            print(f"{CC.WARNING} *{CC.ENDC} Delete host {host} failed {exp}")
+                        else:
+                            print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
 
 
         if app.config['CMK_BULK_DELETE_HOSTS']:
@@ -278,8 +284,13 @@ class SyncCMK2(CMK2):
             for chunk in chunks:
                 self.num_deleted += len(chunk)
                 print(f" * Send Bulk Request {count}/{total}")
-                self.request(url, data={'entries': chunk }, method="POST")
-                count += 1
+                try:
+                    self.request(url, data={'entries': chunk }, method="POST")
+                except CmkException as exp:
+                    self.log_details.append(("error", f"Host Bulk deletion failed: {exp}"))
+                    print(f"{CC.WARNING} *{CC.ENDC} Bulk Host deletion failed failed {exp}")
+                else:
+                    count += 1
                 self.num_deleted += len(chunk)
 
 
