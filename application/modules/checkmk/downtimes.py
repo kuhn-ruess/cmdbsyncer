@@ -201,7 +201,7 @@ class CheckmkDowntimeSync(CMK2):
                     self.set_downtime(hostname, downtime)
         except Exception as exp:
             self.log_details.append(('error', f'Exception {exp}'))
-            raise
+            print(f"Exception: {exp}")
 
     def run(self):
         """
