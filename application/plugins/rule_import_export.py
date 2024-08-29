@@ -72,7 +72,10 @@ def export_rules(rule_type):
                "rules_json": rules})
     else:
         print("Ruletype not supported")
-        print(f"Currently supported: {','.join(enabled_rules.keys())}")
+        print("Currently supported:")
+        print()
+        for rulename in sorted(enabled_rules):
+            print(rulename)
 
 @cli_rules.command('import_rules')
 @click.argument("rulefile_path")
