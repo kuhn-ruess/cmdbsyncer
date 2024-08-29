@@ -16,7 +16,7 @@ class SyncCMK2(CMK2):
     """
     Sync Functions
     """
-    log_details = []
+    #log_details = []
 
     bulk_creates = []
     bulk_updates = []

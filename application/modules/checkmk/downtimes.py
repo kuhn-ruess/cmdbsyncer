@@ -16,6 +16,8 @@ class CheckmkDowntimeSync(CMK2):
     """
     Sync Checkmk Downtimes
     """
+    # Reset Log Details
+    #log_details = []
 
     name = "Synced Checkmk Downtimes"
     source = "cmk_downtime_sync"
@@ -184,18 +186,22 @@ class CheckmkDowntimeSync(CMK2):
         """
         Calls for one Hosts Downtime
         """
-        configured_downtimes = []
-        for _rule_type, rules in host_actions.items():
-            for rule in rules:
-                configured_downtimes += \
-                        list(self.calculate_configured_downtimes(rule, attributes['all']))
+        try:
+            configured_downtimes = []
+            for _rule_type, rules in host_actions.items():
+                for rule in rules:
+                    configured_downtimes += \
+                            list(self.calculate_configured_downtimes(rule, attributes['all']))
 
-        current_downtimes = list(
-                    self.get_current_cmk_downtimes(hostname)
-                )
-        for downtime in configured_downtimes:
-            if downtime not in current_downtimes:
-                self.set_downtime(hostname, downtime)
+            current_downtimes = list(
+                        self.get_current_cmk_downtimes(hostname)
+                    )
+            for downtime in configured_downtimes:
+                if downtime not in current_downtimes:
+                    self.set_downtime(hostname, downtime)
+        except Exception as exp:
+            self.log_details.append(('error', f'Exception {exp}'))
+            raise
 
     def run(self):
         """
