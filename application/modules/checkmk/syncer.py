@@ -117,7 +117,11 @@ class SyncCMK2(CMK2):
             url = f'/objects/folder_config/{folder_name_url}'
             if add_attributes or update_attributes:
                 # get current E-Tag
-                curren_folder, headers = self.request(url)
+                try:
+                    curren_folder, headers = self.request(url)
+                except CmkException as exp:
+                    self.log_details.append(('error', f'GET Folder Exception: {exp}'))
+                    continue
                 if not curren_folder:
                     continue
                 etag = headers['etag']
@@ -131,9 +135,13 @@ class SyncCMK2(CMK2):
                 update_headers = {
                     'if-match': etag,
                 }
-                _, headers = self.request(url, method="PUT",
-                             data=payload,
-                             additional_header=update_headers)
+                try:
+                    _, headers = self.request(url, method="PUT",
+                                 data=payload,
+                                 additional_header=update_headers)
+                except CmkException as exp:
+                    self.log_details.append(('error', f'Create Folder Exception: {exp}'))
+                    continue
                 del update_attributes['title']
                 etag = headers['etag']
             if add_attributes:
@@ -145,9 +153,13 @@ class SyncCMK2(CMK2):
                 update_headers = {
                     'if-match': etag,
                 }
-                _, headers = self.request(url, method="PUT",
-                             data=payload,
-                             additional_header=update_headers)
+                try:
+                    _, headers = self.request(url, method="PUT",
+                                 data=payload,
+                                 additional_header=update_headers)
+                except CmkException as exp:
+                    self.log_details.append(('error', f'Create Folder Exception: {exp}'))
+                    continue
                 etag = headers['etag']
             if update_attributes:
                 payload = {
@@ -156,9 +168,13 @@ class SyncCMK2(CMK2):
                 update_headers = {
                     'if-match': etag,
                 }
-                self.request(url, method="PUT",
-                         data=payload,
-                         additional_header=update_headers)
+                try:
+                    self.request(url, method="PUT",
+                             data=payload,
+                             additional_header=update_headers)
+                except CmkException as exp:
+                    self.log_details.append(('error', f'Update Folder Exception: {exp}'))
+                    continue
                 print(f"{CC.OKGREEN} *{CC.ENDC} Update Attributes on Folder: {folder_name} "\
                       f"({update_attributes})")
 
@@ -400,7 +416,13 @@ class SyncCMK2(CMK2):
 
             if is_cluster and not cmk_host['extensions']['is_cluster']:
                 url = f"/objects/host_config/{hostname}"
-                self.request(url, method="DELETE")
+                try:
+                    self.request(url, method="DELETE")
+                except CmkException as exp:
+                    self.log_details.append(("error", f"Host deletion failed: {exp}"))
+                    print(f"{CC.WARNING} *{CC.ENDC} Host deletion failed failed {exp}")
+                    return
+
                 print(f"{CC.WARNING} *{CC.ENDC} Deleted host to create it as Cluster")
                 # Make sure it's added again
                 self.clusters.append((hostname, folder, labels, \
@@ -732,9 +754,12 @@ class SyncCMK2(CMK2):
             update_body = {
                 'nodes': syncer_nodes
             }
-            self.request(update_url, method="PUT",
-                data=update_body,
-                additional_header=update_headers)
+            try:
+                self.request(update_url, method="PUT",
+                    data=update_body,
+                    additional_header=update_headers)
+            except CmkException as error:
+                self.log_details.append(('error_cluster', f"Cluster Node Update Errror: {error}"))
 
 #.
 #   .-- Update Host
@@ -803,9 +828,12 @@ class SyncCMK2(CMK2):
             update_body = {
                 'target_folder': folder.replace('/','~')
             }
-            _, header = self.request(update_url, method="POST",
-                         data=update_body,
-                         additional_header=update_headers)
+            try:
+                _, header = self.request(update_url, method="POST",
+                             data=update_body,
+                             additional_header=update_headers)
+            except CmkException as exp:
+                self.log_details.append(('error', f'Move exception: {hostname} {exp}'))
             if 'error' in header:
                 self.console(f" * Host Move Problem: {header['error']}")
                 self.log_details.append(('error', f"Move Error: {hostname} {header['error']}"))
