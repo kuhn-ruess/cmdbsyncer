@@ -179,6 +179,7 @@ class CheckmkDowntimeSync(CMK2):
             print(f"\n{cc.OKGREEN} *{cc.ENDC} Set Downtime for "\
                   f"{data['start_time']} ({data['comment']})")
         except CmkException as error:
+            self.log_details.append(("error", f"Downtime failed {error}"))
             print(f"\n{cc.WARNING} *{cc.ENDC} Downtime failed: "\
                   f"{error}")
 
@@ -255,11 +256,10 @@ class CheckmkDowntimeSync(CMK2):
                         progress.advance(task1)
                         continue
 
-                    x= pool.apply_async(self.do_hosts_downtimes,
+                    pool.apply_async(self.do_hosts_downtimes,
                                      args=(hostname, host_actions, attributes),
                                      callback=lambda x: progress.advance(task1))
 
-                    x.get()
                 pool.close()
                 pool.join()
 
