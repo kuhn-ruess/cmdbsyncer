@@ -228,6 +228,7 @@ class CheckmkDowntimeSync(CMK2):
                     progress.advance(task1)
                     continue
                 self.do_hosts_downtimes(hostname, host_actions, attributes)
+                progress.advance(task1)
 
     def run_async(self):
         """
@@ -236,32 +237,33 @@ class CheckmkDowntimeSync(CMK2):
         #@TODO: Fix Error: AttributeError:
         # Can't pickle local object 'export_downtimes.<locals>.ExportDowntimes'
         # Collect Rules
-        total = Host.objects.count()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
-            task1 = progress.add_task("Calculating Downtimes", total=total)
-            with multiprocessing.Pool() as pool:
-                for db_host in Host.objects():
-                    hostname = db_host.hostname
-                    progress.console.print(f"- Started for {hostname}")
-                    attributes = self.get_host_attributes(db_host, 'cmk_conf')
-                    if not attributes:
-                        progress.advance(task1)
-                        continue
+        #total = Host.objects.count()
+        #with Progress(SpinnerColumn(),
+        #              MofNCompleteColumn(),
+        #              *Progress.get_default_columns(),
+        #              TimeElapsedColumn()) as progress:
+        #    task1 = progress.add_task("Calculating Downtimes", total=total)
+        #    with multiprocessing.Pool() as pool:
+        #        for db_host in Host.objects():
+        #            hostname = db_host.hostname
+        #            progress.console.print(f"- Started for {hostname}")
+        #            attributes = self.get_host_attributes(db_host, 'cmk_conf')
+        #            if not attributes:
+        #                progress.advance(task1)
+        #                continue
 
-                    host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-                    if not host_actions:
-                        progress.advance(task1)
-                        continue
+        #            host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+        #            if not host_actions:
+        #                progress.advance(task1)
+        #                continue
+        #            davor += 1
+        #            pool.apply_async(self.do_hosts_downtimes,
+        #                             args=(hostname, host_actions, attributes),
+        #                             callback=lambda x: progress.advance(task1))
+        #            danach += 1
 
-                    pool.apply_async(self.do_hosts_downtimes,
-                                     args=(hostname, host_actions, attributes),
-                                     callback=lambda x: progress.advance(task1))
-
-                pool.close()
-                pool.join()
+        #        pool.close()
+        #        pool.join()
 
     def get_current_cmk_downtimes(self, hostname):
         """
