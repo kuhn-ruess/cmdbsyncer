@@ -3,9 +3,11 @@
 Maintenance Module
 """
 #pylint: disable=too-many-arguments, logging-fstring-interpolation
+import os
 import datetime
 import string
 import secrets
+from pprint import pformat
 import click
 from mongoengine.errors import DoesNotExist, ValidationError
 from application import app, logger, log
@@ -229,11 +231,45 @@ def self_configure():
     Seed needed DB Changes or cleanup stuff.
     Use if stated in docs after Update.
     """
-    print("Seed data if needed:")
+    print("Check for default Config Object")
     if not Config.objects():
+        print(" -> Created")
         conf = Config()
         conf.save()
-    print("- done")
+    else:
+        print(" -> Existed")
+
+
+    print("Check for local_config.py File")
+    if not os.path.isfile('local_config.py'):
+        with open('local_config.py', 'w', encoding="utf-8") as lf:
+            lf.write("#!/usr/bin/env python3\n")
+            lf.write('"""\nLocal Config File\n"""\n')
+            lf.write("import logging\n")
+            lf.write("# Only Update from here inside the config = {} object\n")
+            lf.write("config = {}\n")
+        print(" -> Created new local_config.py")
+    else:
+        print(" -> Existed")
+
+    print("Seed missing Default Values to the local_config.py")
+    alphabet = string.ascii_letters + string.digits + string.punctuation
+    values = {
+        'SECRET_KEY': ''.join(secrets.choice(alphabet) for i in range(120)),
+        'CRYPTOGRAPHY_KEY' : ''.join(secrets.choice(alphabet) for i in range(120)),
+        'SESSION_COOKIE_NAME': "cmdb-syncer",
+        'CMK_SUPPORT': "2.3",
+    }
+    from local_config import config #pylint: disable=import-outside-toplevel
+    for key, value in values.items():
+        if key not in config:
+            config[key] = value
+    with open('local_config.py', 'w', encoding="utf-8") as lf:
+        lf.write("#!/usr/bin/env python3\n")
+        lf.write('"""\nLocal Config File\n"""\n')
+        lf.write("import logging\n")
+        lf.write("# Only Update from here inside the config = {} object\n")
+        lf.write(f"config = {pformat(config)}\n")
 
 #.
 register_cronjob("Syncer: Maintenence", maintenance)
