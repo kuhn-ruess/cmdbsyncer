@@ -4,10 +4,13 @@ Ansible Api
 # pylint: disable=function-redefined
 # pylint: disable=no-member
 from datetime import datetime, timedelta
+from mongoengine.errors import DoesNotExist
 from flask_restx import Namespace, Resource
+
 from application.api import require_token
 from application.modules.log.models import LogEntry
 from application.models.host import Host
+from application.models.cron import CronStats
 
 API = Namespace('syncer')
 
@@ -62,6 +65,35 @@ class SyncerServiceApi(Resource):
             return {
                 'error': "No Entry for Service Found",
             }, 404
+
+
+@API.route('/cron/')
+class SyncerCronApi(Resource):
+    """ Handle Actions """
+
+    @require_token
+    def get(self):
+        """Return Status of Cronjob Groups"""
+        try:
+            response = []
+            for entry in CronStats.objects:
+                response.append({
+                    'name': str(entry.group),
+                    'last_start': entry.last_start.strftime('%Y-%m-%d %H:%M:%S'),
+                    'next_run': entry.next_run.strftime('%Y-%m-%d %H:%M:%S'),
+                    'is_running': entry.is_running,
+                    'last_message': entry.last_message,
+                    'has_error': entry.failure,
+                })
+            return {
+                'result': response,
+            }, 200
+        except DoesNotExist:
+            return {
+                'error': "No Status for CronGroup Found",
+            }, 404
+
+
 
 @API.route('/hosts')
 class SyncerHostsApi(Resource):
