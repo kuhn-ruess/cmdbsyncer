@@ -72,6 +72,9 @@ class DefaultModelView(ModelView):
         """ Overwrite """
         return current_user.is_authenticated
 
+    def inaccessible_callback(self, name, **kwargs):
+        return redirect(url_for('auth.login', next=url_for('admin.index')))
+
 class IndexView(AdminIndexView):
     """
     Index View Overwrite for auth
