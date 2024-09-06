@@ -29,7 +29,7 @@ def get_stats(group):
         return new
 
 
-def calc_next_run(job, last_start):
+def calc_next_run(job, last_start, was_outdated=False):
     """
     Calculate next run of Job
     """
@@ -65,6 +65,14 @@ def calc_next_run(job, last_start):
             return last_start + timedelta(days=days)
         if hours:
             return last_start + timedelta(hours=hours)
+    else:
+        # We are not in Timerange, set the  next run
+        # For tomorrow
+        next_run = now
+        if not was_outdated:
+            next_run += timedelta(days=1)
+        next_run = next_run.replace(hour=t_from, minute=0)
+        return next_run
     return now
 
 def in_timerange(job):
@@ -78,22 +86,6 @@ def in_timerange(job):
     if t_from <= current_hour <= t_to:
         return True
     return False
-
-def calc_next_possible_run(job):
-    """
-    Return the next full time in allowd timerange
-    """
-    now = datetime.now()
-    current_hour = now.hour
-    t_from = int(job.timerange_from)
-    #pylint: disable=line-too-long
-    if current_hour >= t_from:
-        # Next is tomorrw
-        new = now + timedelta(days=1)
-        new.replace(hour=t_from, minute=0)
-        return new
-    # Still today
-    return datetime.strptime(f"{now.day:02d}.{now.month:02d}.{now.year} {t_from:02d}:00", "%d.%m.%Y %H:%M")
 
 
 @_cli_cron.command('force_run_group')
@@ -143,8 +135,9 @@ def jobs(): #pylint: disable=invalid-name
                 job.save()
 
             if not stats.is_running and next_run <= now + timedelta(minutes=1):
+                # This Job is in the past
                 if not force_run and not in_timerange(job):
-                    stats.next_run = calc_next_possible_run(job)
+                    stats.next_run = calc_next_run(job, stats.last_start, was_outdated=True)
                     stats.save()
                     continue
                 print('-------------------------------------------------------------')
