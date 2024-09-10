@@ -19,7 +19,7 @@ from syncerapi.v1.inventory import run_inventory
 
 try:
     import pypyodbc as pyodbc
-except ImportError:
+except: #pylint: disable=bare-except
     logger.debug("Info: ODBC Plugin was not able to load required modules")
 
 try:
