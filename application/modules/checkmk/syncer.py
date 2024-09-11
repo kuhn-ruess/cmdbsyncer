@@ -43,6 +43,9 @@ class SyncCMK2(CMK2):
 
     console = None
 
+    print_disabled = False
+
+
     @staticmethod
     def chunks(lst, n):
         """Yield successive n-sized chunks from lst."""
@@ -467,7 +470,7 @@ class SyncCMK2(CMK2):
                     #@TODO
                     # .get() slows the process, console print is not up to date
                     # New concept will be needed for outputs
-                    #progress.console.print(f"- Started on {db_host.hostname}")
+                    progress.console.print(f"- Started on {db_host.hostname}")
                     #result = x.get()
                     #if not result:
                     #    progress.console.print("--> !! Host Disabled")
@@ -475,7 +478,13 @@ class SyncCMK2(CMK2):
 
                 pool.close()
                 pool.join()
-                self.disabled_hosts = disabled_hosts
+
+                if self.print_disabled:
+                    task2 = progress.add_task("List Disabled Hosts", total=total)
+                    self.disabled_hosts = disabled_hosts
+                    for host in disabled_hosts:
+                        progress.advance(task2)
+                        progress.console.print(f"- Disabled-> {host} disabled")
         return host_actions
 
 

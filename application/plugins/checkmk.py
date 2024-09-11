@@ -115,6 +115,7 @@ def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False
             syncer.save_requests = save_requests
             syncer.account_id = str(target_config['_id'])
             syncer.account_name = target_config['name']
+            syncer.print_disabled = bool(target_config.get('print_disabled', False))
             syncer.limit = limit
             syncer.account_filter = target_config.get('account_filter', False)
             syncer.config = target_config
