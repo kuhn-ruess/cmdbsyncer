@@ -6,9 +6,11 @@ Ansible Api
 from mongoengine.errors import DoesNotExist
 
 from flask import request
-from flask_restx import Namespace, Resource, reqparse
+from flask_restx import Namespace, Resource, reqparse, fields
 from application.api import require_token
 from application.models.host import Host
+
+from application.helpers.get_account import get_account_by_name
 
 API = Namespace('objects')
 
@@ -24,6 +26,22 @@ def build_host_dict(host_obj):
     host_dict['last_seen'] = host_obj.last_import_seen.strftime('%Y-%m-%dT%H:%M:%SZ')
     return host_dict
 
+LABEL = API.model(
+    'label',
+    {
+        'key': fields.String(required=True),
+        'value': fields.String(required=True),
+    },
+)
+
+
+HOST = API.model(
+    'host_object',
+    {
+        'account': fields.String(required=True),
+        'labels': fields.Raw({}, required=True),
+    },
+)
 
 
 @API.route('/<hostname>')
@@ -40,6 +58,42 @@ class HostDetailApi(Resource):
         except DoesNotExist:
             return {'error': "Host not found"}, 404
         return host_dict
+
+    @require_token
+    @API.expect(HOST, validate=True)
+    def post(self, hostname):
+        """ Create/ Update a Host Object"""
+        req_json = request.json
+        account = req_json['account']
+        account_dict = get_account_by_name(account)
+        labels = req_json['labels']
+        host_obj = Host.get_host(hostname)
+        host_obj.update_host(labels)
+        do_save = host_obj.set_account(account_dict=account_dict)
+
+        if do_save:
+            status = 'account_conflict'
+            status_code = 403
+            host_obj.save()
+        status = 'saved'
+        status_code = 200
+
+        return {'status': status}, status_code
+
+    @require_token
+    def delete(self, hostname):
+        """ Delete Object """
+        host_obj = Host.get_host(hostname, create=False)
+        status = "not found"
+        status_code = 404
+        if host_obj:
+            status = "deleted"
+            status_code = 200
+            host_obj.delete()
+
+        return {'status': status}, status_code
+
+
 
 parser = reqparse.RequestParser()
 parser.add_argument('start', type=int, help='Pagination start')
