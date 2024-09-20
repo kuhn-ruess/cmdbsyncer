@@ -48,9 +48,11 @@ def import_hosts(json_path, hostname_field, account):
         data = json.load(json_file)
         for host in data:
             hostname = host[hostname_field]
+            if not hostname:
+                continue
             del host[hostname_field]
             if 'rewrite_hostname' in account and account['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], entry)
+                hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], host)
             print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
             host_obj = Host.get_host(hostname)
             host_obj.update_host(host)
@@ -93,6 +95,8 @@ def import_hosts_json(account):
 
     for entry in data[account['data_key']]:
         hostname = entry[account['hostname_field']]
+        if not hostname:
+            continue
         del entry[account['hostname_field']]
         if 'rewrite_hostname' in account and account['rewrite_hostname']:
             hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], entry)
