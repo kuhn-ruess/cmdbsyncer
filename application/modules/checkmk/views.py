@@ -146,13 +146,14 @@ class CheckmkRuleView(RuleModelView):
             'filter': f"{app.config['BASE_PREFIX']}admin/checkmkfilterrule/edit/?id=",
             'rewrite': f"{app.config['BASE_PREFIX']}admin/checkmkrewriteattributerule/edit/?id=",
             'actions': f"{app.config['BASE_PREFIX']}admin/checkmkrule/edit/?id=",
+            'CustomAttributes': f"{app.config['BASE_PREFIX']}admin/customattributerule/edit/?id=",
         }
         new_rules = {}
         for rule_group, rule_data in output_rules.items():
             new_rules.setdefault(rule_group, [])
             for rule in rule_data:
-                if rule_group in base_urls:
-                    rule['rule_url'] = f"{base_urls[rule_group]}{rule['id']}"
+                #if rule_group in base_urls:
+                rule['rule_url'] = f"{base_urls[rule_group]}{rule['id']}"
                 new_rules[rule_group].append(rule)
 
         if "Error" in output:
