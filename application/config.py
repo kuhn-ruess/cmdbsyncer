@@ -109,6 +109,9 @@ class BaseConfig():
     # Log all Changed done on Hosts
     CMK_DETAILED_LOG = False
 
+    CMK_JINJA_USE_REPLACERS = False
+    CMK_JINJA_USE_REPLACERS_FOR_HOSTNAMES = False
+
 class ProductionConfig(BaseConfig):
     """
     Production Configuration.
