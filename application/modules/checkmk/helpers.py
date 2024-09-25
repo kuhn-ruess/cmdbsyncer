@@ -2,7 +2,7 @@
 Checkmk Helpers
 """
 import re
-import app
+from application import app
 
 def cmk_cleanup_tag_id(input_str):
     """

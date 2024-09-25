@@ -268,7 +268,8 @@ class CheckmkTagSync(CMK2):
                     new_tag_title = render_jinja(rewrite_title, HOSTNAME=hostname,
                                                  **object_attributes['all'])
                     new_tag_title.strip()
-                except Exception:
+                except Exception as exp:
+                    logger.debug(f"Exception: {exp}")
                     new_tag_id, new_tag_title = False, False
 
             if new_tag_id and new_tag_title:
