@@ -58,11 +58,13 @@ class ODBC(Plugin):
                 query = self.config['custom_query']
             logger.debug(query)
             cursor.execute(query)
-            logger.debug(f"Cursor Executed {cursor.description}")
+            logger.debug("Cursor Executed")
             rows = cursor.fetchall()
+            logger.debug(f"Fetch Executed: {cursor.description}")
+            columns = [column[0] for column in cursor.description]
             for row in rows:
                 logger.debug(f"Found row: {row}")
-                labels=dict(zip(self.config['fields'].split(","),row))
+                labels=dict(zip(columns,row))
                 hostname = labels[self.config['hostname_field']].strip()
                 if app_config['LOWERCASE_HOSTNAMES']:
                     hostname = hostname.lower()
