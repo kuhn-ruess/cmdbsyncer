@@ -147,47 +147,31 @@ class FilterAction(db.EmbeddedDocument):
 #   .-- Attribute Rewrite
 
 modes_name = [
-  ("", "Don't Use (Set  old attribute anyway to create a new custom attribute)"),
-  ("string", "With String Match"),
-  ("regex", "With Regex Match"),
-  ("split", "With Split Match, Syntax: SEPERATOR:INDEX"),
-  ("jinja", "With Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
+  ("", "Don't Use (Set  old attribute if you want to create a new custom attribute)"),
+  ("string", "Overwrite with a fixed String"),
+  ("jinja",
+     "Overwrite with Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
 ]
 
 modes_value = [
   ("", "Don't Use"),
   ("string", "To String"),
-  ("regex", "With Regex"),
   ("split", "With Split, Syntax: SEPERATOR:INDEX"),
   ("jinja", "With Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
 ]
 class AttributeRewriteAction(db.EmbeddedDocument):
     """
-    Old Attribute Name
-    ------------------
-    Name of the attribute to rewrite
-    Or Name for the New Attribute based on overwrites
-    Stays Empty if you create a new Attribute
-
-    Overwrite Name
-    --------------
-    Enable if and with which Method you wan't to overwrite
-    the Fields Key
-
-    New Attribute Name
-    ------------------
-    New Name of the attribute
-
+    Attribute rewrite
     """
     old_attribute_name = db.StringField()
     overwrite_name = db.StringField(choices=modes_name, default='string')
     new_attribute_name = db.StringField()
+
     overwrite_value = db.StringField(choices=modes_value, default="None")
     new_value = db.StringField()
     meta = {
         'strict': False
     }
-
 #.
 #   .-- Custom Attribute
 class CustomAttribute(db.EmbeddedDocument):
