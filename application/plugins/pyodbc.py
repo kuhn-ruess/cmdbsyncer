@@ -53,9 +53,10 @@ class ODBC(Plugin):
             cnxn = pyodbc.connect(connect_str)
             cursor = cnxn.cursor()
 
-            query = f"select {self.config['fields']} from {self.config['table']};"
             if "custom_query" in self.config and self.config['custom_query']:
                 query = self.config['custom_query']
+            else:
+                query = f"select {self.config['fields']} from {self.config['table']};"
             logger.debug(query)
             cursor.execute(query)
             logger.debug("Cursor Executed")
