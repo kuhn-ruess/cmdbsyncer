@@ -58,7 +58,7 @@ class ODBC(Plugin):
                 query = self.config['custom_query']
             logger.debug(query)
             cursor.execute(query)
-            logger.debug("Cursor Executed")
+            logger.debug(f"Cursor Executed {cursor.description}")
             rows = cursor.fetchall()
             for row in rows:
                 logger.debug(f"Found row: {row}")
