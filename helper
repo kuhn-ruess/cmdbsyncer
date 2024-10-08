@@ -2,7 +2,7 @@
 # Simple Helper
 # .local.
 CONTAINER=cmdb_syncer
-APPLICATION=cmdb_syncer-api-1
+APPLICATION=cmdb_syncer_api_1
 
 case "$1" in
 "up")

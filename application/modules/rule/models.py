@@ -151,6 +151,7 @@ modes_name = [
   ("string", "Overwrite with a fixed String"),
   ("jinja",
      "Overwrite with Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
+  ("convert_list", "Convert List of String to single Attributes and give them the below set value"),
 ]
 
 modes_value = [
@@ -163,8 +164,8 @@ class AttributeRewriteAction(db.EmbeddedDocument):
     """
     Attribute rewrite
     """
-    old_attribute_name = db.StringField()
     overwrite_name = db.StringField(choices=modes_name, default='string')
+    old_attribute_name = db.StringField()
     new_attribute_name = db.StringField()
 
     overwrite_value = db.StringField(choices=modes_value, default="None")
@@ -172,6 +173,7 @@ class AttributeRewriteAction(db.EmbeddedDocument):
     meta = {
         'strict': False
     }
+
 #.
 #   .-- Custom Attribute
 class CustomAttribute(db.EmbeddedDocument):
