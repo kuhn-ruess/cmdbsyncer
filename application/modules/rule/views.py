@@ -7,6 +7,7 @@ from flask_admin.form import rules
 from markupsafe import Markup
 from application.views.default import DefaultModelView
 from application.modules.rule.models import filter_actions, rule_types
+from application.docu_links import docu_links
 
 #   .-- Renderer
 condition_types={
@@ -374,22 +375,28 @@ class RewriteAttributeView(RuleModelView):
             'outcomes': {
                 'form_subdocuments' : {
                     '': {
+                        'form_args': {
+                            'overwrite_name': {'label': 'Operation'},
+                            'overwrite_value': {'label': 'Operation'},
+                        },
                         'form_overrides' : {
                             'old_attribute_name': StringField,
                             'new_attribute_name': StringField,
                             'new_value': StringField,
                         },
                         'form_widget_args': {
-                            'old_attribute_name': {'style': 'background-color: #2EFE9A;' },
                             'overwrite_name': {'style': 'background-color: #2EFE9A;' },
+                            'old_attribute_name': {'style': 'background-color: #2EFE9A;' },
                             'new_attribute_name': {'style': 'background-color: #2EFE9A;' },
                             'overwrite_value': { 'style': 'background-color: #81DAF5;' },
                             'new_value': { 'style': 'background-color: #81DAF5;' },
                         },
                         'form_rules' : [
+                            rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["rewrite"]}"'\
+                                        'target="_blank" class="badge badge-light">Documentation</a>'),
                             rules.HTML("<div class='form-row'><div class='col'>"),
                             rules.FieldSet(
-                                ('old_attribute_name', 'overwrite_name', 'new_attribute_name'),
+                                ('overwrite_name', 'old_attribute_name','new_attribute_name'),
                                  "Attribute Name"),
                             rules.HTML("</div><div class='col tag'>"),
                             rules.FieldSet(

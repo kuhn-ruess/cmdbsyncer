@@ -3,6 +3,7 @@
 Rewrite
 """
 #pylint: disable=logging-fstring-interpolation
+import ast
 from application.modules.rule.rule import Rule
 from application import logger
 from application.helpers.syncer_jinja import render_jinja
@@ -36,7 +37,7 @@ class Rewrite(Rule):
         # The old Value stays the new Value, if not overwritten
         new_value = old_value
         if value_mode := outcome['overwrite_value']:
-            # Default ijn case of String
+            # Default in case of String
             new_value = outcome['new_value']
             if value_mode == 'split':
                 what, index = new_value.split(':')
@@ -51,20 +52,44 @@ class Rewrite(Rule):
                                          HOSTNAME=self.hostname, **self.attributes)
         return new_value
 
+    def get_list_for_attribute(self, attribute_name, template):
+        """
+        Fetch Attributes Value and convert outcome to list
+        """
+        value = self.attributes.get(attribute_name, "[]")
+        value = render_jinja(template, mode="nullify", result=value, **self.attributes)
+        try:
+            attribute_list = ast.literal_eval(value.replace('\n',''))
+        except ValueError:
+            attribute_list = []
+        return attribute_list
+
+
     def add_outcomes(self, rule, outcomes):
         """
         Rewrite matching Attribute
         """
         for outcome in rule:
+
+            # A Attribute names list is used,
+            # for the case where the mode returns muliple new attributes.
+            # But they will always have the same value
+            attributes = []
             old_name, current_name = self.get_attribute_name(outcome)
-            if current_name:
+            if outcome['overwrite_name'] == 'convert_list':
+                attributes += self.get_list_for_attribute(old_name, current_name)
+            elif current_name:
                 outcomes[f'del_{old_name}'] = True
+                attributes.append(current_name)
             else:
                 # If we have no new name, the old stays as current one
                 current_name = old_name
+                attributes.append(current_name)
+
             # We pass the old name, since the attributes store of the host hast the value
             # stilles stored under this old name
             new_value = self.get_new_attribute_value(outcome, old_name)
-            outcome[f'add_{current_name}'] = new_value
+            for name in attributes:
+                outcomes[f'add_{name}'] = new_value
 
-        return self.outcomes
+        return outcomes
