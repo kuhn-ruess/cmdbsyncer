@@ -60,7 +60,7 @@ class Rewrite(Rule):
         value = render_jinja(template, mode="nullify", result=value, **self.attributes)
         try:
             attribute_list = ast.literal_eval(value.replace('\n',''))
-        except ValueError:
+        except (ValueError, SyntaxError):
             attribute_list = []
         return attribute_list
 
