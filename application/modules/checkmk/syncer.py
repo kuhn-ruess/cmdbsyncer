@@ -583,7 +583,7 @@ class SyncCMK2(CMK2):
         self.log_details.append(('num_total', str(total)))
         self.log_details.append(('num_created', str(self.num_created)))
         self.log_details.append(('num_updated', str(self.num_updated)))
-        self.log_details.append(('num_delted', str(self.num_deleted)))
+        self.log_details.append(('num_deleted', str(self.num_deleted)))
         self.log_details.append(('disabled_hosts', str(self.disabled_hosts)))
 
 #.
