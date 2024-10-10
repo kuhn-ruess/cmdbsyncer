@@ -65,7 +65,7 @@ class Plugin():
         log.log(self.name, source=self.source, details=self.log_details)
 
 
-    def inner_request(self, method, url, data, headers):
+    def inner_request(self, method, url, data, headers=None):
         """
         Requst Module for all HTTP Requests
         by Plugin
@@ -79,7 +79,7 @@ class Plugin():
             'verify': self.verify,
             'timeout': app.config['HTTP_REQUEST_TIMEOUT'],
         }
-        if headers.get('Content-Type') == "application/json" and data:
+        if headers and headers.get('Content-Type') == "application/json" and data:
             payload['json'] = data
         elif data:
             payload['params'] = data

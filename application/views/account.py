@@ -86,6 +86,7 @@ class AccountModelView(DefaultModelView):
         """
         Create Defauls for Account on create
         """
+        main_presets = []
         default_fields = []
         if form.typ.data == 'csv':
             default_fields = [
@@ -206,6 +207,14 @@ class AccountModelView(DefaultModelView):
             default_fields = [
                 ('rewrite_hostname', ""),
             ]
+        elif form.typ.data == 'jdisc':
+            main_presets = [
+                ('address', 'https://SERVER/graphql'),
+            ]
+            default_fields = [
+                ('fields', "name, type"),
+                ('rewrite_hostname', ""),
+            ]
 
         if default_fields:
             for field, content in default_fields:
@@ -214,6 +223,10 @@ class AccountModelView(DefaultModelView):
                     new.name = field
                     new.value = content
                     model.custom_fields.append(new)
+        if main_presets:
+            for field, content in main_presets:
+                if not getattr(model, field):
+                    setattr(model, field, content)
 
         return super().on_model_change(form, model, is_created)
 
