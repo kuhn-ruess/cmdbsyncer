@@ -167,7 +167,10 @@ class Plugin():
                 if rewrite.startswith('add_'):
                     attributes[realname] = value
                 elif rewrite.startswith('del_'):
-                    del attributes[realname]
+                    try:
+                        del attributes[realname]
+                    except KeyError:
+                        continue
         data = {
             'all': attributes,
             'filtered': attributes_filtered,
