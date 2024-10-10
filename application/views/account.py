@@ -10,6 +10,7 @@ from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
 from application.models.account import CustomEntry
 from application.modules.checkmk.models import CheckmkObjectCache
+from application.docu_links import docu_links
 
 def _render_custom_data(_view, _context, model, _name):
     """
@@ -59,6 +60,18 @@ class AccountModelView(DefaultModelView):
             },
         }
     }
+
+
+    form_rules = [
+        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["accounts"]}"'\
+                        'target="_blank" class="badge badge-light">Documentation</a>'),
+        rules.FieldSet(('name', 'typ'),'Basics'),
+        rules.FieldSet(('is_master', 'is_object'), "Account Settings"),
+        rules.FieldSet(('address', 'username', 'password'), "Access Config"),
+        rules.Header("Addional configuration"),
+        rules.Field('custom_fields'),
+        rules.Field('enabled'),
+    ]
 
 
 
