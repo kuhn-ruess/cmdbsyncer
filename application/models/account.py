@@ -10,6 +10,7 @@ account_types = [
     ('csv', "CSV File"),
     ('json', "Json File"),
     ('jira', "Jira CMDB"),
+    ('jdisc', "Jdisc Discovery System"),
     ('mysql', "Mysql Table"),
     ('mssql', "MSSQL Table"),
     ('odbc', "ODBC Conenctions like FreeTDS"),
