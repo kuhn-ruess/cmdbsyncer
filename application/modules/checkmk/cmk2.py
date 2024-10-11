@@ -32,7 +32,6 @@ class CMK2(Plugin):
         super().__init__()
 
         self.log = log
-        self.verify = not app.config.get('DISABLE_SSL_ERRORS')
         self.config = {}
 
 

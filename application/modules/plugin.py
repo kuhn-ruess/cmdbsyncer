@@ -50,6 +50,7 @@ class Plugin():
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
+        self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 
 
         atexit.register(self.save_log)
