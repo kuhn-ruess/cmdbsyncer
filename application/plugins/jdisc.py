@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Import JDISC Data"""
 #pylint: disable=logging-fstring-interpolation
-import json
 import click
 
 from syncerapi.v1 import (
@@ -47,7 +46,11 @@ class JDisc(Plugin):
         response = self.inner_request(
             'POST',
             url=self.config['address'],
-            data=json.dumps(data),
+            data=data,
+              headers={
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+              },
         )
         return response.json()['accessToken']
 
@@ -57,7 +60,10 @@ class JDisc(Plugin):
         """
 
         access_token = self._obtain_access_token()
-        fields = "\n".join([x.strip() for x in self.config['fields'].split(',')])
+        fields = [x.strip() for x in self.config['fields'].split(',')]
+        if 'name' not in fields:
+            fields.append('name')
+        fields = "\n".join(fields)
         graphql_query = """{
         devices {
             findAll {"""+fields+"""
@@ -68,14 +74,15 @@ class JDisc(Plugin):
         data = {'query': graphql_query}
         auth_header = f'Bearer {access_token}'
 
-
         response = self.inner_request(
                 "POST",
                 url=self.config['address'],
-                headers={'Authorization': auth_header},
-                data=json.dumps(data),
+                headers={'Authorization': auth_header,
+                           'Content-Type': 'application/json',
+                           'Accept': 'application/json',
+                  },
+                  data=data,
         )
-        response.raise_for_status()
         return response.json()['data']['devices']['findAll']
 
 
@@ -84,19 +91,12 @@ class JDisc(Plugin):
         JDisc Import
         """
         for labels in self._inner_import():
+            if 'name' not in labels:
+                continue
             hostname = labels['name']
             if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
                 hostname = Host.rewrite_hostname(hostname,
                                                  self.config['rewrite_hostname'], labels)
-            print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
-            del labels['name']
-            host_obj = Host.get_host(hostname)
-            host_obj.update_host(labels)
-            do_save=host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
-            else:
-                print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
             print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
             del labels['name']
             host_obj = Host.get_host(hostname)
