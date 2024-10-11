@@ -150,7 +150,7 @@ modes_name = [
   ("", "Don't Use (Set  old attribute if you want to create a new custom attribute)"),
   ("string", "Overwrite with a fixed String"),
   ("jinja",
-     "Overwrite with Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
+     "Overwrite with Jinja Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
   ("convert_list", "Convert List of String to single Attributes and give them the below set value"),
 ]
 
@@ -158,7 +158,7 @@ modes_value = [
   ("", "Don't Use"),
   ("string", "To String"),
   ("split", "With Split, Syntax: SEPERATOR:INDEX"),
-  ("jinja", "With Jina Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
+  ("jinja", "With Jinja Template and access to all Hosts Attributes, including {{HOSTNAME}}"),
 ]
 class AttributeRewriteAction(db.EmbeddedDocument):
     """
