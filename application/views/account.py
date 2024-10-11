@@ -120,6 +120,7 @@ class AccountModelView(DefaultModelView):
                 ('path', ''),
                 ('hostname_field', 'host'),
                 ('rewrite_hostname', ""),
+                ('data_key', ''),
             ]
         elif form.typ.data == 'maintenance':
             default_fields = [
