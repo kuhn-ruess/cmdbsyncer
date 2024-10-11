@@ -52,7 +52,7 @@ class JDisc(Plugin):
                   'Accept': 'application/json',
               },
         )
-        return response.json()['accessToken']
+        return response.json()['data']['authentication']['login']['accessToken']
 
     def _inner_import(self):
         """
