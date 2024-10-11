@@ -247,7 +247,7 @@ admin.add_view(RewriteAttributeView(AnsibleRewriteAttributesRule, name="Rewrite 
                                                             category="Ansible"))
 admin.add_view(FiltereModelView(AnsibleFilterRule, name="Filter", category="Ansible"))
 admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
-                                    name="Ansible Fields", category="Ansible"))
+                                    name="Ansible Attributes", category="Ansible"))
 #.
 #   .-- Netbox
 admin.add_sub_category(name="Netbox", parent_name="Modules")
@@ -258,7 +258,7 @@ from application.modules.netbox.models import NetboxCustomAttributes, \
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
-                                    name="Custom Attributes", category="Netbox"))
+                                    name="Netbox Fields", category="Netbox"))
 #.
 #   .-- i-doit
 admin.add_sub_category(name="i-doit", parent_name="Modules")
