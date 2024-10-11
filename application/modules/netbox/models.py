@@ -44,6 +44,8 @@ netbox_outcome_types = [
   ('nb_location', "Set Location ID manualy"),
   ('nb_rack', "Set Rack ID manualy"),
   ('nb_device_type', "Set Device Type ID manualy"),
+  #('nb_manufacturer', "Set Manufacturer ID manualy"),
+  #('nb_manufacturer_sync', "Syncronise Manufacturer"),
   ('update_interfaces', "Update Interfaces in Netbox"),
   ('ignore_host', "Ignore Host(s)"),
 ]

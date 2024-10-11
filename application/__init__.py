@@ -247,7 +247,7 @@ admin.add_view(RewriteAttributeView(AnsibleRewriteAttributesRule, name="Rewrite 
                                                             category="Ansible"))
 admin.add_view(FiltereModelView(AnsibleFilterRule, name="Filter", category="Ansible"))
 admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
-                                    name="Custom Variables", category="Ansible"))
+                                    name="Ansible Fields", category="Ansible"))
 #.
 #   .-- Netbox
 admin.add_sub_category(name="Netbox", parent_name="Modules")
