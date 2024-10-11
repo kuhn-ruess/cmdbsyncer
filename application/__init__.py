@@ -2,6 +2,7 @@
 # pylint: disable=invalid-name
 # pylint: disable=wrong-import-position
 # pylint: disable=ungrouped-imports
+# pylint: disable=line-too-long
 import os
 import logging
 from datetime import datetime
@@ -23,7 +24,8 @@ logger = logging.getLogger('cmdb_syncer')
 
 app = Flask(__name__)
 env = os.environ.get('config')
-if env == "prod": app.config.from_object('application.config.ProductionConfig')
+if env == "prod":
+    app.config.from_object('application.config.ProductionConfig')
 elif env == "compose":
     app.config.from_object('application.config.ComposeConfig')
 else:
@@ -258,7 +260,7 @@ from application.modules.netbox.models import NetboxCustomAttributes, \
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
-                                    name="Netbox Fields", category="Netbox"))
+                                    name="Netbox Device Fields", category="Netbox"))
 #.
 #   .-- i-doit
 admin.add_sub_category(name="i-doit", parent_name="Modules")
