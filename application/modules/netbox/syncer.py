@@ -24,11 +24,11 @@ class SyncNetbox(Plugin):
         """
         Inital
         """
+        super().__init__()
         self.log = log
         self.print_debug = debug
         self.cache = {}
         self.interface_cache = {}
-        self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 #.
 #   .-- Get Host Data
     def get_host_data(self, db_host, attributes):

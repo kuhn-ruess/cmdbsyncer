@@ -28,9 +28,9 @@ account_types = [
 
 object_types = [
     'undefined',
+    'host'
     'group',
-    'ipaddress',
-    'user'
+    'network'
 ]
 
 
