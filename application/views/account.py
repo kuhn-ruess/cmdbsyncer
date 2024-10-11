@@ -66,7 +66,8 @@ class AccountModelView(DefaultModelView):
         rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["accounts"]}"'\
                         'target="_blank" class="badge badge-light">Documentation</a>'),
         rules.FieldSet(('name', 'typ'),'Basics'),
-        rules.FieldSet(('is_master', 'is_object'), "Account Settings"),
+        rules.FieldSet(('is_master',), "Account Settings"),
+        rules.FieldSet(('is_object', 'object_type'), "Object Settings"),
         rules.FieldSet(('address', 'username', 'password'), "Access Config"),
         rules.Header("Addional configuration"),
         rules.Field('custom_fields'),

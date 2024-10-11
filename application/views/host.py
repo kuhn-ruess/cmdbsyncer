@@ -154,6 +154,11 @@ class ObjectModelView(DefaultModelView):
     can_create = False
     can_view_details = True
 
+    column_filters = (
+       'hostname',
+       'object_type',
+    )
+
     def get_query(self):
         """
         Limit Objects
@@ -269,6 +274,7 @@ class HostModelView(DefaultModelView):
         'raw',
         'cache',
         'is_object',
+        'object_type',
         'last_export',
         'force_update',
     )

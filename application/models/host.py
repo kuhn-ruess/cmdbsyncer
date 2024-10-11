@@ -31,6 +31,7 @@ class Host(db.Document):
     inventory = db.DictField()
 
     is_object = db.BooleanField(default=False)
+    object_type = db.StringField()
 
     force_update = db.BooleanField(default=False)
 
@@ -277,6 +278,7 @@ class Host(db.Document):
             account_id = account_dict['id']
             account_name = account_dict['name']
             is_object = account_dict.get('is_object', False)
+            self.object_type = account_id.get('object_type', 'undefined')
 
         self.is_object = is_object
 

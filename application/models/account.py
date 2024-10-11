@@ -26,6 +26,14 @@ account_types = [
 ]
 
 
+object_types = [
+    'undefined',
+    'group',
+    'ipaddress',
+    'user'
+]
+
+
 class CustomEntry(db.EmbeddedDocument):
     """
     Custom Attributes for Setup
@@ -42,6 +50,7 @@ class Account(db.Document):
     typ = db.StringField(choices=account_types)
     is_master = db.BooleanField(default=False)
     is_object = db.BooleanField(default=False)
+    object_type = db.BooleanField(choices=object_types)
 
     address = db.StringField()
     username = db.StringField()
