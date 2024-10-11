@@ -66,7 +66,7 @@ class Plugin():
         log.log(self.name, source=self.source, details=self.log_details)
 
 
-    def inner_request(self, method, url, data, headers=None):
+    def inner_request(self, method, url, data, headers=None, auth=None):
         """
         Requst Module for all HTTP Requests
         by Plugin
@@ -76,10 +76,15 @@ class Plugin():
 
         method = method.lower()
         payload = {
-            'headers': headers,
             'verify': self.verify,
             'timeout': app.config['HTTP_REQUEST_TIMEOUT'],
         }
+
+        if headers:
+            payload['headers'] = headers
+        if auth:
+            payload['auth'] = auth
+
         if headers and headers.get('Content-Type') == "application/json" and data:
             payload['json'] = data
         elif data:
