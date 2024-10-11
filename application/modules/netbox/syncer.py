@@ -145,7 +145,7 @@ class SyncNetbox(Plugin):
                             'sub_entries': ['manufacturer'],
                             'fallback': 'CMDB Syncer Not defined',
                            },
-            'device_role': {'url': 'dcim/device-roles/',
+            'role': {'url': 'dcim/device-roles/',
                             'name_tag': 'name',
                             'fallback': 'CMDB Syncer Not defined',
                            },
@@ -215,7 +215,7 @@ class SyncNetbox(Plugin):
         payload = {
           "name": db_host.hostname,
           "device_type": 1,
-          "device_role": 1,
+          "role": 1,
           "tenant": None,
           "platform": None,
           "serial": None,
@@ -494,7 +494,7 @@ class SyncNetbox(Plugin):
                 if not host_netbox_id:
                     logger.debug(payload)
                     logger.debug(create_response)
-                    raise Exception(f"Cannot create Host: {create_response}")
+                    print(f"Cannot create Host: {create_response}")
             if 'update_interfaces' in custom_rules:
                 self.update_interfaces(host_netbox_id, all_attributes['all'])
 
