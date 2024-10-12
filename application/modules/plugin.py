@@ -19,6 +19,11 @@ from syncerapi.v1 import (
     get_account,
 )
 
+class ResponseDataException(Exception):
+    """
+    Raise in case of invalid responses
+    """
+
 
 class Plugin():
     """
@@ -66,7 +71,7 @@ class Plugin():
         log.log(self.name, source=self.source, details=self.log_details)
 
 
-    def inner_request(self, method, url, data, headers=None, auth=None):
+    def inner_request(self, method, url, data=None, headers=None, auth=None):
         """
         Requst Module for all HTTP Requests
         by Plugin

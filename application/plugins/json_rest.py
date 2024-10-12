@@ -5,13 +5,14 @@ JSON Plugin
 #pylint: disable=too-many-arguments, logging-fstring-interpolation
 import json
 import ast
+from requests.exceptions import JSONDecodeError
+from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 import click
 
-from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 from application import app, logger
 from application.models.host import Host
-from application.modules.plugin import Plugin
+from application.modules.plugin import Plugin, ResponseDataException
 from application.modules.debug import ColorCodes
 from application.helpers.cron import register_cronjob
 
@@ -37,11 +38,14 @@ class RestImport(Plugin):
             if auth_type.lower() == 'digest':
                 auth = HTTPDigestAuth(self.config['username'], self.config['password'])
 
-        response = self.inner_requests('get',
+        response = self.inner_request('get',
                                        url=self.config['address'],
                                        headers=headers,
                                        auth=auth)
-        return response.json()
+        try:
+            return response.json()
+        except JSONDecodeError as error:
+            raise ResponseDataException(f"{response.text}\n Response is no valid JSON!") from error
 
     def get_from_file(self):
         """
@@ -57,8 +61,6 @@ class RestImport(Plugin):
         """
         Import Hosts
         """
-
-
         if self.config.get('data_key'):
             data = data[self.config['data_key']]
         for entry in data:
