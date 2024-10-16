@@ -31,6 +31,7 @@ object_types = [
     ('host', 'Host Object'),
     ('group', 'Group Object'),
     ('network', 'Network Object'),
+    ('application', 'Application'),
 ]
 
 
