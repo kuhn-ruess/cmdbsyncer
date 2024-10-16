@@ -54,22 +54,98 @@ class JDisc(Plugin):
         )
         return response.json()['data']['authentication']['login']['accessToken']
 
-    def _inner_import(self):
-        """
-        Connect to Jdisc"
-        """
 
-        access_token = self._obtain_access_token()
+    def get_custom_device_query(self):
+        """
+        Return Custom Query for Devices
+        """
+        return """
+         devices {
+            findAll {
+              id
+              name
+              computername
+              type
+              manufacturer
+              serialNumber
+              hwVersion
+              assetTag
+              operatingSystem {
+                osFamily
+                osVersion
+                rawVersion
+                description
+                kernelVersion
+              }
+              partNumber
+              systemBoard {
+                id
+              }
+              mainIPAddress
+              mainIP4Transport {
+                hostnames
+                ipAddress
+                subnetMask
+                networkInterface {
+                  physicalAddress
+                  index
+                  extendedDescription
+                  operationalStatus
+                  speed
+                }
+                network {
+                  name
+                  nameManuallyConfigured
+                  networkBaseAddress
+                  subnetMask
+                }
+              }
+              mainIP6Transport {
+                ipAddress
+                configuredPrefixLength
+                network {
+                  name
+                  nameManuallyConfigured
+                  prefixLength
+                  networkBaseAddress
+                }
+              }
+            }
+          }
+    """
+
+    def get_custom_fields_query(self, mode):
+        """
+        Build User Defined Payload
+        """
         fields = [x.strip() for x in self.config['fields'].split(',')]
         if 'name' not in fields:
             fields.append('name')
         fields = "\n".join(fields)
-        graphql_query = """{
-        devices {
+        return """{
+        """+mode+""" {
             findAll {"""+fields+"""
             }
           }
         }"""
+
+    def _inner_import(self):
+        """
+        Connect to Jdisc"
+        """
+        access_token = self._obtain_access_token()
+
+        query_mode = self.config.get('mode', 'devices')
+        fields = self.config.get('fields', '')
+        custom_query = self.config.get('custom_query')
+
+
+        if custom_query:
+            graphql_query = custom_query
+        elif query_mode == 'devices' and fields == "default":
+            graphql_query = self.get_custom_device_query()
+        else:
+            graphql_query = self.get_custom_fields_query(query_mode)
 
         data = {'query': graphql_query}
         auth_header = f'Bearer {access_token}'
@@ -83,7 +159,7 @@ class JDisc(Plugin):
                   },
                   data=data,
         )
-        return response.json()['data']['devices']['findAll']
+        return response.json()['data'][query_mode]['findAll']
 
 
     def jdisc_import(self):
