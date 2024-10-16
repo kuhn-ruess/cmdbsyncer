@@ -39,7 +39,7 @@ class CustomEntry(db.EmbeddedDocument):
     Custom Attributes for Setup
     """
     name = db.StringField(max_len=155)
-    value = db.StringField(max_len=155)
+    value = db.StringField()
 
 class Account(db.Document):
     """

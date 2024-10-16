@@ -47,7 +47,6 @@ class AccountModelView(DefaultModelView):
                 },
                     'form_overrides' : {
                         'name': StringField,
-                        'value': StringField,
                     },
                     'form_rules' : [
                         rules.HTML("<div class='form-row'><div class='col-3'>"),
@@ -227,8 +226,10 @@ class AccountModelView(DefaultModelView):
                 ('address', 'https://SERVER/graphql'),
             ]
             default_fields = [
-                ('fields', "name, type"),
+                ('fields', "default"),
                 ('rewrite_hostname', ""),
+                ('mode', "devices"),
+                ('custom_query', ""),
             ]
 
         if default_fields:
