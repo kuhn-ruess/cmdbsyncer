@@ -96,7 +96,9 @@ class Host(db.Document):
         """
         Build a new Hostname based on Jinja Template
         """
-        return render_jinja(template, HOSTNAME=old_name, **attributes)
+        if template:
+            return render_jinja(template, HOSTNAME=old_name, **attributes)
+        return old_name
 
     def lock_to_folder(self, folder_name):
         """

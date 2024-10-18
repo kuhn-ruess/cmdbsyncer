@@ -226,10 +226,7 @@ class AccountModelView(DefaultModelView):
                 ('address', 'https://SERVER/graphql'),
             ]
             default_fields = [
-                ('fields', "default"),
                 ('rewrite_hostname', ""),
-                ('mode', "devices"),
-                ('custom_query', ""),
             ]
 
         if default_fields:
