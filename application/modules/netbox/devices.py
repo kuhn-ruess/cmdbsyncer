@@ -1,107 +1,33 @@
 """
-Create Objects in Netbox
+Create Devices in Netbox
 """
 #pylint: disable=no-member, too-many-locals, import-error
-import requests
+
+from application.modules.netbox.netbox import SyncNetbox
 
 from application.models.host import Host
 from application import app, log, logger
 from application.modules.debug import ColorCodes as CC
-from application.modules.plugin import Plugin
-
-if app.config.get("DISABLE_SSL_ERRORS"):
-    from urllib3.exceptions import InsecureRequestWarning
-    from urllib3 import disable_warnings
-    disable_warnings(InsecureRequestWarning)
 
 
-class SyncNetbox(Plugin):
+class SyncDevices(SyncNetbox):
     """
-    Netbox Update/ Get Operations
+    Netbox Device Operations
     """
-#   .-- Init
-    def __init__(self, debug):
-        """
-        Inital
-        """
-        super().__init__()
-        self.log = log
-        self.print_debug = debug
+    name = "Netbox Device Sync"
+    source = "netbox_device_syn"
+
+    def __init__(self, account):
         self.cache = {}
-        self.interface_cache = {}
-#.
+
+        super().__init__(account)
+
 #   .-- Get Host Data
     def get_host_data(self, db_host, attributes):
         """
         Return commands for fullfilling of the netbox params
         """
         return self.actions.get_outcomes(db_host, attributes)
-#.
-#   . -- Request
-    def request(self, path, method='GET', data=None, additional_header=None):
-        """
-        Handle Request to Netbox
-        """
-        address = self.config['address']
-        password = self.config['password']
-        url = f'{address}/api/{path}'
-        headers = {
-            'Authorization': f"Token {password}",
-            'Content-Type': 'application/json',
-        }
-        if additional_header:
-            headers.update(additional_header)
-        try:
-            method = method.lower()
-            logger.debug(f"Request ({method.upper()}) to {url}")
-            logger.debug(f"Request Json Body: {data}")
-            #pylint: disable=missing-timeout
-            if method == 'get':
-                response = requests.get(url,
-                                        headers=headers,
-                                        params=data,
-                                        verify=self.verify,
-                                       )
-            elif method == 'post':
-                response = requests.post(url, json=data, headers=headers, verify=self.verify)
-            elif method == 'patch':
-                response = requests.patch(url, json=data, headers=headers, verify=self.verify)
-            elif method == 'put':
-                response = requests.put(url, json=data, headers=headers, verify=self.verify)
-            elif method == 'delete':
-                response = requests.delete(url, headers=headers, verify=self.verify)
-                # Checkmk gives no json response here, so we directly return
-                return True, response.headers
-            logger.debug(f"Response Text: {response.text}")
-            if response.status_code == 403:
-                raise Exception("Invalid Login, you may need to create a login token")
-            if response.status_code >= 299:
-                print("Error in response, enable debug_log to see more")
-            try:
-                response_json = response.json()
-            except:
-                raise
-            if 'results' in response_json:
-                results = []
-                results += response_json['results']
-                if response_json['next']:
-                    total = response_json['count']
-                    request_count = int(round(total/len(response_json['results']),0)) + 1
-                    print(f" -- Require {request_count} requests. {total} objects in total")
-                    counter = 0
-                    next_page = response_json['next']
-                    while next_page:
-                        counter += 1
-                        process = 100.0 * counter / request_count
-                        # pylint: disable=line-too-long
-                        print(f"   {CC.OKGREEN}({process:.0f}%)...{counter}/{request_count}{CC.ENDC}")
-                        sub_response= requests.get(next_page, headers=headers, verify=self.verify).json()
-                        next_page = sub_response['next']
-                        results += sub_response['results']
-                return results
-            return response_json
-        except (ConnectionResetError, requests.exceptions.ProxyError):
-            return {}
 #.
 #   .-- Get Devices
     def get_devices(self, syncer_only=False):
@@ -115,19 +41,6 @@ class SyncNetbox(Plugin):
             url += f"&cf_cmdbsyncer_id={self.config['_id']}"
         devices = self.request(url, "GET")
         return {x['display']:x for x in devices}
-#.
-#   .-- Get VMS
-    def get_vms(self, syncer_only=False):
-        """
-        Read full list of vms
-        """
-        print(f"{CC.OKGREEN} -- {CC.ENDC}Netbox: "\
-              f"Read all VMs (Filter only CMDB Syncer: {syncer_only})")
-        url = 'virtualization/virtual-machines/?limit=10000'
-        if syncer_only:
-            url += f"&cf_cmdbsyncer_id={self.config['_id']}"
-        vms = self.request(url, "GET")
-        return {x['display']:x for x in vms}
 #.
 #   .-- Create Netbox Sub Entry Types
     def create_sub_entry(self, endpoint, value, inventory):
@@ -301,147 +214,6 @@ class SyncNetbox(Plugin):
                 keys.append(key)
         return keys
 #.
-#   .-- Get Interface Payload
-    def get_interface_payload(self, host_id, if_attributes):
-        """ Return Interface Payload
-        """
-        status_map = {
-            'up' : True,
-        }
-
-        # @Todo: Detect Type:
-        interface_type = "other"
-        if if_attributes['interfaceType'] == "Virtual":
-            interface_type = 'virtual'
-
-
-        duplex_modes = {
-            'FullDuplex' : 'full',
-            'HalfDuplex' : 'half',
-        }
-        duplex_mode = duplex_modes.get(if_attributes.get('duplex'), 'auto')
-
-        access_modes = {
-            'access': 'access',
-            'trunk': 'tagged',
-        }
-        access_mode = access_modes.get(if_attributes.get('portMode'))
-
-        interface_speed = int(if_attributes.get('speed',0))
-
-        payload = {
-          "device": host_id,
-          #"module": 0,
-          "name": if_attributes['portName'],
-          #"label": "string",
-          "type": interface_type,
-          "enabled": status_map.get(if_attributes['adminStatus'].lower(), False),
-          #"parent": 0,
-          #"bridge": 0,
-          #"lag": 0,
-          "speed": interface_speed,
-          "duplex": duplex_mode,
-          #"wwn": "string",
-          #"mgmt_only": true,
-          "description": if_attributes.get('description'),
-          #"rf_role": "ap",
-          #"rf_channel": "2.4g-1-2412-22",
-          #"poe_mode": "pd",
-          #"poe_type": "type1-ieee802.3af",
-          #"rf_channel_frequency": 0,
-          #"rf_channel_width": 0,
-          #"tx_power": 127,
-          #"untagged_vlan": 0,
-          #"tagged_vlans": [
-          #  0
-          #],
-          #"mark_connected": true,
-          #"cable": {
-          #  "label": "string"
-          #},
-          #"wireless_link": 0,
-          #"wireless_lans": [
-          #  0
-          #],
-          #"vrf": 0,
-          #"tags": [
-          #  {
-          #    "name": "string",
-          #    "slug": "string",
-          #    "color": "string"
-          #  }
-          #],
-          #"custom_fields": {}
-        }
-        if if_attributes['macAddress']:
-            payload['mac_address'] = if_attributes['macAddress'].upper()
-        if access_mode:
-            payload["mode"] =  access_mode
-        if mtu := if_attributes.get('mtu'):
-            payload["mtu"] = int(mtu)
-        if self.print_debug:
-            print(payload)
-        return payload
-#.
-#   .-- Create Interface
-    def create_interface(self, host_id, payload):
-        """
-        Create Interface in Netbox
-        """
-
-#.
-#   .-- build interface_list
-    def get_interface_list_by_attributes(self, attributes):
-        """
-        Return List of Interfaces
-        """
-        interfaces = {}
-        for attribute, value in attributes.items():
-            # @TODO: Build more general approach
-            # Better RegEx Rewrites needed for that
-            if attribute.startswith('cisco_dnainterface'):
-                splitted = attribute.split('_')
-                interface_id = splitted[-2]
-                field_name = splitted[-1]
-                interfaces.setdefault(interface_id, {})
-                interfaces[interface_id][field_name] = value
-        return interfaces
-
-
-#.
-#   .-- Update Interfaces
-    def update_interfaces(self, host_id, attributes):
-        """
-        Update Interfaces based on Attributes
-        """
-        url = f'dcim/interfaces?device_id={host_id}'
-        device_interfaces = {}
-        for entry in self.request(url, "GET"):
-            # We need some rewrite here to match the payloads of the api
-            del entry['device']
-            entry['name'] = entry['display']
-            device_interfaces[entry['name']] = entry
-
-        url = 'dcim/interfaces/'
-        interfaces = self.get_interface_list_by_attributes(attributes)
-        for _interface, interface_data in interfaces.items():
-            payload = self.get_interface_payload(host_id, interface_data)
-            port_name = interface_data['portName']
-            if port_name not in device_interfaces:
-                print(f"{CC.OKBLUE} *{CC.ENDC} Create Interface {port_name}")
-                create_response = self.request(url, "POST", payload)
-                if self.print_debug:
-                    print(f"Debug: Created Interface: {create_response}")
-            elif update_keys := self.need_update(device_interfaces[port_name], payload):
-                update_payload = {}
-                for key in update_keys:
-                    update_payload[key] = payload[key]
-                print(f"{CC.OKGREEN} *{CC.ENDC} Update Interface {port_name} ({update_keys})")
-                url = f'dcim/interfaces/{device_interfaces[port_name]["id"]}/'
-                self.request(url, "PATCH", update_payload)
-
-        print(f"{CC.OKGREEN} *{CC.ENDC} Check Sync of Interfaces")
-#.
 #   .--- Export Hosts
     def export_hosts(self):
         """
@@ -488,13 +260,13 @@ class SyncNetbox(Plugin):
                     print(f"{CC.OKBLUE} *{CC.ENDC} Netbox already up to date")
             else:
                 ### Create
-                print(f"{CC.OKGREEN} *{CC.ENDC} Create Host")
+                print(f"{CC.OKGREEN} *{CC.ENDC} Create Device")
                 create_response = self.request(url, "POST", payload)
                 host_netbox_id = create_response.get('id')
                 if not host_netbox_id:
                     logger.debug(payload)
                     logger.debug(create_response)
-                    print(f"Cannot create Host: {create_response}")
+                    print(f"Cannot create Device: {create_response}")
             if 'update_interfaces' in custom_rules:
                 self.update_interfaces(host_netbox_id, all_attributes['all'])
 
@@ -537,18 +309,6 @@ class SyncNetbox(Plugin):
             host_obj = Host.get_host(hostname)
             print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
             host_obj.update_host(labels)
-            do_save = host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
-
-        for hostname, data in self.get_vms().items():
-            labels = extract_data(data)
-            if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], labels)
-            host_obj = Host.get_host(hostname)
-            print(f"\n{CC.HEADER}Process VM: {hostname}{CC.ENDC}")
-            host_obj.update_host(labels)
-            do_save = host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)
             if do_save:
                 host_obj.save()
