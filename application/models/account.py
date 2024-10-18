@@ -27,7 +27,8 @@ account_types = [
 
 
 object_types = [
-    ('undefined', 'Default'),
+    ('auto', 'Autodetect by Plugin'),
+    ('undefined', 'Undefined'),
     ('host', 'Host Object'),
     ('group', 'Group Object'),
     ('network', 'Network Object'),

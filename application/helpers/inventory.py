@@ -9,7 +9,7 @@ from syncerapi.v1.core import (
     app_config,
 )
 
-def _innter_inventorize(host_obj, labels, key, config):
+def inventorize_host(host_obj, labels, key, config):
     """
     Add Inventorize Information to host
     """
@@ -19,6 +19,9 @@ def _innter_inventorize(host_obj, labels, key, config):
         host_obj.save()
     else:
         print(f" {CC.WARNING} * {CC.ENDC} Syncer does not have this Host")
+
+
+
 
 def run_inventory(config, objects):
     """
@@ -47,10 +50,10 @@ def run_inventory(config, objects):
 
         if config.get('inventorize_match_by_domain'):
             for host_obj in Host.objects(hostname__endswith=hostname):
-                _innter_inventorize(host_obj, labels, inv_key, config)
+                inventorize_host(host_obj, labels, inv_key, config)
         else:
             host_obj = Host.get_host(hostname, create=False)
-            _innter_inventorize(host_obj, labels, inv_key, config)
+            inventorize_host(host_obj, labels, inv_key, config)
 
     if collected_by_key:
         print(f"{CC.OKBLUE}Run 2: {CC.ENDC} Add extra collected data")
@@ -58,4 +61,4 @@ def run_inventory(config, objects):
         for hostname, subs in collected_by_key.items():
             # Loop ALL hosts to delete empty collections if not found anymore
             host_obj = Host.get_host(hostname, create=False)
-            _innter_inventorize(host_obj, dict(enumerate(subs)), f"{inv_key}_collection", False)
+            inventorize_host(host_obj, dict(enumerate(subs)), f"{inv_key}_collection", False)
