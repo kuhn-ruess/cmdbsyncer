@@ -55,6 +55,8 @@ class Plugin():
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
+            if not self.config:
+                raise ValueError("Account Invalid or not found")
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 
 
@@ -114,6 +116,8 @@ class Plugin():
         #        resp = requests.get(url, **payload)
         #    case 'post':
         #        resp = requests.post(url, **payload)
+        #    case 'patch':
+        #        resp = requests.patch(url, **payload)
         #    case 'put':
         #        resp = requests.put(url, **payload)
         #    case 'delete':
@@ -127,6 +131,8 @@ class Plugin():
             resp = requests.get(url, **payload)
         elif method == 'post':
             resp = requests.post(url, **payload)
+        elif method == 'patch':
+            resp = requests.patch(url, **payload)
         elif method == 'put':
             resp = requests.put(url, **payload)
         elif method == 'delete':
