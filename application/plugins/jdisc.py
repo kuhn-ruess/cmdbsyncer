@@ -65,7 +65,7 @@ def jdisc_applications_import(account):
 @click.argument('account')
 def cli_jdisc_application_import(account):
     """Import Applications from JDisc"""
-    jdisc_device_import(account)
+    jdisc_applications_import(account)
 
 
 

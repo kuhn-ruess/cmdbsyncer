@@ -73,7 +73,7 @@ class JdiscDevices(JDisc):
           }
     """
 
-    def device_import(self):
+    def import_devices(self):
         """
         JDisc Import
         """
