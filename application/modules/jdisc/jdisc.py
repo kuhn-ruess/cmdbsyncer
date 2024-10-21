@@ -55,17 +55,19 @@ class JDisc(Plugin):
     def handle_object(self, objects, obj_type):
         """
         Handle host actions """
-        print(f" {cc.OKGREEN}* {cc.ENDC} Created Needed objects")
         for found_obj in objects:
+            found_obj = found_obj[obj_type]
             if not 'name' in found_obj:
                 continue
             name = found_obj['name']
             del found_obj['name']
             host_obj = Host.get_host(name)
-            host_obj.set_account(self.config)
+            do_save=host_obj.set_account(account_dict=self.config)
             host_obj.is_object = True
             host_obj.object_type = obj_type
             host_obj.set_labels(found_obj)
+            host_obj.save()
+            print(f" {cc.OKGREEN}* {cc.ENDC} Created object {name}")
 
 
     #def get_custom_fields_query(self, mode):

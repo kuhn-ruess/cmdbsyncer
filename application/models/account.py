@@ -33,6 +33,7 @@ object_types = [
     ('group', 'Group Object'),
     ('network', 'Network Object'),
     ('application', 'Application'),
+    ('contact', 'Contact'),
 ]
 
 

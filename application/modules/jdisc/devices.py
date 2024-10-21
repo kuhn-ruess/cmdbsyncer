@@ -6,6 +6,7 @@ from application.modules.jdisc.jdisc import JDisc
 from syncerapi.v1.inventory import run_inventory
 
 from syncerapi.v1 import (
+    Host,
     cc,
 )
 
@@ -19,7 +20,8 @@ class JdiscDevices(JDisc):
         Return Query for Devices
         """
         return """
-         devices {
+        query test {
+        devices {
             findAll {
               id
               name
@@ -69,15 +71,28 @@ class JdiscDevices(JDisc):
                   networkBaseAddress
                 }
               }
+              operatingSystem {
+                installedApplications {
+                  application {
+                    id
+                    name
+                    manufacturer
+                    version
+                  }
+                  installationPath
+                  installationDate
+                }
+              }
             }
           }
+        }
     """
 
     def import_devices(self):
         """
         JDisc Import
         """
-        for labels in self.run_query()['devices']:
+        for labels in self.run_query()['devices']['findAll']:
             if 'name' not in labels:
                 continue
             hostname = labels['name']
