@@ -21,23 +21,25 @@ class JdiscApplications(JDisc):
         Return Query for Devices
         """
         return """
-            devices {
-              findAll {
-                id
-                name
-                operatingSystem {
-                  installedApplications {
-                    application {
-                      id
-                      name
-                      manufacturer
-                      version
+            query test {
+                devices {
+                  findAll {
+                    id
+                    name
+                    operatingSystem {
+                      installedApplications {
+                        application {
+                          id
+                          name
+                          manufacturer
+                          version
+                        }
+                        installationPath
+                        installationDate
+                      }
                     }
-                    installationPath
-                    installationDate
                   }
                 }
-              }
             }
     """
 
@@ -46,6 +48,6 @@ class JdiscApplications(JDisc):
         JDisc Import
         """
         already_found = []
-        for labels in self.run_query()['devices']:
+        for labels in self.run_query()['devices']['findAll']:
             applications =  labels['operatingSystem']['installedApplications']
             self.handle_object(applications, 'application')
