@@ -89,7 +89,7 @@ class JDisc(Plugin):
         """
         access_token = self._obtain_access_token()
 
-        graphql_query = custom_query
+        graphql_query = self.get_query()
 
         data = {'query': graphql_query}
         auth_header = f'Bearer {access_token}'
