@@ -173,6 +173,15 @@ class Host(db.Document):
         return self.labels
 
 
+    def set_inventory_attribute(self, key, value):
+        """
+        Set a Singe Attribute to the Inventory and Save it
+        """
+
+        self.inventory[key] = value
+        self.save()
+
+
     def update_inventory(self, key, new_data, config=False):
         """
         Updates all inventory entries, with names who starting with given key.

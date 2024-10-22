@@ -18,7 +18,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.8 Daily 21.10.2024'
+VERSION = '3.8 Daily 22.10.2024'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -255,12 +255,19 @@ admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
 admin.add_sub_category(name="Netbox", parent_name="Modules")
 
 from application.modules.netbox.views import NetboxCustomAttributesView
-from application.modules.netbox.models import NetboxCustomAttributes, \
-                                                NetboxRewriteAttributeRule
+from application.modules.netbox.models import (NetboxCustomAttributes, 
+                                                NetboxRewriteAttributeRule,
+                                                NetboxIpamIpaddressattributes,
+                                               NetboxDcimInterfaceAttributes,
+                                              )
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
-                                    name="Netbox Device Fields", category="Netbox"))
+                                    name="Netbox DCIM Device", category="Netbox"))
+admin.add_view(NetboxCustomAttributesView(NetboxDcimInterfaceAttributes,\
+                                    name="Netbox DCIM Interfaces", category="Netbox"))
+admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
+                                    name="Netbox IPAM IP Addresses", category="Netbox"))
 #.
 #   .-- i-doit
 admin.add_sub_category(name="i-doit", parent_name="Modules")

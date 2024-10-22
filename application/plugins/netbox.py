@@ -10,11 +10,13 @@ from application.modules.debug import attribute_table
 
 from application.modules.rule.rewrite import Rewrite
 
-from application.modules.netbox.models import NetboxCustomAttributes, NetboxRewriteAttributeRule
-from application.modules.netbox.rules import NetboxVariableRule
+from application.modules.netbox.models import *
+from application.modules.netbox.rules import *
+
 from application.modules.netbox.devices import SyncDevices
 from application.modules.netbox.vms import SyncVMS
 from application.modules.netbox.ipam import SyncIPAM
+from application.modules.netbox.interfaces import SyncInterfaces
 
 from syncerapi.v1 import (
     register_cronjob,
@@ -22,7 +24,7 @@ from syncerapi.v1 import (
     Host,
 )
 
-def load_rules():
+def load_device_rules():
     """
     Cache all needed Rules for operation
     """
@@ -52,7 +54,7 @@ def cli_netbox():
 def netbox_device_export(account):
     """Sync Objects with Netbox"""
     try:
-        rules = load_rules()
+        rules = load_device_rules()
         syncer = SyncDevices(account)
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
@@ -108,7 +110,19 @@ def cli_netbox_vm_import(account):
 def netbox_ip_sync(account):
     """Import Devices from Netbox"""
     try:
+        attribute_rewrite = Rewrite()
+        attribute_rewrite.cache_name = 'netbox_rewrite'
+
+        attribute_rewrite.rules = \
+                NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+        
+        netbox_rules = NetboxIpamIPaddressRule()
+        netbox_rules.rules = NetboxIpamIpaddressattributes.objects(enabled=True).order_by('sort_field')
+
         syncer = SyncIPAM(account)
+        syncer.rewrite = attribute_rewrite
+        syncer.actions = netbox_rules
+
         syncer.sync_ips()
     except Exception as error_obj: #pylint:disable=broad-except
         print(f'C{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -116,8 +130,38 @@ def netbox_ip_sync(account):
 @cli_netbox.command('export_ips')
 @click.argument("account")
 def cli_netbox_ip_syn(account):
-    """Import Devices from Netbox"""
+    """Export IPAM IPs"""
     netbox_ip_sync(account)
+#.
+
+#   .-- Command: Export Interfaces
+def netbox_interface_sync(account):
+    """Export Interfaces to Netbox"""
+    try:
+        attribute_rewrite = Rewrite()
+        attribute_rewrite.cache_name = 'netbox_rewrite'
+
+        attribute_rewrite.rules = \
+                NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+        
+        netbox_rules = NetboxDevicesInterfaceRule()
+        netbox_rules.rules = NetboxDcimInterfaceAttributes.objects(enabled=True).order_by('sort_field')
+
+        syncer = SyncInterfaces(account)
+        syncer.rewrite = attribute_rewrite
+        syncer.actions = netbox_rules
+
+        syncer.sync_interfaces()
+    except KeyError as error_obj: #pylint:disable=broad-except
+        print(f'C{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
+    except Exception as error_obj: #pylint:disable=broad-except
+        print(f'C{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('export_interfaces')
+@click.argument("account")
+def cli_netbox_interface(account):
+    """Export Interfaces of Devices"""
+    netbox_interface_sync(account)
 #.
 
 
@@ -128,7 +172,7 @@ def netbox_host_debug(hostname):
     """Debug Host Rules"""
     print(f"{cc.HEADER} ***** Run Rules ***** {cc.ENDC}")
 
-    rules = load_rules()
+    rules = load_device_rules()
 
     syncer = SyncDevices(False)
     syncer.debug = True
