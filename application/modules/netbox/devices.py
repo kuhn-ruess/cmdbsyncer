@@ -22,13 +22,6 @@ class SyncDevices(SyncNetbox):
 
         super().__init__(account)
 
-#   .-- Get Host Data
-    def get_host_data(self, db_host, attributes):
-        """
-        Return commands for fullfilling of the netbox params
-        """
-        return self.actions.get_outcomes(db_host, attributes)
-#.
 #   .-- Get Devices
     def get_devices(self, syncer_only=False):
         """
@@ -198,22 +191,6 @@ class SyncDevices(SyncNetbox):
         logger.debug(f"Payload: {payload}")
         return payload
 #.
-#   .-- Device Need Update?
-    def need_update(self, target_payload, main_payload):
-        """
-        Compare Request Payload with Device Response
-        """
-        keys = []
-        for key, value in main_payload.items():
-            target_value = target_payload.get(key)
-            if isinstance(target_value, dict):
-                if 'cmdbsyncer_id' in target_value:
-                    continue
-                target_value = target_value.get('id')
-            if target_value and str(value) != str(target_value):
-                keys.append(key)
-        return keys
-#.
 #   .--- Export Hosts
     def export_hosts(self):
         """
@@ -269,6 +246,9 @@ class SyncDevices(SyncNetbox):
                     print(f"Cannot create Device: {create_response}")
             if 'update_interfaces' in custom_rules:
                 self.update_interfaces(host_netbox_id, all_attributes['all'])
+
+            attr_name = f"{self.config['name']}_device_id"
+            db_host.set_inventory_attribute(attr_name, host_netbox_id)
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
         for hostname, host_data in current_netbox_devices.items():

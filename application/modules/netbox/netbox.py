@@ -9,6 +9,30 @@ class SyncNetbox(Plugin):
     """
     Netbox Base Class
     """
+
+#   .-- Get Host Data
+    def get_host_data(self, db_host, attributes):
+        """
+        Return commands for fullfilling of the netbox params
+        """
+        return self.actions.get_outcomes(db_host, attributes)
+#.
+#   .-- Object Need Update?
+    def need_update(self, target_payload, main_payload):
+        """
+        Compare Request Payload with Device Response
+        """
+        keys = []
+        for key, value in main_payload.items():
+            target_value = target_payload.get(key)
+            if isinstance(target_value, dict):
+                if 'cmdbsyncer_id' in target_value:
+                    continue
+                target_value = target_value.get('id')
+            if target_value and str(value) != str(target_value):
+                keys.append(key)
+        return keys
+#.
     def request(self, path, method='GET', data=None, additional_header=None):
         """
         Handle Request to Netbox
@@ -31,10 +55,12 @@ class SyncNetbox(Plugin):
             if response.status_code == 403:
                 raise Exception("Invalid Login, you may need to create a login token")
             if response.status_code >= 299:
+                print(response.text)
                 print("Error in response, enable debug_log to see more")
             try:
                 response_json = response.json()
             except:
+                print(response.text)
                 raise
             if 'results' in response_json:
                 results = []

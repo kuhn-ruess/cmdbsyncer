@@ -3,12 +3,30 @@ Syncers Jinja Functions
 """
 #pylint: disable=logging-fstring-interpolation
 import ast
+import ipaddress
 import jinja2
 from jinja2 import StrictUndefined
 
 from application import logger
 from application.modules.checkmk.helpers import cmk_cleanup_tag_id, cmk_cleanup_hostname
 
+
+
+def syncer_eval(string, default=None):
+    """
+    Evals given object
+    """
+    try:
+        return ast.literal_eval(string)
+    except ValueError:
+        return default
+
+def get_ip4_network(ip_string):
+    """
+    Converts 192.178.2.55/255.255.255.0 to 192.178.2.0/24
+    """
+    net = ipaddress.ip_interface(ip_string)
+    return net.network
 
 def get_list(input_list):
     """
@@ -61,6 +79,8 @@ def render_jinja(value, mode="ignore", **kwargs):
         'merge_list_of_dicts': merge_list_of_dicts,
         'cmk_cleanup_tag_id': cmk_cleanup_tag_id,
         'cmk_cleanup_hostname': cmk_cleanup_hostname,
+        'get_ip4_network': get_ip4_network,
+        'eval': syncer_eval,
 
     })
 
