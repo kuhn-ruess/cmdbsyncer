@@ -391,7 +391,7 @@ class CheckmkSite(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
-    server_address = db.StringField(required=True, unique=True)
+    server_address = db.StringField(required=True)
     settings_master = db.ReferenceField(document_type="CheckmkSettings", required=True)
 
     enabled = db.BooleanField()
