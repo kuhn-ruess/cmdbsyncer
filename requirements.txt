@@ -13,3 +13,4 @@ mongoengine==0.29.1
 pyotp==2.9.0
 requests==2.32.3
 rich==13.9.2
+uWSGI
