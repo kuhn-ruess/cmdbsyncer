@@ -837,6 +837,7 @@ class SyncCMK2(CMK2):
             update_body = {
                 'target_folder': folder.replace('/','~')
             }
+            header = {}
             try:
                 _, header = self.request(update_url, method="POST",
                              data=update_body,
