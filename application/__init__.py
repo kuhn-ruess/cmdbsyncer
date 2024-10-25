@@ -263,11 +263,11 @@ from application.modules.netbox.models import (NetboxCustomAttributes,
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
-                                    name="Netbox DCIM Device", category="Netbox"))
+                                    name="DCIM Device", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxDcimInterfaceAttributes,\
-                                    name="Netbox DCIM Interfaces", category="Netbox"))
+                                    name="DCIM Interfaces", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
-                                    name="Netbox IPAM IP Addresses", category="Netbox"))
+                                    name="IPAM IP Addresses", category="Netbox"))
 #.
 #   .-- i-doit
 admin.add_sub_category(name="i-doit", parent_name="Modules")
