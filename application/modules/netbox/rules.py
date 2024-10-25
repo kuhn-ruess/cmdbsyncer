@@ -43,6 +43,8 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
                     new_value = False
                 else:
                     new_value = True
+
+
             outcomes[action] = new_value
         return outcomes
 
