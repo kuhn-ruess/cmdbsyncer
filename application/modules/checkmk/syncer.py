@@ -273,6 +273,9 @@ class SyncCMK2(CMK2):
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
         print(f"{CC.OKBLUE} -- {CC.ENDC}Check if we need to cleanup hosts")
+        if app.config.get['CMK_DONT_DELETE_HOSTS']:
+            print(f"{CC.WARNING} *{CC.ENDC} Deletion of Hosts is disabled by setting")
+            return
         delete_list = []
         for host, host_data in self.checkmk_hosts.items():
             host_labels = host_data['extensions']['attributes'].get('labels',{})
