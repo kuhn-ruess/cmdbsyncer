@@ -61,7 +61,7 @@ def netbox_device_export(account):
         syncer.actions = rules['actions']
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
-        print(f'C{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
         raise
 
 @cli_netbox.command('export_hosts')
@@ -80,7 +80,7 @@ def netbox_device_import(account):
         syncer = SyncDevices(account)
         syncer.import_hosts()
     except Exception as error_obj: #pylint:disable=broad-except
-        print(f'C{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('import_hosts')
 @cli_netbox.command('import_devices')
@@ -97,7 +97,7 @@ def netbox_vm_import(account):
         syncer = SyncVMS(account)
         syncer.import_hosts()
     except Exception as error_obj: #pylint:disable=broad-except
-        print(f'C{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('import_vms')
 @click.argument("account")
@@ -125,7 +125,8 @@ def netbox_ip_sync(account):
 
         syncer.sync_ips()
     except Exception as error_obj: #pylint:disable=broad-except
-        print(f'C{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+        raise
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_ips')
 @click.argument("account")
@@ -153,9 +154,9 @@ def netbox_interface_sync(account):
 
         syncer.sync_interfaces()
     except KeyError as error_obj: #pylint:disable=broad-except
-        print(f'C{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
+        print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
-        print(f'C{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_interfaces')
 @click.argument("account")

@@ -88,9 +88,11 @@ class NetboxCustomAttributes(db.Document):
     }
 
 netbox_ipam_ipaddress_outcome_types = [
-  ('ip_address', 'IP Address (Example 127.0.0.1/24)'),
+  ('ip_address', 'IPv4 or IPv6 with Network Address (Example: 127.0.0.1/24)'),
+  ('ip_family', 'Family of IP: ipv6 or ipv4'),
   ('assigned', 'Is Assigned (bool)'),
   ('assigned_obj_id', 'Assigned Object ID'),
+  ('assigned_obj_type', 'Assigned Object Type'),
   ('ignore_ip', 'Ignore matching objects for sync'),
 ]
 class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
@@ -128,7 +130,8 @@ class NetboxIpamIpaddressattributes(db.Document):
     }
 
 netbox_device_interface_outcome_types = [
-        ('device', 'ID of Assigned Device'),
+        ('device', '(required) ID of Assigned Device'),
+        ('ip_address', '(required) IP Address used by Interface'),
         ('portName', 'Port Name'),
         ('macAddress', 'Mac Address'),
         ('description', 'Description'),

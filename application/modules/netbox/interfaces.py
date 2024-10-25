@@ -117,14 +117,18 @@ class SyncInterfaces(SyncNetbox):
 #.
 
 #   .-- Update Device Interfaces
-    def update_interfaces(self, interfaces):
+    def update_interfaces(self, interfaces, db_host):
         """
         Update Interfaces based on Attributes
         """
+        port_infos = []
         for interface_data in interfaces:
             if interface_data.get('ignore_interface'):
                 continue
+
             device_id = interface_data['device']
+            if not device_id:
+                continue
             if device_id not in self.device_interface_cache:
                 device_interfaces = {}
                 url = f'dcim/interfaces?device_id={device_id}'
@@ -143,13 +147,24 @@ class SyncInterfaces(SyncNetbox):
             if port_name not in device_interfaces:
                 self.progress(f"Create Interface {port_name}")
                 create_response = self.request(url, "POST", payload)
-            elif update_keys := self.need_update(device_interfaces[port_name], payload):
-                update_payload = {}
-                for key in update_keys:
-                    update_payload[key] = payload[key]
-                self.progrees(f"Update Interface {port_name} ({update_keys})")
-                url = f'dcim/interfaces/{device_interfaces[port_name]["id"]}/'
-                self.request(url, "PATCH", update_payload)
+                print(create_response)
+            else:
+                interface_id = device_interfaces[port_name]['id']
+                if update_keys := self.need_update(device_interfaces[port_name], payload):
+                    update_payload = {}
+                    for key in update_keys:
+                        update_payload[key] = payload[key]
+                    self.progrees(f"Update Interface {port_name} ({update_keys})")
+                    url = f'dcim/interfaces/{device_interfaces[port_name]["id"]}/'
+                    self.request(url, "PATCH", update_payload)
+
+            port_infos.append({
+                'port_name': port_name,
+                'netbox_if_id': interface_id,
+                'used_ip': interface_data['ip_address'], 
+            })
+        attr_name = f"{self.config['name']}_interfaces"
+        db_host.set_inventory_attribute(attr_name, port_infos)
 
 #.
 
@@ -168,11 +183,12 @@ class SyncInterfaces(SyncNetbox):
             for db_host in db_objects:
                 hostname = db_host.hostname
 
+
                 all_attributes = self.get_host_attributes(db_host, 'netbox_hostattribute')
                 if not all_attributes:
                     progress.advance(task1)
                     continue
                 interfaces = self.get_host_data(db_host, all_attributes['all'])['interfaces']
-                self.update_interfaces(interfaces)
+                self.update_interfaces(interfaces, db_host)
 
                 progress.advance(task1)
