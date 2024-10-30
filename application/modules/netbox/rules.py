@@ -19,6 +19,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
         """
         # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('custom_attributes', [])
+        outcomes.setdefault('do_not_update_keys', [])
         for outcome in rule_outcomes:
             action_param = outcome['param']
             action = outcome['action']
@@ -30,6 +31,9 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                     outcomes['custom_attributes'].append((key, value))
                 except ValueError:
                     logger.debug(f"Cant split '{new_value}' into Key Value Pair")
+            elif action == 'update_optout':
+                fields = [str(x).strip() for x in action_param.split(',')]
+                outcomes['do_not_update_keys'] += fields
             else:
                 outcomes[outcome['action']] = outcome['param']
 

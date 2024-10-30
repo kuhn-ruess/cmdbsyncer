@@ -50,6 +50,7 @@ netbox_outcome_types = [
   #('nb_manufacturer_sync', 'Syncronise Manufacturer'),
   #('update_interfaces', 'Update Interfaces in Netbox'),
   ('custom_field', 'Set a Custom Field key:value (Jinja)'),
+  ('update_optout', 'Do never Update given Fields (comma separated list possible)'),
   ('ignore_host', 'Ignore Host(s)'),
 ]
 
