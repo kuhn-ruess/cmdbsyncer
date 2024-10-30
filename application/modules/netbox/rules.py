@@ -2,23 +2,37 @@
 """
 Netbox Rules
 """
+from application import logger
 from application.modules.rule.rule import Rule
 from application.helpers.syncer_jinja import render_jinja
 
 class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
     """
-    Add custom Variables for Ansible
+    Add custom Variables for Netbox Devices
     """
 
-    name = "Netbox -> Custom Attributes"
+    name = "Netbox -> DCIM Device Attributes"
 
     def add_outcomes(self, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """
         # pylint: disable=too-many-nested-blocks
+        outcomes.setdefault('custom_attributes', [])
         for outcome in rule_outcomes:
-            outcomes[outcome['action']] = outcome['param']
+            action_param = outcome['param']
+            action = outcome['action']
+            if action == 'custom_field':
+                new_value  = render_jinja(action_param, mode="nullify",
+                                         HOSTNAME=self.hostname, **self.attributes)
+                try:
+                    key, value = new_value.split(':')
+                    outcomes['custom_attributes'].append((key, value))
+                except ValueError:
+                    logger.debug(f"Cant split '{new_value}' into Key Value Pair")
+            else:
+                outcomes[outcome['action']] = outcome['param']
+
         return outcomes
 
 class NetboxIpamIPaddressRule(NetboxVariableRule):
@@ -33,10 +47,8 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
             action_param = outcome['param']
             action = outcome['action']
 
-            hostname = self.db_host.hostname
-
             new_value  = render_jinja(action_param, mode="nullify",
-                                     HOSTNAME=hostname, **self.attributes)
+                                     HOSTNAME=self.hostname, **self.attributes)
 
             if action == "assigned":
                 if action_param.lower() == 'false':
@@ -49,7 +61,7 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
         return outcomes
 
 class NetboxDevicesInterfaceRule(NetboxVariableRule):
-    name = "Netbox -> Device Interfaces"
+    name = "Netbox -> DCIM Interfaces"
 
     def add_outcomes(self, rule_outcomes, outcomes):
         """

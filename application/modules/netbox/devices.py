@@ -188,6 +188,9 @@ class SyncDevices(SyncNetbox):
         payload['custom_fields'] = {
             'cmdbsyncer_id': str(self.config['_id']),
         }
+        for key, value in custom_rules['custom_attributes']:
+            payload['custom_fields'][key] = value
+
         logger.debug(f"Payload: {payload}")
         return payload
 #.
