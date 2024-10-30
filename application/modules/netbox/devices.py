@@ -229,7 +229,7 @@ class SyncDevices(SyncNetbox):
                 ## Update
                 host_netbox_data = current_netbox_devices[hostname]
                 host_netbox_id = host_netbox_data['id']
-                if update_keys := self.need_update(host_netbox_data, payload):
+                if update_keys := self.need_update(host_netbox_data, payload, custom_rules['do_not_update_keys']):
                     print(f"{CC.OKBLUE} *{CC.ENDC} Update Host")
                     url += f"{current_netbox_devices[hostname]['id']}/"
                     update_payload = {}
@@ -247,8 +247,6 @@ class SyncDevices(SyncNetbox):
                     logger.debug(payload)
                     logger.debug(create_response)
                     print(f"Cannot create Device: {create_response}")
-            if 'update_interfaces' in custom_rules:
-                self.update_interfaces(host_netbox_id, all_attributes['all'])
 
             attr_name = f"{self.config['name']}_device_id"
             db_host.set_inventory_attribute(attr_name, host_netbox_id)

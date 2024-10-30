@@ -18,12 +18,14 @@ class SyncNetbox(Plugin):
         return self.actions.get_outcomes(db_host, attributes)
 #.
 #   .-- Object Need Update?
-    def need_update(self, target_payload, main_payload):
+    def need_update(self, target_payload, main_payload, ignore_fields=None):
         """
         Compare Request Payload with Device Response
         """
         keys = []
         for key, value in main_payload.items():
+            if ignore_fields and key in ignore_fields:
+                continue
             target_value = target_payload.get(key)
             if isinstance(target_value, dict):
                 if 'cmdbsyncer_id' in target_value:
