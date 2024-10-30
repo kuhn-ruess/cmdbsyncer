@@ -31,6 +31,7 @@ class JdiscDevices(JDisc):
               serialNumber
               hwVersion
               assetTag
+              roles
               operatingSystem {
                 osFamily
                 osVersion
