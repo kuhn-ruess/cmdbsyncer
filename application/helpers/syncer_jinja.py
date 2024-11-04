@@ -87,13 +87,14 @@ def render_jinja(value, mode="ignore", **kwargs):
 
     if mode == 'nullify':
         try:
-            return value_tpl.render(**kwargs)
+            final =  value_tpl.render(**kwargs)
         except (jinja2.exceptions.UndefinedError, TypeError):
-            logger.debug("JINJA String full nullifyed")
+            logger.debug("JINJA Exception: String full nullifyed")
             return ""
         except SyntaxError as exc:
-            logger.debug(f"Jinja Syntax error: {exc}")
+            logger.debug(f"Jinja Exception: Syntax error: {exc}")
             return ""
-    final = value_tpl.render(**kwargs)
+    else:
+        final = value_tpl.render(**kwargs)
     logger.debug(f"JINJA: String After Rewrite: {final}")
     return final

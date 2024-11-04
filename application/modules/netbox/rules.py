@@ -28,14 +28,14 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                                          HOSTNAME=self.hostname, **self.attributes)
                 try:
                     key, value = new_value.split(':')
-                    outcomes['custom_attributes'].append((key, value))
+                    outcomes['custom_attributes'].append((key, value.strip()))
                 except ValueError:
                     logger.debug(f"Cant split '{new_value}' into Key Value Pair")
             elif action == 'update_optout':
                 fields = [str(x).strip() for x in action_param.split(',')]
                 outcomes['do_not_update_keys'] += fields
             else:
-                outcomes[outcome['action']] = outcome['param']
+                outcomes[outcome['action']] = outcome['param'].strip()
 
         return outcomes
 
@@ -53,7 +53,7 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
 
             new_value  = render_jinja(action_param, mode="nullify",
                                      HOSTNAME=self.hostname, **self.attributes)
-
+            new_value = new_value.strip()
             if action == "assigned":
                 if action_param.lower() == 'false':
                     new_value = False
@@ -83,6 +83,6 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
             new_value  = render_jinja(action_param, mode="nullify",
                                      HOSTNAME=hostname, **self.attributes)
 
-            outcome_object[action] = new_value
+            outcome_object[action] = new_value.strip()
         outcomes['interfaces'].append(outcome_object)
         return outcomes
