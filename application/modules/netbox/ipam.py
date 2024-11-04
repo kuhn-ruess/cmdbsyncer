@@ -92,7 +92,7 @@ class SyncIPAM(SyncNetbox):
             for db_host in db_objects:
                 hostname = db_host.hostname
 
-                self.console(f'Hanling: {hostname}')
+                self.console(f'Handling: {hostname}')
 
                 all_attributes = self.get_host_attributes(db_host, 'netbox_hostattribute')
                 if not all_attributes:
