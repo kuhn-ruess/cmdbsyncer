@@ -177,8 +177,13 @@ class Host(db.Document):
         """
         Set a Singe Attribute to the Inventory and Save it
         """
-
-        self.inventory[key] = value
+        if key in self.inventory:
+            if self.inventory[key] != value:
+                self.inventory[key] = value
+                self.cache = {}
+        else:
+            self.inventory[key] = value
+            self.cache = {}
         self.save()
 
 
