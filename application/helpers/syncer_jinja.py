@@ -101,7 +101,6 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         try:
             final =  value_tpl.render(**kwargs)
         except (jinja2.exceptions.UndefinedError, TypeError):
-            raise
             logger.debug("JINJA Exception: String full nullifyed")
             return ""
         except SyntaxError as exc:
