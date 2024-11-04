@@ -59,6 +59,8 @@ def netbox_device_export(account):
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
         syncer.actions = rules['actions']
+        syncer.name = "Export Devices"
+        syncer.source = "netbox_device_export"
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -122,6 +124,8 @@ def netbox_ip_sync(account):
         syncer = SyncIPAM(account)
         syncer.rewrite = attribute_rewrite
         syncer.actions = netbox_rules
+        syncer.name = "Export IPs"
+        syncer.source = "netbox_ipam_export"
 
         syncer.sync_ips()
     except Exception as error_obj: #pylint:disable=broad-except
@@ -151,6 +155,8 @@ def netbox_interface_sync(account):
         syncer = SyncInterfaces(account)
         syncer.rewrite = attribute_rewrite
         syncer.actions = netbox_rules
+        syncer.name = "Export Interfaces"
+        syncer.source = "netbox_interface_export"
 
         syncer.sync_interfaces()
     except KeyError as error_obj: #pylint:disable=broad-except
