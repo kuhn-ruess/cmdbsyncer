@@ -147,6 +147,7 @@ class SyncInterfaces(SyncNetbox):
             if port_name not in device_interfaces:
                 self.progress(f"Create Interface {port_name}")
                 create_response = self.request(url, "POST", payload)
+                interface_id = create_response['id']
             else:
                 interface_id = device_interfaces[port_name]['id']
                 if update_keys := self.need_update(device_interfaces[port_name], payload):
