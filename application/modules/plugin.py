@@ -47,7 +47,7 @@ class Plugin():
 
 
     name = "Undefined"
-    source = "Undefined"
+    source = None
 
     def __init__(self, account=False):
         self.start_time = time.time()
@@ -58,6 +58,9 @@ class Plugin():
             if not self.config:
                 raise ValueError("Account Invalid or not found")
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
+
+        if not self.source:
+            self.source = self.__class__.__qualname__.replace('.','')
 
 
         atexit.register(self.save_log)

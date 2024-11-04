@@ -45,6 +45,9 @@ class SyncCMK2(CMK2):
 
     print_disabled = False
 
+    name = "Sync Checkmk Hosts"
+    source = "cmk_host_sync"
+
 
     @staticmethod
     def chunks(lst, n):
