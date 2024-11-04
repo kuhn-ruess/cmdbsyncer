@@ -56,7 +56,7 @@ class NetboxCustomAttributesView(RuleModelView):
                 'form_subdocuments' : {
                     '': {
                         'form_overrides' : {
-                            'param': StringField,
+                            #'param': StringField,
                         }
                     },
                 }
