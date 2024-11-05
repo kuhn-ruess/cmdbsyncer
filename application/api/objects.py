@@ -23,7 +23,17 @@ def build_host_dict(host_obj):
     host_dict['hostname'] = host_obj.hostname
     host_dict['labels'] = host_obj.get_labels()
     host_dict['inventory'] = host_obj.get_inventory()
-    host_dict['last_seen'] = host_obj.last_import_seen.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    last_seen = False
+    if host.last_import_seen:
+        last_seen = host_obj.last_import_seen.strftime('%Y-%m-%dT%H:%M:%SZ')
+    host_dict['last_seen'] = last_seen
+
+    last_update = False
+    if host.last_import_sync:
+        last_update = host_obj.last_import_sync.strftime('%Y-%m-%dT%H:%M:%SZ')
+    host_dict['last_update'] = last_update
+
     return host_dict
 
 LABEL = API.model(
