@@ -88,8 +88,8 @@ class Rewrite(Rule):
 
             # We pass the old name, since the attributes store of the host hast the value
             # stilles stored under this old name
-            new_value = self.get_new_attribute_value(outcome, old_name)
-            for name in attributes:
-                outcomes[f'add_{name}'] = new_value
+            if new_value := self.get_new_attribute_value(outcome, old_name):
+                for name in attributes:
+                    outcomes[f'add_{name}'] = new_value
 
         return outcomes
