@@ -28,7 +28,7 @@ class SyncVMS(SyncNetbox):
 
     def import_hosts(self):
         for hostname, data in self.get_vms().items():
-            labels = extract_data(data)
+            labels = self.extract_data(data)
             if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
                 hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], labels)
             host_obj = Host.get_host(hostname)

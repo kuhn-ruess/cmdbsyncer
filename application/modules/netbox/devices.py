@@ -264,27 +264,8 @@ class SyncDevices(SyncNetbox):
         Import Objects from Netbox to the Syncer
         """
 
-        def extract_data(data):
-            """
-            Extract Netbox fields
-            """
-            labels = {}
-            for key, value in data.items():
-                if key == 'custom_fields':
-                    if 'cmdbsyncer_id' in value:
-                        del value['cmdbsyncer_id']
-                    labels.update(value)
-                elif isinstance(value, str):
-                    labels[key] = value
-                elif isinstance(value, dict):
-                    if 'display' in value:
-                        labels[key] = value['display']
-                    elif 'label' in value:
-                        labels[key] = value['label']
-            return labels
-
         for hostname, data in self.get_devices().items():
-            labels = extract_data(data)
+            labels = self.extract_data(data)
             if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
                 hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], labels)
             host_obj = Host.get_host(hostname)

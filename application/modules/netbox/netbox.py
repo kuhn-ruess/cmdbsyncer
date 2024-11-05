@@ -35,6 +35,27 @@ class SyncNetbox(Plugin):
                 keys.append(key)
         return keys
 #.
+
+    @staticmethod
+    def extract_data(data):
+        """
+        Extract Netbox fields
+        """
+        labels = {}
+        for key, value in data.items():
+            if key == 'custom_fields':
+                if 'cmdbsyncer_id' in value:
+                    del value['cmdbsyncer_id']
+                labels.update(value)
+            elif isinstance(value, str):
+                labels[key] = value
+            elif isinstance(value, dict):
+                if 'display' in value:
+                    labels[key] = value['display']
+                elif 'label' in value:
+                    labels[key] = value['label']
+        return labels
+
     def request(self, path, method='GET', data=None, additional_header=None):
         """
         Handle Request to Netbox
