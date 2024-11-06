@@ -82,7 +82,7 @@ class SyncerCronApi(Resource):
                     last_start = last_start.strftime('%Y-%m-%d %H:%M:%S')
                 next_run = entry.next_run
                 if next_run:
-                    next_run = next_run.strftime('%Y-%m-%d %H:%M:%S'),
+                    next_run = next_run.strftime('%Y-%m-%d %H:%M:%S')
                 response.append({
                     'name': str(entry.group),
                     'last_start': last_start,
