@@ -161,7 +161,11 @@ class Plugin():
         self.custom_attributes.rules = \
                         CustomAttributeRuleModel.objects(enabled=True).order_by('sort_field')
 
+
     def get_host_attributes(self, db_host, cache):
+        return self.get_attributes(db_host, cache)
+
+    def get_attributes(self, db_host, cache):
         """
         Return Host Attributes or False if Host should be ignored
         """

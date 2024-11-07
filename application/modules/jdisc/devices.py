@@ -19,6 +19,7 @@ class JdiscDevices(JDisc):
         """
         Return Query for Devices
         """
+
         return """
         query test {
         devices {
@@ -50,10 +51,14 @@ class JdiscDevices(JDisc):
                 subnetMask
                 networkInterface {
                   physicalAddress
+                  type
                   index
                   extendedDescription
                   operationalStatus
+                  administrativeStatus
                   speed
+                  duplexMode
+                  mtu
                 }
                 network {
                   name
@@ -74,6 +79,7 @@ class JdiscDevices(JDisc):
               }
               operatingSystem {
                 installedApplications {
+                  source
                   application {
                     id
                     name

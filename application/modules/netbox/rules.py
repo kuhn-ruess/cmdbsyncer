@@ -86,3 +86,24 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
             outcome_object[action] = new_value.strip()
         outcomes['interfaces'].append(outcome_object)
         return outcomes
+
+class NetboxContactRule(NetboxVariableRule):
+    name = "Netbox -> Tenancy Contacts"
+
+    def add_outcomes(self, rule_outcomes, outcomes):
+        """
+        Filter if labels match to a rule
+        """
+        # pylint: disable=too-many-nested-blocks
+        outcome_object = {}
+        for outcome in rule_outcomes:
+            action_param = outcome['param']
+            action = outcome['action']
+
+            hostname = self.db_host.hostname
+
+            new_value  = render_jinja(action_param, mode="nullify",
+                                     HOSTNAME=hostname, **self.attributes)
+
+            outcomes[action] = new_value.strip()
+        return outcomes

@@ -17,6 +17,7 @@ from application.modules.netbox.devices import SyncDevices
 from application.modules.netbox.vms import SyncVMS
 from application.modules.netbox.ipam import SyncIPAM
 from application.modules.netbox.interfaces import SyncInterfaces
+from application.modules.netbox.contacts import SyncContacts
 
 from syncerapi.v1 import (
     register_cronjob,
@@ -64,7 +65,6 @@ def netbox_device_export(account):
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
-        raise
 
 @cli_netbox.command('export_hosts')
 @cli_netbox.command('export_devices')
@@ -129,7 +129,6 @@ def netbox_ip_sync(account):
 
         syncer.sync_ips()
     except Exception as error_obj: #pylint:disable=broad-except
-        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_ips')
@@ -162,6 +161,7 @@ def netbox_interface_sync(account):
     except KeyError as error_obj: #pylint:disable=broad-except
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
+        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_interfaces')
@@ -169,6 +169,38 @@ def netbox_interface_sync(account):
 def cli_netbox_interface(account):
     """Export Interfaces of Devices"""
     netbox_interface_sync(account)
+#.
+#   .-- Command: Export Contacts
+def netbox_contacts_sync(account):
+    """Export Contacts to Netbox"""
+    try:
+        attribute_rewrite = Rewrite()
+        attribute_rewrite.cache_name = 'netbox_rewrite'
+
+        attribute_rewrite.rules = \
+                NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+        
+        netbox_rules = NetboxContactRule()
+        netbox_rules.rules = NetboxContactAttributes.objects(enabled=True).order_by('sort_field')
+
+        syncer = SyncContacts(account)
+        syncer.rewrite = attribute_rewrite
+        syncer.actions = netbox_rules
+        syncer.name = "Export Interfaces"
+        syncer.source = "netbox_contacts_export"
+
+        syncer.sync_contacts()
+    except KeyError as error_obj: #pylint:disable=broad-except
+        print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
+    except Exception as error_obj: #pylint:disable=broad-except
+        raise
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('export_contacts')
+@click.argument("account")
+def cli_netbox_contacts(account):
+    """Export Contacts"""
+    netbox_contacts_sync(account)
 #.
 
 
@@ -234,3 +266,4 @@ register_cronjob("Netbox: Export Devices", netbox_device_export)
 register_cronjob("Netbox: Import Devices", netbox_device_import)
 register_cronjob("Netbox: Import VMs", netbox_vm_import)
 register_cronjob("Netbox: Export IPs", netbox_ip_sync)
+register_cronjob("Netbox: Export Contacts", netbox_contacts_sync)
