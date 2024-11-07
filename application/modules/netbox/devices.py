@@ -77,16 +77,15 @@ class SyncDevices(SyncNetbox):
             if not fallback:
                 return None
             value = fallback
-        value = value.lower()
 
 
 
-        print(f"{CC.OKCYAN} *{CC.ENDC} Attribute: {endpoint}:{value} will be synced")
+        print(f"{CC.OKCYAN} *{CC.ENDC} Attribute: {endpoint}:{value} configured for dynamic sync")
         if not self.cache.get(endpoint):
             print(f"{CC.OKGREEN} ** {CC.ENDC}build cache for {endpoint}")
             self.cache[endpoint] = {}
             for entry in self.request(conf['url'], "GET"):
-                self.cache[endpoint][entry['display'].lower()] = entry['id']
+                self.cache[endpoint][entry['display']] = entry['id']
 
         # FIND Data and Return in that case
         for entry_name, entry_id in self.cache[endpoint].items():

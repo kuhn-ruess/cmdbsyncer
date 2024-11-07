@@ -25,6 +25,7 @@ class SyncNetbox(Plugin):
         keys = []
         for key, value in main_payload.items():
             if ignore_fields and key in ignore_fields:
+                print(1)
                 continue
             target_value = target_payload.get(key)
             if isinstance(target_value, dict):
@@ -35,6 +36,31 @@ class SyncNetbox(Plugin):
                 keys.append(key)
         return keys
 #.
+
+    def get_objects(self, url, syncer_only=False):
+        """
+        Read full list of given Objects
+        """
+        print(f"{cc.OKGREEN} -- {cc.ENDC}Netbox: "\
+              f"Read all Objects (Filter only CMDB Syncer: {syncer_only})")
+        if syncer_only:
+            url += f"?cf_cmdbsyncer_id={self.config['_id']}"
+        ips = self.request(url, "GET")
+        return {x['display']:x for x in ips}
+
+    def update_object(self, url, payload):
+        """
+        Send Update Request to Netbox
+        """
+        self.request(url, 'PATCH', payload)
+        self.console(f' - Updated Object with ID {netbox_id}')
+
+    def create_object(self, url, payload):
+        """
+        Send Create Request to Netbox
+        """
+        self.request(url, "POST", payload)
+        self.console(' - Created Object')
 
     @staticmethod
     def extract_data(data):
@@ -67,6 +93,7 @@ class SyncNetbox(Plugin):
             'Authorization': f"Token {password}",
             'Content-Type': 'application/json',
         }
+        response_json = ""
         if additional_header:
             headers.update(additional_header)
         try:
@@ -83,8 +110,7 @@ class SyncNetbox(Plugin):
             try:
                 response_json = response.json()
             except:
-                print(response.text)
-                raise
+                pass
             if 'results' in response_json:
                 results = []
                 results += response_json['results']
@@ -99,7 +125,7 @@ class SyncNetbox(Plugin):
                         process = 100.0 * counter / request_count
                         # pylint: disable=line-too-long
                         print(f"   {cc.OKGREEN}({process:.0f}%)...{counter}/{request_count}{cc.ENDC}")
-                        sub_response= requests.get(next_page, headers=headers, verify=self.verify).json()
+                        sub_response= self.inner_requests("GET", next_page, headers=headers, verify=self.verify).json()
                         next_page = sub_response['next']
                         results += sub_response['results']
                 return results

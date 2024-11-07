@@ -16,20 +16,6 @@ class SyncIPAM(SyncNetbox):
     """
     console = None
 
-    def get_ips(self, syncer_only=False):
-        """
-        Read full list of IPs
-        """
-        print(f"{cc.OKGREEN} -- {cc.ENDC}Netbox: "\
-              f"Read all IPs (Filter only CMDB Syncer: {syncer_only})")
-        url = 'ipam/ip-addresses/'
-        if syncer_only:
-            url += f"?cf_cmdbsyncer_id={self.config['_id']}"
-        ips = self.request(url, "GET")
-        return {x['display']:x for x in ips}
-
-
-
     def get_payload(self, ip, fields):
         """
         Build Netbox Payload
@@ -54,31 +40,13 @@ class SyncIPAM(SyncNetbox):
             }
         return payload
 
-
-
-
-    def update_ip(self, netbox_id, payload):
-        """
-        Send Update Request to Netbox
-        """
-        url = f'ipam/ip-addresses/{netbox_id}'
-        self.request(url, 'PATCH', payload)
-        self.console(f' - Updated IP Address with ID {netbox_id}')
-
-    def create_ip(self, ip, payload):
-        """
-        Send Create Request to Netbox
-        """
-        url = 'ipam/ip-addresses/'
-        self.request(url, "POST", payload)
-        self.console(f' - Created IP Address {payload["address"]}')
-
     def sync_ips(self):
         """
         Sync IP Addresses
         """
         # Get current IPs
-        current_ips = self.get_ips(syncer_only=True)
+        url = 'ipam/ip-addresses/'
+        current_ips = self.get_objects(url, syncer_only=True)
         new_ips = {}
 
         db_objects = Host.get_export_hosts()
@@ -120,7 +88,10 @@ class SyncIPAM(SyncNetbox):
                 if ip in current_ips:
                     # Update IPs
                     if update_keys := self.need_update(current_ips[ip], payload):
-                        self.update_ip(current_ips[ip]['id'], payload)
+                        netbox_id = current_ips[ip]['id']
+                        url = f'ipam/ip-addresses/{netbox_id}'
+                        self.update_object(url, payload)
                 else:
-                    self.create_ip(ip, payload)
+                    url = 'ipam/ip-addresses/'
+                    self.create_object(url, payload)
                 progress.advance(task2)

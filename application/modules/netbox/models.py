@@ -56,7 +56,7 @@ netbox_outcome_types = [
 
 class NetboxOutcome(db.EmbeddedDocument):
     """
-    Ansible Outcome
+    Outcome
     """
     action = db.StringField(choices=netbox_outcome_types)
     param = db.StringField()
@@ -66,7 +66,7 @@ class NetboxOutcome(db.EmbeddedDocument):
 
 class NetboxCustomAttributes(db.Document):
     """
-    Define Rule based Custom Ansible Variables
+    Define Rule based Custom Variables
     LEGACY: This is for Devices
     """
 
@@ -99,7 +99,7 @@ netbox_ipam_ipaddress_outcome_types = [
 ]
 class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
     """
-    Ansible Outcome
+    Outcome
     """
     action = db.StringField(choices=netbox_ipam_ipaddress_outcome_types)
     param = db.StringField()
@@ -109,7 +109,7 @@ class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
 
 class NetboxIpamIpaddressattributes(db.Document):
     """
-    Define Rule based Custom Ansible Variables
+    Define Rule based Custom Variables
     """
 
     name = db.StringField(required=True, unique=True)
@@ -150,7 +150,7 @@ netbox_device_interface_outcome_types = [
 ]
 class NetboxDcimInterfaceOutcome(db.EmbeddedDocument):
     """
-    Ansible Outcome
+    Outcome
     """
     action = db.StringField(choices=netbox_device_interface_outcome_types)
     param = db.StringField()
@@ -160,7 +160,7 @@ class NetboxDcimInterfaceOutcome(db.EmbeddedDocument):
 
 class NetboxDcimInterfaceAttributes(db.Document):
     """
-    Define Rule based Custom Ansible Variables
+    Define Rule based Custom Variables
     """
 
     name = db.StringField(required=True, unique=True)
@@ -171,6 +171,49 @@ class NetboxDcimInterfaceAttributes(db.Document):
     render_full_conditions = db.StringField() # Helper for preview
 
     outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxDcimInterfaceOutcome'))
+    render_netbox_outcome = db.StringField() # Helper for preview
+
+    last_match = db.BooleanField(default=False)
+
+
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+    meta = {
+        'strict': False
+    }
+
+netbox_contact_outcome_types = [
+    ('name', 'Name (required)'),
+    ('title', 'Title'),
+    ('phone', 'Phone'),
+    ('email', 'E-Mail'),
+    ('address', 'Address'),
+    ('description', 'Description'),
+    ('ignore_contact', 'Ignore matching objects for sync'),
+]
+class NetboxContactOutcome(db.EmbeddedDocument):
+    """
+    Outcome
+    """
+    action = db.StringField(choices=netbox_contact_outcome_types)
+    param = db.StringField()
+    meta = {
+        'strict': False,
+    }
+
+class NetboxContactAttributes(db.Document):
+    """
+    Define Rule based Custom Variables
+    """
+
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
+    render_full_conditions = db.StringField() # Helper for preview
+
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxContactOutcome'))
     render_netbox_outcome = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)

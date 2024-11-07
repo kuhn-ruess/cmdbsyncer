@@ -18,7 +18,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.8 Daily 05.11.2024'
+VERSION = '3.8 Daily 07.11.2024'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -255,11 +255,13 @@ admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
 admin.add_sub_category(name="Netbox", parent_name="Modules")
 
 from application.modules.netbox.views import NetboxCustomAttributesView
-from application.modules.netbox.models import (NetboxCustomAttributes, 
-                                                NetboxRewriteAttributeRule,
-                                                NetboxIpamIpaddressattributes,
-                                               NetboxDcimInterfaceAttributes,
-                                              )
+from application.modules.netbox.models import (
+                                            NetboxCustomAttributes, 
+                                            NetboxRewriteAttributeRule,
+                                            NetboxIpamIpaddressattributes,
+                                            NetboxDcimInterfaceAttributes,
+                                            NetboxContactAttributes,
+                                        )
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
@@ -268,6 +270,8 @@ admin.add_view(NetboxCustomAttributesView(NetboxDcimInterfaceAttributes,\
                                     name="DCIM Interfaces", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
                                     name="IPAM IP Addresses", category="Netbox"))
+admin.add_view(NetboxCustomAttributesView(NetboxContactAttributes,\
+                                    name="Tenancy Contacts", category="Netbox"))
 #.
 #   .-- i-doit
 admin.add_sub_category(name="i-doit", parent_name="Modules")

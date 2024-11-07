@@ -19,7 +19,7 @@ class SyncInterfaces(SyncNetbox):
     device_interface_cache = {}
 
 #   .-- Get Interface Payload
-    def get_interface_payload(self, device_id, if_attributes):
+    def get_interface_payload(self, hostname, device_id, if_attributes):
         """ Return Interface Payload
         """
         status_map = {
@@ -49,7 +49,7 @@ class SyncInterfaces(SyncNetbox):
         payload = {
           "device": device_id,
           #"module": 0,
-          "name": if_attributes['portName'],
+          "name": f'{hostname} {if_attributes["portName"]}',
           #"label": "string",
           "type": interface_type,
           "enabled": status_map.get(if_attributes['adminStatus'].lower(), False),
@@ -141,9 +141,9 @@ class SyncInterfaces(SyncNetbox):
                 device_interfaces = self.device_interface_cache[device_id]
 
             url = 'dcim/interfaces/'
-            #interfaces = self.get_interface_list_by_attributes(attributes)
-            payload = self.get_interface_payload(device_id, interface_data)
-            port_name = interface_data['portName']
+            hostname = db_host.hostname
+            payload = self.get_interface_payload(hostname, device_id, interface_data)
+            port_name = payload['name']
             if port_name not in device_interfaces:
                 self.progress(f"Create Interface {port_name}")
                 create_response = self.request(url, "POST", payload)
@@ -154,7 +154,7 @@ class SyncInterfaces(SyncNetbox):
                     update_payload = {}
                     for key in update_keys:
                         update_payload[key] = payload[key]
-                    self.progrees(f"Update Interface {port_name} ({update_keys})")
+                    self.progress(f"Update Interface {port_name} Fields: ({update_keys})")
                     url = f'dcim/interfaces/{device_interfaces[port_name]["id"]}/'
                     self.request(url, "PATCH", update_payload)
 
