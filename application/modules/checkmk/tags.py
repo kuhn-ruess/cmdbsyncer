@@ -355,7 +355,7 @@ class CheckmkTagSync(CMK2):
                             'if-match': etag
                         }
                         del payload['ident']
-                        payload['repair'] = True
+                        payload['repair'] = False
                         try:
                             self.request(url,
                                 method="PUT",
