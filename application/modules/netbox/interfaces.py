@@ -10,7 +10,6 @@ from syncerapi.v1 import (
     cc,
 )
 
-
 class SyncInterfaces(SyncNetbox):
     """
     Interface Syncer
@@ -44,12 +43,14 @@ class SyncInterfaces(SyncNetbox):
         }
         access_mode = access_modes.get(if_attributes.get('portMode'))
 
-        interface_speed = int(if_attributes.get('speed',0))
+        interface_speed = if_attributes.get('speed', 0)
+        if not isinstance(interface_speed, int):
+            interface_speed = None
 
         payload = {
           "device": device_id,
           #"module": 0,
-          "name": f'{hostname} {if_attributes["portName"]}',
+          "name": str(if_attributes["portName"]),
           #"label": "string",
           "type": interface_type,
           "enabled": status_map.get(if_attributes['adminStatus'].lower(), False),
@@ -90,12 +91,14 @@ class SyncInterfaces(SyncNetbox):
           #],
           #"custom_fields": {}
         }
-        if if_attributes.get('macAddress'):
-            payload['mac_address'] = if_attributes['macAddress'].upper()
+        if mac_address := if_attributes.get('macAddress'):
+            payload['mac_address'] = mac_address.upper()
         if access_mode:
             payload["mode"] =  access_mode
         if mtu := if_attributes.get('mtu'):
-            payload["mtu"] = int(mtu)
+            if not isinstance(mtu, int):
+                mtu = None
+            payload["mtu"] = mtu
         return payload
 #.
 #   .-- build interface_list
@@ -144,9 +147,12 @@ class SyncInterfaces(SyncNetbox):
             hostname = db_host.hostname
             payload = self.get_interface_payload(hostname, device_id, interface_data)
             port_name = payload['name']
+            #print(device_interfaces)
             if port_name not in device_interfaces:
                 self.progress(f"Create Interface {port_name}")
                 create_response = self.request(url, "POST", payload)
+                if not create_response:
+                    continue
                 interface_id = create_response['id']
             else:
                 interface_id = device_interfaces[port_name]['id']
@@ -179,7 +185,7 @@ class SyncInterfaces(SyncNetbox):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             self.progress = progress.console.print
-            task1 = progress.add_task("Updateing Interfaces for Devices", total=total)
+            task1 = progress.add_task("Updating Interfaces for Devices", total=total)
             for db_host in db_objects:
                 hostname = db_host.hostname
 

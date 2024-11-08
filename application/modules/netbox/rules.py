@@ -85,7 +85,10 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
             new_value  = render_jinja(action_param, mode="nullify",
                                      HOSTNAME=hostname, **self.attributes)
 
-            outcome_object[action] = new_value.strip()
+            new_value = new_value.strip()
+            if new_value == "None":
+                new_value = None
+            outcome_object[action] = new_value
         outcomes['interfaces'].append(outcome_object)
         return outcomes
 

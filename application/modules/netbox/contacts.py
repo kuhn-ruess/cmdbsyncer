@@ -84,6 +84,10 @@ class SyncContacts(SyncNetbox):
                     continue
                 custom_rules = self.get_host_data(db_object, all_attributes['all'])
 
+                if not custom_rules:
+                    progress.advance(task1)
+                    continue
+
                 if custom_rules.get('ignore_contact'):
                     progress.advance(task1)
                     continue

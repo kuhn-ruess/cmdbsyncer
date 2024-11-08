@@ -29,6 +29,7 @@ enabled_rules = {
     'host_objects': ('application.models.host', 'Host'),
     'accounts': ('application.models.account', 'Account'),
     'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
+    'netbox_interfaces': ('application.modules.netbox.models', 'NetboxDcimInterfaceAttributes'),
 }
 
 
