@@ -159,6 +159,7 @@ def netbox_interface_sync(account):
 
         syncer.sync_interfaces()
     except KeyError as error_obj: #pylint:disable=broad-except
+        raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
         raise
@@ -193,7 +194,6 @@ def netbox_contacts_sync(account):
     except KeyError as error_obj: #pylint:disable=broad-except
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
-        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_contacts')

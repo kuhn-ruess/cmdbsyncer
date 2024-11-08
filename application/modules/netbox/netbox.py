@@ -25,14 +25,13 @@ class SyncNetbox(Plugin):
         keys = []
         for key, value in main_payload.items():
             if ignore_fields and key in ignore_fields:
-                print(1)
                 continue
             target_value = target_payload.get(key)
             if isinstance(target_value, dict):
                 if 'cmdbsyncer_id' in target_value:
                     continue
                 target_value = target_value.get('id')
-            if target_value and str(value) != str(target_value):
+            if value != target_value:
                 keys.append(key)
         return keys
 #.
@@ -53,7 +52,7 @@ class SyncNetbox(Plugin):
         Send Update Request to Netbox
         """
         self.request(url, 'PATCH', payload)
-        self.console(f' - Updated Object with ID {netbox_id}')
+        self.console(f' - Updated Object')
 
     def create_object(self, url, payload):
         """
@@ -107,6 +106,7 @@ class SyncNetbox(Plugin):
             if response.status_code >= 299:
                 print(response.text)
                 print("Error in response, enable debug_log to see more")
+                return {}
             try:
                 response_json = response.json()
             except:
@@ -125,7 +125,7 @@ class SyncNetbox(Plugin):
                         process = 100.0 * counter / request_count
                         # pylint: disable=line-too-long
                         print(f"   {cc.OKGREEN}({process:.0f}%)...{counter}/{request_count}{cc.ENDC}")
-                        sub_response= self.inner_requests("GET", next_page, headers=headers, verify=self.verify).json()
+                        sub_response= self.inner_request("GET", next_page, headers=headers).json()
                         next_page = sub_response['next']
                         results += sub_response['results']
                 return results

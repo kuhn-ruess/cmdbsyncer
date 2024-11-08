@@ -56,6 +56,7 @@ class JdiscDevices(JDisc):
                   extendedDescription
                   operationalStatus
                   administrativeStatus
+                  description
                   speed
                   duplexMode
                   mtu

@@ -71,6 +71,7 @@ def _inner_import(config):
                                       search_filter,
                                       attributes,
                                       serverctrls=[page_control])
+    print(results)
     for dn, entry in results:
         labels = {
             'dn': dn,
