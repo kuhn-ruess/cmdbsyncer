@@ -64,6 +64,9 @@ class BaseConfig():
     DISABLE_SSL_ERRORS = True
     HTTP_REQUEST_TIMEOUT = 30
 
+    HTTP_REPEAT_TIMEOUT = 3
+    HTTP_MAX_RETRIES = 2
+
     SWAGGER_ENABLED = True
     DEBUG = True
     MONGODB_SETTINGS = {
