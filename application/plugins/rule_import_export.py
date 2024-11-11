@@ -41,22 +41,6 @@ def export_rules_from_model(rule_type):
     for db_rule in getattr(model, enabled_rules[rule_type][1]).objects():
         yield db_rule.to_json()
 
-
-def import_rules_to_model(rule_type, json_raw):
-    """
-    Import Rules to Model
-    """
-    model = importlib.import_module(enabled_rules[rule_type][0])
-    for json_rule_raw in json_raw:
-        json_dict = json.loads(json_rule_raw)
-        print(f"* Import {json_dict['_id']}")
-        db_ref = getattr(model, enabled_rules[rule_type][1])()
-        new = db_ref.from_json(json.dumps(json_dict))
-        try:
-            new.save(force_insert=True)
-        except NotUniqueError:
-            print("   Already existed")
-
 @app.cli.group(name='rules')
 def cli_rules():
     """Syner Rules import and Export"""
@@ -68,9 +52,9 @@ def export_rules(rule_type):
     Export Rules by Category
     """
     if rule_type.lower() in enabled_rules:
-        rules = list(export_rules_from_model(rule_type))
-        print({"rule_type": rule_type,
-               "rules_json": rules})
+        print(json.dumps({"rule_type": rule_type}))
+        for rule in export_rules_from_model(rule_type):
+            print(rule)
     else:
         print("Ruletype not supported")
         print("Currently supported:")
@@ -84,12 +68,22 @@ def import_rules(rulefile_path):
     """
     Import Rules into the CMDB Syncer
     """
-    with open(rulefile_path, newline='', encoding='utf-8') as rulefile:
-        rules_obj = literal_eval(rulefile.read())
-        rule_type = rules_obj['rule_type']
-        rule_json_field = rules_obj['rules_json']
-        if rule_type not in enabled_rules:
-            print("Ruletype not supported")
-            print(f"Currently supported: {', '.join(enabled_rules.keys())}")
-        else:
-            import_rules_to_model(rule_type, rule_json_field)
+    with open(rulefile_path, encoding='utf-8') as rulefile:
+        rule_type = False
+        for line in rulefile.readlines():
+            json_dict = json.loads(line)
+            if not rule_type:
+                rule_type = json_dict['rule_type']
+                if rule_type not in enabled_rules:
+                    print("Ruletype not supported")
+                    print(f"Currently supported: {', '.join(enabled_rules.keys())}")
+                    return
+                model = importlib.import_module(enabled_rules[rule_type][0])
+            else:
+                print(f"* Import {json_dict['_id']}")
+                db_ref = getattr(model, enabled_rules[rule_type][1])()
+                new = db_ref.from_json(json.dumps(json_dict))
+                try:
+                    new.save(force_insert=True)
+                except NotUniqueError:
+                    print("   Already existed")
