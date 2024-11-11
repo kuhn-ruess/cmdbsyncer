@@ -87,7 +87,8 @@ class CheckmkTagSync(CMK2):
         """
         base_groups, multiply_expressions = self.calculate_rules()
 
-        total = Host.objects.count()
+        db_objects = Host.objects()
+        total = db_objects.count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
@@ -101,7 +102,7 @@ class CheckmkTagSync(CMK2):
 
             task1 = progress.add_task("Calculating Caches", total=total)
             with multiprocessing.Pool() as pool:
-                for entry in Host.objects():
+                for entry in db_objects:
                     pool.apply_async(self.build_caches,
                                      args=(entry, groups, mlt_expressions),
                                      callback=lambda x: progress.advance(task1))
@@ -111,7 +112,7 @@ class CheckmkTagSync(CMK2):
             task2 = progress.add_task("Apply Hosttags to objects", total=total)
             with multiprocessing.Pool() as pool:
                 tags = manager.list()
-                for entry in Host.objects():
+                for entry in db_objects:
                     pool.apply_async(self.update_hosts_tags,
                                      args=(entry, tags),
                                      callback=lambda x: progress.advance(task2))
@@ -125,7 +126,7 @@ class CheckmkTagSync(CMK2):
                 del groups[group_id]
 
 
-        self.sync_to_checkmk(dict(groups), list(tags))
+        self.sync_to_checkmk(groups, tags)
 
     def update_hosts_multigroups(self, db_host, groups):
         """

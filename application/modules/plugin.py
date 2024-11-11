@@ -76,6 +76,7 @@ class Plugin():
         log.log(self.name, source=self.source, details=self.log_details)
 
 
+
     def inner_request(self, method, url, data=None, headers=None, auth=None):
         """
         Requst Module for all HTTP Requests
@@ -130,20 +131,32 @@ class Plugin():
         #    case 'options':
         #        resp = requests.options(url, **payload)
         # Python pre 3.10 suppport.....:
-        if method == "get":
-            resp = requests.get(url, **payload)
-        elif method == 'post':
-            resp = requests.post(url, **payload)
-        elif method == 'patch':
-            resp = requests.patch(url, **payload)
-        elif method == 'put':
-            resp = requests.put(url, **payload)
-        elif method == 'delete':
-            resp = requests.delete(url, **payload)
-        elif method ==  'head':
-            resp = requests.head(url, **payload)
-        elif method ==  'options':
-            resp = requests.options(url, **payload)
+        max_retries = app.config['HTTP_MAX_RETRIES']
+        retry_wait = app.config['HTTP_REPEAT_TIMEOUT']
+        for attempt in range(1, max_retries+1):
+            try:
+                if method == "get":
+                    resp = requests.get(url, **payload)
+                elif method == 'post':
+                    resp = requests.post(url, **payload)
+                elif method == 'patch':
+                    resp = requests.patch(url, **payload)
+                elif method == 'put':
+                    resp = requests.put(url, **payload)
+                elif method == 'delete':
+                    resp = requests.delete(url, **payload)
+                elif method ==  'head':
+                    resp = requests.head(url, **payload)
+                elif method ==  'options':
+                    resp = requests.options(url, **payload)
+                break
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                print(f"Try {attempt} of {max_retries} failed: {e}")
+                if attempt < max_retries:
+                    print(f"Timeout for {retry_wait} Secounds\033[5m...\033[0m")
+                    time.sleep(retry_wait)
+                else:
+                    raise
 
         try:
             logger.debug(f"Response Json: {pformat(resp.json())}")
