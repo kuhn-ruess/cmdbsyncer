@@ -78,7 +78,7 @@ class CheckmkTagSync(CMK2):
                                      callback=lambda x: progress.advance(task1))
                 pool.close()
                 pool.join()
-        return base_groups, multiply_expressions
+        return dict(base_groups), list(multiply_expressions)
 
 
     def export_tags(self):
@@ -125,7 +125,7 @@ class CheckmkTagSync(CMK2):
                 del groups[group_id]
 
 
-        self.sync_to_checkmk(groups, tags)
+        self.sync_to_checkmk(dict(groups), list(tags))
 
     def update_hosts_multigroups(self, db_host, groups):
         """

@@ -481,9 +481,9 @@ class SyncCMK2(CMK2):
                     #if not result:
                     #    progress.console.print("--> !! Host Disabled")
 
-
                 pool.close()
                 pool.join()
+
 
                 if self.print_disabled:
                     task2 = progress.add_task("List Disabled Hosts", total=total)
@@ -491,7 +491,7 @@ class SyncCMK2(CMK2):
                     for host in disabled_hosts:
                         progress.advance(task2)
                         progress.console.print(f"- Disabled-> {host} disabled")
-        return host_actions
+        return dict(host_actions)
 
 
 
