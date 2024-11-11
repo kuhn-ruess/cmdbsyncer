@@ -467,12 +467,14 @@ class SyncCMK2(CMK2):
             host_actions = manager.dict()
             disabled_hosts = manager.list()
             with multiprocessing.Pool() as pool:
+                tasks = []
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
                         continue
-                    pool.apply_async(self.handle_host,
+                    task = pool.apply_async(self.handle_host,
                                      args=(db_host, host_actions, disabled_hosts),
                                      callback=lambda x: progress.advance(task1))
+                    tasks.append(task)
                     #@TODO
                     # .get() slows the process, console print is not up to date
                     # New concept will be needed for outputs
@@ -481,6 +483,12 @@ class SyncCMK2(CMK2):
                     #if not result:
                     #    progress.console.print("--> !! Host Disabled")
 
+                progress.console.print("Waiting for Calculation to finish")
+                for task in tasks:
+                    try:
+                        task.get(timeout=5)
+                    except multiprocessing.TimeoutError:
+                        progress.console.print(f"- ERROR: Timout on {db_host.hostname}")
                 pool.close()
                 pool.join()
 
