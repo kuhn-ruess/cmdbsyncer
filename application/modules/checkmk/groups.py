@@ -138,7 +138,7 @@ class CheckmkGroupSync(CMK2):
                     new_group_title = value
                     new_group_name = value
                     if rewrite_name:
-                        new_group_name = render_jinja(outcome.rewrite_name,
+                        new_group_name = render_jinja(outcome.rewrite,
                                                       name=value, result=value)
                     new_group_name = str_replace(new_group_name, replace_exceptions).strip()
                     if rewrite_title:
