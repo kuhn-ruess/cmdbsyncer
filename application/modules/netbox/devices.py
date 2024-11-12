@@ -6,7 +6,7 @@ Create Devices in Netbox
 from application.modules.netbox.netbox import SyncNetbox
 
 from application.models.host import Host
-from application import app, log, logger
+from application import logger
 from application.modules.debug import ColorCodes as CC
 
 
@@ -36,7 +36,7 @@ class SyncDevices(SyncNetbox):
         return {x['display']:x for x in devices}
 #.
 #   .-- Create Netbox Sub Entry Types
-    def create_sub_entry(self, endpoint, value, inventory):
+    def create_sub_entry(self, endpoint, value, extra_infos=None):
         """
         Returns the Netbox Entry ID of given value
         directly or creates it first
@@ -59,15 +59,15 @@ class SyncDevices(SyncNetbox):
                             'name_tag': 'name',
                             'fallback': 'CMDB Syncer Not defined',
                             },
-            'primary_ip4': {'url': 'ipam/ip-addresses/',
-                            'name_tag': 'address',
-                            'fallback': None,
-                            'split_needle': "/",
-                           },
-            'primary_ip6': {'url': 'ipam/ip-addresses/',
-                            'name_tag': 'address',
-                            'fallback': None,
-                           },
+            #'primary_ip4': {'url': 'ipam/ip-addresses/',
+            #                'name_tag': 'address',
+            #                'fallback': None,
+            #                'split_needle': "/",
+            #               },
+            #'primary_ip6': {'url': 'ipam/ip-addresses/',
+            #                'name_tag': 'address',
+            #                'fallback': None,
+            #               },
         }
 
         conf = endpoints[endpoint]
@@ -99,21 +99,24 @@ class SyncDevices(SyncNetbox):
             conf['name_tag']: value,
             'slug': value.lower().replace(' ','_').replace(',', '_')
         }
-        for extra_key in conf.get('sub_entries', []):
-            payload[extra_key] = self.create_sub_entry(extra_key, \
-                            inventory.get('manufacturer', 'Manufacturer Attribute Missing'), None)
+        print(extra_infos)
+        if extra_infos:
+            for extra_key in conf.get('sub_entries', []):
+                payload[extra_key] = \
+                        self.create_sub_entry(extra_key,
+                                              extra_infos.get(extra_key, 'Undefiend'))
 
         response = self.request(conf['url'], "POST", payload)
         print(f"{CC.OKBLUE} *{CC.ENDC} New {endpoint} {value} created in Netbox")
         new_id = response.get('id')
         if not new_id:
-            print(response)
+            self.log_details.append(('error', f'Device Exception: {response.text}'))
             raise ValueError(f"Invalid Response from Netbox for {value}")
         self.cache[endpoint][value] = new_id
         return new_id
 #.
 #   .-- Get Device Payload
-    def get_payload(self, db_host, custom_rules, inventory):
+    def get_payload(self, db_host, custom_rules):
         """
         Build API Payload
         """
@@ -155,40 +158,32 @@ class SyncDevices(SyncNetbox):
         }
 
 
-        keys_from_inventory = [
-            "serial",
-        ]
-        # Add custom variables who match to keyload
-        for key in custom_rules:
+        payload['custom_fields'] = {
+            'cmdbsyncer_id': str(self.config['_id']),
+        }
+        # Add Synced Variables or direct IDs
+        for key, value in custom_rules.items():
             if key.endswith("_sync"):
                 # Sync attribute by value of given tag
                 # Needs to be first since we need nb_ in keyname
                 endpoint_name = key[3:-5]
-                needed_entry = inventory.get(custom_rules.get(key))
-                payload[endpoint_name] = self.create_sub_entry(endpoint_name,
-                                                                needed_entry, inventory)
+                payload[endpoint_name] = self.create_sub_entry(endpoint_name, value,
+                                                               custom_rules['sub_values'])
 
-
-            if key.startswith('nb_'):
+            elif key.startswith('nb_'):
                 key = key[3:]
-            if key in payload:
-                payload[key] = custom_rules.get("nb_"+key)
+                if key in payload:
+                    payload[key] = value
+            elif key == "custom_attributes":
+                # Add Custom Variables
+                for sub_key, sub_value in value:
+                    payload['custom_fields'][sub_key] = sub_value
 
-        # Add Inventory Variables we have a remap entry for
-        for key in inventory:
-            if key in keys_from_inventory:
-                payload[key]= inventory.get(key)
-
+        # Cleanup Empty Keys
         keys = list(payload.keys())
         for key in keys:
             if not payload[key]:
                 del payload[key]
-
-        payload['custom_fields'] = {
-            'cmdbsyncer_id': str(self.config['_id']),
-        }
-        for key, value in custom_rules['custom_attributes']:
-            payload['custom_fields'][key] = value
 
         logger.debug(f"Payload: {payload}")
         return payload
@@ -221,14 +216,15 @@ class SyncDevices(SyncNetbox):
             process = 100.0 * counter / total
             print(f"\n{CC.OKBLUE}({process:.0f}%){{CC.ENDC}} {hostname}")
 
-            payload = self.get_payload(db_host, custom_rules, all_attributes['all'])
+            payload = self.get_payload(db_host, custom_rules)
             url = 'dcim/devices/'
             found_hosts.append(hostname)
             if hostname in current_netbox_devices:
                 ## Update
                 host_netbox_data = current_netbox_devices[hostname]
                 host_netbox_id = host_netbox_data['id']
-                if update_keys := self.need_update(host_netbox_data, payload, custom_rules['do_not_update_keys']):
+                if update_keys := self.need_update(host_netbox_data, payload,
+                                                   custom_rules['do_not_update_keys']):
                     print(f"{CC.OKBLUE} *{CC.ENDC} Update Host")
                     url += f"{current_netbox_devices[hostname]['id']}/"
                     update_payload = {}

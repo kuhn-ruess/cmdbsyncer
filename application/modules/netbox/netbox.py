@@ -18,20 +18,28 @@ class SyncNetbox(Plugin):
         return self.actions.get_outcomes(db_host, attributes)
 #.
 #   .-- Object Need Update?
-    def need_update(self, target_payload, main_payload, ignore_fields=None):
+    def need_update(self, device_payload, target_payload, ignore_fields=None):
         """
         Compare Request Payload with Device Response
         """
         keys = []
-        for key, value in main_payload.items():
+        #print('##################')
+        #print(target_payload)
+        #print(device_payload)
+        #print('##################')
+        for key, value in target_payload.items():
             if ignore_fields and key in ignore_fields:
                 continue
-            target_value = target_payload.get(key)
-            if isinstance(target_value, dict):
-                if 'cmdbsyncer_id' in target_value:
-                    continue
-                target_value = target_value.get('id')
-            if value != target_value:
+            current_value = device_payload.get(key, False)
+            if current_value is False:
+                continue
+            if isinstance(current_value, dict):
+                sub_value = current_value.get('id')
+                if not sub_value:
+                    sub_value = current_value.get('value')
+                current_value = sub_value
+            #print(f'{key}: {current_value} -> {value}')
+            if value != current_value:
                 keys.append(key)
         return keys
 #.
@@ -104,8 +112,8 @@ class SyncNetbox(Plugin):
             if response.status_code == 403:
                 raise Exception("Invalid Login, you may need to create a login token")
             if response.status_code >= 299:
-                print(response.text)
-                print("Error in response, enable debug_log to see more")
+                self.log_details.append(('error', f'Exception: {response.text}'))
+                print(f"Error in response {response.text}")
                 return {}
             try:
                 response_json = response.json()

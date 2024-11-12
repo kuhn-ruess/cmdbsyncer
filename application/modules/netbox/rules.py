@@ -20,6 +20,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
         # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('custom_attributes', [])
         outcomes.setdefault('do_not_update_keys', [])
+        outcomes.setdefault('sub_values', {})
         for outcome in rule_outcomes:
             action_param = outcome['param']
             action = outcome['action']
@@ -34,6 +35,11 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
             elif action == 'update_optout':
                 fields = [str(x).strip() for x in action_param.split(',')]
                 outcomes['do_not_update_keys'] += fields
+            elif action.startswith('sub_'):
+                new_value  = render_jinja(action_param, mode="nullify",
+                                         HOSTNAME=self.hostname, **self.attributes)
+                key = action[4:]
+                outcomes['sub_values'][key] = new_value
             else:
                 new_value  = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=self.hostname, **self.attributes)
@@ -88,6 +94,7 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
             new_value = new_value.strip()
             if new_value == "None":
                 new_value = None
+
             outcome_object[action] = new_value
         outcomes['interfaces'].append(outcome_object)
         return outcomes

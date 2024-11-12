@@ -50,7 +50,7 @@ class SyncInterfaces(SyncNetbox):
         payload = {
           "device": device_id,
           #"module": 0,
-          "name": str(if_attributes["portName"]) if if_attributes['portName'] else "None",
+          "name": str(if_attributes["portName"])[:64] if if_attributes['portName'] else "None",
           #"label": "string",
           "type": interface_type,
           "enabled": status_map.get(if_attributes['adminStatus'].lower(), False),
@@ -96,9 +96,7 @@ class SyncInterfaces(SyncNetbox):
         if access_mode:
             payload["mode"] =  access_mode
         if mtu := if_attributes.get('mtu'):
-            if not isinstance(mtu, int):
-                mtu = None
-            payload["mtu"] = mtu
+            payload["mtu"] = int(mtu)
         return payload
 #.
 #   .-- build interface_list
@@ -156,7 +154,8 @@ class SyncInterfaces(SyncNetbox):
                 interface_id = create_response['id']
             else:
                 interface_id = device_interfaces[port_name]['id']
-                if update_keys := self.need_update(device_interfaces[port_name], payload):
+                if update_keys := self.need_update(device_interfaces[port_name], 
+                                                   payload, ignore_fields=['type']):
                     update_payload = {}
                     for key in update_keys:
                         update_payload[key] = payload[key]
