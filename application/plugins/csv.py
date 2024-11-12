@@ -132,11 +132,12 @@ def cli_import_hosts(csv_path, delimiter, hostname_field, account):
     """
     import_hosts(csv_path, delimiter, hostname_field, account)
 
-def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
+def inventorize_hosts(csv_path=None, delimiter=";", hostname_field="host", key="csv", account=None):
     """
     Inventorize data from a CSV
     """
     #pylint: disable=no-member, consider-using-generator
+    encoding="utf-8"
     if account:
 
         account = get_account_by_name(account)
@@ -151,6 +152,8 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
             csv_path = account['path']
         if 'inventorize_key' not in account:
             account['inventorize_key'] = key
+        if 'encoding' in account:
+            encoding = account['encoding']
     else:
         account = {
             'hostname_field': hostname_field,
@@ -167,7 +170,7 @@ def inventorize_hosts(csv_path, delimiter, hostname_field, key, account):
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
           f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
     objects = []
-    with open(csv_path, newline='', encoding='utf-8') as csvfile:
+    with open(csv_path, newline='', encoding=encoding) as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for labels in reader:
             hostname = labels[hostname_field].strip()
