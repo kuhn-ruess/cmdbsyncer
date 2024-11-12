@@ -21,6 +21,16 @@ def syncer_eval(string, default=None):
     except ValueError:
         return default
 
+def syncer_defined(string, default=""):
+    """
+    Makes String Object True or False
+    """
+    if string.lower() in ["false", "none"]:
+        return default
+    if not string:
+        return default
+    return string
+
 def get_ip4_network(ip_string):
     """
     Converts 192.178.2.55/255.255.255.0 to 192.178.2.0/24
@@ -93,6 +103,7 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         'get_ip4_network': get_ip4_network,
         'get_ip4_interface': get_ip4_interface,
         'eval': syncer_eval,
+        'defined': syncer_defined,
 
     })
 
