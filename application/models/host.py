@@ -143,7 +143,7 @@ class Host(db.Document):
             if isinstance(value, dict):
                 for sub_key, sub_value in value.items():
                     labels[f'{key}__{sub_key}'] = sub_value
-                del labels[key]
+                #del labels[key]
         if self.get_labels() != labels:
             self.set_import_sync()
             self.set_labels(labels)
