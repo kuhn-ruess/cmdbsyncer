@@ -50,7 +50,7 @@ class SyncInterfaces(SyncNetbox):
         payload = {
           "device": device_id,
           #"module": 0,
-          "name": str(if_attributes["portName"]),
+          "name": str(if_attributes["portName"]) if if_attributes['portName'] else "None",
           #"label": "string",
           "type": interface_type,
           "enabled": status_map.get(if_attributes['adminStatus'].lower(), False),

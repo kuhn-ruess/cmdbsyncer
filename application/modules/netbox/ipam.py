@@ -82,7 +82,7 @@ class SyncIPAM(SyncNetbox):
                         }
                 progress.advance(task1)
             
-            task2 = progress.add_task("Send Requets to Netbox", total=len(new_ips))
+            task2 = progress.add_task("Send Requests to Netbox", total=len(new_ips))
             for ip, fields in new_ips.items():
                 payload = self.get_payload(ip, fields)
                 if ip in current_ips:

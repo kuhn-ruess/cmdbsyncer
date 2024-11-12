@@ -2,7 +2,8 @@
 Add Hosts into CMK Version 2 Installations
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
-#pylint: disable=logging-fstring-interpolation
+#pylint: disable=logging-fstring-interpolation, too-many-locals, too-many-positional-arguments
+#pylint: disable=too-many-branches, too-many-instance-attributes, too-many-public-methods
 import ast
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -488,7 +489,7 @@ class SyncCMK2(CMK2):
                     try:
                         task.get(timeout=5)
                     except multiprocessing.TimeoutError:
-                        progress.console.print(f"- ERROR: Timout on {db_host.hostname}")
+                        progress.console.print("- ERROR: Timout for a object")
                 pool.close()
                 pool.join()
 
