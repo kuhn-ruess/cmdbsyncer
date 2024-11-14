@@ -25,15 +25,6 @@ class CMK2(Plugin):
     Get Data from CMK
     """
 
-    def __init__(self):
-        """
-        Inital
-        """
-        super().__init__()
-
-        self.log = log
-        self.config = {}
-
 
     def request(self, params, method='GET', data=None, additional_header=None):
         """

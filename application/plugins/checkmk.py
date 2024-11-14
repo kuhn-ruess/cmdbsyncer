@@ -109,15 +109,12 @@ def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False
         target_config = get_account_by_name(account)
         if target_config:
             rules = _load_rules()
-            syncer = SyncCMK2()
+            syncer = SyncCMK2(account)
             syncer.dry_run = dry_run
             syncer.save_requests = save_requests
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
             syncer.print_disabled = bool(target_config.get('print_disabled', False))
             syncer.limit = limit
             syncer.account_filter = target_config.get('account_filter', False)
-            syncer.config = target_config
             syncer.filter = rules['filter']
             syncer.rewrite = rules['rewrite']
             syncer.actions = rules['actions']

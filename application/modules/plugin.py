@@ -57,7 +57,11 @@ class Plugin():
             self.config = get_account(account)
             if not self.config:
                 raise ValueError("Account Invalid or not found")
+            self.account_name = self.config['name']
+            self.account_id = str(self.config['_id'])
+            self.log_details.append(('Account', self.config['name']))
         self.verify = not app.config.get('DISABLE_SSL_ERRORS')
+
 
         if not self.source:
             self.source = self.__class__.__qualname__.replace('.','')
