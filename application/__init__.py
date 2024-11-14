@@ -18,7 +18,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.8 Daily 11.11.2024'
+VERSION = '3.8 Daily 14.11.2024'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -204,8 +204,9 @@ from application.modules.checkmk.models import CheckmkFolderPool
 from application.modules.checkmk.views import CheckmkFolderPoolView
 admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
 
+from application.modules.checkmk.views import CheckmkInventorizeAttributesView
 from application.modules.checkmk.models import CheckmkInventorizeAttributes
-admin.add_view(DefaultModelView(CheckmkInventorizeAttributes, name="Inventorize from Checkmk Settings",
+admin.add_view(CheckmkInventorizeAttributesView(CheckmkInventorizeAttributes, name="Inventorize from Checkmk Settings",
                                                             category="Checkmk"))
 
 from application.modules.checkmk.models import CheckmkObjectCache

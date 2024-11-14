@@ -12,6 +12,7 @@ from mongoengine.errors import DoesNotExist
 from flask_login import current_user
 from application import app
 from application.views.default import DefaultModelView
+from application.docu_links import docu_links
 
 from application.modules.rule.views import RuleModelView, \
                     form_subdocuments_template, _render_full_conditions
@@ -609,6 +610,18 @@ class CheckmkDCDView(RuleModelView):
         })
 
         super().__init__(model, **kwargs)
+
+class CheckmkInventorizeAttributesView(DefaultModelView):
+    """
+    Form rules for Inventorize Attributes
+    """
+
+    form_rules = [
+        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_inventory_attributes"]}"'\
+                        'target="_blank" class="badge badge-light">Documentation</a>'),
+        rules.Field('attribute_names'),
+        rules.Field('attribute_source'),
+    ]
 
 class CheckmkPasswordView(DefaultModelView):
     """

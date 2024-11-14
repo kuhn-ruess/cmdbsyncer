@@ -2,7 +2,6 @@
 Inits for the Plugins
 """
 from application import log
-from application.helpers.get_account import get_account_by_name
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 from application.models.host import Host
@@ -54,24 +53,16 @@ def export_tags(account):
     """
     Export Tags to Checkmk
     """
+    details = []
     try:
-        details = []
-        target_config = get_account_by_name(account)
-        if target_config:
-            rules = _load_rules()
-            syncer = CheckmkTagSync()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.config = target_config
-            syncer.rewrite = rules['rewrite']
-            syncer.export_tags()
-            details.append(("info", "Succsessfull"))
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        rules = _load_rules()
+        syncer = CheckmkTagSync(account)
+        syncer.rewrite = rules['rewrite']
+        syncer.export_tags()
     except Exception as error_obj:
         print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'Error: {error_obj}'))
-        log.log(f"Exception Syncing Tags to Account: {target_config['name']}",
+        log.log(f"Exception Syncing Tags to Account: {account.name}",
                 source="checkmk_tag_export",
                 details=details)
 
@@ -83,30 +74,23 @@ def export_bi_rules(account):
     """
     details = []
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            rules = _load_rules()
-            syncer = BI()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.config = target_config
-            syncer.rewrite = rules['rewrite']
+        rules = _load_rules()
+        syncer = BI(account)
+        syncer.rewrite = rules['rewrite']
 
-            class ExportBiRule(DefaultRule):
-                """
-                Name overwrite 
-                """
+        class ExportBiRule(DefaultRule):
+            """
+            Name overwrite 
+            """
 
-            actions = ExportBiRule()
-            actions.rules = CheckmkBiRule.objects(enabled=True)
-            syncer.actions = actions
-            syncer.export_bi_rules()
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        actions = ExportBiRule()
+        actions.rules = CheckmkBiRule.objects(enabled=True)
+        syncer.actions = actions
+        syncer.export_bi_rules()
     except CmkException as error_obj:
         details.append(('error', f'CMK Error: {error_obj}'))
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        log.log(f"Exception Export BI Rules to Checkmk Account: {target_config['name']}",
+        log.log(f"Exception Export BI Rules to Checkmk Account: {account.name}",
                 source="cmk_bi_sync", details=details)
 #.
 #   .-- Export BI Aggregations
@@ -116,29 +100,22 @@ def export_bi_aggregations(account):
     """
     details = []
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            rules = _load_rules()
-            syncer = BI()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.rewrite = rules['rewrite']
-            syncer.config = target_config
-            class ExportBiAggr(DefaultRule):
-                """
-                Name overwrite
-                """
-            actions = ExportBiAggr()
-            actions.rules = CheckmkBiAggregation.objects(enabled=True)
-            syncer.actions = actions
-            syncer.export_bi_aggregations()
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        rules = _load_rules()
+        syncer = BI(account)
+        syncer.rewrite = rules['rewrite']
+        class ExportBiAggr(DefaultRule):
+            """
+            Name overwrite
+            """
+        actions = ExportBiAggr()
+        actions.rules = CheckmkBiAggregation.objects(enabled=True)
+        syncer.actions = actions
+        syncer.export_bi_aggregations()
     except CmkException as error_obj:
         details.append(('error', f'CMK Error: {error_obj}'))
         print(f'{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-    log.log(f"Export BI Aggregations to Checkmk Account: {target_config['name']}",
-            source="Checkmk", details=details)
+        log.log(f"Export BI Aggregations to Checkmk Account: {account.name}",
+                source="Checkmk", details=details)
 
 #.
 #   .-- Inventorize Hosts
@@ -148,16 +125,15 @@ def inventorize_hosts(account):
     """
     Inventorize information from Checkmk Installation
     """
-    details = []
     try:
-        config = get_account_by_name(account)
-        inven = InventorizeHosts(account, config)
+        inven = InventorizeHosts(account)
         inven.run()
     except CmkException as error_obj:
+        details = []
         details.append(('error', f'Error: {error_obj}'))
         print(f'{ColorCodes.FAIL} Error: {error_obj} {ColorCodes.ENDC}')
-    log.log(f"Inventorize Hosts Account: {config['name']}",
-            source="Checkmk", details=details)
+        log.log(f"Failure Inventorize Hosts Account: {account.name}",
+                source="Checkmk", details=details)
 
 #.
 #   . -- Show missing hosts
@@ -165,9 +141,7 @@ def show_missing(account):
     """
     Return list of all currently missing hosts
     """
-    config = get_account_by_name(account)
-    cmk = CMK2()
-    cmk.config = config
+    cmk = CMK2(account)
 
     local_hosts = [x.hostname for x in Host.get_export_hosts()]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
@@ -185,6 +159,8 @@ def bake_and_sign_agents(account):
     """
     Bake and Sign Agents in Checkmk
     """
+    #pylint: disable = import-outside-toplevel
+    from application.helpers.get_account import get_account_by_name
     account_config = get_account_by_name(account)
     if account_config['typ'] != 'cmkv2':
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
@@ -193,8 +169,7 @@ def bake_and_sign_agents(account):
         print(f"{ColorCodes.FAIL} Please set bakery_key_id and "\
               f"bakery_passphrase as Custom Account Config {ColorCodes.ENDC}")
         return False
-    cmk = CMK2()
-    cmk.config = account_config
+    cmk = CMK2(account)
     url = "/domain-types/agent/actions/bake_and_sign/invoke"
     data = {
         'key_id': int(account_config['bakery_key_id']),
@@ -213,12 +188,7 @@ def activate_changes(account):
     """
     Activate Changes of Checkmk Instance
     """
-    account_config = get_account_by_name(account)
-    if account_config['typ'] != 'cmkv2':
-        print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
-        return False
-    cmk = CMK2()
-    cmk.config = account_config
+    cmk = CMK2(account)
     # Get current activation etag
     url = "/domain-types/activation_run/collections/pending_changes"
     _, headers = cmk.request(url, "GET")
@@ -252,22 +222,14 @@ def export_groups(account, test_run=False):
     """
     details = []
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            rules = _load_rules()
-            syncer = CheckmkGroupSync()
-            syncer.account = target_config['_id']
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.rewrite = rules['rewrite']
-            syncer.config = target_config
-            syncer.export_cmk_groups(test_run)
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        rules = _load_rules()
+        syncer = CheckmkGroupSync(account)
+        syncer.rewrite = rules['rewrite']
+        syncer.export_cmk_groups(test_run)
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporting Groups to Checkmk Account: {target_config['name']}",
+        log.log(f"Error Exporting Groups to Checkmk Account: {account.name}",
                 source="Checkmk", details=details)
 #.
 #   .-- Export Rules
@@ -277,26 +239,19 @@ def export_rules(account):
     """
     details = []
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            rules = _load_rules()
-            syncer = CheckmkRuleSync()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.config = target_config
-            syncer.filter = rules['filter']
+        rules = _load_rules()
+        syncer = CheckmkRuleSync(account)
+        syncer.filter = rules['filter']
 
-            syncer.rewrite = rules['rewrite']
-            actions = CheckmkRulesetRule()
-            actions.rules = CheckmkRuleMngmt.objects(enabled=True)
-            syncer.actions = actions
-            syncer.export_cmk_rules()
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        syncer.rewrite = rules['rewrite']
+        actions = CheckmkRulesetRule()
+        actions.rules = CheckmkRuleMngmt.objects(enabled=True)
+        syncer.actions = actions
+        syncer.export_cmk_rules()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error exporting Rules to Checkmk Account: {target_config['name']}",
+        log.log(f"Error exporting Rules to Checkmk Account: {account.name}",
                 source="cmk_rule_sync", details=details)
 #.
 #    .-- Export Downtimes
@@ -306,30 +261,23 @@ def export_downtimes(account):
     """
     details = []
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            rules = _load_rules()
-            syncer = CheckmkDowntimeSync()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.config = target_config
-            syncer.rewrite = rules['rewrite']
-            class ExportDowntimes(DefaultRule):
-                """
-                Name overwrite
-                """
+        rules = _load_rules()
+        syncer = CheckmkDowntimeSync()
+        syncer.rewrite = rules['rewrite']
+        class ExportDowntimes(DefaultRule):
+            """
+            Name overwrite
+            """
 
-            actions = ExportDowntimes()
-            actions.rules = CheckmkDowntimeRule.objects(enabled=True)
-            syncer.actions = actions
-            syncer.run()
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        actions = ExportDowntimes()
+        actions.rules = CheckmkDowntimeRule.objects(enabled=True)
+        syncer.actions = actions
+        syncer.run()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-    log.log(f"Export Downtimes to Checkmk Account: {target_config['name']}",
-            source="Checkmk", details=details)
+        log.log(f"Export Downtimes to Checkmk Account: {account.name}",
+                source="Checkmk", details=details)
 #.
 #   . DCD Rules
 def export_dcd_rules(account):
@@ -338,26 +286,19 @@ def export_dcd_rules(account):
     """
     details = []
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            syncer = CheckmkDCDRuleSync()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.config = target_config
-            class ExportDCD(DefaultRule):
-                """
-                Name overwrite
-                """
-            actions = ExportDCD()
-            actions.rules = CheckmkDCDRule.objects(enabled=True)
-            syncer.actions = actions
-            syncer.export_rules()
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        syncer = CheckmkDCDRuleSync(account)
+        class ExportDCD(DefaultRule):
+            """
+            Name overwrite
+            """
+        actions = ExportDCD()
+        actions.rules = CheckmkDCDRule.objects(enabled=True)
+        syncer.actions = actions
+        syncer.export_rules()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporing DCD Rules to Checkmk Account: {target_config['name']}",
+        log.log(f"Error Exporing DCD Rules to Checkmk Account: {account.name}",
                 source="cmk_dcd_rule_sync", details=details)
 #.
 #   . Passwords
@@ -367,19 +308,12 @@ def export_passwords(account):
     """
     details = []
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            syncer = CheckmkPasswordSync()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.config = target_config
-            syncer.export_passwords()
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        syncer = CheckmkPasswordSync(account)
+        syncer.export_passwords()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporting Passwords to Checkmk Account: {target_config['name']}",
+        log.log(f"Error Exporting Passwords to Checkmk Account: {account.name}",
             source="cmk_password_sync", details=details)
 #.
 #   . Export Users
@@ -389,18 +323,11 @@ def export_users(account):
     """
     details = []
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            syncer = CheckmkUserSync()
-            syncer.account_id = str(target_config['_id'])
-            syncer.account_name = target_config['name']
-            syncer.config = target_config
-            syncer.export_users()
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        syncer = CheckmkUserSync(account)
+        syncer.export_users()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error exporting Users to Checkmk Account: {target_config['name']}",
+        log.log(f"Error exporting Users to Checkmk Account: {account.name}",
                 source="cmk_user_sync", details=details)
 #.

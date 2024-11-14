@@ -45,13 +45,10 @@ class InventorizeHosts(CMK2):
             self.found_hosts.append(host)
 
 
-    def __init__(self, account, config):
+    def __init__(self, account):
         """Init"""
-        super().__init__()
 
-        self.account = account
-        self.config = config
-
+        super().__init__(account)
 
         for rule in CheckmkInventorizeAttributes.objects():
             self.fields.setdefault(rule.attribute_source, [])
