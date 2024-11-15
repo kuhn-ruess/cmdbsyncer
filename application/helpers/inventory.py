@@ -37,7 +37,6 @@ def run_inventory(config, objects):
         if app_config['LOWERCASE_HOSTNAMES']:
             hostname = hostname.lower()
 
-
         print(f"{CC.OKGREEN}* {CC.ENDC} Data for {hostname}")
         if collect_key := config.get('inventorize_collect_by_key'):
             if value := labels.get(collect_key):

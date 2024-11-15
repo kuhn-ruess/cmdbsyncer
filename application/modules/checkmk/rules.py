@@ -41,6 +41,8 @@ class DefaultRule(Rule):
         """
         Init
         """
+        super().__init__()
+
         if not self.name:
             self.name = name
 
@@ -110,6 +112,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             ('remove_attributes', []),
             ('create_cluster', []),
             ('create_folder', ""),
+            ('create_folder_extra_folder_options', ""),
             ('prefix_labels', False),
             ('only_update_prefixed_labels', False),
             ('dont_update_prefixed_labels', []),
@@ -163,7 +166,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 new_value = render_jinja(new_value, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
 
-                outcomes['extra_folder_options'] += self.format_foldername(new_value)
+                outcomes['create_folder_extra_folder_options'] += self.format_foldername(new_value)
                 outcomes['create_folder'] += self.fix_and_format_foldername(new_value)
 
             if outcome['action'] == 'folder_pool':
