@@ -1,13 +1,10 @@
 """
 Contact Syncronisation
 """
-from application.modules.netbox.netbox import SyncNetbox
-from application.models.host import Host
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from syncerapi.v1 import (
-    cc,
-)
+from application.modules.netbox.netbox import SyncNetbox
+from application.models.host import Host
 
 
 class SyncContacts(SyncNetbox):
@@ -51,7 +48,7 @@ class SyncContacts(SyncNetbox):
           #}
         }
 
-        for what in ['name', 'title', 'phone', 
+        for what in ['name', 'title', 'phone',
                      'email', 'address', 'description']:
             if what in fields:
                 payload[what] = fields[what]
@@ -64,7 +61,6 @@ class SyncContacts(SyncNetbox):
         # Get current Contacts
         url = '/tenancy/contacts/'
         current_contacts = self.get_objects(url, syncer_only=True)
-        new_contacts = {}
         db_objects = Host.objects()
         total = db_objects.count()
         with Progress(SpinnerColumn(),
@@ -91,14 +87,18 @@ class SyncContacts(SyncNetbox):
                 if custom_rules.get('ignore_contact'):
                     progress.advance(task1)
                     continue
-            
+
                 payload = self.get_payload(custom_rules)
-                if payload['name'] in current_contacts:
+                contact = payload['name']
+                if contact in current_contacts:
                     # Update Contact
-                    if update_keys := self.need_update(current_contacts[payload['name']], payload):
+                    if update_keys := self.need_update(current_contacts[contact], payload):
                         netbox_id = current_contacts[contact]['id']
                         url = f'tenancy/contacts/{netbox_id}'
-                        self.update_object(url, payload)
+                        update_payload = {}
+                        for key in update_keys:
+                            update_payload[key] = payload[key]
+                        self.update_object(url, update_payload)
                 else:
                     url = 'tenancy/contacts/'
                     self.create_object(url, payload)
