@@ -44,6 +44,8 @@ class SyncCMK2(CMK2):
 
     console = None
 
+    limit = False
+
     name = "Sync Checkmk Hosts"
     source = "cmk_host_sync"
 
@@ -252,6 +254,7 @@ class SyncCMK2(CMK2):
         for export or not
         """
         if self.config.get('limit_by_hostnames'):
+            self.limit = True
             if hostname not in [x.strip() for x in self.config['limit_by_hostnames'].split(',')]:
                 return False
 
