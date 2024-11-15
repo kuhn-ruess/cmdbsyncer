@@ -3,6 +3,7 @@
 #pylint: disable=logging-fstring-interpolation
 import click
 
+
 from syncerapi.v1 import (
     register_cronjob,
     cc,
@@ -13,6 +14,9 @@ from syncerapi.v1.core import (
     cli,
     Plugin,
 )
+
+
+from syncerapi.v1.inventory import run_inventory
 
 class JDisc(Plugin):
     """
@@ -62,13 +66,13 @@ class JDisc(Plugin):
             name = found_obj['name']
             del found_obj['name']
             host_obj = Host.get_host(name)
-            do_save=host_obj.set_account(account_dict=self.config)
-            host_obj.is_object = True
-            host_obj.object_type = obj_type
-            host_obj.set_labels(found_obj)
-            host_obj.save()
+            do_save = host_obj.set_account(account_dict=self.config)
+            if do_save:
+                host_obj.is_object = True
+                host_obj.object_type = obj_type
+                host_obj.set_labels(found_obj)
+                host_obj.save()
             print(f" {cc.OKGREEN}* {cc.ENDC} Created object {name}")
-
 
     #def get_custom_fields_query(self, mode):
     #    """

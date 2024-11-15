@@ -3,12 +3,7 @@ JDISC Applications
 """
 from application.modules.jdisc.jdisc import JDisc
 
-from syncerapi.v1 import (
-    Host,
-    cc,
-)
-
-from application.helpers.inventory import inventorize_host
+from syncerapi.v1.inventory import run_inventory
 
 
 class JdiscApplications(JDisc):
@@ -28,6 +23,7 @@ class JdiscApplications(JDisc):
                     name
                     operatingSystem {
                       installedApplications {
+                        source
                         application {
                           id
                           name
@@ -45,9 +41,16 @@ class JdiscApplications(JDisc):
 
     def import_applications(self):
         """
-        JDisc Import
+        JDisc Application Import
         """
-        already_found = []
         for labels in self.run_query()['devices']['findAll']:
             applications =  labels['operatingSystem']['installedApplications']
             self.handle_object(applications, 'application')
+
+
+    def inventorize(self):
+        """
+        JDisc Application Inventorize
+        """
+        run_inventory(self.config, [(x['name'], x['operatingSystem']['installedApplications'])
+                                      for x in self.run_query()['devices']['findAll'] if x['name']])

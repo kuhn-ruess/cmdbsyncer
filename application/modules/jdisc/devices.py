@@ -3,8 +3,8 @@ Jdisc Device Import
 """
 
 from application.modules.jdisc.jdisc import JDisc
-from syncerapi.v1.inventory import run_inventory
 
+from syncerapi.v1.inventory import run_inventory
 from syncerapi.v1 import (
     Host,
     cc,
@@ -78,19 +78,6 @@ class JdiscDevices(JDisc):
                   networkBaseAddress
                 }
               }
-              operatingSystem {
-                installedApplications {
-                  source
-                  application {
-                    id
-                    name
-                    manufacturer
-                    version
-                  }
-                  installationPath
-                  installationDate
-                }
-              }
             }
           }
         }
@@ -117,8 +104,9 @@ class JdiscDevices(JDisc):
             else:
                 print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
 
-    def device_inventorize(self):
+    def inventorize(self):
         """
-        JDisc Inventorize
+        JDisc Application Inventorize
         """
-        run_inventory(self.config, self._inner_import())
+        run_inventory(self.config, [(x['name'], x) for x in \
+                            self.run_query()['devices']['findAll'] if x['name']])
