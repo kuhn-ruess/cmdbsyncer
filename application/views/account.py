@@ -150,8 +150,9 @@ class AccountModelView(DefaultModelView):
             ]
         elif form.typ.data == 'cmkv2':
             default_fields = [
-                ('account_filter', ""),
-                ('print_disabled', ""),
+                ('limit_by_accounts', ""),
+                ('limit_by_hostnames', ""),
+                ('list_disabled_hosts', ""),
             ]
         elif form.typ.data == 'ldap':
             default_fields = [

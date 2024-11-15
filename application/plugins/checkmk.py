@@ -8,7 +8,6 @@ from mongoengine.errors import DoesNotExist
 from application import log
 from application.modules.checkmk.syncer import SyncCMK2
 from application.modules.checkmk.cmk2 import cli_cmk
-from application.helpers.get_account import get_account_by_name
 from application.helpers.cron import register_cronjob
 from application.modules.debug import ColorCodes, attribute_table
 
@@ -106,24 +105,19 @@ def show_labels():
 #   .-- Command: Export Hosts
 def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False):
     try:
-        target_config = get_account_by_name(account)
-        if target_config:
-            rules = _load_rules()
-            syncer = SyncCMK2(account)
-            syncer.dry_run = dry_run
-            syncer.save_requests = save_requests
-            syncer.print_disabled = bool(target_config.get('print_disabled', False))
-            syncer.limit = limit
-            syncer.account_filter = target_config.get('account_filter', False)
-            syncer.filter = rules['filter']
-            syncer.rewrite = rules['rewrite']
-            syncer.actions = rules['actions']
-            syncer.run()
+        rules = _load_rules()
+        syncer = SyncCMK2(account)
+        syncer.dry_run = dry_run
+        syncer.save_requests = save_requests
+        if limit:
+            syncer.config['limit_by_hostnames'] = limit
 
-        else:
-            print(f"{ColorCodes.FAIL} Config not found {ColorCodes.ENDC}")
+        syncer.filter = rules['filter']
+        syncer.rewrite = rules['rewrite']
+        syncer.actions = rules['actions']
+        syncer.run()
     except Exception as error_obj:
-        log.log(f"Export to Checkmk Account: {target_config['name']} FAILED",
+        log.log(f"Export to Checkmk Account: {account.name} FAILED",
         source="checkmk_host_export", details=[('error', str(error_obj))])
         print(f'{ColorCodes.FAIL}CMK Connection Error: {error_obj} {ColorCodes.ENDC}')
 
