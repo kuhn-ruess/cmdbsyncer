@@ -19,6 +19,7 @@ from syncerapi.v1.core import (
 def cli_jdisc():
     """JDisc commands"""
 
+#   .-- Devices 
 def jdisc_device_import(account):
     """
     Jdisc Device Import
@@ -28,13 +29,6 @@ def jdisc_device_import(account):
     jdisc.source = "jdisc_device_import"
     jdisc.import_devices()
 
-
-@cli_jdisc.command('import_devices')
-@click.argument('account')
-def cli_jdisc_device_import(account):
-    """Import Devices from JDisc"""
-    jdisc_device_import(account)
-
 def jdisc_device_inventorize(account):
     """
     JDISC Inner Inventorize
@@ -42,15 +36,26 @@ def jdisc_device_inventorize(account):
     jdisc = JdiscDevices(account)
     jdisc.name = f"Inventorize data from {account}"
     jdisc.source = "jdisc_device_inventorize"
-    jdisc.jdisc_inventorize()
+    jdisc.inventorize()
+
+@cli_jdisc.command('import_devices')
+@click.argument('account')
+def cli_jdisc_device_import(account):
+    """Import Devices from JDisc"""
+    jdisc_device_import(account)
 
 @cli_jdisc.command('inventorize_devices')
 @click.argument('account')
 def cli_jdisc_device_inventorize(account):
     """Inventorize Devices from JDisc"""
-    jdisc_inventorize(account)
+    jdisc_device_inventorize(account)
 
 
+register_cronjob("JDisc: Import Devices", jdisc_device_import)
+register_cronjob("JDisc: Inventorize Devices", jdisc_device_inventorize)
+
+#.
+#   .-- Applications
 def jdisc_applications_import(account):
     """
     Jdisc Applications Import
@@ -60,6 +65,21 @@ def jdisc_applications_import(account):
     jdisc.source = "jdisc_applications_import"
     jdisc.import_applications()
 
+def jdisc_application_inventorize(account):
+    """
+    JDISC Inner Inventorize
+    """
+    jdisc = JdiscApplications(account)
+    jdisc.name = f"Inventorize data from {account}"
+    jdisc.source = "jdisc_application_inventorize"
+    jdisc.inventorize()
+
+
+@cli_jdisc.command('inventorize_applications')
+@click.argument('account')
+def cli_jdisc_device_inventorize(account):
+    """Inventorize Applications from JDisc"""
+    jdisc_application_inventorize(account)
 
 @cli_jdisc.command('import_applications')
 @click.argument('account')
@@ -67,8 +87,8 @@ def cli_jdisc_application_import(account):
     """Import Applications from JDisc"""
     jdisc_applications_import(account)
 
-
-
-register_cronjob("JDisc: Import Devices", jdisc_device_import)
+register_cronjob("JDisc: Inventorize Applications", jdisc_application_inventorize)
 register_cronjob("JDisc: Import Applications", jdisc_applications_import)
-register_cronjob("JDisc: Inventorize Devices", jdisc_device_inventorize)
+#.
+
+
