@@ -44,6 +44,7 @@ class BaseConfig():
     REPLACE_ATTRIBUTE_KEYS = False
     LOWERCASE_ATTRIBUTE_KEYS = False
     LOWERCASE_HOSTNAMES = False
+    LABELS_ITERATE_FIRST_LEVEL = False
 
     REPLACERS = [
       (' ', '_'),

@@ -140,10 +140,11 @@ class Host(db.Document):
         set_import_sync and import_seen as needed
         """
         for key, value in list(labels.items()):
-            if isinstance(value, dict):
-                for sub_key, sub_value in value.items():
-                    labels[f'{key}__{sub_key}'] = sub_value
-                #del labels[key]
+            if app.config['LABELS_ITERATE_FIRST_LEVEL']:
+                if isinstance(value, dict):
+                    for sub_key, sub_value in value.items():
+                        labels[f'{key}__{sub_key}'] = sub_value
+                    del labels[key]
         if self.get_labels() != labels:
             self.set_import_sync()
             self.set_labels(labels)

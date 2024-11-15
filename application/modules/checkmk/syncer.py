@@ -44,8 +44,6 @@ class SyncCMK2(CMK2):
 
     console = None
 
-    print_disabled = False
-
     name = "Sync Checkmk Hosts"
     source = "cmk_host_sync"
 
@@ -253,11 +251,17 @@ class SyncCMK2(CMK2):
         Return if the Host is to be used
         for export or not
         """
-        if self.limit:
-            if hostname not in self.limit:
+        if self.config.get('limit_by_hostnames'):
+            if hostname not in [x.strip() for x in self.config['limit_by_hostnames'].split(',')]:
                 return False
-        if self.account_filter:
-            filters = [x.strip() for x in self.account_filter.split(',')]
+
+        # Remove with 4.0
+        if self.config.get('account_filter'):
+            raise ValueError("Please migrate 'account_filter' to "\
+                            "'limit_by_accounts' in Accounts settings")
+
+        if self.config.get('limit_by_accounts'):
+            filters = [x.strip() for x in self.config['limit_by_accounts'].split(',')]
             if source_account_name not in filters:
                 return False
 
@@ -494,7 +498,7 @@ class SyncCMK2(CMK2):
                 pool.join()
 
 
-                if self.print_disabled:
+                if self.config.get('list_disabled_hosts'):
                     task2 = progress.add_task("List Disabled Hosts", total=total)
                     self.disabled_hosts = disabled_hosts
                     for host in disabled_hosts:
