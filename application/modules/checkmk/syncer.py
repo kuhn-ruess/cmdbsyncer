@@ -349,6 +349,8 @@ class SyncCMK2(CMK2):
         if '{' in next_actions.get('extra_folder_options', ''):
             self.handle_extra_folder_options(next_actions['extra_folder_options'])
         if 'create_folder' in next_actions:
+            if '{' in next_actions.get('create_folder_extra_folder_options', ''):
+                self.handle_extra_folder_options(next_actions['create_folder_extra_folder_options'])
             create_folder = next_actions['create_folder']
             if create_folder not in self.existing_folders:
                 # We may need to create them later
