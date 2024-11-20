@@ -45,7 +45,7 @@ def format_log(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     html = "<ul>"
     for entry in m.log:
-        html+=f"<li>{entry}</li>"
+        html+=f"<li>{entry[:200]}</li>"
     html += "</ul>"
     return Markup(html)
 

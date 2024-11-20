@@ -53,4 +53,4 @@ class JdiscApplications(JDisc):
         JDisc Application Inventorize
         """
         run_inventory(self.config, [(x['name'], x['operatingSystem']['installedApplications'])
-                                      for x in self.run_query()['devices']['findAll'] if x['name']])
+                                      for x in self.run_query()['devices']['findAll'] if x['name']], 'applications')

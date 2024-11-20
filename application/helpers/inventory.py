@@ -23,15 +23,19 @@ def inventorize_host(host_obj, labels, key, config):
 
 
 
-def run_inventory(config, objects):
+def run_inventory(config, objects, sub_key=None):
     """
     Run the inventory proccess
     Objects needs to be a list of tuples
     (hostname, labels).
     """
     inv_key = config['inventorize_key']
+    if sub_key:
+        inv_key += "_" + sub_key
     collected_by_key = {}
     for hostname, labels in objects:
+        if isinstance(labels, list):
+            labels = {'list':labels}
         if config.get('rewrite_hostname'):
             hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
         if app_config['LOWERCASE_HOSTNAMES']:

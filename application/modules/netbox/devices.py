@@ -104,7 +104,7 @@ class SyncDevices(SyncNetbox):
             for extra_key in conf.get('sub_entries', []):
                 payload[extra_key] = \
                         self.create_sub_entry(extra_key,
-                                              extra_infos.get(extra_key, 'Undefiend'))
+                                              extra_infos.get(extra_key, 'Undefined'))
 
         response = self.request(conf['url'], "POST", payload)
         print(f"{CC.OKBLUE} *{CC.ENDC} New {endpoint} {value} created in Netbox")

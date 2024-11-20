@@ -20,14 +20,16 @@ class JdiscExecutables(JDisc):
                 devices {
                   findAll {
                     name
-                    installedExecutableFiles {
-                        executableFile {
-                            binaryName
-                                name
-                                manufacturer
-                                version
-                              }
-                              installationPath
+                    operatingSystem {
+                     installedExecutableFiles {
+                         executableFile {
+                             binaryName
+                                 name
+                                 manufacturer
+                                 version
+                               }
+                               installationPath
+                     }
                     }
                   }
                 }
@@ -46,5 +48,5 @@ class JdiscExecutables(JDisc):
         """
         JDisc Executables Inventorize
         """
-        run_inventory(self.config, [(x['name'], x)
-                                      for x in self.run_query()['devices']['findAll'] if x['name']])
+        run_inventory(self.config, [(x['name'], x['operatingSystem']['installedExecutableFiles'])
+                                      for x in self.run_query()['devices']['findAll'] if x['name']], 'executables')
