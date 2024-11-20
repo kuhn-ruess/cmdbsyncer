@@ -22,7 +22,7 @@ class JdiscDevices(JDisc):
 
         return """
         query test {
-        devices {
+           devices {
             findAll {
               id
               name
@@ -78,9 +78,61 @@ class JdiscDevices(JDisc):
                   networkBaseAddress
                 }
               }
+            networkInterfaces {
+              ip4Transports {
+                hostnames
+                ipAddress
+                hostnames
+                ipAddress
+                subnetMask
+                networkInterface {
+                  physicalAddress
+                  type
+                  index
+                  duplexMode
+                  extendedDescription
+                  operationalStatus
+                  speed
+                  mtu
+                  administrativeStatus
+                  description
+                }
+                network {
+                  name
+                  nameManuallyConfigured
+                  networkBaseAddress
+                  subnetMask
+                }
+              }
+              ip6Transports {
+                hostnames
+                ipAddress
+                hostnames
+                ipAddress
+                configuredPrefixLength
+                networkInterface {
+                  physicalAddress
+                  type
+                  index
+                  duplexMode
+                  extendedDescription
+                  operationalStatus
+                  speed
+                  mtu
+                  administrativeStatus
+                  description
+                }
+                network {
+                  name
+                  nameManuallyConfigured
+                  networkBaseAddress
+                  prefixLength
+                }
+              }
             }
           }
         }
+       }
     """
 
     def import_devices(self):

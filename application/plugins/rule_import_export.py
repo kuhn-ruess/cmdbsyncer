@@ -30,6 +30,7 @@ enabled_rules = {
     'accounts': ('application.models.account', 'Account'),
     'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
     'netbox_interfaces': ('application.modules.netbox.models', 'NetboxDcimInterfaceAttributes'),
+    'netbox_devices': ('application.modules.netbox.models', 'NetboxCustomAttributes'),
 }
 
 

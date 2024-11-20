@@ -33,9 +33,10 @@ class NetboxRewriteAttributeRule(db.Document):
 
 netbox_outcome_types = [
   ('nb_device_type_sync', 'Syncronise Device Type'),
-  ('nb_platform_sync', 'Syncronise Platform ID'),
+  ('nb_platform_sync', 'Syncronise Platform'),
   ('sub_manufacturer_sync', 'Syncronise Manufacturer for Device Type'),
   ('nb_role_sync', 'Syncronise (Device) Role'),
+  ('nb_serial', 'Syncronise Serial Number'),
   ('nb_role', 'Set (Device) Role ID manually'),
   ('nb_tenant', 'Set Device Tenant ID manually'),
   ('nb_platform', 'Set Platform ID manually'),
