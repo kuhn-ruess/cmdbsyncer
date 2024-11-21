@@ -50,7 +50,6 @@ def load_device_rules():
 def cli_netbox():
     """Netbox Import and Syncronisation"""
 
-
 #   .-- Command: Export Hosts
 def netbox_device_export(account):
     """Sync Objects with Netbox"""
@@ -64,6 +63,7 @@ def netbox_device_export(account):
         syncer.source = "netbox_device_export"
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
+        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_hosts')
@@ -73,8 +73,6 @@ def cli_netbox_device_export(account):
     """Sync Devices with Netbox"""
     netbox_device_export(account)
 #.
-
-
 #   .-- Command: Import Devices
 def netbox_device_import(account):
     """Import Devices from Netbox"""
@@ -91,7 +89,6 @@ def cli_netbox_device_import(account):
     """Import Devices from Netbox"""
     netbox_device_import(account)
 #.
-
 #   .-- Command: Import VMS
 def netbox_vm_import(account):
     """Import VMs from Netbox"""
@@ -107,7 +104,6 @@ def cli_netbox_vm_import(account):
     """Import VMs from Netbox"""
     netbox_vm_import(account)
 #.
-
 #   .-- Command: Export IPs
 def netbox_ip_sync(account):
     """Import Devices from Netbox"""
@@ -129,6 +125,7 @@ def netbox_ip_sync(account):
 
         syncer.sync_ips()
     except Exception as error_obj: #pylint:disable=broad-except
+        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_ips')
@@ -137,7 +134,6 @@ def cli_netbox_ip_syn(account):
     """Export IPAM IPs"""
     netbox_ip_sync(account)
 #.
-
 #   .-- Command: Export Interfaces
 def netbox_interface_sync(account):
     """Export Interfaces to Netbox"""
@@ -202,8 +198,6 @@ def cli_netbox_contacts(account):
     """Export Contacts"""
     netbox_contacts_sync(account)
 #.
-
-
 #   .-- Command: Debug Hosts
 @cli_netbox.command('debug_host')
 @click.argument("hostname")
@@ -262,8 +256,8 @@ def netbox_host_debug(hostname):
     #attribute_table("API Payload", payload)
 #.
 
-register_cronjob("Netbox: Export Devices", netbox_device_export)
+register_cronjob("Netbox: Update Devices", netbox_device_export)
 register_cronjob("Netbox: Import Devices", netbox_device_import)
 register_cronjob("Netbox: Import VMs", netbox_vm_import)
-register_cronjob("Netbox: Export IPs", netbox_ip_sync)
-register_cronjob("Netbox: Export Contacts", netbox_contacts_sync)
+register_cronjob("Netbox: Update IPs", netbox_ip_sync)
+register_cronjob("Netbox: Update Contacts", netbox_contacts_sync)

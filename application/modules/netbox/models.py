@@ -32,19 +32,19 @@ class NetboxRewriteAttributeRule(db.Document):
 # if they end with sync, they sync with an netbox endpoint
 
 netbox_outcome_types = [
-  ('nb_device_type_sync', 'Syncronise Device Type'),
-  ('nb_platform_sync', 'Syncronise Platform'),
-  ('sub_manufacturer_sync', 'Syncronise Manufacturer for Device Type'),
-  ('nb_role_sync', 'Syncronise (Device) Role'),
-  ('nb_serial', 'Syncronise Serial Number'),
-  ('nb_role', 'Set (Device) Role ID manually'),
-  ('nb_tenant', 'Set Device Tenant ID manually'),
-  ('nb_platform', 'Set Platform ID manually'),
-  ('nb_site', 'Set Site ID manually'),
-  ('nb_location', 'Set Location ID manually'),
-  ('nb_rack', 'Set Rack ID manually'),
-  ('nb_device_type', 'Set Device Type ID manually'),
-  ('custom_field', 'Set a Custom Field key:value (Jinja)'),
+  ('nb_device_type', '* Type'),
+  ('nb_platform', 'Platform'),
+  ('nb_device_type.manufacturer', '* Manufacturer'),
+  ('nb_model', '* Model'),
+  ('nb_role', 'Role'),
+  ('nb_serial', 'Serial Number'),
+  #('nb_tenant', 'Tenant'),
+  ('nb_platform', 'Platform'),
+  ('nb_site', 'Site'),
+  #('nb_location', 'Location'),
+  #('nb_rack', 'Rack'),
+  #('custom_field', 'Set a Custom Field key:value (Jinja)'),
+
   ('update_optout', 'Do never Update given Fields (comma separated list possible)'),
   ('ignore_host', 'Ignore Host(s)'),
 ]
@@ -85,13 +85,14 @@ class NetboxCustomAttributes(db.Document):
     }
 
 netbox_ipam_ipaddress_outcome_types = [
-  ('ip_address', 'IPv4 or IPv6 with Network Address (Example: 127.0.0.1/24)'),
-  ('ip_family', 'Family of IP: ipv6 or ipv4'),
-  ('assigned', 'Is Assigned (bool)'),
-  ('assigned_obj_id', 'Assigned Object ID'),
-  ('assigned_obj_type', 'Assigned Object Type'),
+  ('address', 'IPv4 or IPv6 with Network Address (Example: 127.0.0.1/24)'),
+  ('family', 'Family of IP: ipv6 or ipv4'),
+  ('status', 'Status of IP like: active'),
+  ('assigned_object_id', 'Assigned Object ID'),
+  ('assigned_object_type', 'Assigned Object Type'),
   ('ignore_ip', 'Ignore matching objects for sync'),
 ]
+
 class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
     """
     Outcome
@@ -129,16 +130,16 @@ class NetboxIpamIpaddressattributes(db.Document):
 netbox_device_interface_outcome_types = [
         ('device', '(required) ID of Assigned Device'),
         ('ip_address', '(required) IP Address used by Interface'),
-        ('portName', 'Port Name'),
-        ('macAddress', 'Mac Address'),
+        ('name', 'Port/ Interface Name'),
+        ('mac_address', 'Mac Address'),
         ('description', 'Description'),
-        ('interfaceType', 'Interface Type'),
-        ('adminStatus', 'Admin Status'),
+        ('type', 'Interface Type'),
+        ('admin_status', 'Admin Status'),
         ('type', 'Interface Type'),
         ('speed', 'Interface Speed'),
         ('duplex', 'Interface Duplex Mode'),
         ('description', 'Interface Description'),
-        ('macAddress', 'Interface MacAddress'),
+        ('mac_address', 'Interface MacAddress'),
         ('mode', 'Interface Mode'),
         ('mtu', 'Interface MTU'),
         ('ignore_interface', 'Ignore matching objects for sync'),

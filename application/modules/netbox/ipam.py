@@ -1,13 +1,10 @@
 """
 IPAM Syncronisation
 """
+from application import logger
 from application.modules.netbox.netbox import SyncNetbox
 from application.models.host import Host
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-
-from syncerapi.v1 import (
-    cc,
-)
 
 
 class SyncIPAM(SyncNetbox):
@@ -16,38 +13,24 @@ class SyncIPAM(SyncNetbox):
     """
     console = None
 
-    def get_payload(self, ip, fields):
+    @staticmethod
+    def get_field_config():
         """
-        Build Netbox Payload
+        Return Fields needed for Devices
         """
-        payload = {
-             'address': ip,
-             'status': 'active',
-             'assigned': fields.get('assigned', False),
-             'assigned_object_type': fields['assigned_obj_type'],
-             'assigned_object_id': fields['assigned_obj_id'],
-           }
+        translation = {
+        }
+        form_rules = {
+        }
 
-        if fields['ip_family'] == 'ipv4':
-            payload['family'] = {
-                'value': 4,
-                'label': 'IPv4',
-            }
-        else:
-            payload['family'] = {
-                'value': 6,
-                'label': 'IPv6',
-            }
-        return payload
+        return translation, form_rules
 
     def sync_ips(self):
         """
         Sync IP Addresses
         """
         # Get current IPs
-        url = 'ipam/ip-addresses/'
-        current_ips = self.get_objects(url, syncer_only=True)
-        new_ips = {}
+        current_ips = self.nb.ipam.ip_addresses
 
         db_objects = Host.get_export_hosts()
         total = db_objects.count()
@@ -56,42 +39,43 @@ class SyncIPAM(SyncNetbox):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             self.console = progress.console.print
-            task1 = progress.add_task("Calculating all IPs", total=total)
-            for db_host in db_objects:
-                hostname = db_host.hostname
+            task1 = progress.add_task("Updating IPs", total=total)
+            for db_object in db_objects:
+                hostname = db_object.hostname
 
                 self.console(f'Handling: {hostname}')
 
-                all_attributes = self.get_host_attributes(db_host, 'netbox_hostattribute')
+                all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
                 if not all_attributes:
                     progress.advance(task1)
                     continue
-                custom_rules = self.get_host_data(db_host, all_attributes['all'])
+                cfg_ips = self.get_host_data(db_object, all_attributes['all'])
 
-                if custom_rules.get('ignore_ip'):
+                if cfg_ips.get('ignore_ip'):
                     progress.advance(task1)
                     continue
 
-                if custom_rules:
-                    if 'ip_address' in custom_rules and custom_rules['ip_address']:
-                        new_ips[custom_rules['ip_address']] = {
-                            'ip_family': custom_rules.get('ip_family', 'ipv4'),
-                            'assigned': custom_rules.get('assigned', False),
-                            'assigned_obj_id' : custom_rules.get('assigned_obj_id', 0),
-                            'assigned_obj_type' : custom_rules.get('assigned_obj_type', 0),
-                        }
-                progress.advance(task1)
-            
-            task2 = progress.add_task("Send Requests to Netbox", total=len(new_ips))
-            for ip, fields in new_ips.items():
-                payload = self.get_payload(ip, fields)
-                if ip in current_ips:
-                    # Update IPs
-                    if update_keys := self.need_update(current_ips[ip], payload):
-                        netbox_id = current_ips[ip]['id']
-                        url = f'ipam/ip-addresses/{netbox_id}'
-                        self.update_object(url, payload)
+                logger.debug(f"Working with {cfg_ips}")
+                address = cfg_ips['fields']['address']
+                if not address:
+                    continue
+                ip_query = {
+                    'address': address,
+                    'assigned_object': cfg_ips['fields']['assigned_object_id'],
+                }
+                logger.debug(f"IPAM IPS Filter Query: {ip_query}")
+                if ip := current_ips.get(**ip_query):
+                    # Update
+                    if payload := self.get_update_keys(ip, cfg_ips):
+                        self.console(f"* Update IP: for {hostname} {payload}")
+                        ip.update(payload)
+                    else:
+                        self.console("* Netbox already up to date")
                 else:
-                    url = 'ipam/ip-addresses/'
-                    self.create_object(url, payload)
-                progress.advance(task2)
+                    ### Create
+                    self.console(f" * Create IP for {hostname}")
+                    payload = self.get_update_keys(False, cfg_ips)
+                    logger.debug(f"Create Payload: {payload}")
+                    ip = self.nb.ipam.ip_addresses.create(payload)
+
+                progress.advance(task1)

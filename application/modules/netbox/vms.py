@@ -14,21 +14,10 @@ class SyncVMS(SyncNetbox):
     Sync Netbox VMS
     """
 
-    def get_vms(self, syncer_only=False):
-        """
-        Read full list of vms
-        """
-        print(f"{cc.OKGREEN} -- {cc.ENDC}Netbox: "\
-              f"Read all VMs (Filter only CMDB Syncer: {syncer_only})")
-        url = 'virtualization/virtual-machines/?limit=10000'
-        if syncer_only:
-            url += f"&cf_cmdbsyncer_id={self.config['_id']}"
-        vms = self.request(url, "GET")
-        return {x['display']:x for x in vms}
-
     def import_hosts(self):
-        for hostname, data in self.get_vms().items():
-            labels = self.extract_data(data)
+        for vm in self.nb.virtualization.virtual_machines.all():
+            hostname = vm.name
+            labels = vm.__dict__
             if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
                 hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], labels)
             host_obj = Host.get_host(hostname)
