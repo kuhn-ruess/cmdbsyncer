@@ -4,7 +4,7 @@ Host Model
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 import datetime
 from mongoengine.errors import DoesNotExist
-from application import db, app
+from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 
@@ -68,6 +68,18 @@ class Host(db.Document):
         Return all Objects for Exports
         """
         return Host.objects(available=True, is_object__ne=True)
+
+    @staticmethod
+    def objects_by_filter(object_list):
+        """
+        Return DB Objects Matching Filter
+        """
+        if not object_list:
+            logger.debug("HOST FILTER OFF")
+            return Host.objects(is_object__ne=True)
+        logger.debug(f"HOST FILTER {object_list}")
+        return Host.objects(object_type__in=object_list)
+
 
     @staticmethod
     def get_host(hostname, create=True):

@@ -2,6 +2,7 @@
 Handle Netbox
 """
 #pylint: disable=no-member, too-many-locals
+#pylint: disable=wildcard-import, unused-wildcard-import
 import click
 from mongoengine.errors import DoesNotExist
 
@@ -59,11 +60,10 @@ def netbox_device_export(account):
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
         syncer.actions = rules['actions']
-        syncer.name = "Export Devices"
-        syncer.source = "netbox_device_export"
+        syncer.name = "Netbox: Update Devices"
+        syncer.source = "netbox_device_syng"
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
-        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_hosts')
@@ -113,19 +113,19 @@ def netbox_ip_sync(account):
 
         attribute_rewrite.rules = \
                 NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
-        
+
         netbox_rules = NetboxIpamIPaddressRule()
-        netbox_rules.rules = NetboxIpamIpaddressattributes.objects(enabled=True).order_by('sort_field')
+        netbox_rules.rules = \
+                NetboxIpamIpaddressattributes.objects(enabled=True).order_by('sort_field')
 
         syncer = SyncIPAM(account)
         syncer.rewrite = attribute_rewrite
         syncer.actions = netbox_rules
-        syncer.name = "Export IPs"
+        syncer.name = "Netbox: IPs Devices"
         syncer.source = "netbox_ipam_export"
 
         syncer.sync_ips()
     except Exception as error_obj: #pylint:disable=broad-except
-        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_ips')
@@ -143,22 +143,21 @@ def netbox_interface_sync(account):
 
         attribute_rewrite.rules = \
                 NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
-        
+
         netbox_rules = NetboxDevicesInterfaceRule()
-        netbox_rules.rules = NetboxDcimInterfaceAttributes.objects(enabled=True).order_by('sort_field')
+        netbox_rules.rules = \
+                NetboxDcimInterfaceAttributes.objects(enabled=True).order_by('sort_field')
 
         syncer = SyncInterfaces(account)
         syncer.rewrite = attribute_rewrite
         syncer.actions = netbox_rules
-        syncer.name = "Export Interfaces"
-        syncer.source = "netbox_interface_export"
+        syncer.name = "Netbox: Update Interfaces"
+        syncer.source = "netbox_interface_sync"
 
         syncer.sync_interfaces()
     except KeyError as error_obj: #pylint:disable=broad-except
-        raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
-        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_interfaces')
@@ -176,15 +175,15 @@ def netbox_contacts_sync(account):
 
         attribute_rewrite.rules = \
                 NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
-        
+
         netbox_rules = NetboxContactRule()
         netbox_rules.rules = NetboxContactAttributes.objects(enabled=True).order_by('sort_field')
 
         syncer = SyncContacts(account)
         syncer.rewrite = attribute_rewrite
         syncer.actions = netbox_rules
-        syncer.name = "Export Interfaces"
-        syncer.source = "netbox_contacts_export"
+        syncer.name = "Netbox: Update Contacts"
+        syncer.source = "netbox_contact_sync"
 
         syncer.sync_contacts()
     except KeyError as error_obj: #pylint:disable=broad-except
@@ -255,9 +254,9 @@ def netbox_host_debug(hostname):
     #payload = syncer.get_payload(db_host, extra_attributes, attributes['all'])
     #attribute_table("API Payload", payload)
 #.
-
 register_cronjob("Netbox: Update Devices", netbox_device_export)
 register_cronjob("Netbox: Import Devices", netbox_device_import)
 register_cronjob("Netbox: Import VMs", netbox_vm_import)
 register_cronjob("Netbox: Update IPs", netbox_ip_sync)
 register_cronjob("Netbox: Update Contacts", netbox_contacts_sync)
+register_cronjob("Netbox: Update Interfaces", netbox_interface_sync)

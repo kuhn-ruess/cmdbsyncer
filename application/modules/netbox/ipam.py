@@ -32,7 +32,8 @@ class SyncIPAM(SyncNetbox):
         # Get current IPs
         current_ips = self.nb.ipam.ip_addresses
 
-        db_objects = Host.get_export_hosts()
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),

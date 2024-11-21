@@ -14,9 +14,6 @@ class SyncInterfaces(SyncNetbox):
     if_types = []
     console = None
 
-    name = "Netbox Interface Sync"
-    source = "netbox_interface_sync"
-
     def fix_values(self, value_dict):
         """
         Fix invalid values
@@ -34,7 +31,8 @@ class SyncInterfaces(SyncNetbox):
         """
         Iterarte over objects and sync them to Netbox
         """
-        db_objects = Host.objects()
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
@@ -74,7 +72,7 @@ class SyncInterfaces(SyncNetbox):
                             self.console("* Netbox already up to date")
                     else:
                         ### Create
-                        self.console(f" * Create Device for {hostname}")
+                        self.console(f" * Create Interfaces for {hostname}")
                         payload = self.get_update_keys(False, cfg_interface)
                         payload['device'] = int(payload['device'])
                         logger.debug(f"Create Payload: {payload}")

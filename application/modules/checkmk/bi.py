@@ -15,8 +15,6 @@ class BI(CMK2):
     """
     Sync jobs for Checkmk Config
     """
-    name = "Sync BI Rules to Checkmk"
-    source = "cmk_bi_sync"
 
 
 

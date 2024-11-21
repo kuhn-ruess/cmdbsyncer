@@ -109,6 +109,7 @@ login_manager.login_message = False
 
 
 cron_register = {}
+plugin_register = []
 from plugins import *
 from application.plugins import *
 

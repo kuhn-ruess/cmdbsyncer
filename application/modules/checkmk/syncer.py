@@ -46,10 +46,6 @@ class SyncCMK2(CMK2):
 
     limit = False
 
-    name = "Sync Checkmk Hosts"
-    source = "cmk_host_sync"
-
-
     @staticmethod
     def chunks(lst, n):
         """Yield successive n-sized chunks from lst."""
@@ -465,7 +461,8 @@ class SyncCMK2(CMK2):
         """
         Calculate Attributes and Rules
         """
-        db_objects = Host.get_export_hosts()
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
 
         with Progress(SpinnerColumn(),

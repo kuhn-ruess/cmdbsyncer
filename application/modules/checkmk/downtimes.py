@@ -19,8 +19,6 @@ class CheckmkDowntimeSync(CMK2):
     # Reset Log Details
     #log_details = []
 
-    name = "Synced Checkmk Downtimes"
-    source = "cmk_downtime_sync"
 
     def ahead_days(self, offset):
         """
@@ -215,7 +213,9 @@ class CheckmkDowntimeSync(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Calculating Downtimes", total=total)
-            for db_host in Host.objects():
+            object_filter = self.config['settings'].get(self.name, {}).get('filter')
+            db_objects = Host.objects_by_filter(object_filter)
+            for db_host in db_objects:
                 hostname = db_host.hostname
                 progress.console.print(f"- Started for {hostname}")
                 attributes = self.get_host_attributes(db_host, 'cmk_conf')

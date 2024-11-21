@@ -50,6 +50,9 @@ class Plugin():
     source = None
 
     def __init__(self, account=False):
+        """
+        Intit
+        """
         self.start_time = time.time()
         self.log_details = []
         self.log_details.append(('started', datetime.now()))

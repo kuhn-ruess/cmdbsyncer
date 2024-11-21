@@ -17,10 +17,6 @@ class CheckmkDCDRuleSync(CMK2):
     console = None
     all_rules = []
 
-    name = "Synced DCD Rules"
-    source = "cmk_dcd_rule_sync"
-
-
     def does_rule_exist(self, rule_id):
         """
         Check if Rule is existing
@@ -153,7 +149,9 @@ class CheckmkDCDRuleSync(CMK2):
                       TimeElapsedColumn()) as progress:
             self.console = progress.console.print
             task1 = progress.add_task("Calculate Rules", total=total)
-            for db_host in Host.objects():
+            object_filter = self.config['settings'].get(self.name, {}).get('filter')
+            db_objects = Host.objects_by_filter(object_filter)
+            for db_host in db_objects:
                 attributes = self.get_host_attributes(db_host, 'cmk_conf')
                 if not attributes:
                     continue

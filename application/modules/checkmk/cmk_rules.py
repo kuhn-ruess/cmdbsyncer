@@ -24,9 +24,6 @@ class CheckmkRuleSync(CMK2):
     """
     rulsets_by_type = {}
 
-    name = "Synced Configuration Rules"
-    source = "cmk_rule_sync"
-
     def export_cmk_rules(self): # pylint: disable=too-many-branches, too-many-statements
         """
         Export config rules to checkmk
@@ -43,7 +40,9 @@ class CheckmkRuleSync(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Calculate Ruels", total=total)
-            for db_host in Host.objects():
+            object_filter = self.config['settings'].get(self.name, {}).get('filter')
+            db_objects = Host.objects_by_filter(object_filter)
+            for db_host in db_objects:
                 attributes = self.get_host_attributes(db_host, 'cmk_conf')
                 if not attributes:
                     continue
