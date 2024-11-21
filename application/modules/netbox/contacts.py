@@ -20,7 +20,8 @@ class SyncContacts(SyncNetbox):
         """
         # Get current Contacts
         current_contacts = self.nb.tenancy.contacts
-        db_objects = Host.objects()
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),

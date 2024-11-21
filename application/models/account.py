@@ -1,10 +1,9 @@
 """
 Account
 """
-from application import db
+from application import db, plugin_register
 
 account_types = [
-
     ('cmkv1', "Checkmk Version 1.x"),
     ('cmkv2', "Checkmk Version 2.x"),
     ('csv', "CSV File"),
@@ -37,6 +36,13 @@ object_types = [
 ]
 
 
+class PluginSettings(db.EmbeddedDocument):
+    """
+    Custom Attributes for Setup
+    """
+    plugin = db.StringField(choices=plugin_register)
+    object_filter = db.ListField(field=db.StringField(choices=object_types))
+
 class CustomEntry(db.EmbeddedDocument):
     """
     Custom Attributes for Setup
@@ -48,7 +54,6 @@ class Account(db.Document):
     """
     Account
     """
-
     name = db.StringField(required=True, unique=True)
     typ = db.StringField(choices=account_types)
     is_master = db.BooleanField(default=False)
@@ -60,6 +65,7 @@ class Account(db.Document):
     password = db.StringField()
 
     custom_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CustomEntry"))
+    plugin_settings = db.ListField(field=db.EmbeddedDocumentField(document_type="PluginSettings"))
 
 
     enabled = db.BooleanField()

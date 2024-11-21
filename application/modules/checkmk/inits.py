@@ -58,6 +58,8 @@ def export_tags(account):
         rules = _load_rules()
         syncer = CheckmkTagSync(account)
         syncer.rewrite = rules['rewrite']
+        syncer.name = 'Checkmk: Export Tags'
+        syncer.source = "cmk_tag_sync"
         syncer.export_tags()
     except Exception as error_obj:
         print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
@@ -86,6 +88,8 @@ def export_bi_rules(account):
         actions = ExportBiRule()
         actions.rules = CheckmkBiRule.objects(enabled=True)
         syncer.actions = actions
+        syncer.name = 'Checkmk: Export BI Rules'
+        syncer.source = "cmk_bi_sync"
         syncer.export_bi_rules()
     except CmkException as error_obj:
         details.append(('error', f'CMK Error: {error_obj}'))
@@ -111,6 +115,8 @@ def export_bi_aggregations(account):
         actions.rules = CheckmkBiAggregation.objects(enabled=True)
         syncer.actions = actions
         syncer.export_bi_aggregations()
+        syncer.name = 'Checkmk: Export BI Aggregations'
+        syncer.source = "cmk_bi_aggrigation_sync"
     except CmkException as error_obj:
         details.append(('error', f'CMK Error: {error_obj}'))
         print(f'{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
@@ -225,6 +231,8 @@ def export_groups(account, test_run=False):
         rules = _load_rules()
         syncer = CheckmkGroupSync(account)
         syncer.rewrite = rules['rewrite']
+        syncer.name = 'Checkmk: Export Groups'
+        syncer.source = "cmk_group_sync"
         syncer.export_cmk_groups(test_run)
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
@@ -247,6 +255,8 @@ def export_rules(account):
         actions = CheckmkRulesetRule()
         actions.rules = CheckmkRuleMngmt.objects(enabled=True)
         syncer.actions = actions
+        syncer.name = 'Checkmk: Export Rules'
+        syncer.source = "cmk_rule_sync"
         syncer.export_cmk_rules()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
@@ -254,7 +264,7 @@ def export_rules(account):
         log.log(f"Error exporting Rules to Checkmk Account: {account.name}",
                 source="cmk_rule_sync", details=details)
 #.
-#    .-- Export Downtimes
+#   .-- Export Downtimes
 def export_downtimes(account):
     """
     Create Rules in Checkmk
@@ -272,6 +282,8 @@ def export_downtimes(account):
         actions = ExportDowntimes()
         actions.rules = CheckmkDowntimeRule.objects(enabled=True)
         syncer.actions = actions
+        syncer.name = 'Checkmk: Export Downtimes'
+        syncer.source = "cmk_downtime_sync"
         syncer.run()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
@@ -294,6 +306,8 @@ def export_dcd_rules(account):
         actions = ExportDCD()
         actions.rules = CheckmkDCDRule.objects(enabled=True)
         syncer.actions = actions
+        syncer.name = 'Checkmk: Export DCD Rules'
+        syncer.source = "cmk_dcd_rule_sync"
         syncer.export_rules()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')

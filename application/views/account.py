@@ -70,6 +70,7 @@ class AccountModelView(DefaultModelView):
         rules.FieldSet(('address', 'username', 'password'), "Access Config"),
         rules.Header("Addional configuration"),
         rules.Field('custom_fields'),
+        rules.Field('plugin_settings'),
         rules.Field('enabled'),
     ]
 

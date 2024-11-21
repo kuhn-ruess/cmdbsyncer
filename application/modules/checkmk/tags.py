@@ -19,9 +19,6 @@ class CheckmkTagSync(CMK2):
     """
     groups = {}
 
-    name = "Sync Checkmk Tags"
-    source = "cmk_tag_sync"
-
 
     def build_caches(self, db_host, groups, multiply_expressions):
         """
@@ -87,7 +84,8 @@ class CheckmkTagSync(CMK2):
         """
         base_groups, multiply_expressions = self.calculate_rules()
 
-        db_objects = Host.objects()
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),

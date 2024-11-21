@@ -13,9 +13,6 @@ class SyncDevices(SyncNetbox):
     """
     Netbox Device Operations
     """
-    name = "Netbox Device Sync"
-    source = "netbox_device_sync"
-
     @staticmethod
     def get_field_config():
         """
@@ -54,7 +51,8 @@ class SyncDevices(SyncNetbox):
         current_netbox_devices = self.nb.dcim.devices
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
-        db_objects = Host.get_export_hosts()
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
         counter = 0
         found_hosts = []

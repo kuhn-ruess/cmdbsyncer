@@ -22,7 +22,14 @@ def get_account_by_name(name):
             if not value:
                 value = False
             account_dict[field] = value
+        account_dict['settings'] = {}
+        for plugin, object_filter  in [(x['plugin'],
+                                        x.get('object_filter'))
+                                       for x in account_dict['plugin_settings']]:
+            account_dict['settings'][plugin] = {}
+            account_dict['settings'][plugin]['filter'] = object_filter
         del account_dict['custom_fields']
+        del account_dict['plugin_settings']
         account_dict['id'] = str(account_dict['_id'])
         return account_dict
     except DoesNotExist:

@@ -274,7 +274,6 @@ class HostModelView(DefaultModelView):
         'raw',
         'cache',
         'is_object',
-        'object_type',
         'last_export',
         'force_update',
     )

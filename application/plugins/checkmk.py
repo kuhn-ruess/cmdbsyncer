@@ -115,9 +115,11 @@ def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
         syncer.actions = rules['actions']
+        syncer.name = "Checkmk: Export Hosts"
+        syncer.source = "cmk_host_sync"
         syncer.run()
     except Exception as error_obj:
-        log.log(f"Export to Checkmk Account: {account.name} FAILED",
+        log.log(f"Export to Checkmk Account: {account} maybe not found FAILED",
         source="checkmk_host_export", details=[('error', str(error_obj))])
         print(f'{ColorCodes.FAIL}CMK Connection Error: {error_obj} {ColorCodes.ENDC}')
 

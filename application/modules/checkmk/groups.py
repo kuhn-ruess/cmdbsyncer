@@ -18,8 +18,6 @@ class CheckmkGroupSync(CMK2):
     """
     Syncronize Checkmk Groups
     """
-    name = "Sync Checkmk Groups"
-    source = "cmk_group_sync"
 
     def get_cache_object(self, group):
         """
