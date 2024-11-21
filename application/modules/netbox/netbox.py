@@ -79,7 +79,6 @@ class SyncNetbox(Plugin):
                 logger.debug("2) Field has slug")
                 create_obj['slug'] = self.get_slug(field_value)
 
-
             if current := self.get_nested_attr(self.nb, obj_type).get(**create_obj):
                 logger.debug(f"3) Found current ID value  {current.id}")
                 outer_id = current.id
@@ -141,7 +140,10 @@ class SyncNetbox(Plugin):
                 current_field = False
             if not field_value or field_value == '':
                 field_value = 'CMDB Syncer Not defined'
-            if str(field_value) != str(current_field):
+
+
+            if str(field_value).lower() != str(current_field).lower():
+                logger.debug(f'{field}: {repr(current_field)} -> {repr(field_value)}')
                 field_value = self.get_name_or_id(field, field_value, config)
                 if '.' in field:
                     field = field.split('.')[0]

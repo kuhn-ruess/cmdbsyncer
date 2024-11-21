@@ -1,10 +1,11 @@
 """
 IPAM Syncronisation
 """
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
+
 from application import logger
 from application.modules.netbox.netbox import SyncNetbox
 from application.models.host import Host
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 
 class SyncIPAM(SyncNetbox):
@@ -12,18 +13,6 @@ class SyncIPAM(SyncNetbox):
     IP Syncer
     """
     console = None
-
-    @staticmethod
-    def get_field_config():
-        """
-        Return Fields needed for Devices
-        """
-        translation = {
-        }
-        form_rules = {
-        }
-
-        return translation, form_rules
 
     def sync_ips(self):
         """
@@ -43,8 +32,6 @@ class SyncIPAM(SyncNetbox):
             task1 = progress.add_task("Updating IPs", total=total)
             for db_object in db_objects:
                 hostname = db_object.hostname
-
-                self.console(f'Handling: {hostname}')
 
                 all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
                 if not all_attributes:
@@ -71,7 +58,7 @@ class SyncIPAM(SyncNetbox):
                         self.console(f"* Update IP: for {hostname} {payload}")
                         ip.update(payload)
                     else:
-                        self.console("* Netbox already up to date")
+                        self.console(f"* Data for {hostname} already up to date")
                 else:
                     ### Create
                     self.console(f" * Create IP for {hostname}")

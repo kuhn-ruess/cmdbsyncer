@@ -51,7 +51,7 @@ def load_device_rules():
 def cli_netbox():
     """Netbox Import and Syncronisation"""
 
-#   .-- Command: Export Hosts
+#   .-- Command: Export Devices
 def netbox_device_export(account):
     """Sync Objects with Netbox"""
     try:
@@ -64,6 +64,7 @@ def netbox_device_export(account):
         syncer.source = "netbox_device_syng"
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
+        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_hosts')

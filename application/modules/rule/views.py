@@ -1,6 +1,7 @@
 """
 Rule Model View
 """
+
 from wtforms import HiddenField, StringField
 from flask_login import current_user
 from flask_admin.form import rules
@@ -114,8 +115,8 @@ def _render_full_conditions(_view, _context, model, _name):
             html += f"<tr><td>{idx}</td> <td><b>Hostname</b></td><td>"
             if entry.hostname_match_negate:
                 html += "<b>NOT</b> "
-            html += f"{condition_types[entry.hostname_match]}</td>"\
-                    f"<td><b>{entry.hostname[:50]}{points}</b></td></tr>"
+            html += f"{condition_types[entry.hostname_match]} "\
+                    f"<b>{entry.hostname[:50]}{points}</b></td></tr>"
         else:
             value_points = ""
             tag_points = ""

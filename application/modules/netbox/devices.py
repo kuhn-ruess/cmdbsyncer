@@ -40,6 +40,11 @@ class SyncDevices(SyncNetbox):
                 'type': 'dcim.platforms',
                  'has_slug' : True,
             },
+            'primary_ip4' : {
+                'type': 'ipam.ip-addresses',
+                'has_slug': False,
+                'name_field': 'address',
+            }
         }
 
 #   .--- Export Devices
@@ -57,37 +62,40 @@ class SyncDevices(SyncNetbox):
         counter = 0
         found_hosts = []
         for db_host in db_objects:
-            hostname = db_host.hostname
-            counter += 1
+            try:
+                hostname = db_host.hostname
+                counter += 1
 
-            all_attributes = self.get_host_attributes(db_host, 'netbox')
-            if not all_attributes:
-                continue
-            custom_rules = self.get_host_data(db_host, all_attributes['all'])
+                all_attributes = self.get_host_attributes(db_host, 'netbox')
+                if not all_attributes:
+                    continue
+                custom_rules = self.get_host_data(db_host, all_attributes['all'])
 
-            if custom_rules.get('ignore_host'):
-                continue
+                if custom_rules.get('ignore_host'):
+                    continue
 
-            process = 100.0 * counter / total
-            print(f"\n{CC.OKBLUE}({process:.0f}%){{CC.ENDC}} {hostname}")
+                process = 100.0 * counter / total
+                print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {hostname}")
 
-            found_hosts.append(hostname)
-            if device := current_netbox_devices.get(name=hostname):
-                # Update
-                if update_keys := self.get_update_keys(device, custom_rules):
-                    print(f"{CC.OKBLUE} *{CC.ENDC} Update Device: {update_keys}")
-                    device.update(update_keys)
+                found_hosts.append(hostname)
+                if device := current_netbox_devices.get(name=hostname):
+                    # Update
+                    if update_keys := self.get_update_keys(device, custom_rules):
+                        print(f"{CC.OKBLUE} *{CC.ENDC} Update Device: {update_keys}")
+                        device.update(update_keys)
+                    else:
+                        print(f"{CC.OKBLUE} *{CC.ENDC} Netbox already up to date")
                 else:
-                    print(f"{CC.OKBLUE} *{CC.ENDC} Netbox already up to date")
-            else:
-                ### Create
-                print(f"{CC.OKGREEN} *{CC.ENDC} Create Device")
-                payload = self.get_update_keys(False, custom_rules)
-                payload['name'] = hostname
-                device = self.nb.dcim.devices.create(payload)
+                    ### Create
+                    print(f"{CC.OKGREEN} *{CC.ENDC} Create Device")
+                    payload = self.get_update_keys(False, custom_rules)
+                    payload['name'] = hostname
+                    device = self.nb.dcim.devices.create(payload)
 
-            attr_name = f"{self.config['name']}_device_id"
-            db_host.set_inventory_attribute(attr_name, device.id)
+                attr_name = f"{self.config['name']}_device_id"
+                db_host.set_inventory_attribute(attr_name, device.id)
+            except Exception as error:
+                print(f" Error in process: {error}")
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
         for device in current_netbox_devices.all():
