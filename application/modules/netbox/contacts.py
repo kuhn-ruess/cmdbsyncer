@@ -3,6 +3,7 @@ Contact Syncronisation
 """
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
+from application import logger
 from application.modules.netbox.netbox import SyncNetbox
 from application.models.host import Host
 
@@ -13,54 +14,12 @@ class SyncContacts(SyncNetbox):
     """
     console = None
 
-
-
-
-    def get_payload(self, fields):
-        """
-        Build Netbox Payload
-        """
-        payload = {
-          #"group": {
-          #  "name": "string",
-          #  "slug": "VLF6pIubTngolExZ9Lc",
-          #  "description": "string"
-          #},
-          #"name": "string",
-          #"title": "string",
-          #"phone": "string",
-          #"email": "user@example.com",
-          #"address": "string",
-          #"link": "string",
-          #"description": "string",
-          #"comments": "string",
-          #"tags": [
-          #  {
-          #    "name": "string",
-          #    "slug": "iB9r-7YmQXFiOTYt0vxJFKS",
-          #    "color": "5e04b8"
-          #  }
-          #],
-          #"custom_fields": {
-          #  "additionalProp1": "string",
-          #  "additionalProp2": "string",
-          #  "additionalProp3": "string"
-          #}
-        }
-
-        for what in ['name', 'title', 'phone',
-                     'email', 'address', 'description']:
-            if what in fields:
-                payload[what] = fields[what]
-        return payload
-
     def sync_contacts(self):
         """
         Sync Contacts
         """
         # Get current Contacts
-        url = '/tenancy/contacts/'
-        current_contacts = self.get_objects(url, syncer_only=True)
+        current_contacts = self.nb.tenancy.contacts
         db_objects = Host.objects()
         total = db_objects.count()
         with Progress(SpinnerColumn(),
@@ -88,18 +47,26 @@ class SyncContacts(SyncNetbox):
                     progress.advance(task1)
                     continue
 
-                payload = self.get_payload(custom_rules)
-                contact = payload['name']
-                if contact in current_contacts:
-                    # Update Contact
-                    if update_keys := self.need_update(current_contacts[contact], payload):
-                        netbox_id = current_contacts[contact]['id']
-                        url = f'tenancy/contacts/{netbox_id}'
-                        update_payload = {}
-                        for key in update_keys:
-                            update_payload[key] = payload[key]
-                        self.update_object(url, update_payload)
+                logger.debug(f"Working with {custom_rules}")
+                name = custom_rules['fields']['name']
+                if not name:
+                    progress.advance(task1)
+                    continue
+                query = {
+                    'name': name,
+                }
+                logger.debug(f"Contact Filter Query: {query}")
+                if contact := current_contacts.get(**query):
+                    # Update
+                    if payload := self.get_update_keys(contact, custom_rules):
+                        self.console(f"* Update Interface: for {db_object.hostname} {payload}")
+                        contact.update(payload)
+                    else:
+                        self.console("* Netbox already up to date")
                 else:
-                    url = 'tenancy/contacts/'
-                    self.create_object(url, payload)
+                    ### Create
+                    self.console(f" * Create Device for {db_object.hostname}")
+                    payload = self.get_update_keys(False, custom_rules)
+                    logger.debug(f"Create Payload: {payload}")
+                    contact = self.nb.tenancy.contacts.create(payload)
                 progress.advance(task1)

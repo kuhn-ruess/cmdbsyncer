@@ -14,3 +14,4 @@ pyotp==2.9.0
 requests==2.32.3
 rich==13.9.2
 uWSGI
+pynetbox==7.4.1

@@ -20,7 +20,7 @@ from syncerapi.v1.inventory import run_inventory
 try:
     import pypyodbc as pyodbc
 except: #pylint: disable=bare-except
-    logger.debug("Info: ODBC Plugin was not able to load required modules")
+    logger.info("Info: ODBC Plugin was not able to load required modules")
 
 try:
     import sqlserverport

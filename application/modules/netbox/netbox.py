@@ -1,9 +1,9 @@
-import requests
 from application.modules.plugin import Plugin
-
-from syncerapi.v1 import (
-    cc,
-)
+from application import logger
+try:
+    import pynetbox
+except ImportError:
+    logger.info("Info: Netbox Plugin was not able to load required modules")
 
 class SyncNetbox(Plugin):
     """
@@ -17,126 +17,133 @@ class SyncNetbox(Plugin):
         """
         return self.actions.get_outcomes(db_host, attributes)
 #.
-#   .-- Object Need Update?
-    def need_update(self, device_payload, target_payload, ignore_fields=None):
-        """
-        Compare Request Payload with Device Response
-        """
-        keys = []
-        #print('##################')
-        #print(target_payload)
-        #print(device_payload)
-        #print('##################')
-        for key, value in target_payload.items():
-            if ignore_fields and key in ignore_fields:
-                continue
-            current_value = device_payload.get(key, False)
-            if current_value is False:
-                continue
-            if isinstance(current_value, dict):
-                sub_value = current_value.get('id')
-                if not sub_value:
-                    sub_value = current_value.get('value')
-                current_value = sub_value
-            #print(f'{key}: {current_value} -> {value}')
-            if value != current_value:
-                keys.append(key)
-        return keys
-#.
 
-    def get_objects(self, url, syncer_only=False):
-        """
-        Read full list of given Objects
-        """
-        print(f"{cc.OKGREEN} -- {cc.ENDC}Netbox: "\
-              f"Read all Objects (Filter only CMDB Syncer: {syncer_only})")
-        if syncer_only:
-            url += f"?cf_cmdbsyncer_id={self.config['_id']}"
-        ips = self.request(url, "GET")
-        return {x['display']:x for x in ips}
+    def __init__(self, account):
+        """ INIT """
+        self.console = print # Fallback
 
-    def update_object(self, url, payload):
-        """
-        Send Update Request to Netbox
-        """
-        self.request(url, 'PATCH', payload)
-        self.console(f' - Updated Object')
-
-    def create_object(self, url, payload):
-        """
-        Send Create Request to Netbox
-        """
-        self.request(url, "POST", payload)
-        self.console(' - Created Object')
+        super().__init__(account)
+        if self.config:
+            # Not needed in Debug_host Mode
+            self.nb = pynetbox.api(self.config['address'], token=self.config['password'])
 
     @staticmethod
-    def extract_data(data):
+    def get_field_config():
         """
-        Extract Netbox fields
+        Return Fields needed for Devices
         """
-        labels = {}
-        for key, value in data.items():
-            if key == 'custom_fields':
-                if 'cmdbsyncer_id' in value:
-                    del value['cmdbsyncer_id']
-                labels.update(value)
-            elif isinstance(value, str):
-                labels[key] = value
-            elif isinstance(value, dict):
-                if 'display' in value:
-                    labels[key] = value['display']
-                elif 'label' in value:
-                    labels[key] = value['label']
-        return labels
+        return {}
 
-    def request(self, path, method='GET', data=None, additional_header=None):
-        """
-        Handle Request to Netbox
-        """
-        address = self.config['address']
-        password = self.config['password']
-        url = f'{address}/api/{path}'
-        headers = {
-            'Authorization': f"Token {password}",
-            'Content-Type': 'application/json',
-        }
-        response_json = ""
-        if additional_header:
-            headers.update(additional_header)
-        try:
-            method = method.lower()
-            #pylint: disable=missing-timeout
 
-            response = self.inner_request(method, url, data, headers)
+    @staticmethod
+    def get_nested_attr(obj, attr_chain):
+        """
+        Parse nested Object
+        """
+        attributes = attr_chain.split(".")
+        for attr in attributes:
+            obj = getattr(obj, attr)
+        return obj
 
-            if response.status_code == 403:
-                raise Exception("Invalid Login, you may need to create a login token")
-            if response.status_code >= 299:
-                self.log_details.append(('error', f'Exception: {response.text}'))
-                print(f"Error in response {response.text}")
-                return {}
-            try:
-                response_json = response.json()
-            except:
-                pass
-            if 'results' in response_json:
-                results = []
-                results += response_json['results']
-                if response_json['next']:
-                    total = response_json['count']
-                    request_count = int(round(total/len(response_json['results']),0)) + 1
-                    print(f" -- Require {request_count} requests. {total} objects in total")
-                    counter = 0
-                    next_page = response_json['next']
-                    while next_page:
-                        counter += 1
-                        process = 100.0 * counter / request_count
-                        # pylint: disable=line-too-long
-                        print(f"   {cc.OKGREEN}({process:.0f}%)...{counter}/{request_count}{cc.ENDC}")
-                        sub_response= self.inner_request("GET", next_page, headers=headers).json()
-                        next_page = sub_response['next']
-                        results += sub_response['results']
-                return results
-            return response_json
-        except (ConnectionResetError, requests.exceptions.ProxyError):
-            return {}
+    @staticmethod
+    def get_slug(name):
+        """
+        Return Slag Version of String
+        """
+        return name.replace(' ', '_').lower()
+
+    def get_name_or_id(self, field, field_value, config):
+        """
+        Get Netbox Object ID of given Object
+        """
+        translation = self.get_field_config()
+
+        is_sub_model = False
+        if '.' in field:
+            splitted = field.split('.')
+            field = splitted[1]
+            is_sub_model = splitted[0]
+
+        logger.debug(f"0) Working on {field}")
+        if sub_obj := translation.get(field):
+            obj_type = sub_obj['type']
+            ## Create the SUB Field
+            name_field = sub_obj.get('name_field', 'name')
+            create_obj = {name_field: field_value}
+            logger.debug(f"1) Obj: {create_obj}, Type: {obj_type}")
+            allow_default = sub_obj.get('allow_default_value', True)
+            if not allow_default and field_value == 'CMDB Syncer Not defined':
+                logger.debug("1a) Ditched value since its a default")
+                return None
+            if sub_obj['has_slug']:
+                logger.debug("2) Field has slug")
+                create_obj['slug'] = self.get_slug(field_value)
+
+
+            if current := self.get_nested_attr(self.nb, obj_type).get(**create_obj):
+                logger.debug(f"3) Found current ID value  {current.id}")
+                outer_id = current.id
+            else:
+                logger.debug("4) Need to create a new id")
+                new_obj = self.get_nested_attr(self.nb, obj_type).create(create_obj)
+                logger.debug(f"4b) New id is {new_obj.id}")
+                outer_id = new_obj.id
+
+            ## Sub Field was a subfield, so thats the first level
+            if is_sub_model:
+                sub_sub_obj = translation[is_sub_model]
+                sub_obj_type = sub_sub_obj['type']
+                logger.debug(f"5) Working with Submodel {obj_type}")
+                new_name = config['fields'][is_sub_model]
+                if not new_name:
+                    new_name = "CMDB Syncer Undefined"
+                create_obj = {'name': new_name}
+                if sub_sub_obj['has_slug']:
+                    create_obj['slug'] = self.get_slug(new_name)
+                if current := self.get_nested_attr(self.nb, sub_obj_type).get(**create_obj):
+                    logger.debug("7) Found current Sub Field")
+                    # Update the reference also if needed here
+                    if getattr(current, field) != outer_id:
+                        logger.debug("8) Need to Update reference field")
+                        current.update({field: outer_id})
+                    return current.id
+                # Add reference to first field
+                create_obj[field] = outer_id
+                if extra_fields := sub_sub_obj.get('sub_fields'):
+                    for extra_field in extra_fields:
+                        create_obj[extra_field] = \
+                                config['sub_fields'].get(extra_field, 'CMDB Syncer Undefined')
+                logger.debug(f"9) Creating object {create_obj}")
+                new_obj = self.get_nested_attr(self.nb, sub_obj_type).create(create_obj)
+                logger.debug(f"9 a) Returning New created Sub ID {new_obj.id}")
+                return new_obj.id
+            logger.debug(f"10) Returning First created ID {outer_id}")
+            return outer_id
+        # It's no reference, so direct value return
+        logger.debug(f"11) Returning original Value {field_value}")
+        return field_value
+
+
+    def get_update_keys(self, current_obj, config):
+        """
+        Get Keys which need a Update
+        """
+        update_fields = {}
+        for field, field_value in config['fields'].items():
+            logger.debug(f"update_keys: {field}, {field_value}")
+            if field in config.get('do_not_update_keys',[]):
+                continue
+
+            if current_obj:
+                current_field = self.get_nested_attr(current_obj, field)
+            else:
+                # In this case we create a new project
+                current_field = False
+            if not field_value or field_value == '':
+                field_value = 'CMDB Syncer Not defined'
+            if str(field_value) != str(current_field):
+                field_value = self.get_name_or_id(field, field_value, config)
+                if '.' in field:
+                    field = field.split('.')[0]
+                update_fields[field] = field_value
+        return update_fields

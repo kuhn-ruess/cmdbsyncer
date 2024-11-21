@@ -2,176 +2,33 @@
 Interface Syncronisation
 """
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-
+from application import logger
 from application.modules.netbox.netbox import SyncNetbox
 from application.models.host import Host
-
-from syncerapi.v1 import (
-    cc,
-)
 
 class SyncInterfaces(SyncNetbox):
     """
     Interface Syncer
     """
 
-    device_interface_cache = {}
+    if_types = []
+    console = None
 
-#   .-- Get Interface Payload
-    def get_interface_payload(self, hostname, device_id, if_attributes):
-        """ Return Interface Payload
+    name = "Netbox Interface Sync"
+    source = "netbox_interface_sync"
+
+    def fix_values(self, value_dict):
         """
-        status_map = {
-            'up' : True,
-        }
-
-        # @Todo: Detect Type:
-        interface_type = "other"
-        if if_attributes.get('interfaceType') == "Virtual":
-            interface_type = 'virtual'
-
-
-        duplex_modes = {
-            'FullDuplex' : 'full',
-            'HalfDuplex' : 'half',
-        }
-        duplex_mode = duplex_modes.get(if_attributes.get('duplex'), 'auto')
-
-        access_modes = {
-            'access': 'access',
-            'trunk': 'tagged',
-        }
-        access_mode = access_modes.get(if_attributes.get('portMode'))
-
-        interface_speed = if_attributes.get('speed', 0)
-        if not isinstance(interface_speed, int):
-            interface_speed = None
-
-        payload = {
-          "device": device_id,
-          #"module": 0,
-          "name": str(if_attributes["portName"])[:64] if if_attributes['portName'] else "None",
-          #"label": "string",
-          "type": interface_type,
-          "enabled": status_map.get(if_attributes['adminStatus'].lower(), False),
-          #"parent": 0,
-          #"bridge": 0,
-          #"lag": 0,
-          "speed": interface_speed,
-          "duplex": duplex_mode,
-          #"wwn": "string",
-          #"mgmt_only": true,
-          "description": if_attributes.get('description', ""),
-          #"rf_role": "ap",
-          #"rf_channel": "2.4g-1-2412-22",
-          #"poe_mode": "pd",
-          #"poe_type": "type1-ieee802.3af",
-          #"rf_channel_frequency": 0,
-          #"rf_channel_width": 0,
-          #"tx_power": 127,
-          #"untagged_vlan": 0,
-          #"tagged_vlans": [
-          #  0
-          #],
-          #"mark_connected": true,
-          #"cable": {
-          #  "label": "string"
-          #},
-          #"wireless_link": 0,
-          #"wireless_lans": [
-          #  0
-          #],
-          #"vrf": 0,
-          #"tags": [
-          #  {
-          #    "name": "string",
-          #    "slug": "string",
-          #    "color": "string"
-          #  }
-          #],
-          #"custom_fields": {}
-        }
-        if mac_address := if_attributes.get('macAddress'):
-            payload['mac_address'] = mac_address.upper()
-        if access_mode:
-            payload["mode"] =  access_mode
-        if mtu := if_attributes.get('mtu'):
-            payload["mtu"] = int(mtu)
-        return payload
-#.
-#   .-- build interface_list
-#    def get_interface_list_by_attributes(self, attributes):
-#        """
-#        Return List of Interfaces
-#        """
-#        interfaces = {}
-#        for attribute, value in attributes.items():
-#            # @TODO: Build more general approach
-#            # Better RegEx Rewrites needed for that
-#            if attribute.startswith('cisco_dnainterface'):
-#                splitted = attribute.split('_')
-#                interface_id = splitted[-2]
-#                field_name = splitted[-1]
-#                interfaces.setdefault(interface_id, {})
-#                interfaces[interface_id][field_name] = value
-#        return interfaces
-#.
-
-#   .-- Update Device Interfaces
-    def update_interfaces(self, interfaces, db_host):
+        Fix invalid values
         """
-        Update Interfaces based on Attributes
-        """
-        port_infos = []
-        for interface_data in interfaces:
-            if interface_data.get('ignore_interface'):
-                continue
+        new_dict = {}
+        for key, value in value_dict.items():
+            if key == 'type':
+                if value not in self.if_types:
+                    value = 'other'
+            new_dict[key] = value
+        return new_dict
 
-            device_id = interface_data['device']
-            if not device_id:
-                continue
-            if device_id not in self.device_interface_cache:
-                device_interfaces = {}
-                url = f'dcim/interfaces?device_id={device_id}'
-                for entry in self.request(url, "GET"):
-                    # We need some rewrite here to match the payloads of the api
-                    del entry['device']
-                    entry['name'] = entry['display']
-                    device_interfaces[entry['name']] = entry
-            else:
-                device_interfaces = self.device_interface_cache[device_id]
-
-            url = 'dcim/interfaces/'
-            hostname = db_host.hostname
-            payload = self.get_interface_payload(hostname, device_id, interface_data)
-            port_name = payload['name']
-            #print(device_interfaces)
-            if port_name not in device_interfaces:
-                self.progress(f"Create Interface {port_name}")
-                create_response = self.request(url, "POST", payload)
-                if not create_response:
-                    continue
-                interface_id = create_response['id']
-            else:
-                interface_id = device_interfaces[port_name]['id']
-                if update_keys := self.need_update(device_interfaces[port_name], 
-                                                   payload, ignore_fields=['type']):
-                    update_payload = {}
-                    for key in update_keys:
-                        update_payload[key] = payload[key]
-                    self.progress(f"Update Interface {port_name} Fields: ({update_keys})")
-                    url = f'dcim/interfaces/{device_interfaces[port_name]["id"]}/'
-                    self.request(url, "PATCH", update_payload)
-
-            port_infos.append({
-                'port_name': port_name,
-                'netbox_if_id': interface_id,
-                'used_ip': interface_data['ip_address'], 
-            })
-        attr_name = f"{self.config['name']}_interfaces"
-        db_host.set_inventory_attribute(attr_name, port_infos)
-
-#.
 
     def sync_interfaces(self):
         """
@@ -183,17 +40,52 @@ class SyncInterfaces(SyncNetbox):
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
-            self.progress = progress.console.print
+            self.console = progress.console.print
             task1 = progress.add_task("Updating Interfaces for Devices", total=total)
-            for db_host in db_objects:
-                hostname = db_host.hostname
 
+            current_netbox_interfaces = self.nb.dcim.interfaces
 
-                all_attributes = self.get_host_attributes(db_host, 'netbox_hostattribute')
+            self.if_types = [x['value'] for x in self.nb.dcim.interfaces.choices()['type']]
+            for db_object in db_objects:
+                port_infos = []
+                hostname = db_object.hostname
+
+                all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
                 if not all_attributes:
                     progress.advance(task1)
                     continue
-                interfaces = self.get_host_data(db_host, all_attributes['all'])['interfaces']
-                self.update_interfaces(interfaces, db_host)
+                cfg_interfaces = self.get_host_data(db_object, all_attributes['all'])['interfaces']
+
+                for cfg_interface in cfg_interfaces:
+                    cfg_interface['fields'] = self.fix_values(cfg_interface['fields'])
+                    logger.debug(f"Working with {cfg_interface}")
+                    interface_query = {
+                        'ip_address': cfg_interface['sub_fields']['ip_address'],
+                        'device': hostname,
+                        'name': cfg_interface['fields']['name'],
+                    }
+                    logger.debug(f"Interface Filter Query: {interface_query}")
+                    if interface := current_netbox_interfaces.get(**interface_query):
+                        # Update
+                        if payload := self.get_update_keys(interface, cfg_interface):
+                            self.console(f"* Update Interface: for {hostname} {payload}")
+                            interface.update(payload)
+                        else:
+                            self.console("* Netbox already up to date")
+                    else:
+                        ### Create
+                        self.console(f" * Create Device for {hostname}")
+                        payload = self.get_update_keys(False, cfg_interface)
+                        payload['device'] = int(payload['device'])
+                        logger.debug(f"Create Payload: {payload}")
+                        interface = self.nb.dcim.interfaces.create(payload)
+
+                    port_infos.append({
+                        'port_name': cfg_interface['fields']['name'],
+                        'netbox_if_id': interface.id,
+                        'used_ip': cfg_interface['sub_fields']['ip_address'],
+                    })
 
                 progress.advance(task1)
+                attr_name = f"{self.config['name']}_interfaces"
+                db_object.set_inventory_attribute(attr_name, port_infos)

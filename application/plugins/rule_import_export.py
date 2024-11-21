@@ -3,6 +3,7 @@ Rule Import/ Export
 """
 #pylint: disable=too-many-arguments
 import json
+from json.decoder import JSONDecodeError
 import importlib
 from ast import literal_eval
 import click
@@ -72,7 +73,11 @@ def import_rules(rulefile_path):
     with open(rulefile_path, encoding='utf-8') as rulefile:
         rule_type = False
         for line in rulefile.readlines():
-            json_dict = json.loads(line)
+            try:
+                json_dict = json.loads(line)
+            except JSONDecodeError:
+                print (line)
+                continue
             if not rule_type:
                 rule_type = json_dict['rule_type']
                 if rule_type not in enabled_rules:
