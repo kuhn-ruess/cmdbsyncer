@@ -3,10 +3,10 @@
 Netbox Rules
 """
 #pylint: disable=too-few-public-methods
-from application import logger
 from application.modules.rule.rule import Rule
 from application.helpers.syncer_jinja import render_jinja
 
+#   . -- Devices
 class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
     """
     Add custom Variables for Netbox Devices
@@ -27,26 +27,28 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
         outcomes.setdefault('sub_fields', {})
         for outcome in rule_outcomes:
             action_param = outcome['param']
-            action = outcome['action']
-            if action == 'update_optout':
+            field = outcome['action']
+            if field == 'update_optout':
                 fields = [str(x).strip() for x in action_param.split(',')]
                 outcomes['do_not_update_keys'] += fields
-            elif action.startswith('nb_'):
+            else:
                 new_value  = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=self.hostname, **self.attributes)
-                new_field = action[3:]
 
-                if new_field == 'serial':
+                if new_value in ['None', '']:
+                    continue
+
+                if field == 'serial':
                     new_value = new_value[:50]
 
-
-                if new_field in sub_values:
-                    outcomes['sub_fields'][new_field] = new_value.strip()
+                if field in sub_values:
+                    outcomes['sub_fields'][field] = new_value.strip()
                 else:
-                    outcomes['fields'][new_field] = new_value.strip()
+                    outcomes['fields'][field] = new_value.strip()
 
         return outcomes
-
+#.
+#   . -- IP Addresses
 class NetboxIpamIPaddressRule(NetboxVariableRule):
     """
     Rules for IP Addresses 
@@ -81,7 +83,8 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
                 outcomes['fields'][action] = new_value
 
         return outcomes
-
+#.
+#   . -- Interfaces
 class NetboxDevicesInterfaceRule(NetboxVariableRule):
     """
     Rules for Device Interfaces
@@ -98,6 +101,7 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
         outcome_subfields_object = {}
         sub_fields = [
             'ip_address',
+            'netbox_device_id',
         ]
         for outcome in rule_outcomes:
             action_param = outcome['param']
@@ -127,7 +131,8 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
         outcomes['interfaces'].append({'fields': outcome_object,
                                        'sub_fields': outcome_subfields_object})
         return outcomes
-
+#.
+#   . -- Contacts
 class NetboxContactRule(NetboxVariableRule):
     """
     Attribute Options for a Contact
@@ -157,3 +162,4 @@ class NetboxContactRule(NetboxVariableRule):
 
             outcomes['fields'][action] = new_value
         return outcomes
+#.

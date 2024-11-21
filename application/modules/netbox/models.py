@@ -25,26 +25,21 @@ class NetboxRewriteAttributeRule(db.Document):
         'strict': False
     }
 #.
-
-# About the Names:
-# If they not end with _sync, their value is used as content
-# for the request
-# if they end with sync, they sync with an netbox endpoint
-
+#   . -- Devices
 netbox_outcome_types = [
-  ('nb_device_type', '* Type'),
-  ('nb_platform', 'Platform'),
-  ('nb_device_type.manufacturer', '* Manufacturer'),
-  ('nb_model', '* Model'),
-  ('nb_role', 'Role'),
-  ('nb_serial', 'Serial Number'),
-  #('nb_tenant', 'Tenant'),
-  ('nb_platform', 'Platform'),
-  ('nb_site', 'Site'),
-  #('nb_location', 'Location'),
-  #('nb_rack', 'Rack'),
+  ('device_type', '* Type'),
+  ('platform', 'Platform'),
+  ('device_type.manufacturer', '* Manufacturer'),
+  ('model', '* Model'),
+  ('role', 'Role'),
+  ('serial', 'Serial Number'),
+  ('tenant', 'Tenant'),
+  ('platform', 'Platform'),
+  ('site', 'Site'),
+  ('location', 'Location'),
+  ('rack', 'Rack'),
+  ('primary_ip4', 'Primary IPv4'),
   #('custom_field', 'Set a Custom Field key:value (Jinja)'),
-
   ('update_optout', 'Do never Update given Fields (comma separated list possible)'),
   ('ignore_host', 'Ignore Host(s)'),
 ]
@@ -83,13 +78,17 @@ class NetboxCustomAttributes(db.Document):
     meta = {
         'strict': False
     }
-
+#.
+#   . -- IP Addresses
 netbox_ipam_ipaddress_outcome_types = [
   ('address', 'IPv4 or IPv6 with Network Address (Example: 127.0.0.1/24)'),
   ('family', 'Family of IP: ipv6 or ipv4'),
   ('status', 'Status of IP like: active'),
   ('assigned_object_id', 'Assigned Object ID'),
   ('assigned_object_type', 'Assigned Object Type'),
+  ('assigned_object_type', 'Assigned Object Type'),
+  ('role', 'Role'),
+  ('description', 'Description'),
   ('ignore_ip', 'Ignore matching objects for sync'),
 ]
 
@@ -126,9 +125,11 @@ class NetboxIpamIpaddressattributes(db.Document):
     meta = {
         'strict': False
     }
-
+#.
+#   . -- Interfaces
 netbox_device_interface_outcome_types = [
-        ('device', '(required) ID of Assigned Device'),
+        ('device', '(required) Name of Assigned Device'),
+        ('netbox_device_id', '(required) Numeric ID of  Device'),
         ('ip_address', '(required) IP Address used by Interface'),
         ('name', 'Port/ Interface Name'),
         ('mac_address', 'Mac Address'),
@@ -177,7 +178,8 @@ class NetboxDcimInterfaceAttributes(db.Document):
     meta = {
         'strict': False
     }
-
+#.
+#   . -- Contacts
 netbox_contact_outcome_types = [
     ('name', 'Name (required)'),
     ('title', 'Title'),
@@ -220,3 +222,4 @@ class NetboxContactAttributes(db.Document):
     meta = {
         'strict': False
     }
+#.

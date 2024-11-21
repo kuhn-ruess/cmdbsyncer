@@ -69,12 +69,13 @@ class SyncInterfaces(SyncNetbox):
                             self.console(f"* Update Interface: for {hostname} {payload}")
                             interface.update(payload)
                         else:
-                            self.console("* Netbox already up to date")
+                            self.console(f"* Data for {hostname} already up to date")
                     else:
                         ### Create
                         self.console(f" * Create Interfaces for {hostname}")
                         payload = self.get_update_keys(False, cfg_interface)
-                        payload['device'] = int(payload['device'])
+                        if payload.get('device'):
+                            payload['device'] = cfg_interface['sub_fields']['netbox_device_id']
                         logger.debug(f"Create Payload: {payload}")
                         interface = self.nb.dcim.interfaces.create(payload)
 

@@ -1,6 +1,10 @@
 """
 Netbox Rule Views
 """
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import DjangoLexer
+
 from markupsafe import Markup
 from wtforms import HiddenField, StringField
 
@@ -20,9 +24,10 @@ def _render_netbox_outcome(_view, _context, model, _name):
     outcome_names +=  netbox_device_interface_outcome_types
     outcome_names +=  netbox_contact_outcome_types
     for idx, entry in enumerate(model.outcomes):
+        highlighted_param = highlight(entry.param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
         html += f"<tr><td>{idx}</td><td>{dict(outcome_names)[entry.action]}</td>"
         if entry.param:
-            html += f"<td><b>{entry.param}</b></td></tr>"
+            html += f"<td><b>{highlighted_param}</b></td></tr>"
     html += "</table>"
     return Markup(html)
 
