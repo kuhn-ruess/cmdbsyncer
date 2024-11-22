@@ -142,8 +142,7 @@ def export_hosts(account, limit, dry_run, save_requests):
         limit (list): Comma separted list of Hosts
     """
 
-    limit_list = [x.strip() for x in limit.split(',') if x]
-    _inner_export_hosts(account, limit_list, dry_run, save_requests)
+    _inner_export_hosts(account, limit, dry_run, save_requests)
 #.
 #   .-- Command: Host Debug
 
