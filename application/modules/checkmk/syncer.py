@@ -496,6 +496,8 @@ class SyncCMK2(CMK2):
                         task.get(timeout=5)
                     except multiprocessing.TimeoutError:
                         progress.console.print("- ERROR: Timout for a object")
+                    except Exception:
+                        progress.console.print(f"- ERROR: Timout error for object ({Exception})")
                 pool.close()
                 pool.join()
 
