@@ -14,7 +14,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
 
     name = "Netbox -> DCIM Device Attributes"
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """
@@ -55,7 +55,7 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
     """
     name = "Netbox -> IPAM IP Attributes"
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """
@@ -91,7 +91,7 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
     """
     name = "Netbox -> DCIM Interfaces"
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """
@@ -139,7 +139,7 @@ class NetboxContactRule(NetboxVariableRule):
     """
     name = "Netbox -> Tenancy Contacts"
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """

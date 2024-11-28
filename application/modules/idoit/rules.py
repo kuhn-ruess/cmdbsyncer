@@ -13,7 +13,7 @@ class IdoitVariableRule(Rule):# pylint: disable=too-few-public-methods
 
     name = "i-doit -> Custom attributes"
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """

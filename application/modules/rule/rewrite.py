@@ -65,11 +65,11 @@ class Rewrite(Rule):
         return attribute_list
 
 
-    def add_outcomes(self, rule, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Rewrite matching Attribute
         """
-        for outcome in rule:
+        for outcome in rule_outcomes:
 
             # A Attribute names list is used,
             # for the case where the mode returns muliple new attributes.

@@ -26,6 +26,20 @@ def _render_custom_data(_view, _context, model, _name):
     html += "</table>"
     return Markup(html)
 
+def _render_plugin_data(_view, _context, model, _name):
+    """
+    Render for Plugin Settings
+    """
+    html = "<table width=100%>"
+    for entry in model.plugin_settings:
+        max_len = 80
+        value = entry.object_filter[:max_len]
+        if len(entry.object_filter) > max_len:
+            value += "..."
+        html += f"<tr><td>{entry.plugin}</td><td>{value}</td></tr>"
+    html += "</table>"
+    return Markup(html)
+
 class AccountModelView(DefaultModelView):
     """
     Account Model
@@ -82,6 +96,7 @@ class AccountModelView(DefaultModelView):
 
     column_formatters = {
         'password': _render_custom_data,
+        'plugin_settings': _render_plugin_data,
     }
 
     form_overrides = {

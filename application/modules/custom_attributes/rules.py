@@ -14,7 +14,7 @@ class CustomAttributeRule(Rule): # pylint: disable=too-few-public-methods
 
     name = "Custom Attributes"
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Add the new Attributes
         """

@@ -21,11 +21,11 @@ class CheckmkRulesetRule(Rule): # pylint: disable=too-few-public-methods, too-ma
     name = "Checkmk -> CMK Rules Managment"
 
 
-    def add_outcomes(self, rule, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Add matching Rules to the set
         """
-        for outcome in rule:
+        for outcome in rule_outcomes:
             ruleset_type = outcome['ruleset']
             outcomes.setdefault(ruleset_type, [])
             outcomes[ruleset_type].append(outcome)
@@ -46,12 +46,12 @@ class DefaultRule(Rule):
         if not self.name:
             self.name = name
 
-    def add_outcomes(self, rule, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Add matching Rules to the set
         """
         outcomes.setdefault('default', [])
-        for outcome in rule:
+        for outcome in rule_outcomes:
             outcomes['default'].append(outcome)
         return outcomes
 
@@ -99,7 +99,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 parts.append(folder_name)
         return "/" + "/".join(parts)
 
-    def add_outcomes(self, rule, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """ Handle the Outcomes """
         #pylint: disable=too-many-branches, too-many-statements
         #pylint: disable=too-many-locals, too-many-nested-blocks
@@ -126,7 +126,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         print_debug(self.debug,
                     "- Handle Special options")
 
-        for outcome in rule:
+        for outcome in rule_outcomes:
             # We add only the outcome of the
             # first matching rule action
             # exception are the folders
