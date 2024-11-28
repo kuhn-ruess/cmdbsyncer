@@ -11,7 +11,7 @@ class Filter(Rule):# pylint: disable=too-few-public-methods
 
     name = "Filter"
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Filter if attributes match to a rule
         """

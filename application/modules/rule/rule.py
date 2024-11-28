@@ -156,7 +156,7 @@ class Rule(): # pylint: disable=too-few-public-methods
                 table.add_row(str(rule_hit), rule_descriptions[rule['condition_typ']],\
                               rule['name'][:30], str(rule['_id']), str(rule['last_match']))
             if rule_hit:
-                outcomes = self.add_outcomes([dict(x) for x in rule['outcomes']], outcomes)
+                outcomes = self.add_outcomes(rule, [dict(x) for x in rule['outcomes']], outcomes)
                 # If rule has matched, and option is set, we are done
                 if rule['last_match']:
                     break
@@ -166,7 +166,7 @@ class Rule(): # pylint: disable=too-few-public-methods
             print()
         return outcomes
 
-    def add_outcomes(self, rule, outcomes):
+    def add_outcomes(self, rule, rule_outcomes, outcomes):
         """
         Please implement
         """

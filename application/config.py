@@ -85,7 +85,6 @@ class BaseConfig():
 
     #Checkmk has a bug:
     CMK_SUPPORT = "2.3"
-    CMK_22_23_HANDLE_TAG_LABEL_BUG = False
 
     CMK_BULK_CREATE_HOSTS = True
     CMK_BULK_CREATE_OPERATIONS = 300

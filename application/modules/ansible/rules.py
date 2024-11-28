@@ -12,7 +12,7 @@ class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
 
     name = "Ansible -> Custom Variables"
 
-    def add_outcomes(self, rule_outcomes, outcomes):
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Filter if Attributes match to a rule
         """

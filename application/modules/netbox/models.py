@@ -167,7 +167,8 @@ class NetboxDcimInterfaceAttributes(db.Document):
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
     render_full_conditions = db.StringField() # Helper for preview
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxDcimInterfaceOutcome'))
+    outcomes = db.ListField(field= \
+            db.EmbeddedDocumentField(document_type='NetboxDcimInterfaceOutcome'))
     render_netbox_outcome = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
