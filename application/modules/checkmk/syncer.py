@@ -4,6 +4,7 @@ Add Hosts into CMK Version 2 Installations
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 #pylint: disable=logging-fstring-interpolation, too-many-locals, too-many-positional-arguments
 #pylint: disable=too-many-branches, too-many-instance-attributes, too-many-public-methods
+#pylint: disable=too-many-lines
 import ast
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -400,7 +401,8 @@ class SyncCMK2(CMK2):
 
     def create_or_update_host(self, hostname, folder, labels,
                                     cluster_nodes, additional_attributes,
-                                    remove_attributes, dont_move_host, dont_update_host):
+                                    remove_attributes, dont_move_host,
+                                    dont_update_host, dont_create_host):
         """
         Do creation or update actions
         """
@@ -408,24 +410,26 @@ class SyncCMK2(CMK2):
         if cluster_nodes:
             is_cluster = True
         if hostname not in self.checkmk_hosts:
-            # Create since missing
-            if is_cluster:
-                print(f"{CC.OKBLUE} *{CC.ENDC} Will be created as Cluster")
-                # We need to create them Later, since we not know that we have all nodes
-                self.clusters.append((hostname, folder, labels, \
-                                    cluster_nodes, additional_attributes))
-            else:
-                print(f"{CC.OKBLUE} *{CC.ENDC} Need to created in Checkmk")
-                self.create_host(hostname, folder, labels, additional_attributes)
-            # Add Host information to the dict, for later cleanup.
-            # So no need to query all the hosta again
-            self.checkmk_hosts[hostname] = \
-                        {'extensions': {
-                            'attributes':{
-                                 'labels': {
-                                      'cmdb_syncer': self.account_id
-                            }}
-                         }}
+            # If here so that it not goes into update mode
+            if not dont_create_host:
+                # Create since missing
+                if is_cluster:
+                    print(f"{CC.OKBLUE} *{CC.ENDC} Will be created as Cluster")
+                    # We need to create them Later, since we not know that we have all nodes
+                    self.clusters.append((hostname, folder, labels, \
+                                        cluster_nodes, additional_attributes))
+                else:
+                    print(f"{CC.OKBLUE} *{CC.ENDC} Need to created in Checkmk")
+                    self.create_host(hostname, folder, labels, additional_attributes)
+                # Add Host information to the dict, for later cleanup.
+                # So no need to query all the hosta again
+                self.checkmk_hosts[hostname] = \
+                            {'extensions': {
+                                'attributes':{
+                                     'labels': {
+                                          'cmdb_syncer': self.account_id
+                                }}
+                             }}
         elif not dont_update_host:
             cmk_host = self.checkmk_hosts[hostname]
 
@@ -558,6 +562,7 @@ class SyncCMK2(CMK2):
 
                 dont_move_host = next_actions.get('dont_move', False)
                 dont_update_host = next_actions.get('dont_update', False)
+                dont_create_host = next_actions.get('dont_create', False)
 
                 folder = self.handle_cmk_folder(next_actions)
                 export_details.append(("folder", folder))
@@ -582,7 +587,8 @@ class SyncCMK2(CMK2):
 
                 self.create_or_update_host(hostname, folder, labels,
                                       cluster_nodes, additional_attributes,
-                                      remove_attributes, dont_move_host, dont_update_host)
+                                      remove_attributes, dont_move_host,
+                                      dont_update_host, dont_create_host)
                 progress.advance(task1)
 
 
