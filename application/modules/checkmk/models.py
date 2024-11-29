@@ -82,6 +82,8 @@ action_outcome_types = [
      "Move Optout: __ Don't Move host to another Folder after inital creation"),
     ("dont_update",
      "Update Optout: __ Don't update host Attributes after initial creation"),
+    ("dont_create",
+     "Create Optout: __ Don't create Host if missing, but still Update it"),
     ("prefix_labels",
      "Prefix Labels: __ Prefix all labels with given String"),
     ("only_update_prefixed_labels",
