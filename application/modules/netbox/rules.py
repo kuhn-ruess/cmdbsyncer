@@ -55,15 +55,17 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
     """
     name = "Netbox -> IPAM IP Attributes"
 
-    def add_outcomes(self, _rule, rule_outcomes, outcomes):
+    def add_outcomes(self, rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """
         # pylint: disable=too-many-nested-blocks
-        outcomes.setdefault('fields', {})
-        outcomes.setdefault('sub_fields', {})
+        outcomes.setdefault('ips', [])
         sub_fields = [
         ]
+        outcome_object = {}
+        outcome_subfields_object = {}
+        rule_name = rule['name']
         for outcome in rule_outcomes:
             action_param = outcome['param']
             action = outcome['action']
@@ -71,6 +73,9 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
             new_value  = render_jinja(action_param, mode="nullify",
                                      HOSTNAME=self.hostname, **self.attributes)
             new_value = new_value.strip()
+            if action == 'address' and not new_value:
+                # early return
+                return outcomes
             if action == "assigned":
                 if action_param.lower() == 'false':
                     new_value = False
@@ -78,9 +83,13 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
                     new_value = True
 
             if action in sub_fields:
-                outcomes['sub_fields'][action] = new_value
+                outcome_subfields_object[action] = new_value
             else:
-                outcomes['fields'][action] = new_value
+                outcome_object[action] = new_value
+
+        outcomes['ips'].append({'fields': outcome_object,
+                                'sub_fields': outcome_subfields_object,
+                                'by_rule': rule_name})
 
         return outcomes
 #.
@@ -91,11 +100,15 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
     """
     name = "Netbox -> DCIM Interfaces"
 
-    def add_outcomes(self, _rule, rule_outcomes, outcomes):
+    def add_outcomes(self, rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """
         # pylint: disable=too-many-nested-blocks
+        # This function is called once per rule,
+        # But can contain outcomes of more then one rule.
+        # Here we match them together
+        rule_name = rule['name']
         outcomes.setdefault('interfaces', [])
         outcome_object = {}
         outcome_subfields_object = {}
@@ -112,6 +125,10 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
             new_value  = render_jinja(action_param, mode="nullify",
                                      HOSTNAME=hostname, **self.attributes)
 
+            if action == 'name' and not new_value:
+                # early return
+                return outcomes
+
             new_value = new_value.strip()
             if new_value == "None":
                 new_value = None
@@ -127,9 +144,9 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
                 outcome_subfields_object[action] = new_value
             else:
                 outcome_object[action] = new_value
-        # @TODO allow multiple Interfaces, sperated by rule
         outcomes['interfaces'].append({'fields': outcome_object,
-                                       'sub_fields': outcome_subfields_object})
+                                       'sub_fields': outcome_subfields_object,
+                                       'by_rule': rule_name})
         return outcomes
 #.
 #   . -- Contacts
