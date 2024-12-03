@@ -141,7 +141,6 @@ class SyncNetbox(Plugin):
             if not field_value or field_value == '':
                 field_value = 'CMDB Syncer Not defined'
 
-
             if str(field_value).lower() != str(current_field).lower():
                 logger.debug(f'{field}: {repr(current_field)} -> {repr(field_value)}')
                 field_value = self.get_name_or_id(field, field_value, config)

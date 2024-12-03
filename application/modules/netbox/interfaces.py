@@ -63,16 +63,17 @@ class SyncInterfaces(SyncNetbox):
                         'name': cfg_interface['fields']['name'],
                     }
                     logger.debug(f"Interface Filter Query: {interface_query}")
-                    if interface := current_netbox_interfaces.get(**interface_query):
-                        # Update
-                        if payload := self.get_update_keys(interface, cfg_interface):
-                            self.console(f"* Update Interface: for {hostname} {payload}")
-                            interface.update(payload)
-                        else:
-                            self.console(f"* Data for {hostname} already up to date")
+                    if interfaces := current_netbox_interfaces.filter(**interface_query):
+                        for interface in interfaces:
+                            # Update
+                            if payload := self.get_update_keys(interface, cfg_interface):
+                                self.console(f"* Update Interface: for {hostname} {payload}")
+                                interface.update(payload)
+                            else:
+                                self.console(f"* Interface {interface} already up to date")
                     else:
                         ### Create
-                        self.console(f" * Create Interfaces for {hostname}")
+                        self.console(f"* Create Interfaces for {hostname}")
                         payload = self.get_update_keys(False, cfg_interface)
                         if payload.get('device'):
                             payload['device'] = cfg_interface['sub_fields']['netbox_device_id']
