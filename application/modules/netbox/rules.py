@@ -69,7 +69,6 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
         for outcome in rule_outcomes:
             action_param = outcome['param']
             action = outcome['action']
-
             new_value  = render_jinja(action_param, mode="nullify",
                                      HOSTNAME=self.hostname, **self.attributes)
             new_value = new_value.strip()
@@ -194,26 +193,33 @@ class NetboxDataflowRule(NetboxVariableRule):
         # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('entries', [])
         outcome_object = {}
-        outcome_subfields_object = {}
-        sub_fields = [
-        ]
         rule_name = rule['name']
         for outcome in rule_outcomes:
-            action_param = outcome['param']
-            action = outcome['action']
+            field_name = outcome['field_name']
+            field_value = outcome['field_value']
 
             hostname = self.db_host.hostname
 
-            new_value  = render_jinja(action_param, mode="nullify",
+            new_value  = render_jinja(field_value, mode="raise",
                                      HOSTNAME=hostname, **self.attributes).strip()
 
-
-            if action in sub_fields:
-                outcome_subfields_object[action] = new_value
+            if outcome['expand_value_as_list']:
+                for list_value in new_value.split(','):
+                    outcome_object = {}
+                    outcome_object[field_name] = {
+                            'value': list_value,
+                            'use_to_identify': outcome['use_to_identify'],
+                            'expand_value_as_list': outcome['expand_value_as_list'],
+                            }
+                    outcomes['entries'].append({'fields': outcome_object,
+                                             'by_rule': rule_name})
             else:
-                outcome_object[action] = new_value
-        outcomes['entries'].append({'fields': outcome_object,
-                                     'sub_fields': outcome_subfields_object,
-                                     'by_rule': rule_name})
+                outcome_object[field_name] = {
+                        'value': new_value,
+                        'use_to_identify': outcome['use_to_identify'],
+                        'expand_value_as_list': outcome['expand_value_as_list'],
+                        }
+                outcomes['entries'].append({'fields': outcome_object,
+                                             'by_rule': rule_name})
         return outcomes
 #.

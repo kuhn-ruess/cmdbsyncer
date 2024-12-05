@@ -225,6 +225,7 @@ def netbox_dataflow_sync(account):
 
         syncer.sync_dataflow()
     except KeyError as error_obj: #pylint:disable=broad-except
+        raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
         raise

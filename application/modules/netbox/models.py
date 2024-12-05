@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Netbox Rule
 """
@@ -115,7 +116,8 @@ class NetboxIpamIpaddressattributes(db.Document):
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
     render_full_conditions = db.StringField() # Helper for preview
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxIpamIPAddressOutcome'))
+    outcomes =\
+        db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxIpamIPAddressOutcome'))
     render_netbox_outcome = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
@@ -212,7 +214,6 @@ class NetboxContactAttributes(db.Document):
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
     render_full_conditions = db.StringField() # Helper for preview
-
     outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxContactOutcome'))
     render_netbox_outcome = db.StringField() # Helper for preview
 
@@ -232,6 +233,9 @@ class NetboxDataflowOutcome(db.EmbeddedDocument):
     """
     field_name = db.StringField()
     field_value = db.StringField()
+    use_to_identify = db.BooleanField()
+    expand_value_as_list = db.BooleanField()
+    is_netbox_list_field = db.BooleanField()
     meta = {
         'strict': False,
     }
@@ -256,6 +260,10 @@ class NetboxDataflowAttributes(db.Document):
 
     enabled = db.BooleanField()
     sort_field = db.IntField(default=0)
+
+    def __str__(self):
+        return self.name
+
     meta = {
         'strict': False
     }
@@ -273,4 +281,5 @@ class NetboxDataflowModels(db.Document):
             db.ReferenceField(document_type=NetboxDataflowAttributes,
                               reverse_delete_rule=CASCADE))
 
+    enabled = db.BooleanField()
 #.
