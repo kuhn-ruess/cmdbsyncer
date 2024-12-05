@@ -19,6 +19,7 @@ from application.modules.netbox.vms import SyncVMS
 from application.modules.netbox.ipam import SyncIPAM
 from application.modules.netbox.interfaces import SyncInterfaces
 from application.modules.netbox.contacts import SyncContacts
+from application.modules.netbox.dataflow import SyncDataFlow
 
 from syncerapi.v1 import (
     register_cronjob,
@@ -64,7 +65,6 @@ def netbox_device_export(account):
         syncer.source = "netbox_device_syng"
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
-        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_hosts')
@@ -73,6 +73,7 @@ def netbox_device_export(account):
 def cli_netbox_device_export(account):
     """Sync Devices with Netbox"""
     netbox_device_export(account)
+register_cronjob("Netbox: Update Devices", netbox_device_export)
 #.
 #   .-- Command: Import Devices
 def netbox_device_import(account):
@@ -89,6 +90,7 @@ def netbox_device_import(account):
 def cli_netbox_device_import(account):
     """Import Devices from Netbox"""
     netbox_device_import(account)
+register_cronjob("Netbox: Import Devices", netbox_device_import)
 #.
 #   .-- Command: Import VMS
 def netbox_vm_import(account):
@@ -104,6 +106,7 @@ def netbox_vm_import(account):
 def cli_netbox_vm_import(account):
     """Import VMs from Netbox"""
     netbox_vm_import(account)
+register_cronjob("Netbox: Import VMs", netbox_vm_import)
 #.
 #   .-- Command: Export IPs
 def netbox_ip_sync(account):
@@ -134,6 +137,7 @@ def netbox_ip_sync(account):
 def cli_netbox_ip_syn(account):
     """Export IPAM IPs"""
     netbox_ip_sync(account)
+register_cronjob("Netbox: Update IPs", netbox_ip_sync)
 #.
 #   .-- Command: Export Interfaces
 def netbox_interface_sync(account):
@@ -166,6 +170,7 @@ def netbox_interface_sync(account):
 def cli_netbox_interface(account):
     """Export Interfaces of Devices"""
     netbox_interface_sync(account)
+register_cronjob("Netbox: Update Interfaces", netbox_interface_sync)
 #.
 #   .-- Command: Export Contacts
 def netbox_contacts_sync(account):
@@ -197,6 +202,39 @@ def netbox_contacts_sync(account):
 def cli_netbox_contacts(account):
     """Export Contacts"""
     netbox_contacts_sync(account)
+register_cronjob("Netbox: Update Contacts", netbox_contacts_sync)
+#.
+#   .-- Command: Export Dataflow
+def netbox_dataflow_sync(account):
+    """Export DataFlow Data to Netbox"""
+    try:
+        attribute_rewrite = Rewrite()
+        attribute_rewrite.cache_name = 'netbox_rewrite'
+
+        attribute_rewrite.rules = \
+                NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+
+        netbox_rules = NetboxDataflowRule()
+        netbox_rules.rules = NetboxDataflowtAttributes.objects(enabled=True).order_by('sort_field')
+
+        syncer = SyncDataFlow(account)
+        syncer.rewrite = attribute_rewrite
+        syncer.actions = netbox_rules
+        syncer.name = "Netbox: Update DataFlow Data"
+        syncer.source = "netbox_dataflow_sync"
+
+        syncer.sync_dataflow()
+    except KeyError as error_obj: #pylint:disable=broad-except
+        print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
+    except Exception as error_obj: #pylint:disable=broad-except
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('export_dataflow')
+@click.argument("account")
+def cli_netbox_dataflow(account):
+    """Export Contacts"""
+    netbox_dataflow_sync(account)
+register_cronjob("Netbox: Update Dataflow", netbox_dataflow_sync)
 #.
 #   .-- Command: Debug Hosts
 @cli_netbox.command('debug_host')
@@ -255,9 +293,3 @@ def netbox_host_debug(hostname):
     #payload = syncer.get_payload(db_host, extra_attributes, attributes['all'])
     #attribute_table("API Payload", payload)
 #.
-register_cronjob("Netbox: Update Devices", netbox_device_export)
-register_cronjob("Netbox: Import Devices", netbox_device_import)
-register_cronjob("Netbox: Import VMs", netbox_vm_import)
-register_cronjob("Netbox: Update IPs", netbox_ip_sync)
-register_cronjob("Netbox: Update Contacts", netbox_contacts_sync)
-register_cronjob("Netbox: Update Interfaces", netbox_interface_sync)

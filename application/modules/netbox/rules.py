@@ -180,3 +180,40 @@ class NetboxContactRule(NetboxVariableRule):
             outcomes['fields'][action] = new_value
         return outcomes
 #.
+#   . -- Dataflow
+class NetboxDataflowRule(NetboxVariableRule):
+    """
+    Attribute Options for a Dataflow
+    """
+    name = "Netbox -> Dataflow"
+
+    def add_outcomes(self, rule, rule_outcomes, outcomes):
+        """
+        Filter if labels match to a rule
+        """
+        # pylint: disable=too-many-nested-blocks
+        outcomes.setdefault('entries', [])
+        outcome_object = {}
+        outcome_subfields_object = {}
+        sub_fields = [
+        ]
+        rule_name = rule['name']
+        for outcome in rule_outcomes:
+            action_param = outcome['param']
+            action = outcome['action']
+
+            hostname = self.db_host.hostname
+
+            new_value  = render_jinja(action_param, mode="nullify",
+                                     HOSTNAME=hostname, **self.attributes).strip()
+
+
+            if action in sub_fields:
+                outcome_subfields_object[action] = new_value
+            else:
+                outcome_object[action] = new_value
+        outcomes['entries'].append({'fields': outcome_object,
+                                     'sub_fields': outcome_subfields_object,
+                                     'by_rule': rule_name})
+        return outcomes
+#.
