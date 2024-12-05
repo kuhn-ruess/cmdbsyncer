@@ -256,13 +256,19 @@ admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
 #   .-- Netbox
 admin.add_sub_category(name="Netbox", parent_name="Modules")
 
-from application.modules.netbox.views import NetboxCustomAttributesView
+from application.modules.netbox.views import (
+                                            NetboxCustomAttributesView,
+                                            NetboxDataFlowView,
+                                            NetboxDataFlowModelView,
+                                        )
 from application.modules.netbox.models import (
-                                            NetboxCustomAttributes, 
+                                            NetboxCustomAttributes,
                                             NetboxRewriteAttributeRule,
                                             NetboxIpamIpaddressattributes,
                                             NetboxDcimInterfaceAttributes,
                                             NetboxContactAttributes,
+                                            NetboxDataflowAttributes,
+                                            NetboxDataflowModels,
                                         )
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
@@ -274,6 +280,12 @@ admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
                                     name="IPAM IP Addresses", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxContactAttributes,\
                                     name="Tenancy Contacts", category="Netbox"))
+
+admin.add_sub_category(name="Plugin: Dataflow", parent_name="Netbox")
+admin.add_view(NetboxDataFlowModelView(NetboxDataflowModels,\
+        name="Model Defintion", category="Plugin: Dataflow"))
+admin.add_view(NetboxDataFlowView(NetboxDataflowAttributes,\
+        name="Field Definition", category="Plugin: Dataflow"))
 #.
 #   .-- i-doit
 admin.add_sub_category(name="i-doit", parent_name="Modules")

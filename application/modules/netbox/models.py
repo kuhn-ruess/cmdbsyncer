@@ -2,6 +2,7 @@
 Netbox Rule
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes, import-error
+from mongoengine import CASCADE
 from application import db
 from application.modules.rule.models import rule_types
 
@@ -223,4 +224,53 @@ class NetboxContactAttributes(db.Document):
     meta = {
         'strict': False
     }
+#.
+#   . -- Dataflow
+class NetboxDataflowOutcome(db.EmbeddedDocument):
+    """
+    Outcome
+    """
+    field_name = db.StringField()
+    field_value = db.StringField()
+    meta = {
+        'strict': False,
+    }
+
+class NetboxDataflowAttributes(db.Document):
+    """
+    Define Rule based DataFlow Attributes
+    """
+
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
+    render_full_conditions = db.StringField() # Helper for preview
+
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxDataflowOutcome'))
+    render_netbox_outcome = db.StringField() # Helper for preview
+
+    last_match = db.BooleanField(default=False)
+
+
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+    meta = {
+        'strict': False
+    }
+
+
+class NetboxDataflowModels(db.Document):
+    """
+    Netbox Dataflow Setttings
+    """
+    name = db.StringField(max_length=120)
+    documentation = db.StringField()
+
+    used_dataflow_model = db.StringField(max_length=120)
+    connected_rules = db.ListField(field=\
+            db.ReferenceField(document_type=NetboxDataflowAttributes,
+                              reverse_delete_rule=CASCADE))
+
 #.
