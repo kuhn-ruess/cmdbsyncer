@@ -258,7 +258,7 @@ admin.add_sub_category(name="Netbox", parent_name="Modules")
 
 from application.modules.netbox.views import (
                                             NetboxCustomAttributesView,
-                                            NetboxDataFlowView,
+                                            NetboxDataFlowAttributesView,
                                             NetboxDataFlowModelView,
                                         )
 from application.modules.netbox.models import (
@@ -272,6 +272,7 @@ from application.modules.netbox.models import (
                                         )
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
+
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
                                     name="DCIM Device", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxDcimInterfaceAttributes,\
@@ -281,11 +282,12 @@ admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
 admin.add_view(NetboxCustomAttributesView(NetboxContactAttributes,\
                                     name="Tenancy Contacts", category="Netbox"))
 
-admin.add_sub_category(name="Plugin: Dataflow", parent_name="Netbox")
+admin.add_sub_category(name="Plugin Dataflow", parent_name="Netbox")
 admin.add_view(NetboxDataFlowModelView(NetboxDataflowModels,\
-        name="Model Defintion", category="Plugin: Dataflow"))
-admin.add_view(NetboxDataFlowView(NetboxDataflowAttributes,\
-        name="Field Definition", category="Plugin: Dataflow"))
+        name="Model Defintion", category="Plugin Dataflow"))
+
+admin.add_view(NetboxDataFlowAttributesView(NetboxDataflowAttributes,\
+        name="Field Definition", category="Plugin Dataflow"))
 #.
 #   .-- i-doit
 admin.add_sub_category(name="i-doit", parent_name="Modules")

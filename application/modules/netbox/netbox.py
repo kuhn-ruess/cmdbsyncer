@@ -26,6 +26,10 @@ class SyncNetbox(Plugin):
         if self.config:
             # Not needed in Debug_host Mode
             self.nb = pynetbox.api(self.config['address'], token=self.config['password'])
+            verify = False
+            if 'true' in self.config.get('verify_cert', 'true').lower():
+                verify = True
+            self.nb.http_session.verify = verify
 
     @staticmethod
     def get_field_config():
@@ -50,7 +54,13 @@ class SyncNetbox(Plugin):
         """
         Return Slag Version of String
         """
-        return name.replace(' ', '_').lower()
+        replacers = [
+            ('.', ''),
+            (' ', '-'),
+        ]
+        for repl, target in replacers:
+            name = name.replace(repl, target)
+        return name.lower()
 
     def get_name_or_id(self, field, field_value, config):
         """

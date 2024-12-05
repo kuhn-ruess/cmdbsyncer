@@ -32,6 +32,7 @@ enabled_rules = {
     'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
     'netbox_interfaces': ('application.modules.netbox.models', 'NetboxDcimInterfaceAttributes'),
     'netbox_devices': ('application.modules.netbox.models', 'NetboxCustomAttributes'),
+    'netbox_ips': ('application.modules.netbox.models', 'NetboxIpamIpaddressattributes'),
 }
 
 

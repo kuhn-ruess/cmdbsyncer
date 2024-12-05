@@ -33,6 +33,7 @@ class JdiscDevices(JDisc):
               hwVersion
               assetTag
               roles
+              model
               operatingSystem {
                 osFamily
                 osVersion
