@@ -26,7 +26,9 @@ def _render_netbox_outcome(_view, _context, model, _name):
     outcome_names +=  netbox_device_interface_outcome_types
     outcome_names +=  netbox_contact_outcome_types
     for idx, entry in enumerate(model.outcomes):
-        highlighted_param = highlight(entry.param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+        if entry.param:
+            highlighted_param = \
+                    highlight(entry.param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
         html += f"<tr><td>{idx}</td><td>{dict(outcome_names)[entry.action]}</td>"
         if entry.param:
             html += f"<td><b>{highlighted_param}</b></td></tr>"
@@ -46,7 +48,7 @@ class NetboxCustomAttributesView(RuleModelView):
         """
 
         self.column_formatters.update({
-            'render_netbox_outcome': _render_netbox_outcome,
+            'render_netbox_outcome': _render_netbox_outcome
         })
 
         self.form_overrides.update({
@@ -56,7 +58,6 @@ class NetboxCustomAttributesView(RuleModelView):
         self.column_labels.update({
             'render_netbox_outcome': "Netbox Actions",
         })
-
         #pylint: disable=access-member-before-definition
         base_config = dict(self.form_subdocuments)
         base_config.update({
@@ -88,7 +89,7 @@ def _render_dataflow_outcome(_view, _context, model, _name):
     html += "</table>"
     return Markup(html)
 
-class NetboxDataFlowView(RuleModelView):
+class NetboxDataFlowAttributesView(RuleModelView):
     """
     Custom Dataflow Model
     """

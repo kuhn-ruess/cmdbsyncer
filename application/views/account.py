@@ -237,6 +237,7 @@ class AccountModelView(DefaultModelView):
         elif form.typ.data == 'netbox':
             default_fields = [
                 ('rewrite_hostname', ""),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'jdisc':
             main_presets = [

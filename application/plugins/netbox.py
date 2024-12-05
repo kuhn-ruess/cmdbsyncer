@@ -215,7 +215,7 @@ def netbox_dataflow_sync(account):
                 NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
 
         netbox_rules = NetboxDataflowRule()
-        netbox_rules.rules = NetboxDataflowtAttributes.objects(enabled=True).order_by('sort_field')
+        netbox_rules.rules = NetboxDataflowAttributes.objects(enabled=True).order_by('sort_field')
 
         syncer = SyncDataFlow(account)
         syncer.rewrite = attribute_rewrite
@@ -227,6 +227,7 @@ def netbox_dataflow_sync(account):
     except KeyError as error_obj: #pylint:disable=broad-except
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
+        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_dataflow')
