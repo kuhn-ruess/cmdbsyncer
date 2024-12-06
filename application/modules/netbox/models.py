@@ -253,7 +253,7 @@ class NetboxDataflowAttributes(db.Document):
     render_full_conditions = db.StringField() # Helper for preview
 
     outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxDataflowOutcome'))
-    render_netbox_outcome = db.StringField() # Helper for preview
+    render_netbox_dataflow = db.StringField() # Helper for preview
 
     last_match = db.BooleanField(default=False)
 

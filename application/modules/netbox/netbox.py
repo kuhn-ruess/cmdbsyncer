@@ -77,6 +77,8 @@ class SyncNetbox(Plugin):
         logger.debug(f"0) Working on {field}")
         if sub_obj := translation.get(field):
             obj_type = sub_obj['type']
+            if obj_type == 'string':
+                return field_value
             ## Create the SUB Field
             name_field = sub_obj.get('name_field', 'name')
             create_obj = {name_field: field_value}
@@ -88,12 +90,15 @@ class SyncNetbox(Plugin):
             if sub_obj['has_slug']:
                 logger.debug("2) Field has slug")
                 create_obj['slug'] = self.get_slug(field_value)
-
             if current := self.get_nested_attr(self.nb, obj_type).get(**create_obj):
                 logger.debug(f"3) Found current ID value  {current.id}")
                 outer_id = current.id
             else:
                 logger.debug("4) Need to create a new id")
+                if extra_fields := sub_obj.get('sub_fields'):
+                    for extra_field in extra_fields:
+                        create_obj[extra_field] = \
+                                self.get_name_or_id(extra_field, field_value, config)
                 new_obj = self.get_nested_attr(self.nb, obj_type).create(create_obj)
                 logger.debug(f"4b) New id is {new_obj.id}")
                 outer_id = new_obj.id

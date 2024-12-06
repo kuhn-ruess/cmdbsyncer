@@ -100,7 +100,7 @@ class NetboxDataFlowAttributesView(RuleModelView):
         """
 
         self.column_formatters.update({
-            'render_netbox_outcome': _render_dataflow_outcome,
+            'render_netbox_dataflow': _render_dataflow_outcome,
         })
 
         self.form_overrides.update({
