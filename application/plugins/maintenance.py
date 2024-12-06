@@ -116,17 +116,26 @@ def delete_cache(cache_name):
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
 #.
-#   .-- Command: Delete Caches
+#   .-- Command: Delete Inventory
 
 @_cli_sys.command('delete_inventory')
-def delete_inventory():
+@click.argument("prefix_only", default="")
+def delete_inventory(prefix_only):
     """
     Delete the inventory of all hosts
+
+    Add a prefix als parameter to limit to only the ones starting with that
     """
     print(f"{CC.HEADER} ***** Delete Inventory ***** {CC.ENDC}")
     for host in Host.objects():
         logger.debug(f"Handling Host {host.hostname}")
-        host.inventory = {}
+        if prefix_only:
+            prefix_only = prefix_only.lower()
+            for entry in list(host.inventory.keys()):
+                if entry.lower().startswith(prefix_only):
+                    del host.inventory[entry]
+        else:
+            host.inventory = {}
         host.save()
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 

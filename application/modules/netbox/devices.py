@@ -23,6 +23,9 @@ class SyncDevices(SyncNetbox):
                 'type': 'dcim.manufacturers',
                 'has_slug' : True,
             },
+            'model': {
+                'type': 'string',
+            },
             'site': {
                 'type': 'dcim.sites',
                 'has_slug': True,
@@ -30,11 +33,11 @@ class SyncDevices(SyncNetbox):
             'device_type': {
                 'type': 'dcim.device-types',
                 'has_slug': True,
-                'sub_fields' : ['model'],
+                'sub_fields' : ['model', 'manufacturer'],
             },
             'role': {
                 'type': 'dcim.device-roles',
-                 'has_slug' : False,
+                 'has_slug' : True,
             },
             'platform': {
                 'type': 'dcim.platforms',
@@ -90,12 +93,17 @@ class SyncDevices(SyncNetbox):
                     print(f"{CC.OKGREEN} *{CC.ENDC} Create Device")
                     payload = self.get_update_keys(False, custom_rules)
                     payload['name'] = hostname
+                    # When we create, we don't have all rferences jet.
+                    # So we need to delete now and update alter
+                    for what in ['primary_ip4', 'primary_ip4']:
+                        if what in payload:
+                            del payload[what]
                     device = self.nb.dcim.devices.create(payload)
 
-                attr_name = f"{self.config['name']}_device_id"
-                db_host.set_inventory_attribute(attr_name, device.id)
             except Exception as error:
                 print(f" Error in process: {error}")
+            attr_name = f"{self.config['name']}_device_id"
+            db_host.set_inventory_attribute(attr_name, device.id)
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
         for device in current_netbox_devices.all():
