@@ -79,7 +79,10 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         new_folder = self.replace(new_folder, exceptions=['/'])
         if app.config['CMK_LOWERCASE_FOLDERNAMES']:
             new_folder = new_folder.lower()
-        return self.replace(new_folder, regex='[^a-z A-Z 0-9/_-]')
+        new_path = self.replace(new_folder, regex='[^a-z A-Z 0-9/_-]')
+        if new_path[-1] == '/':
+            return new_path[:-1]
+        return new_path
 
     def format_foldername(self, folder):
         """
@@ -97,7 +100,10 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 folder_name += "|" + splitted[1]
             if folder_name:
                 parts.append(folder_name)
-        return "/" + "/".join(parts)
+        new_path = "/" + "/".join(parts)
+        if new_path[-1] == '/':
+            return new_path[:-1]
+        return new_path
 
     def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """ Handle the Outcomes """
