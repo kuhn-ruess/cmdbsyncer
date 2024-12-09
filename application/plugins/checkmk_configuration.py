@@ -44,8 +44,10 @@ def cli_export_downtimes(account):
 #   .-- Command: Export Tags
 @cli_cmk.command('export_tags')
 @click.argument('account')
+@click.option("--dry-run", default=False, is_flag=True)
+@click.option("--save-requests", default='')
 #pylint: disable=too-many-locals
-def cli_export_tags(account):
+def cli_export_tags(account, dry_run, save_requests):
     """
     Export Hosttags Groups to Checkmk
 
@@ -55,7 +57,7 @@ def cli_export_tags(account):
     Args:
         account (string): Name Checkmk Account Config
     """
-    export_tags(account)
+    export_tags(account, dry_run, save_requests)
 
 #.
 
