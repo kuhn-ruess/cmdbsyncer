@@ -49,7 +49,7 @@ def _load_rules():
     }
 
 #   .-- Export Tags
-def export_tags(account):
+def export_tags(account, dry_run=False, save_requests=False):
     """
     Export Tags to Checkmk
     """
@@ -58,6 +58,8 @@ def export_tags(account):
         rules = _load_rules()
         syncer = CheckmkTagSync(account)
         syncer.rewrite = rules['rewrite']
+        syncer.dry_run = dry_run
+        syncer.save_requests = save_requests
         syncer.name = 'Checkmk: Export Tags'
         syncer.source = "cmk_tag_sync"
         syncer.export_tags()
