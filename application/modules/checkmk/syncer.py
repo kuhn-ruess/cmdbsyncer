@@ -633,7 +633,7 @@ class SyncCMK2(CMK2):
         full_foldername = f'{parent}{mid_char}{subfolder}'
         self.existing_folders.append(full_foldername)
         if extra_opts := self.custom_folder_attributes.get(full_foldername):
-            body.update(extra_opts)
+            body.update({'attributes': extra_opts})
         try:
             self.request(url, method="POST", data=body)
         except CmkException as error:
@@ -659,8 +659,8 @@ class SyncCMK2(CMK2):
                 extr = ""
                 if not next_parent.endswith('/') and not sub_folder.startswith('/'):
                     extr = "/"
-
-                if f'{next_parent}{extr}{sub_folder}' not in self.existing_folders:
+                next_subfolder = f'{next_parent}{extr}{sub_folder}'
+                if next_subfolder  not in self.existing_folders:
                     self._create_folder(next_parent, sub_folder)
                 if next_parent == '/':
                     next_parent += sub_folder
