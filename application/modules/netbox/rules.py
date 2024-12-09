@@ -200,14 +200,14 @@ class NetboxDataflowRule(NetboxVariableRule):
 
             hostname = self.db_host.hostname
 
-            new_value  = render_jinja(field_value, mode="raise",
+            new_value  = render_jinja(field_value, mode="nullify",
                                      HOSTNAME=hostname, **self.attributes).strip()
 
             if outcome['expand_value_as_list']:
                 for list_value in new_value.split(','):
                     outcome_object = {}
                     outcome_object[field_name] = {
-                            'value': list_value,
+                            'value': list_value.strip(),
                             'use_to_identify': outcome['use_to_identify'],
                             'expand_value_as_list': outcome['expand_value_as_list'],
                             }

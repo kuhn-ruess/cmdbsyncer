@@ -1,6 +1,7 @@
 """
 IPAM Syncronisation
 """
+#pylint: disable=unnecessary-dunder-call
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application import logger
@@ -16,7 +17,7 @@ class SyncDataFlow(SyncNetbox):
     """
     console = None
 
-    def inner_update(self, current_objects, model_data):
+    def inner_update(self, nb_objects, model_data):
         """
         Update/ Create of objects
         """
@@ -24,12 +25,23 @@ class SyncDataFlow(SyncNetbox):
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
+        current_objects = {}
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             self.console = progress.console.print
             task1 = progress.add_task("Updateing Objectst", total=total)
+            for nb_object in nb_objects:
+                custom_fields = False
+                name = False
+                for field in nb_object:
+                    if field[0] == 'name':
+                        name = field[1]
+                    elif field[0] == 'custom_fields':
+                        custom_fields = field[1]
+                if custom_fields and name:
+                    current_objects.update({name:custom_fields})
             for db_object in db_objects:
                 hostname = db_object.hostname
 
@@ -44,27 +56,23 @@ class SyncDataFlow(SyncNetbox):
                         continue
 
                     logger.debug(f"Working with {field_cfg}")
-                    query = {x:y['value'] for x,y in
-                                field_cfg['fields'].items() if y['use_to_identify']}
-                    all_fields = {x:y['value'] for x,y in
+                    query_field = [x['value'] for x in
+                                field_cfg['fields'].values() if x['use_to_identify']][0]
+                    all_fields = {}
+                    all_fields['fields'] = {x:y['value'] for x,y in
                                 field_cfg['fields'].items()}
-                    logger.debug(f"Filter Query: {query}")
-                    if nb_object := current_objects.get(**query):
-                        # Update
-                        if payload := self.get_update_keys(nb_object, all_fields):
-                            self.console(f"* Update Object: ... on {hostname}")
-                            nb_object.update(payload)
-                        else:
-                            self.console(f"* Already up to date ... on {hostname}")
-                    else:
+
+                    logger.debug(f"Filter Query: {query_field}")
+
+                    if query_field and query_field not in current_objects:
                         ### Create
-                        self.console(f" * Create Object  on {hostname}")
+                        self.console(f" * Create Object {query_field} from {hostname}")
                         payload = self.get_update_keys(False, all_fields)
                         logger.debug(f"Create Payload: {payload}")
-
-                        self.nb.__getattribute__('data-flows').\
-                                    __getattribute__(model_name).create(payload)
-            progress.advance(task1)
+                        self.nb.plugins.__getattr__('data-flows').\
+                                    __getattr__(model_name).create(payload)
+                        current_objects.update({query_field: {}})
+                progress.advance(task1)
 
     def sync_dataflow(self):
         """
