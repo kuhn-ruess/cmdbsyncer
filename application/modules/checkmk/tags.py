@@ -123,7 +123,7 @@ class CheckmkTagSync(CMK2):
                 logger.debug(f"Delete Template {group_id}")
                 del groups[group_id]
 
-
+        tags = list(set(tags))
         self.sync_to_checkmk(groups, tags)
 
     def update_hosts_multigroups(self, db_host, groups):
@@ -346,7 +346,8 @@ class CheckmkTagSync(CMK2):
                     checkmk_tags = checkmk_ids[syncer_group_id]
                     flat = [ {'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
 
-                    if flat == payload['tags']:
+                    if {frozenset(d.items()) for d in flat} == \
+                            {frozenset(d.items()) for d in payload['tags']}:
                         progress.console.print(f" * Group {syncer_group_id} already up to date.")
                     else:
                         url = f"/objects/host_tag_group/{syncer_group_id}"
