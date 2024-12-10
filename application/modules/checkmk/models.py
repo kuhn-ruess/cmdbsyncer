@@ -73,6 +73,7 @@ action_outcome_types = [
      "Custom CMK Attribute. Custom: __ "\
      "Create Custom Checkmk Attribute: "\
      "Set key:value, Placeholders: {{HOSTNAME}} and all Host Attributes in Jinja Syntax"),
+    ("remove_attr_if_not_set", "Remove given Attributes from Host, if not explicitly assigned"),
     ("multiple_custom_attribute","Deprecated: Just switch to normal Custom Attribute"),
     ("create_cluster",
      "Cluster: __ Create Cluster. Specify Tags with Nodes as Wildcard (*) and or Comma separated"),

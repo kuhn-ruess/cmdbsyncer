@@ -132,6 +132,8 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         print_debug(self.debug,
                     "- Handle Special options")
 
+        hostname = self.db_host.hostname
+
         for outcome in rule_outcomes:
             # We add only the outcome of the
             # first matching rule action
@@ -142,7 +144,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             action_param = outcome['action_param']
             if outcome['action'] == 'move_folder':
                 new_value = action_param
-                hostname = self.db_host.hostname
                 new_value = render_jinja(new_value, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
 
@@ -168,7 +169,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == 'create_folder':
                 new_value = action_param
-                hostname = self.db_host.hostname
                 new_value = render_jinja(new_value, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
 
@@ -197,9 +197,16 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             if outcome['action'] == 'attribute':
                 outcomes['attributes'].append(action_param)
 
-            if outcome['action'] == 'custom_attribute':
-                hostname = self.db_host.hostname
+            if outcome['action'] == "remove_attr_if_not_set":
+                action_render = render_jinja(action_param, mode="nullify",
+                                         HOSTNAME=hostname, **self.attributes)
 
+                for attribute in action_render.split(','):
+                    attribute = attribute.strip()
+                    if attribute not in self.attributes:
+                        outcomes['remove_attributes'].append(attribute)
+
+            if outcome['action'] == 'custom_attribute':
                 action_render = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
 
@@ -237,7 +244,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == "set_parent":
                 value = action_param
-                hostname = self.db_host.hostname
                 new_value = render_jinja(value, HOSTNAME=hostname, **self.attributes)
                 for parent in new_value.split(','):
                     parent = parent.strip()
