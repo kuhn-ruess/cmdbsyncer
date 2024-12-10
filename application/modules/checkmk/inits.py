@@ -66,7 +66,7 @@ def export_tags(account, dry_run=False, save_requests=False):
     except Exception as error_obj:
         print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'Error: {error_obj}'))
-        log.log(f"Exception Syncing Tags to Account: {account.name}",
+        log.log(f"Exception Syncing Tags to Account: {account}",
                 source="checkmk_tag_export",
                 details=details)
 
@@ -96,7 +96,7 @@ def export_bi_rules(account):
     except CmkException as error_obj:
         details.append(('error', f'CMK Error: {error_obj}'))
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        log.log(f"Exception Export BI Rules to Checkmk Account: {account.name}",
+        log.log(f"Exception Export BI Rules to Checkmk Account: {account}",
                 source="cmk_bi_sync", details=details)
 #.
 #   .-- Export BI Aggregations
@@ -122,7 +122,7 @@ def export_bi_aggregations(account):
     except CmkException as error_obj:
         details.append(('error', f'CMK Error: {error_obj}'))
         print(f'{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        log.log(f"Export BI Aggregations to Checkmk Account: {account.name}",
+        log.log(f"Export BI Aggregations to Checkmk Account: {account}",
                 source="Checkmk", details=details)
 
 #.
@@ -140,7 +140,7 @@ def inventorize_hosts(account):
         details = []
         details.append(('error', f'Error: {error_obj}'))
         print(f'{ColorCodes.FAIL} Error: {error_obj} {ColorCodes.ENDC}')
-        log.log(f"Failure Inventorize Hosts Account: {account.name}",
+        log.log(f"Failure Inventorize Hosts Account: {account}",
                 source="Checkmk", details=details)
 
 #.
@@ -239,7 +239,7 @@ def export_groups(account, test_run=False):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporting Groups to Checkmk Account: {account.name}",
+        log.log(f"Error Exporting Groups to Checkmk Account: {account}",
                 source="Checkmk", details=details)
 #.
 #   .-- Export Rules
@@ -263,7 +263,7 @@ def export_rules(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error exporting Rules to Checkmk Account: {account.name}",
+        log.log(f"Error exporting Rules to Checkmk Account: {account}",
                 source="cmk_rule_sync", details=details)
 #.
 #   .-- Export Downtimes
@@ -290,7 +290,7 @@ def export_downtimes(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Export Downtimes to Checkmk Account: {account.name}",
+        log.log(f"Export Downtimes to Checkmk Account: {account}",
                 source="Checkmk", details=details)
 #.
 #   . DCD Rules
@@ -314,7 +314,7 @@ def export_dcd_rules(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporing DCD Rules to Checkmk Account: {account.name}",
+        log.log(f"Error Exporing DCD Rules to Checkmk Account: {account}",
                 source="cmk_dcd_rule_sync", details=details)
 #.
 #   . Passwords
@@ -329,7 +329,7 @@ def export_passwords(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporting Passwords to Checkmk Account: {account.name}",
+        log.log(f"Error Exporting Passwords to Checkmk Account: {account}",
             source="cmk_password_sync", details=details)
 #.
 #   . Export Users
@@ -344,6 +344,6 @@ def export_users(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error exporting Users to Checkmk Account: {account.name}",
+        log.log(f"Error exporting Users to Checkmk Account: {account}",
                 source="cmk_user_sync", details=details)
 #.
