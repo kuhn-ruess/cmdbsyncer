@@ -119,6 +119,8 @@ class SyncDevices(SyncNetbox):
 
         for device in self.nb.dcim.devices.all():
             hostname = device.name
+            if not hostname:
+                continue
             labels = device.__dict__
             for what in ['has_details', 'api',
                          'default_ret', 'endpoint',
