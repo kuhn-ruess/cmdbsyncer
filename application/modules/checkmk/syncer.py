@@ -398,6 +398,11 @@ class SyncCMK2(CMK2):
             if attr_value := attributes['all'].get(additional_attr):
                 additional_attributes[additional_attr] = attr_value
 
+        if 'remove_if_attributes' in next_actions:
+            for remove_if in next_actions['remove_if_attributes']:
+                if remove_if not in additional_attributes:
+                    remove_attributes.append(remove_if)
+
         return additional_attributes, remove_attributes
 
 

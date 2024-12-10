@@ -116,6 +116,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             ('attributes', []),
             ('custom_attributes', {}),
             ('remove_attributes', []),
+            ('remove_if_attributes', []),
             ('create_cluster', []),
             ('create_folder', ""),
             ('create_folder_extra_folder_options', ""),
@@ -203,8 +204,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
                 for attribute in action_render.split(','):
                     attribute = attribute.strip()
-                    if attribute not in self.attributes:
-                        outcomes['remove_attributes'].append(attribute)
+                    outcomes['remove_if_attributes'].append(attribute)
 
             if outcome['action'] == 'custom_attribute':
                 action_render = render_jinja(action_param, mode="nullify",
