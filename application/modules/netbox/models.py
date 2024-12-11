@@ -41,7 +41,7 @@ netbox_outcome_types = [
   ('location', 'Location'),
   ('rack', 'Rack'),
   ('primary_ip4', 'Primary IPv4'),
-  #('custom_field', 'Set a Custom Field key:value (Jinja)'),
+  ('custom_field', 'Set a Custom Field key:value (Jinja)'),
   ('update_optout', 'Do never Update given Fields (comma separated list possible)'),
   ('ignore_host', 'Ignore Host(s)'),
 ]

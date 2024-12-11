@@ -23,6 +23,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
             'model'
         ]
         outcomes.setdefault('fields', {})
+        outcomes.setdefault('custom_fields', {})
         outcomes.setdefault('do_not_update_keys', [])
         outcomes.setdefault('sub_fields', {})
         for outcome in rule_outcomes:
@@ -31,6 +32,12 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
             if field == 'update_optout':
                 fields = [str(x).strip() for x in action_param.split(',')]
                 outcomes['do_not_update_keys'] += fields
+            elif field == 'custom_field':
+                new_value  = render_jinja(action_param, mode="nullify",
+                                         HOSTNAME=self.hostname, **self.attributes)
+                custom_key, custom_value = new_value.split(':')
+                outcomes['custom_fields'][custom_key] = custom_value
+
             else:
                 new_value  = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=self.hostname, **self.attributes)
