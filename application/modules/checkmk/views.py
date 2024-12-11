@@ -2,6 +2,11 @@
 Checkmk Rule Views
 """
 from markupsafe import Markup
+
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import DjangoLexer
+
 from wtforms import HiddenField, StringField, PasswordField
 from wtforms.validators import ValidationError
 from flask import request
@@ -61,17 +66,35 @@ def _render_checkmk_outcome(_view, _context, model, _name):
     """
     Render Checkmk outcomes
     """
-    html = "<table width=100%>"
+    html = "<table width='100%'>"
     for idx, entry in enumerate(model.outcomes):
         name = dict(action_outcome_types)[entry.action].split('_',1)[0]
         html += f"<tr><td>{idx}</td><td>{name}</td>"
         if entry.action_param:
-            points = ""
-            if len(entry.action_param) > 150:
-                points ="..."
-
-            html += f"<td><b>{entry.action_param[:150]}</b>{points}</td></tr>"
+            highlighted_param = \
+                    highlight(entry.action_param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+            html += f"<td>{highlighted_param}</td></tr>"
     html += "</table>"
+    html = ""
+    for idx, entry in enumerate(model.outcomes):
+        name = dict(action_outcome_types)[entry.action].split('_',1)[0]
+        highlighted_param = ""
+        if entry.action_param:
+            highlighted_param = \
+                    highlight(entry.action_param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+        html += f'''
+            <div class="card">
+              <div class="card-body">
+                <p class="card-text">
+                 <h6 class="card-subtitle mb-2 text-muted">{name}</h6>
+                </p>
+                <p class="card-text">
+                {highlighted_param}
+                </p>
+              </div>
+            </div>
+            '''
+
     return Markup(html)
 
 def _render_group_outcome(_view, _context, model, _name):

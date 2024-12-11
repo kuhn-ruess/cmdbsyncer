@@ -71,8 +71,16 @@ def _render_condition_typ(_view, _context, model, _name):
     """
     Render Condition Typ
     """
-    translation = dict(rule_types)
-    return translation[model.condition_typ]
+    badges = {
+            'all': 'success',
+            'any': 'warning',
+            'anyway': 'danger',
+    }
+    badge = badges[model.condition_typ]
+
+    rule_names = dict(rule_types)
+    translation = rule_names[model.condition_typ]
+    return Markup(f'<span class="badge badge-{badge}">{translation}<span>')
 
 def _render_filter_outcomes(_view, _context, model, _name):
     """
@@ -106,41 +114,47 @@ def _render_full_conditions(_view, _context, model, _name):
     """
     Render full condition set which contains host or labels
     """
-    html = "<table width=100%>"
-    for idx, entry in enumerate(model.conditions):
+    negate = {
+        True: 'not ',
+        False: ' ',
+    }
+    html = ""
+    for entry in model.conditions:
         if entry.match_type == 'host':
-            points = ""
-            if len(entry.hostname) > 50:
-                points = "..."
-            html += f"<tr><td>{idx}</td> <td><b>Hostname</b></td><td>"
-            if entry.hostname_match_negate:
-                html += "<b>NOT</b> "
-            html += f"{condition_types[entry.hostname_match]} "\
-                    f"<b>{entry.hostname[:50]}{points}</b></td></tr>"
+            html += f'''
+                <div class="card">
+                  <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Hostname</h6>
+                    <p class="card-text">
+                     <span class="badge badge-primary">
+                     {negate[entry.hostname_match_negate]}
+                     {condition_types[entry.hostname_match]}</span>
+                    <span class="badge badge-info">{entry.hostname}</span>
+                    </p>
+                  </div>
+                </div>
+                '''
         else:
-            value_points = ""
-            tag_points = ""
-            if len(entry.tag) > 50:
-                tag_points = "..."
-            if len(entry.value) > 50:
-                value_points = "..."
-            html += f"<tr><td>{idx}</td><td><b>Attribute</b></td><td>"\
-                "<table width=100%>"\
-                "<tr>"\
-                "<td><b>Key</b></td>"\
-                f"<td>{condition_types[entry.tag_match]}</td>"\
-                f"<td><b>{entry.tag[:50]}{tag_points}</b></td>"\
-                f"<td>Negate: <b>{entry.tag_match_negate}</b></td>"\
-                "</tr>"\
-                "<tr>"\
-                "<td><b>Value</b></td>"\
-                f"<td>{condition_types[entry.value_match]}</td>"\
-                f"<td><b>{entry.value[:50]}{value_points}</b></td>"\
-                f"<td>Negate: <b>{entry.value_match_negate}</b></td>"\
-                "</tr>"\
-                "</table>"\
-                "</td></tr>"
-    html += "</table>"
+            html += f'''
+                <div class="card">
+                  <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Key</h6>
+                    <p class="card-text">
+                     <span class="badge badge-primary">
+                        {negate[entry.tag_match_negate]}{condition_types[entry.tag_match]}
+                     </span>
+                     <span class="badge badge-info">{entry.tag}</span>
+                    </p>
+                    <h6 class="card-subtitle mb-2 text-muted">Value</h6>
+                    <p class="card-text">
+                    <span class="badge badge-primary">
+                        {negate[entry.tag_match_negate]}{condition_types[entry.value_match]}
+                    </span>
+                    <span class="badge badge-info">{entry.value_match_negate}{entry.value}</span>
+                    </p>
+                  </div>
+                </div>
+                '''
     return Markup(html)
 
 #.
