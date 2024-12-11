@@ -7,6 +7,7 @@ import click
 from mongoengine.errors import DoesNotExist
 
 from application import app
+from application import log
 from application.modules.debug import attribute_table
 
 from application.modules.rule.rewrite import Rewrite
@@ -62,9 +63,11 @@ def netbox_device_export(account):
         syncer.rewrite = rules['rewrite']
         syncer.actions = rules['actions']
         syncer.name = "Netbox: Update Devices"
-        syncer.source = "netbox_device_syng"
+        syncer.source = "netbox_device_sync"
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
+        log.log(f"Export Devices to Account: {account} Failed",
+        source="netbox_device_sync_command", details=[('error', str(error_obj))])
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_hosts')
@@ -225,10 +228,8 @@ def netbox_dataflow_sync(account):
 
         syncer.sync_dataflow()
     except KeyError as error_obj: #pylint:disable=broad-except
-        raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
-        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_dataflow')

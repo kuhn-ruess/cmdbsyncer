@@ -151,7 +151,7 @@ class SyncNetbox(Plugin):
             if current_obj:
                 current_field = self.get_nested_attr(current_obj, field)
             else:
-                # In this case we create a new project
+                # In this case we create a new object
                 current_field = False
             if not field_value or field_value == '':
                 field_value = 'CMDB Syncer Not defined'
@@ -162,4 +162,22 @@ class SyncNetbox(Plugin):
                 if '.' in field:
                     field = field.split('.')[0]
                 update_fields[field] = field_value
+
+        if config.get('custom_fields'):
+            update_fields['custom_fields'] = {}
+            if not current_obj:
+                update_fields['custom_fields'] = config['custom_fields']
+            else:
+                if not hasattr(current_obj, 'custom_fields'):
+                    update_fields['custom_fields'] = config['custom_fields']
+                else:
+                    for field, field_value in config['custom_fields'].items():
+                        logger.debug(f"update_custom_keys: {field}, {field_value}")
+                        if current_field := current_obj['custom_fields'].get(field):
+                            if current_field != field_value:
+                                update_fields['custom_fields'][field] = field_value
+                        else:
+                            update_fields['custom_fields'][field] = field_value
+            if not update_fields['custom_fields']:
+                del update_fields['custom_fields']
         return update_fields

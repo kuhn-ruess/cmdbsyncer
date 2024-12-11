@@ -30,6 +30,7 @@ class JdiscDevices(JDisc):
               type
               manufacturer
               serialNumber
+              logicalSerialNumber
               hwVersion
               assetTag
               roles
@@ -37,6 +38,7 @@ class JdiscDevices(JDisc):
               operatingSystem {
                 osFamily
                 osVersion
+                patchLevel
                 rawVersion
                 description
                 kernelVersion
