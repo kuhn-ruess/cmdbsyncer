@@ -19,11 +19,11 @@ class SyncInterfaces(SyncNetbox):
         Fix invalid values
         """
         new_dict = {}
-        for key, value in value_dict.items():
+        for key, data in value_dict.items():
             if key == 'type':
-                if value not in self.if_types:
-                    value = 'other'
-            new_dict[key] = value
+                if data['value'] not in self.if_types:
+                    data['value'] = 'other'
+            new_dict[key]['value'] = data
         return new_dict
 
 
@@ -58,9 +58,9 @@ class SyncInterfaces(SyncNetbox):
                     cfg_interface['fields'] = self.fix_values(cfg_interface['fields'])
                     logger.debug(f"Working with {cfg_interface}")
                     interface_query = {
-                        'ip_address': cfg_interface['sub_fields']['ip_address'],
+                        'ip_address': cfg_interface['sub_fields']['ip_address']['value'],
                         'device': hostname,
-                        'name': cfg_interface['fields']['name'],
+                        'name': cfg_interface['fields']['name']['value'],
                     }
                     logger.debug(f"Interface Filter Query: {interface_query}")
                     if interfaces := current_netbox_interfaces.filter(**interface_query):
@@ -76,14 +76,14 @@ class SyncInterfaces(SyncNetbox):
                         self.console(f"* Create Interfaces for {hostname}")
                         payload = self.get_update_keys(False, cfg_interface)
                         if payload.get('device'):
-                            payload['device'] = cfg_interface['sub_fields']['netbox_device_id']
+                            payload['device'] = cfg_interface['sub_fields']['netbox_device_id']['value']
                         logger.debug(f"Create Payload: {payload}")
                         interface = self.nb.dcim.interfaces.create(payload)
 
                     port_infos.append({
-                        'port_name': cfg_interface['fields']['name'],
+                        'port_name': cfg_interface['fields']['name']['value'],
                         'netbox_if_id': interface.id,
-                        'used_ip': cfg_interface['sub_fields']['ip_address'],
+                        'used_ip': cfg_interface['sub_fields']['ip_address']['value'],
                     })
 
                 progress.advance(task1)

@@ -49,7 +49,7 @@ class SyncContacts(SyncNetbox):
                     continue
 
                 logger.debug(f"Working with {custom_rules}")
-                name = custom_rules['fields']['name']
+                name = custom_rules['fields']['name']['value']
                 if not name:
                     progress.advance(task1)
                     continue

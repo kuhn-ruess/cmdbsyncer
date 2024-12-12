@@ -58,16 +58,12 @@ class SyncDataFlow(SyncNetbox):
                     logger.debug(f"Working with {field_cfg}")
                     query_field = [x['value'] for x in
                                 field_cfg['fields'].values() if x['use_to_identify']][0]
-                    all_fields = {}
-                    all_fields['fields'] = {x:y['value'] for x,y in
-                                field_cfg['fields'].items()}
-
                     logger.debug(f"Filter Query: {query_field}")
 
                     if query_field and query_field not in current_objects:
                         ### Create
                         self.console(f" * Create Object {query_field} from {hostname}")
-                        payload = self.get_update_keys(False, all_fields)
+                        payload = self.get_update_keys(False, field_cfg['fields'])
                         logger.debug(f"Create Payload: {payload}")
                         self.nb.plugins.__getattr__('data-flows').\
                                     __getattr__(model_name).create(payload)
