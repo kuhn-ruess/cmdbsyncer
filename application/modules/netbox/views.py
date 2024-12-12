@@ -21,18 +21,29 @@ def _render_netbox_outcome(_view, _context, model, _name):
     """
     Render Netbox outcomes
     """
-    html = "<table width=100%>"
+    html = ""
     outcome_names = netbox_outcome_types + netbox_ipam_ipaddress_outcome_types
     outcome_names +=  netbox_device_interface_outcome_types
     outcome_names +=  netbox_contact_outcome_types
-    for idx, entry in enumerate(model.outcomes):
+    for entry in model.outcomes:
+        name = dict(outcome_names)[entry.action]
+        highlighted_param = ""
         if entry.param:
             highlighted_param = \
                     highlight(entry.param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
-        html += f"<tr><td>{idx}</td><td>{dict(outcome_names)[entry.action]}</td>"
-        if entry.param:
-            html += f"<td><b>{highlighted_param}</b></td></tr>"
-    html += "</table>"
+        html += f'''
+            <div class="card">
+              <div class="card-body">
+                <p class="card-text">
+                 <h6 class="card-subtitle mb-2 text-muted">{name}</h6>
+                </p>
+                <p class="card-text">
+                {highlighted_param}
+                </p>
+              </div>
+            </div>
+            '''
+
     return Markup(html)
 
 
