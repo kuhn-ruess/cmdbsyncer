@@ -66,17 +66,8 @@ def _render_checkmk_outcome(_view, _context, model, _name):
     """
     Render Checkmk outcomes
     """
-    html = "<table width='100%'>"
-    for idx, entry in enumerate(model.outcomes):
-        name = dict(action_outcome_types)[entry.action].split('_',1)[0]
-        html += f"<tr><td>{idx}</td><td>{name}</td>"
-        if entry.action_param:
-            highlighted_param = \
-                    highlight(entry.action_param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
-            html += f"<td>{highlighted_param}</td></tr>"
-    html += "</table>"
     html = ""
-    for idx, entry in enumerate(model.outcomes):
+    for entry in model.outcomes:
         name = dict(action_outcome_types)[entry.action].split('_',1)[0]
         highlighted_param = ""
         if entry.action_param:
