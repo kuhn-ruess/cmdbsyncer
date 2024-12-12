@@ -45,12 +45,12 @@ class SyncIPAM(SyncNetbox):
                             continue
 
                         logger.debug(f"Working with {cfg_ip}")
-                        address = cfg_ip['fields']['address']
+                        address = cfg_ip['fields']['address']['value']
                         if not address:
                             continue
                         ip_query = {
                             'address': address,
-                            'assigned_object': cfg_ip['fields']['assigned_object_id'],
+                            'assigned_object': cfg_ip['fields']['assigned_object_id']['value'],
                         }
                         logger.debug(f"IPAM IPS Filter Query: {ip_query}")
                         if ip := current_ips.get(**ip_query):

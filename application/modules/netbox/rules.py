@@ -36,7 +36,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                 new_value  = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=self.hostname, **self.attributes)
                 custom_key, custom_value = new_value.split(':')
-                outcomes['custom_fields'][custom_key] = custom_value
+                outcomes['custom_fields'][custom_key] = {'value': custom_value}
 
             else:
                 new_value  = render_jinja(action_param, mode="nullify",
@@ -49,9 +49,9 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                     new_value = new_value[:50]
 
                 if field in sub_values:
-                    outcomes['sub_fields'][field] = new_value.strip()
+                    outcomes['sub_fields'][field] = {'value': new_value.strip()}
                 else:
-                    outcomes['fields'][field] = new_value.strip()
+                    outcomes['fields'][field] = {'value': new_value.strip()}
 
         return outcomes
 #.
@@ -89,9 +89,9 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
                     new_value = True
 
             if action in sub_fields:
-                outcome_subfields_object[action] = new_value
+                outcome_subfields_object[action] = {'value': new_value}
             else:
-                outcome_object[action] = new_value
+                outcome_object[action] = {'value': new_value}
 
         outcomes['ips'].append({'fields': outcome_object,
                                 'sub_fields': outcome_subfields_object,
@@ -147,9 +147,9 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
                     continue
                 new_value = int(new_value)
             if action in sub_fields:
-                outcome_subfields_object[action] = new_value
+                outcome_subfields_object[action] = {'value': new_value}
             else:
-                outcome_object[action] = new_value
+                outcome_object[action] = {'value': new_value}
         outcomes['interfaces'].append({'fields': outcome_object,
                                        'sub_fields': outcome_subfields_object,
                                        'by_rule': rule_name})
@@ -183,7 +183,7 @@ class NetboxContactRule(NetboxVariableRule):
                 if not new_value or new_value == '':
                     continue
 
-            outcomes['fields'][action] = new_value
+            outcomes['fields'][action] = {'value': new_value}
         return outcomes
 #.
 #   . -- Dataflow
@@ -225,6 +225,7 @@ class NetboxDataflowRule(NetboxVariableRule):
                         'value': new_value,
                         'use_to_identify': outcome['use_to_identify'],
                         'expand_value_as_list': outcome['expand_value_as_list'],
+                        'is_list': outcome['is_netbox_list_field'],
                         }
                 outcomes['entries'].append({'fields': outcome_object,
                                              'by_rule': rule_name})

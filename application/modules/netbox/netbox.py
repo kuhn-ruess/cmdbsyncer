@@ -108,7 +108,7 @@ class SyncNetbox(Plugin):
                 sub_sub_obj = translation[is_sub_model]
                 sub_obj_type = sub_sub_obj['type']
                 logger.debug(f"5) Working with Submodel {obj_type}")
-                new_name = config['fields'][is_sub_model]
+                new_name = config['fields'][is_sub_model]['value']
                 if not new_name:
                     new_name = "CMDB Syncer Undefined"
                 create_obj = {'name': new_name}
@@ -126,7 +126,8 @@ class SyncNetbox(Plugin):
                 if extra_fields := sub_sub_obj.get('sub_fields'):
                     for extra_field in extra_fields:
                         create_obj[extra_field] = \
-                                config['sub_fields'].get(extra_field, 'CMDB Syncer Undefined')
+                                config['sub_fields'].get(extra_field,
+                                {'value': 'CMDB Syncer Undefined'})['value']
                 logger.debug(f"9) Creating object {create_obj}")
                 new_obj = self.get_nested_attr(self.nb, sub_obj_type).create(create_obj)
                 logger.debug(f"9 a) Returning New created Sub ID {new_obj.id}")
@@ -143,10 +144,13 @@ class SyncNetbox(Plugin):
         Get Keys which need a Update
         """
         update_fields = {}
-        for field, field_value in config['fields'].items():
+        for field, field_data in config['fields'].items():
+            field_value = field_data['value']
+
             logger.debug(f"update_keys: {field}, {field_value}")
             if field in config.get('do_not_update_keys',[]):
                 continue
+
 
             if current_obj:
                 current_field = self.get_nested_attr(current_obj, field)
@@ -155,23 +159,28 @@ class SyncNetbox(Plugin):
                 current_field = False
             if not field_value or field_value == '':
                 field_value = 'CMDB Syncer Not defined'
-
-            if str(field_value).lower() != str(current_field).lower():
-                logger.debug(f'{field}: {repr(current_field)} -> {repr(field_value)}')
-                field_value = self.get_name_or_id(field, field_value, config)
-                if '.' in field:
-                    field = field.split('.')[0]
-                update_fields[field] = field_value
+            if field_data.get('is_list'):
+                if field_value not in current_field:
+                    update_fields[field] = current_field + field_value
+            else:
+                if str(field_value).lower() != str(current_field).lower():
+                    logger.debug(f'{field}: {repr(current_field)} -> {repr(field_value)}')
+                    field_value = self.get_name_or_id(field, field_value, config)
+                    if '.' in field:
+                        field = field.split('.')[0]
+                    update_fields[field] = field_value
 
         if config.get('custom_fields'):
             update_fields['custom_fields'] = {}
+            custom_field_values = dict({x:y['value'] for x,y in config['custom_fields'].items()})
             if not current_obj:
-                update_fields['custom_fields'] = config['custom_fields']
+                update_fields['custom_fields'] = custom_field_values
             else:
                 if not hasattr(current_obj, 'custom_fields'):
-                    update_fields['custom_fields'] = config['custom_fields']
+                    update_fields['custom_fields'] = custom_field_values
                 else:
-                    for field, field_value in config['custom_fields'].items():
+                    for field, field_data in config['custom_fields'].items():
+                        field_value = field_data['value']
                         logger.debug(f"update_custom_keys: {field}, {field_value}")
                         if current_field := current_obj['custom_fields'].get(field):
                             if current_field != field_value:

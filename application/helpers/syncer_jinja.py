@@ -81,17 +81,17 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     - raise: Raise Error if missing Variables
     - nullify: Nullify string in nase of missing Variables
     """
-    logger.debug(f"JINJA: Rewrite String: {value}")
+    #logger.debug(f"JINJA: Rewrite String: {value}")
     payload = {}
 
     if replace_newlines:
         value = value.replace('\n','')
-        logger.debug(f"JINJA: Replaced Newlines: {value}")
+        #logger.debug(f"JINJA: Replaced Newlines: {value}")
 
     if mode in ["raise", "nullify"]:
         #value_tpl.undefined = StrictUndefined
         payload['undefined'] = StrictUndefined
-        logger.debug("JINJA: Strict Undefined defined")
+        #logger.debug("JINJA: Strict Undefined defined")
 
 
     value_tpl = jinja2.Template(str(value), **payload)
@@ -112,12 +112,12 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         try:
             final =  value_tpl.render(**kwargs)
         except (jinja2.exceptions.UndefinedError, TypeError):
-            logger.debug("JINJA Exception: String full nullifyed")
+            logger.debug(f"JINJA Exception: String {value} full nullifyed")
             return ""
         except SyntaxError as exc:
             logger.debug(f"Jinja Exception: Syntax error: {exc}")
             return ""
     else:
         final = value_tpl.render(**kwargs)
-    logger.debug(f"JINJA: String After Rewrite: {final}")
+    #logger.debug(f"JINJA: String After Rewrite: {final}")
     return final
