@@ -5,7 +5,9 @@ import base64
 import ast
 import json
 
-from application.models.host import Host
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
+
+from application.models.host import Host, app
 from application.modules.checkmk.models import (
    CheckmkInventorizeAttributes
 )
@@ -37,6 +39,9 @@ class InventorizeHosts(CMK2):
     config_inventory = {}
     label_inventory = {}
 
+
+    checkmk_folders = []
+
     def add_host(self, host):
         """
         Just add if not in
@@ -44,6 +49,22 @@ class InventorizeHosts(CMK2):
         if host not in self.found_hosts:
             self.found_hosts.append(host)
 
+    def fetch_checkmk_folders(self):
+        """
+        Fetch list of Folders in Checkmk
+        """
+        url = "domain-types/folder_config/collections/all"
+        url += "?parent=/&recursive=true&show_hosts=false"
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            task1 = progress.add_task("Fetching Current Folders", start=False)
+            api_folders = self.request(url, method="GET")
+            for folder in api_folders[0]['value']:
+                progress.update(task1, advance=1)
+                path = folder['extensions']['path']
+                self.checkmk_folders.append(path)
 
     def __init__(self, account):
         """Init"""
@@ -198,6 +219,11 @@ class InventorizeHosts(CMK2):
     def get_attr_labels(self):
         """ Gett Attribute and Labels """
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Config Data")
+        if app.config['CMK_GET_HOST_BY_FOLDER']:
+            pass
+
+
+
         url = "domain-types/host_config/collections/all?effective_attributes=true"
         api_hosts = self.request(url, method="GET")
         for host in api_hosts[0]['value']:
@@ -249,6 +275,9 @@ class InventorizeHosts(CMK2):
 
         print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
               f"{ColorCodes.UNDERLINE}{self.account}{ColorCodes.ENDC}")
+
+        if app.config['CMK_GET_HOST_BY_FOLDER']:
+            self.fetch_checkmk_folders()
 
 
         # Inventory for Status Information
