@@ -148,9 +148,9 @@ def _render_full_conditions(_view, _context, model, _name):
                     <h6 class="card-subtitle mb-2 text-muted">Value</h6>
                     <p class="card-text">
                     <span class="badge badge-primary">
-                        {negate[entry.tag_match_negate]}{condition_types[entry.value_match]}
+                        {negate[entry.tag_match_negate]} {condition_types[entry.value_match]}
                     </span>
-                    <span class="badge badge-info">{entry.value_match_negate}{entry.value}</span>
+                    <span class="badge badge-info">{entry.value}</span>
                     </p>
                   </div>
                 </div>
