@@ -198,9 +198,10 @@ class NetboxDataflowRule(NetboxVariableRule):
         Filter if labels match to a rule
         """
         # pylint: disable=too-many-nested-blocks
-        outcomes.setdefault('entries', [])
-        outcome_object = {}
+        outcomes.setdefault('rules', [])
         rule_name = rule['name']
+        unique_fields = {}
+        multiply_fields = []
         for outcome in rule_outcomes:
             field_name = outcome['field_name']
             field_value = outcome['field_value']
@@ -209,25 +210,42 @@ class NetboxDataflowRule(NetboxVariableRule):
 
             new_value  = render_jinja(field_value, mode="nullify",
                                      HOSTNAME=hostname, **self.attributes).strip()
+            if not new_value:
+                continue
 
             if outcome['expand_value_as_list']:
                 for list_value in new_value.split(','):
+                    if not list_value:
+                        continue
                     outcome_object = {}
                     outcome_object[field_name] = {
                             'value': list_value.strip(),
                             'use_to_identify': outcome['use_to_identify'],
                             'expand_value_as_list': outcome['expand_value_as_list'],
                             }
-                    outcomes['entries'].append({'fields': outcome_object,
-                                             'by_rule': rule_name})
+                    multiply_fields.append(outcome_object)
             else:
-                outcome_object[field_name] = {
+                unique_fields[field_name] = {
                         'value': new_value,
                         'use_to_identify': outcome['use_to_identify'],
                         'expand_value_as_list': outcome['expand_value_as_list'],
                         'is_list': outcome['is_netbox_list_field'],
                         }
-                outcomes['entries'].append({'fields': outcome_object,
-                                             'by_rule': rule_name})
+
+        if multiply_fields:
+            for field in multiply_fields:
+                new_dict = field
+                new_dict.update(unique_fields)
+                outcome_object = {
+                    'rule': rule_name,
+                    'fields': new_dict,
+                }
+                outcomes['rules'].append(outcome_object)
+        else:
+            outcome_object = {
+                'rule': rule_name,
+                'fields': unique_fields,
+            }
+            outcomes['rules'].append(outcome_object)
         return outcomes
 #.
