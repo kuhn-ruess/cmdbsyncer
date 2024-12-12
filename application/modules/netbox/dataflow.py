@@ -49,25 +49,33 @@ class SyncDataFlow(SyncNetbox):
                 if not all_attributes:
                     progress.advance(task1)
                     continue
-                field_cfgs = self.get_host_data(db_object, all_attributes['all'])
+                rules = self.get_host_data(db_object, all_attributes['all'])
                 allowed_rules = [x.name for x in model_data['connected_rules']]
-                for field_cfg in field_cfgs['entries']:
-                    if field_cfg['by_rule'] not in allowed_rules:
+
+
+                for rule in rules['rules']:
+                    if rule['rule'] not in allowed_rules:
                         continue
 
-                    logger.debug(f"Working with {field_cfg}")
+                    logger.debug(f"Working with {rule}")
                     query_field = [x['value'] for x in
-                                field_cfg['fields'].values() if x['use_to_identify']][0]
+                                    rule['fields'].values() if x['use_to_identify']][0]
                     logger.debug(f"Filter Query: {query_field}")
 
                     if query_field and query_field not in current_objects:
                         ### Create
                         self.console(f" * Create Object {query_field} from {hostname}")
-                        payload = self.get_update_keys(False, field_cfg['fields'])
+                        payload = self.get_update_keys(False, rule)
                         logger.debug(f"Create Payload: {payload}")
                         self.nb.plugins.__getattr__('data-flows').\
                                     __getattr__(model_name).create(payload)
                         current_objects.update({query_field: {}})
+                    else:
+                        # @TODO Get CURRENT OBJECT
+                        raise("CANT UPDATE OBJECTS YET")
+                        payload = self.get_update_keys(current_obj, rule)
+                        self.nb.plugins.__getattr__('data-flows').\
+                                    __getattr__(model_name).create(payload)
                 progress.advance(task1)
 
     def sync_dataflow(self):
@@ -76,6 +84,7 @@ class SyncDataFlow(SyncNetbox):
         """
         for model_data in NetboxDataflowModels.objects(enabled=True):
             model_name = model_data.used_dataflow_model
-            current_objects = \
-                    self.nb.plugins.__getattr__('data-flows').__getattr__(model_name).all()
+            #current_objects = \
+            #        self.nb.plugins.__getattr__('data-flows').__getattr__(model_name).all()
+            current_objects = []
             self.inner_update(current_objects, model_data)

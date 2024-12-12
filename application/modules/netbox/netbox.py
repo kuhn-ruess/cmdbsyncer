@@ -160,8 +160,12 @@ class SyncNetbox(Plugin):
             if not field_value or field_value == '':
                 field_value = 'CMDB Syncer Not defined'
             if field_data.get('is_list'):
+                if not current_field:
+                    current_field = []
+
                 if field_value not in current_field:
-                    update_fields[field] = current_field + field_value
+                    current_field.append(field_value)
+                    update_fields[field] = current_field
             else:
                 if str(field_value).lower() != str(current_field).lower():
                     logger.debug(f'{field}: {repr(current_field)} -> {repr(field_value)}')
