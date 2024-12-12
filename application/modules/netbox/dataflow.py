@@ -84,7 +84,7 @@ class SyncDataFlow(SyncNetbox):
         """
         for model_data in NetboxDataflowModels.objects(enabled=True):
             model_name = model_data.used_dataflow_model
-            #current_objects = \
-            #        self.nb.plugins.__getattr__('data-flows').__getattr__(model_name).all()
+            current_objects = \
+                    self.nb.plugins.__getattr__('data-flows').__getattr__(model_name).all()
             current_objects = []
             self.inner_update(current_objects, model_data)
