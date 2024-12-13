@@ -274,7 +274,7 @@ def export_downtimes(account):
     details = []
     try:
         rules = _load_rules()
-        syncer = CheckmkDowntimeSync()
+        syncer = CheckmkDowntimeSync(account)
         syncer.rewrite = rules['rewrite']
         class ExportDowntimes(DefaultRule):
             """
