@@ -91,7 +91,7 @@ netbox_ipam_ipaddress_outcome_types = [
   ('assigned_object_type', 'Assigned Object Type'),
   ('role', 'Role'),
   ('description', 'Description'),
-  ('ignore_ip', 'Ignore matching objects for sync'),
+  ('ignore_ip', 'Ignore Rule in case of the following addresses (Comma separated)')
 ]
 
 class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
@@ -146,7 +146,7 @@ netbox_device_interface_outcome_types = [
         ('mac_address', 'Interface MacAddress'),
         ('mode', 'Interface Mode'),
         ('mtu', 'Interface MTU'),
-        ('ignore_interface', 'Ignore matching objects for sync'),
+        ('ignore_interface', 'Ignore Rule in case of the following Port/ Interface- names (Comma separated)')
 ]
 class NetboxDcimInterfaceOutcome(db.EmbeddedDocument):
     """

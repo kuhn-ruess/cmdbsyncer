@@ -59,8 +59,7 @@ class SyncIPAM(SyncNetbox):
                                 print(payload)
                                 ip.update(payload)
                             else:
-                                pass
-                                #self.console(f"* Already up to date IP: {address} on {hostname}")
+                                self.console(f"* Already up to date IP: {address} on {hostname}")
                         else:
                             ### Create
                             self.console(f" * Create IP {address} on {hostname}")

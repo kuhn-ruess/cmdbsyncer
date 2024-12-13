@@ -75,6 +75,7 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
         outcome_object = {}
         outcome_subfields_object = {}
         rule_name = rule['name']
+        ignored_ips = []
         for outcome in rule_outcomes:
             action_param = outcome['param']
             action = outcome['action']
@@ -84,6 +85,9 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
             if action == 'address' and not new_value:
                 # early return
                 return outcomes
+            if action == 'ignore_ip':
+                ignored_ips += [x.strip() for x in new_value.split(',')]
+                continue
             if action == "assigned":
                 if action_param.lower() == 'false':
                     new_value = False
@@ -94,11 +98,11 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
                 outcome_subfields_object[action] = {'value': new_value}
             else:
                 outcome_object[action] = {'value': new_value}
-
-        outcomes['ips'].append({'fields': outcome_object,
-                                'sub_fields': outcome_subfields_object,
-                                'by_rule': rule_name})
-
+        # all Outcomes of one rule, lead to one IP
+        if outcome_object['address']['value'] not in ignored_ips:
+            outcomes['ips'].append({'fields': outcome_object,
+                                    'sub_fields': outcome_subfields_object,
+                                    'by_rule': rule_name})
         return outcomes
 #.
 #   . -- Interfaces
@@ -118,12 +122,15 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
         # Here we match them together
         rule_name = rule['name']
         outcomes.setdefault('interfaces', [])
-        outcome_object = {}
-        outcome_subfields_object = {}
         sub_fields = [
             'ip_address',
             'netbox_device_id',
         ]
+        ignored_interfaces = []
+
+        outcome_object = {}
+        outcome_subfields_object = {}
+
         for outcome in rule_outcomes:
             action_param = outcome['param']
             action = outcome['action']
@@ -148,13 +155,19 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
                 if not new_value:
                     continue
                 new_value = int(new_value)
+            if action == 'ignore_interface':
+                ignored_interfaces += [x.strip() for x in new_value.split(',')]
+                continue
+
             if action in sub_fields:
                 outcome_subfields_object[action] = {'value': new_value}
             else:
                 outcome_object[action] = {'value': new_value}
-        outcomes['interfaces'].append({'fields': outcome_object,
-                                       'sub_fields': outcome_subfields_object,
-                                       'by_rule': rule_name})
+
+        if outcome_object['name']['value'] not in ignored_interfaces:
+            outcomes['interfaces'].append({'fields': outcome_object,
+                                           'sub_fields': outcome_subfields_object,
+                                           'by_rule': rule_name})
         return outcomes
 #.
 #   . -- Contacts
