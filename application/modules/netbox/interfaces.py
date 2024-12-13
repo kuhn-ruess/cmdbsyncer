@@ -80,11 +80,11 @@ class SyncInterfaces(SyncNetbox):
                             logger.debug(f"Create Payload: {payload}")
                             interface = self.nb.dcim.interfaces.create(payload)
 
-                    port_infos.append({
-                        'port_name': cfg_interface['fields']['name']['value'],
-                        'netbox_if_id': interface.id,
-                        'used_ip': cfg_interface['sub_fields']['ip_address']['value'],
-                    })
+                        port_infos.append({
+                            'port_name': cfg_interface['fields']['name']['value'],
+                            'netbox_if_id': interface.id,
+                            'used_ip': cfg_interface['sub_fields']['ip_address']['value'],
+                        })
                 except Exception as error:
                     self.log_details.append((f'export_error {hostname}', str(error)))
                     print(f" Error in process: {error}")

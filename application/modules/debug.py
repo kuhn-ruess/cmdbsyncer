@@ -7,6 +7,8 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
+from pprint import pformat
+
 def attribute_table(title, data):
     """
     Print nice looking Debug  Table
@@ -20,7 +22,7 @@ def attribute_table(title, data):
     table.add_column("Attribute Name", style="cyan")
     table.add_column("Attribute Value", style="magenta")
     for key, value in data.items():
-        table.add_row(key, str(value))
+        table.add_row(key, pformat(value))
 
     console = Console()
     console.print(table)
