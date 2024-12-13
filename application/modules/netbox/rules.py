@@ -33,11 +33,13 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                 fields = [str(x).strip() for x in action_param.split(',')]
                 outcomes['do_not_update_keys'] += fields
             elif field == 'custom_field':
-                new_value  = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=self.hostname, **self.attributes)
-                custom_key, custom_value = new_value.split(':')
-                outcomes['custom_fields'][custom_key] = {'value': custom_value}
-
+                try:
+                    new_value  = render_jinja(action_param, mode="nullify",
+                                             HOSTNAME=self.hostname, **self.attributes)
+                    custom_key, custom_value = new_value.split(':')
+                    outcomes['custom_fields'][custom_key] = {'value': custom_value}
+                except ValueError:
+                    continue
             else:
                 new_value  = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=self.hostname, **self.attributes)

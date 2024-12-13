@@ -112,7 +112,7 @@ def cli_netbox_vm_import(account):
 register_cronjob("Netbox: Import VMs", netbox_vm_import)
 #.
 #   .-- Command: Export IPs
-def netbox_ip_sync(account):
+def netbox_ip_sync(account, debug=False, debug_rules=False):
     """Import Devices from Netbox"""
     try:
         attribute_rewrite = Rewrite()
@@ -125,25 +125,61 @@ def netbox_ip_sync(account):
         netbox_rules.rules = \
                 NetboxIpamIpaddressattributes.objects(enabled=True).order_by('sort_field')
 
-        syncer = SyncIPAM(account)
-        syncer.rewrite = attribute_rewrite
-        syncer.actions = netbox_rules
-        syncer.name = "Netbox: IPs Devices"
-        syncer.source = "netbox_ipam_export"
+        if not debug_rules:
+            syncer = SyncIPAM(account)
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.name = "Netbox: IPs Devices"
+            syncer.source = "netbox_ipam_export"
+            syncer.sync_ips()
+        else:
+            syncer = SyncIPAM(False)
+            syncer.debug = True
+            syncer.config = {
+                '_id': "debugmode",
+            }
 
-        syncer.sync_ips()
+            syncer.rewrite = attribute_rewrite
+            syncer.rewrite.debug = True
+            syncer.actions = netbox_rules
+            syncer.actions.debug = True
+
+            try:
+                db_host = Host.objects.get(hostname=debug_rules)
+                for key in list(db_host.cache.keys()):
+                    if key.lower().startswith('netbox'):
+                        del db_host.cache[key]
+                if "CustomAttributeRule" in db_host.cache:
+                    del db_host.cache['CustomAttributeRule']
+                db_host.save()
+            except DoesNotExist:
+                print(f"{cc.FAIL}Host not Found{cc.ENDC}")
+                return
+
+            attributes = syncer.get_host_attributes(db_host, 'netbox')
+
+            if not attributes:
+                print(f"{cc.FAIL}THIS HOST IS IGNORED BY RULE{cc.ENDC}")
+                return
+
+            extra_attributes = syncer.get_host_data(db_host, attributes['all'])
+            attribute_table("Attributes by Rule ", extra_attributes)
     except Exception as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_ips')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
 @click.argument("account")
-def cli_netbox_ip_syn(account):
+def cli_netbox_ip_syn(account, debug, debug_rules):
     """Export IPAM IPs"""
-    netbox_ip_sync(account)
+    netbox_ip_sync(account, debug, debug_rules)
 register_cronjob("Netbox: Update IPs", netbox_ip_sync)
 #.
 #   .-- Command: Export Interfaces
-def netbox_interface_sync(account):
+def netbox_interface_sync(account, debug=False, debug_rules=False):
     """Export Interfaces to Netbox"""
     try:
         attribute_rewrite = Rewrite()
@@ -156,23 +192,62 @@ def netbox_interface_sync(account):
         netbox_rules.rules = \
                 NetboxDcimInterfaceAttributes.objects(enabled=True).order_by('sort_field')
 
-        syncer = SyncInterfaces(account)
-        syncer.rewrite = attribute_rewrite
-        syncer.actions = netbox_rules
-        syncer.name = "Netbox: Update Interfaces"
-        syncer.source = "netbox_interface_sync"
+        if not debug_rules:
+            syncer = SyncInterfaces(account)
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.name = "Netbox: Update Interfaces"
+            syncer.source = "netbox_interface_sync"
+            syncer.sync_interfaces()
+        else:
+            syncer = SyncInterfaces(False)
+            syncer.debug = True
+            syncer.config = {
+                '_id': "debugmode",
+            }
 
-        syncer.sync_interfaces()
+            syncer.rewrite = attribute_rewrite
+            syncer.rewrite.debug = True
+            syncer.actions = netbox_rules
+            syncer.actions.debug = True
+
+            try:
+                db_host = Host.objects.get(hostname=debug_rules)
+                for key in list(db_host.cache.keys()):
+                    if key.lower().startswith('netbox'):
+                        del db_host.cache[key]
+                if "CustomAttributeRule" in db_host.cache:
+                    del db_host.cache['CustomAttributeRule']
+                db_host.save()
+            except DoesNotExist:
+                print(f"{cc.FAIL}Host not Found{cc.ENDC}")
+                return
+
+            attributes = syncer.get_host_attributes(db_host, 'netbox')
+
+            if not attributes:
+                print(f"{cc.FAIL}THIS HOST IS IGNORED BY RULE{cc.ENDC}")
+                return
+
+            extra_attributes = syncer.get_host_data(db_host, attributes['all'])
+            attribute_table("Attributes by Rule ", extra_attributes)
     except KeyError as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_interfaces')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
 @click.argument("account")
-def cli_netbox_interface(account):
+def cli_netbox_interface(account, debug, debug_rules):
     """Export Interfaces of Devices"""
-    netbox_interface_sync(account)
+    netbox_interface_sync(account, debug, debug_rules)
+
 register_cronjob("Netbox: Update Interfaces", netbox_interface_sync)
 #.
 #   .-- Command: Export Contacts
@@ -288,11 +363,4 @@ def netbox_host_debug(hostname):
     attribute_table("Full Attribute List", attributes['all'])
     attribute_table("Filtered Attribute for Netbox Rules", attributes['filtered'])
     attribute_table("Attributes by Rule ", extra_attributes)
-    if 'update_interfaces' in extra_attributes:
-        attribute_table("Interfaces", {y['portName']: y for x,y in \
-                syncer.get_interface_list_by_attributes(attributes['all']).items()})
-
-    ## Disabled because fails in case of attribute sync, payload method tries to create them
-    #payload = syncer.get_payload(db_host, extra_attributes, attributes['all'])
-    #attribute_table("API Payload", payload)
 #.
