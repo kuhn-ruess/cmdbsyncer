@@ -38,7 +38,6 @@ class SyncIPAM(SyncNetbox):
                     progress.advance(task1)
                     continue
                 cfg_ips = self.get_host_data(db_object, all_attributes['all'])
-
                 for cfg_ip in cfg_ips['ips']:
                     try:
                         if 'ignore_ip' in cfg_ip['fields']:
@@ -57,9 +56,11 @@ class SyncIPAM(SyncNetbox):
                             # Update
                             if payload := self.get_update_keys(ip, cfg_ip):
                                 self.console(f"* Update IP: for {address} on {hostname}")
+                                print(payload)
                                 ip.update(payload)
                             else:
-                                self.console(f"* Already up to date IP: {address} on {hostname}")
+                                pass
+                                #self.console(f"* Already up to date IP: {address} on {hostname}")
                         else:
                             ### Create
                             self.console(f" * Create IP {address} on {hostname}")
@@ -68,4 +69,5 @@ class SyncIPAM(SyncNetbox):
                             ip = self.nb.ipam.ip_addresses.create(payload)
                     except Exception as exp:
                         self.console(f"Error with device: {exp}")
+                        self.log_details.append((f'export_error {hostname}', str(exp)))
                 progress.advance(task1)
