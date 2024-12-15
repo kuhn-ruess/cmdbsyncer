@@ -4,14 +4,15 @@ Handle Rule Matching
 """
 # pylint: disable=import-error
 # pylint: disable=logging-fstring-interpolation
+import ast
 import re
 from rich.console import Console
 from rich.table import Table
 from rich import box
 
 from application import logger, app
-
 from application.modules.rule.match import match
+from application.helpers.syncer_jinja import render_jinja
 
 class Rule(): # pylint: disable=too-few-public-methods
     """
@@ -165,6 +166,74 @@ class Rule(): # pylint: disable=too-few-public-methods
             console.print(table)
             print()
         return outcomes
+
+    def handle_fields(self, field_name, field_value):
+        """
+        Default, overwrite if needed
+        Rewrites Attributes if needed in get_multilist_outcomes mode
+        """
+        #pylint: disable= unused-argument
+        return field_value
+
+    def get_multilist_outcomes(self, rule_outcomes, ignore_field):
+        """
+        Central Function which helps 
+        with list based outcomes to prevent the need of to many rules
+        """
+        outcome_selection = []
+
+        defaults_for_list = {}
+        defaults_by_id = {}
+        hostname = self.db_host.hostname
+
+        ignore_list = []
+
+        for outcome in rule_outcomes:
+            action_param = outcome['param']
+            action = outcome['action']
+            if outcome['use_list_variable']:
+                varname = outcome['list_variable_name']
+
+                input_list = self.attributes[varname]
+                if isinstance(input_list, str):
+                    input_list = ast.literal_eval(input_list.replace('\n',''))
+                for idx, data in enumerate(input_list):
+                    defaults_by_id.setdefault(idx, {})
+
+                    new_value  = render_jinja(action_param, mode="nullify",
+                                             LIST_VAR=data,
+                                             HOSTNAME=hostname, **self.attributes)
+                    new_value = self.handle_fields(action, new_value)
+
+                    if new_value == 'SKIP_RULE':
+                        defaults_by_id[idx] = False
+                    elif new_value != 'SKIP_FIELD':
+                        defaults_by_id[idx][action] = new_value
+                    else:
+                        defaults_by_id[idx][action] = False
+            else:
+                new_value  = render_jinja(action_param, mode="nullify",
+                                         HOSTNAME=hostname, **self.attributes)
+                new_value = self.handle_fields(action, new_value)
+                if new_value != 'SKIP_FIELD':
+                    defaults_for_list[action] = new_value
+                else:
+                    defaults_for_list[action] = False
+
+            if action == ignore_field:
+                ignore_list += [x.strip() for x in new_value.split(',')]
+                continue
+
+
+        if defaults_by_id:
+            for collection_data in defaults_by_id.values():
+                collection_data.update(defaults_for_list)
+                outcome_selection.append(collection_data)
+        else:
+            outcome_selection.append(defaults_for_list)
+
+        return outcome_selection, ignore_list
+
 
     def add_outcomes(self, rule, rule_outcomes, outcomes):
         """

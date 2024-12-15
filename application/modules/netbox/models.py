@@ -100,6 +100,9 @@ class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
     """
     action = db.StringField(choices=netbox_ipam_ipaddress_outcome_types)
     param = db.StringField()
+    use_list_variable = db.BooleanField()
+    list_variable_name = db.StringField()
+
     meta = {
         'strict': False,
     }
@@ -146,7 +149,8 @@ netbox_device_interface_outcome_types = [
         ('mac_address', 'Interface MacAddress'),
         ('mode', 'Interface Mode'),
         ('mtu', 'Interface MTU'),
-        ('ignore_interface', 'Ignore Rule in case of the following Port/ Interface- names (Comma separated)')
+        ('ignore_interface',
+                'Ignore Rule in case of the following Port/ Interface- names (Comma separated)')
 ]
 class NetboxDcimInterfaceOutcome(db.EmbeddedDocument):
     """
@@ -154,6 +158,8 @@ class NetboxDcimInterfaceOutcome(db.EmbeddedDocument):
     """
     action = db.StringField(choices=netbox_device_interface_outcome_types)
     param = db.StringField()
+    use_list_variable = db.BooleanField()
+    list_variable_name = db.StringField()
     meta = {
         'strict': False,
     }
