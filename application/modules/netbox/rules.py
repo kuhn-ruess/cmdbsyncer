@@ -3,6 +3,7 @@
 Netbox Rules
 """
 #pylint: disable=too-few-public-methods
+import ast
 from application.modules.rule.rule import Rule
 from application.helpers.syncer_jinja import render_jinja
 
@@ -64,6 +65,7 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
     """
     name = "Netbox -> IPAM IP Attributes"
 
+
     def add_outcomes(self, rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
@@ -76,33 +78,24 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
         outcome_subfields_object = {}
         rule_name = rule['name']
         ignored_ips = []
-        for outcome in rule_outcomes:
-            action_param = outcome['param']
-            action = outcome['action']
-            new_value  = render_jinja(action_param, mode="nullify",
-                                     HOSTNAME=self.hostname, **self.attributes)
-            new_value = new_value.strip()
-            if action == 'address' and not new_value:
-                # early return
-                return outcomes
-            if action == 'ignore_ip':
-                ignored_ips += [x.strip() for x in new_value.split(',')]
-                continue
-            if action == "assigned":
-                if action_param.lower() == 'false':
-                    new_value = False
-                else:
-                    new_value = True
 
-            if action in sub_fields:
-                outcome_subfields_object[action] = {'value': new_value}
-            else:
-                outcome_object[action] = {'value': new_value}
-        # all Outcomes of one rule, lead to one IP
-        if outcome_object['address']['value'] not in ignored_ips:
+        outcome_selection, ignored_ips =\
+                self.get_multilist_outcomes(rule_outcomes, 'ignore_ip')
+
+        for entry in outcome_selection:
+            outcome_object = {}
+            outcome_subfields_object = {}
+            for key, value in entry.items():
+                if key == 'name' and value in ignored_ips:
+                    break
+                if key in sub_fields:
+                    outcome_subfields_object[key] = {'value': value}
+                else:
+                    outcome_object[key] = {'value': value}
+
             outcomes['ips'].append({'fields': outcome_object,
-                                    'sub_fields': outcome_subfields_object,
-                                    'by_rule': rule_name})
+                                           'sub_fields': outcome_subfields_object,
+                                           'by_rule': rule_name})
         return outcomes
 #.
 #   . -- Interfaces
@@ -112,59 +105,55 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
     """
     name = "Netbox -> DCIM Interfaces"
 
+
+    def handle_fields(self, field_name, field_value):
+        """
+        Special Ops for Interfaces
+        """
+        if field_name == 'name' and not field_value:
+            return "SKIP_RULE"
+
+        field_value = field_value.strip()
+        if field_value == "None":
+            field_value = None
+        if field_name == 'mac_address':
+            if not field_value:
+                return "SKIP_FIELD"
+            field_value = field_value.upper()
+        if field_name == 'mtu':
+            if not field_value:
+                return "SKIP_FIELD"
+            field_value = int(field_value)
+
+        return field_value
+
+
     def add_outcomes(self, rule, rule_outcomes, outcomes):
         """
         Filter if labels match to a rule
         """
         # pylint: disable=too-many-nested-blocks
-        # This function is called once per rule,
-        # But can contain outcomes of more then one rule.
-        # Here we match them together
         rule_name = rule['name']
         outcomes.setdefault('interfaces', [])
         sub_fields = [
             'ip_address',
             'netbox_device_id',
         ]
-        ignored_interfaces = []
 
-        outcome_object = {}
-        outcome_subfields_object = {}
+        outcome_selection, ignored_interfaces =\
+                self.get_multilist_outcomes(rule_outcomes, 'ignore_interface')
 
-        for outcome in rule_outcomes:
-            action_param = outcome['param']
-            action = outcome['action']
+        for entry in outcome_selection:
+            outcome_object = {}
+            outcome_subfields_object = {}
+            for key, value in entry.items():
+                if key == 'name' and value in ignored_interfaces:
+                    break
+                if key in sub_fields:
+                    outcome_subfields_object[key] = {'value': value}
+                else:
+                    outcome_object[key] = {'value': value}
 
-            hostname = self.db_host.hostname
-
-            new_value  = render_jinja(action_param, mode="nullify",
-                                     HOSTNAME=hostname, **self.attributes)
-
-            if action == 'name' and not new_value:
-                # early return
-                return outcomes
-
-            new_value = new_value.strip()
-            if new_value == "None":
-                new_value = None
-            if action == 'mac_address':
-                if not new_value:
-                    continue
-                new_value = new_value.upper()
-            if action == 'mtu':
-                if not new_value:
-                    continue
-                new_value = int(new_value)
-            if action == 'ignore_interface':
-                ignored_interfaces += [x.strip() for x in new_value.split(',')]
-                continue
-
-            if action in sub_fields:
-                outcome_subfields_object[action] = {'value': new_value}
-            else:
-                outcome_object[action] = {'value': new_value}
-
-        if outcome_object['name']['value'] not in ignored_interfaces:
             outcomes['interfaces'].append({'fields': outcome_object,
                                            'sub_fields': outcome_subfields_object,
                                            'by_rule': rule_name})
