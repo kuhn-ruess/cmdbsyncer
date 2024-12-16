@@ -9,6 +9,7 @@ from markupsafe import Markup
 from application.views.default import DefaultModelView
 from application.modules.rule.models import filter_actions, rule_types
 from application.docu_links import docu_links
+from application.helpers.sates import add_changes
 
 #   .-- Renderer
 condition_types={
@@ -235,6 +236,13 @@ class RuleModelView(DefaultModelView):
         'conditions', 'outcomes'
     ]
 
+    def on_model_change(self, form, model, is_created):
+        """
+        Cleanup Inputs
+        """
+        add_changes()
+
+        return super().on_model_change(form, model, is_created)
 
 
     def is_accessible(self):

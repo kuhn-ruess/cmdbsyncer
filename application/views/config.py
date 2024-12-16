@@ -6,6 +6,7 @@ Models Config
 from application import app
 from application.models.host import Host
 from application.views.default import DefaultModelView
+from application.helpers.sates import remove_changes
 from flask import flash, redirect
 from flask_admin import expose
 from flask_login import current_user
@@ -24,6 +25,7 @@ class ConfigModelView(DefaultModelView):
         """
         Delete all Caches
         """
+        remove_changes()
         for host in Host.objects():
             host.cache = {}
             host.save()
