@@ -92,6 +92,17 @@ except ImportError:
     # Output makes problems for commands
     db = MongoEngine(app)
 
+
+from application.helpers.sates import get_changes
+
+
+@app.before_request
+def load_before_request():
+    """
+    Helper to have up to date data for each request
+    """
+    app.config['CHANGES'] = get_changes()
+
 # We need the db in the Module
 from application.modules.log.log import Log
 
@@ -300,10 +311,7 @@ admin.add_view(RewriteAttributeView(IdoitRewriteAttributeRule, name="Rewrite Att
 admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
                                     name="Custom Attributes", category="i-doit"))
 #.
-
-
 #   .-- Config
-
 from application.models.user import User
 from application.views.user import UserView
 admin.add_view(UserView(User, category='Syncer Config'))
@@ -312,7 +320,6 @@ from application.models.config import Config
 from application.views.config import ConfigModelView
 
 admin.add_view(ConfigModelView(Config, name="System Config", category="Syncer Config"))
-
 #.
 
 #   .-- Rest
