@@ -105,6 +105,8 @@ class Plugin():
 
         if headers and headers.get('Content-Type') == "application/json" and data:
             payload['json'] = data
+        elif data and method != 'get':
+            payload['data'] = data
         elif data:
             payload['params'] = data
 
@@ -140,6 +142,7 @@ class Plugin():
         # Python pre 3.10 suppport.....:
         max_retries = app.config['HTTP_MAX_RETRIES']
         retry_wait = app.config['HTTP_REPEAT_TIMEOUT']
+        resp = {}
         for attempt in range(1, max_retries+1):
             try:
                 if method == "get":
@@ -183,6 +186,9 @@ class Plugin():
 
 
     def get_host_attributes(self, db_host, cache):
+        """
+        Return Attribute for Host
+        """
         return self.get_attributes(db_host, cache)
 
     def get_attributes(self, db_host, cache):
