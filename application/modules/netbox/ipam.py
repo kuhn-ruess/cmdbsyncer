@@ -52,6 +52,8 @@ class SyncIPAM(SyncNetbox):
                         # Create Field to be used for the operation
                         cfg_ip['fields']['address'] = {}
                         for address in addresses.split(','):
+                            if address in cfg_ip['ignore_list']:
+                                continue
                             address = address.strip()
                             cfg_ip['fields']['address']['value'] = address
                             if not address:
