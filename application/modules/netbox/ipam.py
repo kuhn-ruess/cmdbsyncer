@@ -42,31 +42,41 @@ class SyncIPAM(SyncNetbox):
                     try:
                         if 'ignore_ip' in cfg_ip['fields']:
                             continue
+                        if not 'addresses' in cfg_ip['fields']:
+                            continue
 
                         logger.debug(f"Working with {cfg_ip}")
-                        address = cfg_ip['fields']['address']['value']
-                        if not address:
-                            continue
-                        ip_query = {
-                            'address': address,
-                            'assigned_object': cfg_ip['fields']['assigned_object_id']['value'],
-                        }
-                        logger.debug(f"IPAM IPS Filter Query: {ip_query}")
-                        if ip := current_ips.get(**ip_query):
-                            # Update
-                            if payload := self.get_update_keys(ip, cfg_ip):
-                                self.console(f"* Update IP: for {address} on {hostname}")
-                                print(payload)
-                                ip.update(payload)
+                        # Delete Helper Field
+                        addresses = cfg_ip['fields']['addresses']['value']
+                        del cfg_ip['fields']['addresses']
+                        # Create Field to be used for the operation
+                        cfg_ip['fields']['address'] = {}
+                        for address in addresses.split(','):
+                            address = address.strip()
+                            cfg_ip['fields']['address']['value'] = address
+                            if not address:
+                                continue
+                            ip_query = {
+                                'address': address,
+                                'assigned_object': cfg_ip['fields']['assigned_object_id']['value'],
+                            }
+                            logger.debug(f"IPAM IPS Filter Query: {ip_query}")
+                            if ip := current_ips.get(**ip_query):
+                                # Update
+                                if payload := self.get_update_keys(ip, cfg_ip):
+                                    self.console(f"* Update IP: for {address} on {hostname} {payload}")
+                                    ip.update(payload)
+                                else:
+                                    self.console(f"* Already up to date IP: {address} on {hostname}")
                             else:
-                                self.console(f"* Already up to date IP: {address} on {hostname}")
-                        else:
-                            ### Create
-                            self.console(f" * Create IP {address} on {hostname}")
-                            payload = self.get_update_keys(False, cfg_ip)
-                            logger.debug(f"Create Payload: {payload}")
-                            ip = self.nb.ipam.ip_addresses.create(payload)
+                                ### Create
+                                self.console(f" * Create IP {address} on {hostname}")
+                                payload = self.get_update_keys(False, cfg_ip)
+                                logger.debug(f"Create Payload: {payload}")
+                                ip = self.nb.ipam.ip_addresses.create(payload)
                     except Exception as exp:
+                        if self.debug:
+                            raise
                         self.console(f"Error with device: {exp}")
                         self.log_details.append((f'export_error {hostname}', str(exp)))
                 progress.advance(task1)

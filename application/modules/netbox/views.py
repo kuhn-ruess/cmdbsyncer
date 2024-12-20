@@ -40,6 +40,15 @@ def _render_netbox_outcome(_view, _context, model, _name):
                 <p class="card-text">
                 {highlighted_param}
                 </p>
+        '''
+        if hasattr(entry, 'use_list_variable'):
+            html += f'''
+                    <p>
+                    <b>List Mode:</b> {entry.use_list_variable}<br>
+                    <b>Variable Name:</b> {entry.list_variable_name}
+                    </p>
+            '''
+        html += f'''
               </div>
             </div>
             '''
@@ -75,6 +84,9 @@ class NetboxCustomAttributesView(RuleModelView):
             'outcomes': {
                 'form_subdocuments' : {
                     '': {
+                        'form_widget_args': {
+                            'param' : {"rows": 10},
+                        },
                         'form_overrides' : {
                             #'param': StringField,
                         }

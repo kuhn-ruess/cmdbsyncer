@@ -194,31 +194,31 @@ class Rule(): # pylint: disable=too-few-public-methods
             if outcome['use_list_variable']:
                 varname = outcome['list_variable_name']
 
-                input_list = self.attributes[varname]
-                if isinstance(input_list, str):
-                    input_list = ast.literal_eval(input_list.replace('\n',''))
-                for idx, data in enumerate(input_list):
-                    defaults_by_id.setdefault(idx, {})
+                if input_list := self.attributes.get(varname):
+                    if isinstance(input_list, str):
+                        input_list = ast.literal_eval(input_list.replace('\n',''))
+                    for idx, data in enumerate(input_list):
+                        defaults_by_id.setdefault(idx, {})
 
-                    new_value  = render_jinja(action_param, mode="nullify",
-                                             LIST_VAR=data,
-                                             HOSTNAME=hostname, **self.attributes)
-                    new_value = self.handle_fields(action, new_value)
+                        new_value  = render_jinja(action_param, mode="nullify",
+                                                 LIST_VAR=data,
+                                                 HOSTNAME=hostname, **self.attributes)
+                        new_value = self.handle_fields(action, new_value)
 
-                    if new_value == 'SKIP_RULE':
-                        defaults_by_id[idx] = False
-                    elif new_value != 'SKIP_FIELD':
-                        defaults_by_id[idx][action] = new_value
-                    else:
-                        defaults_by_id[idx][action] = False
+                        if new_value == 'SKIP_RULE':
+                            defaults_by_id[idx] = False
+                        elif new_value != 'SKIP_FIELD':
+                            defaults_by_id[idx][action] = new_value
+                        #else:
+                        #    defaults_by_id[idx][action] = False
             else:
                 new_value  = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
                 new_value = self.handle_fields(action, new_value)
                 if new_value != 'SKIP_FIELD':
                     defaults_for_list[action] = new_value
-                else:
-                    defaults_for_list[action] = False
+                #else:
+                #    defaults_for_list[action] = False
 
             if action == ignore_field:
                 ignore_list += [x.strip() for x in new_value.split(',')]

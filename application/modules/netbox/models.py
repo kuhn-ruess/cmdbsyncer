@@ -83,11 +83,12 @@ class NetboxCustomAttributes(db.Document):
 #.
 #   . -- IP Addresses
 netbox_ipam_ipaddress_outcome_types = [
-  ('address', 'IPv4 or IPv6 with Network Address (Example: 127.0.0.1/24)'),
+  ('addresses',
+   'List of IPv4 or IPv6 with Network Address '
+   '(Example: 127.0.0.1/24), (Comma separated)'),
   ('family', 'Family of IP: ipv6 or ipv4'),
   ('status', 'Status of IP like: active'),
   ('assigned_object_id', 'Assigned Object ID'),
-  ('assigned_object_type', 'Assigned Object Type'),
   ('assigned_object_type', 'Assigned Object Type'),
   ('role', 'Role'),
   ('description', 'Description'),
@@ -101,7 +102,7 @@ class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
     action = db.StringField(choices=netbox_ipam_ipaddress_outcome_types)
     param = db.StringField()
     use_list_variable = db.BooleanField()
-    list_variable_name = db.StringField()
+    list_variable_name = db.StringField(max_length=120)
 
     meta = {
         'strict': False,
@@ -136,8 +137,9 @@ class NetboxIpamIpaddressattributes(db.Document):
 netbox_device_interface_outcome_types = [
         ('device', '(required) Name of Assigned Device'),
         ('netbox_device_id', '(required) Numeric ID of  Device'),
-        ('ip_address', '(required) IP Address used by Interface'),
-        ('name', 'Port/ Interface Name'),
+        ('ipv4_addresses', '(required) IPv4 Address list (comma seperated)'),
+        ('ipv6_addresses', '(required) IPv6 Address list (comma seperated)'),
+        ('name', '(required) Port/ Interface Name'),
         ('mac_address', 'Mac Address'),
         ('description', 'Description'),
         ('type', 'Interface Type'),
@@ -159,7 +161,7 @@ class NetboxDcimInterfaceOutcome(db.EmbeddedDocument):
     action = db.StringField(choices=netbox_device_interface_outcome_types)
     param = db.StringField()
     use_list_variable = db.BooleanField()
-    list_variable_name = db.StringField()
+    list_variable_name = db.StringField(max_length=120)
     meta = {
         'strict': False,
     }

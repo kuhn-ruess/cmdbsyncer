@@ -86,16 +86,18 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
             outcome_object = {}
             outcome_subfields_object = {}
             for key, value in entry.items():
+                if key == 'ignore_ip':
+                    continue
                 if key == 'name' and value in ignored_ips:
                     break
                 if key in sub_fields:
                     outcome_subfields_object[key] = {'value': value}
                 else:
                     outcome_object[key] = {'value': value}
-
-            outcomes['ips'].append({'fields': outcome_object,
-                                           'sub_fields': outcome_subfields_object,
-                                           'by_rule': rule_name})
+            if outcome_object:
+                outcomes['ips'].append({'fields': outcome_object,
+                                               'sub_fields': outcome_subfields_object,
+                                               'by_rule': rule_name})
         return outcomes
 #.
 #   . -- Interfaces
@@ -123,6 +125,7 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
         if field_name == 'mtu':
             if not field_value:
                 return "SKIP_FIELD"
+            field_value = field_value.upper()
             field_value = int(field_value)
 
         return field_value
@@ -136,7 +139,8 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
         rule_name = rule['name']
         outcomes.setdefault('interfaces', [])
         sub_fields = [
-            'ip_address',
+            'ipv4_addresses',
+            'ipv6_addresses',
             'netbox_device_id',
         ]
 
@@ -147,16 +151,18 @@ class NetboxDevicesInterfaceRule(NetboxVariableRule):
             outcome_object = {}
             outcome_subfields_object = {}
             for key, value in entry.items():
+                if key == 'ignore_interface':
+                    continue
                 if key == 'name' and value in ignored_interfaces:
                     break
                 if key in sub_fields:
                     outcome_subfields_object[key] = {'value': value}
                 else:
                     outcome_object[key] = {'value': value}
-
-            outcomes['interfaces'].append({'fields': outcome_object,
-                                           'sub_fields': outcome_subfields_object,
-                                           'by_rule': rule_name})
+            if outcome_object:
+                outcomes['interfaces'].append({'fields': outcome_object,
+                                               'sub_fields': outcome_subfields_object,
+                                               'by_rule': rule_name})
         return outcomes
 #.
 #   . -- Contacts

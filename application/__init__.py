@@ -4,6 +4,7 @@
 # pylint: disable=ungrouped-imports
 # pylint: disable=line-too-long
 import os
+import sys
 import logging
 from datetime import datetime
 from pprint import pformat
@@ -18,7 +19,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.8 Daily 12.18.2024'
+VERSION = '3.8 Daily 20.12.2024'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -32,6 +33,8 @@ else:
     app.config.from_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
 
+
+
 try:
     from local_config import config
     app.config.update(config)
@@ -43,6 +46,8 @@ logger.setLevel(logging.DEBUG)
 
 ch = app.config['LOG_CHANNEL']
 ch.setLevel(app.config['LOG_LEVEL'])
+if '--debug' in sys.argv:
+    ch.setLevel(6)
 
 formatter = logging.Formatter('%(levelname)s - %(message)s')
 ch.setFormatter(formatter)
