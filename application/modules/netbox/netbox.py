@@ -163,8 +163,8 @@ class SyncNetbox(Plugin):
                 if not current_field:
                     current_field = []
 
-                if field_value not in current_field:
-                    current_field.append(field_value)
+                if field_value not in [x['id'] for x in current_field]:
+                    current_field.append({'id': field_value})
                     update_fields[field] = current_field
             else:
                 if str(field_value).lower() != str(current_field).lower():

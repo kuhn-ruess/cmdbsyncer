@@ -15,26 +15,6 @@ class JdiscDevices(JDisc):
     JDISC Device Import
     """
 
-
-    def fix_networkinterfaces(self, labels):
-        """
-        Flat networkInterface
-        """
-        ip4_interfaces = []
-        ip6_interfaces = []
-        if "networkinterfaces" in labels:
-            for interface in labels['networkinterfaces']:
-                for config in interface['ip4Transports']:
-                    ip4_interfaces.append(config)
-                for config in interface['ip6Transports']:
-                    ip6_interfaces.append(config)
-            del labels['networkinterfaces']
-            labels['network_ipv4_interfaces'] = ip4_interfaces
-            labels['network_ipv6_interfaces'] = ip6_interfaces
-        return labels
-
-
-
     def get_query(self):
         """
         Return Query for Devices
@@ -102,24 +82,22 @@ class JdiscDevices(JDisc):
                 }
               }
             networkInterfaces {
+              physicalAddress
+              type
+              index
+              duplexMode
+              extendedDescription
+              operationalStatus
+              speed
+              mtu
+              administrativeStatus
+              description
               ip4Transports {
                 hostnames
                 ipAddress
                 hostnames
                 ipAddress
                 subnetMask
-                networkInterface {
-                  physicalAddress
-                  type
-                  index
-                  duplexMode
-                  extendedDescription
-                  operationalStatus
-                  speed
-                  mtu
-                  administrativeStatus
-                  description
-                }
                 network {
                   name
                   nameManuallyConfigured
@@ -133,18 +111,6 @@ class JdiscDevices(JDisc):
                 hostnames
                 ipAddress
                 configuredPrefixLength
-                networkInterface {
-                  physicalAddress
-                  type
-                  index
-                  duplexMode
-                  extendedDescription
-                  operationalStatus
-                  speed
-                  mtu
-                  administrativeStatus
-                  description
-                }
                 network {
                   name
                   nameManuallyConfigured
@@ -172,7 +138,6 @@ class JdiscDevices(JDisc):
             print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
             del labels['name']
             host_obj = Host.get_host(hostname)
-            labels = self.fix_networkinterfaces(labels)
             host_obj.update_host(labels)
             do_save=host_obj.set_account(account_dict=self.config)
             if do_save:

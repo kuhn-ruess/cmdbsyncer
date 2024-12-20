@@ -127,6 +127,7 @@ def netbox_ip_sync(account, debug=False, debug_rules=False):
 
         if not debug_rules:
             syncer = SyncIPAM(account)
+            syncer.debug = debug
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.name = "Netbox: IPs Devices"
@@ -194,6 +195,7 @@ def netbox_interface_sync(account, debug=False, debug_rules=False):
 
         if not debug_rules:
             syncer = SyncInterfaces(account)
+            syncer.debug = debug
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.name = "Netbox: Update Interfaces"
@@ -305,6 +307,7 @@ def netbox_dataflow_sync(account):
     except KeyError as error_obj: #pylint:disable=broad-except
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
+        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_dataflow')

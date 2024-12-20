@@ -57,35 +57,41 @@ class SyncInterfaces(SyncNetbox):
                     for cfg_interface in cfg_interfaces:
                         cfg_interface['fields'] = self.fix_values(cfg_interface['fields'])
                         logger.debug(f"Working with {cfg_interface}")
+                        interface_name = cfg_interface['fields']['name']['value']
                         interface_query = {
-                            'ip_address': cfg_interface['sub_fields']['ip_address']['value'],
                             'device': hostname,
-                            'name': cfg_interface['fields']['name']['value'],
+                            'name': interface_name,
                         }
                         logger.debug(f"Interface Filter Query: {interface_query}")
                         if interfaces := current_netbox_interfaces.filter(**interface_query):
                             for interface in interfaces:
                                 # Update
                                 if payload := self.get_update_keys(interface, cfg_interface):
-                                    self.console(f"* Update Interface: for {hostname} {payload}")
+                                    self.console(f"* Update Interface: {interface_name} {payload}")
                                     interface.update(payload)
                                 else:
                                     self.console(f"* Interface {interface} already up to date")
                         else:
                             ### Create
-                            self.console(f"* Create Interfaces for {hostname}")
+                            self.console(f"* Create Interface {interface_name}")
                             payload = self.get_update_keys(False, cfg_interface)
                             if payload.get('device'):
-                                payload['device'] = cfg_interface['sub_fields']['netbox_device_id']['value']
+                                payload['device'] = \
+                                        cfg_interface['sub_fields']['netbox_device_id']['value']
                             logger.debug(f"Create Payload: {payload}")
                             interface = self.nb.dcim.interfaces.create(payload)
 
                         port_infos.append({
                             'port_name': cfg_interface['fields']['name']['value'],
                             'netbox_if_id': interface.id,
-                            'used_ip': cfg_interface['sub_fields']['ip_address']['value'],
+                            'ipv4_addresses': \
+                                    cfg_interface['sub_fields']['ipv4_addresses']['value'],
+                            'ipv6_addresses': \
+                                    cfg_interface['sub_fields']['ipv6_addresses']['value'],
                         })
                 except Exception as error:
+                    if self.debug:
+                        raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
                     print(f" Error in process: {error}")
 
