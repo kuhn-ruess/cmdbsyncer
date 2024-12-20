@@ -88,15 +88,20 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
             for key, value in entry.items():
                 if key == 'ignore_ip':
                     continue
-                if key == 'name' and value in ignored_ips:
-                    break
                 if key in sub_fields:
                     outcome_subfields_object[key] = {'value': value}
                 else:
                     outcome_object[key] = {'value': value}
+
+
+
+            # The Outcome can contain a list of IPs,
+            # and in the current state it's just a list.
+            # Ignore objects therfore will be handled in plugin
             if outcome_object:
                 outcomes['ips'].append({'fields': outcome_object,
                                                'sub_fields': outcome_subfields_object,
+                                               'ignore_list': ignored_ips,
                                                'by_rule': rule_name})
         return outcomes
 #.
