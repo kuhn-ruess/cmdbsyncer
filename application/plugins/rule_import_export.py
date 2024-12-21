@@ -5,7 +5,6 @@ Rule Import/ Export
 import json
 from json.decoder import JSONDecodeError
 import importlib
-from ast import literal_eval
 import click
 
 from mongoengine.errors import NotUniqueError
@@ -27,6 +26,7 @@ enabled_rules = {
     'cmk_bi_aggregation': ('application.modules.checkmk.models', 'CheckmkBiAggregation'),
     'cmk_bi_rule': ('application.modules.checkmk.models', 'CheckmkBiRule'),
     'cmk_downtimes': ('application.modules.checkmk.models', 'CheckmkDowntimeRule'),
+    'cmk_dcd_rules': ('application.modules.checkmk.models', 'CheckmkDCDRule'),
     'host_objects': ('application.models.host', 'Host'),
     'accounts': ('application.models.account', 'Account'),
     'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
