@@ -19,7 +19,7 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.8 Daily 20.12.2024'
+VERSION = '3.8 Daily 21.12.2024'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
@@ -285,25 +285,31 @@ from application.modules.netbox.models import (
                                             NetboxContactAttributes,
                                             NetboxDataflowAttributes,
                                             NetboxDataflowModels,
+                                            NetboxClusterAttributes,
+                                            NetboxVirtualMachineAttributes,
                                         )
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
 
 admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
-                                    name="DCIM Device", category="Netbox"))
+        name="DCIM: Devices", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxDcimInterfaceAttributes,\
-                                    name="DCIM Interfaces", category="Netbox"))
+        name="DCIM: Interfaces", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
-                                    name="IPAM IP Addresses", category="Netbox"))
+        name="IPAM: IP Addresses", category="Netbox"))
+admin.add_view(NetboxCustomAttributesView(NetboxClusterAttributes,\
+        name="Virtualization: Cluster", category="Netbox"))
+admin.add_view(NetboxCustomAttributesView(NetboxVirtualMachineAttributes,\
+        name="Virtualization: Virtual Machines", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxContactAttributes,\
-                                    name="Tenancy Contacts", category="Netbox"))
+        name="Tenancy: Contacts", category="Netbox"))
 
-admin.add_sub_category(name="Plugin Dataflow", parent_name="Netbox")
+admin.add_sub_category(name="Plugin: Dataflow", parent_name="Netbox")
 admin.add_view(NetboxDataFlowModelView(NetboxDataflowModels,\
-        name="Model Defintion", category="Plugin Dataflow"))
+        name="Model Defintion", category="Plugin: Dataflow"))
 
 admin.add_view(NetboxDataFlowAttributesView(NetboxDataflowAttributes,\
-        name="Field Definition", category="Plugin Dataflow"))
+        name="Field Definition", category="Plugin: Dataflow"))
 #.
 #   .-- i-doit
 admin.add_sub_category(name="i-doit", parent_name="Modules")

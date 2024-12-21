@@ -1,3 +1,6 @@
+"""
+Central Brain for Netbox Operations
+"""
 from application.modules.plugin import Plugin
 from application import logger
 try:
@@ -57,6 +60,9 @@ class SyncNetbox(Plugin):
         replacers = [
             ('.', ''),
             (' ', '-'),
+            ('ü', 'ue'),
+            ('ä', 'ae'),
+            ('ö', 'oe'),
         ]
         for repl, target in replacers:
             name = name.replace(repl, target)

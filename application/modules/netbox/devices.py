@@ -107,11 +107,11 @@ class SyncDevices(SyncNetbox):
                 attr_name = f"{self.config['name']}_device_id"
                 db_host.set_inventory_attribute(attr_name, device.id)
 
-        print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
-        for device in current_netbox_devices.all():
-            if device.name not in found_hosts:
-                print(f"{CC.OKBLUE} *{CC.ENDC} Delete {device.name}")
-                device.delete()
+        #print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
+        #for device in current_netbox_devices.all():
+        #    if device.name not in found_hosts:
+        #        print(f"{CC.OKBLUE} *{CC.ENDC} Delete {device.name}")
+        #        device.delete()
 #.
 #   .--- Import Devices
     def import_hosts(self):

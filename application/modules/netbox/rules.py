@@ -7,7 +7,7 @@ import ast
 from application.modules.rule.rule import Rule
 from application.helpers.syncer_jinja import render_jinja
 
-#   . -- Devices
+#DcimInterfaceAttributes   . -- Devices
 class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
     """
     Add custom Variables for Netbox Devices
@@ -50,6 +50,92 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
 
                 if field == 'serial':
                     new_value = new_value[:50]
+
+                if field in sub_values:
+                    outcomes['sub_fields'][field] = {'value': new_value.strip()}
+                else:
+                    outcomes['fields'][field] = {'value': new_value.strip()}
+
+        return outcomes
+#.
+#   . Cluster Rule
+class NetboxCluserRule(Rule):# pylint: disable=too-few-public-methods
+    """
+    Add custom Variables for Cluster
+    """
+
+    name = "Netbox -> Virtualization Cluster"
+
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
+        """
+        Filter if labels match to a rule
+        """
+        # pylint: disable=too-many-nested-blocks
+        sub_values = [
+        ]
+        outcomes.setdefault('fields', {})
+        outcomes.setdefault('custom_fields', {})
+        outcomes.setdefault('sub_fields', {})
+        for outcome in rule_outcomes:
+            action_param = outcome['param']
+            field = outcome['action']
+            if field == 'custom_field':
+                try:
+                    new_value  = render_jinja(action_param, mode="nullify",
+                                             HOSTNAME=self.hostname, **self.attributes)
+                    custom_key, custom_value = new_value.split(':')
+                    outcomes['custom_fields'][custom_key] = {'value': custom_value}
+                except ValueError:
+                    continue
+            else:
+                new_value  = render_jinja(action_param, mode="nullify",
+                                         HOSTNAME=self.hostname, **self.attributes)
+
+                if new_value in ['None', '']:
+                    continue
+
+                if field in sub_values:
+                    outcomes['sub_fields'][field] = {'value': new_value.strip()}
+                else:
+                    outcomes['fields'][field] = {'value': new_value.strip()}
+
+        return outcomes
+#.
+#   . Virutal Machines
+class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
+    """
+    Add custom Variables for Virutal Machines
+    """
+
+    name = "Netbox -> Virtualization Machines"
+
+    def add_outcomes(self, _rule, rule_outcomes, outcomes):
+        """
+        Filter if labels match to a rule
+        """
+        # pylint: disable=too-many-nested-blocks
+        sub_values = [
+        ]
+        outcomes.setdefault('fields', {})
+        outcomes.setdefault('custom_fields', {})
+        outcomes.setdefault('sub_fields', {})
+        for outcome in rule_outcomes:
+            action_param = outcome['param']
+            field = outcome['action']
+            if field == 'custom_field':
+                try:
+                    new_value  = render_jinja(action_param, mode="nullify",
+                                             HOSTNAME=self.hostname, **self.attributes)
+                    custom_key, custom_value = new_value.split(':')
+                    outcomes['custom_fields'][custom_key] = {'value': custom_value}
+                except ValueError:
+                    continue
+            else:
+                new_value  = render_jinja(action_param, mode="nullify",
+                                         HOSTNAME=self.hostname, **self.attributes)
+
+                if new_value in ['None', '']:
+                    continue
 
                 if field in sub_values:
                     outcomes['sub_fields'][field] = {'value': new_value.strip()}
