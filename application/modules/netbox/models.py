@@ -27,6 +27,100 @@ class NetboxRewriteAttributeRule(db.Document):
         'strict': False
     }
 #.
+#   . -- Cluster
+netbox_cluster_outcomes = [
+  ('name', '* Name'),
+  ('type', '* Type'),
+  ('site', 'Site'),
+  ('status', 'Status'),
+  ('custom_field', 'Set a Custom Field key:value (Jinja)'),
+  ('description', 'Description'),
+]
+
+class NetboxClusterOutcome(db.EmbeddedDocument):
+    """
+    Outcome
+    """
+    action = db.StringField(choices=netbox_cluster_outcomes)
+    param = db.StringField()
+    meta = {
+        'strict': False,
+    }
+
+class NetboxClusterAttributes(db.Document):
+    """
+    Configure Clusters
+    """
+
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
+    render_full_conditions = db.StringField() # Helper for preview
+
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxClusterOutcome'))
+    render_netbox_outcome = db.StringField() # Helper for preview
+
+    last_match = db.BooleanField(default=False)
+
+
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+    meta = {
+        'strict': False
+    }
+
+#.
+#   . Virutal Machines
+netbox_virtualmachines_types = [
+  ('name', '* Name'),
+  ('cluster', 'Cluster'),
+  ('role', 'Role'),
+  ('status', 'Status'),
+  ('serial', 'Serial Number'),
+  ('tenant', 'Tenant'),
+  ('platform', 'Platform'),
+  ('site', 'Site'),
+  ('primary_ip4', 'Primary IPv4'),
+  ('primary_ip6', 'Primary IPv6'),
+  ('custom_field', 'Set a Custom Field key:value (Jinja)'),
+]
+class NetboxVirtualMachineOutcome(db.EmbeddedDocument):
+    """
+    Outcome
+    """
+    action = db.StringField(choices=netbox_virtualmachines_types)
+    param = db.StringField()
+    meta = {
+        'strict': False,
+    }
+
+class NetboxVirtualMachineAttributes(db.Document):
+    """
+    Virutal Machine
+    """
+
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
+    render_full_conditions = db.StringField() # Helper for preview
+
+    outcomes = \
+        db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxVirtualMachineOutcome'))
+    render_netbox_outcome = db.StringField() # Helper for preview
+
+    last_match = db.BooleanField(default=False)
+
+
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+    meta = {
+        'strict': False
+    }
+#.
 #   . -- Devices
 netbox_outcome_types = [
   ('device_type', '* Type'),
@@ -41,6 +135,7 @@ netbox_outcome_types = [
   ('location', 'Location'),
   ('rack', 'Rack'),
   ('primary_ip4', 'Primary IPv4'),
+  ('primary_ip6', 'Primary IPv6'),
   ('custom_field', 'Set a Custom Field key:value (Jinja)'),
   ('update_optout', 'Do never Update given Fields (comma separated list possible)'),
   ('ignore_host', 'Ignore Host(s)'),
@@ -135,22 +230,19 @@ class NetboxIpamIpaddressattributes(db.Document):
 #.
 #   . -- Interfaces
 netbox_device_interface_outcome_types = [
-        ('device', '(required) Name of Assigned Device'),
-        ('netbox_device_id', '(required) Numeric ID of  Device'),
-        ('ipv4_addresses', '(required) IPv4 Address list (comma seperated)'),
-        ('ipv6_addresses', '(required) IPv6 Address list (comma seperated)'),
-        ('name', '(required) Port/ Interface Name'),
+        ('device', '* Name of Assigned Device'),
+        ('netbox_device_id', '* Numeric ID of  Device'),
+        ('ipv4_addresses', '* IPv4 Address list (comma seperated)'),
+        ('ipv6_addresses', '* IPv6 Address list (comma seperated)'),
+        ('name', '* Name'),
         ('mac_address', 'Mac Address'),
         ('description', 'Description'),
-        ('type', 'Interface Type'),
+        ('type', 'Type'),
         ('admin_status', 'Admin Status'),
-        ('type', 'Interface Type'),
-        ('speed', 'Interface Speed'),
-        ('duplex', 'Interface Duplex Mode'),
-        ('description', 'Interface Description'),
-        ('mac_address', 'Interface MacAddress'),
-        ('mode', 'Interface Mode'),
-        ('mtu', 'Interface MTU'),
+        ('speed', 'Speed'),
+        ('duplex', 'Duplex Mode'),
+        ('mode', 'Mode'),
+        ('mtu', 'MTU'),
         ('ignore_interface',
                 'Ignore Rule in case of the following Port/ Interface- names (Comma separated)')
 ]
@@ -193,7 +285,7 @@ class NetboxDcimInterfaceAttributes(db.Document):
 #.
 #   . -- Contacts
 netbox_contact_outcome_types = [
-    ('name', 'Name (required)'),
+    ('name', '* Name'),
     ('title', 'Title'),
     ('phone', 'Phone'),
     ('email', 'E-Mail'),

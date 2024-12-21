@@ -21,6 +21,8 @@ from application.modules.netbox.ipam import SyncIPAM
 from application.modules.netbox.interfaces import SyncInterfaces
 from application.modules.netbox.contacts import SyncContacts
 from application.modules.netbox.dataflow import SyncDataFlow
+from application.modules.netbox.cluster import SyncCluster
+from application.modules.netbox.virtualmachines import SyncVirtualMachines
 
 from syncerapi.v1 import (
     register_cronjob,
@@ -77,6 +79,152 @@ def cli_netbox_device_export(account):
     """Sync Devices with Netbox"""
     netbox_device_export(account)
 register_cronjob("Netbox: Update Devices", netbox_device_export)
+#.
+#   . -- Command: Export Virtual Machines
+def netbox_virtual_machines_sync(account, debug=False, debug_rules=False):
+    """Export Virtual Machines to NB"""
+    try:
+        attribute_rewrite = Rewrite()
+        attribute_rewrite.cache_name = 'netbox_rewrite'
+
+        attribute_rewrite.rules = \
+                NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+
+        netbox_rules = NetboxVirutalMachineRule()
+        netbox_rules.rules = \
+                NetboxVirtualMachineAttributes.objects(enabled=True).order_by('sort_field')
+
+        if not debug_rules:
+            syncer = SyncVirtualMachines(account)
+            syncer.debug = debug
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.name = "Netbox: Update VMs"
+            syncer.source = "netbox_vm_sync"
+            syncer.sync_virtualmachines()
+        else:
+            syncer = SyncVirtualMachines(False)
+            syncer.debug = True
+            syncer.config = {
+                '_id': "debugmode",
+            }
+
+            syncer.rewrite = attribute_rewrite
+            syncer.rewrite.debug = True
+            syncer.actions = netbox_rules
+            syncer.actions.debug = True
+
+            try:
+                db_host = Host.objects.get(hostname=debug_rules)
+                for key in list(db_host.cache.keys()):
+                    if key.lower().startswith('netbox'):
+                        del db_host.cache[key]
+                if "CustomAttributeRule" in db_host.cache:
+                    del db_host.cache['CustomAttributeRule']
+                db_host.save()
+            except DoesNotExist:
+                print(f"{cc.FAIL}Host not Found{cc.ENDC}")
+                return
+
+            attributes = syncer.get_host_attributes(db_host, 'netbox')
+
+            if not attributes:
+                print(f"{cc.FAIL}THIS HOST IS IGNORED BY RULE{cc.ENDC}")
+                return
+
+            extra_attributes = syncer.get_host_data(db_host, attributes['all'])
+            attribute_table("Attributes by Rule ", extra_attributes)
+    except KeyError as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
+        print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
+    except Exception as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('export_vms')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
+@click.argument("account")
+def cli_netbox_vms(account, debug, debug_rules):
+    """Export Virtual Machines"""
+    netbox_virtual_machines_sync(account, debug, debug_rules)
+
+register_cronjob("Netbox: Sync Virutal Machines", netbox_virtual_machines_sync)
+#.
+#   . -- Command: Export Cluster
+def netbox_cluster_sync(account, debug=False, debug_rules=False):
+    """Export Interfaces to Netbox"""
+    try:
+        attribute_rewrite = Rewrite()
+        attribute_rewrite.cache_name = 'netbox_rewrite'
+
+        attribute_rewrite.rules = \
+                NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+
+        netbox_rules = NetboxCluserRule()
+        netbox_rules.rules = \
+                NetboxClusterAttributes.objects(enabled=True).order_by('sort_field')
+
+        if not debug_rules:
+            syncer = SyncCluster(account)
+            syncer.debug = debug
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.name = "Netbox: Update Cluster"
+            syncer.source = "netbox_cluster_sync"
+            syncer.sync_clusters()
+        else:
+            syncer = SyncCluster(False)
+            syncer.debug = True
+            syncer.config = {
+                '_id': "debugmode",
+            }
+
+            syncer.rewrite = attribute_rewrite
+            syncer.rewrite.debug = True
+            syncer.actions = netbox_rules
+            syncer.actions.debug = True
+
+            try:
+                db_host = Host.objects.get(hostname=debug_rules)
+                for key in list(db_host.cache.keys()):
+                    if key.lower().startswith('netbox'):
+                        del db_host.cache[key]
+                if "CustomAttributeRule" in db_host.cache:
+                    del db_host.cache['CustomAttributeRule']
+                db_host.save()
+            except DoesNotExist:
+                print(f"{cc.FAIL}Host not Found{cc.ENDC}")
+                return
+
+            attributes = syncer.get_host_attributes(db_host, 'netbox')
+
+            if not attributes:
+                print(f"{cc.FAIL}THIS HOST IS IGNORED BY RULE{cc.ENDC}")
+                return
+
+            extra_attributes = syncer.get_host_data(db_host, attributes['all'])
+            attribute_table("Attributes by Rule ", extra_attributes)
+    except KeyError as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
+        print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
+    except Exception as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('export_cluster')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
+@click.argument("account")
+def cli_netbox_cluster(account, debug, debug_rules):
+    """Export Interfaces of Devices"""
+    netbox_cluster_sync(account, debug, debug_rules)
+
+register_cronjob("Netbox: Sync Cluster", netbox_cluster_sync)
 #.
 #   .-- Command: Import Devices
 def netbox_device_import(account):
@@ -280,7 +428,7 @@ def netbox_contacts_sync(account):
 @cli_netbox.command('export_contacts')
 @click.argument("account")
 def cli_netbox_contacts(account):
-    """Export Contacts"""
+    """Export Dataflows"""
     netbox_contacts_sync(account)
 register_cronjob("Netbox: Update Contacts", netbox_contacts_sync)
 #.
@@ -307,7 +455,6 @@ def netbox_dataflow_sync(account):
     except KeyError as error_obj: #pylint:disable=broad-except
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
-        raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_dataflow')

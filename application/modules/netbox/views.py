@@ -14,6 +14,8 @@ from application.modules.netbox.models import (netbox_outcome_types,
                                                netbox_ipam_ipaddress_outcome_types,
                                                netbox_device_interface_outcome_types,
                                                netbox_contact_outcome_types,
+                                               netbox_cluster_outcomes,
+                                               netbox_virtualmachines_types,
                                                NetboxDataflowAttributes
                                               )
 
@@ -23,8 +25,11 @@ def _render_netbox_outcome(_view, _context, model, _name):
     """
     html = ""
     outcome_names = netbox_outcome_types + netbox_ipam_ipaddress_outcome_types
-    outcome_names +=  netbox_device_interface_outcome_types
-    outcome_names +=  netbox_contact_outcome_types
+    outcome_names += netbox_device_interface_outcome_types
+    outcome_names += netbox_contact_outcome_types
+    outcome_names += netbox_cluster_outcomes
+    outcome_names += netbox_virtualmachines_types
+
     for entry in model.outcomes:
         name = dict(outcome_names)[entry.action]
         highlighted_param = ""
