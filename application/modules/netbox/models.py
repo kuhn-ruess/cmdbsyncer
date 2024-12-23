@@ -336,6 +336,7 @@ class NetboxDataflowOutcome(db.EmbeddedDocument):
     use_to_identify = db.BooleanField()
     expand_value_as_list = db.BooleanField()
     is_netbox_list_field = db.BooleanField()
+    is_netbox_custom_field = db.BooleanField()
     meta = {
         'strict': False,
     }

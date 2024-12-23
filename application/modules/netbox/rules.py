@@ -302,6 +302,7 @@ class NetboxDataflowRule(NetboxVariableRule):
         outcomes.setdefault('rules', [])
         rule_name = rule['name']
         unique_fields = {}
+        custom_fields = {}
         multiply_fields = []
         for outcome in rule_outcomes:
             field_name = outcome['field_name']
@@ -322,16 +323,20 @@ class NetboxDataflowRule(NetboxVariableRule):
                     outcome_object[field_name] = {
                             'value': list_value.strip(),
                             'use_to_identify': outcome['use_to_identify'],
-                            'expand_value_as_list': outcome['expand_value_as_list'],
                             }
+                    if outcome['is_netbox_custom_field']:
+                        raise ValueError('Expand Value can not be a custom Field at the same time')
                     multiply_fields.append(outcome_object)
             else:
-                unique_fields[field_name] = {
+                field_data = {
                         'value': new_value,
                         'use_to_identify': outcome['use_to_identify'],
-                        'expand_value_as_list': outcome['expand_value_as_list'],
                         'is_list': outcome['is_netbox_list_field'],
                         }
+                if outcome['is_netbox_custom_field']:
+                    custom_fields[field_name] = field_data
+                else:
+                    unique_fields[field_name] = field_data
 
         if multiply_fields:
             for field in multiply_fields:
@@ -340,12 +345,14 @@ class NetboxDataflowRule(NetboxVariableRule):
                 outcome_object = {
                     'rule': rule_name,
                     'fields': new_dict,
+                    'custom_fields': custom_fields,
                 }
                 outcomes['rules'].append(outcome_object)
         else:
             outcome_object = {
                 'rule': rule_name,
                 'fields': unique_fields,
+                'custom_fields': custom_fields,
             }
             outcomes['rules'].append(outcome_object)
         return outcomes

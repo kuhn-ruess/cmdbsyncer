@@ -90,12 +90,8 @@ class SyncDataFlow(SyncNetbox):
                                     __getattr__(model_name).create(payload)
                         current_objects.update({query_field: {}})
                     elif query_field:
-                        #if platform := current_objects[query_field]['systemplatform']:
-                        #    print(platform)
                         current_obj = Struct(current_objects[query_field])
                         payload = self.get_update_keys(current_obj, rule)
-                        payload['custom_fields'] = {}
-                        payload['custom_fields']['systemplatform'] = [{'id': 4}] 
                         payload['name'] = query_field
                         payload['id'] = current_obj.id
                         #print(payload)

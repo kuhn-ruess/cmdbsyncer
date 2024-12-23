@@ -191,12 +191,21 @@ class SyncNetbox(Plugin):
                 else:
                     for field, field_data in config['custom_fields'].items():
                         field_value = field_data['value']
-                        logger.debug(f"update_custom_keys: {field}, {field_value}")
-                        if current_field := current_obj['custom_fields'].get(field):
-                            if current_field != field_value:
-                                update_fields['custom_fields'][field] = field_value
+                        if field_data.get('is_list'):
+                            if not current_field:
+                                current_field = []
+
+                            logger.debug(f"update_custom_list_field: {field}, {field_value}")
+                            if field_value not in [x['id'] for x in current_field]:
+                                current_field.append({'id': field_value})
+                                update_fields['custom_fields'][field] = current_field
                         else:
-                            update_fields['custom_fields'][field] = field_value
+                            logger.debug(f"update_custom_keys: {field}, {field_value}")
+                            if current_field := current_obj['custom_fields'].get(field):
+                                if current_field != field_value:
+                                    update_fields['custom_fields'][field] = field_value
+                            else:
+                                update_fields['custom_fields'][field] = field_value
             if not update_fields['custom_fields']:
                 del update_fields['custom_fields']
         return update_fields
