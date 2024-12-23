@@ -338,7 +338,7 @@ def cli_netbox_contacts(account, debug, debug_rules):
 register_cronjob("Netbox: Update Contacts", netbox_contacts_sync)
 #.
 #   .-- Command: Export Dataflow
-def netbox_dataflow_sync(account):
+def netbox_dataflow_sync(account, debug=False, debug_rules=False):
     """Export DataFlow Data to Netbox"""
     try:
         attribute_rewrite = Rewrite()
@@ -349,24 +349,35 @@ def netbox_dataflow_sync(account):
 
         netbox_rules = NetboxDataflowRule()
         netbox_rules.rules = NetboxDataflowAttributes.objects(enabled=True).order_by('sort_field')
+        if not debug_rules:
+            syncer = SyncDataFlow(account)
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.name = "Netbox: Update DataFlow Data"
+            syncer.source = "netbox_dataflow_sync"
+            syncer.sync_dataflow()
+        else:
+            syncer = SyncDataFlow(False)
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.debug_rules(debug_rules, 'Netbox')
 
-        syncer = SyncDataFlow(account)
-        syncer.rewrite = attribute_rewrite
-        syncer.actions = netbox_rules
-        syncer.name = "Netbox: Update DataFlow Data"
-        syncer.source = "netbox_dataflow_sync"
-
-        syncer.sync_dataflow()
     except KeyError as error_obj: #pylint:disable=broad-except
+        if debug:
+           raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
+        if debug:
+           raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_dataflow')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
 @click.argument("account")
-def cli_netbox_dataflow(account):
+def cli_netbox_dataflow(account, debug, debug_rules):
     """Export Contacts"""
-    netbox_dataflow_sync(account)
+    netbox_dataflow_sync(account, debug, debug_rules)
 register_cronjob("Netbox: Update Dataflow", netbox_dataflow_sync)
 #.
 #   .-- Command: Debug Hosts

@@ -85,6 +85,8 @@ class SyncDataFlow(SyncNetbox):
                         ### Create
                         self.console(f" *    Create Object {query_field}")
                         payload = self.get_update_keys(False, rule)
+                        print(hostname)
+                        print(payload)
                         logger.debug(f"Create Payload: {payload}")
                         self.nb.plugins.__getattr__('data-flows').\
                                     __getattr__(model_name).create(payload)
@@ -92,6 +94,9 @@ class SyncDataFlow(SyncNetbox):
                     elif query_field:
                         current_obj = Struct(current_objects[query_field])
                         payload = self.get_update_keys(current_obj, rule)
+                        print(hostname)
+                        print(payload)
+                        logger.debug(f"Update Payload: {payload}")
                         payload['name'] = query_field
                         payload['id'] = current_obj.id
                         #print(payload)
