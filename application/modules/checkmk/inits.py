@@ -19,6 +19,7 @@ from application.modules.checkmk.users import CheckmkUserSync
 from application.modules.checkmk.bi import BI
 
 
+
 from application.modules.rule.rewrite import Rewrite
 from application.modules.checkmk.models import (
    CheckmkRuleMngmt,
@@ -267,27 +268,36 @@ def export_rules(account):
                 source="cmk_rule_sync", details=details)
 #.
 #   .-- Export Downtimes
-def export_downtimes(account):
+def export_downtimes(account, debug=False, debug_rules=False):
     """
     Create Rules in Checkmk
     """
     details = []
     try:
         rules = _load_rules()
-        syncer = CheckmkDowntimeSync(account)
-        syncer.rewrite = rules['rewrite']
         class ExportDowntimes(DefaultRule):
             """
             Name overwrite
             """
-
         actions = ExportDowntimes()
         actions.rules = CheckmkDowntimeRule.objects(enabled=True)
-        syncer.actions = actions
-        syncer.name = 'Checkmk: Export Downtimes'
-        syncer.source = "cmk_downtime_sync"
-        syncer.run()
+
+        if not debug_rules:
+            syncer = CheckmkDowntimeSync(account)
+            syncer.rewrite = rules['rewrite']
+            syncer.actions = actions
+            syncer.name = 'Checkmk: Export Downtimes'
+            syncer.source = "cmk_downtime_sync"
+            syncer.run()
+        else:
+            syncer = CheckmkDowntimeSync(False)
+            syncer.rewrite = rules['rewrite']
+            syncer.actions = actions
+            syncer.debug_rules(debug_rules, "Checkmk")
+
     except CmkException as error_obj:
+        if debug:
+            raise
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
         log.log(f"Export Downtimes to Checkmk Account: {account}",

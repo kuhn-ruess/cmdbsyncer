@@ -13,14 +13,6 @@ class SyncNetbox(Plugin):
     Netbox Base Class
     """
 
-#   .-- Get Host Data
-    def get_host_data(self, db_host, attributes):
-        """
-        Return commands for fullfilling of the netbox params
-        """
-        return self.actions.get_outcomes(db_host, attributes)
-#.
-
     def __init__(self, account):
         """ INIT """
         self.console = print # Fallback
