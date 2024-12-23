@@ -14,6 +14,18 @@ class SyncIPAM(SyncNetbox):
     """
     console = None
 
+    @staticmethod
+    def get_field_config():
+        """
+        Return Fields needed for Devices
+        """
+        return {
+            'vrf': {
+                'type': 'ipam.vrfs',
+                'has_slug': False,
+            },
+        }
+
     def sync_ips(self):
         """
         Sync IP Addresses

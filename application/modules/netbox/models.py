@@ -72,7 +72,7 @@ class NetboxClusterAttributes(db.Document):
     }
 
 #.
-#   . Virutal Machines
+#   . -- Virutal Machines
 netbox_virtualmachines_types = [
   ('name', '* Name'),
   ('cluster', 'Cluster'),
@@ -185,6 +185,7 @@ netbox_ipam_ipaddress_outcome_types = [
   ('status', 'Status of IP like: active'),
   ('assigned_object_id', 'Assigned Object ID'),
   ('assigned_object_type', 'Assigned Object Type'),
+  ('vrf', "VRF"),
   ('role', 'Role'),
   ('description', 'Description'),
   ('ignore_ip', 'Ignore Rule in case of the following addresses (Comma separated)')

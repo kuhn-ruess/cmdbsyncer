@@ -179,6 +179,10 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
                 else:
                     outcome_object[key] = {'value': value}
 
+            #if 'vrf' not in outcome_object:
+            #    outcome_object['vrf'] = {'value': 'Global'}
+
+
 
 
             # The Outcome can contain a list of IPs,
