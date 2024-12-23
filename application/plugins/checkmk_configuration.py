@@ -24,9 +24,11 @@ from application.modules.checkmk.inits import (
 
 #   .-- Command: Export Downtimes
 @cli_cmk.command('export_downtimes')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
 @click.argument('account')
 #pylint: disable=too-many-locals
-def cli_export_downtimes(account):
+def cli_export_downtimes(account, debug, debug_rules):
     """
     Export Dowtimes to Checkmk
 
@@ -36,7 +38,7 @@ def cli_export_downtimes(account):
     Args:
         account (string): Name Checkmk Account Config
     """
-    export_downtimes(account)
+    export_downtimes(account, debug, debug_rules)
 
 
 

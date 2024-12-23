@@ -6,6 +6,7 @@ Alle Stuff shared by the plugins
 from datetime import datetime
 import time
 import atexit
+from mongoengine.errors import DoesNotExist
 
 from pprint import pformat
 from collections import namedtuple
@@ -15,8 +16,12 @@ from application.modules.custom_attributes.models import CustomAttributeRule as 
     CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
 
+from application.modules.debug import attribute_table
+
 from syncerapi.v1 import (
     get_account,
+    Host,
+    cc,
 )
 
 class ResponseDataException(Exception):
@@ -237,3 +242,43 @@ class Plugin():
         db_host.cache[cache]['attributes'] = data
         db_host.save()
         return data
+
+#   .-- Get Host Data
+    def get_host_data(self, db_host, attributes):
+        """
+        Return commands for fullfilling of the netbox params
+        """
+        return self.actions.get_outcomes(db_host, attributes)
+#.
+
+    def debug_rules(self, hostname, model):
+        """
+        Debug Mode to see Rule outcomes.
+        Used with --debug-rules switch
+        """
+        self.rewrite.debug = True
+        self.actions.debug = True
+        self.config = {
+            '_id': "debugmode",
+        }
+        try:
+            db_host = Host.objects.get(hostname=hostname)
+            for key in list(db_host.cache.keys()):
+                if key.lower().startswith(model):
+                    del db_host.cache[key]
+            if "CustomAttributeRule" in db_host.cache:
+                del db_host.cache['CustomAttributeRule']
+            db_host.save()
+        except DoesNotExist:
+            print(f"{cc.FAIL}Host not Found{cc.ENDC}")
+            return
+
+        attributes = self.get_host_attributes(db_host, 'netbox')
+
+        if not attributes:
+            print(f"{cc.FAIL}THIS HOST IS IGNORED BY RULE{cc.ENDC}")
+            return
+
+        extra_attributes = self.get_host_data(db_host, attributes['all'])
+        attribute_table("Attributes by Rule ", extra_attributes)
+
