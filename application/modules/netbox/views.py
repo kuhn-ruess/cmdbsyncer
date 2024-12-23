@@ -31,7 +31,7 @@ def _render_netbox_outcome(_view, _context, model, _name):
     outcome_names += netbox_virtualmachines_types
 
     for entry in model.outcomes:
-        name = dict(outcome_names)[entry.action]
+        name = dict(outcome_names).get(entry.action, "Field deprecated")
         highlighted_param = ""
         if entry.param:
             highlighted_param = \

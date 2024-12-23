@@ -174,30 +174,22 @@ class SyncNetbox(Plugin):
 
         if config.get('custom_fields'):
             update_fields['custom_fields'] = {}
-            custom_field_values = dict({x:y['value'] for x,y in config['custom_fields'].items()})
-            if not current_obj:
-                update_fields['custom_fields'] = custom_field_values
-            else:
-                if not hasattr(current_obj, 'custom_fields'):
-                    update_fields['custom_fields'] = custom_field_values
-                else:
-                    for field, field_data in config['custom_fields'].items():
-                        field_value = field_data['value']
-                        if field_data.get('is_list'):
-                            if not current_field:
-                                current_field = []
+            # Is it a dict or an obj?
+            # Maybe Problem Dataflow vs Normal field
+            #if not hasattr(current_obj, 'custom_fields'):
+            #    current_obj.custom_fields = {}
 
-                            logger.debug(f"update_custom_list_field: {field}, {field_value}")
-                            if field_value not in [x['id'] for x in current_field]:
-                                current_field.append({'id': field_value})
-                                update_fields['custom_fields'][field] = current_field
-                        else:
-                            logger.debug(f"update_custom_keys: {field}, {field_value}")
-                            if current_field := current_obj['custom_fields'].get(field):
-                                if current_field != field_value:
-                                    update_fields['custom_fields'][field] = field_value
-                            else:
-                                update_fields['custom_fields'][field] = field_value
+            for field, field_data in config['custom_fields'].items():
+                new_value = field_data['value']
+
+                if current_field := current_obj['custom_fields'].get(field):
+                    if field_data.get('is_list') and \
+                            new_value not in [x['id'] for x in current_field]:
+                        logger.debug(f"update_custom_list_field: {field}, {new_value}")
+                        update_fields['custom_fields'][field] = current_field + {'id': new_value}
+                    elif new_value != current_field:
+                        logger.debug(f"update_custom_field: {field}, {new_value}")
+                        update_fields['custom_fields'][field] = current_field
             if not update_fields['custom_fields']:
                 del update_fields['custom_fields']
         return update_fields
