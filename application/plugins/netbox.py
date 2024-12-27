@@ -56,7 +56,7 @@ def cli_netbox():
     """Netbox Import and Syncronisation"""
 
 #   .-- Command: Export Devices
-def netbox_device_export(account):
+def netbox_device_export(account, debug=False):
     """Sync Objects with Netbox"""
     try:
         rules = load_device_rules()
@@ -68,16 +68,19 @@ def netbox_device_export(account):
         syncer.source = "netbox_device_sync"
         syncer.export_hosts()
     except Exception as error_obj: #pylint: disable=broad-except
+        if debug:
+            raise
         log.log(f"Export Devices to Account: {account} Failed",
         source="netbox_device_sync_command", details=[('error', str(error_obj))])
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_hosts')
 @cli_netbox.command('export_devices')
+@click.option("--debug", is_flag=True)
 @click.argument("account")
-def cli_netbox_device_export(account):
+def cli_netbox_device_export(account, debug):
     """Sync Devices with Netbox"""
-    netbox_device_export(account)
+    netbox_device_export(account, debug)
 register_cronjob("Netbox: Update Devices", netbox_device_export)
 #.
 #   . -- Command: Export Virtual Machines
@@ -364,11 +367,11 @@ def netbox_dataflow_sync(account, debug=False, debug_rules=False):
 
     except KeyError as error_obj: #pylint:disable=broad-except
         if debug:
-           raise
+            raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj: #pylint:disable=broad-except
         if debug:
-           raise
+            raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_dataflow')

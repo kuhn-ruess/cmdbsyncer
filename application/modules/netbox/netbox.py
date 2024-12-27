@@ -45,8 +45,7 @@ class SyncNetbox(Plugin):
                 obj = getattr(obj, attr)
             return obj
         except AttributeError:
-            print('xxxxxxxxxx')
-            print(obj, attr_chain)
+            logger.debug(f"Attribute Error: {obj} -> {attr_chain}")
 
     @staticmethod
     def get_slug(name):
@@ -189,20 +188,22 @@ class SyncNetbox(Plugin):
                 if not current_obj:
                     continue
                 try:
-                    if current_field := getattr(current_obj, field):
-                        if field_data.get('is_list'):
-                            if int(new_value) not in [x['id'] for x in current_field]:
-                                # Maybe also for else:
-                                logger.debug(f"update_custom_list_field: {field}, {new_value}")
-                                current_field.append({'id': int(new_value)})
-                                update_fields['custom_fields'][field] = [{'id': x['id']} for x in current_field]
-                        elif new_value != current_field:
-                            logger.debug(f"update_custom_field: {field}, {new_value}")
-                            update_fields['custom_fields'][field] = current_field
+                    current_field = []
+                    if hasattr(current_obj, field):
+                        current_field = getattr(current_obj, field)
+
+                    if field_data.get('is_list'):
+                        if int(new_value) not in [x['id'] for x in current_field]:
+                            # Maybe also for else:
+                            logger.debug(f"update_custom_list_field: {field}, {new_value}")
+                            current_field.append({'id': int(new_value)})
+                            update_fields['custom_fields'][field] \
+                                    = [{'id': x['id']} for x in current_field]
+                    elif new_value != current_field:
+                        logger.debug(f"update_custom_field: {field}, {new_value}")
+                        update_fields['custom_fields'][field] = new_value
                 except AttributeError:
-                    print('#################')
-                    print(f'All: {dir(current_obj)}')
-                    print(f'Missing: {field}')
+                    logger.debug(f"Missing Custom Field: {field}")
             if not update_fields['custom_fields']:
                 del update_fields['custom_fields']
         return update_fields
