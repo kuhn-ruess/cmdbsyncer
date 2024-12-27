@@ -261,7 +261,7 @@ def netbox_interface_sync(account, debug=False, debug_rules=False):
         attribute_rewrite.rules = \
                 NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
 
-        netbox_rules = NetboxDevicesInterfaceRule()
+        netbox_rules = NetboxInterfaceRule()
         netbox_rules.rules = \
                 NetboxDcimInterfaceAttributes.objects(enabled=True).order_by('sort_field')
 
@@ -287,7 +287,7 @@ def netbox_interface_sync(account, debug=False, debug_rules=False):
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
-@cli_netbox.command('export_interfaces')
+@cli_netbox.command('export_dcim_interfaces')
 @click.option("--debug", is_flag=True)
 @click.option("--debug-rules", default="")
 @click.argument("account")
@@ -295,7 +295,54 @@ def cli_netbox_interface(account, debug, debug_rules):
     """Export Interfaces of Devices"""
     netbox_interface_sync(account, debug, debug_rules)
 
-register_cronjob("Netbox: Update Interfaces", netbox_interface_sync)
+register_cronjob("Netbox: Update DCIM Interfaces", netbox_interface_sync)
+
+
+def netbox_virt_interface_sync(account, debug=False, debug_rules=False):
+    """Export Interfaces to Netbox"""
+    try:
+        attribute_rewrite = Rewrite()
+        attribute_rewrite.cache_name = 'netbox_rewrite'
+
+        attribute_rewrite.rules = \
+                NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+
+        netbox_rules = NetboxInterfaceRule()
+        netbox_rules.rules = \
+                NetboxVirtualizationInterfaceAttributes.objects(enabled=True).order_by('sort_field')
+
+        if not debug_rules:
+            syncer = SyncInterfaces(account)
+            syncer.debug = debug
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.name = "Netbox: Update Interfaces"
+            syncer.source = "netbox_interface_sync"
+            syncer.sync_interfaces(mode='virtualization')
+        else:
+            syncer = SyncInterfaces(False)
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.debug_rules(debug_rules, 'Netbox')
+    except KeyError as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
+        print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
+    except Exception as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('export_virt_interfaces')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
+@click.argument("account")
+def cli_netbox_virt_interface(account, debug, debug_rules):
+    """Export Interfaces of Devices"""
+    netbox_virt_interface_sync(account, debug, debug_rules)
+
+register_cronjob("Netbox: Update Virtualization Interfaces", netbox_virt_interface_sync)
+
 #.
 #   .-- Command: Export Contacts
 def netbox_contacts_sync(account, debug=False, debug_rules=False):

@@ -232,7 +232,7 @@ class NetboxIpamIpaddressattributes(db.Document):
 #   . -- Interfaces
 netbox_device_interface_outcome_types = [
         ('device', '* Name of Assigned Device'),
-        ('netbox_device_id', '* Numeric ID of  Device'),
+        ('netbox_device_id', '* Numeric ID of Device'),
         ('ipv4_addresses', '* IPv4 Address list (comma seperated)'),
         ('ipv6_addresses', '* IPv6 Address list (comma seperated)'),
         ('name', '* Name'),
@@ -283,6 +283,62 @@ class NetboxDcimInterfaceAttributes(db.Document):
     meta = {
         'strict': False
     }
+
+netbox_virt_interface_outcome_types = [
+        ('virtual_machine', '* Name of Assigned Virtual Machine'),
+        ('netbox_device_id', '* Numeric ID of Virtual Machine'),
+        ('ipv4_addresses', '* IPv4 Address list (comma seperated)'),
+        ('ipv6_addresses', '* IPv6 Address list (comma seperated)'),
+        ('name', '* Name'),
+        ('mac_address', 'Mac Address'),
+        ('description', 'Description'),
+        ('type', 'Type'),
+        ('admin_status', 'Admin Status'),
+        ('speed', 'Speed'),
+        ('duplex', 'Duplex Mode'),
+        ('mode', 'Mode'),
+        ('mtu', 'MTU'),
+        ('ignore_interface',
+                'Ignore Rule in case of the following Port/ Interface- names (Comma separated)')
+]
+
+class NetboxVirtInterfaceOutcome(db.EmbeddedDocument):
+    """
+    Outcome
+    """
+    action = db.StringField(choices=netbox_virt_interface_outcome_types)
+    param = db.StringField()
+    use_list_variable = db.BooleanField()
+    list_variable_name = db.StringField(max_length=120)
+    meta = {
+        'strict': False,
+    }
+
+class NetboxVirtualizationInterfaceAttributes(db.Document):
+    """
+    Define Rule based Custom Variables
+    """
+
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
+    render_full_conditions = db.StringField() # Helper for preview
+
+    outcomes = db.ListField(field= \
+            db.EmbeddedDocumentField(document_type='NetboxVirtInterfaceOutcome'))
+    render_netbox_outcome = db.StringField() # Helper for preview
+
+    last_match = db.BooleanField(default=False)
+
+
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+    meta = {
+        'strict': False
+    }
+
 #.
 #   . -- Contacts
 netbox_contact_outcome_types = [
