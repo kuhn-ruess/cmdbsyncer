@@ -196,11 +196,11 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
         return outcomes
 #.
 #   . -- Interfaces
-class NetboxDevicesInterfaceRule(NetboxVariableRule):
+class NetboxInterfaceRule(NetboxVariableRule):
     """
     Rules for Device Interfaces
     """
-    name = "Netbox -> DCIM Interfaces"
+    name = "Netbox -> DCIM/ Virtualization Interfaces"
 
 
     def handle_fields(self, field_name, field_value):

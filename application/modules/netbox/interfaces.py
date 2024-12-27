@@ -1,6 +1,7 @@
 """
 Interface Syncronisation
 """
+#pylint: disable = broad-exception-caught, too-many-locals, too-many-branches, too-many-statements, too-many-nested-blocks
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import logger
 from application.modules.netbox.netbox import SyncNetbox
@@ -26,7 +27,7 @@ class SyncInterfaces(SyncNetbox):
         return value_dict
 
 
-    def sync_interfaces(self):
+    def sync_interfaces(self, mode='dcim'):
         """
         Iterarte over objects and sync them to Netbox
         """
@@ -40,7 +41,11 @@ class SyncInterfaces(SyncNetbox):
             self.console = progress.console.print
             task1 = progress.add_task("Updating Interfaces for Devices", total=total)
 
-            current_netbox_interfaces = self.nb.dcim.interfaces
+            current_netbox_interfaces = False
+            if mode == "dcim":
+                current_netbox_interfaces = self.nb.dcim.interfaces
+            elif mode == 'virtualization':
+                current_netbox_interfaces = self.nb.virtualization.interfaces
 
             self.if_types = [x['value'] for x in self.nb.dcim.interfaces.choices()['type']]
             for db_object in db_objects:
@@ -52,7 +57,12 @@ class SyncInterfaces(SyncNetbox):
                     if not all_attributes:
                         progress.advance(task1)
                         continue
-                    cfg_interfaces = self.get_host_data(db_object, all_attributes['all'])['interfaces']
+                    try:
+                        cfg_interfaces = \
+                                self.get_host_data(db_object, all_attributes['all'])['interfaces']
+                    except KeyError:
+                        progress.advance(task1)
+                        continue
 
                     for cfg_interface in cfg_interfaces:
                         cfg_interface['fields'] = self.fix_values(cfg_interface['fields'])
@@ -62,24 +72,28 @@ class SyncInterfaces(SyncNetbox):
                             'device': hostname,
                             'name': interface_name,
                         }
-                        logger.debug(f"Interface Filter Query: {interface_query}")
+                        logger.debug(f"{mode} Interface Filter Query: {interface_query}")
                         if interfaces := current_netbox_interfaces.filter(**interface_query):
                             for interface in interfaces:
                                 # Update
                                 if payload := self.get_update_keys(interface, cfg_interface):
-                                    self.console(f"* Update Interface: {interface_name} {payload}")
+                                    self.console(f"* Update {mode} Interface: "\
+                                                 f"{interface_name} {payload}")
                                     interface.update(payload)
                                 else:
                                     self.console(f"* Interface {interface} already up to date")
                         else:
                             ### Create
-                            self.console(f"* Create Interface {interface_name}")
+                            self.console(f"* Create {mode} Interface {interface_name}")
                             payload = self.get_update_keys(False, cfg_interface)
                             if payload.get('device'):
                                 payload['device'] = \
                                         cfg_interface['sub_fields']['netbox_device_id']['value']
                             logger.debug(f"Create Payload: {payload}")
-                            interface = self.nb.dcim.interfaces.create(payload)
+                            if mode == 'dcim':
+                                interface = self.nb.dcim.interfaces.create(payload)
+                            elif mode == 'virtualization':
+                                interface = self.nb.virtualization.interfaces.create(payload)
 
                         port_infos.append({
                             'port_name': cfg_interface['fields']['name']['value'],
@@ -97,5 +111,5 @@ class SyncInterfaces(SyncNetbox):
 
 
                 progress.advance(task1)
-                attr_name = f"{self.config['name']}_interfaces"
+                attr_name = f"{self.config['name']}_{mode}_interfaces"
                 db_object.set_inventory_attribute(attr_name, port_infos)

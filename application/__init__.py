@@ -287,6 +287,7 @@ from application.modules.netbox.models import (
                                             NetboxDataflowModels,
                                             NetboxClusterAttributes,
                                             NetboxVirtualMachineAttributes,
+                                            NetboxVirtualizationInterfaceAttributes,
                                         )
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                             category="Netbox"))
@@ -301,6 +302,8 @@ admin.add_view(NetboxCustomAttributesView(NetboxClusterAttributes,\
         name="Virtualization: Cluster", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxVirtualMachineAttributes,\
         name="Virtualization: Virtual Machines", category="Netbox"))
+admin.add_view(NetboxCustomAttributesView(NetboxVirtualizationInterfaceAttributes,\
+        name="Virtualization: Interfaces", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxContactAttributes,\
         name="Tenancy: Contacts", category="Netbox"))
 
