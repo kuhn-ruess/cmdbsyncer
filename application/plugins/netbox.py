@@ -56,8 +56,11 @@ def cli_netbox():
     """Netbox Import and Syncronisation"""
 
 #   .-- Command: Export Devices
-def netbox_device_export(account, debug=False):
-    """Sync Objects with Netbox"""
+def netbox_device_export(account, debug=False, debug_rules=False):
+    """Export DCIM Devices"""
+    if debug_rules:
+        netbox_host_debug(debug_rules)
+        return
     try:
         rules = load_device_rules()
         syncer = SyncDevices(account)
@@ -74,13 +77,13 @@ def netbox_device_export(account, debug=False):
         source="netbox_device_sync_command", details=[('error', str(error_obj))])
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
-@cli_netbox.command('export_hosts')
 @cli_netbox.command('export_devices')
 @click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
 @click.argument("account")
-def cli_netbox_device_export(account, debug):
-    """Sync Devices with Netbox"""
-    netbox_device_export(account, debug)
+def cli_netbox_device_export(account, debug, debug_rules):
+    """Export Devices"""
+    netbox_device_export(account, debug, debug_rules)
 register_cronjob("Netbox: Update Devices", netbox_device_export)
 #.
 #   . -- Command: Export Virtual Machines
@@ -186,7 +189,6 @@ def netbox_device_import(account):
     except Exception as error_obj: #pylint:disable=broad-except
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
-@cli_netbox.command('import_hosts')
 @cli_netbox.command('import_devices')
 @click.argument("account")
 def cli_netbox_device_import(account):
@@ -253,7 +255,7 @@ register_cronjob("Netbox: Update IPs", netbox_ip_sync)
 #.
 #   .-- Command: Export Interfaces
 def netbox_interface_sync(account, debug=False, debug_rules=False):
-    """Export Interfaces to Netbox"""
+    """Export DCIM Interfaces"""
     try:
         attribute_rewrite = Rewrite()
         attribute_rewrite.cache_name = 'netbox_rewrite'
@@ -299,7 +301,7 @@ register_cronjob("Netbox: Update DCIM Interfaces", netbox_interface_sync)
 
 
 def netbox_virt_interface_sync(account, debug=False, debug_rules=False):
-    """Export Interfaces to Netbox"""
+    """Export Virtualization Interfaces"""
     try:
         attribute_rewrite = Rewrite()
         attribute_rewrite.cache_name = 'netbox_rewrite'
@@ -431,8 +433,6 @@ def cli_netbox_dataflow(account, debug, debug_rules):
 register_cronjob("Netbox: Update Dataflow", netbox_dataflow_sync)
 #.
 #   .-- Command: Debug Hosts
-@cli_netbox.command('debug_host')
-@click.argument("hostname")
 def netbox_host_debug(hostname):
     """Debug Host Rules"""
     print(f"{cc.HEADER} ***** Run Rules ***** {cc.ENDC}")
