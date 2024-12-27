@@ -70,14 +70,21 @@ class SyncIPAM(SyncNetbox):
                             cfg_ip['fields']['address']['value'] = address
                             if not address:
                                 continue
+                            # @Todo: Try to use real pynetbox objects for the query
+                            assigned_obj = cfg_ip['fields']['assigned_object_id']['value']
                             ip_query = {
                                 'address': address,
-                                'assigned_object': cfg_ip['fields']['assigned_object_id']['value'],
                             }
-                            logger.debug(f"IPAM IPS Filter Query: {ip_query}")
-                            if ip := current_ips.get(**ip_query):
+                            logger.debug(f"IPAM IPS Filter {hostname} Query: {ip_query}")
+                            found = False
+                            if ips := current_ips.filter(**ip_query):
+                                for ip in ips:
+                                    if ip.assigned_object_id == int(assigned_obj):
+                                        found = ip
+                                        break
+                            if found:
                                 # Update
-                                if payload := self.get_update_keys(ip, cfg_ip):
+                                if payload := self.get_update_keys(found, cfg_ip):
                                     self.console(f"* Update IP: for {address} on {hostname} {payload}")
                                     ip.update(payload)
                                 else:
