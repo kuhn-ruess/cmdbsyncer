@@ -139,7 +139,7 @@ def jdisc_executables_inventorize(account, debug=False):
             raise
 
 
-@cli_jdisc.command('inventorize_excecutables')
+@cli_jdisc.command('inventorize_executables')
 @click.option("--debug", is_flag=True)
 @click.argument('account')
 def cli_jdisc_executables_inventorize(account, debug):
