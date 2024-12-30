@@ -30,9 +30,12 @@ enabled_rules = {
     'host_objects': ('application.models.host', 'Host'),
     'accounts': ('application.models.account', 'Account'),
     'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
-    'netbox_interfaces': ('application.modules.netbox.models', 'NetboxDcimInterfaceAttributes'),
+    'netbox_dcim_interfaces': ('application.modules.netbox.models', 'NetboxDcimInterfaceAttributes'),
+    'netbox_virtual_interfaces': ('application.modules.netbox.models', 'NetboxVirtualizationInterfaceAttributes'),
     'netbox_devices': ('application.modules.netbox.models', 'NetboxCustomAttributes'),
     'netbox_ips': ('application.modules.netbox.models', 'NetboxIpamIpaddressattributes'),
+    'netbox_vms': ('application.modules.netbox.models', 'NetboxVirtualMachineAttributes'),
+    'netbox_cluster': ('application.modules.netbox.models', 'NetboxClusterAttributes'),
 }
 
 

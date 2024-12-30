@@ -2,12 +2,12 @@
 """
 Debug Helpers
 """
+from pprint import pformat
 
 from rich.console import Console
 from rich.table import Table
 from rich import box
 
-from pprint import pformat
 
 def attribute_table(title, data):
     """
@@ -22,7 +22,7 @@ def attribute_table(title, data):
     table.add_column("Attribute Name", style="cyan")
     table.add_column("Attribute Value", style="magenta")
     for key, value in data.items():
-        table.add_row(key, pformat(value))
+        table.add_row(key, pformat(value)[:500])
 
     console = Console()
     console.print(table)
