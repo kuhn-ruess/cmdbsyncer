@@ -116,3 +116,9 @@ class SyncInterfaces(SyncNetbox):
                 progress.advance(task1)
                 attr_name = f"{self.config['name']}_{mode}_interfaces"
                 db_object.set_inventory_attribute(attr_name, port_infos)
+
+
+class SyncVirtInterfaces(SyncInterfaces):
+    """
+    Class needed cause of cache feature
+    """
