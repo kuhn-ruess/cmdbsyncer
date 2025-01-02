@@ -30,6 +30,19 @@ class SyncVirtualMachines(SyncNetbox):
                 'type': 'virtualization.clusters',
                 'has_slug': True,
             },
+            'role': {
+                'type': 'dcim.device-roles',
+                 'has_slug' : True,
+            },
+            'platform': {
+                'type': 'dcim.platforms',
+                 'has_slug' : True,
+            },
+            'primary_ip4' : {
+                'type': 'ipam.ip-addresses',
+                'has_slug': False,
+                'name_field': 'address',
+            }
         }
 
 #   .--- Sync Virtual Machines
@@ -45,7 +58,7 @@ class SyncVirtualMachines(SyncNetbox):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             self.console = progress.console.print
-            task1 = progress.add_task("Updating Cluster", total=total)
+            task1 = progress.add_task("Updating Objects", total=total)
 
             current_nb_objects = self.nb.virtualization.virtual_machines
 
@@ -60,7 +73,7 @@ class SyncVirtualMachines(SyncNetbox):
                     if not cfg:
                         continue
 
-                    object_name = cfg['fields']['name']['value']
+                    object_name = hostname
                     query = {
                         'name': object_name,
                     }
@@ -75,6 +88,10 @@ class SyncVirtualMachines(SyncNetbox):
                         ### Create
                         self.console(f"* Create Object {object_name}")
                         payload = self.get_update_keys(False, cfg)
+                        payload['name'] = object_name
+                        for what in ['primary_ip4', 'primary_ip4']:
+                            if what in payload:
+                                del payload[what]
                         logger.debug(f"Create Payload: {payload}")
                         current_obj = self.nb.virtualization.virtual_machines.create(payload)
                 except Exception as error:
@@ -82,6 +99,9 @@ class SyncVirtualMachines(SyncNetbox):
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
                     print(f" Error in process: {error}")
+                if current_obj:
+                    attr_name = f"{self.config['name']}_virtualmachine_id"
+                    db_object.set_inventory_attribute(attr_name, current_obj.id)
 
                 progress.advance(task1)
 #.

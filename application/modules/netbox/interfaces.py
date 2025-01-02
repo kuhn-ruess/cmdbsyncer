@@ -65,6 +65,9 @@ class SyncInterfaces(SyncNetbox):
                         continue
 
                     for cfg_interface in cfg_interfaces:
+                        if not cfg_interface['sub_fields']['ipv4_addresses']['value'] and \
+                                not cfg_interface['sub_fields']['ipv6_addresses']['value']:
+                            continue
                         cfg_interface['fields'] = self.fix_values(cfg_interface['fields'])
                         logger.debug(f"Working with {cfg_interface}")
                         interface_name = cfg_interface['fields']['name']['value']

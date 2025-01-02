@@ -74,7 +74,6 @@ class NetboxClusterAttributes(db.Document):
 #.
 #   . -- Virutal Machines
 netbox_virtualmachines_types = [
-  ('name', '* Name'),
   ('cluster', 'Cluster'),
   ('role', 'Role'),
   ('status', 'Status'),
@@ -285,8 +284,7 @@ class NetboxDcimInterfaceAttributes(db.Document):
     }
 
 netbox_virt_interface_outcome_types = [
-        ('virtual_machine', '* Name of Assigned Virtual Machine'),
-        ('netbox_device_id', '* Numeric ID of Virtual Machine'),
+        ('virtual_machine', '* Numeric ID of Assigned Virtual Machine'),
         ('ipv4_addresses', '* IPv4 Address list (comma seperated)'),
         ('ipv6_addresses', '* IPv6 Address list (comma seperated)'),
         ('name', '* Name'),

@@ -22,7 +22,7 @@ def attribute_table(title, data):
     table.add_column("Attribute Name", style="cyan")
     table.add_column("Attribute Value", style="magenta")
     for key, value in data.items():
-        table.add_row(key, pformat(value)[:500])
+        table.add_row(key, pformat(value)[:10000])
 
     console = Console()
     console.print(table)
