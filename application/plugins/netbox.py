@@ -17,7 +17,7 @@ from application.modules.netbox.rules import *
 from application.modules.netbox.devices import SyncDevices
 from application.modules.netbox.vms import SyncVMS
 from application.modules.netbox.ipam import SyncIPAM
-from application.modules.netbox.interfaces import SyncInterfaces
+from application.modules.netbox.interfaces import SyncInterfaces, SyncVirtInterfaces
 from application.modules.netbox.contacts import SyncContacts
 from application.modules.netbox.dataflow import SyncDataFlow
 from application.modules.netbox.cluster import SyncCluster
@@ -136,7 +136,7 @@ register_cronjob("Netbox: Sync Virutal Machines", netbox_virtual_machines_sync)
 #.
 #   . -- Command: Export Cluster
 def netbox_cluster_sync(account, debug=False, debug_rules=False):
-    """Export Interfaces to Netbox"""
+    """Export Clusters to Netbox"""
     try:
         attribute_rewrite = Rewrite()
         attribute_rewrite.cache_name = 'netbox_rewrite'
@@ -274,7 +274,7 @@ def netbox_interface_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.name = "Netbox: Update Interfaces"
-            syncer.source = "netbox_interface_sync"
+            syncer.source = "netbox_dcim_interface_sync"
             syncer.sync_interfaces()
         else:
             syncer = SyncInterfaces(False)
@@ -315,15 +315,15 @@ def netbox_virt_interface_sync(account, debug=False, debug_rules=False):
                 NetboxVirtualizationInterfaceAttributes.objects(enabled=True).order_by('sort_field')
 
         if not debug_rules:
-            syncer = SyncInterfaces(account)
+            syncer = SyncVirtInterfaces(account)
             syncer.debug = debug
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.name = "Netbox: Update Interfaces"
-            syncer.source = "netbox_interface_sync"
+            syncer.source = "netbox_virt_interface_sync"
             syncer.sync_interfaces(mode='virtualization')
         else:
-            syncer = SyncInterfaces(False)
+            syncer = SyncVirtInterfaces(False)
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
