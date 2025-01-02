@@ -101,9 +101,11 @@ class SyncDevices(SyncNetbox):
                     device = self.nb.dcim.devices.create(payload)
 
             except Exception as error:
+                if self.debug:
+                    raise
                 self.log_details.append((f'export_error {hostname}', str(error)))
                 print(f" Error in process: {error}")
-            else:
+            if device:
                 attr_name = f"{self.config['name']}_device_id"
                 db_host.set_inventory_attribute(attr_name, device.id)
 

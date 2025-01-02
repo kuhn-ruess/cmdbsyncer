@@ -64,6 +64,7 @@ def netbox_device_export(account, debug=False, debug_rules=False):
     try:
         rules = load_device_rules()
         syncer = SyncDevices(account)
+        syncer.debug = debug
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
         syncer.actions = rules['actions']
@@ -361,6 +362,7 @@ def netbox_contacts_sync(account, debug=False, debug_rules=False):
 
         if not debug_rules:
             syncer = SyncContacts(account)
+            syncer.debug = debug
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.name = "Netbox: Update Contacts"
@@ -403,6 +405,7 @@ def netbox_dataflow_sync(account, debug=False, debug_rules=False):
         netbox_rules.rules = NetboxDataflowAttributes.objects(enabled=True).order_by('sort_field')
         if not debug_rules:
             syncer = SyncDataFlow(account)
+            syncer.debug = debug
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.name = "Netbox: Update DataFlow Data"

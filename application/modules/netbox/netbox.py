@@ -145,6 +145,8 @@ class SyncNetbox(Plugin):
         Get Keys which need a Update
         """
         update_fields = {}
+        if not 'fields' in config:
+            return {}
         for field, field_data in config['fields'].items():
             field_value = field_data['value']
 

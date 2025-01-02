@@ -127,7 +127,7 @@ class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
                     new_value  = render_jinja(action_param, mode="nullify",
                                              HOSTNAME=self.hostname, **self.attributes)
                     custom_key, custom_value = new_value.split(':')
-                    outcomes['custom_fields'][custom_key] = {'value': custom_value}
+                    outcomes['custom_fields'][custom_key] = {'value': custom_value.strip()}
                 except ValueError:
                     continue
             else:
@@ -174,6 +174,7 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
             for key, value in entry.items():
                 if key == 'ignore_ip':
                     continue
+                value = value.strip()
                 if key in sub_fields:
                     outcome_subfields_object[key] = {'value': value}
                 else:
@@ -214,9 +215,10 @@ class NetboxInterfaceRule(NetboxVariableRule):
         if field_value == "None":
             field_value = None
         if field_name == 'mac_address':
+
             if not field_value:
                 return "SKIP_FIELD"
-            field_value = field_value.upper()
+            field_value = field_value.upper()[:17]
         if field_name == 'mtu':
             if not field_value:
                 return "SKIP_FIELD"
@@ -246,6 +248,8 @@ class NetboxInterfaceRule(NetboxVariableRule):
             outcome_object = {}
             outcome_subfields_object = {}
             for key, value in entry.items():
+                if isinstance(value, str):
+                    value = value.strip()
                 if key == 'ignore_interface':
                     continue
                 if key == 'name' and value in ignored_interfaces:

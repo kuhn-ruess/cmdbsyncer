@@ -203,6 +203,7 @@ class Rule(): # pylint: disable=too-few-public-methods
                         new_value  = render_jinja(action_param, mode="nullify",
                                                  LIST_VAR=data,
                                                  HOSTNAME=hostname, **self.attributes)
+                        new_value = new_value.strip()
                         new_value = self.handle_fields(action, new_value)
 
                         if new_value == 'SKIP_RULE':
@@ -214,6 +215,7 @@ class Rule(): # pylint: disable=too-few-public-methods
             else:
                 new_value  = render_jinja(action_param, mode="nullify",
                                          HOSTNAME=hostname, **self.attributes)
+                new_value = new_value.strip()
                 new_value = self.handle_fields(action, new_value)
                 if new_value != 'SKIP_FIELD':
                     defaults_for_list[action] = new_value

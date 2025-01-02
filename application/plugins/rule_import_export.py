@@ -7,7 +7,7 @@ from json.decoder import JSONDecodeError
 import importlib
 import click
 
-from mongoengine.errors import NotUniqueError
+from mongoengine.errors import NotUniqueError, ValidationError
 from application import app
 
 enabled_rules = {
@@ -97,3 +97,5 @@ def import_rules(rulefile_path):
                     new.save(force_insert=True)
                 except NotUniqueError:
                     print("   Already existed")
+                except ValidationError:
+                    print(f"Problem with entry: {json_dict}")
