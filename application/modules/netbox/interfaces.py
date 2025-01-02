@@ -110,7 +110,7 @@ class SyncInterfaces(SyncNetbox):
                     if self.debug:
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
-                    print(f" Error in process: {error}")
+                    self.console(f" Error in process: {error}")
 
 
                 progress.advance(task1)

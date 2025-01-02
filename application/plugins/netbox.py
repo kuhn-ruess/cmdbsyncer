@@ -176,7 +176,7 @@ def netbox_cluster_sync(account, debug=False, debug_rules=False):
 @click.option("--debug-rules", default="")
 @click.argument("account")
 def cli_netbox_cluster(account, debug, debug_rules):
-    """Export Interfaces of Devices"""
+    """Export Cluster """
     netbox_cluster_sync(account, debug, debug_rules)
 
 register_cronjob("Netbox: Sync Cluster", netbox_cluster_sync)
@@ -310,7 +310,7 @@ def netbox_virt_interface_sync(account, debug=False, debug_rules=False):
         attribute_rewrite.rules = \
                 NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
 
-        netbox_rules = NetboxInterfaceRule()
+        netbox_rules = NetboxVirtInterfaceRule()
         netbox_rules.rules = \
                 NetboxVirtualizationInterfaceAttributes.objects(enabled=True).order_by('sort_field')
 

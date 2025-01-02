@@ -263,6 +263,11 @@ class NetboxInterfaceRule(NetboxVariableRule):
                                                'sub_fields': outcome_subfields_object,
                                                'by_rule': rule_name})
         return outcomes
+
+class NetboxVirtInterfaceRule(NetboxInterfaceRule):
+    """
+    Subclass for caching
+    """
 #.
 #   . -- Contacts
 class NetboxContactRule(NetboxVariableRule):
