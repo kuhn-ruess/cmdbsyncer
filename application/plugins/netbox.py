@@ -15,7 +15,6 @@ from application.modules.netbox.models import *
 from application.modules.netbox.rules import *
 
 from application.modules.netbox.devices import SyncDevices
-from application.modules.netbox.vms import SyncVMS
 from application.modules.netbox.ipam import SyncIPAM
 from application.modules.netbox.interfaces import SyncInterfaces, SyncVirtInterfaces
 from application.modules.netbox.contacts import SyncContacts
@@ -181,7 +180,7 @@ def cli_netbox_cluster(account, debug, debug_rules):
 
 register_cronjob("Netbox: Sync Cluster", netbox_cluster_sync)
 #.
-#   .-- Command: Import Devices
+#   .-- Command: Import VMS
 def netbox_device_import(account):
     """Import Devices from Netbox"""
     try:
@@ -201,7 +200,7 @@ register_cronjob("Netbox: Import Devices", netbox_device_import)
 def netbox_vm_import(account):
     """Import VMs from Netbox"""
     try:
-        syncer = SyncVMS(account)
+        syncer = SyncVirtualMachines(account)
         syncer.import_hosts()
     except Exception as error_obj: #pylint:disable=broad-except
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -341,7 +340,7 @@ def netbox_virt_interface_sync(account, debug=False, debug_rules=False):
 @click.option("--debug-rules", default="")
 @click.argument("account")
 def cli_netbox_virt_interface(account, debug, debug_rules):
-    """Export Interfaces of Devices"""
+    """Export Interfaces of Virtual Machines"""
     netbox_virt_interface_sync(account, debug, debug_rules)
 
 register_cronjob("Netbox: Update Virtualization Interfaces", netbox_virt_interface_sync)
@@ -387,7 +386,7 @@ def netbox_contacts_sync(account, debug=False, debug_rules=False):
 @click.option("--debug-rules", default="")
 @click.argument("account")
 def cli_netbox_contacts(account, debug, debug_rules):
-    """Export Dataflows"""
+    """Export Contacts"""
     netbox_contacts_sync(account, debug, debug_rules)
 register_cronjob("Netbox: Update Contacts", netbox_contacts_sync)
 #.
@@ -431,7 +430,7 @@ def netbox_dataflow_sync(account, debug=False, debug_rules=False):
 @click.option("--debug-rules", default="")
 @click.argument("account")
 def cli_netbox_dataflow(account, debug, debug_rules):
-    """Export Contacts"""
+    """Export Dataflow"""
     netbox_dataflow_sync(account, debug, debug_rules)
 register_cronjob("Netbox: Update Dataflow", netbox_dataflow_sync)
 #.
