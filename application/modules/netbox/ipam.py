@@ -43,6 +43,7 @@ class SyncIPAM(SyncNetbox):
             self.console = progress.console.print
             task1 = progress.add_task("Updating IPs", total=total)
             for db_object in db_objects:
+                ip_infos = []
                 hostname = db_object.hostname
 
                 all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
@@ -92,15 +93,20 @@ class SyncIPAM(SyncNetbox):
                                     ip.update(payload)
                                 else:
                                     self.console(f"* Already up to date IP: {address} on {hostname}")
+                                ip_infos.append({'netbox_ip_id': ip.id, 'address': address})
+
                             else:
                                 ### Create
                                 self.console(f" * Create IP {address} on {hostname}")
                                 payload = self.get_update_keys(False, cfg_ip)
                                 logger.debug(f"Create Payload: {payload}")
                                 ip = self.nb.ipam.ip_addresses.create(payload)
+                                ip_infos.append({'netbox_ip_id': ip.id, 'address': address})
                     except Exception as exp:
                         if self.debug:
                             raise
                         self.console(f"Error with device: {exp}")
                         self.log_details.append((f'export_error {hostname}', str(exp)))
                 progress.advance(task1)
+                attr_name = f"{self.config['name']}_ips"
+                db_object.set_inventory_attribute(attr_name, ip_infos)

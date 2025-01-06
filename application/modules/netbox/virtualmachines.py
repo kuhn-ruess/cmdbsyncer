@@ -44,9 +44,35 @@ class SyncVirtualMachines(SyncNetbox):
             'primary_ip4' : {
                 'type': 'ipam.ip-addresses',
                 'has_slug': False,
-                'name_field': 'address',
+                'name_field': 'id',
+            },
+            'primary_ip6' : {
+                'type': 'ipam.ip-addresses',
+                'has_slug': False,
+                'name_field': 'id',
             }
         }
+
+    def get_ip_id(self, custom_rules, all_attributes, mode):
+        """
+        Search if the Host already has infos to his ip addreses saved
+        """
+        if primary_ip_obj := custom_rules['fields'].get(mode):
+            needed_ip = primary_ip_obj['value']
+            attr_name = f"{self.config['name']}_ips"
+            if not attr_name in all_attributes['all']:
+                del custom_rules['fields'][mode]
+            else:
+                new_value = False
+                for ip in all_attributes['all'][attr_name]:
+                    if ip['address'] == needed_ip:
+                        new_value = ip['netbox_ip_id']
+                        break
+                if new_value:
+                    custom_rules['fields'][mode]['value'] = new_value
+                else:
+                    del custom_rules['fields'][mode]
+        return custom_rules
 
 #   .--- Sync Virtual Machines
     def sync_virtualmachines(self):
@@ -75,6 +101,8 @@ class SyncVirtualMachines(SyncNetbox):
                     cfg = self.get_host_data(db_object, all_attributes['all'])
                     if not cfg:
                         continue
+                    cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip4')
+                    cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip6')
 
                     object_name = hostname
                     query = {
@@ -82,7 +110,8 @@ class SyncVirtualMachines(SyncNetbox):
                     }
                     logger.debug(f"Object Filter Query: {query}")
                     if current_obj := current_nb_objects.get(**query):
-                        if payload := self.get_update_keys(current_obj, cfg):
+                        if payload := self.get_update_keys(current_obj, cfg,
+                                                           ['primary_ip4', 'primary_ip6']):
                             self.console(f"* Update Object: {object_name} {payload}")
                             current_obj.update(payload)
                         else:
@@ -92,9 +121,6 @@ class SyncVirtualMachines(SyncNetbox):
                         self.console(f"* Create Object {object_name}")
                         payload = self.get_update_keys(False, cfg)
                         payload['name'] = object_name
-                        for what in ['primary_ip4', 'primary_ip4']:
-                            if what in payload:
-                                del payload[what]
                         logger.debug(f"Create Payload: {payload}")
                         current_obj = self.nb.virtualization.virtual_machines.create(payload)
                 except Exception as error:
@@ -109,6 +135,9 @@ class SyncVirtualMachines(SyncNetbox):
                 progress.advance(task1)
 #.
     def import_hosts(self):
+        """
+        Import VMS out of Netbox
+        """
         for vm in self.nb.virtualization.virtual_machines.all():
             hostname = vm.name
             labels = vm.__dict__
