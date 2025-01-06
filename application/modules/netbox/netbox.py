@@ -94,7 +94,8 @@ class SyncNetbox(Plugin):
             if current := self.get_nested_attr(self.nb, obj_type).get(**create_obj):
                 logger.debug(f"3) Found current ID value  {current.id}")
                 outer_id = current.id
-            else:
+            elif name_field != 'id':
+                # ID Fields mean reference, they are not created if not existing
                 logger.debug("4) Need to create a new id")
                 if extra_fields := sub_obj.get('sub_fields'):
                     for extra_field in extra_fields:
@@ -103,6 +104,8 @@ class SyncNetbox(Plugin):
                 new_obj = self.get_nested_attr(self.nb, obj_type).create(create_obj)
                 logger.debug(f"4b) New id is {new_obj.id}")
                 outer_id = new_obj.id
+            else:
+                return False
 
             ## Sub Field was a subfield, so thats the first level
             if is_sub_model:
@@ -140,10 +143,12 @@ class SyncNetbox(Plugin):
         return field_value
 
 
-    def get_update_keys(self, current_obj, config):
+    def get_update_keys(self, current_obj, config, compare_ids=False):
         """
         Get Keys which need a Update
         """
+        if not compare_ids:
+            compare_ids = []
         update_fields = {}
         if not 'fields' in config:
             return {}
@@ -170,31 +175,37 @@ class SyncNetbox(Plugin):
                     current_field.append({'id': field_value})
                     update_fields[field] = current_field
             else:
+                if field in compare_ids:
+                    current_field = current_field.id
                 if str(field_value).lower() != str(current_field).lower():
                     logger.debug(f'{field}: {repr(current_field)} -> {repr(field_value)}')
                     field_value = self.get_name_or_id(field, field_value, config)
+                    #pylint: disable=singleton-comparison
+                    if field_value == False:
+                        continue
                     if '.' in field:
                         field = field.split('.')[0]
                     update_fields[field] = field_value
 
         if config.get('custom_fields'):
             update_fields['custom_fields'] = {}
-            # Is it a dict or an obj?
-            # Maybe Problem Dataflow vs Normal field
-            #if not hasattr(current_obj, 'custom_fields'):
-            #    current_obj.custom_fields = {}
+
+            current_custom = None # Can be also None in getattr
+            if current_obj:
+                current_custom = getattr(current_obj, "custom_fields")
+            if not current_custom:
+                current_custom = {}
 
             for field, field_data in config['custom_fields'].items():
                 new_value = field_data['value']
 
-                if not current_obj:
-                    continue
                 try:
-                    current_field = []
-                    if hasattr(current_obj, field):
-                        current_field = getattr(current_obj, field)
+                    current_field = None
+                    if field in  current_custom:
+                        current_field = current_custom[field]
 
                     if field_data.get('is_list'):
+                        current_field = []
                         if int(new_value) not in [x['id'] for x in current_field]:
                             # Maybe also for else:
                             logger.debug(f"update_custom_list_field: {field}, {new_value}")
@@ -202,7 +213,7 @@ class SyncNetbox(Plugin):
                             update_fields['custom_fields'][field] \
                                     = [{'id': x['id']} for x in current_field]
                     elif new_value != current_field:
-                        logger.debug(f"update_custom_field: {field}, {new_value}")
+                        logger.debug(f"update_custom_field: {field}, {new_value} from {current_field}")
                         update_fields['custom_fields'][field] = new_value
                 except AttributeError:
                     logger.debug(f"Missing Custom Field: {field}")

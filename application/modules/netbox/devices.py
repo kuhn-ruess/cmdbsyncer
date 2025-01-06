@@ -46,9 +46,36 @@ class SyncDevices(SyncNetbox):
             'primary_ip4' : {
                 'type': 'ipam.ip-addresses',
                 'has_slug': False,
-                'name_field': 'address',
+                'name_field': 'id',
+            },
+            'primary_ip6' : {
+                'type': 'ipam.ip-addresses',
+                'has_slug': False,
+                'name_field': 'id',
             }
         }
+
+
+    def get_ip_id(self, custom_rules, all_attributes, mode):
+        """
+        Search if the Host already has infos to his ip addreses saved
+        """
+        if primary_ip_obj := custom_rules['fields'].get(mode):
+            needed_ip = primary_ip_obj['value']
+            attr_name = f"{self.config['name']}_ips"
+            if not attr_name in all_attributes['all']:
+                del custom_rules['fields'][mode]
+            else:
+                new_value = False
+                for ip in all_attributes['all'][attr_name]:
+                    if ip['address'] == needed_ip:
+                        new_value = ip['netbox_ip_id']
+                        break
+                if new_value:
+                    custom_rules['fields'][mode]['value'] = new_value
+                else:
+                    del custom_rules['fields'][mode]
+        return custom_rules
 
 #   .--- Export Devices
     def export_hosts(self):
@@ -73,9 +100,14 @@ class SyncDevices(SyncNetbox):
                 if not all_attributes:
                     continue
                 custom_rules = self.get_host_data(db_host, all_attributes['all'])
+                if not custom_rules:
+                    continue
 
                 if custom_rules.get('ignore_host'):
                     continue
+
+                custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip4')
+                custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
 
                 process = 100.0 * counter / total
                 print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {hostname}")
@@ -83,7 +115,8 @@ class SyncDevices(SyncNetbox):
                 found_hosts.append(hostname)
                 if device := current_netbox_devices.get(name=hostname):
                     # Update
-                    if update_keys := self.get_update_keys(device, custom_rules):
+                    if update_keys := self.get_update_keys(device, custom_rules,
+                                                           ['primary_ip4', 'primary_ip6']):
                         print(f"{CC.OKBLUE} *{CC.ENDC} Update Device: {update_keys}")
                         device.update(update_keys)
                     else:
@@ -93,11 +126,6 @@ class SyncDevices(SyncNetbox):
                     print(f"{CC.OKGREEN} *{CC.ENDC} Create Device")
                     payload = self.get_update_keys(False, custom_rules)
                     payload['name'] = hostname
-                    # When we create, we don't have all rferences jet.
-                    # So we need to delete now and update alter
-                    for what in ['primary_ip4', 'primary_ip4']:
-                        if what in payload:
-                            del payload[what]
                     device = self.nb.dcim.devices.create(payload)
 
             except Exception as error:
