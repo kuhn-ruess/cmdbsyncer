@@ -175,7 +175,7 @@ class SyncNetbox(Plugin):
                     current_field.append({'id': field_value})
                     update_fields[field] = current_field
             else:
-                if field in compare_ids:
+                if field in compare_ids and current_field:
                     current_field = current_field.id
                 if str(field_value).lower() != str(current_field).lower():
                     logger.debug(f'{field}: {repr(current_field)} -> {repr(field_value)}')
