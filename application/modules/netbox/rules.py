@@ -211,6 +211,9 @@ class NetboxInterfaceRule(NetboxVariableRule):
         if field_name == 'name' and not field_value:
             return "SKIP_RULE"
 
+        if field_name == 'name':
+            field_value = field_value[:64]
+
         field_value = field_value.strip()
         if field_value == "None":
             field_value = None
