@@ -346,6 +346,7 @@ netbox_contact_outcome_types = [
     ('email', 'E-Mail'),
     ('address', 'Address'),
     ('description', 'Description'),
+    ('group', 'Contacts Groupname'),
     ('ignore_contact', 'Ignore matching objects for sync'),
 ]
 class NetboxContactOutcome(db.EmbeddedDocument):

@@ -14,6 +14,18 @@ class SyncContacts(SyncNetbox):
     """
     console = None
 
+    @staticmethod
+    def get_field_config():
+        """
+        Return Fields needed for Devices
+        """
+        return {
+            'group': {
+                'type': 'tenancy.contact-groups',
+                'has_slug' : True,
+            },
+        }
+
     def sync_contacts(self):
         """
         Sync Contacts
