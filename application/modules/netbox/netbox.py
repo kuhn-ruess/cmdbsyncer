@@ -5,6 +5,7 @@ from application.modules.plugin import Plugin
 from application import logger
 try:
     import pynetbox
+    from slugify import slugify
 except ImportError:
     logger.info("Info: Netbox Plugin was not able to load required modules")
 
@@ -52,16 +53,7 @@ class SyncNetbox(Plugin):
         """
         Return Slag Version of String
         """
-        replacers = [
-            ('.', ''),
-            (' ', '-'),
-            ('ü', 'ue'),
-            ('ä', 'ae'),
-            ('ö', 'oe'),
-        ]
-        for repl, target in replacers:
-            name = name.replace(repl, target)
-        return name.lower()
+        return slugify(name)
 
     def get_name_or_id(self, field, field_value, config):
         """
