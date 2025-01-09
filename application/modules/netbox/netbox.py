@@ -67,7 +67,7 @@ class SyncNetbox(Plugin):
             field = splitted[1]
             is_sub_model = splitted[0]
 
-        logger.debug(f"0) Working on {field}")
+        logger.debug(f"B0) Working on {field}")
         if sub_obj := translation.get(field):
             obj_type = sub_obj['type']
             if obj_type == 'string':
@@ -75,26 +75,26 @@ class SyncNetbox(Plugin):
             ## Create the SUB Field
             name_field = sub_obj.get('name_field', 'name')
             create_obj = {name_field: field_value}
-            logger.debug(f"1) Obj: {create_obj}, Type: {obj_type}")
+            logger.debug(f"B1) Obj: {create_obj}, Type: {obj_type}")
             allow_default = sub_obj.get('allow_default_value', True)
             if not allow_default and field_value == 'CMDB Syncer Not defined':
-                logger.debug("1a) Ditched value since its a default")
+                logger.debug("B1a) Ditched value since its a default")
                 return None
             if sub_obj['has_slug']:
-                logger.debug("2) Field has slug")
+                logger.debug("B2) Field has slug")
                 create_obj['slug'] = self.get_slug(field_value)
             if current := self.get_nested_attr(self.nb, obj_type).get(**create_obj):
-                logger.debug(f"3) Found current ID value  {current.id}")
+                logger.debug(f"B3) Found current ID value  {current.id}")
                 outer_id = current.id
             elif name_field != 'id':
                 # ID Fields mean reference, they are not created if not existing
-                logger.debug("4) Need to create a new id")
+                logger.debug(f"B4) Need to create a new id, did not find {create_obj}")
                 if extra_fields := sub_obj.get('sub_fields'):
                     for extra_field in extra_fields:
                         create_obj[extra_field] = \
                                 self.get_name_or_id(extra_field, field_value, config)
                 new_obj = self.get_nested_attr(self.nb, obj_type).create(create_obj)
-                logger.debug(f"4b) New id is {new_obj.id}")
+                logger.debug(f"B4b) New id is {new_obj.id}")
                 outer_id = new_obj.id
             else:
                 return False
@@ -103,7 +103,7 @@ class SyncNetbox(Plugin):
             if is_sub_model:
                 sub_sub_obj = translation[is_sub_model]
                 sub_obj_type = sub_sub_obj['type']
-                logger.debug(f"5) Working with Submodel {obj_type}")
+                logger.debug(f"B5) Working with Submodel {obj_type}")
                 new_name = config['fields'][is_sub_model]['value']
                 if not new_name:
                     new_name = "CMDB Syncer Undefined"
@@ -111,10 +111,10 @@ class SyncNetbox(Plugin):
                 if sub_sub_obj['has_slug']:
                     create_obj['slug'] = self.get_slug(new_name)
                 if current := self.get_nested_attr(self.nb, sub_obj_type).get(**create_obj):
-                    logger.debug("7) Found current Sub Field")
+                    logger.debug("B7) Found current Sub Field")
                     # Update the reference also if needed here
                     if getattr(current, field) != outer_id:
-                        logger.debug("8) Need to Update reference field")
+                        logger.debug("B8) Need to Update reference field")
                         current.update({field: outer_id})
                     return current.id
                 # Add reference to first field
@@ -124,14 +124,14 @@ class SyncNetbox(Plugin):
                         create_obj[extra_field] = \
                                 config['sub_fields'].get(extra_field,
                                 {'value': 'CMDB Syncer Undefined'})['value']
-                logger.debug(f"9) Creating object {create_obj}")
+                logger.debug(f"B9) Creating object {create_obj}")
                 new_obj = self.get_nested_attr(self.nb, sub_obj_type).create(create_obj)
-                logger.debug(f"9 a) Returning New created Sub ID {new_obj.id}")
+                logger.debug(f"B9 a) Returning New created Sub ID {new_obj.id}")
                 return new_obj.id
-            logger.debug(f"10) Returning First created ID {outer_id}")
+            logger.debug(f"B10) Returning First created ID {outer_id}")
             return outer_id
         # It's no reference, so direct value return
-        logger.debug(f"11) Returning original Value {field_value}")
+        logger.debug(f"B11) Returning original Value {field_value}")
         return field_value
 
 
@@ -144,33 +144,43 @@ class SyncNetbox(Plugin):
         update_fields = {}
         if not 'fields' in config:
             return {}
+        field_config = self.get_field_config()
         for field, field_data in config['fields'].items():
             field_value = field_data['value']
 
-            logger.debug(f"update_keys: {field}, {field_value}")
+            logger.debug(f"A1) update_keys: {field}, {field_value}")
             if field in config.get('do_not_update_keys',[]):
                 continue
 
 
             if current_obj:
+                logger.debug(f"A2 a) Have current_object: {current_obj}")
                 current_field = self.get_nested_attr(current_obj, field)
             else:
-                # In this case we create a new object
+                # In Case we create a new project, it still could be thats
+                # we have data from subfields here, therefore check for it:
+                logger.debug("A2 b) Dont Have current_object, check for subfield")
                 current_field = False
+
             if not field_value or field_value == '':
+                logger.debug("A3) Field Undefied Fallback")
                 field_value = 'CMDB Syncer Not defined'
             if field_data.get('is_list'):
+                logger.debug("A4) Is list field")
                 if not current_field:
                     current_field = []
 
                 if field_value not in [x['id'] for x in current_field]:
+                    logger.debug(f"A5) Added id {field_value} to list")
                     current_field.append({'id': field_value})
                     update_fields[field] = current_field
             else:
                 if field in compare_ids and current_field:
-                    current_field = current_field.id
+                    new_field = current_field.id
+                    logger.debug(f'A5) {field} compared {current_field}->{new_field}')
+                    current_field = new_field
                 if str(field_value).lower() != str(current_field).lower():
-                    logger.debug(f'{field}: {repr(current_field)} -> {repr(field_value)}')
+                    logger.debug(f'A6) {field}: {repr(current_field)} -> {repr(field_value)}')
                     field_value = self.get_name_or_id(field, field_value, config)
                     #pylint: disable=singleton-comparison
                     if field_value == False:

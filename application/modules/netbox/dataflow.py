@@ -1,5 +1,5 @@
 """
-IPAM Syncronisation
+Dataflow Sync
 """
 #pylint: disable=unnecessary-dunder-call
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -9,11 +9,6 @@ from application.modules.netbox.netbox import SyncNetbox
 from application.models.host import Host
 
 from application.modules.netbox.models import NetboxDataflowModels
-
-class Struct:
-    def __init__(self, entries):
-        for key, value in entries.items():
-            setattr(self, key, value)
 
 
 class SyncDataFlow(SyncNetbox):
@@ -26,6 +21,11 @@ class SyncDataFlow(SyncNetbox):
         """
         Update/ Create of objects
         """
+        class Struct:
+            def __init__(self, entries):
+                for key, value in entries.items():
+                    setattr(self, key, value)
+
         model_name = model_data.used_dataflow_model
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
@@ -105,11 +105,14 @@ class SyncDataFlow(SyncNetbox):
 
     def sync_dataflow(self):
         """
-        Sync Dataflow Addresses
+        Sync Dataflow using custom API Endpoints
         """
+        headers = {
+            'Authorization': f"Token {self.config['password']}",
+            'Content-Type': 'application/json',
+        }
         for model_data in NetboxDataflowModels.objects(enabled=True):
             model_name = model_data.used_dataflow_model
-            current_objects = \
-                    self.nb.plugins.__getattr__('data-flows').__getattr__(model_name).all()
-
-            self.inner_update(current_objects, model_data)
+            api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}"
+            resp = self.inner_request("GET", api_url, headers=headers)
+            print(resp.json())

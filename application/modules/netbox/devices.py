@@ -2,6 +2,7 @@
 Create Devices in Netbox
 """
 #pylint: disable=no-member, too-many-locals, import-error
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application.modules.netbox.netbox import SyncNetbox
 
@@ -13,6 +14,9 @@ class SyncDevices(SyncNetbox):
     """
     Netbox Device Operations
     """
+
+    console = None
+
     @staticmethod
     def get_field_config():
         """
@@ -85,57 +89,62 @@ class SyncDevices(SyncNetbox):
         #pylint: disable=too-many-locals
         current_netbox_devices = self.nb.dcim.devices
 
-        print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
-        counter = 0
         found_hosts = []
-        for db_host in db_objects:
-            try:
-                hostname = db_host.hostname
-                counter += 1
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            self.console = progress.console.print
+            task1 = progress.add_task("Updating Objects", total=total)
+            for db_host in db_objects:
+                try:
+                    hostname = db_host.hostname
+                    all_attributes = self.get_host_attributes(db_host, 'netbox')
+                    if not all_attributes:
+                        progress.advance(task1)
+                        continue
+                    custom_rules = self.get_host_data(db_host, all_attributes['all'])
+                    if not custom_rules:
+                        progress.advance(task1)
+                        continue
 
-                all_attributes = self.get_host_attributes(db_host, 'netbox')
-                if not all_attributes:
-                    continue
-                custom_rules = self.get_host_data(db_host, all_attributes['all'])
-                if not custom_rules:
-                    continue
+                    if custom_rules.get('ignore_host'):
+                        progress.advance(task1)
+                        continue
 
-                if custom_rules.get('ignore_host'):
-                    continue
+                    custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip4')
+                    custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
 
-                custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip4')
-                custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
 
-                process = 100.0 * counter / total
-                print(f"\n{CC.OKBLUE}({process:.0f}%){CC.ENDC} {hostname}")
-
-                found_hosts.append(hostname)
-                if device := current_netbox_devices.get(name=hostname):
-                    # Update
-                    if update_keys := self.get_update_keys(device, custom_rules,
-                                                           ['primary_ip4', 'primary_ip6']):
-                        print(f"{CC.OKBLUE} *{CC.ENDC} Update Device: {update_keys}")
-                        device.update(update_keys)
+                    found_hosts.append(hostname)
+                    if device := current_netbox_devices.get(name=hostname):
+                        # Update
+                        if update_keys := self.get_update_keys(device, custom_rules,
+                                                               ['primary_ip4', 'primary_ip6']):
+                            self.console(f" * Update Device {hostname}: {update_keys}")
+                            device.update(update_keys)
+                        else:
+                            self.console(f" * Already up to date {hostname}")
                     else:
-                        print(f"{CC.OKBLUE} *{CC.ENDC} Netbox already up to date")
-                else:
-                    ### Create
-                    print(f"{CC.OKGREEN} *{CC.ENDC} Create Device")
-                    payload = self.get_update_keys(False, custom_rules)
-                    payload['name'] = hostname
-                    device = self.nb.dcim.devices.create(payload)
+                        ### Create
+                        self.console(f" * Create Device {hostname}")
+                        payload = self.get_update_keys(False, custom_rules)
+                        payload['name'] = hostname
+                        device = self.nb.dcim.devices.create(payload)
 
-            except Exception as error:
-                if self.debug:
-                    raise
-                self.log_details.append((f'export_error {hostname}', str(error)))
-                print(f" Error in process: {error}")
-            if device:
-                attr_name = f"{self.config['name']}_device_id"
-                db_host.set_inventory_attribute(attr_name, device.id)
+                except Exception as error:
+                    if self.debug:
+                        raise
+                    self.log_details.append((f'export_error {hostname}', str(error)))
+                    self.console(f" Error in process: {error}")
+                progress.advance(task1)
+
+                if device:
+                    attr_name = f"{self.config['name']}_device_id"
+                    db_host.set_inventory_attribute(attr_name, device.id)
 
         #print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
         #for device in current_netbox_devices.all():
