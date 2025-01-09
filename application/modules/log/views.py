@@ -14,6 +14,15 @@ def format_log(v, c, m, p):
     html += "</table>"
     return Markup(html)
 
+def format_error_flag(v, c, m, p):
+    """
+    Format Has error flag"
+    """
+    # pylint: disable=invalid-name, unused-argument
+    if m.has_error:
+        return Markup('<span style="color:red;" class="fa fa-warning"></span>')
+    return Markup('<span style="color:green;" class="fa fa-circle"></span>')
+
 
 class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
     """
@@ -27,7 +36,7 @@ class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
     can_view_details = True
 
     export_types = ['csv']
-    
+
     column_extra_row_actions = [] # Overwrite because of clone icon
 
     column_details_list = [
@@ -44,10 +53,12 @@ class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
 
     column_formatters = {
         'details': format_log,
+        'has_error': format_error_flag,
     }
 
     column_filters = (
         'source', 'message', 'affected_hosts',
+        'has_error',
     )
     page_size = 100
 
