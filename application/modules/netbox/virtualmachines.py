@@ -29,6 +29,10 @@ class SyncVirtualMachines(SyncNetbox):
                 'type': 'dcim.sites',
                 'has_slug': True,
             },
+            'manufacturer': {
+                'type': 'dcim.manufacturers',
+                'has_slug' : True,
+            },
             'cluster': {
                 'type': 'virtualization.clusters',
                 'has_slug': True,
@@ -100,6 +104,7 @@ class SyncVirtualMachines(SyncNetbox):
                         continue
                     cfg = self.get_host_data(db_object, all_attributes['all'])
                     if not cfg:
+                        progress.advance(task1)
                         continue
                     cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip4')
                     cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip6')
