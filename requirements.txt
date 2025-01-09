@@ -15,4 +15,4 @@ requests==2.32.3
 rich==13.9.2
 uWSGI
 pynetbox==7.4.1
-slugify==0.0.1
+python-slugify==8.0.4
