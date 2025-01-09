@@ -238,11 +238,19 @@ class RuleModelView(DefaultModelView):
 
     def on_model_change(self, form, model, is_created):
         """
-        Cleanup Inputs
+        Overwrite Actions on Model Change
         """
         add_changes()
 
         return super().on_model_change(form, model, is_created)
+
+    def on_model_delete(self, model):
+        """
+        Overwrite Actions on Model Delete
+        """
+        add_changes()
+
+        return super().on_model_delete(model)
 
 
     def is_accessible(self):
