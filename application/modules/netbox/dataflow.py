@@ -3,6 +3,7 @@ Dataflow Sync
 """
 #pylint: disable=unnecessary-dunder-call
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
+from rich.console import Console
 
 from application import logger
 from application.modules.netbox.netbox import SyncNetbox
@@ -10,109 +11,134 @@ from application.models.host import Host
 
 from application.modules.netbox.models import NetboxDataflowModels
 
+class Struct: #pylint: disable=missing-class-docstring
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
 
 class SyncDataFlow(SyncNetbox):
     """
     Netbox Data Flow
     """
     console = None
+    headers = {}
 
-    def inner_update(self, nb_objects, model_data):
-        """
-        Update/ Create of objects
-        """
-        class Struct:
-            def __init__(self, entries):
-                for key, value in entries.items():
-                    setattr(self, key, value)
+    model_data_by_model = {}
 
-        model_name = model_data.used_dataflow_model
+
+    def handle_rule(self, rule, identify_field_name, model_name, nb_data):
+        """
+        Handle Actions resulting from Rule
+
+        Gets the current rules, which contain what the host has
+        Checks if this exsist in den nb_data
+        if not, just creates it, 
+        if yes, checks if up to date,
+        if not up to date, updates it.
+
+        2) Compare with the nb_data
+        3) Create if not in nb_data
+        4) Update if given Fields are different
+        """
+
+        identify_field_value = rule['fields'][identify_field_name]['value']
+
+        api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}"
+        if identify_field_value not in nb_data:
+            # Crate Object
+            payload = self.get_update_keys(False, rule)
+            logger.debug(f"Create Object with {payload}")
+            self.inner_request("POST", api_url, headers=self.headers)
+
+        else:
+            # Maybe Update Object
+            as_object = Struct(**nb_data[identify_field_value])
+            payload = self.get_update_keys(as_object, rule)
+            logger.debug(f"Update Object with {payload}")
+            self.inner_request("PUT", api_url, headers=self.headers)
+
+
+    def struct_current_model_data(self, identify_field, model_data):
+        """
+        Parse Netbox Data into usable dict
+        """
+        out_dict = {}
+        for entry in model_data:
+            out_dict[entry[identify_field]] = entry
+        return out_dict
+
+    def process_model_data(self, model_name, model_data, rules):
+        """
+        Handle the Data and connect it to the Objects
+        """
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
-        current_objects = {}
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             self.console = progress.console.print
-            total_nb = len(nb_objects)
-            task1 = progress.add_task("Reading Objects from Netbox", total=total_nb)
-            for nb_object in nb_objects:
-                custom_fields = {}
-                name = False
-                fields = {}
-                for field in nb_object:
-                    if field[0] == 'name':
-                        name = field[1]
-                        fields['name'] = name
-                    elif field[0] == 'custom_fields':
-                        custom_fields = field[1]
-                    else:
-                        fields[field[0]] = field[1]
-                if fields and name:
-                    fields.update(custom_fields)
-                    current_objects.update({name:fields})
-                progress.advance(task1)
+            task1 = progress.add_task("Updating Data in Netbox", total=total)
 
-            task2 = progress.add_task("Sending objects to Netbox", total=total)
             for db_object in db_objects:
-                hostname = db_object.hostname
-                payloads = []
 
                 all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
                 if not all_attributes:
                     progress.advance(task1)
                     continue
+
                 rules = self.get_host_data(db_object, all_attributes['all'])
-                allowed_rules = [x.name for x in model_data['connected_rules']]
-                self.console(f" * Handle {hostname}")
+                self.console(f" * Handle {db_object.thostname}")
 
-
+                allowed_rules = [x.name for x in rules]
                 for rule in rules['rules']:
                     if rule['rule'] not in allowed_rules:
                         continue
 
                     logger.debug(f"Working with {rule}")
                     try:
-                        query_field = [x['value'] for x in
-                                        rule['fields'].values() if x['use_to_identify']][0]
+                        identify_field_name = [x for x,y in
+                                        rule['fields'].items() if y['use_to_identify']][0]
                     except IndexError:
                         continue
-                    logger.debug(f"Filter Query: {query_field}")
-
-                    if query_field and query_field not in current_objects:
-                        ### Create
-                        self.console(f" *    Create Object {query_field}")
-                        payload = self.get_update_keys(False, rule)
-                        logger.debug(f"Create Payload: {payload}")
-                        self.nb.plugins.__getattr__('data-flows').\
-                                    __getattr__(model_name).create(payload)
-                        current_objects.update({query_field: {}})
-                    elif query_field:
-                        current_obj = Struct(current_objects[query_field])
-                        payload = self.get_update_keys(current_obj, rule)
-                        logger.debug(f"Update Payload: {payload}")
-                        payload['name'] = query_field
-                        payload['id'] = current_obj.id
-                        payloads.append(payload)
+                    if model_name not in self.model_data_by_model:
+                        nb_data = self.struct_current_model_data(identify_field_name, model_data)
                     else:
-                        self.log_details.append(('info', f'Empty field with {hostname}'))
-                if payloads:
-                    self.nb.plugins.__getattr__('data-flows').\
-                                __getattr__(model_name).update(payloads)
-                progress.advance(task2)
+                        nb_data = self.model_data_by_model[model_name]
+
+                    self.handle_rule(rule, identify_field_name, model_name, nb_data)
+                progress.advance(task1)
+
+
+    def get_current_data(self, model_name):
+        """
+        Collect the current Data for the given Model
+        """
+        collection = []
+        console = Console()
+        with console.status(f"Download current data for {model_name}"):
+            api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}"
+            resp = self.inner_request("GET", api_url, headers=self.headers)
+            resp_data = resp.json()
+            collection =+ resp_data['results']
+            while resp_data.get('next'):
+                next_url = resp_data['next']
+                resp = self.inner_request("GET", next_url, headers=self.headers)
+                resp_data = resp.json()
+                collection =+ resp_data['results']
+        return collection
+
 
     def sync_dataflow(self):
         """
         Sync Dataflow using custom API Endpoints
         """
-        headers = {
+        self.headers = {
             'Authorization': f"Token {self.config['password']}",
             'Content-Type': 'application/json',
         }
-        for model_data in NetboxDataflowModels.objects(enabled=True):
-            model_name = model_data.used_dataflow_model
-            api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}"
-            resp = self.inner_request("GET", api_url, headers=headers)
-            print(resp.json())
+        for model_config in NetboxDataflowModels.objects(enabled=True):
+            model_name = model_config.used_dataflow_model
+            model_data = self.get_current_data(model_name)
+            self.process_model_data(model_name, model_data, model_config.connected_rules)
