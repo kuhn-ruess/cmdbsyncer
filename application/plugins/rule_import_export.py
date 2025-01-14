@@ -30,13 +30,26 @@ enabled_rules = {
     'host_objects': ('application.models.host', 'Host'),
     'accounts': ('application.models.account', 'Account'),
     'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
-    'netbox_dcim_interfaces': ('application.modules.netbox.models', 'NetboxDcimInterfaceAttributes'),
-    'netbox_virtual_interfaces': ('application.modules.netbox.models', 'NetboxVirtualizationInterfaceAttributes'),
+    'netbox_dcim_interfaces': ('application.modules.netbox.models',
+                                'NetboxDcimInterfaceAttributes'),
+    'netbox_virtual_interfaces': ('application.modules.netbox.models',
+                                  'NetboxVirtualizationInterfaceAttributes'),
     'netbox_devices': ('application.modules.netbox.models', 'NetboxCustomAttributes'),
     'netbox_ips': ('application.modules.netbox.models', 'NetboxIpamIpaddressattributes'),
     'netbox_vms': ('application.modules.netbox.models', 'NetboxVirtualMachineAttributes'),
     'netbox_cluster': ('application.modules.netbox.models', 'NetboxClusterAttributes'),
 }
+
+
+def get_ruletype_by_filename(filename):
+    """
+    Try to guess the rule_type using the filename
+    """
+    model_name = filename.split('/')[-1].split('_')[0]
+    for rule_type, model_data in enabled_rules.items():
+        if model_data[1] == model_name:
+            return rule_type
+    return False
 
 
 def export_rules_from_model(rule_type):
@@ -50,6 +63,7 @@ def export_rules_from_model(rule_type):
 @app.cli.group(name='rules')
 def cli_rules():
     """Syner Rules import and Export"""
+
 
 @cli_rules.command('export_rules')
 @click.argument("rule_type", default="")
@@ -83,7 +97,12 @@ def import_rules(rulefile_path):
                 print (line)
                 continue
             if not rule_type:
-                rule_type = json_dict['rule_type']
+                try:
+                    rule_type = json_dict['rule_type']
+                except KeyError:
+                    # Mode get type by filename
+                    # This mode is for export from GUI
+                    rule_type = get_ruletype_by_filename(rulefile_path)
                 if rule_type not in enabled_rules:
                     print("Ruletype not supported")
                     print(f"Currently supported: {', '.join(enabled_rules.keys())}")

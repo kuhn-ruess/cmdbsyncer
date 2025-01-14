@@ -1,6 +1,7 @@
 """
 Rule Model View
 """
+from datetime import datetime
 
 from wtforms import HiddenField, StringField
 from flask_login import current_user
@@ -162,6 +163,11 @@ def _render_full_conditions(_view, _context, model, _name):
 #   .-- Rule Model
 #pylint: disable=too-few-public-methods
 
+def get_rule_json(_view, _context, model, _name):
+    """
+    Export Given Rulesets
+    """
+    return model.to_json()
 
 class RuleModelView(DefaultModelView):
     """
@@ -170,7 +176,13 @@ class RuleModelView(DefaultModelView):
 
     can_export = True
 
-    export_types = ['xlsx', 'csv']
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
 
     form_rules = [
         rules.FieldSet((
@@ -251,6 +263,15 @@ class RuleModelView(DefaultModelView):
         add_changes()
 
         return super().on_model_delete(model)
+
+    def get_export_name(self, export_type):
+        """
+        Overwrite Filename
+        """
+        now = datetime.now()
+
+        dt_str = now.strftime("%Y%m%d%H%M")
+        return f"{self.model.__name__}_{dt_str}.syncer_json"
 
 
     def is_accessible(self):

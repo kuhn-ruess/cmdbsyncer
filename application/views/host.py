@@ -1,9 +1,9 @@
 """
 Host Model View
 """
+from datetime import datetime
 # pylint: disable=too-few-public-methods
 import re
-from mongoengine.errors import DoesNotExist
 from flask_login import current_user
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 from flask_admin.model.template import LinkRowAction
@@ -14,7 +14,12 @@ from markupsafe import Markup
 from application import app
 from application.views.default import DefaultModelView
 from application.models.host import Host
-from application.models.config import Config
+
+def get_rule_json(_view, _context, model, _name):
+    """
+    Export Given Rulesets
+    """
+    return model.to_json()
 
 
 class FilterHostnameRegex(BaseMongoEngineFilter):
@@ -86,7 +91,6 @@ def format_labels_export(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     labels = []
     for entry in m.labels:
-        print(entry.key, flush=True)
         labels.append(f"{entry.key}:{entry.value}")
     return Markup(", ".join(labels))
 
@@ -97,51 +101,6 @@ def format_inventory_export(v, c, m, p):
     for key, value in m.inventory.items():
         inventory.append(f"{key}:{value}")
     return Markup(", ".join(inventory))
-
-
-def get_export_colums():
-    """
-    Return list of columns to export
-    """
-    # BUG with MongoDB and Forks
-    columns = [
-        'hostname',
-    ]
-
-    # BUG with MongoDB and Forks
-    #try:
-    #    config = Config.objects.get()
-    #except DoesNotExist:
-    #    pass
-    #else:
-    #    columns += config.export_labels_list
-    #    columns += config.export_inventory_list
-
-    columns += [
-        'sync_id',
-        'source_account_name',
-        'available',
-    ]
-    return columns
-
-def get_export_values():
-    """
-    Dynamic fill needed fields
-    """
-    # BUG with MongoDB and Forks
-    return {}
-    try:
-        config = Config.objects.get()
-    except DoesNotExist:
-        return {}
-
-    functions = {}
-
-    for field in config.export_inventory_list:
-        functions[field] = lambda v, c, m, p: m.inventory.get(p)
-    for field in config.export_labels_list:
-        functions[field] = lambda v, c, m, p: m.get_labels().get(p)
-    return functions
 
 
 
@@ -158,6 +117,10 @@ class ObjectModelView(DefaultModelView):
        'hostname',
        'object_type',
     )
+
+    can_export = False
+    # False: Because it's a Host Model and therfore conflict
+
 
     def get_query(self):
         """
@@ -194,6 +157,15 @@ class ObjectModelView(DefaultModelView):
         'inventory': format_inventory,
     }
 
+    def get_export_name(self, _export_type):
+        """
+        Overwrite Filename
+        """
+        now = datetime.now()
+
+        dt_str = now.strftime("%Y%m%d%H%M")
+        return f"{self.model.__name__}_{dt_str}.syncer_json"
+
 
 class HostModelView(DefaultModelView):
     """
@@ -204,7 +176,13 @@ class HostModelView(DefaultModelView):
     can_view_details = True
     can_export = True
 
-    export_types = ['xlsx', 'csv']
+    export_types = ['syncer_rules',]
+
+    column_export_list = ('hostname', )
+
+    column_formatters_export = {
+        'hostname': get_rule_json
+    }
 
     column_extra_row_actions = [
         LinkRowAction("fa fa-rocket", app.config['BASE_PREFIX'] + \
@@ -254,8 +232,6 @@ class HostModelView(DefaultModelView):
     page_size = 25
     can_set_page_size = True
 
-    column_export_list = get_export_colums()
-    column_formatters_export = get_export_values()
 
     column_formatters = {
         'log': format_log,
@@ -281,6 +257,15 @@ class HostModelView(DefaultModelView):
     column_editable_list = (
         'force_update',
     )
+
+    def get_export_name(self, _export_type):
+        """
+        Overwrite Filename
+        """
+        now = datetime.now()
+
+        dt_str = now.strftime("%Y%m%d%H%M")
+        return f"{self.model.__name__}_{dt_str}.syncer_json"
 
     def __init__(self, model, **kwargs):
         """

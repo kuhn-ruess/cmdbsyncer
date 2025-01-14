@@ -19,7 +19,13 @@ from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
 
-VERSION = '3.8 Daily 13.01.2025'
+from application.helpers.tablib_formater import ExportObjects
+from tablib.formats import registry as tablib_registry
+
+tablib_registry.register('syncer_rules', ExportObjects())
+
+
+VERSION = '3.8 Daily 14.01.2025'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 
