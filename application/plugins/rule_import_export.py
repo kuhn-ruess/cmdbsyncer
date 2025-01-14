@@ -38,6 +38,9 @@ enabled_rules = {
     'netbox_ips': ('application.modules.netbox.models', 'NetboxIpamIpaddressattributes'),
     'netbox_vms': ('application.modules.netbox.models', 'NetboxVirtualMachineAttributes'),
     'netbox_cluster': ('application.modules.netbox.models', 'NetboxClusterAttributes'),
+    'netbox_contacts': ('application.modules.netbox.models', 'NetboxContactAttributes'),
+    'netbox_dataflow_models': ('application.modules.netbox.models', 'NetboxDataflowModels'),
+    'netbox_dataflow_fields': ('application.modules.netbox.models', 'NetboxDataflowAttributes'),
 }
 
 

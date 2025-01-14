@@ -1,6 +1,7 @@
 """
 Netbox Rule Views
 """
+from datetime import datetime
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import DjangoLexer
@@ -9,7 +10,7 @@ from markupsafe import Markup
 from wtforms import HiddenField, StringField
 
 from application.views.default import DefaultModelView
-from application.modules.rule.views import RuleModelView
+from application.modules.rule.views import RuleModelView, get_rule_json
 from application.modules.netbox.models import (netbox_outcome_types,
                                                netbox_ipam_ipaddress_outcome_types,
                                                netbox_device_interface_outcome_types,
@@ -160,3 +161,22 @@ class NetboxDataFlowModelView(DefaultModelView):
     """
     Custom Dataflow Model Model View :-)
     """
+
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
+
+    def get_export_name(self, export_type):
+        """
+        Overwrite Filename
+        """
+        now = datetime.now()
+
+        dt_str = now.strftime("%Y%m%d%H%M")
+        return f"{self.model.__name__}_{dt_str}.syncer_json"
