@@ -153,7 +153,11 @@ class SyncNetbox(Plugin):
                 continue
 
 
-            if current_obj:
+            if isinstance(current_obj, dict):
+                # This is the Case when the Dataflow Plugin is used,
+                # there we have no object but a dict.
+                current_field = current_obj.get(field)
+            elif current_obj:
                 logger.debug(f"A2 a) Have current_object: {current_obj}")
                 current_field = self.get_nested_attr(current_obj, field)
             else:
@@ -165,7 +169,7 @@ class SyncNetbox(Plugin):
             if not field_value or field_value == '':
                 logger.debug("A3) Field Undefied Fallback")
                 field_value = 'CMDB Syncer Not defined'
-            if field_data.get('is_list'):
+            if field_data.get('is_list') or isinstance(current_field, list):
                 logger.debug("A4) Is list field")
                 if not current_field:
                     current_field = []
@@ -193,32 +197,44 @@ class SyncNetbox(Plugin):
             update_fields['custom_fields'] = {}
 
             current_custom = None # Can be also None in getattr
-            if current_obj:
+            if isinstance(current_obj, dict):
+                # This is the Case when the Dataflow Plugin is used,
+                # there we have no object but a dict.
+                current_custom = current_obj.get('custom_fields', {})
+            elif current_obj:
                 current_custom = getattr(current_obj, "custom_fields")
             if not current_custom:
                 current_custom = {}
+
 
             for field, field_data in config['custom_fields'].items():
                 new_value = field_data['value']
 
                 try:
                     current_field = None
-                    if field in  current_custom:
+                    if field in current_custom:
                         current_field = current_custom[field]
+                    else:
+                        logger.debug(f"Field not found in {current_custom}")
 
                     if field_data.get('is_list'):
-                        current_field = []
-                        if int(new_value) not in [x['id'] for x in current_field]:
+                        if not current_field:
+                            current_field = []
+                        search_ids = [x['id'] for x in current_field]
+                        if int(new_value) not in search_ids:
                             # Maybe also for else:
-                            logger.debug(f"update_custom_list_field: {field}, {new_value}")
+                            logger.debug(f"upd_cst_list_field: {field}, {new_value}"\
+                                         f" not in {search_ids}")
                             current_field.append({'id': int(new_value)})
                             update_fields['custom_fields'][field] \
                                     = [{'id': x['id']} for x in current_field]
                     elif new_value != current_field:
-                        logger.debug(f"update_custom_field: {field}, {new_value} from {current_field}")
+                        logger.debug(f"update_custom_field: {field}, {new_value}"\
+                                     f" from {current_field}")
                         update_fields['custom_fields'][field] = new_value
                 except AttributeError:
                     logger.debug(f"Missing Custom Field: {field}")
             if not update_fields['custom_fields']:
                 del update_fields['custom_fields']
+        logger.debug(f"A7) Final Keys to update {update_fields}")
         return update_fields
