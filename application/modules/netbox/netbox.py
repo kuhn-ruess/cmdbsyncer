@@ -13,6 +13,8 @@ class SyncNetbox(Plugin):
     """
     Netbox Base Class
     """
+    set_syncer_id = False
+
 
     def __init__(self, account):
         """ INIT """
@@ -144,8 +146,16 @@ class SyncNetbox(Plugin):
         if not compare_ids:
             compare_ids = []
         update_fields = {}
+        update_fields['custom_fields'] = {}
         if not 'fields' in config:
             return {}
+        if self.set_syncer_id:
+            syncer_data = {'cmdbsyncer_id': {'value': str(self.account_id)}}
+            if 'custom_fields' not in config:
+                config['custom_fields'] = syncer_data
+            else:
+                config['custom_fields'].update(syncer_data)
+
         for field, field_data in config['fields'].items():
             field_value = field_data['value']
 
@@ -196,7 +206,6 @@ class SyncNetbox(Plugin):
                     update_fields[field] = field_value
 
         if config.get('custom_fields'):
-            update_fields['custom_fields'] = {}
 
             current_custom = {}
             if isinstance(current_obj, dict):
@@ -234,7 +243,7 @@ class SyncNetbox(Plugin):
                         update_fields['custom_fields'][field] = new_value
                 except AttributeError:
                     logger.debug(f"Missing Custom Field: {field}")
-            if not update_fields['custom_fields']:
-                del update_fields['custom_fields']
+        if not update_fields['custom_fields']:
+            del update_fields['custom_fields']
         logger.debug(f"A7) Final Keys to update {update_fields}")
         return update_fields

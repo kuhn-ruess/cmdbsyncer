@@ -70,15 +70,14 @@ class SyncDataFlow(SyncNetbox):
                 print(current_object)
                 raise
             # We don't wan't to have the ID in the update check
-            del current_object['id']
             if payload := self.get_update_keys(current_object, rule):
                 self.console(f"Update {identify_field_value}")
                 update_url = f'{api_url}{obj_id}/'
                 # It seams we need the full object here to do a update.
                 # So use the changes to update the current_object
+                current_object['custom_fields'].update(payload['custom_fields'])
                 current_object.update(payload)
                 self.inner_request("PUT", update_url, data=current_object, headers=self.headers)
-            current_object['id'] = obj_id
 
 
 
@@ -87,17 +86,17 @@ class SyncDataFlow(SyncNetbox):
         Parse Netbox Data into usable dict
         """
         out_dict = {}
-        allowed_fields = list(rule['fields'].keys())
-        allowed_fields.append('id')
-        allowed_custom_fields = list(rule['custom_fields'].keys())
+        #allowed_fields = list(rule['fields'].keys())
+        #allowed_fields.append('id')
+        #allowed_custom_fields = list(rule['custom_fields'].keys())
         for entry in model_data:
             field_name = entry[identify_field]
-            subset = {k:v for k,v in entry.items() if k in allowed_fields}
-            custom_fields = {k:v for k,v in entry['custom_fields'].items() \
-                            if k in allowed_custom_fields}
-            if custom_fields:
-                subset['custom_fields'] = custom_fields
-            out_dict[field_name] = subset
+            #subset = {k:v for k,v in entry.items() if k in allowed_fields}
+            #custom_fields = {k:v for k,v in entry['custom_fields'].items() \
+            #                if k in allowed_custom_fields}
+            #if entry['custom_fields']:
+            #    subset['custom_fields'] = entry['custom_fields']
+            out_dict[field_name] = entry
         return out_dict
 
     def process_model_data(self, model_name, model_data, rules):

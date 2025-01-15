@@ -19,6 +19,8 @@ class SyncVirtualMachines(SyncNetbox):
     """
     console = None
 
+    set_syncer_id = True
+
     @staticmethod
     def get_field_config():
         """
