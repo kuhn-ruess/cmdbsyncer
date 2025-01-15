@@ -47,6 +47,7 @@ class SyncNetbox(Plugin):
             return obj
         except AttributeError:
             logger.debug(f"Attribute Error: {obj} -> {attr_chain}")
+        return False
 
     @staticmethod
     def get_slug(name):
@@ -77,7 +78,8 @@ class SyncNetbox(Plugin):
             create_obj = {name_field: field_value}
             logger.debug(f"B1) Obj: {create_obj}, Type: {obj_type}")
             allow_default = sub_obj.get('allow_default_value', True)
-            if not allow_default and field_value == 'CMDB Syncer Not defined':
+            if not allow_default and field_value in ['CMDB Syncer Not defined',
+                                                     'Unkown', 'unkown', None]:
                 logger.debug("B1a) Ditched value since its a default")
                 return None
             if sub_obj['has_slug']:
@@ -144,7 +146,6 @@ class SyncNetbox(Plugin):
         update_fields = {}
         if not 'fields' in config:
             return {}
-        field_config = self.get_field_config()
         for field, field_data in config['fields'].items():
             field_value = field_data['value']
 
@@ -161,8 +162,6 @@ class SyncNetbox(Plugin):
                 logger.debug(f"A2 a) Have current_object: {current_obj}")
                 current_field = self.get_nested_attr(current_obj, field)
             else:
-                # In Case we create a new project, it still could be thats
-                # we have data from subfields here, therefore check for it:
                 logger.debug("A2 b) Dont Have current_object, check for subfield")
                 current_field = False
 
@@ -185,10 +184,13 @@ class SyncNetbox(Plugin):
                     current_field = new_field
                 if str(field_value).lower() != str(current_field).lower():
                     logger.debug(f'A6) {field}: {repr(current_field)} -> {repr(field_value)}')
+                    if field_value in ['Unkown', 'unkown', 'CMDB Syncer Not defined']:
+                        continue
                     field_value = self.get_name_or_id(field, field_value, config)
                     #pylint: disable=singleton-comparison
                     if field_value == False:
                         continue
+                    print(field_value)
                     if '.' in field:
                         field = field.split('.')[0]
                     update_fields[field] = field_value
@@ -196,15 +198,13 @@ class SyncNetbox(Plugin):
         if config.get('custom_fields'):
             update_fields['custom_fields'] = {}
 
-            current_custom = None # Can be also None in getattr
+            current_custom = {}
             if isinstance(current_obj, dict):
                 # This is the Case when the Dataflow Plugin is used,
                 # there we have no object but a dict.
                 current_custom = current_obj.get('custom_fields', {})
             elif current_obj:
                 current_custom = getattr(current_obj, "custom_fields")
-            if not current_custom:
-                current_custom = {}
 
 
             for field, field_data in config['custom_fields'].items():
