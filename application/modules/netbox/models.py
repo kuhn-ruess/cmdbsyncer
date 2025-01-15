@@ -428,6 +428,10 @@ class NetboxDataflowAttributes(db.Document):
     }
 
 
+data_flow_models = [
+    ('applications', 'Applications'),
+]
+
 class NetboxDataflowModels(db.Document):
     """
     Netbox Dataflow Setttings
@@ -435,7 +439,7 @@ class NetboxDataflowModels(db.Document):
     name = db.StringField(max_length=120)
     documentation = db.StringField()
 
-    used_dataflow_model = db.StringField(max_length=120)
+    used_dataflow_model = db.StringField(choices=data_flow_models)
     connected_rules = db.ListField(field=\
             db.ReferenceField(document_type=NetboxDataflowAttributes,
                               reverse_delete_rule=CASCADE))
