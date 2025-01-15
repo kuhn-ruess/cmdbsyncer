@@ -16,6 +16,7 @@ class SyncDevices(SyncNetbox):
     """
 
     console = None
+    set_syncer_id = True
 
     @staticmethod
     def get_field_config():
@@ -88,6 +89,7 @@ class SyncDevices(SyncNetbox):
         """
         #pylint: disable=too-many-locals
         current_netbox_devices = self.nb.dcim.devices
+
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)

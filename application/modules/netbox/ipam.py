@@ -52,6 +52,7 @@ class SyncIPAM(SyncNetbox):
                     continue
                 cfg_ips = self.get_host_data(db_object, all_attributes['all'])
                 if 'ips' not in cfg_ips:
+                    progress.advance(task1)
                     continue
                     
                 for cfg_ip in cfg_ips['ips']:
