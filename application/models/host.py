@@ -2,6 +2,8 @@
 Host Model
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
+# pylint: disable=logging-fstring-interpolation
+import re
 import datetime
 from mongoengine.errors import DoesNotExist
 from application import db, app, logger
@@ -60,6 +62,18 @@ class Host(db.Document):
         'strict': False,
     }
 
+
+    def is_valid_hostname(self):
+        """
+        Validate that the Hostname of the object is valid
+        """
+        if len(self.hostname) > 253:
+            return False
+
+        hostname_regex = \
+                re.compile(r'^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$')
+
+        return bool(hostname_regex.fullmatch(self.hostname))
 
 
     @staticmethod
@@ -313,6 +327,12 @@ class Host(db.Document):
             account_name = account_dict['name']
             is_object = account_dict.get('is_object', False)
             self.object_type = account_dict.get('object_type', 'undefined')
+
+        if self.object_type == 'host':
+            if not self.is_valid_hostname():
+                raise HostError(f"{self.hostname} is not a valid Hostname,"
+                                   "but object type for import is set to host")
+
 
         self.is_object = is_object
 
