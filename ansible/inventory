@@ -1,2 +1,2 @@
 #!/bin/sh
-../cmdbsyncer ansible source $1 $2
+../cmdbsyncer ansible source $1 $2 2>/dev/null
