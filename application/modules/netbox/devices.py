@@ -163,20 +163,25 @@ class SyncDevices(SyncNetbox):
         """
 
         for device in self.nb.dcim.devices.all():
-            hostname = device.name
-            if not hostname:
-                continue
-            labels = device.__dict__
-            for what in ['has_details', 'api',
-                         'default_ret', 'endpoint',
-                         '_full_cache', '_init_cache']:
-                del labels[what]
-            if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], labels)
-            host_obj = Host.get_host(hostname)
-            print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
-            host_obj.update_host(labels)
-            do_save = host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
+            try:
+                hostname = device.name
+                if not hostname:
+                    continue
+                labels = device.__dict__
+                for what in ['has_details', 'api',
+                             'default_ret', 'endpoint',
+                             '_full_cache', '_init_cache']:
+                    del labels[what]
+                if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
+                    hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], labels)
+                host_obj = Host.get_host(hostname)
+                print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
+                host_obj.update_host(labels)
+                do_save = host_obj.set_account(account_dict=self.config)
+                if do_save:
+                    host_obj.save()
+            except Exception as error:
+                if self.debug:
+                    raise
+                self.log_details.append((f'import_error {hostname}', str(error)))
 #.

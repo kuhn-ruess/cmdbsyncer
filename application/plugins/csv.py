@@ -87,25 +87,28 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
     with open(csv_path, newline='', encoding=encoding) as csvfile:
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for row in reader:
-            hostname = row[hostname_field].strip()
-            keys = list(row.keys())
-            for dkey in keys:
-                if not row[dkey]:
-                    del row[dkey]
-            if 'rewrite_hostname' in account and account['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], row)
-            print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
-            host_obj = Host.get_host(hostname)
-            del row[hostname_field]
-            host_obj.update_host(row)
-            if account:
-                do_save = host_obj.set_account(account_dict=account)
-            else:
-                do_save = True
-                host_obj.set_account(f"csv_{filename}", filename)
+            try:
+                hostname = row[hostname_field].strip()
+                keys = list(row.keys())
+                for dkey in keys:
+                    if not row[dkey]:
+                        del row[dkey]
+                if 'rewrite_hostname' in account and account['rewrite_hostname']:
+                    hostname = Host.rewrite_hostname(hostname, account['rewrite_hostname'], row)
+                print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
+                host_obj = Host.get_host(hostname)
+                del row[hostname_field]
+                host_obj.update_host(row)
+                if account:
+                    do_save = host_obj.set_account(account_dict=account)
+                else:
+                    do_save = True
+                    host_obj.set_account(f"csv_{filename}", filename)
 
-            if do_save:
-                host_obj.save()
+                if do_save:
+                    host_obj.save()
+            except Exception as error:
+                print(f"Error: {error}")
 
 @_cli_csv.command('import_hosts')
 @click.argument("csv_path", default="")
