@@ -200,7 +200,6 @@ class SyncNetbox(Plugin):
                     #pylint: disable=singleton-comparison
                     if field_value == False:
                         continue
-                    print(field_value)
                     if '.' in field:
                         field = field.split('.')[0]
                     update_fields[field] = field_value
