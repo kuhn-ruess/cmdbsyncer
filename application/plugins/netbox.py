@@ -15,12 +15,13 @@ from application.modules.netbox.models import *
 from application.modules.netbox.rules import *
 
 from application.modules.netbox.devices import SyncDevices
-from application.modules.netbox.ipam import SyncIPAM
+from application.modules.netbox.ips import SyncIPS
 from application.modules.netbox.interfaces import SyncInterfaces, SyncVirtInterfaces
 from application.modules.netbox.contacts import SyncContacts
 from application.modules.netbox.dataflow import SyncDataFlow
 from application.modules.netbox.cluster import SyncCluster
 from application.modules.netbox.virtualmachines import SyncVirtualMachines
+from application.modules.netbox.prefixes import SyncPrefixes
 from application.modules.debug import attribute_table
 
 from syncerapi.v1 import (
@@ -227,15 +228,15 @@ def netbox_ip_sync(account, debug=False, debug_rules=False):
                 NetboxIpamIpaddressattributes.objects(enabled=True).order_by('sort_field')
 
         if not debug_rules:
-            syncer = SyncIPAM(account)
+            syncer = SyncIPS(account)
             syncer.debug = debug
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
-            syncer.name = "Netbox: IPs Devices"
-            syncer.source = "netbox_ipam_export"
+            syncer.name = "Netbox: Update IPs"
+            syncer.source = "netbox_ipam_ip_export"
             syncer.sync_ips()
         else:
-            syncer = SyncIPAM(False)
+            syncer = SyncIPS(False)
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
@@ -252,6 +253,47 @@ def cli_netbox_ip_syn(account, debug, debug_rules):
     """Export IPAM IPs"""
     netbox_ip_sync(account, debug, debug_rules)
 register_cronjob("Netbox: Update IPs", netbox_ip_sync)
+#.
+#   .-- Command: Export Prefixes
+def netbox_prefix_sync(account, debug=False, debug_rules=False):
+    """Export Prefixes to Netbox"""
+    try:
+        attribute_rewrite = Rewrite()
+        attribute_rewrite.cache_name = 'netbox_rewrite'
+
+        attribute_rewrite.rules = \
+                NetboxRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+
+        netbox_rules = NetboxIpamPrefixRule()
+        netbox_rules.rules = \
+                NetboxIpamPrefixAttributes.objects(enabled=True).order_by('sort_field')
+
+        if not debug_rules:
+            syncer = SyncPrefixes(account)
+            syncer.debug = debug
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.name = "Netbox: Update Prefixes"
+            syncer.source = "netbox_ipam_prefix_export"
+            syncer.sync_prefixes()
+        else:
+            syncer = SyncPrefixes(False)
+            syncer.rewrite = attribute_rewrite
+            syncer.actions = netbox_rules
+            syncer.debug_rules(debug_rules, 'Netbox')
+    except Exception as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('export_prefixes')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
+@click.argument("account")
+def cli_netbox_prefix_syn(account, debug, debug_rules):
+    """Export IPAM IPs"""
+    netbox_prefix_sync(account, debug, debug_rules)
+register_cronjob("Netbox: Update Prefixes", netbox_prefix_sync)
 #.
 #   .-- Command: Export Interfaces
 def netbox_interface_sync(account, debug=False, debug_rules=False):

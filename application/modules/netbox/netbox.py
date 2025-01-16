@@ -1,8 +1,12 @@
 """
 Central Brain for Netbox Operations
 """
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
+
 from application.modules.plugin import Plugin
+from application.models.host import Host
 from application import logger
+
 try:
     import pynetbox
     from slugify import slugify
@@ -15,7 +19,7 @@ class SyncNetbox(Plugin):
     """
     set_syncer_id = False
 
-
+#   . -- Init
     def __init__(self, account):
         """ INIT """
         self.console = print # Fallback
@@ -28,7 +32,8 @@ class SyncNetbox(Plugin):
             if 'true' in self.config.get('verify_cert', 'true').lower():
                 verify = True
             self.nb.http_session.verify = verify
-
+#.
+#   . -- Helpers
     @staticmethod
     def get_field_config():
         """
@@ -57,7 +62,8 @@ class SyncNetbox(Plugin):
         Return Slag Version of String
         """
         return slugify(name)
-
+#.
+#   . -- Get Name or ID
     def get_name_or_id(self, field, field_value, config):
         """
         Get Netbox Object ID of given Object
@@ -137,7 +143,8 @@ class SyncNetbox(Plugin):
         # It's no reference, so direct value return
         logger.debug(f"B11) Returning original Value {field_value}")
         return field_value
-
+#.
+#   . -- Get Update Keys
 
     def get_update_keys(self, current_obj, config, compare_ids=False):
         """
@@ -246,3 +253,67 @@ class SyncNetbox(Plugin):
             del update_fields['custom_fields']
         logger.debug(f"A7) Final Keys to update {update_fields}")
         return update_fields
+#.
+#   . -- Generic Netbox Synncer Function
+
+    def sync_generic(self, what, current_objects, name_field):
+        """
+        Generic Sync Function
+        for Modules without special Need
+        """
+
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
+        total = db_objects.count()
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            self.console = progress.console.print
+            task1 = progress.add_task(f"Updating Data for {what}", total=total)
+
+
+            for db_object in db_objects:
+                hostname = db_object.hostname
+                try:
+                    all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
+                    if not all_attributes:
+                        progress.advance(task1)
+                        continue
+                    cfg = self.get_host_data(db_object, all_attributes['all'])
+                    if not cfg:
+                        progress.advance(task1)
+                        continue
+
+                    if cfg.get('ignore'):
+                        progress.advance(task1)
+                        continue
+
+                    object_name = cfg['fields'][name_field]['value']
+                    if not object_name:
+                        progress.advance(task1)
+                        continue
+                    query = {
+                        name_field:  object_name,
+                    }
+                    logger.debug(f"Filter Query: {query}")
+                    if current_object := current_objects.get(**query):
+                        if payload := self.get_update_keys(current_object, cfg):
+                            self.console(f"* Update {what}: {object_name} {payload}")
+                            current_object.update(payload)
+                        else:
+                            self.console(f"* {what} {object_name} already up to date")
+                    else:
+                        ### Create
+                        self.console(f"* Create {what} {object_name}")
+                        payload = self.get_update_keys(False, cfg)
+                        logger.debug(f"Create Payload: {payload}")
+                        current_object = current_objects.create(payload)
+
+                except Exception as error:
+                    if self.debug:
+                        raise
+                    self.log_details.append((f'export_error {hostname}', str(error)))
+                    print(f" Error in process: {error}")
+
+                progress.advance(task1)

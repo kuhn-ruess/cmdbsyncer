@@ -26,8 +26,7 @@ def cmk_cleanup_tag_value(input_str):
 
 def cmk_cleanup_hostname(input_str):
     """
-    Cleans Invalid Chars out
-    of strings you wan't to use as tag_id in cmk
+    Cleans Invalid Chars out of Hostnames
     """
     if app.config['CMK_JINJA_USE_REPLACERS_FOR_HOSTNAMES']:
         for needle, replacer in app.config['REPLACERS']:

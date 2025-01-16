@@ -293,6 +293,7 @@ from application.modules.netbox.models import (
                                             NetboxDataflowModels,
                                             NetboxClusterAttributes,
                                             NetboxVirtualMachineAttributes,
+                                            NetboxIpamPrefixAttributes,
                                             NetboxVirtualizationInterfaceAttributes,
                                         )
 admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
@@ -304,6 +305,8 @@ admin.add_view(NetboxCustomAttributesView(NetboxDcimInterfaceAttributes,\
         name="DCIM: Interfaces", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
         name="IPAM: IP Addresses", category="Netbox"))
+admin.add_view(NetboxCustomAttributesView(NetboxIpamPrefixAttributes,\
+        name="IPAM: Prefix", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxClusterAttributes,\
         name="Virtualization: Cluster", category="Netbox"))
 admin.add_view(NetboxCustomAttributesView(NetboxVirtualMachineAttributes,\

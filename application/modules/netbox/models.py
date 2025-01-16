@@ -230,6 +230,50 @@ class NetboxIpamIpaddressattributes(db.Document):
         'strict': False
     }
 #.
+#   . -- IPAM Prefix
+netbox_prefix_outcome_types = [
+  ("prefix", "Prefix eg. 172.30.180.0/24"),
+  ("status", "Status like: active or decommissioning"),
+  ("description", "Description"),
+]
+
+class NetboxIpamPrefixOutcome(db.EmbeddedDocument):
+    """
+    Outcome
+    """
+    action = db.StringField(choices=netbox_prefix_outcome_types)
+    param = db.StringField()
+    #use_list_variable = db.BooleanField()
+    #list_variable_name = db.StringField(max_length=120)
+
+    meta = {
+        'strict': False,
+    }
+
+class NetboxIpamPrefixAttributes(db.Document):
+    """
+    Define Rule based Prefixes
+    """
+
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
+    render_full_conditions = db.StringField() # Helper for preview
+
+    outcomes =\
+        db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxIpamPrefixOutcome'))
+    render_netbox_outcome = db.StringField() # Helper for preview
+
+    last_match = db.BooleanField(default=False)
+
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+    meta = {
+        'strict': False
+    }
+#.
 #   . -- Interfaces
 netbox_device_interface_outcome_types = [
         ('device', '* Name of Assigned Device'),
@@ -349,7 +393,7 @@ netbox_contact_outcome_types = [
     ('address', 'Address'),
     ('description', 'Description'),
     ('group', 'Contacts Groupname'),
-    ('ignore_contact', 'Ignore matching objects for sync'),
+    ('ignore', 'Ignore matching objects for sync'),
 ]
 class NetboxContactOutcome(db.EmbeddedDocument):
     """

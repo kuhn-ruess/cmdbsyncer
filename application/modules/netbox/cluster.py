@@ -37,52 +37,6 @@ class SyncCluster(SyncNetbox):
         """
         Update Devices Table in Netbox
         """
-        object_filter = self.config['settings'].get(self.name, {}).get('filter')
-        db_objects = Host.objects_by_filter(object_filter)
-        total = db_objects.count()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
-            self.console = progress.console.print
-            task1 = progress.add_task("Updating Cluster", total=total)
-
-            current_netbox_clusters = self.nb.virtualization.clusters
-
-            for db_object in db_objects:
-                hostname = db_object.hostname
-                try:
-                    all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
-                    if not all_attributes:
-                        progress.advance(task1)
-                        continue
-                    cfg_cluster = self.get_host_data(db_object, all_attributes['all'])
-                    if not cfg_cluster:
-                        continue
-
-                    cluster_name = cfg_cluster['fields']['name']['value']
-                    cluster_query = {
-                        'name': cluster_name,
-                    }
-                    logger.debug(f"Cluster Filter Query: {cluster_query}")
-                    if cluster := current_netbox_clusters.get(**cluster_query):
-                        if payload := self.get_update_keys(cluster, cfg_cluster):
-                            self.console(f"* Update Cluster: {cluster_name} {payload}")
-                            cluster.update(payload)
-                        else:
-                            self.console(f"* Cluster {cluster_name} already up to date")
-                    else:
-                        ### Create
-                        self.console(f"* Create Cluster {cluster_name}")
-                        payload = self.get_update_keys(False, cfg_cluster)
-                        logger.debug(f"Create Payload: {payload}")
-                        cluster = self.nb.virtualization.clusters.create(payload)
-
-                except Exception as error:
-                    if self.debug:
-                        raise
-                    self.log_details.append((f'export_error {hostname}', str(error)))
-                    print(f" Error in process: {error}")
-
-                progress.advance(task1)
+        current_netbox_clusters = self.nb.virtualization.clusters
+        self.sync_generic('Cluster', current_netbox_clusters, 'name')
 #.
