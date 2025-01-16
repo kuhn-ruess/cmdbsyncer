@@ -90,7 +90,6 @@ class SyncDevices(SyncNetbox):
         #pylint: disable=too-many-locals
         current_netbox_devices = self.nb.dcim.devices
 
-
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
@@ -148,11 +147,14 @@ class SyncDevices(SyncNetbox):
                     attr_name = f"{self.config['name']}_device_id"
                     db_host.set_inventory_attribute(attr_name, device.id)
 
-        #print(f"\n{CC.OKGREEN} -- {CC.ENDC}Cleanup")
-        #for device in current_netbox_devices.all():
-        #    if device.name not in found_hosts:
-        #        print(f"{CC.OKBLUE} *{CC.ENDC} Delete {device.name}")
-        #        device.delete()
+            task2 = progress.add_task("Cleanup netbox", total=None)
+            for device in current_netbox_devices.filter(cf_cmdbsyncer_id=str(self.account_id)):
+                if str(device.status) == 'Decommissioning':
+                    continue
+                if device.name not in found_hosts:
+                    self.console(f"* Set Inactive for {device.name}")
+                    device.update({"status": 'decommissioning'})
+                    progress.advance(task2)
 #.
 #   .--- Import Devices
     def import_hosts(self):

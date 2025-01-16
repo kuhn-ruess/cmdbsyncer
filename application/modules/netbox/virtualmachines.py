@@ -96,7 +96,7 @@ class SyncVirtualMachines(SyncNetbox):
             task1 = progress.add_task("Updating Objects", total=total)
 
             current_nb_objects = self.nb.virtualization.virtual_machines
-
+            found_hosts = []
             for db_object in db_objects:
                 hostname = db_object.hostname
                 try:
@@ -116,6 +116,7 @@ class SyncVirtualMachines(SyncNetbox):
                         'name': object_name,
                     }
                     logger.debug(f"Object Filter Query: {query}")
+                    found_hosts.append(hostname)
                     if current_obj := current_nb_objects.get(**query):
                         if payload := self.get_update_keys(current_obj, cfg,
                                                            ['primary_ip4', 'primary_ip6']):
@@ -140,6 +141,15 @@ class SyncVirtualMachines(SyncNetbox):
                     db_object.set_inventory_attribute(attr_name, current_obj.id)
 
                 progress.advance(task1)
+
+            task2 = progress.add_task("Cleanup netbox", total=None)
+            for vm in current_nb_objects.filter(cf_cmdbsyncer_id=str(self.account_id)):
+                if str(vm.status) == 'Decommissioning':
+                    continue
+                if vm.name not in found_hosts:
+                    self.console(f"* Set Decommissioning for {vm.name}")
+                    vm.update({"status": 'decommissioning'})
+                    progress.advance(task2)
 #.
     def import_hosts(self):
         """
