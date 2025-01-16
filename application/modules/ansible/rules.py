@@ -4,6 +4,7 @@ Ansible Rules
 """
 from application.modules.rule.rule import Rule
 from application.helpers.get_account import get_account_variable
+from application.helpers.syncer_jinja import render_jinja
 
 class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
     """
@@ -24,5 +25,7 @@ class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
                     attr_value = get_account_variable(attr_value)
                 except ValueError:
                     pass
-            outcomes[outcome['attribute_name']] = attr_value
+            new_value  = render_jinja(attr_value, mode="nullify",
+                                     HOSTNAME=self.hostname, **self.attributes).strip()
+            outcomes[outcome['attribute_name']] = new_value
         return outcomes
