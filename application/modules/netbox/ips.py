@@ -8,7 +8,7 @@ from application.modules.netbox.netbox import SyncNetbox
 from application.models.host import Host
 
 
-class SyncIPAM(SyncNetbox):
+class SyncIPS(SyncNetbox):
     """
     IP Syncer
     """

@@ -3,11 +3,10 @@
 Netbox Rules
 """
 #pylint: disable=too-few-public-methods
-import ast
 from application.modules.rule.rule import Rule
 from application.helpers.syncer_jinja import render_jinja
 
-#DcimInterfaceAttributes   . -- Devices
+#   . -- Devices
 class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
     """
     Add custom Variables for Netbox Devices
@@ -58,7 +57,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
 
         return outcomes
 #.
-#   . Cluster Rule
+#   . -- Cluster Rule
 class NetboxCluserRule(Rule):# pylint: disable=too-few-public-methods
     """
     Add custom Variables for Cluster
@@ -101,7 +100,7 @@ class NetboxCluserRule(Rule):# pylint: disable=too-few-public-methods
 
         return outcomes
 #.
-#   . Virutal Machines
+#   .-- Virutal Machines
 class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
     """
     Add custom Variables for Virutal Machines
@@ -193,6 +192,46 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
                 outcomes['ips'].append({'fields': outcome_object,
                                                'sub_fields': outcome_subfields_object,
                                                'ignore_list': ignored_ips,
+                                               'by_rule': rule_name})
+        return outcomes
+#.
+#   . -- IPAM Prefixes
+class NetboxIpamPrefixRule(NetboxVariableRule):
+    """
+    Rules for IPAM Prefixes
+    """
+    name = "Netbox -> IPAM Prefixes"
+
+
+    def add_outcomes(self, rule, rule_outcomes, outcomes):
+        """
+        Filter if labels match to a rule
+        """
+        # pylint: disable=too-many-nested-blocks
+        outcomes.setdefault('prefixes', [])
+        sub_fields = [
+        ]
+        outcome_object = {}
+        outcome_subfields_object = {}
+        rule_name = rule['name']
+
+        outcome_selection, _ignorelist =\
+                self.get_multilist_outcomes(rule_outcomes, False)
+
+        for entry in outcome_selection:
+            outcome_object = {}
+            outcome_subfields_object = {}
+            for key, value in entry.items():
+                value = value.strip()
+                if key in sub_fields:
+                    outcome_subfields_object[key] = {'value': value}
+                else:
+                    outcome_object[key] = {'value': value}
+
+
+            if outcome_object:
+                outcomes['prefixes'].append({'fields': outcome_object,
+                                               'sub_fields': outcome_subfields_object,
                                                'by_rule': rule_name})
         return outcomes
 #.
