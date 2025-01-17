@@ -38,18 +38,18 @@ class Rewrite(Rule):
         new_value = old_value
         if value_mode := outcome['overwrite_value']:
             # Default in case of String
-            new_value = outcome['new_value']
-            if value_mode == 'split':
-                what, index = new_value.split(':')
-                try:
-                    splited = old_value.split(what)
-                    new_value = splited[int(index)]
-                except (IndexError, TypeError):
-                    logger.debug("Cant Split Value, old one returned")
-                    return old_value
-            elif value_mode == 'jinja':
-                new_value = render_jinja(new_value, mode="nullify",
-                                         HOSTNAME=self.hostname, **self.attributes)
+            if  new_value := outcome.get('new_value'):
+                if value_mode == 'split':
+                    what, index = new_value.split(':')
+                    try:
+                        splited = old_value.split(what)
+                        new_value = splited[int(index)]
+                    except (IndexError, TypeError):
+                        logger.debug("Cant Split Value, old one returned")
+                        return old_value
+                elif value_mode == 'jinja':
+                    new_value = render_jinja(new_value, mode="nullify",
+                                             HOSTNAME=self.hostname, **self.attributes)
         return new_value
 
     def get_list_for_attribute(self, attribute_name, template):

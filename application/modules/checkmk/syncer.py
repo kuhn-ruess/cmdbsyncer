@@ -89,9 +89,9 @@ class SyncCMK2(CMK2):
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Fetching Current Folders", start=False)
             api_folders = self.request(url, method="GET")
-            progress.update(task1, total=len(api_folders), start=True)
             if not api_folders[0]:
                 raise CmkException("Cant connect or auth with CMK")
+            progress.update(task1, total=len(api_folders[0]['value']), start=True)
             for folder in api_folders[0]['value']:
                 progress.update(task1, advance=1)
                 path = folder['extensions']['path']
@@ -195,7 +195,7 @@ class SyncCMK2(CMK2):
             task1 = progress.add_task("Fetching Hosts", start=False)
             progress.console.print("Waiting for Checkmk Response")
             api_hosts = self.request(url, method="GET")
-            progress.update(task1, total=len(api_hosts), start=True)
+            progress.update(task1, total=len(api_hosts[0]['value']), start=True)
             for host in api_hosts[0]['value']:
                 self.checkmk_hosts[host['id']] = host
                 progress.update(task1, advance=1)
@@ -505,11 +505,13 @@ class SyncCMK2(CMK2):
                 progress.console.print("Waiting for Calculation to finish")
                 for task in tasks:
                     try:
-                        task.get(timeout=5)
+                        task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
                         progress.console.print("- ERROR: Timout for a object")
-                    except Exception:
-                        progress.console.print(f"- ERROR: Timout error for object ({Exception})")
+                    except Exception as error:
+                        if self.debug:
+                            raise
+                        progress.console.print(f"- ERROR: Timout error for object ({error})")
                 pool.close()
                 pool.join()
 

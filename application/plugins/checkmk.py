@@ -103,11 +103,12 @@ def show_labels():
         print(f"{key}:{value}")
 #.
 #   .-- Command: Export Hosts
-def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False):
+def _inner_export_hosts(account, limit=False, debug=False, dry_run=False, save_requests=False):
     try:
         rules = _load_rules()
         syncer = SyncCMK2(account)
         syncer.dry_run = dry_run
+        syncer.debug = debug
         syncer.save_requests = save_requests
         if limit:
             syncer.config['limit_by_hostnames'] = limit
@@ -119,6 +120,8 @@ def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False
         syncer.source = "cmk_host_sync"
         syncer.run()
     except Exception as error_obj:
+        if debug:
+            raise
         log.log(f"Export to Checkmk Account: {account} maybe not found FAILED",
         source="checkmk_host_export", details=[('error', str(error_obj))])
         print(f'{ColorCodes.FAIL}CMK Connection Error: {error_obj} {ColorCodes.ENDC}')
@@ -127,10 +130,10 @@ def _inner_export_hosts(account, limit=False, dry_run=False, save_requests=False
 @cli_cmk.command('export_hosts')
 @click.argument("account")
 @click.option("--limit", default='')
-#@click.option("--debug", default=False, is_flag=True)
+@click.option("--debug", default=False, is_flag=True)
 @click.option("--dry-run", default=False, is_flag=True)
 @click.option("--save-requests", default='')
-def export_hosts(account, limit, dry_run, save_requests):
+def export_hosts(account, limit, debug, dry_run, save_requests):
     """
     Export Hosts to Checkmk
 
@@ -142,7 +145,7 @@ def export_hosts(account, limit, dry_run, save_requests):
         limit (list): Comma separted list of Hosts
     """
 
-    _inner_export_hosts(account, limit, dry_run, save_requests)
+    _inner_export_hosts(account, limit, debug, dry_run, save_requests)
 #.
 #   .-- Command: Host Debug
 
