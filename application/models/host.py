@@ -156,7 +156,7 @@ class Host(db.Document):
         if current_value := self.labels.get(key):
             if current_value == value:
                 return
-        self.labels[key] = str(value).strip()
+        self.labels[key] = value
         self.cache = {}
 
     def update_host(self, labels):
@@ -192,7 +192,7 @@ class Host(db.Document):
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
-        new_labels =dict({self._fix_key(x):str(y).strip() for x, y in label_dict.items()})
+        new_labels =dict({self._fix_key(x):y for x, y in label_dict.items()})
         if new_labels != self.labels:
             self.add_log(f"Label Change: {self.labels} to {new_labels}")
             self.labels = new_labels
@@ -263,7 +263,11 @@ class Host(db.Document):
         if not new_data:
             update_dict = {}
         else:
-            update_dict = {f"{key}__{self._fix_key(x)}":str(y).strip() for x, y in new_data.items()}
+            update_dict = {
+                f"{key}__{self._fix_key(x)}": y
+                for x, y in new_data.items()
+                if y
+            }
         # We always set that, because we deleted before all with the key
         self.inventory.update(update_dict)
 
