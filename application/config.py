@@ -117,6 +117,8 @@ class BaseConfig():
     CMK_JINJA_USE_REPLACERS = False
     CMK_JINJA_USE_REPLACERS_FOR_HOSTNAMES = False
 
+    PROCESS_TIMEOUT = 15
+
 class ProductionConfig(BaseConfig):
     """
     Production Configuration.
