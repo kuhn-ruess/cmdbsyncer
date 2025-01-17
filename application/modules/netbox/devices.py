@@ -27,9 +27,7 @@ class SyncDevices(SyncNetbox):
             'manufacturer': {
                 'type': 'dcim.manufacturers',
                 'has_slug' : True,
-            },
-            'model': {
-                'type': 'string',
+                #'sub_fields' : ['manufacturer'],
             },
             'site': {
                 'type': 'dcim.sites',
@@ -38,7 +36,7 @@ class SyncDevices(SyncNetbox):
             'device_type': {
                 'type': 'dcim.device-types',
                 'has_slug': True,
-                'sub_fields' : ['model', 'manufacturer'],
+                'sub_fields' : ['manufacturer', 'model'],
             },
             'role': {
                 'type': 'dcim.device-roles',

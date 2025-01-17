@@ -20,7 +20,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
         """
         # pylint: disable=too-many-nested-blocks
         sub_values = [
-            'model'
+            'model',
         ]
         outcomes.setdefault('fields', {})
         outcomes.setdefault('custom_fields', {})
@@ -54,7 +54,6 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                     outcomes['sub_fields'][field] = {'value': new_value.strip()}
                 else:
                     outcomes['fields'][field] = {'value': new_value.strip()}
-
         return outcomes
 #.
 #   . -- Cluster Rule

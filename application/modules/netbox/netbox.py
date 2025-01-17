@@ -150,6 +150,7 @@ class SyncNetbox(Plugin):
         """
         Get Keys which need a Update
         """
+        logger.debug(f"A0) Working with {config}")
         if not compare_ids:
             compare_ids = []
         update_fields = {}
@@ -201,7 +202,7 @@ class SyncNetbox(Plugin):
                     current_field = new_field
                 if str(field_value).lower() != str(current_field).lower():
                     logger.debug(f'A6) {field}: {repr(current_field)} -> {repr(field_value)}')
-                    if field_value in ['Unkown', 'unkown', 'CMDB Syncer Not defined']:
+                    if field_value in ['Unkown', 'unkown', 'CMDB Syncer Not defined'] and current_field:
                         continue
                     field_value = self.get_name_or_id(field, field_value, config)
                     #pylint: disable=singleton-comparison
@@ -254,7 +255,7 @@ class SyncNetbox(Plugin):
         logger.debug(f"A7) Final Keys to update {update_fields}")
         return update_fields
 #.
-#   . -- Generic Netbox Synncer Function
+#   . -- Generic Netbox Syncer Function
 
     def sync_generic(self, what, current_objects, name_field):
         """
