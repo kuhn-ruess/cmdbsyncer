@@ -39,7 +39,8 @@ def match(value, needle, condition, negate=False):
             value = make_bool(value)
             needle = make_bool(needle)
         else:
-            value = str(value).lower()
+            if isinstance(value, str):
+                value = str(value).lower()
             needle = str(needle).lower()
 
         if negate:
@@ -56,14 +57,14 @@ def match(value, needle, condition, negate=False):
                 if value not in [x.strip() for x in needle.split(',')]:
                     return True
             elif condition == 'swith':
-                if not value.startswith(needle):
+                if not str(value).startswith(needle):
                     return True
             elif condition == 'ewith':
-                if not value.endswith(needle):
+                if not str(value).endswith(needle):
                     return True
             elif condition == 'regex':
                 pattern = re.compile(needle) #@TODO Cache
-                if not pattern.match(value):
+                if not pattern.match(str(value)):
                     return True
             elif condition == 'bool':
                 if needle != value:
@@ -84,14 +85,14 @@ def match(value, needle, condition, negate=False):
             if value in [x.strip() for x in needle.split(',')]:
                 return True
         elif condition == 'swith':
-            if value.startswith(needle):
+            if str(value).startswith(needle):
                 return True
         elif condition == 'ewith':
-            if value.endswith(needle):
+            if str(value).endswith(needle):
                 return True
         elif condition == 'regex':
             pattern = re.compile(needle)
-            if pattern.match(value):
+            if pattern.match(str(value)):
                 return True
         elif condition == 'bool':
             if needle == value:
