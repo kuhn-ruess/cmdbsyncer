@@ -263,11 +263,17 @@ class Host(db.Document):
         if not new_data:
             update_dict = {}
         else:
-            update_dict = {
-                f"{key}__{self._fix_key(x)}": y
-                for x, y in new_data.items()
-                if y
-            }
+            if app.config['LABELS_IMPORT_EMPTY']:
+                update_dict = {
+                    f"{key}__{self._fix_key(x)}": y
+                    for x, y in new_data.items()
+                }
+            else:
+                update_dict = {
+                    f"{key}__{self._fix_key(x)}": y
+                    for x, y in new_data.items()
+                    if y
+                }
         # We always set that, because we deleted before all with the key
         self.inventory.update(update_dict)
 
