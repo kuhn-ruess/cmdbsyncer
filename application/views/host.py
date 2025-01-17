@@ -45,6 +45,17 @@ class FilterLabelKey(BaseMongoEngineFilter):
     def operation(self):
         return "exists"
 
+class FilterInventoryKey(BaseMongoEngineFilter):
+    """
+    Filter for Inventory Key
+    """
+
+    def apply(self, query, value):
+        return query.filter(__raw__={f'inventory.{value}': {'$exists': True}})
+
+    def operation(self):
+        return "exists"
+
 def format_log(v, c, m, p):
     """ Format Log view"""
     # pylint: disable=invalid-name, unused-argument
@@ -221,6 +232,10 @@ class HostModelView(DefaultModelView):
        FilterLabelKey(
         Host,
         "Label Key"
+       ),
+       FilterInventoryKey(
+        Host,
+        "Inventory Key"
        ),
     )
 
