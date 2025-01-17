@@ -16,15 +16,20 @@ def syncer_eval(string, default=None):
     """
     Evals given object
     """
-    try:
-        return ast.literal_eval(string)
-    except ValueError:
-        return default
+    if isinstance(string, str):
+        try:
+            return ast.literal_eval(string)
+        except ValueError:
+            return default
+    else:
+        return string
 
 def syncer_defined(string, default=""):
     """
     Makes String Object True or False
     """
+    if isinstance(string, bool):
+        return string
     if string.lower() in ["false", "none"]:
         return default
     if not string:
