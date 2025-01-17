@@ -488,6 +488,7 @@ class SyncCMK2(CMK2):
                 tasks = []
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
+                        progress.advance(task1)
                         continue
                     task = pool.apply_async(self.handle_host,
                                      args=(db_host, host_actions, disabled_hosts),
