@@ -388,6 +388,15 @@ class CheckmkSettings(db.Document):
         return self.name
 #.
 #   .-- Checkmk Sites
+
+
+class AnsibleVariable(db.EmbeddedDocument):
+    """
+    Ansible Variable
+    """
+    variable_name = db.StringField(required=True, max_length=160)
+    variable_value = db.StringField(required=True, max_length=160)
+
 class CheckmkSite(db.Document):
     """
     Checkmk Site
@@ -397,7 +406,13 @@ class CheckmkSite(db.Document):
     server_address = db.StringField(required=True)
     settings_master = db.ReferenceField(document_type="CheckmkSettings", required=True)
 
+
+    custom_ansible_variables = \
+            db.ListField(field=db.EmbeddedDocumentField(document_type="AnsibleVariable"))
+
     enabled = db.BooleanField()
+
+
 
     meta = {
         'strict': False,
