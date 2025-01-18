@@ -2,10 +2,10 @@
 """
 Ansible Checkmk Modul
 """
+import jinja2
 from mongoengine.errors import DoesNotExist
 from application.modules.checkmk.models import CheckmkSite
 from application.modules.plugin import Plugin
-import jinja2
 
 class SyncSites(Plugin):
     """
@@ -35,6 +35,8 @@ class SyncSites(Plugin):
             'subscription_username': site.settings_master.subscription_username,
             'subscription_password': site.settings_master.subscription_password,
         })
+        for custom_var in site.custom_ansible_variables:
+            inventory[custom_var.variable_name] = custom_var.variable_value
         return inventory
 
     def get_full_inventory(self):
