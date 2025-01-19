@@ -29,6 +29,9 @@ class JdiscDevices(JDisc):
               computername
               type
               manufacturer
+              bios {
+                version
+              }
               serialNumber
               logicalSerialNumber
               hwVersion
