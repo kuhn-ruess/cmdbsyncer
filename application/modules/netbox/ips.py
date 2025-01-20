@@ -54,7 +54,6 @@ class SyncIPS(SyncNetbox):
                 if 'ips' not in cfg_ips:
                     progress.advance(task1)
                     continue
-                    
                 for cfg_ip in cfg_ips['ips']:
                     try:
                         if 'ignore_ip' in cfg_ip['fields']:
@@ -68,7 +67,7 @@ class SyncIPS(SyncNetbox):
                         del cfg_ip['fields']['addresses']
                         # Create Field to be used for the operation
                         cfg_ip['fields']['address'] = {}
-                        for address in addresses.split(','):
+                        for address in addresses:
                             if address in cfg_ip['ignore_list']:
                                 continue
                             address = address.strip()
@@ -90,11 +89,11 @@ class SyncIPS(SyncNetbox):
                             if found:
                                 # Update
                                 if payload := self.get_update_keys(found, cfg_ip):
-                                    self.console(f"* Update IP: for {address} on {hostname} {payload}")
-                                    ip.update(payload)
+                                    self.console(f"* Update IP: for {address} on {hostname}")
+                                    found.update(payload)
                                 else:
-                                    self.console(f"* Already up to date IP: {address} on {hostname}")
-                                ip_infos.append({'netbox_ip_id': ip.id, 'address': address})
+                                    self.console(f"* Nothing to do: {address} on {hostname}")
+                                ip_infos.append({'netbox_ip_id': found.id, 'address': address})
 
                             else:
                                 ### Create

@@ -200,10 +200,26 @@ class Rule(): # pylint: disable=too-few-public-methods
                     for idx, data in enumerate(input_list):
                         defaults_by_id.setdefault(idx, {})
 
-                        new_value  = render_jinja(action_param, mode="nullify",
-                                                 LIST_VAR=data,
-                                                 HOSTNAME=hostname, **self.attributes)
+                        if isinstance(action_param, list):
+                            new_list = []
+                            for entry in action_param:
+                                new_value  = render_jinja(entry, mode="nullify",
+                                                         LIST_VAR=data,
+                                                         HOSTNAME=hostname, **self.attributes)
+                                if new_value:
+                                    new_list.appende(new_value)
+                            new_value = new_list
+                        else:
+                            new_value  = render_jinja(action_param, mode="nullify",
+                                                     LIST_VAR=data,
+                                                     HOSTNAME=hostname, **self.attributes)
+
                         new_value = new_value.strip()
+                        if new_value.startswith('[') and new_value.endswith(']'):
+                            new_value = ast.literal_eval(new_value.replace('\n',''))
+                            # Remove empty entries
+                            new_value = [x for x in new_value if x]
+
                         new_value = self.handle_fields(action, new_value)
 
                         if new_value == 'SKIP_RULE':

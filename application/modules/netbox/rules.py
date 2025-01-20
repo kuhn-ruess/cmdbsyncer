@@ -172,16 +172,12 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
             for key, value in entry.items():
                 if key == 'ignore_ip':
                     continue
-                value = value.strip()
+                if isinstance(value, str):
+                    value = value.strip()
                 if key in sub_fields:
                     outcome_subfields_object[key] = {'value': value}
                 else:
                     outcome_object[key] = {'value': value}
-
-            #if 'vrf' not in outcome_object:
-            #    outcome_object['vrf'] = {'value': 'Global'}
-
-
 
 
             # The Outcome can contain a list of IPs,
@@ -216,6 +212,7 @@ class NetboxIpamPrefixRule(NetboxVariableRule):
 
         outcome_selection, _ignorelist =\
                 self.get_multilist_outcomes(rule_outcomes, False)
+
 
         for entry in outcome_selection:
             outcome_object = {}
@@ -296,6 +293,9 @@ class NetboxInterfaceRule(NetboxVariableRule):
                 if key == 'name' and value in ignored_interfaces:
                     break
                 if key in sub_fields:
+                    if key in ['ipv6_addresses', 'ipv4_addresses']:
+                        value = value.split(',')
+                        value = [x for x in value if x]
                     outcome_subfields_object[key] = {'value': value}
                 else:
                     outcome_object[key] = {'value': value}

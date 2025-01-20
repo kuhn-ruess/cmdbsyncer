@@ -98,6 +98,7 @@ class SyncInterfaces(SyncNetbox):
                             elif mode == 'virtualization':
                                 interface = self.nb.virtualization.interfaces.create(payload)
 
+
                         port_infos.append({
                             'port_name': cfg_interface['fields']['name']['value'],
                             'netbox_if_id': interface.id,
