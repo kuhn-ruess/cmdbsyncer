@@ -36,18 +36,23 @@ def syncer_defined(string, default=""):
         return default
     return string
 
-def get_ip4_network(ip_string):
+def get_ip_network(ip_string):
     """
     Converts 192.178.2.55/255.255.255.0 to 192.178.2.0/24
     """
-    net = ipaddress.ip_interface(ip_string)
-    return net.network
+    if not ip_string:
+        return ''
+    net = ipaddress.ip_network(ip_string.strip(), strict=False)
+    net_part = ip_string.split('/')[1]
+    return f"{net.network_address}/{net_part}"
 
-def get_ip4_interface(ip_string):
+def get_ip_interface(ip_string):
     """
     Converts 192.178.2.55/255.255.255.0 to 192.178.2.55/24
     """
-    net = ipaddress.ip_interface(ip_string)
+    if not ip_string:
+        return ''
+    net = ipaddress.ip_interface(ip_string.strip())
     return net
 
 def get_list(input_list):
@@ -105,8 +110,9 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         'merge_list_of_dicts': merge_list_of_dicts,
         'cmk_cleanup_tag_id': cmk_cleanup_tag_id,
         'cmk_cleanup_hostname': cmk_cleanup_hostname,
-        'get_ip4_network': get_ip4_network,
-        'get_ip4_interface': get_ip4_interface,
+        'get_ip_network': get_ip_network,
+        'get_ip4_interface': get_ip_interface,
+        'get_ip_interface': get_ip_interface,
         'eval': syncer_eval,
         'defined': syncer_defined,
 

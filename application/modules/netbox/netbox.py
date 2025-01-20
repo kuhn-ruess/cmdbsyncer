@@ -257,7 +257,33 @@ class SyncNetbox(Plugin):
 #.
 #   . -- Generic Netbox Syncer Function
 
-    def sync_generic(self, what, current_objects, name_field):
+
+    def _handle_config(self, what, cfg, current_objects, name_field, progress, task):
+        """
+        Handle Single Entry of cfg
+        """
+        object_name = cfg['fields'][name_field]['value']
+        if not object_name:
+            progress.advance(task)
+            return
+        query = {
+            name_field:  object_name,
+        }
+        logger.debug(f"Filter Query: {query}")
+        if current_object := current_objects.get(**query):
+            if payload := self.get_update_keys(current_object, cfg):
+                self.console(f"* Update {what}: {object_name} {payload}")
+                current_object.update(payload)
+            else:
+                self.console(f"* {what} {object_name} already up to date")
+        else:
+            ### Create
+            self.console(f"* Create {what} {object_name}")
+            payload = self.get_update_keys(False, cfg)
+            logger.debug(f"Create Payload: {payload}")
+            current_object = current_objects.create(payload)
+
+    def sync_generic(self, what, current_objects, name_field, list_mode=False):
         """
         Generic Sync Function
         for Modules without special Need
@@ -290,26 +316,14 @@ class SyncNetbox(Plugin):
                         progress.advance(task1)
                         continue
 
-                    object_name = cfg['fields'][name_field]['value']
-                    if not object_name:
-                        progress.advance(task1)
-                        continue
-                    query = {
-                        name_field:  object_name,
-                    }
-                    logger.debug(f"Filter Query: {query}")
-                    if current_object := current_objects.get(**query):
-                        if payload := self.get_update_keys(current_object, cfg):
-                            self.console(f"* Update {what}: {object_name} {payload}")
-                            current_object.update(payload)
-                        else:
-                            self.console(f"* {what} {object_name} already up to date")
+                    if list_mode:
+                        for sub_cfg in cfg[list_mode]:
+                            self._handle_config(what, sub_cfg, current_objects,
+                                                name_field, progress, task1)
                     else:
-                        ### Create
-                        self.console(f"* Create {what} {object_name}")
-                        payload = self.get_update_keys(False, cfg)
-                        logger.debug(f"Create Payload: {payload}")
-                        current_object = current_objects.create(payload)
+                        self._handle_config(what, cfg, current_objects, name_field, progress, task1)
+
+
 
                 except Exception as error:
                     if self.debug:

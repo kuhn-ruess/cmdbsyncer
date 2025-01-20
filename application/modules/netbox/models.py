@@ -231,7 +231,7 @@ class NetboxIpamIpaddressattributes(db.Document):
 #.
 #   . -- IPAM Prefix
 netbox_prefix_outcome_types = [
-  ("prefix", "Prefix eg. 172.30.180.0/24"),
+  ("prefix", "Prefix eg. 172.30.180.0/24 (Use comma for lists)"),
   ("status", "Status like: active or decommissioning"),
   ("description", "Description"),
 ]
@@ -242,8 +242,8 @@ class NetboxIpamPrefixOutcome(db.EmbeddedDocument):
     """
     action = db.StringField(choices=netbox_prefix_outcome_types)
     param = db.StringField()
-    #use_list_variable = db.BooleanField()
-    #list_variable_name = db.StringField(max_length=120)
+    use_list_variable = db.BooleanField()
+    list_variable_name = db.StringField(max_length=120)
 
     meta = {
         'strict': False,
