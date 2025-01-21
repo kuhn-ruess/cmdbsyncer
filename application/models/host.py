@@ -165,8 +165,8 @@ class Host(db.Document):
         but checks first if needed and also sets
         set_import_sync and import_seen as needed
         """
-        for key, value in list(labels.items()):
-            if app.config['LABELS_ITERATE_FIRST_LEVEL']:
+        if app.config['LABELS_ITERATE_FIRST_LEVEL']:
+            for key, value in list(labels.items()):
                 if isinstance(value, dict):
                     for sub_key, sub_value in value.items():
                         labels[f'{key}__{sub_key}'] = sub_value
@@ -194,11 +194,10 @@ class Host(db.Document):
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
-        new_labels =dict({self._fix_key(x):y for x, y in label_dict.items()})
-        if new_labels != self.get_labels():
-            self.add_log(f"Label Change: {self.labels} to {new_labels}")
-            self.labels = new_labels
-            self.cache = {}
+        new_labels = dict(map(lambda kv: (self._fix_key(kv[0]), kv[1]), label_dict.items()))
+        self.add_log(f"Label Change: {self.labels} to {new_labels}")
+        self.labels = new_labels
+        self.cache = {}
 
     def get_labels(self):
         """

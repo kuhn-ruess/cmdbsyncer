@@ -3,8 +3,9 @@ Central Brain for Netbox Operations
 """
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from application.modules.plugin import Plugin
+
 from application.models.host import Host
+from application.modules.plugin import Plugin
 from application import logger
 
 try:
@@ -257,6 +258,22 @@ class SyncNetbox(Plugin):
 #.
 #   . -- Generic Netbox Syncer Function
 
+    def fix_value(self, value):
+        """
+        Fix Nested Netbox Fields so that they 
+        Stored as string
+
+        Otherwise we would have a big reference to 
+        the other field instead just the name
+        """
+        if str(type(value)).startswith("<class 'pynetbox"):
+            value = str(value)
+        if isinstance(value, list):
+            new_list = []
+            for list_value in value:
+                new_list.append(self.fix_value(list_value))
+            value = new_list
+        return value
 
     def _handle_config(self, what, cfg, current_objects, name_field, progress, task):
         """
