@@ -155,17 +155,26 @@ class SyncVirtualMachines(SyncNetbox):
         """
         Import VMS out of Netbox
         """
+        def fix_value(value):
+            if str(type(value)) == "<class 'pynetbox.core.response.Record'>":
+                value = str(value)
+            return value
         for vm in self.nb.virtualization.virtual_machines.all():
             try:
                 hostname = vm.name
                 labels = vm.__dict__
+                for what in ['has_details', 'api',
+                             'default_ret', 'endpoint',
+                             '_full_cache', '_init_cache']:
+                    del labels[what]
+
                 if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
                     hostname = Host.rewrite_hostname(hostname,
                                                      self.config['rewrite_hostname'], labels)
                 host_obj = Host.get_host(hostname)
                 print(f"\n{cc.HEADER}Process VM: {hostname}{cc.ENDC}")
                 host_obj.update_host(labels)
-                do_save = host_obj.update_host(labels)
+                host_obj.update_host({x:fix_value(y) for x,y in labels.items()})
                 do_save = host_obj.set_account(account_dict=self.config)
                 if do_save:
                     host_obj.save()
