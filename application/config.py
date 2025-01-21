@@ -71,6 +71,8 @@ class BaseConfig():
 
     SWAGGER_ENABLED = True
     DEBUG = True
+    ADVANCED_RULE_DEBUG = False
+
     MONGODB_SETTINGS = {
         'db': 'cmdb-api',
         'host': '127.0.0.1',

@@ -33,13 +33,37 @@ def _render_dw_rule(_view, _context, model, _name):
     """
     Render Downtime Rule
     """
-    html = "<table width=100%>"
+    html = ""
     for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td>"\
-                f"<td>{entry['every']} {entry['start_day']} "\
-                f"{entry['start_time_h']}:{entry['start_time_m']}</td></tr>"
-    html += "</table>"
+        idx += 1
+        data = [
+            ("Every", entry['every']),
+            ("Day", entry['start_day']),
+            ("Hour", entry['start_time_h']),
+            ("Min", entry['start_time_m']),
+        ]
+        out_lines = ""
+        for what, value in data:
+            if not value:
+                continue
+            highlighted = \
+                    highlight(value, DjangoLexer(),
+                              HtmlFormatter(sytle='colorfull'))
+            out_lines += f"{what}: {highlighted}"
+
+        html += f'''
+            <div class="card">
+              <div class="card-body">
+                <p class="card-text">
+                 <h6 class="card-subtitle mb-2 text-muted">Downtime {idx}</h6>
+                </p>
+                  {out_lines}
+              </div>
+            </div>
+            '''
+
     return Markup(html)
+
 
 def _render_dcd_rule(_view, _context, model, _name):
     """
