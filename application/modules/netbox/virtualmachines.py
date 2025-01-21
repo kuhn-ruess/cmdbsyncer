@@ -155,10 +155,6 @@ class SyncVirtualMachines(SyncNetbox):
         """
         Import VMS out of Netbox
         """
-        def fix_value(value):
-            if str(type(value)).startswith("<class 'pynetbox"):
-                value = str(value)
-            return value
         for vm in self.nb.virtualization.virtual_machines.all():
             try:
                 hostname = vm.name
@@ -173,7 +169,7 @@ class SyncVirtualMachines(SyncNetbox):
                                                      self.config['rewrite_hostname'], labels)
                 host_obj = Host.get_host(hostname)
                 print(f"\n{cc.HEADER}Process VM: {hostname}{cc.ENDC}")
-                host_obj.update_host({x:fix_value(y) for x,y in labels.items()})
+                host_obj.update_host(labels, fix_value_func=self.fix_value)
                 do_save = host_obj.set_account(account_dict=self.config)
                 if do_save:
                     host_obj.save()
