@@ -160,7 +160,7 @@ class SyncDevices(SyncNetbox):
         Import Objects from Netbox to the Syncer
         """
         def fix_value(value):
-            if str(type(value)) == "<class 'pynetbox.core.response.Record'>":
+            if str(type(value)).startswith("<class 'pynetbox"):
                 value = str(value)
             return value
 
