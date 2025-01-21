@@ -209,8 +209,8 @@ class Plugin():
                 return False
             return db_host.cache[cache]['attributes']
         attributes = {}
-        attributes.update({x:y for x,y in db_host.labels.items() if y})
-        attributes.update({x:y for x,y in db_host.inventory.items() if y})
+        attributes.update(db_host.labels.items())
+        attributes.update(db_host.inventory.items())
 
         self.init_custom_attributes()
         attributes.update(self.custom_attributes.get_outcomes(db_host, attributes))
