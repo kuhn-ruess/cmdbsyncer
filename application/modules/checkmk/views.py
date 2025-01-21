@@ -20,7 +20,7 @@ from application.views.default import DefaultModelView
 from application.docu_links import docu_links
 
 from application.modules.rule.views import RuleModelView, \
-                    form_subdocuments_template, _render_full_conditions
+                    form_subdocuments_template, _render_full_conditions, get_rule_json
 from application.modules.checkmk.models import action_outcome_types, CheckmkSite
 from application.plugins.checkmk import get_debug_data
 
@@ -298,6 +298,15 @@ class CheckmkBiRuleView(DefaultModelView):
     """
     Custom BI Rule View
     """
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
 
     form_rules = [
         rules.FieldSet((
@@ -439,6 +448,15 @@ class CheckmkSiteView(DefaultModelView):
     """
     Checkmk Site Management Config
     """
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
 
     column_default_sort = "name"
 
@@ -451,6 +469,16 @@ class CheckmkTagMngmtView(DefaultModelView):
     """
     Checkmk Tag Management
     """
+
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
 
     column_exclude_list = [
         'documentation', 'group_help',
@@ -465,6 +493,16 @@ class CheckmkUserMngmtView(DefaultModelView):
     """
     Checkmk User Management
     """
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
+
 
     column_exclude_list = [
         'password', 'email',
@@ -482,6 +520,16 @@ class CheckmkSettingsView(DefaultModelView):
     """
     Checkmk Server Settings View
     """
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
+
 
     column_exclude_list = [
         'inital_password',
@@ -505,6 +553,16 @@ class CheckmkFolderPoolView(DefaultModelView):
     """
     Folder Pool Model
     """
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
+
     column_default_sort = "folder_name"
 
     column_editable_list = [
@@ -629,6 +687,15 @@ class CheckmkInventorizeAttributesView(DefaultModelView):
     """
     Form rules for Inventorize Attributes
     """
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
 
     form_rules = [
         rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_inventory_attributes"]}"'\
