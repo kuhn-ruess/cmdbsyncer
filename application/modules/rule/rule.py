@@ -75,9 +75,18 @@ class Rule(): # pylint: disable=too-few-public-methods
         # Wee need to find out if tag AND tag value match
         for tag, value in self.attributes.items():
             # Check if Tag matchs
+            if app.config['ADVANCED_RULE_DEBUG']:
+                logger.debug(f"Check Tag: {tag} vs needed: {needed_tag} "\
+                             f"for {tag_match}, Negate: {tag_match_negate}")
             if match(tag, needed_tag, tag_match, tag_match_negate):
+                if app.config['ADVANCED_RULE_DEBUG']:
+                    logger.debug('--> HIT')
+                    logger.debug(f"Check Value: {repr(value)} vs needed: {repr(needed_value)} "\
+                                 f"for {value_match}, Negate: {value_match_negate}")
                 # Tag Match, see if Value Match
                 if match(value, needed_value, value_match, value_match_negate):
+                    if app.config['ADVANCED_RULE_DEBUG']:
+                        logger.debug('--> HIT')
                     return True
         return False
 
@@ -119,6 +128,10 @@ class Rule(): # pylint: disable=too-few-public-methods
 
         outcomes = {}
         for rule in self.rules:
+            if app.config['ADVANCED_RULE_DEBUG']:
+                logger.debug('##########################')
+                logger.debug(f'Check Rule: {rule.name}')
+                logger.debug('##########################')
             rule = rule.to_mongo()
             rule_hit = False
             if rule['condition_typ'] == 'any':
@@ -144,6 +157,8 @@ class Rule(): # pylint: disable=too-few-public-methods
             elif rule['condition_typ'] == 'anyway':
                 rule_hit = True
 
+
+
             if self.debug:
                 debug_data = {
                     "group": self.name,
@@ -151,7 +166,7 @@ class Rule(): # pylint: disable=too-few-public-methods
                     "condition_type": rule_descriptions[rule['condition_typ']],
                     "name": rule['name'],
                     "id": str(rule['_id']),
-                    "last_match": str(rule['last_match'])
+                    "last_match": str(rule['last_match']),
                 }
                 self.debug_lines.append(debug_data)
                 table.add_row(str(rule_hit), rule_descriptions[rule['condition_typ']],\
