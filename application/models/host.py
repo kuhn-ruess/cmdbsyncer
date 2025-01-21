@@ -185,6 +185,8 @@ class Host(db.Document):
                 key = key.replace(needle, replacer)
         return key.replace(" ", "_").strip()
 
+
+
     def set_labels(self, label_dict):
         """
         Overwrite all Labels on host
@@ -193,7 +195,7 @@ class Host(db.Document):
             label_dict (dict): Key:Value pairs of labels
         """
         new_labels =dict({self._fix_key(x):y for x, y in label_dict.items()})
-        if new_labels != self.labels:
+        if new_labels != self.get_labels():
             self.add_log(f"Label Change: {self.labels} to {new_labels}")
             self.labels = new_labels
             self.cache = {}

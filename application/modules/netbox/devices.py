@@ -159,6 +159,10 @@ class SyncDevices(SyncNetbox):
         """
         Import Objects from Netbox to the Syncer
         """
+        def fix_value(value):
+            if str(type(value)) == "<class 'pynetbox.core.response.Record'>":
+                value = str(value)
+            return value
 
         for device in self.nb.dcim.devices.all():
             try:
@@ -171,10 +175,11 @@ class SyncDevices(SyncNetbox):
                              '_full_cache', '_init_cache']:
                     del labels[what]
                 if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                    hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], labels)
+                    hostname = Host.rewrite_hostname(hostname,
+                                                     self.config['rewrite_hostname'], labels)
                 host_obj = Host.get_host(hostname)
                 print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
-                host_obj.update_host(labels)
+                host_obj.update_host({x:fix_value(y) for x,y in labels.items()})
                 do_save = host_obj.set_account(account_dict=self.config)
                 if do_save:
                     host_obj.save()
