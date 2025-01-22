@@ -28,7 +28,6 @@ class InventorizeHosts(CMK2):
     source = "cmk_inventorize"
 
     fields = {}
-    account = ""
     config = {}
 
     found_hosts = []
@@ -274,7 +273,7 @@ class InventorizeHosts(CMK2):
             raise CmkException("No Inventory Rules configured")
 
         print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
-              f"{ColorCodes.UNDERLINE}{self.account}{ColorCodes.ENDC}")
+              f"{ColorCodes.UNDERLINE}{self.account_name}{ColorCodes.ENDC}")
 
         if app.config['CMK_GET_HOST_BY_FOLDER']:
             self.fetch_checkmk_folders()

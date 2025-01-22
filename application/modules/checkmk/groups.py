@@ -24,11 +24,11 @@ class CheckmkGroupSync(CMK2):
         Get Cache Objects
         """
         try:
-            return CheckmkObjectCache.objects.get(cache_group=group, account=self.account)
+            return CheckmkObjectCache.objects.get(cache_group=group, account=self.account_id)
         except DoesNotExist:
             new = CheckmkObjectCache()
             new.cache_group = group
-            new.account = self.account
+            new.account = self.account_id
             return new
 
     def parse_attributes(self):
