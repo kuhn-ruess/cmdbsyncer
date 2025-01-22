@@ -217,18 +217,24 @@ class NetboxIpamPrefixRule(NetboxVariableRule):
         for entry in outcome_selection:
             outcome_object = {}
             outcome_subfields_object = {}
+            prefixes = []
             for key, value in entry.items():
-                value = value.strip()
-                if key in sub_fields:
+                if key == 'prefix':
+                    prefixes = value
+                elif key in sub_fields:
                     outcome_subfields_object[key] = {'value': value}
                 else:
                     outcome_object[key] = {'value': value}
 
-
-            if outcome_object:
-                outcomes['prefixes'].append({'fields': outcome_object,
-                                               'sub_fields': outcome_subfields_object,
-                                               'by_rule': rule_name})
+            for prefix in prefixes:
+                if prefix in ['127.0.0.0/8']:
+                    continue
+                if outcome_object:
+                    new_object  = outcome_object.copy()
+                    new_object['prefix'] = {'value': prefix}
+                    outcomes['prefixes'].append({'fields': new_object,
+                                                   'sub_fields': outcome_subfields_object,
+                                                   'by_rule': rule_name})
         return outcomes
 #.
 #   . -- Interfaces
@@ -295,7 +301,7 @@ class NetboxInterfaceRule(NetboxVariableRule):
                 if key in sub_fields:
                     if key in ['ipv6_addresses', 'ipv4_addresses']:
                         value = value.split(',')
-                        value = [x for x in value if x]
+                        value = [x.strip() for x in value if x]
                     outcome_subfields_object[key] = {'value': value}
                 else:
                     outcome_object[key] = {'value': value}
