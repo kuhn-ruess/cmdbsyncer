@@ -171,9 +171,10 @@ class Host(db.Document):
                     for sub_key, sub_value in value.items():
                         labels[f'{key}__{sub_key}'] = sub_value
                     del labels[key]
-        if self.get_labels() != labels:
+        label_dict = dict(map(lambda kv: (self._fix_key(kv[0]), kv[1]), labels.items()))
+        if self.get_labels() != label_dict:
             self.set_import_sync()
-            self.set_labels(labels)
+            self._set_labels(label_dict)
         self.set_import_seen()
 
     def _fix_key(self, key):
@@ -185,18 +186,21 @@ class Host(db.Document):
                 key = key.replace(needle, replacer)
         return key.replace(" ", "_").strip()
 
+    def set_labels(self, _label_dictl):
+        """
+        Deprecated, migrate to update_host
+        """
+        raise Exception("Deprecated function set_labels(), migrate to update_host")
 
-
-    def set_labels(self, label_dict):
+    def _set_labels(self, label_dict):
         """
         Overwrite all Labels on host
 
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
-        new_labels = dict(map(lambda kv: (self._fix_key(kv[0]), kv[1]), label_dict.items()))
-        self.add_log(f"Label Change: {self.labels} to {new_labels}")
-        self.labels = new_labels
+        self.add_log(f"Label Change: {self.labels} to {label_dict}")
+        self.labels = label_dict
         self.cache = {}
 
     def get_labels(self):
