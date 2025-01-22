@@ -146,10 +146,12 @@ def jobs(): #pylint: disable=invalid-name
                 stats.last_start = now
                 stats.failure = False
                 stats.save()
+                stats.last_message = f"{now}: Started Job: {job.name} (PID: {os.getpid()})"
+                stats.all_messages = f"{now}: Started Job: {job.name} (PID: {os.getpid()})\n"
                 for task in job.jobs:
                     print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
-                    stats.last_message = f"{now}: Started {task.name} (PID: {os.getpid()})"
-                    stats.all_messages += f"{now}: Started {task.name} (PID: {os.getpid()})\n"
+                    stats.last_message = f"{now}: Started Task: {task.name} (PID: {os.getpid()})"
+                    stats.all_messages += f"{now}: Started Task:  {task.name} (PID: {os.getpid()})\n"
                     stats.save()
                     try:
                         if task.account:
