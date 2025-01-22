@@ -22,9 +22,9 @@ class CustomAttributeRule(Rule): # pylint: disable=too-few-public-methods
             if not outcome:
                 continue
             attribute_value = outcome['attribute_value']
-            if attribute_value.lower() == 'true':
+            if attribute_value == 'True':
                 attribute_value = True
-            elif attribute_value.lower() == 'false':
+            elif attribute_value == 'False':
                 attribute_value = False
             outcomes[outcome['attribute_name']] = attribute_value
         return outcomes
