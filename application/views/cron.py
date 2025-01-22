@@ -9,6 +9,15 @@ from wtforms import HiddenField
 
 from application.views.default import DefaultModelView
 
+def format_error_flag(v, c, m, p):
+    """
+    Format Has error flag"
+    """
+    # pylint: disable=invalid-name, unused-argument
+    if m.failure:
+        return Markup('<span style="color:red;" class="fa fa-warning"></span>')
+    return Markup('<span style="color:green;" class="fa fa-circle"></span>')
+
 
 def format_date(v, c, m, p):
     """ Format Date Field"""
@@ -103,6 +112,7 @@ class CronStatsView(DefaultModelView):
         'last_run': format_date,
         'last_start': format_date,
         'last_ended': format_date,
+        'failure': format_error_flag,
     }
     def is_accessible(self):
         """ Overwrite """
