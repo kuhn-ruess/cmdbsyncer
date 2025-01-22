@@ -149,6 +149,7 @@ def jobs(): #pylint: disable=invalid-name
                 for task in job.jobs:
                     print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
                     stats.last_message = f"{now}: Started {task.name} (PID: {os.getpid()})"
+                    stats.all_messages += f"{now}: Started {task.name} (PID: {os.getpid()})\n"
                     stats.save()
                     try:
                         if task.account:
@@ -161,6 +162,7 @@ def jobs(): #pylint: disable=invalid-name
                         stats.failure = True
                         stats.last_ended = None
                         stats.last_message = str(exp)
+                        stats.all_messages += f"{exp}\n"
                         stats.save()
                         name = "Failed Cron Group"
                         source = "cron"
@@ -181,6 +183,7 @@ def jobs(): #pylint: disable=invalid-name
             stats.failure = True
             stats.last_ended = None
             stats.last_message = str(exp)
+            stats.all_messages += f"{exp}\n"
             stats.save()
         name = "Failed Cron Group"
         source = "cron"

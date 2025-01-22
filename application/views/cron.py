@@ -87,7 +87,7 @@ class CronStatsView(DefaultModelView):
     """
     Cron Stats Model
     """
-    can_edit = True
+    can_edit = False
     can_create = False
     can_export = True
 
