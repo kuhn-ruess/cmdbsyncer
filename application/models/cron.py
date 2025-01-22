@@ -92,6 +92,8 @@ class CronStats(db.Document):
 
     last_message = db.StringField()
 
+    all_messages = db.StringField()
+
 
     meta = {
         'strict' : False
