@@ -300,7 +300,8 @@ class SyncNetbox(Plugin):
             logger.debug(f"Create Payload: {payload}")
             current_object = current_objects.create(payload)
 
-    def sync_generic(self, what, current_objects, name_field, list_mode=False):
+    def sync_generic(self, what, current_objects,
+                     name_field, list_mode=False, prevent_duplicates=False):
         """
         Generic Sync Function
         for Modules without special Need
@@ -309,12 +310,13 @@ class SyncNetbox(Plugin):
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
+        duplicate_list = []
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             self.console = progress.console.print
-            task1 = progress.add_task(f"Updating Data for {what}", total=total)
+            task1 = progress.add_task(f"Updating Data for {what}", total=None)
 
 
             for db_object in db_objects:
@@ -335,9 +337,21 @@ class SyncNetbox(Plugin):
 
                     if list_mode:
                         for sub_cfg in cfg[list_mode]:
+                            if prevent_duplicates:
+                                seach_field = sub_cfg['fields'][prevent_duplicates]['value']
+                                if seach_field in duplicate_list:
+                                    progress.advance(task1)
+                                    continue
+                                duplicate_list.append(seach_field)
                             self._handle_config(what, sub_cfg, current_objects,
                                                 name_field, progress, task1)
                     else:
+                        if prevent_duplicates:
+                            seach_field = cfg['fields'][prevent_duplicates]['value']
+                            if seach_field in duplicate_list:
+                                progress.advance(task1)
+                                continue
+                            duplicate_list.append(seach_field)
                         self._handle_config(what, cfg, current_objects, name_field, progress, task1)
 
 

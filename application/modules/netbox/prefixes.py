@@ -17,5 +17,7 @@ class SyncPrefixes(SyncNetbox):
         Update Prefixes in Netbox
         """
         current_objects = self.nb.ipam.prefixes
-        self.sync_generic('Prefix', current_objects, 'prefix', list_mode='prefixes')
+        self.sync_generic('Prefix', current_objects,
+                          'prefix', list_mode='prefixes',
+                          prevent_duplicates='prefix')
 #.
