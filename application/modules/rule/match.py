@@ -48,13 +48,19 @@ def match(value, needle, condition, negate=False):
                 if value != needle:
                     return True
             elif condition == 'in':
+                if not isinstance(value, list):
+                    value = str(value)
                 if needle not in value:
                     return True
             elif condition == 'not_in':
+                if not isinstance(value, list):
+                    value = str(value)
                 if needle in value:
                     return True
             elif condition == 'in_list':
-                if value not in [x.strip() for x in needle.split(',')]:
+                if not isinstance(needle, list):
+                    needle = [x.strip() for x in needle.split(',')]
+                if value not in needle:
                     return True
             elif condition == 'swith':
                 if not str(value).startswith(needle):
@@ -76,13 +82,19 @@ def match(value, needle, condition, negate=False):
             if value == needle:
                 return True
         elif condition == 'in':
+            if not isinstance(value, list):
+                value = str(value)
             if needle in value:
                 return True
         elif condition == 'not_in':
+            if not isinstance(value, list):
+                value = str(value)
             if needle not in value:
                 return True
         elif condition == 'in_list':
-            if value in [x.strip() for x in needle.split(',')]:
+            if not isinstance(needle, list):
+                needle = [x.strip() for x in needle.split(',')]
+            if value in needle:
                 return True
         elif condition == 'swith':
             if str(value).startswith(needle):
