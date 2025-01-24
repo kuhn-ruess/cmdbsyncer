@@ -159,8 +159,10 @@ class SyncDevices(SyncNetbox):
         """
         Import Objects from Netbox to the Syncer
         """
-
-        for device in self.nb.dcim.devices.all():
+        device_filter = {}
+        if import_filter := self.config.get('import_filter'):
+            device_filter = dict([x.strip().split(',') for x in import_filter.split(',') if x])
+        for device in self.nb.dcim.devices.filter(**device_filter):
             try:
                 hostname = device.name
                 if not hostname:

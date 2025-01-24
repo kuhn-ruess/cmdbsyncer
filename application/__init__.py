@@ -25,7 +25,7 @@ from tablib.formats import registry as tablib_registry
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-VERSION = '3.8 Daily 22.01.2025'
+VERSION = '3.8 Daily 24.01.2025'
 # create logger
 logger = logging.getLogger('cmdb_syncer')
 

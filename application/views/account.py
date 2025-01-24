@@ -238,6 +238,8 @@ class AccountModelView(DefaultModelView):
             default_fields = [
                 ('rewrite_hostname', ""),
                 ('verify_cert', "True"),
+                ('import_filter', ""),
+
             ]
         elif form.typ.data == 'jdisc':
             main_presets = [
