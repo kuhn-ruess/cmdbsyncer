@@ -3,6 +3,10 @@ Rule Model View
 """
 from datetime import datetime
 
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import DjangoLexer
+
 from wtforms import HiddenField, StringField
 from flask_login import current_user
 from flask_admin.form import rules
@@ -376,26 +380,31 @@ def _render_attribute_rewrite(_view, _context, model, _name):
     """
     Render Attribute outcomes
     """
-    html = "<table width=100%>"
-    for idx, entry in enumerate(model.outcomes):
-        attribute_name = entry.old_attribute_name
-        html += f"<tr><td>{idx}</td>"
-        colspan = 3
-        value = entry.new_value
-        if value:
-            colspan = 0
-        if not attribute_name:
-            html += f"<td><b>New Attibute</b></td>"\
-                    "<td><b>to</b></td>"\
-                    f"<td>{entry.new_attribute_name}</td>"
-        else:
-            html += f"<td>{attribute_name}</td>"\
-                    "<td><b>to</b></td>"\
-                    f"<td colspan={colspan}>{entry.new_attribute_name}</td>"
+    html = ""
+    for entry in model.outcomes:
+        old_attr_name = entry.old_attribute_name
+        new_attr_name  = entry.new_attribute_name
 
-        if value:
-            html += f"<td><b>New Value</b></td><td>{value}</td>"
-    html += "</tr></table>"
+        value = \
+            highlight(entry.new_value, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+
+        if old_attr_name and new_attr_name:
+            attribute_name = f"Rewrite from {old_attr_name} to {new_attr_name}"
+        else:
+            attribute_name = new_attr_name
+
+        html += f'''
+            <div class="card">
+              <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">New Attribute</h6>
+                <p class="card-text">
+                {attribute_name}
+                </p>
+                <h6 class="card-subtitle mb-2 text-muted">New Value</h6>
+                {value}
+              </div>
+            </div>
+            '''
     return Markup(html)
 
 
@@ -434,7 +443,6 @@ class RewriteAttributeView(RuleModelView):
                         'form_overrides' : {
                             'old_attribute_name': StringField,
                             'new_attribute_name': StringField,
-                            'new_value': StringField,
                         },
                         'form_widget_args': {
                             'overwrite_name': {'style': 'background-color: #2EFE9A;' },

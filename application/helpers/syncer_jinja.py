@@ -131,4 +131,4 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     else:
         final = value_tpl.render(**kwargs)
     #logger.debug(f"JINJA: String After Rewrite: {final}")
-    return final
+    return final.strip()
