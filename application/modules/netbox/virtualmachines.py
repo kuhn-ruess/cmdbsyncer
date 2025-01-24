@@ -157,7 +157,7 @@ class SyncVirtualMachines(SyncNetbox):
         """
         vm_filter = {}
         if import_filter := self.config.get('import_filter'):
-            vm_filter  = dict([x.strip().split(',') for x in import_filter.split(',') if x])
+            vm_filter  = dict([x.strip().split(':') for x in import_filter.split(',') if x])
         for vm in self.nb.virtualization.virtual_machines.filter(**vm_filter):
             try:
                 hostname = vm.name
