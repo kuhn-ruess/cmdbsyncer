@@ -16,6 +16,7 @@ from application.modules.rule.models import filter_actions, rule_types
 from application.docu_links import docu_links
 from application.helpers.sates import add_changes
 
+
 #   .-- Renderer
 condition_types={
     'equal': "is equal",
@@ -169,7 +170,8 @@ def _render_full_conditions(_view, _context, model, _name):
 
 def get_rule_json(_view, _context, model, _name):
     """
-    Export Given Rulesets
+    Export Given Rulesets, Cant be imported from views
+    So its duplicate
     """
     return model.to_json()
 
@@ -290,7 +292,15 @@ class FiltereModelView(DefaultModelView):
     Filter
     """
 
-    can_export = False
+    can_export = True
+
+    export_types = ['syncer_rules', ]
+
+    column_export_list = ('name', )
+
+    column_formatters_export = {
+        'name': get_rule_json
+    }
 
 
     form_subdocuments = form_subdocuments_template
