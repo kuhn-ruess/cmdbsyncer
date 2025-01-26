@@ -5,6 +5,12 @@ Helper To match condtions
 import re
 
 
+class MatchException(Exception):
+    """
+    Invalid Match Exception
+    """
+
+
 # pylint: disable=inconsistent-return-statements
 def make_bool(value):
     """
@@ -22,12 +28,49 @@ def make_bool(value):
         return False
 
 
-def match(value, needle, condition, negate=False):
+
+def check_condition(attr_value, needle, condition):
+    """
+    Check the Condition Match
+    """
+    # pylint: disable=too-many-branches, too-many-return-statements
+    if condition == 'equal':
+        if attr_value == needle:
+            return True
+    elif condition == 'in':
+        # In String
+        if needle in attr_value:
+            return True
+    elif condition == 'not_in':
+        # Not in String
+        if needle not in attr_value:
+            return True
+    elif condition == 'in_list':
+        if not isinstance(attr_value, list):
+            attr_value = [x.strip() for x in attr_value.split(',')]
+        if needle in attr_value:
+            return True
+    elif condition == 'swith':
+        if attr_value.startswith(needle):
+            return True
+    elif condition == 'ewith':
+        if attr_value.endswith(needle):
+            return True
+    elif condition == 'regex':
+        pattern = re.compile(needle)
+        if pattern.match(str(attr_value)):
+            return True
+    elif condition == 'bool':
+        if needle == attr_value:
+            return True
+    return False
+
+
+def match(attr_value, needle, condition, negate=False):
     """
     Check for Match for given params
     """
     try:
-        # pylint: disable=too-many-branches, too-many-return-statements
         if condition == 'ignore' and negate:
             # In case that rule ignore is negate, than the condition simply not match
             return False
@@ -36,79 +79,23 @@ def match(value, needle, condition, negate=False):
             return True
 
         if condition == 'bool':
-            value = make_bool(value)
+            attr_value = make_bool(attr_value)
             needle = make_bool(needle)
-        else:
-            if isinstance(value, str):
-                value = str(value).lower()
+
+        if condition in ['equal', 'in', 'not_in', 'swith', 'ewith']:
+            ### Conditions which are String matches
+            attr_value = str(attr_value).lower()
             needle = str(needle).lower()
 
-        if negate:
-            if condition == 'equal':
-                if value != needle:
-                    return True
-            elif condition == 'in':
-                if not isinstance(value, list):
-                    value = str(value)
-                if needle not in value:
-                    return True
-            elif condition == 'not_in':
-                if not isinstance(value, list):
-                    value = str(value)
-                if needle in value:
-                    return True
-            elif condition == 'in_list':
-                if not isinstance(needle, list):
-                    needle = [x.strip() for x in needle.split(',')]
-                if value not in needle:
-                    return True
-            elif condition == 'swith':
-                if not str(value).startswith(needle):
-                    return True
-            elif condition == 'ewith':
-                if not str(value).endswith(needle):
-                    return True
-            elif condition == 'regex':
-                pattern = re.compile(needle) #@TODO Cache
-                if not pattern.match(str(value)):
-                    return True
-            elif condition == 'bool':
-                if needle != value:
-                    return True
+        result = check_condition(attr_value, needle, condition)
 
+        if negate and result:
             return False
+        if negate and not result:
+            return True
+        return result
 
-        if condition == 'equal':
-            if value == needle:
-                return True
-        elif condition == 'in':
-            if not isinstance(value, list):
-                value = str(value)
-            if needle in value:
-                return True
-        elif condition == 'not_in':
-            if not isinstance(value, list):
-                value = str(value)
-            if needle not in value:
-                return True
-        elif condition == 'in_list':
-            if not isinstance(needle, list):
-                needle = [x.strip() for x in needle.split(',')]
-            if value in needle:
-                return True
-        elif condition == 'swith':
-            if str(value).startswith(needle):
-                return True
-        elif condition == 'ewith':
-            if str(value).endswith(needle):
-                return True
-        elif condition == 'regex':
-            pattern = re.compile(needle)
-            if pattern.match(str(value)):
-                return True
-        elif condition == 'bool':
-            if needle == value:
-                return True
-        return False
     except Exception as error:
-        raise Exception(f"Condition Failed: {condition}, Value: {value}, Needed: {needle}. Hint: {error}")
+        raise MatchException(f"Condition Failed: {condition}, "\
+                             f"Attributes Value: {attr_value}, "\
+                             f"Needed: {needle}. Hint: {error}") from error

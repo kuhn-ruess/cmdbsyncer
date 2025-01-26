@@ -81,7 +81,7 @@ class Rule(): # pylint: disable=too-few-public-methods
             if match(tag, needed_tag, tag_match, tag_match_negate):
                 if app.config['ADVANCED_RULE_DEBUG']:
                     logger.debug('--> HIT')
-                    logger.debug(f"Check Value: {repr(value)} vs needed: {repr(needed_value)} "\
+                    logger.debug(f"Check Attr Value: {repr(value)} vs needed: {repr(needed_value)} "\
                                  f"for {value_match}, Negate: {value_match_negate}")
                 # Tag Match, see if Value Match
                 if match(value, needed_value, value_match, value_match_negate):

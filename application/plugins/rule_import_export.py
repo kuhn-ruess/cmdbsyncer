@@ -27,6 +27,7 @@ enabled_rules = {
     'cmk_bi_rule': ('application.modules.checkmk.models', 'CheckmkBiRule'),
     'cmk_downtimes': ('application.modules.checkmk.models', 'CheckmkDowntimeRule'),
     'cmk_dcd_rules': ('application.modules.checkmk.models', 'CheckmkDCDRule'),
+    'cmk_filter': ('application.modules.checkmk.models', 'CheckmkFilterRule'),
     'host_objects': ('application.models.host', 'Host'),
     'accounts': ('application.models.account', 'Account'),
     'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
