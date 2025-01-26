@@ -205,7 +205,8 @@ def get_debug_data(hostname):
 
 @cli_cmk.command('debug_host')
 @click.argument("hostname")
-def debug_host(hostname):
+@click.option("--debug", default=False, is_flag=True)
+def debug_host(hostname, debug):
     """
     Debug Host Configuration
 

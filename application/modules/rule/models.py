@@ -8,9 +8,9 @@ from application import db
 #   .-- Condition Types
 condition_types = [
     ('equal', "String Equal (x == y)"),
-    ('in', "String Contains (in)"),
-    ('not_in', "String not Contains (not in)"),
-    ('in_list', "String in list (comma seperated) (x in [y,y,y])"),
+    ('in', "String Contains String (in)"),
+    ('not_in', "String not Contains String (not in)"),
+    ('in_list', "String as Value in List"),
     ('ewith', "String ends with (x.endswith(y)"),
     ('swith', "String starts with (x.startswith(y)"),
     ('regex', "Regex Match"),
