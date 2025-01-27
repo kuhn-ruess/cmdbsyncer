@@ -8,9 +8,10 @@ from application import db
 #   .-- Condition Types
 condition_types = [
     ('equal', "String Equal (x == y)"),
-    ('in', "String Contains String (in)"),
-    ('not_in', "String not Contains String (not in)"),
-    ('in_list', "String as Value in List"),
+    ('in', "String contains String (in)"),
+    ('not_in', "String not contains String (not in)"),
+    ('in_list', "Hosts Attribute equals a String in given comma separated list"),
+    ('string_in_list', "String included in Attributes Python List"),
     ('ewith', "String ends with (x.endswith(y)"),
     ('swith', "String starts with (x.startswith(y)"),
     ('regex', "Regex Match"),

@@ -45,10 +45,17 @@ def check_condition(attr_value, needle, condition):
         # Not in String
         if needle not in attr_value:
             return True
-    elif condition == 'in_list':
+    elif condition == 'string_in_list':
         if not isinstance(attr_value, list):
             attr_value = [x.strip() for x in attr_value.split(',')]
         if needle in attr_value:
+            return True
+    elif condition == 'in_list':
+        # Warning, this condition needs a list given by
+        # the user and checks if the attribute is in it
+        if not isinstance(needle, list):
+            needle = [x.strip() for x in needle.split(',')]
+        if attr_value in needle:
             return True
     elif condition == 'swith':
         if attr_value.startswith(needle):
