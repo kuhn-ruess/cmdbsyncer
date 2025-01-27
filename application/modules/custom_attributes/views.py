@@ -11,8 +11,6 @@ class CustomAttributeView(RuleModelView):
     Custom Attribute Model View
     """
 
-    can_export = False
-
     def __init__(self, model, **kwargs):
         """
         Update elements

@@ -93,15 +93,24 @@ def _render_filter_outcomes(_view, _context, model, _name):
     """
     Render Filter outcomes
     """
-    html = "<table width=100%>"
-    for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{dict(filter_actions)[entry.action]}</td>"
+    html = ""
+    for entry in model.outcomes:
+        action = dict(filter_actions)[entry.action]
+        value = ""
         if entry.attribute_name:
-            html += f"<td><b>{entry.attribute_name}</b></td></tr>"
-        else:
-            html += "<td></td></tr>"
-
-    html += "</table>"
+            value = \
+                highlight(entry.attribute_name, DjangoLexer(),
+                          HtmlFormatter(sytle='colorfull'))
+        html += f'''
+            <div class="card">
+              <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">{action}</h6>
+                <p class="card-text">
+                 {value}
+                </p>
+              </div>
+            </div>
+            '''
     return Markup(html)
 
 
@@ -109,11 +118,21 @@ def _render_attribute_outcomes(_view, _context, model, _name):
     """
     Render attribute outcomes
     """
-    html = "<table width=100%>"
-    for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{entry.attribute_name}</td>"\
-                f"<td><b>{entry.attribute_value}</b></td></tr>"
-    html += "</table>"
+    html = ""
+    for entry in model.outcomes:
+        html += f'''
+            <div class="card">
+              <div class="card-body">
+                <p class="card-text">
+                 <span class="badge badge-primary">
+                 {entry.attribute_name}</span>:
+                <span class="badge badge-info">
+                {entry.attribute_value}
+                </span>
+                </p>
+              </div>
+            </div>
+            '''
     return Markup(html)
 
 
