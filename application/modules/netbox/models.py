@@ -125,7 +125,8 @@ class NetboxVirtualMachineAttributes(db.Document):
 netbox_outcome_types = [
   ('device_type', '* Device Type: Model'),
   ('device_type.manufacturer', '* Device Type: Manufacturer'),
-  ('platform', 'Platform'),
+  ('platform', 'Platform: Name'),
+  ('platform.manufacturer', 'Platform: Manufacturer'),
   ('role', 'Role'),
   ('serial', 'Serial Number'),
   ('tenant', 'Tenant'),

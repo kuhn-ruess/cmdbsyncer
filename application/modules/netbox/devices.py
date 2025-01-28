@@ -45,6 +45,7 @@ class SyncDevices(SyncNetbox):
             'platform': {
                 'type': 'dcim.platforms',
                  'has_slug' : True,
+                 'sub_fields' : ['manufacturer'],
             },
             'primary_ip4' : {
                 'type': 'ipam.ip-addresses',
@@ -99,6 +100,7 @@ class SyncDevices(SyncNetbox):
             self.console = progress.console.print
             task1 = progress.add_task("Updating Objects", total=total)
             for db_host in db_objects:
+                device = False
                 try:
                     hostname = db_host.hostname
                     all_attributes = self.get_host_attributes(db_host, 'netbox')
