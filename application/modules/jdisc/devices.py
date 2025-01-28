@@ -132,21 +132,28 @@ class JdiscDevices(JDisc):
         JDisc Import
         """
         for labels in self.run_query()['devices']['findAll']:
-            if 'name' not in labels:
-                continue
-            hostname = labels['name']
-            if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(hostname,
-                                                 self.config['rewrite_hostname'], labels)
-            print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
-            del labels['name']
-            host_obj = Host.get_host(hostname)
-            host_obj.update_host(labels)
-            do_save=host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
-            else:
-                print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
+            try:
+                if 'name' not in labels:
+                    continue
+                hostname = labels['name']
+                if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
+                    hostname = Host.rewrite_hostname(hostname,
+                                                     self.config['rewrite_hostname'], labels)
+                print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
+                del labels['name']
+                host_obj = Host.get_host(hostname)
+                host_obj.update_host(labels)
+                do_save=host_obj.set_account(account_dict=self.config)
+                if do_save:
+                    host_obj.save()
+                else:
+                    print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
+            except Exception as error:
+                if self.debug:
+                    raise
+                self.log_details.append((f'export_error {hostname}', str(error)))
+                self.console(f" Error in process: {error}")
+
 
     def inventorize(self):
         """
