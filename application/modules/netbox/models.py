@@ -130,8 +130,6 @@ netbox_outcome_types = [
   ('role', 'Role'),
   ('serial', 'Serial Number'),
   ('tenant', 'Tenant'),
-  ('platform', 'Platform'),
-  ('platform.manufacturer', 'Platform Manufacturer'),
   ('site', 'Site'),
   ('location', 'Location'),
   ('rack', 'Rack'),
