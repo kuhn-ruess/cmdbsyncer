@@ -177,6 +177,7 @@ def inventorize_hosts(csv_path=None, delimiter=";", hostname_field="host", key="
         reader = csv.DictReader(csvfile, delimiter=delimiter)
         for labels in reader:
             hostname = labels[hostname_field].strip()
+            del labels[hostname_field]
             objects.append((hostname, labels))
 
     run_inventory(account, objects)
