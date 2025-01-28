@@ -105,6 +105,13 @@ class NetboxCustomAttributesView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def on_model_change(self, form, model, is_created):
+        """
+        Sort Fields        
+        """
+
+        return super().on_model_change(form, model, is_created)
+
 def _render_dataflow_outcome(_view, _context, model, _name):
     """
     Render Dataflow outcomes

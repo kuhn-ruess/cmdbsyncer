@@ -379,9 +379,34 @@ class FiltereModelView(DefaultModelView):
         'render_full_conditions': "Conditions",
     }
 
+    def get_export_name(self, export_type):
+        """
+        Overwrite Filename
+        """
+        now = datetime.now()
+
+        dt_str = now.strftime("%Y%m%d%H%M")
+        return f"{self.model.__name__}_{dt_str}.syncer_json"
+
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('rule')
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Overwrite Actions on Model Change
+        """
+        add_changes()
+
+        return super().on_model_change(form, model, is_created)
+
+    def on_model_delete(self, model):
+        """
+        Overwrite Actions on Model Delete
+        """
+        add_changes()
+
+        return super().on_model_delete(model)
 
     def __init__(self, model, **kwargs):
         """
