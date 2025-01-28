@@ -46,6 +46,8 @@ class SyncVirtualMachines(SyncNetbox):
             'platform': {
                 'type': 'dcim.platforms',
                  'has_slug' : True,
+                 'sub_fields' : ['manufacturer'],
+
             },
             'primary_ip4' : {
                 'type': 'ipam.ip-addresses',
