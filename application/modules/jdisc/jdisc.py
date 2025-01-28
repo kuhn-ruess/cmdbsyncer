@@ -71,7 +71,7 @@ class JDisc(Plugin):
                 if self.debug:
                     raise
                 self.log_details.append((f'export_error {name}', str(error)))
-                self.console(f" Error in process: {error}")
+                print(f" Error in process: {error}")
 
     #def get_custom_fields_query(self, mode):
     #    """
