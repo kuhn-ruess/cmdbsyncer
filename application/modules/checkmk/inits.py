@@ -50,7 +50,7 @@ def _load_rules():
     }
 
 #   .-- Export Tags
-def export_tags(account, dry_run=False, save_requests=False):
+def export_tags(account, dry_run=False, save_requests=False, debug=False):
     """
     Export Tags to Checkmk
     """
@@ -58,6 +58,7 @@ def export_tags(account, dry_run=False, save_requests=False):
     try:
         rules = _load_rules()
         syncer = CheckmkTagSync(account)
+        syncer.debug = debug
         syncer.rewrite = rules['rewrite']
         syncer.dry_run = dry_run
         syncer.save_requests = save_requests
@@ -70,6 +71,8 @@ def export_tags(account, dry_run=False, save_requests=False):
         log.log(f"Exception Syncing Tags to Account: {account}",
                 source="checkmk_tag_export",
                 details=details)
+        if debug:
+            raise
 
 #.
 #   .-- Export BI Rules

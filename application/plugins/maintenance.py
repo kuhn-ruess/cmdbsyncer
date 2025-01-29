@@ -267,7 +267,6 @@ def self_configure():
         'SECRET_KEY': ''.join(secrets.choice(alphabet) for i in range(120)),
         'CRYPTOGRAPHY_KEY' : ''.join(secrets.choice(alphabet) for i in range(120)),
         'SESSION_COOKIE_NAME': "cmdb-syncer",
-        'CMK_SUPPORT': "2.3",
     }
     from local_config import config #pylint: disable=import-outside-toplevel
     for key, value in values.items():

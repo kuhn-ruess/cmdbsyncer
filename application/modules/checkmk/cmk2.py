@@ -4,7 +4,7 @@ Central Request Modul to CMK 2.x
 #pylint: disable=logging-fstring-interpolation
 import requests
 #from requests.exceptions import ConnectionError
-from application import app, log
+from application import app
 from application.modules.plugin import Plugin
 
 @app.cli.group(name='checkmk')
@@ -24,6 +24,19 @@ class CMK2(Plugin):
     """
     Get Data from CMK
     """
+
+    checkmk_version = False
+
+
+    def __init__(self, account=False):
+        """
+        Check for Version
+        """
+        super().__init__(account)
+
+        if not self.checkmk_version:
+            data = self.request('/version')[0]
+            self.checkmk_version = data['versions']['checkmk']
 
 
     def request(self, params, method='GET', data=None, additional_header=None):

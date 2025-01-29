@@ -865,7 +865,7 @@ class SyncCMK2(CMK2):
         etag = False
         # Check if we really need to move
         check_folder = folder
-        if app.config['CMK_SUPPORT'] == '2.2' and folder.endswith('/'):
+        if self.checkmk_version.startswith('2.2') and folder.endswith('/'):
             check_folder = folder[:-1]
         if not dont_move_host and current_folder != check_folder:
             etag = self.get_etag(hostname, "Move Host")

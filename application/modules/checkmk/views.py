@@ -20,7 +20,7 @@ from application.views.default import DefaultModelView
 from application.docu_links import docu_links
 
 from application.modules.rule.views import RuleModelView, \
-                    form_subdocuments_template, _render_full_conditions, get_rule_json
+                    form_subdocuments_template, _render_full_conditions, get_rule_json, _render_jinja
 from application.modules.checkmk.models import action_outcome_types, CheckmkSite
 from application.plugins.checkmk import get_debug_data
 
@@ -511,6 +511,11 @@ class CheckmkTagMngmtView(DefaultModelView):
     column_editable_list = [
         'enabled',
     ]
+
+    column_formatters = {
+            'rewrite_id': _render_jinja,
+            'rewrite_title': _render_jinja,
+    }
 
 
 class CheckmkUserMngmtView(DefaultModelView):

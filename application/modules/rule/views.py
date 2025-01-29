@@ -75,6 +75,14 @@ form_subdocuments_template = {
     }
 }
 
+def _render_jinja(_view, _context, model, name):
+    """
+    Render A field containing a Jinja Tempalte
+    """
+    value = highlight(model[name], DjangoLexer(),
+              HtmlFormatter(sytle='colorfull'))
+    return Markup(f'{value}')
+
 def _render_condition_typ(_view, _context, model, _name):
     """
     Render Condition Typ

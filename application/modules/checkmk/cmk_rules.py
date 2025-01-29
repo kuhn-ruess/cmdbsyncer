@@ -14,10 +14,6 @@ from application.modules.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.debug import ColorCodes as CC
 
-from syncerapi.v1.core import (
-    app_config,
-)
-
 class CheckmkRuleSync(CMK2):
     """
     Export Checkmk Rules
@@ -62,7 +58,7 @@ class CheckmkRuleSync(CMK2):
         for rule_type, rules in host_actions.items():
             for rule_params in rules:
                 # Render Template Value
-                if app_config['CMK_SUPPORT'] == '2.2':
+                if self.checkmk_version.startswith('2.2'):
                     condition_tpl = {"host_tags": [], "service_labels": []}
                 else:
                     condition_tpl = {"host_tags": [], "service_label_groups": [],
@@ -89,7 +85,7 @@ class CheckmkRuleSync(CMK2):
                     # Fix bug in case of empty Labels in store
                     if not label_key or not label_value:
                         continue
-                    if app_config['CMK_SUPPORT'] == '2.2':
+                    if self.checkmk_version.startswith('2.2'):
                         condition_tpl['host_labels'] = [{
                                                 "key": label_key,
                                                 "operator": "is",
