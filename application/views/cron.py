@@ -45,7 +45,7 @@ class CronGroupView(DefaultModelView):
     ]
 
 
-    column_default_sort = ("sort_field", True), ("name", True)
+    column_default_sort = ("sort_field", False)
 
     column_sortable_list = (
         'name',
