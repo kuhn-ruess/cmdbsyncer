@@ -12,7 +12,7 @@ from flask_login import current_user
 from flask_admin.form import rules
 from markupsafe import Markup
 from application.views.default import DefaultModelView
-from application.modules.rule.models import filter_actions, rule_types
+from application.modules.rule.models import filter_actions, rule_types, condition_types
 from application.docu_links import docu_links
 from application.helpers.sates import add_changes
 
@@ -22,7 +22,8 @@ condition_types={
     'equal': "is equal",
     'in': "contains",
     'not_in': "not contains",
-    'in_list': "found in list",
+    'in_list': "found in given list",
+    'string_in_list': "found in list",
     'ewith': "endswith",
     'swith': "startswith",
     'regex': "regex match",
