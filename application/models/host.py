@@ -15,6 +15,11 @@ class HostError(Exception):
     Errors related to host updates or creation
     """
 
+class DeprecatedError(Exception):
+    """
+    Raise for Deprecated functions
+    """
+
 class Target(db.EmbeddedDocument):
     """
     Target Stats
@@ -104,6 +109,8 @@ class Host(db.Document):
         Args:
             create (bool): Create a object if not yet existing (default)
         """
+        if not isinstance(hostname, str):
+            raise HostError("Hostname field does not contain a string")
         if app.config['LOWERCASE_HOSTNAMES']:
             hostname = hostname.lower()
         try:
@@ -190,7 +197,7 @@ class Host(db.Document):
         """
         Deprecated, migrate to update_host
         """
-        raise Exception("Deprecated function set_labels(), migrate to update_host")
+        raise DeprecatedError("Deprecated function set_labels(), migrate to update_host")
 
     def _set_labels(self, label_dict):
         """
