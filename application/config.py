@@ -86,9 +86,6 @@ class BaseConfig():
 
     ### Checkmk Stuff
 
-    #Checkmk has a bug:
-    CMK_SUPPORT = "2.3"
-
     CMK_BULK_CREATE_HOSTS = True
     CMK_BULK_CREATE_OPERATIONS = 300
 

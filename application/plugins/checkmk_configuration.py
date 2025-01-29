@@ -48,8 +48,9 @@ def cli_export_downtimes(account, debug, debug_rules):
 @click.argument('account')
 @click.option("--dry-run", default=False, is_flag=True)
 @click.option("--save-requests", default='')
+@click.option("--debug", is_flag=True)
 #pylint: disable=too-many-locals
-def cli_export_tags(account, dry_run, save_requests):
+def cli_export_tags(account, dry_run, save_requests, debug=False):
     """
     Export Hosttags Groups to Checkmk
 
@@ -59,7 +60,7 @@ def cli_export_tags(account, dry_run, save_requests):
     Args:
         account (string): Name Checkmk Account Config
     """
-    export_tags(account, dry_run, save_requests)
+    export_tags(account, dry_run, save_requests, debug)
 
 #.
 
