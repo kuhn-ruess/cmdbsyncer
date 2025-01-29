@@ -6,12 +6,13 @@ from application import db
 
 
 #   .-- Condition Types
+# IMPORTANT: Always also add in Views if new condition types
 condition_types = [
     ('equal', "String Equal (x == y)"),
     ('in', "String contains String (in)"),
     ('not_in', "String not contains String (not in)"),
     ('in_list', "Hosts Attribute equals a String in given comma separated list"),
-    ('string_in_list', "String included in Attributes Python List"),
+    ('string_in_list', "String included in Attributes (Python) List"),
     ('ewith', "String ends with (x.endswith(y)"),
     ('swith', "String starts with (x.startswith(y)"),
     ('regex', "Regex Match"),
