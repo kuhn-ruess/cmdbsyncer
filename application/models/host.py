@@ -359,6 +359,8 @@ class Host(db.Document):
         self.is_object = is_object
 
         self.inventory['syncer_account'] = account_name
+        self.inventory['syncer_last_seen'] = self.last_import_seen
+        self.inventory['syncer_last_sync'] = self.last_import_sync
 
         # Everthing Match already, make it short
         if self.source_account_id and self.source_account_id == account_id \
