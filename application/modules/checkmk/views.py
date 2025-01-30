@@ -69,11 +69,25 @@ def _render_dcd_rule(_view, _context, model, _name):
     """
     Render Downtime Rule
     """
-    html = "<table width=100%>"
-    for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td>"\
-                f"<td>{entry['dcd_id']}</td><td>{entry['title']}</td></tr>"
-    html += "</table>"
+
+    html = ""
+    for entry in model.outcomes:
+        dcd_id = \
+                highlight(entry['dcd_id'], DjangoLexer(),
+                          HtmlFormatter(sytle='colorfull'))
+        title  = \
+                highlight(entry['title'], DjangoLexer(),
+                          HtmlFormatter(sytle='colorfull'))
+        html += f'''
+            <div class="card">
+              <div class="card-body">
+                <p class="card-text">
+                 <h6 class="card-subtitle mb-2 text-muted">{dcd_id}</h6>
+                 {title}
+                </p>
+              </div>
+            </div>
+            '''
     return Markup(html)
 
 def _render_bi_rule(_view, _context, model, _name):

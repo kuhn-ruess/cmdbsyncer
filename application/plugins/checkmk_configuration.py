@@ -225,8 +225,9 @@ def cli_cmk_users(account):
     export_users(account)
 
 @cli_cmk.command('export_dcd_rules')
+@click.option("--debug", is_flag=True)
 @click.argument("account")
-def cli_cmk_dcd(account):
+def cli_cmk_dcd(account, debug=False):
     """
     Export Rules for DCD Deamon
 
@@ -237,7 +238,7 @@ def cli_cmk_dcd(account):
     Args:
         account (string): Name Checkmk Account Config
     """
-    export_dcd_rules(account)
+    export_dcd_rules(account, debug)
 
 @cli_cmk.command('export_passwords')
 @click.argument("account")

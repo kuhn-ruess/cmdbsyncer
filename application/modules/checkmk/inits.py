@@ -307,13 +307,14 @@ def export_downtimes(account, debug=False, debug_rules=False):
                 source="Checkmk", details=details)
 #.
 #   . DCD Rules
-def export_dcd_rules(account):
+def export_dcd_rules(account, debug=False):
     """
     Export DCD Rules to Checkmk
     """
     details = []
     try:
         syncer = CheckmkDCDRuleSync(account)
+        syncer.debug = debug
         class ExportDCD(DefaultRule):
             """
             Name overwrite
@@ -329,6 +330,8 @@ def export_dcd_rules(account):
         details.append(('error', f'CMK Error: {error_obj}'))
         log.log(f"Error Exporing DCD Rules to Checkmk Account: {account}",
                 source="cmk_dcd_rule_sync", details=details)
+        if debug:
+            raise
 #.
 #   . Passwords
 def export_passwords(account):
