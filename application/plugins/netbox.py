@@ -198,19 +198,23 @@ def cli_netbox_device_import(account):
 register_cronjob("Netbox: Import Devices", netbox_device_import)
 #.
 #   .-- Command: Import VMS
-def netbox_vm_import(account):
+def netbox_vm_import(account, debug=False):
     """Import VMs from Netbox"""
     try:
         syncer = SyncVirtualMachines(account)
+        syncer.debug = debug
         syncer.import_hosts()
     except Exception as error_obj: #pylint:disable=broad-except
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+        if debug:
+            raise
 
 @cli_netbox.command('import_vms')
 @click.argument("account")
-def cli_netbox_vm_import(account):
+@click.option("--debug", is_flag=True)
+def cli_netbox_vm_import(account, debug=False):
     """Import VMs from Netbox"""
-    netbox_vm_import(account)
+    netbox_vm_import(account, debug)
 register_cronjob("Netbox: Import VMs", netbox_vm_import)
 #.
 #   .-- Command: Export IPs
