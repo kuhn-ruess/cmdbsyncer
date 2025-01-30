@@ -206,7 +206,7 @@ class Rule(): # pylint: disable=too-few-public-methods
         for outcome in rule_outcomes:
             action_param = outcome['param']
             action = outcome['action']
-            if outcome['use_list_variable']:
+            if outcome['list_variable_name']:
                 varname = outcome['list_variable_name']
 
                 if input_list := self.attributes.get(varname):
