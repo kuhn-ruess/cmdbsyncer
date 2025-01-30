@@ -34,7 +34,7 @@ class CMK2(Plugin):
         """
         super().__init__(account)
 
-        if not self.checkmk_version:
+        if account and not self.checkmk_version:
             data = self.request('/version')[0]
             self.checkmk_version = data['versions']['checkmk']
 
