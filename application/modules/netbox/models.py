@@ -196,7 +196,6 @@ class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
     """
     action = db.StringField(choices=netbox_ipam_ipaddress_outcome_types)
     param = db.StringField()
-    use_list_variable = db.BooleanField()
     list_variable_name = db.StringField(max_length=120)
 
     meta = {
@@ -241,7 +240,6 @@ class NetboxIpamPrefixOutcome(db.EmbeddedDocument):
     """
     action = db.StringField(choices=netbox_prefix_outcome_types)
     param = db.StringField()
-    use_list_variable = db.BooleanField()
     list_variable_name = db.StringField(max_length=120)
 
     meta = {
@@ -296,7 +294,6 @@ class NetboxDcimInterfaceOutcome(db.EmbeddedDocument):
     """
     action = db.StringField(choices=netbox_device_interface_outcome_types)
     param = db.StringField()
-    use_list_variable = db.BooleanField()
     list_variable_name = db.StringField(max_length=120)
     meta = {
         'strict': False,
@@ -350,7 +347,6 @@ class NetboxVirtInterfaceOutcome(db.EmbeddedDocument):
     """
     action = db.StringField(choices=netbox_virt_interface_outcome_types)
     param = db.StringField()
-    use_list_variable = db.BooleanField()
     list_variable_name = db.StringField(max_length=120)
     meta = {
         'strict': False,

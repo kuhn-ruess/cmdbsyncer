@@ -42,6 +42,7 @@ enabled_rules = {
     'netbox_contacts': ('application.modules.netbox.models', 'NetboxContactAttributes'),
     'netbox_dataflow_models': ('application.modules.netbox.models', 'NetboxDataflowModels'),
     'netbox_dataflow_fields': ('application.modules.netbox.models', 'NetboxDataflowAttributes'),
+    'netbox_rewrites': ('application.modules.netbox.models', 'NetboxRewriteAttributeRule'),
 }
 
 
