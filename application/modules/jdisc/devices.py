@@ -140,6 +140,7 @@ class JdiscDevices(JDisc):
                 if not hostname and self.config.get('import_unnamed_devices'):
                     hostname = f'unnamed-{labels["serialNumber"]}'
                 elif not hostname:
+                    self.log_details.append(('unnamed_device_skipped', f'{labels["serialNumber"]}'))
                     continue
                 if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
                     hostname = Host.rewrite_hostname(hostname,
