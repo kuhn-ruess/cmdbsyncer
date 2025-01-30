@@ -136,6 +136,11 @@ class JdiscDevices(JDisc):
                 if 'name' not in labels:
                     continue
                 hostname = labels['name']
+
+                if not hostname and self.config.get('import_unnamed_devices'):
+                    hostname = f'unnamed-{labels["serialNumber"]}'
+                elif not hostname:
+                    continue
                 if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
                     hostname = Host.rewrite_hostname(hostname,
                                                      self.config['rewrite_hostname'], labels)

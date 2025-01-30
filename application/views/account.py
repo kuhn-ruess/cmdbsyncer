@@ -247,6 +247,7 @@ class AccountModelView(DefaultModelView):
             ]
             default_fields = [
                 ('rewrite_hostname', ""),
+                ('import_unnamed_devices', ""),
             ]
 
         if default_fields:
