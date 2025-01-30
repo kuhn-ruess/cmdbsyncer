@@ -70,7 +70,7 @@ class CheckmkDCDRuleSync(CMK2):
             rule_payload = {
                 'folder_path': render_jinja(crule['folder_path'], attributes),
                 'delete_hosts': crule['delete_hosts'],
-                'host_attributes': dict({x.attribute_name:x.attribute_value \
+                'host_attributes': dict({x['attribute_name']:x['attribute_value'] \
                                             for x in crule['host_attributes']})
             }
             if crule['host_filters']:
