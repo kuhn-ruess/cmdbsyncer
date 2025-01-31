@@ -34,15 +34,13 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                 outcomes['do_not_update_keys'] += fields
             elif field == 'custom_field':
                 try:
-                    new_value  = render_jinja(action_param, mode="nullify",
-                                             HOSTNAME=self.hostname, **self.attributes)
+                    new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                     custom_key, custom_value = new_value.split(':')
                     outcomes['custom_fields'][custom_key] = {'value': custom_value}
                 except ValueError:
                     continue
             else:
-                new_value  = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=self.hostname, **self.attributes)
+                new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
 
                 #if new_value in ['None', '']:
                 #    continue
@@ -79,15 +77,13 @@ class NetboxCluserRule(Rule):# pylint: disable=too-few-public-methods
             field = outcome['action']
             if field == 'custom_field':
                 try:
-                    new_value  = render_jinja(action_param, mode="nullify",
-                                             HOSTNAME=self.hostname, **self.attributes)
+                    new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                     custom_key, custom_value = new_value.split(':')
                     outcomes['custom_fields'][custom_key] = {'value': custom_value}
                 except ValueError:
                     continue
             else:
-                new_value  = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=self.hostname, **self.attributes)
+                new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
 
                 if new_value in ['None', '']:
                     continue
@@ -122,15 +118,13 @@ class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
             field = outcome['action']
             if field == 'custom_field':
                 try:
-                    new_value  = render_jinja(action_param, mode="nullify",
-                                             HOSTNAME=self.hostname, **self.attributes)
+                    new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                     custom_key, custom_value = new_value.split(':')
                     outcomes['custom_fields'][custom_key] = {'value': custom_value.strip()}
                 except ValueError:
                     continue
             else:
-                new_value  = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=self.hostname, **self.attributes)
+                new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
 
                 if new_value in ['None', '']:
                     continue
@@ -333,10 +327,7 @@ class NetboxContactRule(NetboxVariableRule):
             action_param = outcome['param']
             action = outcome['action']
 
-            hostname = self.db_host.hostname
-
-            new_value  = render_jinja(action_param, mode="nullify",
-                                     HOSTNAME=hostname, **self.attributes).strip()
+            new_value  = render_jinja(action_param, mode="nullify", **self.attributes).strip()
 
             if action == 'email':
                 if not '@' in new_value:
@@ -368,10 +359,7 @@ class NetboxDataflowRule(NetboxVariableRule):
             field_name = outcome['field_name']
             field_value = outcome['field_value']
 
-            hostname = self.db_host.hostname
-
-            new_value  = render_jinja(field_value, mode="nullify",
-                                     HOSTNAME=hostname, **self.attributes).strip()
+            new_value  = render_jinja(field_value, mode="nullify", **self.attributes).strip()
             if not new_value:
                 continue
 

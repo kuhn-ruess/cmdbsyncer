@@ -255,8 +255,7 @@ class CheckmkTagSync(CMK2):
                     rewrite_id = group_data['rw_id']
                     rewrite_title = group_data['rw_title']
 
-                    new_tag_id = render_jinja(rewrite_id, HOSTNAME=hostname,
-                                              **object_attributes['all'])
+                    new_tag_id = render_jinja(rewrite_id, **object_attributes['all'])
                     new_tag_id = new_tag_id.strip()
 
 
@@ -264,8 +263,7 @@ class CheckmkTagSync(CMK2):
                     if new_tag_id:
                         new_tag_id = cmk_cleanup_tag_id(new_tag_id)
 
-                    new_tag_title = render_jinja(rewrite_title, HOSTNAME=hostname,
-                                                 **object_attributes['all'])
+                    new_tag_title = render_jinja(rewrite_title, **object_attributes['all'])
                     new_tag_title.strip()
                 except Exception as exp:
                     logger.debug(f"Exception: {exp}")

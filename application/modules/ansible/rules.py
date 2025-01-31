@@ -25,7 +25,6 @@ class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
                     attr_value = get_account_variable(attr_value)
                 except ValueError:
                     pass
-            new_value  = render_jinja(attr_value, mode="nullify",
-                                     HOSTNAME=self.hostname, **self.attributes).strip()
+            new_value  = render_jinja(attr_value, mode="nullify", **self.attributes).strip()
             outcomes[outcome['attribute_name']] = new_value
         return outcomes

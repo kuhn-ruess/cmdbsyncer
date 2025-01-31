@@ -44,14 +44,14 @@ class CheckmkRuleSync(CMK2):
                     continue
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:
-                    self.calculate_rules_of_host(db_host.hostname, host_actions, attributes)
+                    self.calculate_rules_of_host(host_actions, attributes)
                 progress.advance(task1)
 
         self.clean_rules()
         self.create_rules()
 
 
-    def calculate_rules_of_host(self, hostname, host_actions, attributes):
+    def calculate_rules_of_host(self, host_actions, attributes):
         """
         Calculate rules by Attribute of Host
         """
@@ -64,12 +64,10 @@ class CheckmkRuleSync(CMK2):
                     condition_tpl = {"host_tags": [], "service_label_groups": [],
                                      "host_label_groups": []}
                 value = \
-                    render_jinja(rule_params['value_template'],
-                                 HOSTNAME=hostname, **attributes['all'])
+                    render_jinja(rule_params['value_template'], **attributes['all'])
 
                 rule_params['folder'] =\
-                    render_jinja(rule_params['folder'],
-                                 HOSTNAME=hostname, **attributes['all'])
+                    render_jinja(rule_params['folder'], **attributes['all'])
 
                 # Overwrite the Params again
                 rule_params['value'] = value
@@ -78,8 +76,7 @@ class CheckmkRuleSync(CMK2):
                 if rule_params['condition_label_template']:
                     label_condition = \
                         render_jinja(rule_params['condition_label_template'],
-                                     HOSTNAME=hostname,
-                                     **attributes['all'])
+                                                    **attributes['all'])
 
                     label_key, label_value = label_condition.split(':')
                     # Fix bug in case of empty Labels in store
@@ -103,9 +100,7 @@ class CheckmkRuleSync(CMK2):
 
                 if rule_params['condition_host']:
                     host_condition = \
-                        render_jinja(rule_params['condition_host'],
-                                     HOSTNAME=hostname,
-                                     **attributes['all'])
+                        render_jinja(rule_params['condition_host'], **attributes['all'])
                     if host_condition:
                         condition_tpl["host_name"]= {
                                         "match_on": host_condition.split(','),
