@@ -307,24 +307,32 @@ def export_downtimes(account, debug=False, debug_rules=False):
                 source="Checkmk", details=details)
 #.
 #   . DCD Rules
-def export_dcd_rules(account, debug=False):
+def export_dcd_rules(account, debug=False, debug_rules=False):
     """
     Export DCD Rules to Checkmk
     """
     details = []
     try:
-        syncer = CheckmkDCDRuleSync(account)
-        syncer.debug = debug
         class ExportDCD(DefaultRule):
             """
             Name overwrite
             """
-        actions = ExportDCD()
+        actions = ExportDCD(account)
         actions.rules = CheckmkDCDRule.objects(enabled=True)
-        syncer.actions = actions
-        syncer.name = 'Checkmk: Export DCD Rules'
-        syncer.source = "cmk_dcd_rule_sync"
-        syncer.export_rules()
+
+        if not debug_rules:
+            syncer = CheckmkDCDRuleSync(account)
+            syncer.debug = debug
+            syncer.actions = actions
+            syncer.name = 'Checkmk: Export DCD Rules'
+            syncer.source = "cmk_dcd_rule_sync"
+            syncer.export_rules()
+        else:
+            syncer = CheckmkDCDRuleSync(False)
+            syncer.actions = actions
+            syncer.debug_rules(debug_rules, "Checkmk")
+
+
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))

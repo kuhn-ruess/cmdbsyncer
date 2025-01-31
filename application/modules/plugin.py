@@ -226,6 +226,8 @@ class Plugin():
                         del attributes[realname]
                     except KeyError:
                         continue
+        # This is used that we have this varialbe in all Jinja Contexts
+        attributes['HOSTNAME'] = db_host.hostname
         data = {
             'all': attributes,
             'filtered': attributes_filtered,
@@ -256,7 +258,8 @@ class Plugin():
         Debug Mode to see Rule outcomes.
         Used with --debug-rules switch
         """
-        self.rewrite.debug = True
+        if self.rewrite:
+            self.rewrite.debug = True
         self.actions.debug = True
         self.config = {
             '_id': "debugmode",

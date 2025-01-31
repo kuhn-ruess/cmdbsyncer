@@ -145,8 +145,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             action_param = outcome['action_param']
             if outcome['action'] == 'move_folder':
                 new_value = action_param
-                new_value = render_jinja(new_value, mode="nullify",
-                                         HOSTNAME=hostname, **self.attributes)
+                new_value = render_jinja(new_value, mode="nullify", **self.attributes)
 
                 outcomes['extra_folder_options'] += self.format_foldername(new_value)
                 outcomes['move_folder'] += self.fix_and_format_foldername(new_value)
@@ -170,8 +169,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == 'create_folder':
                 new_value = action_param
-                new_value = render_jinja(new_value, mode="nullify",
-                                         HOSTNAME=hostname, **self.attributes)
+                new_value = render_jinja(new_value, mode="nullify", **self.attributes)
 
                 outcomes['create_folder_extra_folder_options'] += self.format_foldername(new_value)
                 outcomes['create_folder'] += self.fix_and_format_foldername(new_value)
@@ -199,16 +197,14 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                 outcomes['attributes'].append(action_param)
 
             if outcome['action'] == "remove_attr_if_not_set":
-                action_render = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=hostname, **self.attributes)
+                action_render = render_jinja(action_param, mode="nullify", **self.attributes)
 
                 for attribute in action_render.split(','):
                     attribute = attribute.strip()
                     outcomes['remove_if_attributes'].append(attribute)
 
             if outcome['action'] == 'custom_attribute':
-                action_render = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=hostname, **self.attributes)
+                action_render = render_jinja(action_param, mode="nullify", **self.attributes)
 
                 action_render = self.replace(action_render, exceptions=[
                                                         " ", '/', ',','|'
@@ -244,7 +240,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == "set_parent":
                 value = action_param
-                new_value = render_jinja(value, HOSTNAME=hostname, **self.attributes)
+                new_value = render_jinja(value, **self.attributes)
                 for parent in new_value.split(','):
                     parent = parent.strip()
                     if parent and parent not in outcomes['parents']:
