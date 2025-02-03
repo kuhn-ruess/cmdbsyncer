@@ -177,6 +177,8 @@ class Plugin():
             logger.debug(f"Response Json: {pformat(resp.json())}")
         except requests.exceptions.JSONDecodeError:
             logger.debug(f"Response Text: {pformat(resp.text)}")
+        except AttributeError:
+            logger.debug(f"Response Raw: {pformat(resp)}")
         return resp
 
 
