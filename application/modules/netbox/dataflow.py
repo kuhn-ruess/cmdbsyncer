@@ -35,6 +35,8 @@ class SyncDataFlow(SyncNetbox):
         Use the NB Response to Udpate local Cache
         """
         for line in data:
+            if not line:
+                continue
             identify_field_value = line[identify_field_name]
             for what in ['created', 'display', 'last_updated', 'url']:
                 try:
@@ -120,10 +122,10 @@ class SyncDataFlow(SyncNetbox):
 
                     payload, what = self.handle_rule_outcome(rule, identify_field_value, model_name)
                     if what == 'create':
-                        if payload not in create_list:
+                        if payload and payload not in create_list:
                             create_list.append(payload)
                     elif what == 'update':
-                        if payload not in update_list:
+                        if payload and payload not in update_list:
                             update_list.append(payload)
 
                 if create_list:
@@ -134,7 +136,8 @@ class SyncDataFlow(SyncNetbox):
 
                 if update_list:
                     self.console('Send Updates')
-                    response = self.inner_request('PUT', api_url, data=update_list, headers=self.headers)
+                    response = self.inner_request('PUT', api_url,
+                                                  data=update_list, headers=self.headers)
                     self.update_cache(response.json(), model_name,  identify_field_name)
 
                 progress.advance(task1)
