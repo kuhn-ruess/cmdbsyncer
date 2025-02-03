@@ -5,11 +5,13 @@ Alle Stuff shared by the plugins
 #pylint: disable=logging-fstring-interpolation
 from datetime import datetime
 import time
+import json
 import atexit
-from mongoengine.errors import DoesNotExist
 
 from pprint import pformat
 from collections import namedtuple
+
+from mongoengine.errors import DoesNotExist
 import requests
 from application import logger, app, log
 from application.modules.custom_attributes.models import CustomAttributeRule as \
@@ -109,7 +111,7 @@ class Plugin():
             payload['auth'] = auth
 
         if headers and headers.get('Content-Type') == "application/json" and data:
-            payload['json'] = data
+            payload['json'] = json.dumps(data)
         elif data and method != 'get':
             payload['data'] = data
         elif data:
@@ -286,4 +288,3 @@ class Plugin():
 
         extra_attributes = self.get_host_data(db_host, attributes['all'])
         attribute_table("Attributes by Rule ", extra_attributes)
-
