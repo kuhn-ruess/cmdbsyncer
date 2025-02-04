@@ -64,7 +64,7 @@ class JDisc(Plugin):
                 if do_save:
                     host_obj.is_object = True
                     host_obj.object_type = obj_type
-                    host_obj.set_labels(found_obj)
+                    host_obj.update_host(found_obj)
                     host_obj.save()
                 print(f" {cc.OKGREEN}* {cc.ENDC} Created object {name}")
             except Exception as error:
