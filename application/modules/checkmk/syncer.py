@@ -561,7 +561,8 @@ class SyncCMK2(CMK2):
                 label_prefix = ""
                 if self.label_prefix:
                     label_prefix = self.label_prefix
-                labels = {f"{label_prefix}{k}":str(v) for k,v in attributes['filtered'].items()}
+                labels = {f"{label_prefix}{k}":str(v).replace(':','-') \
+                        for k,v in attributes['filtered'].items()}
 
                 self.only_update_prefixed_labels = next_actions.get('only_update_prefixed_labels')
                 self.dont_update_prefixed_labels = next_actions.get('dont_update_prefixed_labels')
