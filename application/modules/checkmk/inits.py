@@ -228,7 +228,7 @@ def activate_changes(account):
     return True
 #.
 #   .-- Export Groups
-def export_groups(account, test_run=False):
+def export_groups(account, test_run=False, debug=False):
     """
     Manage Groups in Checkmk
     """
@@ -236,11 +236,14 @@ def export_groups(account, test_run=False):
     try:
         rules = _load_rules()
         syncer = CheckmkGroupSync(account)
+        syncer.debug = debug
         syncer.rewrite = rules['rewrite']
         syncer.name = 'Checkmk: Export Groups'
         syncer.source = "cmk_group_sync"
         syncer.export_cmk_groups(test_run)
     except CmkException as error_obj:
+        if debug:
+            raise
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
         log.log(f"Error Exporting Groups to Checkmk Account: {account}",
