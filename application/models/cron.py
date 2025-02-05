@@ -41,9 +41,9 @@ class GroupEntry(db.EmbeddedDocument):
     """
     Cron Entry
     """
-    name = db.StringField()
-    command = db.StringField(choices=cron_register.keys())
-    account = db.ReferenceField(document_type='Account')
+    name = db.StringField(required=True)
+    command = db.StringField(choices=cron_register.keys(), required=True)
+    account = db.ReferenceField(document_type='Account', required=True)
 
 
 class CronGroup(db.Document):
