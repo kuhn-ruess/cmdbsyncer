@@ -203,7 +203,8 @@ class SyncNetbox(Plugin):
                     current_field = new_field
                 if str(field_value).lower() != str(current_field).lower():
                     logger.debug(f'A6) {field}: {repr(current_field)} -> {repr(field_value)}')
-                    if field_value in ['Unknown', 'unknown', 'CMDB Syncer Not defined'] and current_field:
+                    if field_value in [ None, 'Unknown', 'unknown',
+                                       'CMDB Syncer Not defined'] and current_field:
                         continue
                     field_value = self.get_name_or_id(field, field_value, config)
                     #pylint: disable=singleton-comparison

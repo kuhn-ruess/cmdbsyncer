@@ -39,7 +39,6 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
         outcomes.setdefault('custom_fields', {})
         outcomes.setdefault('do_not_update_keys', [])
         outcomes.setdefault('sub_fields', {})
-        not_null_values = ['serial']
         for outcome in rule_outcomes:
             action_param = outcome['param']
             field = outcome['action']
@@ -55,13 +54,12 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                 except ValueError:
                     continue
             else:
-                if field == 'serial':
-                    new_value = new_value[:50]
-
-                if field in not_null_values and not new_value:
-                    new_value = ''
 
                 new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
+                if field == 'serial':
+                    if new_value == 'None':
+                        new_value = 'Unknown'
+                    new_value = new_value[:50]
                 new_value = prepare_value(new_value)
 
                 if field in sub_values:
