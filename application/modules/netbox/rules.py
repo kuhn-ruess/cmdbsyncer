@@ -54,11 +54,11 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                 except ValueError:
                     continue
             else:
-                new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
-                new_value = prepare_value(new_value)
-
                 if field == 'serial':
                     new_value = new_value[:50]
+
+                new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
+                new_value = prepare_value(new_value)
 
                 if field in sub_values:
                     outcomes['sub_fields'][field] = {'value': new_value}
