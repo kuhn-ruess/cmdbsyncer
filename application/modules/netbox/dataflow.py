@@ -37,6 +37,8 @@ class SyncDataFlow(SyncNetbox):
         for line in data:
             if not line:
                 continue
+            if isinstance(line, str):
+                continue
             identify_field_value = line[identify_field_name]
             for what in ['created', 'display', 'last_updated', 'url']:
                 try:
@@ -150,7 +152,7 @@ class SyncDataFlow(SyncNetbox):
         result_collection = []
         console = Console()
         with console.status(f"Download current data for {model_name}"):
-            api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}"
+            api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}?limit=15000"
             resp = self.inner_request("GET", api_url, headers=self.headers)
             resp_data = resp.json()
             result_collection += resp_data['results']
