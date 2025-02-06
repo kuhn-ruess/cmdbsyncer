@@ -111,13 +111,13 @@ class Plugin():
             payload['auth'] = auth
 
         if headers and headers.get('Content-Type') == "application/json" and data:
-            payload['json'] = json.dumps(data)
+            payload['json'] = data
         elif data and method != 'get':
             payload['data'] = data
         elif data:
             payload['params'] = data
 
-        logger.debug(f"Payload: {pformat(payload)}")
+        logger.debug(f"Payload: {json.dumps(payload)}")
 
         if path := self.save_requests:
             #pylint: disable=consider-using-with
@@ -176,7 +176,7 @@ class Plugin():
                     raise
 
         try:
-            logger.debug(f"Response Json: {pformat(resp.json())}")
+            logger.debug(f"Response Json: {json.dumps(resp.json())}")
         except requests.exceptions.JSONDecodeError:
             logger.debug(f"Response Text: {pformat(resp.text)}")
         except AttributeError:

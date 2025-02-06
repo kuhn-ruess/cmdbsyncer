@@ -52,6 +52,7 @@ class CMK2(Plugin):
         headers = {
             'Authorization': f'Bearer {username} {password}',
             'Accept': 'application/json',
+            'Content-Type': 'application/json',
         }
         response = False
         if additional_header:
