@@ -115,7 +115,7 @@ class Plugin():
         elif data:
             payload['params'] = data
 
-        logger.debug(f"Payload: {pformat(payload)}")
+        logger.debug(f"Payload: {json.dumps(payload)}")
 
         if path := self.save_requests:
             #pylint: disable=consider-using-with
@@ -174,7 +174,7 @@ class Plugin():
                     raise
 
         try:
-            logger.debug(f"Response Json: {pformat(resp.json())}")
+            logger.debug(f"Response Json: {json.dumps(resp.json())}")
         except requests.exceptions.JSONDecodeError:
             logger.debug(f"Response Text: {pformat(resp.text)}")
         return resp
