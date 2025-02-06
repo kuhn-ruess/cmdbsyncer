@@ -8,6 +8,7 @@ from flask_login import current_user
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 from flask_admin.model.template import LinkRowAction
 
+from mongoengine.queryset.visitor import Q
 from markupsafe import Markup
 
 
@@ -55,6 +56,45 @@ class FilterInventoryKey(BaseMongoEngineFilter):
 
     def operation(self):
         return "exists"
+
+
+class FilterLabelKeyAndValue(BaseMongoEngineFilter):
+    """
+    Filter Key:Value Pair for Label
+    """
+
+    def apply(self, query, value):
+        key, value = value.split(':')
+        pipeline_org = {
+                f'labels__{key}': value,
+        }
+        pipeline_int = {
+                f'labels__{key}': int(value),
+        }
+
+        return query.filter(Q(**pipeline_org) | Q(**pipeline_int))
+
+    def operation(self):
+        return "search"
+
+class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
+    """
+    Filter Key:Value Pair for Inventory
+    """
+
+    def apply(self, query, value):
+        key, value = value.split(':')
+        pipeline_org = {
+                f'inventory__{key}': value,
+        }
+        pipeline_int = {
+                f'inventory__{key}': int(value),
+        }
+
+        return query.filter(Q(**pipeline_org) | Q(**pipeline_int))
+
+    def operation(self):
+        return "search"
 
 def format_log(v, c, m, p):
     """ Format Log view"""
@@ -233,9 +273,17 @@ class HostModelView(DefaultModelView):
         Host,
         "Label Key"
        ),
+       FilterLabelKeyAndValue(
+        Host,
+        "Label Key:Value"
+       ),
        FilterInventoryKey(
         Host,
         "Inventory Key"
+       ),
+       FilterInventoryKeyAndValue(
+        Host,
+        "Inventory Key:Value"
        ),
     )
 
