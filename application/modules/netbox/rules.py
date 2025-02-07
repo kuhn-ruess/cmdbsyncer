@@ -6,6 +6,19 @@ Netbox Rules
 from application.modules.rule.rule import Rule
 from application.helpers.syncer_jinja import render_jinja
 
+
+
+def prepare_value(value):
+    """
+    Perpare Value to later have e.g. correct 
+    Json reprensentation like None will be Null etc.
+    """
+
+    value = value.strip()
+    if value.lower() == 'none':
+        value = None
+    return value
+
 #   . -- Devices
 class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
     """
@@ -34,26 +47,25 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
                 outcomes['do_not_update_keys'] += fields
             elif field == 'custom_field':
                 try:
-                    new_value  = render_jinja(action_param, mode="nullify",
-                                             HOSTNAME=self.hostname, **self.attributes)
+                    new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                     custom_key, custom_value = new_value.split(':')
+                    custom_value = prepare_value(custom_value)
                     outcomes['custom_fields'][custom_key] = {'value': custom_value}
                 except ValueError:
                     continue
             else:
-                new_value  = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=self.hostname, **self.attributes)
 
-                #if new_value in ['None', '']:
-                #    continue
-
+                new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                 if field == 'serial':
+                    if new_value == 'None':
+                        new_value = 'Unknown'
                     new_value = new_value[:50]
+                new_value = prepare_value(new_value)
 
                 if field in sub_values:
-                    outcomes['sub_fields'][field] = {'value': new_value.strip()}
+                    outcomes['sub_fields'][field] = {'value': new_value}
                 else:
-                    outcomes['fields'][field] = {'value': new_value.strip()}
+                    outcomes['fields'][field] = {'value': new_value}
         return outcomes
 #.
 #   . -- Cluster Rule
@@ -79,15 +91,13 @@ class NetboxCluserRule(Rule):# pylint: disable=too-few-public-methods
             field = outcome['action']
             if field == 'custom_field':
                 try:
-                    new_value  = render_jinja(action_param, mode="nullify",
-                                             HOSTNAME=self.hostname, **self.attributes)
+                    new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                     custom_key, custom_value = new_value.split(':')
                     outcomes['custom_fields'][custom_key] = {'value': custom_value}
                 except ValueError:
                     continue
             else:
-                new_value  = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=self.hostname, **self.attributes)
+                new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
 
                 if new_value in ['None', '']:
                     continue
@@ -122,23 +132,20 @@ class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
             field = outcome['action']
             if field == 'custom_field':
                 try:
-                    new_value  = render_jinja(action_param, mode="nullify",
-                                             HOSTNAME=self.hostname, **self.attributes)
+                    new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                     custom_key, custom_value = new_value.split(':')
-                    outcomes['custom_fields'][custom_key] = {'value': custom_value.strip()}
+                    custom_value = prepare_value(custom_value)
+                    outcomes['custom_fields'][custom_key] = {'value': custom_value}
                 except ValueError:
                     continue
             else:
-                new_value  = render_jinja(action_param, mode="nullify",
-                                         HOSTNAME=self.hostname, **self.attributes)
-
-                if new_value in ['None', '']:
-                    continue
+                new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
+                new_value = prepare_value(new_value)
 
                 if field in sub_values:
-                    outcomes['sub_fields'][field] = {'value': new_value.strip()}
+                    outcomes['sub_fields'][field] = {'value': new_value}
                 else:
-                    outcomes['fields'][field] = {'value': new_value.strip()}
+                    outcomes['fields'][field] = {'value': new_value}
 
         return outcomes
 #.
@@ -333,10 +340,7 @@ class NetboxContactRule(NetboxVariableRule):
             action_param = outcome['param']
             action = outcome['action']
 
-            hostname = self.db_host.hostname
-
-            new_value  = render_jinja(action_param, mode="nullify",
-                                     HOSTNAME=hostname, **self.attributes).strip()
+            new_value  = render_jinja(action_param, mode="nullify", **self.attributes).strip()
 
             if action == 'email':
                 if not '@' in new_value:
@@ -368,10 +372,7 @@ class NetboxDataflowRule(NetboxVariableRule):
             field_name = outcome['field_name']
             field_value = outcome['field_value']
 
-            hostname = self.db_host.hostname
-
-            new_value  = render_jinja(field_value, mode="nullify",
-                                     HOSTNAME=hostname, **self.attributes).strip()
+            new_value  = render_jinja(field_value, mode="nullify", **self.attributes).strip()
             if not new_value:
                 continue
 

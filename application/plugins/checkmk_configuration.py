@@ -103,8 +103,9 @@ def cli_export_rules(account):
 @cli_cmk.command('export_groups')
 @click.argument("account")
 @click.option('-t', '--test-run', is_flag=True)
+@click.option("--debug", is_flag=True)
 #pylint: disable=too-many-locals, too-many-branches
-def cli_export_groups(account, test_run):
+def cli_export_groups(account, test_run, debug=False):
     """
     Create Groups in Checkmk
 
@@ -116,7 +117,7 @@ def cli_export_groups(account, test_run):
         account (string): Name Account Config
         test_run (bool): Only Print Result ( default is False )
     """
-    export_groups(account, test_run)
+    export_groups(account, test_run, debug)
 
 
 #.
@@ -225,9 +226,10 @@ def cli_cmk_users(account):
     export_users(account)
 
 @cli_cmk.command('export_dcd_rules')
+@click.option("--debug-rules", default="")
 @click.option("--debug", is_flag=True)
 @click.argument("account")
-def cli_cmk_dcd(account, debug=False):
+def cli_cmk_dcd(account, debug_rules, debug=False):
     """
     Export Rules for DCD Deamon
 
@@ -238,7 +240,7 @@ def cli_cmk_dcd(account, debug=False):
     Args:
         account (string): Name Checkmk Account Config
     """
-    export_dcd_rules(account, debug)
+    export_dcd_rules(account, debug, debug_rules)
 
 @cli_cmk.command('export_passwords')
 @click.argument("account")

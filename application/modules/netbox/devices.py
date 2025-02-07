@@ -56,7 +56,7 @@ class SyncDevices(SyncNetbox):
                 'type': 'ipam.ip-addresses',
                 'has_slug': False,
                 'name_field': 'id',
-            }
+            },
         }
 
 
