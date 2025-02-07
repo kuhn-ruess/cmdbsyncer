@@ -88,7 +88,7 @@ class SyncNetbox(Plugin):
             logger.debug(f"B1) Obj: {create_obj}, Type: {obj_type}")
             allow_default = sub_obj.get('allow_default_value', True)
             if not allow_default and field_value in ['CMDB Syncer Not defined',
-                                                     'Unkown', 'unkown', None]:
+                                                     'Unknown', 'unknown', None]:
                 logger.debug("B1a) Ditched value since its a default")
                 return None
             if sub_obj['has_slug']:
@@ -116,7 +116,7 @@ class SyncNetbox(Plugin):
                 sub_obj_type = sub_sub_obj['type']
                 logger.debug(f"B5) Working with Submodel {obj_type}")
                 new_name = config['fields'][is_sub_model]['value']
-                if not new_name:
+                if new_name == '':
                     new_name = "CMDB Syncer Undefined"
                 create_obj = {'name': new_name}
                 if sub_sub_obj['has_slug']:
@@ -184,7 +184,7 @@ class SyncNetbox(Plugin):
                 logger.debug("A2 b) Dont Have current_object, check for subfield")
                 current_field = False
 
-            if not field_value or field_value == '':
+            if field_value == '':
                 logger.debug("A3) Field Undefied Fallback")
                 field_value = 'CMDB Syncer Not defined'
             if field_data.get('is_list') or isinstance(current_field, list):
@@ -203,7 +203,8 @@ class SyncNetbox(Plugin):
                     current_field = new_field
                 if str(field_value).lower() != str(current_field).lower():
                     logger.debug(f'A6) {field}: {repr(current_field)} -> {repr(field_value)}')
-                    if field_value in ['Unkown', 'unkown', 'CMDB Syncer Not defined'] and current_field:
+                    if field_value in [ None, 'Unknown', 'unknown',
+                                       'CMDB Syncer Not defined'] and current_field:
                         continue
                     field_value = self.get_name_or_id(field, field_value, config)
                     #pylint: disable=singleton-comparison

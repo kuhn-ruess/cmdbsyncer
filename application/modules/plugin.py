@@ -5,11 +5,13 @@ Alle Stuff shared by the plugins
 #pylint: disable=logging-fstring-interpolation
 from datetime import datetime
 import time
+import json
 import atexit
-from mongoengine.errors import DoesNotExist
 
 from pprint import pformat
 from collections import namedtuple
+
+from mongoengine.errors import DoesNotExist
 import requests
 from application import logger, app, log
 from application.modules.custom_attributes.models import CustomAttributeRule as \
@@ -177,6 +179,8 @@ class Plugin():
             logger.debug(f"Response Json: {json.dumps(resp.json())}")
         except requests.exceptions.JSONDecodeError:
             logger.debug(f"Response Text: {pformat(resp.text)}")
+        except AttributeError:
+            logger.debug(f"Response Raw: {pformat(resp)}")
         return resp
 
 
@@ -226,6 +230,8 @@ class Plugin():
                         del attributes[realname]
                     except KeyError:
                         continue
+        # This is used that we have this varialbe in all Jinja Contexts
+        attributes['HOSTNAME'] = db_host.hostname
         data = {
             'all': attributes,
             'filtered': attributes_filtered,
@@ -256,7 +262,8 @@ class Plugin():
         Debug Mode to see Rule outcomes.
         Used with --debug-rules switch
         """
-        self.rewrite.debug = True
+        if self.rewrite:
+            self.rewrite.debug = True
         self.actions.debug = True
         self.config = {
             '_id': "debugmode",
@@ -281,4 +288,3 @@ class Plugin():
 
         extra_attributes = self.get_host_data(db_host, attributes['all'])
         attribute_table("Attributes by Rule ", extra_attributes)
-

@@ -286,6 +286,8 @@ class CheckmkGroupRuleView(RuleModelView):
     }
 
     form_rules = [
+        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_groups"]}"'\
+                        'target="_blank" class="badge badge-light">Documentation</a>'),
         rules.FieldSet(
            ('name', 'documentation', 'enabled'),
             "1. Main Options"),

@@ -39,8 +39,7 @@ class BI(CMK2):
                     for rule_params in rules:
                         # Render Template Value
                         rule_body = \
-                            render_jinja(rule_params['rule_template'],
-                                         HOSTNAME=db_host.hostname, **attributes['all'])
+                            render_jinja(rule_params['rule_template'], **attributes['all'])
                         rule_dict = ast.literal_eval(rule_body.replace('null', 'None'))
                         unique_rules[rule_dict['id']] = rule_dict
                         pack_id = rule_dict['pack_id']
@@ -110,8 +109,7 @@ class BI(CMK2):
                     for rule_params in rules:
                         # Render Template Value
                         rule_body = \
-                            render_jinja(rule_params['rule_template'],
-                                         HOSTNAME=db_host.hostname, **attributes['all'])
+                            render_jinja(rule_params['rule_template'], **attributes['all'])
                         aggregation_dict = ast.literal_eval(rule_body.replace('null', 'None'))
                         unique_aggregations[aggregation_dict['id']] = aggregation_dict
                         pack_id = aggregation_dict['pack_id']

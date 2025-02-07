@@ -30,82 +30,58 @@ class SyncDataFlow(SyncNetbox):
     model_data_by_model = {}
 
 
-    def handle_rule(self, rule, identify_field_name, model_name):
+    def update_cache(self, data, model_name, identify_field_name):
+        """
+        Use the NB Response to Udpate local Cache
+        """
+        for line in data:
+            if not line:
+                continue
+            if isinstance(line, str):
+                continue
+            identify_field_value = line[identify_field_name]
+            for what in ['created', 'display', 'last_updated', 'url']:
+                try:
+                    del line[what]
+                except KeyError:
+                    continue
+            self.model_data_by_model[model_name][identify_field_value] = line
+
+
+    def handle_rule_outcome(self, rule, identify_field_value,  model_name):
         """
         Handle Actions resulting from Rule
 
-        Gets the current rules, which contain what the host has
-        Checks if this exsist in den nb_data
-        if not, just creates it, 
-        if yes, checks if up to date,
-        if not up to date, updates it.
-
-        2) Compare with the nb_data
-        3) Create if not in nb_data
-        4) Update if given Fields are different
+        Function is called once per Rule Outcome
         """
 
-        identify_field_value = rule['fields'][identify_field_name]['value']
 
         nb_data = self.model_data_by_model[model_name]
 
-
-        api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}/"
         if identify_field_value not in nb_data:
             # Crate Object
+            self.console(f" * Prepare CREATE: {identify_field_value}")
             payload = self.get_update_keys(False, rule)
-            new_header = self.headers
-            resp = self.inner_request("POST", api_url, data=payload, headers=new_header)
-            obj_id = resp.json()['id']
-            payload['id'] = obj_id
-            self.model_data_by_model[model_name][identify_field_value] = payload
-            self.console(f"Create {identify_field_value}, new ID: {obj_id}")
-
-        else:
-            # Maybe Update Object
-            current_object = self.model_data_by_model[model_name][identify_field_value]
-            try:
-                obj_id = current_object['id']
-            except KeyError:
-                print(current_object)
-                raise
-            # We don't wan't to have the ID in the update check
-            if payload := self.get_update_keys(current_object, rule):
-                self.console(f"Update {identify_field_value}")
-                update_url = f'{api_url}{obj_id}/'
-                # It seams we need the full object here to do a update.
-                # So use the changes to update the current_object
-                current_object['custom_fields'].update(payload['custom_fields'])
-                current_object.update(payload)
-                self.inner_request("PUT", update_url, data=current_object, headers=self.headers)
+            return payload, "create"
+        # Maybe Update Object
+        current_object = self.model_data_by_model[model_name][identify_field_value]
+        if payload := self.get_update_keys(current_object, rule):
+            self.console(f" * Prepare UPDATE {identify_field_value}")
+            current_object['custom_fields'].update(payload['custom_fields'])
+            current_object.update(payload)
+            return current_object, 'update'
+        return {}, False
 
 
-
-    def struct_current_model_data(self, identify_field, model_data, rule):
-        """
-        Parse Netbox Data into usable dict
-        """
-        out_dict = {}
-        #allowed_fields = list(rule['fields'].keys())
-        #allowed_fields.append('id')
-        #allowed_custom_fields = list(rule['custom_fields'].keys())
-        for entry in model_data:
-            field_name = entry[identify_field]
-            #subset = {k:v for k,v in entry.items() if k in allowed_fields}
-            #custom_fields = {k:v for k,v in entry['custom_fields'].items() \
-            #                if k in allowed_custom_fields}
-            #if entry['custom_fields']:
-            #    subset['custom_fields'] = entry['custom_fields']
-            out_dict[field_name] = entry
-        return out_dict
-
-    def process_model_data(self, model_name, model_data, rules):
+    def process_syncer_objects(self, model_name, model_data, rules):
         """
         Handle the Data and connect it to the Objects
         """
+        api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}/"
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
+        self.model_data_by_model[model_name] = {}
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
@@ -114,6 +90,8 @@ class SyncDataFlow(SyncNetbox):
             task1 = progress.add_task("Updating Data in Netbox", total=total)
 
             for db_object in db_objects:
+                create_list = []
+                update_list = []
 
                 all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
                 if not all_attributes:
@@ -126,6 +104,7 @@ class SyncDataFlow(SyncNetbox):
                 allowed_rules = [x.name for x in rules]
                 if not 'rules' in object_config:
                     continue
+
                 for rule in object_config['rules']:
                     if rule['rule'] not in allowed_rules:
                         continue
@@ -134,26 +113,46 @@ class SyncDataFlow(SyncNetbox):
                     try:
                         identify_field_name = [x for x,y in
                                         rule['fields'].items() if y['use_to_identify']][0]
+                        identify_field_value = rule['fields'][identify_field_name]['value']
                     except IndexError:
                         continue
-                    if model_name not in self.model_data_by_model:
-                        self.model_data_by_model[model_name] = \
-                                self.struct_current_model_data(identify_field_name,
-                                                               model_data,
-                                                               rule)
 
-                    self.handle_rule(rule, identify_field_name, model_name)
+                    # Only get NB Data, if we not already have it from object before.
+                    # Because from there, we keep and Update it in our memory
+                    if identify_field_value not in self.model_data_by_model[model_name]:
+                        self.update_cache(model_data, model_name, identify_field_name)
+
+                    payload, what = self.handle_rule_outcome(rule, identify_field_value, model_name)
+                    if what == 'create':
+                        if payload and payload not in create_list:
+                            create_list.append(payload)
+                    elif what == 'update':
+                        if payload and payload not in update_list:
+                            update_list.append(payload)
+
+                if create_list:
+                    self.console('Send Creates')
+                    response = self.inner_request('POST', api_url,
+                                                  data=create_list, headers=self.headers)
+                    self.update_cache(response.json(), model_name,  identify_field_name)
+
+                if update_list:
+                    self.console('Send Updates')
+                    response = self.inner_request('PUT', api_url,
+                                                  data=update_list, headers=self.headers)
+                    self.update_cache(response.json(), model_name,  identify_field_name)
+
                 progress.advance(task1)
 
 
-    def get_current_data(self, model_name):
+    def get_model_data(self, model_name):
         """
         Collect the current Data for the given Model
         """
         result_collection = []
         console = Console()
         with console.status(f"Download current data for {model_name}"):
-            api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}"
+            api_url = f"{self.config['address']}/api/plugins/data-flows/{model_name}?limit=15000"
             resp = self.inner_request("GET", api_url, headers=self.headers)
             resp_data = resp.json()
             result_collection += resp_data['results']
@@ -175,5 +174,5 @@ class SyncDataFlow(SyncNetbox):
         }
         for model_config in NetboxDataflowModels.objects(enabled=True):
             model_name = model_config.used_dataflow_model
-            model_data = self.get_current_data(model_name)
-            self.process_model_data(model_name, model_data, model_config.connected_rules)
+            model_data = self.get_model_data(model_name)
+            self.process_syncer_objects(model_name, model_data, model_config.connected_rules)

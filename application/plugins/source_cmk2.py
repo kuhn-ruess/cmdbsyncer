@@ -3,95 +3,60 @@
 Get Hosts from a CMKv2 Instance
 """
 import click
-import requests
-from mongoengine.errors import DoesNotExist
-from application import app, log
 from application.modules.checkmk.cmk2 import cli_cmk
-from application.models.host import Host, HostError
-from application.helpers.get_account import get_account_by_name
+from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
+from application.helpers.cron import register_cronjob
+from application.modules.checkmk.cmk2 import CMK2, CmkException
 
 
-if app.config.get("DISABLE_SSL_ERRORS"):
-    from urllib3.exceptions import InsecureRequestWarning
-    from urllib3 import disable_warnings
-    disable_warnings(InsecureRequestWarning)
 
-class CmkException(Exception):
-    """Cmk Errors"""
+def import_hosts(account, debug=False):
+    """
+    Inner Host Import Call
+    """
+    getter = DataGeter(account)
+    getter.debug = debug
+    getter.run()
 
 
-class DataGeter():
+class DataGeter(CMK2):
     """
     Get Data from CMK
     """
 
-    def __init__(self, config):
-        """
-        Inital
-        """
-        self.log = log
-        self.config = config
-        self.account_id = config['id']
-
-    def request(self, url=False):
-        """
-        Handle Request to CMK
-        """
-        address = self.config['address']
-        username = self.config['username']
-        password = self.config['password']
-        if not url:
-            url = f'{address}/check_mk/api/1.0/domain-types/host_config/collections/all'
-        headers = {
-            'Authorization': f"Bearer {username} {password}"
-        }
-        response = requests.get(url, headers=headers, verify=False, timeout=60)
-        if response.status_code != 200:
-            raise CmkException(response.json()['title'])
-        return response.json()
-
     def run(self):
         """Run Actual Job"""
-        for hostdata in self.request()['value']:
+        url = '/domain-types/host_config/collections/all?effective_attributes=true&include_links=false'
+        for hostdata in self.request(url, 'GET')[0]['value']:
             hostname = hostdata['id']
             print(f"\n{CC.HEADER} Process: {hostname}{CC.ENDC}")
 
-            try:
-                host = Host.objects.get(hostname=hostname)
-                host.add_log('Found in Source')
-                print(f"{CC.OKBLUE} *{CC.ENDC} Found host locally")
-            except DoesNotExist:
-                host = Host()
-                host.hostname = hostname
-                host.add_log("Inital Add")
-                print(f"{CC.OKBLUE} *{CC.ENDC} Created host locally")
-
-            do_save = host.set_account(account_dict=self.config)
+            host_obj = Host.get_host(hostname)
             labels = {}
-            try:
-                attributes = hostdata['extensions']['attributes']
-                if 'labels' in attributes:
-                    labels.update(attributes['labels'])
-                host.update_host(labels)
-            except HostError as error_obj:
-                host.add_log(f"Update Error {error_obj}")
+            effective_attributes = hostdata['extensions']['effective_attributes']
+            labels = effective_attributes
+            if 'labels' in effective_attributes:
+                labels.update(effective_attributes['labels'])
+
+            host_obj.update_host(labels)
+            do_save = host_obj.set_account(account_dict=self.config)
             if do_save:
-                host.save()
+                host_obj.save()
             else:
                 print(f"{CC.OKBLUE} *{CC.ENDC} Host owned by diffrent source, ignored")
 
 
+register_cronjob('Checkmk: Import Hosts (V2)', import_hosts)
+
 @cli_cmk.command('import_v2')
 @click.argument("account")
-def get_cmk_data(account):
+@click.option("--debug", default=False, is_flag=True)
+def get_cmk_data(account, debug=False):
     """Get All hosts from a CMK 2.x Installation and add them to local db"""
     try:
-        source_config = get_account_by_name(account)
-        if source_config:
-            getter = DataGeter(source_config)
-            getter.run()
-        else:
-            print("Source not found")
+        import_hosts(account, debug)
     except CmkException as error_obj:
+        if debug:
+            raise
         print(f'CMK Connection Error: {error_obj}')

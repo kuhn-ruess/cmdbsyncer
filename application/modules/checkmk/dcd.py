@@ -114,6 +114,8 @@ class CheckmkDCDRuleSync(CMK2):
             logger.debug(payload)
             return payload
         except UndefinedError:
+            if self.debug:
+                raise
             return {}
 
     def create_rule_in_cmk(self, payload):
@@ -130,10 +132,12 @@ class CheckmkDCDRuleSync(CMK2):
         """
         self.console(f" * Calculate {hostname}")
         for _, rules in outcomes.items():
-            for rule in rules:
+            for rule  in rules:
                 rule_payload = self.build_rule_payload(rule, attributes)
-        if rule_payload and rule_payload not in self.all_rules:
-            self.all_rules.append(rule_payload)
+                logger.debug(f'\nGot Payload: {rule_payload}')
+
+                if rule_payload and rule_payload not in self.all_rules:
+                    self.all_rules.append(rule_payload)
 
     def export_rules(self):
         """
@@ -152,11 +156,15 @@ class CheckmkDCDRuleSync(CMK2):
             object_filter = self.config['settings'].get(self.name, {}).get('filter')
             db_objects = Host.objects_by_filter(object_filter)
             for db_host in db_objects:
+                logger.debug(f'Started with {db_host.hostname}')
                 attributes = self.get_host_attributes(db_host, 'cmk_conf')
                 if not attributes:
+                    logger.debug(' -- Skiped no attributes')
+                    progress.advance(task1)
                     continue
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:
+                    logger.debug(' -- Got Actions')
                     self.calculate_rules_of_host(db_host.hostname, host_actions, attributes['all'])
                 progress.advance(task1)
             task2 = progress.add_task("Send Rules to Checkmk", total=len(self.all_rules))
