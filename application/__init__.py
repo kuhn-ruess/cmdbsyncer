@@ -171,6 +171,18 @@ from application.modules.custom_attributes.views import CustomAttributeView
 admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules"))
 
 #.
+#   .-- Ansible
+admin.add_sub_category(name="Ansible", parent_name="Modules")
+from application.modules.ansible.models import AnsibleCustomVariablesRule, \
+                                        AnsibleFilterRule, AnsibleRewriteAttributesRule
+from application.modules.ansible.views import AnsibleCustomVariablesView
+
+admin.add_view(RewriteAttributeView(AnsibleRewriteAttributesRule, name="Rewrite Attributes",
+                                                            category="Ansible"))
+admin.add_view(FiltereModelView(AnsibleFilterRule, name="Filter", category="Ansible"))
+admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
+                                    name="Ansible Attributes", category="Ansible"))
+#.
 #   .-- Checkmk
 admin.add_sub_category(name="Checkmk", parent_name="Modules")
 admin.add_link(MenuLink(name='Debug Config', category='Checkmk',
@@ -263,17 +275,16 @@ from application.modules.log.views import LogView
 admin.add_view(LogView(LogEntry, name="Log"))
 
 #.
-#   .-- Ansible
-admin.add_sub_category(name="Ansible", parent_name="Modules")
-from application.modules.ansible.models import AnsibleCustomVariablesRule, \
-                                        AnsibleFilterRule, AnsibleRewriteAttributesRule
-from application.modules.ansible.views import AnsibleCustomVariablesView
+#   .-- i-doit
+admin.add_sub_category(name="i-doit", parent_name="Modules")
 
-admin.add_view(RewriteAttributeView(AnsibleRewriteAttributesRule, name="Rewrite Attributes",
-                                                            category="Ansible"))
-admin.add_view(FiltereModelView(AnsibleFilterRule, name="Filter", category="Ansible"))
-admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
-                                    name="Ansible Attributes", category="Ansible"))
+from application.modules.idoit.views import IdoitCustomAttributesView
+from application.modules.idoit.models import IdoitCustomAttributes, \
+                                            IdoitRewriteAttributeRule
+admin.add_view(RewriteAttributeView(IdoitRewriteAttributeRule, name="Rewrite Attributes",
+                                                            category="i-doit"))
+admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
+                                    name="Custom Attributes", category="i-doit"))
 #.
 #   .-- Netbox
 admin.add_sub_category(name="Netbox", parent_name="Modules")
@@ -323,16 +334,15 @@ admin.add_view(NetboxDataFlowModelView(NetboxDataflowModels,\
 admin.add_view(NetboxDataFlowAttributesView(NetboxDataflowAttributes,\
         name="Field Definition", category="Plugin: Dataflow"))
 #.
-#   .-- i-doit
-admin.add_sub_category(name="i-doit", parent_name="Modules")
+#   .-- VMware
+admin.add_sub_category(name="VMware", parent_name="Modules")
 
-from application.modules.idoit.views import IdoitCustomAttributesView
-from application.modules.idoit.models import IdoitCustomAttributes, \
-                                            IdoitRewriteAttributeRule
-admin.add_view(RewriteAttributeView(IdoitRewriteAttributeRule, name="Rewrite Attributes",
-                                                            category="i-doit"))
-admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
-                                    name="Custom Attributes", category="i-doit"))
+from application.modules.vmware.models import VMwareRewriteAttributes, VMwareCustomAttributes
+from application.modules.vmware.views import VMwareCustomAttributeView
+admin.add_view(RewriteAttributeView(VMwareRewriteAttributes, name="Rewrite Attributes",
+                                                            category="VMware"))
+admin.add_view(VMwareCustomAttributeView(VMwareCustomAttributes, name="Custom Attributes",
+                                                            category="VMware"))
 #.
 #   .-- Config
 from application.models.user import User
