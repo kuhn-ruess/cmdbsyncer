@@ -19,6 +19,7 @@ with warnings.catch_warnings():
     except Exception as exp: #pylint: disable=broad-except
         print("Cannot Load Application. Is the Virtual Environment loaded?")
         print(exp)
+        raise
         sys.exit(1)
 
     if __name__ == '__main__':
