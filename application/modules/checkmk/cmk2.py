@@ -39,16 +39,17 @@ class CMK2(Plugin):
             self.checkmk_version = data['versions']['checkmk']
 
 
-    def request(self, params, method='GET', data=None, additional_header=None):
+    def request(self, url, method='GET', data=None, params=None, additional_header=None):
         """
         Handle Request to CMK
         """
         address = self.config['address']
         username = self.config['username']
         password = self.config['password']
-        if params.startswith('/'):
-            params = params[1:]
-        url = f'{address}/check_mk/api/1.0/{params}'
+        if url.startswith('/'):
+            url = url[1:]
+
+        url = f'{address}/check_mk/api/1.0/{url}'
         headers = {
             'Authorization': f'Bearer {username} {password}',
             'Accept': 'application/json',
@@ -65,7 +66,7 @@ class CMK2(Plugin):
         try:
             #pylint: disable=missing-timeout
 
-            response = self.inner_request(method, url, data, headers)
+            response = self.inner_request(method, url, data=data, headers=headers, params=params)
 
             try:
                 response_json = response.json()

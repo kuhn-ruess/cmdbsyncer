@@ -91,7 +91,7 @@ class Plugin():
 
 
 
-    def inner_request(self, method, url, data=None, headers=None, auth=None):
+    def inner_request(self, method, url, data=None, headers=None, auth=None, params=None):
         """
         Requst Module for all HTTP Requests
         by Plugin
@@ -115,7 +115,11 @@ class Plugin():
         elif data and method != 'get':
             payload['data'] = data
         elif data:
+            # @TODO: Check if needed:
             payload['params'] = data
+        elif params:
+            # For like CMK Queries
+            payload['params'] = params
 
         logger.debug(f"Payload: {json.dumps(payload)}")
 
