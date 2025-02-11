@@ -40,7 +40,7 @@ class JiraCloud(Plugin):
           "Content-Type": "application/json",
         }
 
-        self.auth = (self.config['user'], self.config['password'])
+        self.auth = (self.config['username'], self.config['password'])
 
     def get_id(self, obj_id):
         """
@@ -76,8 +76,10 @@ class JiraCloud(Plugin):
         response = self.inner_request(method="POST", url=url, params=query,
                                       headers=self.headers, data=payload, auth=self.auth)
 
-        all_data = response.json()['values']
-        for host in all_data:
+        all_data = response.json()
+        if 'values' not in all_data:
+            raise ValueError("No Data from Jira, Check your Account Settings")
+        for host in all_data['values']:
             hostname = host['label']
             attributes = host['attributes']
             host_obj = Host.get_host(hostname)
@@ -111,6 +113,11 @@ def cmd_import_jira(account, debug):
     """
     Import from Cloud Instance
     """
-    import_jira_cloud(account, debug)
+    try:
+        import_jira_cloud(account, debug)
+    except Exception as error:
+        if debug:
+            raise
+        print(f"Error: {error}")
 
 register_cronjob('Jira Cloud: Import  Hosts', import_jira_cloud)
