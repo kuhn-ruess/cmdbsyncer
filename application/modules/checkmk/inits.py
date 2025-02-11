@@ -133,14 +133,17 @@ def export_bi_aggregations(account):
 #   .-- Inventorize Hosts
 
 
-def inventorize_hosts(account):
+def inventorize_hosts(account, debug=False):
     """
     Inventorize information from Checkmk Installation
     """
     try:
         inven = InventorizeHosts(account)
+        inven.debug = debug
         inven.run()
     except CmkException as error_obj:
+        if debug:
+            raise
         details = []
         details.append(('error', f'Error: {error_obj}'))
         print(f'{ColorCodes.FAIL} Error: {error_obj} {ColorCodes.ENDC}')
