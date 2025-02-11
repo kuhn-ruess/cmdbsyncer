@@ -22,8 +22,12 @@ account_types = [
     ('restapi', "Internal Rest API Credentials"),
     ('external_restapi', "Remote Rest API"),
     ('maintenance', "Maintanence Jobs"),
+    ('vmware', "Vmware"),
     ('custom', "Custom Entries, like DBs"),
 ]
+
+
+account_types.sort()
 
 
 object_types = [
