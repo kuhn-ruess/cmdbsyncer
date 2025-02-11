@@ -90,15 +90,16 @@ class InventorizeHosts(CMK2):
         }
         # We run that only on first line, thats the Checkmk_Service
 
-        api_response = self.request(url, data=params, method="GET")
+        api_response = self.request(url, params=params, method="GET")
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
         for service in api_response[0]['value']:
             hostname = service['extensions']['host_name']
             self.add_host(hostname)
             self.hw_sw_inventory.setdefault(hostname, {})
+            if not 'host_mk_inventory' in service['extensions']:
+                continue
             raw_inventory = service['extensions']['host_mk_inventory']['value'].encode('ascii')
             raw_decoded_inventory = base64.b64decode(raw_inventory).decode('utf-8')
-
             if raw_decoded_inventory:
                 inv_raw = ast.literal_eval(raw_decoded_inventory)
                 inv_parsed = {}
@@ -112,6 +113,12 @@ class InventorizeHosts(CMK2):
                     if node_content['Nodes']:
                         for sub_node_name, sub_node_content in node_content['Nodes'].items():
                             inv_parsed[node_name][sub_node_name] = {}
+                            if sub_node_attributes := sub_node_content.get('Table'):
+                                key_column = sub_node_attributes['KeyColumns'][0]
+                                for line in sub_node_attributes['Rows']:
+                                    entry_name = str(line[key_column])
+                                    inv_parsed[node_name][sub_node_name][entry_name] = line
+
                             if sub_node_attributes := sub_node_content.get('Attributes'):
                                 for attr_name, attribute_value in \
                                             sub_node_attributes['Pairs'].items():
@@ -129,20 +136,22 @@ class InventorizeHosts(CMK2):
                                                 [sub_sub_node_name][attr_name] = attribute_value
 
 
+
                 # Get the wanted fiels out of the parsed data
                 for needed_fields in self.fields['cmk_inventory']:
                     data = inv_parsed
                     fields = needed_fields.split('.')
                     data_name = "_".join(fields)
-                    for path in fields:
-                        if not data:
+                    for path, values in data.items():
+                        data_name += path
+                        if not values:
                             continue
-                        data = data.get(path)
-                    if isinstance(data, dict):
-                        for sub_field, sub_value in data.items():
-                            self.hw_sw_inventory[hostname][f"{data_name}_{sub_field}"] = sub_value
-                    elif data:
-                        self.hw_sw_inventory[hostname][data_name] = data
+                        if isinstance(values, dict):
+                            for sub_field, sub_value in values.items():
+                                self.hw_sw_inventory[hostname][f"{data_name}_{sub_field}"] = \
+                                        sub_value
+                        else:
+                            self.hw_sw_inventory[hostname][data_name] = values
 
     def get_cmk_services(self):
         """ Get CMK Services"""
@@ -165,11 +174,13 @@ class InventorizeHosts(CMK2):
             "columns": columns
         }
 
-        api_response = self.request(url, data=params, method="GET")
+        api_response = self.request(url, params=params, method="GET")
         for service in api_response[0]['value']:
             hostname = service['extensions']['host_name']
             self.add_host(hostname)
             service_description = service['extensions']['description'].lower().replace(' ', '_')
+            if not 'state' in service['extensions']:
+                continue
             service_state = service['extensions']['state']
             service_output = service['extensions']['plugin_output']
             labels = service['extensions']['host_labels']
@@ -199,7 +210,7 @@ class InventorizeHosts(CMK2):
             "columns": columns
         }
         url = "domain-types/service/collections/all"
-        api_response = self.request(url, data=params, method="GET")
+        api_response = self.request(url, params=params, method="GET")
         for service in api_response[0]['value']:
             names = service['extensions']['label_names']
             values = service['extensions']['label_values']
@@ -275,8 +286,8 @@ class InventorizeHosts(CMK2):
         print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
               f"{ColorCodes.UNDERLINE}{self.account_name}{ColorCodes.ENDC}")
 
-        if app.config['CMK_GET_HOST_BY_FOLDER']:
-            self.fetch_checkmk_folders()
+        #if app.config['CMK_GET_HOST_BY_FOLDER']:
+        #    self.fetch_checkmk_folders()
 
 
         # Inventory for Status Information

@@ -163,8 +163,9 @@ def cli_bake_and_sign_agents(account):
 
 @cli_cmk.command('inventorize_hosts')
 @click.argument('account')
+@click.option("--debug", is_flag=True)
 #pylint: disable=too-many-locals
-def cli_inventorize_hosts(account):
+def cli_inventorize_hosts(account, debug=False):
     """
     Do an Status Data inventory on given Checkmk Instance.
     Requires CMK Version greater then 2.1p9
@@ -175,7 +176,7 @@ def cli_inventorize_hosts(account):
     Args:
         account (string): Name Checkmk Account Config
     """
-    inventorize_hosts(account)
+    inventorize_hosts(account, debug)
 #.
 #   .-- Command: Checkmk BI
 
