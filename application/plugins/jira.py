@@ -80,12 +80,12 @@ def import_jira(account):
         if do_save:
             host_obj.save()
 
-@jira_cli.command('import_jira')
+@jira_cli.command('import_onprem')
 @click.argument("account")
 def cmd_import_jira(account):
     """
-    Import from Jira
+    Import from On Premise Jira
     """
     import_jira(account)
 
-register_cronjob('Jira: Import  Hosts', import_jira)
+register_cronjob('Jira OnPrem: Import  Hosts', import_jira)

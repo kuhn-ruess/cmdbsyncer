@@ -9,6 +9,7 @@ account_types = [
     ('csv', "CSV File"),
     ('json', "Json File"),
     ('jira', "Jira CMDB"),
+    ('jira_cloud', "Jira Cloud CMDB"),
     ('jdisc', "Jdisc Device Discovery System"),
     ('mysql', "Mysql Table"),
     ('mssql', "MSSQL Table"),
