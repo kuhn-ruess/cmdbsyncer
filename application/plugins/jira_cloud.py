@@ -4,19 +4,14 @@ Import Jira Data
 #pylint: disable=too-many-locals
 import json
 import click
-from application.plugins.jira import jira_cli
-
-from application.modules.plugin import Plugin
-
 from syncerapi.v1 import (
     register_cronjob,
     cc,
     Host,
 )
 
-
-
-
+from application.plugins.jira import jira_cli
+from application.modules.plugin import Plugin
 
 class JiraCloud(Plugin):
     """
@@ -51,7 +46,8 @@ class JiraCloud(Plugin):
             url = f"{self.base_url}/v1/objecttype/{obj_id}"
             response = self.inner_request(method="GET", url=url,
                                           headers=self.headers, auth=self.auth)
-            obj_name = response.json()['name']
+            resp_json = response.json()
+            obj_name = resp_json.get('name', f'not_found_{obj_id}')
             self.name_cache[obj_id] = obj_name
         else:
             obj_name = self.name_cache[obj_id]
@@ -73,6 +69,7 @@ class JiraCloud(Plugin):
         payload = json.dumps({
             'qlQuery' : self.config['ql_query'],
         })
+        # We send data on purpose (not json)
         response = self.inner_request(method="POST", url=url, params=query,
                                       headers=self.headers, data=payload, auth=self.auth)
 
@@ -83,7 +80,7 @@ class JiraCloud(Plugin):
             hostname = host['label']
             attributes = host['attributes']
             host_obj = Host.get_host(hostname)
-            id_field = 'objectTypeAttributeId'
+            id_field = 'globalId'
             obj_field = 'objectAttributeValues'
             labels = \
                     {self.get_id(x[id_field]):x[obj_field][0].get('value') \
