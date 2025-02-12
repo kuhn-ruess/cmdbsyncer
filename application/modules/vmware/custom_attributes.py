@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import JDISC Data"""
+"""Sync VMware Vsphere Custom Attributes"""
 #pylint: disable=logging-fstring-interpolation
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -35,12 +35,38 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
         attributes = {
             "name": vm.name,
             "power_state": vm.runtime.powerState,
-            "cpu_count": vm.config.hardware.numCPU if vm.config else None,
-            "memory_mb": vm.config.hardware.memoryMB if vm.config else None,
-            "guest_os": vm.config.guestFullName if vm.config else None,
-            "ip_address": vm.guest.ipAddress if vm.guest else None,
-            "hostname": vm.guest.hostName if vm.guest else None,
         }
+
+        if vm.guest:
+            attributes.update({
+                "ip_address": vm.guest.ipAddress,
+                "hostname": vm.guest.hostName,
+                "full_name": vm.guest.guestFullName,
+                "tools_status": vm.guest.toolsStatus,
+            })
+        if vm.config:
+            attributes.update({
+                "cpu_count": vm.config.hardware.numCPU,
+                "memory_mb": vm.config.hardware.memoryMB,
+                "guest_os": vm.config.guestFullName,
+                "uuid": vm.config.uuid,
+                "guest_id": vm.config.guestId,
+                "annotation": vm.config.annotation,
+                "hw_device": vm.config.hardware.device,
+            })
+
+        if vm.runtime:
+            attributes.update({
+                 "power_state": vm.runtime.powerState,
+                 "runtime_host": vm.runtime.host,
+                 "boot_time": vm.runtime.bootTime,
+            })
+
+        if vm.network:
+            attributes['network'] = vm.network
+
+        if vm.datastore:
+            attributes['datastore'] = vm.datastore
 
         if vm.customValue:
             for custom_field in vm.customValue:
@@ -87,7 +113,7 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
             for db_host in db_objects:
                 try:
                     hostname = db_host.hostname
-                    all_attributes = self.get_host_attributes(db_host, 'netbox')
+                    all_attributes = self.get_host_attributes(db_host, 'vmware_vcenter')
                     if not all_attributes:
                         progress.advance(task1)
                         continue
