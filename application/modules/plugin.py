@@ -5,7 +5,7 @@ Alle Stuff shared by the plugins
 #pylint: disable=logging-fstring-interpolation
 from datetime import datetime
 import time
-import json
+import json as mod_json
 import atexit
 
 from pprint import pformat
@@ -91,7 +91,7 @@ class Plugin():
 
 
 
-    def inner_request(self, method, url, data=None, headers=None, auth=None, params=None):
+    def inner_request(self, method, url, data=None, json=None, headers=None, auth=None, params=None):
         """
         Requst Module for all HTTP Requests
         by Plugin
@@ -109,19 +109,14 @@ class Plugin():
             payload['headers'] = headers
         if auth:
             payload['auth'] = auth
-
-        if headers and headers.get('Content-Type') == "application/json" and data:
-            payload['json'] = data
-        elif data and method != 'get':
+        if json:
+            payload['json'] = json
+        if data:
             payload['data'] = data
-        elif data:
-            # @TODO: Check if needed:
-            payload['params'] = data
-        elif params:
-            # For like CMK Queries
+        if params:
             payload['params'] = params
 
-        logger.debug(f"Payload: {json.dumps(payload)}")
+        logger.debug(f"Payload: {mod_json.dumps(payload)}")
 
         if path := self.save_requests:
             #pylint: disable=consider-using-with
@@ -180,7 +175,7 @@ class Plugin():
                     raise
 
         try:
-            logger.debug(f"Response Json: {json.dumps(resp.json())}")
+            logger.debug(f"Response Json: {mod_json.dumps(resp.json())}")
         except requests.exceptions.JSONDecodeError:
             logger.debug(f"Response Text: {pformat(resp.text)}")
         except AttributeError:

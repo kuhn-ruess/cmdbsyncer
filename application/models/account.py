@@ -22,7 +22,7 @@ account_types = [
     ('restapi', "Internal Rest API Credentials"),
     ('external_restapi', "Remote Rest API"),
     ('maintenance', "Maintanence Jobs"),
-    ('vmware', "Vmware"),
+    ('vmware', "Vmware vCenter"),
     ('custom', "Custom Entries, like DBs"),
 ]
 

@@ -43,10 +43,13 @@ class VMwareCustomAttributesPlugin(Plugin):
             context = ssl._create_unverified_context()
         else:
             context = ssl.create_default_context()
+
         self.vcenter = SmartConnect(host=self.config['address'],
                                     user=self.config['username'],
                                     pwd=self.config['password'],
                                     sslContext=context)
+        if not self.vcenter:
+            raise Exception("Cannot connect to vcenter")
 
 
     def get_current_attributes(self):
@@ -57,13 +60,18 @@ class VMwareCustomAttributesPlugin(Plugin):
         content = self.vcenter.RetrieveContent()
         container = content.viewManager.CreateContainerView(content.rootFolder,
                                                             [vim.VirtualMachine], True)
-        return container.view
+        data = [ x for x in container.view]
+        import pprint
+
+        pprint.pprint(data)
+        return []
 
 
     def export_attributes(self):
         """
         Export Custom Attributes
         """
+        self.connect()
         current_attributes = self.get_current_attributes()
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
@@ -102,6 +110,6 @@ class VMwareCustomAttributesPlugin(Plugin):
         """
         Inventorize Custom Attributes
         """
+        self.connect()
 
-        run_inventory(self.config, [(x.name, str(x)) for x in \
-                            x in self.get_current_attributes()])
+        run_inventory(self.config, [(x.name, {str(y):str(z) for y,z in x.__dict__.items()}) for x in self.get_current_attributes()])

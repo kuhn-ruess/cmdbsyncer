@@ -41,7 +41,7 @@ class JDisc(Plugin):
         response = self.inner_request(
             'POST',
             url=self.config['address'],
-            data=data,
+            json=data,
               headers={
                   'Content-Type': 'application/json',
                   'Accept': 'application/json',
@@ -106,7 +106,7 @@ class JDisc(Plugin):
                            'Content-Type': 'application/json',
                            'Accept': 'application/json',
                   },
-                  data=data,
+                  json=data,
         )
         rsp_json = response.json()
         if not rsp_json['data']:
