@@ -37,21 +37,30 @@ class JiraCloud(Plugin):
 
         self.auth = (self.config['username'], self.config['password'])
 
-    def get_id(self, obj_id):
+    def get_name_by_id(self, obj_id):
         """
-        Get ID of Object and Cache items
+        Get name of attribute by id
         """
+        if not self.name_cache:
+            self.get_attribute_names()
 
-        if obj_id not in self.name_cache:
-            url = f"{self.base_url}/v1/objecttype/{obj_id}"
-            response = self.inner_request(method="GET", url=url,
+
+        return self.name_cache.get(obj_id, f'unk_{obj_id}')
+
+    def get_attribute_names(self):
+        """
+        Get the Names of all attributes
+        """
+        url = f"{self.base_url}/v1/objectschema/list"
+        response = self.inner_request(method="GET", url=url,
+                                      headers=self.headers, auth=self.auth)
+
+        for schema in response.json()['values']:
+            url = f"{self.base_url}/v1/objectschema/{schema['id']}/attributes"
+            schema_resp = self.inner_request(method="GET", url=url,
                                           headers=self.headers, auth=self.auth)
-            resp_json = response.json()
-            obj_name = resp_json.get('name', f'not_found_{obj_id}')
-            self.name_cache[obj_id] = obj_name
-        else:
-            obj_name = self.name_cache[obj_id]
-        return obj_name
+            for attribute in schema_resp.json():
+                self.name_cache[attribute['id']] = attribute['name']
 
     def import_objects(self):
         """
@@ -80,10 +89,10 @@ class JiraCloud(Plugin):
             hostname = host['label']
             attributes = host['attributes']
             host_obj = Host.get_host(hostname)
-            id_field = 'globalId'
+            id_field = 'objectTypeAttributeId'
             obj_field = 'objectAttributeValues'
             labels = \
-                    {self.get_id(x[id_field]):x[obj_field][0].get('value') \
+                    {self.get_name_by_id(x[id_field]):x[obj_field][0].get('value') \
                     for x in attributes}
 
             host_obj.update_host(labels)
