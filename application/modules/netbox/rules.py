@@ -57,7 +57,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
 
                 new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                 if field == 'serial':
-                    if new_value == 'None':
+                    if new_value == 'None' or not new_value:
                         new_value = 'Unknown'
                     new_value = new_value[:50]
                 new_value = prepare_value(new_value)
