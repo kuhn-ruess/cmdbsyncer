@@ -39,6 +39,8 @@ class SyncDataFlow(SyncNetbox):
                 continue
             if isinstance(line, str):
                 continue
+            if identify_field_name not in line:
+                continue
             identify_field_value = line[identify_field_name]
             for what in ['created', 'display', 'last_updated', 'url']:
                 try:
