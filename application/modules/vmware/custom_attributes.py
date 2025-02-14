@@ -27,6 +27,7 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
     VMware Custom Attributes
     """
     console = None
+    container_view = None
 
     def get_vm_attributes(self, vm, content):
         """
@@ -52,7 +53,7 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
                 "uuid": vm.config.uuid,
                 "guest_id": vm.config.guestId,
                 "annotation": vm.config.annotation,
-                "hw_device": vm.config.hardware.device,
+                #"hw_device": vm.config.hardware.device,
             })
 
         if vm.runtime:
@@ -63,10 +64,16 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
             })
 
         if vm.network:
-            attributes['network'] = vm.network
+            networks = []
+            for network in vm.network:
+                networks.append({'name': network.name})
+            attributes['networks'] = networks
 
         if vm.datastore:
-            attributes['datastore'] = vm.datastore
+            datastores = []
+            for datastore in vm.datastore:
+                datastores.append({'name': datastore.info.name})
+            attributes['datastores'] = datastores
 
         if vm.customValue:
             for custom_field in vm.customValue:
@@ -76,7 +83,14 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
                     f"custom_{field_key}"
                 )
                 attributes[field_name] = custom_field.value
-        return attributes
+
+        return_dict = {}
+        for key, value in attributes.items():
+            if not isinstance(value, str) and not isinstance(value, list):
+                value = str(value)
+            return_dict[key] = value
+
+        return return_dict
 
 
     def get_current_attributes(self):
@@ -87,8 +101,8 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
         content = self.vcenter.RetrieveContent()
         container = content.viewManager.CreateContainerView(content.rootFolder,
                                                             [vim.VirtualMachine], True)
-        data = [self.get_vm_attributes(x, content) for x in container.view]
-        container.Destroy()
+        self.container_view = container.view
+        data = [self.get_vm_attributes(x, content) for x in self.container_view]
         return data
 
 
@@ -98,7 +112,8 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
         """
         self.connect()
         current_attributes = {x['name']:x for x in self.get_current_attributes()}
-        print(current_attributes)
+
+        current_vms = {x.name:x for x in self.container_view}
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
@@ -124,6 +139,22 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
 
                     self.console(f" * Work on {hostname}")
                     logger.debug(f"{hostname}: {custom_rules}")
+                    changes = []
+                    if vm_host_data := current_attributes.get(hostname):
+                        for new_attr_name, new_attr_value in custom_rules['attributes'].items():
+                            old_value = False
+                            if old_attr := vm_host_data.get(new_attr_name):
+                                old_value = old_attr
+                            if old_value != new_attr_value:
+                                changes.append(f"{new_attr_name}: {old_attr} to {new_attr_value}")
+                                current_vms[hostname].SetCustomValue(key=new_attr_name,
+                                                                     value=new_attr_value)
+                        logger.debug(f" Updated: {changes}")
+                    else:
+                        logger.debug(f" Not found in VMware Data")
+                        progress.advance(task1)
+                        continue
+
                 except Exception as error:
                     if self.debug:
                         raise
