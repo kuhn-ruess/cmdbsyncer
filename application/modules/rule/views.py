@@ -452,6 +452,8 @@ def _render_attribute_rewrite(_view, _context, model, _name):
 
         if old_attr_name and new_attr_name:
             attribute_name = f"Rewrite from {old_attr_name} to {new_attr_name}"
+        elif old_attr_name:
+            attribute_name = old_attr_name
         else:
             attribute_name = new_attr_name
 
@@ -462,7 +464,7 @@ def _render_attribute_rewrite(_view, _context, model, _name):
                 <p class="card-text">
                 {attribute_name}
                 </p>
-                <h6 class="card-subtitle mb-2 text-muted">New Value</h6>
+                <h6 class="card-subtitle mb-2 text-muted">To new Value</h6>
                 {value}
               </div>
             </div>
