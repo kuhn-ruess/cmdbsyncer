@@ -116,7 +116,10 @@ class Plugin():
         if params:
             payload['params'] = params
 
-        logger.debug(f"Payload: {mod_json.dumps(payload)}")
+        log_dict = payload.copy()
+        if 'json' in payload:
+            log_dict['json'] = mod_json.dumps(payload['json'])
+        logger.debug(f"Payload: {log_dict}")
 
         if path := self.save_requests:
             #pylint: disable=consider-using-with
