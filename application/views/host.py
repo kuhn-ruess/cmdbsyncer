@@ -169,8 +169,15 @@ class ObjectModelView(DefaultModelView):
        'object_type',
     )
 
-    can_export = False
-    # False: Because it's a Host Model and therfore conflict
+    can_export = True
+
+    export_types = ['syncer_rules',]
+
+    column_export_list = ('hostname', )
+
+    column_formatters_export = {
+        'hostname': get_rule_json
+    }
 
 
     def get_query(self):
@@ -204,8 +211,10 @@ class ObjectModelView(DefaultModelView):
     ]
 
     column_formatters = {
+        'log': format_log,
         'labels': format_labels,
         'inventory': format_inventory,
+        'cache': format_cache,
     }
 
     def get_export_name(self, _export_type):
@@ -216,6 +225,17 @@ class ObjectModelView(DefaultModelView):
 
         dt_str = now.strftime("%Y%m%d%H%M")
         return f"{self.model.__name__}_{dt_str}.syncer_json"
+
+    def __init__(self, model, **kwargs):
+        """
+        Overwrite based on status
+
+        """
+
+        if app.config['DEBUG'] is True:
+            self.can_edit = True
+
+        super().__init__(model, **kwargs)
 
 
 class HostModelView(DefaultModelView):
