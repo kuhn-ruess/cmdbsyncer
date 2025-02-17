@@ -6,6 +6,7 @@
 import os
 import sys
 import logging
+from logging import config as log_config
 from datetime import datetime
 from pprint import pformat
 from jinja2 import StrictUndefined
@@ -27,7 +28,7 @@ tablib_registry.register('syncer_rules', ExportObjects())
 
 VERSION = '3.8.2-dev'
 # create logger
-logger = logging.getLogger('cmdb_syncer')
+
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -40,6 +41,8 @@ else:
     app.jinja_env.auto_reload = True
 
 
+log_config.dictConfig(app.config['LOGGING'])
+logger = logging.getLogger('debug')
 
 try:
     from local_config import config
@@ -47,17 +50,10 @@ try:
 except ModuleNotFoundError:
     pass
 
-## Logging
-logger.setLevel(logging.DEBUG)
 
-ch = app.config['LOG_CHANNEL']
-ch.setLevel(app.config['LOG_LEVEL'])
 if '--debug' in sys.argv:
-    ch.setLevel(6)
+    logger.setLevel(logging.DEBUG)
 
-formatter = logging.Formatter('%(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
 if app.config['DEBUG']:
     logger.info('Loaded Debug Mode')
 
