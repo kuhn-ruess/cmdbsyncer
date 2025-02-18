@@ -123,7 +123,7 @@ class Plugin():
 
         log_dict = payload.copy()
         if 'json' in payload:
-            log_dict['json'] = mod_json.dumps(payload['json'])
+            log_dict['json'] = json.dumps(payload['json'])
         logger.debug(f"Payload: {log_dict}")
 
         if path := self.save_requests:
