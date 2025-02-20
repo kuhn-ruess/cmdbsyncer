@@ -3,3 +3,5 @@ markdown-it-py==3.0.0
 pypyodbc==1.3.6
 sqlserverport==1.0.1
 mysql-connector-python==9.1.0
+pyvim==3.0.3
+pyvmomi==8.0.3.0.1
