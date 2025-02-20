@@ -141,6 +141,10 @@ class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
             else:
                 new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                 new_value = prepare_value(new_value)
+                if field == 'serial':
+                    if not new_value:
+                        new_value = 'Unknown'
+                    new_value = new_value[:50]
 
                 if field in sub_values:
                     outcomes['sub_fields'][field] = {'value': new_value}
