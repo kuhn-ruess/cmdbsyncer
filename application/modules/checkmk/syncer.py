@@ -30,10 +30,6 @@ class SyncCMK2(CMK2):
     clusters = []
     cluster_updates = []
 
-    checkmk_hosts = {}
-    existing_folders = []
-    existing_folders_attributes = {}
-    custom_folder_attributes = {}
 
     label_prefix = False
     only_update_prefixed_labels = False
@@ -77,28 +73,6 @@ class SyncCMK2(CMK2):
                     if config_path not in self.custom_folder_attributes:
                         self.custom_folder_attributes[config_path] = ast.literal_eval(splitted[1])
 
-    def fetch_checkmk_folders(self):
-        """
-        Fetch list of Folders in Checkmk
-        """
-        url = "domain-types/folder_config/collections/all"
-        url += "?parent=/&recursive=true&show_hosts=false"
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
-            task1 = progress.add_task("Fetching Current Folders", start=False)
-            api_folders = self.request(url, method="GET")
-            if not api_folders[0]:
-                raise CmkException("Cant connect or auth with CMK")
-            progress.update(task1, total=len(api_folders[0]['value']), start=True)
-            for folder in api_folders[0]['value']:
-                progress.update(task1, advance=1)
-                path = folder['extensions']['path']
-                attributes = folder['extensions']['attributes']
-                self.existing_folders_attributes[path] = attributes
-                self.existing_folders_attributes[path].update({'title': folder['title']})
-                self.existing_folders.append(path)
 
     def handle_folders(self):
         """
@@ -183,56 +157,6 @@ class SyncCMK2(CMK2):
                       f"({update_attributes})")
 
 
-    def _fetch_all_checkmk_hosts(self):
-        """
-        Classic full Fetch
-        """
-        url = "domain-types/host_config/collections/all"
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
-            task1 = progress.add_task("Fetching Hosts", start=False)
-            progress.console.print("Waiting for Checkmk Response")
-            api_hosts = self.request(url, method="GET")
-            progress.update(task1, total=len(api_hosts[0]['value']), start=True)
-            for host in api_hosts[0]['value']:
-                self.checkmk_hosts[host['id']] = host
-                progress.update(task1, advance=1)
-
-
-
-    def _get_hosts_of_folder(self, folder, return_dict):
-        """ Get Hosts of given folder """
-        folder = folder.replace('/','~')
-        url = f"objects/folder_config/{folder}/collections/hosts"
-        api_hosts = self.request(url, method="GET")
-        for host in api_hosts[0]['value']:
-            return_dict[host['id']] = host
-
-    def _fetch_checkmk_host_by_folder(self):
-        """
-        Check the folder Structure and get hosts
-        whit multiple request
-        """
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
-            num_folders = len(self.existing_folders)
-
-            task1 = progress.add_task("Fetching Hosts folder by folder", total=num_folders)
-            manager = multiprocessing.Manager()
-            return_dict = manager.dict()
-            with multiprocessing.Pool() as pool:
-                for folder in self.existing_folders:
-                    pool.apply_async(self._get_hosts_of_folder,
-                                     args=(folder, return_dict,),
-                                     callback=lambda x: progress.advance(task1))
-
-                pool.close()
-                pool.join()
-                self.checkmk_hosts.update(return_dict)
 
 
     def fetch_checkmk_hosts(self):
@@ -242,7 +166,7 @@ class SyncCMK2(CMK2):
         if app.config['CMK_GET_HOST_BY_FOLDER']:
             self._fetch_checkmk_host_by_folder()
         else:
-            self._fetch_all_checkmk_hosts()
+            self.fetch_all_checkmk_hosts()
 
 
     def use_host(self, hostname, source_account_name):
