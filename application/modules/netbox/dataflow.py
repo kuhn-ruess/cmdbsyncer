@@ -39,6 +39,8 @@ class SyncDataFlow(SyncNetbox):
                 continue
             if isinstance(line, str):
                 continue
+            if identify_field_name not in line:
+                continue
             identify_field_value = line[identify_field_name]
             for what in ['created', 'display', 'last_updated', 'url']:
                 try:
@@ -133,13 +135,13 @@ class SyncDataFlow(SyncNetbox):
                 if create_list:
                     self.console('Send Creates')
                     response = self.inner_request('POST', api_url,
-                                                  data=create_list, headers=self.headers)
+                                                  json=create_list, headers=self.headers)
                     self.update_cache(response.json(), model_name,  identify_field_name)
 
                 if update_list:
                     self.console('Send Updates')
                     response = self.inner_request('PUT', api_url,
-                                                  data=update_list, headers=self.headers)
+                                                  json=update_list, headers=self.headers)
                     self.update_cache(response.json(), model_name,  identify_field_name)
 
                 progress.advance(task1)
