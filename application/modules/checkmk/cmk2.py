@@ -65,7 +65,6 @@ class CMK2(Plugin):
 
         try:
             #pylint: disable=missing-timeout
-
             response = self.inner_request(method, url, json=data, headers=headers, params=params)
 
             try:
