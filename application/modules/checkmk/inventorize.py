@@ -5,8 +5,6 @@ import base64
 import ast
 import json
 
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-
 from application.models.host import Host, app
 from application.modules.checkmk.models import (
    CheckmkInventorizeAttributes
@@ -39,31 +37,12 @@ class InventorizeHosts(CMK2):
     label_inventory = {}
 
 
-    checkmk_folders = []
-
     def add_host(self, host):
         """
         Just add if not in
         """
         if host not in self.found_hosts:
             self.found_hosts.append(host)
-
-    def fetch_checkmk_folders(self):
-        """
-        Fetch list of Folders in Checkmk
-        """
-        url = "domain-types/folder_config/collections/all"
-        url += "?parent=/&recursive=true&show_hosts=false"
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
-            task1 = progress.add_task("Fetching Current Folders", start=False)
-            api_folders = self.request(url, method="GET")
-            for folder in api_folders[0]['value']:
-                progress.update(task1, advance=1)
-                path = folder['extensions']['path']
-                self.checkmk_folders.append(path)
 
     def __init__(self, account):
         """Init"""
@@ -162,7 +141,7 @@ class InventorizeHosts(CMK2):
 
         expr = []
         expr.append({"op": "=", "left": "description", "right": "Check_MK"})
-        for field in self.fields['cmk_services']:
+        for field in self.fields.get('cmk_services', []):
             expr.append({"op": "=", "left": "description", "right": field})
 
         query = {
@@ -229,18 +208,20 @@ class InventorizeHosts(CMK2):
     def get_attr_labels(self):
         """ Gett Attribute and Labels """
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Config Data")
+
         if app.config['CMK_GET_HOST_BY_FOLDER']:
-            pass
+            self._fetch_checkmk_host_by_folder(extra_params="?effective_attributes=true")
+        else:
+            self.fetch_all_checkmk_hosts(extra_params="?effective_attributes=true")
 
-
-
-        url = "domain-types/host_config/collections/all?effective_attributes=true"
-        api_hosts = self.request(url, method="GET")
-        for host in api_hosts[0]['value']:
-            hostname = host['id']
+        for hostname, host in self.checkmk_hosts.items():
             self.add_host(hostname)
             attributes = host['extensions']
-            attributes.update(host['extensions']['effective_attributes'])
+            if not attributes:
+                continue
+            if attributes['effective_attributes']:
+                attributes.update(attributes['effective_attributes'])
+                del attributes['effective_attributes']
 
             host_inventory = {}
 
@@ -257,7 +238,7 @@ class InventorizeHosts(CMK2):
 
             if self.fields.get('cmk_labels'):
                 labels = self.label_inventory.get(hostname, {})
-                labels.update(attributes['labels'])
+                labels.update(attributes.get('labels', {}))
                 for label_key, label_value in labels.items():
                     if label_key in self.fields['cmk_labels']:
                         label_key = label_key.replace('cmk/','')
@@ -286,8 +267,8 @@ class InventorizeHosts(CMK2):
         print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
               f"{ColorCodes.UNDERLINE}{self.account_name}{ColorCodes.ENDC}")
 
-        #if app.config['CMK_GET_HOST_BY_FOLDER']:
-        #    self.fetch_checkmk_folders()
+        if app.config['CMK_GET_HOST_BY_FOLDER']:
+            self.fetch_checkmk_folders()
 
 
         # Inventory for Status Information
@@ -297,7 +278,8 @@ class InventorizeHosts(CMK2):
 
         #    columns.append('host_mk_inventory')
 
-        if self.fields.get('cmk_services'):
+        if self.fields.get('cmk_services') or self.fields.get('cmk_labels'):
+            # We fetch the Labels to have them available in get_attr_labels()
             self.get_cmk_services()
 
         if self.fields.get('cmk_service_labels'):
