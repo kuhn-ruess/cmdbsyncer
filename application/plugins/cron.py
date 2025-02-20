@@ -40,12 +40,12 @@ def calc_next_run(job, last_start, was_outdated=False):
     t_to = int(job.timerange_to)
 
 
-    if not last_start and  t_from <= current_hour <= t_to:
+    if not last_start and  t_from <= current_hour < t_to:
         # Job is currently and range, but was never started
         return now - timedelta(minutes=1)
 
 
-    if t_from <= current_hour <= t_to:
+    if t_from <= current_hour < t_to:
         # We are in Timerange, but job was running already,
         # so add minutes to the next interval
         minutes = False
@@ -83,7 +83,7 @@ def in_timerange(job):
     current_hour = now.hour
     t_from = int(job.timerange_from)
     t_to = int(job.timerange_to)
-    if t_from <= current_hour <= t_to:
+    if t_from <= current_hour < t_to:
         return True
     return False
 
