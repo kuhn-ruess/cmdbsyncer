@@ -1,6 +1,5 @@
 """ Config File """
 #pylint: disable=too-few-public-methods
-import logging
 
 class BaseConfig():
     """
@@ -16,8 +15,43 @@ class BaseConfig():
     BASE_PREFIX = '/'
     SESSION_COOKIE_NAME = "syncer"
 
-    LOG_LEVEL = logging.INFO
-    LOG_CHANNEL = logging.StreamHandler()
+    LOGGING = {
+        "version": 1,
+        "disable_existing_loggers": "False",
+        "formatters": {
+            "verbose": {
+                "format": "%(levelname)s - %(message)s"
+            },
+            "syslog": {
+                "format": "%(levelname)s - %(message)s"
+            }
+        },
+        "handlers": {
+            "console": {
+                "class":"logging.StreamHandler",
+                "formatter": "verbose"
+            },
+            "syslog": {
+                "class": "logging.handlers.SysLogHandler",
+                "address": ["127.0.0.1", 514],
+                #"address": "/dev/log",
+                "facility": "local6",
+                "formatter": "syslog"
+                }
+        },
+        "loggers": {
+            "debug": {
+                "handlers": ["console"],
+                "level": 100,
+                "propagate": "True"
+            },
+            "syslog": {
+                "handlers": ["syslog"],
+                "level": "INFO",
+                "propagate": "True"
+            }
+        }
+    }
 
     # Minimum length for user Passwords (not applied to admin panel)
     PASSWD_MIN_PASSWD_LENGTH = 9
@@ -39,6 +73,7 @@ class BaseConfig():
     STYLE_NAV_BACKGROUND_COLOR = "#000"
     STYLE_NAV_LINK_COLOR = "#fff"
     HEADER_HINT = ""
+
 
 
     REPLACE_ATTRIBUTE_KEYS = False

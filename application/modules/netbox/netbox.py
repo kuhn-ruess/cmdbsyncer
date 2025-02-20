@@ -80,8 +80,9 @@ class SyncNetbox(Plugin):
         logger.debug(f"B0) Working on {field}")
         if sub_obj := translation.get(field):
             obj_type = sub_obj['type']
-            if obj_type == 'string':
+            if not field_value or obj_type == 'string':
                 return field_value
+
             ## Create the SUB Field
             name_field = sub_obj.get('name_field', 'name')
             create_obj = {name_field: field_value}

@@ -9,6 +9,7 @@ account_types = [
     ('csv', "CSV File"),
     ('json', "Json File"),
     ('jira', "Jira CMDB"),
+    ('jira_cloud', "Jira Cloud CMDB"),
     ('jdisc', "Jdisc Device Discovery System"),
     ('mysql', "Mysql Table"),
     ('mssql', "MSSQL Table"),
@@ -21,8 +22,12 @@ account_types = [
     ('restapi', "Internal Rest API Credentials"),
     ('external_restapi', "Remote Rest API"),
     ('maintenance', "Maintanence Jobs"),
+    ('vmware_vcenter', "Vmware vCenter"),
     ('custom', "Custom Entries, like DBs"),
 ]
+
+
+account_types.sort()
 
 
 object_types = [

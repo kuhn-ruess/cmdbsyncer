@@ -134,8 +134,7 @@ def _render_attribute_outcomes(_view, _context, model, _name):
               <div class="card-body">
                 <p class="card-text">
                  <span class="badge badge-primary">
-                 {entry.attribute_name}</span>:
-                <span class="badge badge-info">
+                 {entry.attribute_name}</span><b>:</b><span class="badge badge-info">
                 {entry.attribute_value}
                 </span>
                 </p>

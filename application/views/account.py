@@ -229,6 +229,11 @@ class AccountModelView(DefaultModelView):
             default_fields = [
                 ('page_size', "1000"),
             ]
+        elif form.typ.data == 'jira_cloud':
+            default_fields = [
+                ('workspace_id', "Required"),
+                ('ql_query', "Required"),
+            ]
 
         elif form.typ.data == 'i-doit':
             default_fields = [

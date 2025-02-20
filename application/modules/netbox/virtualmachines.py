@@ -163,6 +163,8 @@ class SyncVirtualMachines(SyncNetbox):
         for vm in self.nb.virtualization.virtual_machines.filter(**vm_filter):
             try:
                 hostname = vm.name
+                if not hostname:
+                    continue
                 labels = vm.__dict__
                 for what in ['has_details', 'api',
                              'default_ret', 'endpoint',
