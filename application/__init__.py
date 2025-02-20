@@ -25,7 +25,7 @@ from tablib.formats import registry as tablib_registry
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.8.2'
+VERSION = '3.8.3-dev'
 
 # create logger
 
