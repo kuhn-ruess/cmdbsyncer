@@ -163,12 +163,14 @@ class AccountModelView(DefaultModelView):
                 ('data_key', 'result'),
                 ('hostname_field', 'host'),
                 ('rewrite_hostname', ""),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'cmkv2':
             default_fields = [
                 ('limit_by_accounts', ""),
                 ('limit_by_hostnames', ""),
                 ('list_disabled_hosts', ""),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'ldap':
             default_fields = [
@@ -224,15 +226,18 @@ class AccountModelView(DefaultModelView):
                 ('hostname_field', 'dnshostname'),
                 ('namespace', ""),
                 ('class_name', ""),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'jira':
             default_fields = [
                 ('page_size', "1000"),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'jira_cloud':
             default_fields = [
                 ('workspace_id', "Required"),
                 ('ql_query', "Required"),
+                ('verify_cert', "True"),
             ]
 
         elif form.typ.data == 'i-doit':

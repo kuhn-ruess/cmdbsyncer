@@ -21,6 +21,10 @@ def get_account_by_name(name):
         for field, value  in [(x['name'], x.get('value')) for x in account_dict['custom_fields']]:
             if not value:
                 value = False
+            if value.lower() == 'true':
+                account_dict[field] = True
+            if value.lower() == 'false':
+                account_dict[field] = False
             account_dict[field] = value
         account_dict['settings'] = {}
         for plugin, object_filter  in [(x['plugin'],
