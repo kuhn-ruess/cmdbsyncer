@@ -68,11 +68,17 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
         pipeline_org = {
                 f'labels__{key}': value,
         }
-        pipeline_int = {
-                f'labels__{key}': int(value),
-        }
+        try:
+            pipeline_int = {
+                    f'labels__{key}': int(value),
+            }
+        except ValueError:
+            pipeline_int = False
 
-        return query.filter(Q(**pipeline_org) | Q(**pipeline_int))
+        if pipeline_int:
+            return query.filter(Q(**pipeline_org) | Q(**pipeline_int))
+        return query.filter(**pipeline_org)
+        
 
     def operation(self):
         return "search"
@@ -87,11 +93,16 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
         pipeline_org = {
                 f'inventory__{key}': value,
         }
-        pipeline_int = {
-                f'inventory__{key}': int(value),
-        }
+        try:
+            pipeline_int = {
+                    f'inventory__{key}': int(value),
+            }
+        except ValueError:
+            pipeline_int = False
 
-        return query.filter(Q(**pipeline_org) | Q(**pipeline_int))
+        if pipeline_int:
+            return query.filter(Q(**pipeline_org) | Q(**pipeline_int))
+        return query.filter(**pipeline_org)
 
     def operation(self):
         return "search"
