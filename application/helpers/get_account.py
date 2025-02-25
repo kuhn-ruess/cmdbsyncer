@@ -31,6 +31,7 @@ def get_account_by_name(name):
         del account_dict['custom_fields']
         del account_dict['plugin_settings']
         account_dict['id'] = str(account_dict['_id'])
+        account_dict['ref'] = account_dict['_id']
         return account_dict
     except DoesNotExist as exc:
         raise AccountNotFoundError("Account not found") from exc
