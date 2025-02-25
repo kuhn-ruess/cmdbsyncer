@@ -70,7 +70,11 @@ class Plugin():
             self.account_name = self.config['name']
             self.account_id = str(self.config['_id'])
             self.log_details.append(('Account', self.config['name']))
-        self.verify = not app.config.get('DISABLE_SSL_ERRORS')
+            self.verify = self.config.get('verify_cert'):
+
+        if verify := app.config.get('DISABLE_SSL_ERRORS'):
+            # Legacy Behavior -> Global Setting Overwrite. Deprecated start v3.8.2
+            self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 
 
         if not self.source:
