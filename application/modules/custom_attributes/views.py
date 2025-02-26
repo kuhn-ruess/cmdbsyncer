@@ -32,3 +32,4 @@ class CustomAttributeView(RuleModelView):
         self.form_subdocuments = base_config
 
         super().__init__(model, **kwargs)
+
