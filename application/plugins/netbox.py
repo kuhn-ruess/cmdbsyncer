@@ -182,19 +182,23 @@ def cli_netbox_cluster(account, debug, debug_rules):
 register_cronjob("Netbox: Sync Cluster", netbox_cluster_sync)
 #.
 #   .-- Command: Import VMS
-def netbox_device_import(account):
+def netbox_device_import(account, debug=False):
     """Import Devices from Netbox"""
     try:
         syncer = SyncDevices(account)
+        syncer.debug = debug
         syncer.import_hosts()
     except Exception as error_obj: #pylint:disable=broad-except
+        if debug:
+            raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('import_devices')
+@click.option("--debug", is_flag=True)
 @click.argument("account")
-def cli_netbox_device_import(account):
+def cli_netbox_device_import(account, debug=False):
     """Import Devices from Netbox"""
-    netbox_device_import(account)
+    netbox_device_import(account, debug)
 register_cronjob("Netbox: Import Devices", netbox_device_import)
 #.
 #   .-- Command: Import VMS
