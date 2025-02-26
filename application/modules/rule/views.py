@@ -2,10 +2,13 @@
 Rule Model View
 """
 from datetime import datetime
+from mongoengine.errors import NotUniqueError
+
 
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import DjangoLexer
+from flask import flash
 
 from wtforms import HiddenField, StringField
 from flask_login import current_user
@@ -15,6 +18,7 @@ from application.views.default import DefaultModelView
 from application.modules.rule.models import filter_actions, rule_types, condition_types
 from application.docu_links import docu_links
 from application.helpers.sates import add_changes
+
 
 
 #   .-- Renderer
@@ -279,7 +283,17 @@ class RuleModelView(DefaultModelView):
 
     column_exclude_list = [
         'conditions', 'outcomes'
-    ]
+    ]   
+
+    def create_model(self, form):
+        """ 
+        Create model
+        """
+        try:
+            return super().create_model(form)
+        except NotUniqueError:
+            flash("Duplicate Entry Name", "error")
+            return False
 
     def on_model_change(self, form, model, is_created):
         """
@@ -287,7 +301,11 @@ class RuleModelView(DefaultModelView):
         """
         add_changes()
 
-        return super().on_model_change(form, model, is_created)
+        try:
+            super().on_model_change(form, model, is_created)
+        except NotUniqueError as exce:
+            flash("Duplicate Entry Name", "error")
+            raise ValueError("NotUniqueError: Object name not Unique") from exce
 
     def on_model_delete(self, model):
         """
@@ -400,13 +418,27 @@ class FiltereModelView(DefaultModelView):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('rule')
 
+    def create_model(self, form):
+        """ 
+        Create model
+        """
+        try:
+            return super().create_model(form)
+        except NotUniqueError:
+            flash("Duplicate Entry Name", "error")
+            return False
+
     def on_model_change(self, form, model, is_created):
         """
         Overwrite Actions on Model Change
         """
         add_changes()
 
-        return super().on_model_change(form, model, is_created)
+        try:
+            super().on_model_change(form, model, is_created)
+        except NotUniqueError as exce:
+            flash("Duplicate Entry Name", "error")
+            raise ValueError("NotUniqueError: Object name not Unique") from exce
 
     def on_model_delete(self, model):
         """
