@@ -73,10 +73,10 @@ def _render_dcd_rule(_view, _context, model, _name):
     html = ""
     for entry in model.outcomes:
         dcd_id = \
-                highlight(entry['dcd_id'], DjangoLexer(),
+                highlight(str(entry['dcd_id']), DjangoLexer(),
                           HtmlFormatter(sytle='colorfull'))
         title  = \
-                highlight(entry['title'], DjangoLexer(),
+                highlight(str(entry['title']), DjangoLexer(),
                           HtmlFormatter(sytle='colorfull'))
         html += f'''
             <div class="card">
@@ -110,7 +110,7 @@ def _render_checkmk_outcome(_view, _context, model, _name):
         highlighted_param = ""
         if entry.action_param:
             highlighted_param = \
-                    highlight(entry.action_param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+                    highlight(str(entry.action_param), DjangoLexer(), HtmlFormatter(sytle='colorfull'))
         html += f'''
             <div class="card">
               <div class="card-body">
