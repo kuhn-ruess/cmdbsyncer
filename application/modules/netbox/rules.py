@@ -32,6 +32,12 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
         Filter if labels match to a rule
         """
         # pylint: disable=too-many-nested-blocks
+
+        # list of fields, which can not be Null when send to netbox
+        not_null_fields = [
+            'serial', 'device_type',
+            'role', 'site'
+        ]
         sub_values = [
             'model',
         ]
@@ -57,9 +63,14 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
 
                 new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                 new_value = prepare_value(new_value)
-                if field == 'serial':
+
+                # Prevent Exceptions for null fields
+                if field in not_null_fields:
                     if not new_value:
                         new_value = 'Unknown'
+
+                # Extra Handling of Field Settings
+                if field == 'serial':
                     new_value = new_value[:50]
 
                 if field in sub_values:
@@ -123,6 +134,10 @@ class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
         """
         # pylint: disable=too-many-nested-blocks
         sub_values = [
+            'serial', 'cluster'
+        ]
+        not_null_fields = [
+            'name', 'cluster',
         ]
         outcomes.setdefault('fields', {})
         outcomes.setdefault('custom_fields', {})
@@ -141,9 +156,10 @@ class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
             else:
                 new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                 new_value = prepare_value(new_value)
-                if field == 'serial':
+                if field in not_null_fields:
                     if not new_value:
                         new_value = 'Unknown'
+                if field == 'serial':
                     new_value = new_value[:50]
 
                 if field in sub_values:
