@@ -37,7 +37,7 @@ def _render_netbox_outcome(_view, _context, model, _name):
         highlighted_param = ""
         if entry.param:
             highlighted_param = \
-                    highlight(entry.param, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+                    highlight(str(entry.param), DjangoLexer(), HtmlFormatter(sytle='colorfull'))
         html += f'''
             <div class="card">
               <div class="card-body">
@@ -118,7 +118,7 @@ def _render_dataflow_outcome(_view, _context, model, _name):
     """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcomes):
-        highlighted_param = highlight(entry.field_value,
+        highlighted_param = highlight(str(entry.field_value),
                                       DjangoLexer(),
                                       HtmlFormatter(sytle='colorfull'))
         html += f"<tr><td>{idx}</td><td>{entry.field_name}</td>"
