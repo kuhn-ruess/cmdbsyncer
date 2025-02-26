@@ -79,7 +79,7 @@ def _render_jinja(_view, _context, model, name):
     """
     Render A field containing a Jinja Tempalte
     """
-    value = highlight(model[name], DjangoLexer(),
+    value = highlight(str(model[name]), DjangoLexer(),
               HtmlFormatter(sytle='colorfull'))
     return Markup(f'{value}')
 
@@ -108,7 +108,7 @@ def _render_filter_outcomes(_view, _context, model, _name):
         value = ""
         if entry.attribute_name:
             value = \
-                highlight(entry.attribute_name, DjangoLexer(),
+                highlight(str(entry.attribute_name), DjangoLexer(),
                           HtmlFormatter(sytle='colorfull'))
         html += f'''
             <div class="card">
@@ -448,7 +448,7 @@ def _render_attribute_rewrite(_view, _context, model, _name):
         new_attr_name  = entry.new_attribute_name
 
         value = \
-            highlight(entry.new_value, DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+            highlight(str(entry.new_value), DjangoLexer(), HtmlFormatter(sytle='colorfull'))
 
         if old_attr_name and new_attr_name:
             attribute_name = f"Rewrite from {old_attr_name} to {new_attr_name}"
