@@ -113,6 +113,8 @@ class Host(db.Document):
             raise HostError("Hostname field does not contain a string")
         if app.config['LOWERCASE_HOSTNAMES']:
             hostname = hostname.lower()
+        if not hostname:
+            return False
         try:
             return Host.objects.get(hostname=hostname)
         except DoesNotExist:
