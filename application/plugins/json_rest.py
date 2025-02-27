@@ -15,6 +15,8 @@ from application.models.host import Host
 from application.modules.plugin import Plugin, ResponseDataException
 from application.modules.debug import ColorCodes
 from application.helpers.cron import register_cronjob
+from application.helpers.inventory import run_inventory
+
 
 class RestImport(Plugin):
     """
@@ -81,26 +83,49 @@ class RestImport(Plugin):
             if do_save:
                 host_obj.save()
 
+    def inventorize_objects(self, data):
+        """
+        Inventorize Hosts
+        """
+        if self.config.get('data_key'):
+            data = data[self.config['data_key']]
+        hostname_field = self.config['hostname_field']
+        run_inventory(self.config, [(x[hostname_field], x) for x in \
+                                    data if x[hostname_field]])
 
-def import_hosts_json(account):
+
+def import_hosts_json(account, debug=False):
     """
     Inner Function for Import JSON Data
     """
     json_data = RestImport(account)
+    json_data.debug = debug
     json_data.name = f"Import data from {account}"
     json_data.source = "json_file_import"
     data = json_data.get_from_file()
     json_data.import_hosts(data)
 
-def import_hosts_rest(account):
+def import_hosts_rest(account, debug=False):
     """
     Inner Function for Import JSON Data
     """
     json_data = RestImport(account)
+    json_data.debug = debug
     json_data.name = f"Import data from {account}"
     json_data.source = "rest_api_import"
     data = json_data.get_by_http()
     json_data.import_hosts(data)
+
+def inventorize_hosts_rest(account, debug=False):
+    """
+    Inner Function for Inventorize Rest APIS
+    """
+    json_data = RestImport(account)
+    json_data.debug = debug
+    json_data.name = f"Inventorize data from {account}"
+    json_data.source = "rest_api_inventorize"
+    data = json_data.get_by_http()
+    json_data.inventorize_objects(data)
 
 
 @app.cli.group(name='json')
@@ -109,13 +134,13 @@ def _cli_json():
 
 @_cli_json.command('import_hosts')
 @click.argument("account")
-def import_hosts(account):
+@click.option("--debug", default=False, is_flag=True)
+def import_hosts(account, debug):
     """
     ## Import Hosts from JSON File
     """
     #pylint: disable=no-member, consider-using-generator
-    import_hosts_json(account)
-
+    import_hosts_json(account, debug)
 
 
 @app.cli.group(name='rest')
@@ -125,11 +150,22 @@ def _cli_rest():
 
 @_cli_rest.command('import_hosts')
 @click.argument("account")
-def cli_import_hosts_json(account):
+@click.option("--debug", default=False, is_flag=True)
+def cli_import_hosts_rest(account, debug):
     """
     Import Json direct from Rest API
     """
-    return import_hosts_rest(account)
+    return import_hosts_rest(account, debug)
 
-register_cronjob('REST API: Import Hosts', import_hosts_rest)
+@_cli_rest.command('inventorize_objects')
+@click.argument("account")
+@click.option("--debug", default=False, is_flag=True)
+def cli_inventorize_hosts_rest(account, debug):
+    """
+    Import Json direct from Rest API
+    """
+    return inventorize_hosts_rest(account, debug)
+
+register_cronjob('REST API: Import Objects', import_hosts_rest)
+register_cronjob('REST API: Inventorize Objects', inventorize_hosts_rest)
 register_cronjob('JSON FILE: Import Hosts', import_hosts_json)
