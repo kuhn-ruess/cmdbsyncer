@@ -283,7 +283,7 @@ class RuleModelView(DefaultModelView):
 
     column_exclude_list = [
         'conditions', 'outcomes'
-    ]   
+    ]
 
     def create_model(self, form):
         """ 

@@ -96,7 +96,7 @@ class Plugin():
 
 
 
-    def inner_request(self, method, url, data=None, json=None, headers=None, auth=None, params=None):
+    def inner_request(self, method, url, data=None, json=None, headers=None, auth=None, params=None, cert=None):
         """
         Requst Module for all HTTP Requests
         by Plugin
@@ -120,6 +120,8 @@ class Plugin():
             payload['data'] = data
         if params:
             payload['params'] = params
+        if cert:
+            payload['cert'] = cert
 
         log_dict = payload.copy()
         if 'json' in payload:
