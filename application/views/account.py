@@ -3,8 +3,8 @@ Account Model View
 """
 from markupsafe import Markup
 from flask_login import current_user
-from wtforms import StringField
 from flask_admin.form import rules
+from wtforms import StringField
 from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
@@ -158,7 +158,8 @@ class AccountModelView(DefaultModelView):
             ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
-                ('auth_type', "Basic"),
+                ('auth_type', ""),
+                ('cert', ''),
                 ('request_headers', '{"Content-Type": "application/json"}'),
                 ('data_key', 'result'),
                 ('hostname_field', 'host'),
@@ -271,7 +272,6 @@ class AccountModelView(DefaultModelView):
             for field, content in main_presets:
                 if not getattr(model, field):
                     setattr(model, field, content)
-
         return super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):

@@ -34,16 +34,28 @@ class RestImport(Plugin):
             headers = ast.literal_eval(self.config['request_headers'])
             logger.debug(f"Request Headers: {headers}")
 
+
+        auth = None
         if auth_type:= self.config.get('auth_type'):
             if auth_type.lower() == "basic":
                 auth = HTTPBasicAuth(self.config['username'], self.config['password'])
             if auth_type.lower() == 'digest':
                 auth = HTTPDigestAuth(self.config['username'], self.config['password'])
 
-        response = self.inner_request('get',
-                                       url=self.config['address'],
-                                       headers=headers,
-                                       auth=auth)
+        cert = self.config.get('cert')
+
+        params = {
+            'method': 'get',
+            'url': self.config['address'],
+            'headers': headers,
+        }
+
+        if auth:
+            params['auth'] = auth
+        if cert:
+            params['cert'] = cert
+
+        response = self.inner_request(**params)
         try:
             return response.json()
         except JSONDecodeError as error:
