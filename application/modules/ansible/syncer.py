@@ -77,12 +77,18 @@ class SyncAnsible(Plugin):
 
                 attributes = self.get_host_attributes(db_host, 'ansible')
                 if not attributes:
+                    if show_status:
+                        progress.advance(task1)
                     continue
                 extra_attributes = self.get_host_data(db_host, attributes['all'])
                 if 'ignore_host' in extra_attributes:
+                    if show_status:
+                        progress.advance(task1)
                     continue
 
                 if self.bypass_host(attributes['all'], extra_attributes):
+                    if show_status:
+                        progress.advance(task1)
                     continue
 
                 inventory = attributes['filtered']
