@@ -105,17 +105,8 @@ def _inner_udpate_cache():
     """
     Update Cache of Ansible
     """
-    with Progress(SpinnerColumn(),
-                  MofNCompleteColumn(),
-                  *Progress.get_default_columns(),
-                  TimeElapsedColumn()) as progress:
-        query = Host.objects()
-        task1 = progress.add_task("Deleting Cache", total=query.count())
-        for host in query:
-            if 'ansible' in host.cache:
-                del host.cache['ansible']
-                host.save()
-            progress.advance(task1)
+    print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
+    Host.objects.filter(cache__ansible__exists=True).update(unset__cache__ansible=1)
     print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
     rules = load_rules()
     syncer = SyncAnsible()

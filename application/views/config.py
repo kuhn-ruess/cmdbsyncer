@@ -26,9 +26,7 @@ class ConfigModelView(DefaultModelView):
         Delete all Caches
         """
         remove_changes()
-        for host in Host.objects():
-            host.cache = {}
-            host.save()
+        Host.objects(cache__ne={}).update(set__cache={})
         return "Activation Done"
 
     def is_accessible(self):
