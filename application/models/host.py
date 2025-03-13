@@ -178,7 +178,7 @@ class Host(db.Document):
             for key, value in list(labels.items()):
                 if isinstance(value, dict):
                     for sub_key, sub_value in value.items():
-                        labels[f'{key}__{sub_key}'] = sub_value
+                        labels[f'{key}_{sub_key}'] = sub_value
                     del labels[key]
         label_dict = dict(map(lambda kv: (self._fix_key(kv[0]), kv[1]), labels.items()))
         if self.get_labels() != label_dict:
@@ -297,7 +297,7 @@ class Host(db.Document):
             for upd_key, value in list(update_dict.items()):
                 if isinstance(value, dict):
                     for sub_key, sub_value in value.items():
-                        update_dict[f'{upd_key}__{sub_key}'] = sub_value
+                        update_dict[f'{upd_key}_{sub_key}'] = sub_value
                     del update_dict[upd_key]
 
         # We always set that, because we deleted before all with the key
