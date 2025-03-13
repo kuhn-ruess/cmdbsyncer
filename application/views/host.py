@@ -35,28 +35,6 @@ class FilterHostnameRegex(BaseMongoEngineFilter):
     def operation(self):
         return "regex"
 
-class FilterLabelKey(BaseMongoEngineFilter):
-    """
-    Filter for Label Key
-    """
-
-    def apply(self, query, value):
-        return query.filter(__raw__={f'labels.{value}': {'$exists': True}})
-
-    def operation(self):
-        return "exists"
-
-class FilterInventoryKey(BaseMongoEngineFilter):
-    """
-    Filter for Inventory Key
-    """
-
-    def apply(self, query, value):
-        return query.filter(__raw__={f'inventory.{value}': {'$exists': True}})
-
-    def operation(self):
-        return "exists"
-
 
 class FilterLabelKeyAndValue(BaseMongoEngineFilter):
     """
@@ -64,24 +42,31 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        key, value = value.split(':')
-        pipeline_org = {
-                f'labels__{key}': value,
-        }
-        try:
-            pipeline_int = {
-                    f'labels__{key}': int(value),
-            }
-        except ValueError:
-            pipeline_int = False
+        key, value = value.rsplit(':', 1)
 
-        if pipeline_int:
-            return query.filter(Q(**pipeline_org) | Q(**pipeline_int))
-        return query.filter(**pipeline_org)
-        
+        org_value = False
+
+        try:
+            org_value = int(value)
+        except ValueError:
+            pass
+
+
+        if org_value:
+            pipeline = {
+                    "$or": [
+                    {f'labels.{key}': {"$regex":  value, "$options": "i"}},
+                    {f'labels.{key}': org_value}
+                ]
+            }
+        else:
+            pipeline = {
+                    f'labels.{key}': {"$regex":  value, "$options": "i"},
+            }
+        return query.filter(__raw__=pipeline)
 
     def operation(self):
-        return "search"
+        return "regex search"
 
 class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
     """
@@ -89,23 +74,30 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        key, value = value.split(':')
-        pipeline_org = {
-                f'inventory__{key}': value,
-        }
-        try:
-            pipeline_int = {
-                    f'inventory__{key}': int(value),
-            }
-        except ValueError:
-            pipeline_int = False
+        key, value = value.rsplit(':', 1)
+        org_value = False
 
-        if pipeline_int:
-            return query.filter(Q(**pipeline_org) | Q(**pipeline_int))
-        return query.filter(**pipeline_org)
+        try:
+            org_value = int(value)
+        except ValueError:
+            pass
+
+
+        if org_value:
+            pipeline = {
+                    "$or": [
+                    {f'inventory.{key}': {"$regex":  value, "$options": "i"}},
+                    {f'inventory.{key}': org_value}
+                ]
+            }
+        else:
+            pipeline = {
+                    f'inventory.{key}': {"$regex":  value, "$options": "i"},
+            }
+        return query.filter(__raw__=pipeline)
 
     def operation(self):
-        return "search"
+        return "regex search"
 
 def format_log(v, c, m, p):
     """ Format Log view"""
@@ -293,24 +285,15 @@ class HostModelView(DefaultModelView):
                             'last_import_sync')
 
     column_filters = (
-       'hostname',
        FilterHostnameRegex(
         Host,
-        "Hostname Regex",
+        "Hostname",
        ),
        'source_account_name',
        'available',
-       FilterLabelKey(
-        Host,
-        "Label Key"
-       ),
        FilterLabelKeyAndValue(
         Host,
         "Label Key:Value"
-       ),
-       FilterInventoryKey(
-        Host,
-        "Inventory Key"
        ),
        FilterInventoryKeyAndValue(
         Host,
