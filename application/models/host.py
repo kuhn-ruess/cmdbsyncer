@@ -361,7 +361,7 @@ class Host(db.Document):
             is_object = account_dict.get('is_object', False)
             self.object_type = account_dict.get('object_type', 'undefined')
 
-        if self.object_type == 'host':
+        if self.object_type == 'host' and app.config['CHECK_FOR_VALID_HOSTNAME']:
             if not self.is_valid_hostname():
                 raise HostError(f"{self.hostname} is not a valid Hostname,"
                                    "but object type for import is set to host")
