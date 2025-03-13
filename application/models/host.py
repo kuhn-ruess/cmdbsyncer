@@ -210,8 +210,8 @@ class Host(db.Document):
         """
         updates = []
         for key, value in label_dict.items():
-            if old_value := self.labels.get(key) != value:
-                updates.append(f"{key} from {old_value} to {value}")
+            if self.labels.get(key) != value:
+                updates.append(f"{key} to {value}")
 
         self.add_log(f"Label Change: {','.join(updates)}")
         self.labels = label_dict
@@ -301,8 +301,8 @@ class Host(db.Document):
         if check_dict != update_dict:
             updates = []
             for item_key, value in update_dict.items():
-                if old_value := check_dict.get(item_key) != value:
-                    updates.append(f"{item_key} from {old_value} to {value}")
+                if check_dict.get(item_key) != value:
+                    updates.append(f"{item_key} to {value}")
             self.add_log(f"Inventory Change: {','.join(updates)}")
             self.cache = {}
 
