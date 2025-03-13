@@ -67,8 +67,7 @@ action_outcome_types = [
     ("folder_pool",
      "Pool Folder: __ Use Pool Folder (please make sure this matches just once to a host)"),
     ("attribute",
-     "CMK attr. by syncer attr: __ "\
-     "Checkmk-Attribute with Syncers Attributes Value for Key given in action param"),
+     "Deprecated: Migrate to Custom CMK Attribute: key:{{yourattribute}}"),
     ("custom_attribute",
      "Custom CMK Attribute. Custom: __ "\
      "Create Custom Checkmk Attribute: "\

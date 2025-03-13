@@ -7,6 +7,8 @@ import click
 
 from mongoengine.errors import DoesNotExist
 
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
+
 from application import app
 from application.models.host import Host
 from application.modules.debug import ColorCodes, attribute_table
@@ -104,10 +106,7 @@ def _inner_udpate_cache():
     Update Cache of Ansible
     """
     print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
-    for host in Host.get_export_hosts():
-        if 'ansible' in host.cache:
-            del host.cache['ansible']
-            host.save()
+    Host.objects.filter(cache__ansible__exists=True).update(unset__cache__ansible=1)
     print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
     rules = load_rules()
     syncer = SyncAnsible()
@@ -116,7 +115,7 @@ def _inner_udpate_cache():
     syncer.rewrite = rules['rewrite']
     syncer.actions = rules['actions']
     # Do the action which triggers the caches
-    syncer.get_full_inventory()
+    syncer.get_full_inventory(show_status=True)
 
 @cli_ansible.command('update_cache')
 def update_cache():

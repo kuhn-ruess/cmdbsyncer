@@ -1,7 +1,6 @@
 """
 Default Model Views
 """
-
 from copy import deepcopy
 from flask import url_for, redirect, flash, request
 from flask_login import current_user
@@ -65,7 +64,11 @@ class DefaultModelView(ModelView):
             if isinstance(current, str):
                 setattr(model, attr, current.strip())
 
-        return super().on_model_change(form, model, is_created)
+        try:
+            return super().on_model_change(form, model, is_created)
+        except NotUniqueError as exce:
+            flash("Duplicate Entry Name", "error")
+            raise ValueError("NotUniqueError: Object name not Unique") from exce
 
 
     def is_accessible(self):
