@@ -113,6 +113,8 @@ class Host(db.Document):
             raise HostError("Hostname field does not contain a string")
         if app.config['LOWERCASE_HOSTNAMES']:
             hostname = hostname.lower()
+        if not hostname:
+            return False
         try:
             return Host.objects.get(hostname=hostname)
         except DoesNotExist:
@@ -176,7 +178,7 @@ class Host(db.Document):
             for key, value in list(labels.items()):
                 if isinstance(value, dict):
                     for sub_key, sub_value in value.items():
-                        labels[f'{key}__{sub_key}'] = sub_value
+                        labels[f'{key}_{sub_key}'] = sub_value
                     del labels[key]
         label_dict = dict(map(lambda kv: (self._fix_key(kv[0]), kv[1]), labels.items()))
         if self.get_labels() != label_dict:
@@ -206,7 +208,12 @@ class Host(db.Document):
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
-        self.add_log(f"Label Change: {self.labels} to {label_dict}")
+        updates = []
+        for key, value in label_dict.items():
+            if self.labels.get(key) != value:
+                updates.append(f"{key} to {value}")
+
+        self.add_log(f"Label Change: {','.join(updates)}")
         self.labels = label_dict
         self.cache = {}
 
@@ -286,13 +293,24 @@ class Host(db.Document):
                     for x, y in new_data.items()
                     if y
                 }
+        if app.config['LABELS_ITERATE_FIRST_LEVEL']:
+            for upd_key, value in list(update_dict.items()):
+                if isinstance(value, dict):
+                    for sub_key, sub_value in value.items():
+                        update_dict[f'{upd_key}_{sub_key}'] = sub_value
+                    del update_dict[upd_key]
+
         # We always set that, because we deleted before all with the key
         self.inventory.update(update_dict)
 
         # If the inventory is changed, the cache
         # is not longer valid
         if check_dict != update_dict:
-            self.add_log(f"Inventory Change: {check_dict} to {update_dict}")
+            updates = []
+            for item_key, value in update_dict.items():
+                if check_dict.get(item_key) != value:
+                    updates.append(f"{item_key} to {value}")
+            self.add_log(f"Inventory Change: {','.join(updates)}")
             self.cache = {}
 
     def get_inventory(self, key_filter=False):
@@ -350,7 +368,7 @@ class Host(db.Document):
             is_object = account_dict.get('is_object', False)
             self.object_type = account_dict.get('object_type', 'undefined')
 
-        if self.object_type == 'host':
+        if self.object_type == 'host' and app.config['CHECK_FOR_VALID_HOSTNAME']:
             if not self.is_valid_hostname():
                 raise HostError(f"{self.hostname} is not a valid Hostname,"
                                    "but object type for import is set to host")

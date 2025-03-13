@@ -3,8 +3,8 @@ Account Model View
 """
 from markupsafe import Markup
 from flask_login import current_user
-from wtforms import StringField
 from flask_admin.form import rules
+from wtforms import StringField
 from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
@@ -158,17 +158,20 @@ class AccountModelView(DefaultModelView):
             ]
         elif form.typ.data == 'external_restapi':
             default_fields = [
-                ('auth_type', "Basic"),
+                ('auth_type', ""),
+                ('cert', ''),
                 ('request_headers', '{"Content-Type": "application/json"}'),
                 ('data_key', 'result'),
                 ('hostname_field', 'host'),
                 ('rewrite_hostname', ""),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'cmkv2':
             default_fields = [
                 ('limit_by_accounts', ""),
                 ('limit_by_hostnames', ""),
                 ('list_disabled_hosts', ""),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'ldap':
             default_fields = [
@@ -224,15 +227,18 @@ class AccountModelView(DefaultModelView):
                 ('hostname_field', 'dnshostname'),
                 ('namespace', ""),
                 ('class_name', ""),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'jira':
             default_fields = [
                 ('page_size', "1000"),
+                ('verify_cert', "True"),
             ]
         elif form.typ.data == 'jira_cloud':
             default_fields = [
                 ('workspace_id', "Required"),
                 ('ql_query', "Required"),
+                ('verify_cert', "True"),
             ]
 
         elif form.typ.data == 'i-doit':
@@ -266,7 +272,6 @@ class AccountModelView(DefaultModelView):
             for field, content in main_presets:
                 if not getattr(model, field):
                     setattr(model, field, content)
-
         return super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):

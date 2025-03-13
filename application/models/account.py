@@ -24,6 +24,7 @@ account_types = [
     ('maintenance', "Maintanence Jobs"),
     ('vmware_vcenter', "Vmware vCenter"),
     ('custom', "Custom Entries, like DBs"),
+    ('prtg', "PRTG Monitoring"),
 ]
 
 

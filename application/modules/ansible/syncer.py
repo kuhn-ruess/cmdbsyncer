@@ -2,8 +2,8 @@
 """
 Ansible Inventory Modul
 """
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from mongoengine.errors import DoesNotExist
-from application import app
 from application.models.host import Host
 from application.modules.plugin import Plugin
 
@@ -52,7 +52,7 @@ class SyncAnsible(Plugin):
         return outcomes
 
 
-    def get_full_inventory(self):
+    def get_full_inventory(self, show_status=False):
         """
         Get Full Inventory Information for Ansible
         """
@@ -64,25 +64,40 @@ class SyncAnsible(Plugin):
                 'hosts' : []
             },
         }
-        #pylint: disable=no-member
-        for db_host in Host.objects():
-            hostname = db_host.hostname
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            #pylint: disable=no-member
+            query = Host.objects()
+            if show_status:
+                task1 = progress.add_task("Calculating Variables", total=query.count())
+            for db_host in query:
+                hostname = db_host.hostname
 
-            attributes = self.get_host_attributes(db_host, 'ansible')
-            if not attributes:
-                continue
-            extra_attributes = self.get_host_data(db_host, attributes['all'])
-            if 'ignore_host' in extra_attributes:
-                continue
+                attributes = self.get_host_attributes(db_host, 'ansible')
+                if not attributes:
+                    if show_status:
+                        progress.advance(task1)
+                    continue
+                extra_attributes = self.get_host_data(db_host, attributes['all'])
+                if 'ignore_host' in extra_attributes:
+                    if show_status:
+                        progress.advance(task1)
+                    continue
 
-            if self.bypass_host(attributes['all'], extra_attributes):
-                continue
+                if self.bypass_host(attributes['all'], extra_attributes):
+                    if show_status:
+                        progress.advance(task1)
+                    continue
 
-            inventory = attributes['filtered']
-            inventory.update(extra_attributes)
+                inventory = attributes['filtered']
+                inventory.update(extra_attributes)
 
-            data['_meta']['hostvars'][hostname] = inventory
-            data['all']['hosts'].append(hostname)
+                data['_meta']['hostvars'][hostname] = inventory
+                data['all']['hosts'].append(hostname)
+                if show_status:
+                    progress.advance(task1)
         return data
 
 

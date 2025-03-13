@@ -33,8 +33,8 @@ def get_account_by_name(name):
         account_dict['id'] = str(account_dict['_id'])
         account_dict['ref'] = account_dict['_id']
         return account_dict
-    except DoesNotExist:
-        raise AccountNotFoundError("Account not found")
+    except DoesNotExist as exc:
+        raise AccountNotFoundError("Account not found") from exc
 
 def get_account_variable(macro):
     """
@@ -45,5 +45,5 @@ def get_account_variable(macro):
     _, account, var = macro.split(':')
     try:
         return get_account_by_name(account)[var[:-2]]
-    except:
-        raise ValueError("Account Variable not found")
+    except Exception as exc:
+        raise ValueError("Account Variable not found") from exc

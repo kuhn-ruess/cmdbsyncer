@@ -176,7 +176,7 @@ class SyncVirtualMachines(SyncNetbox):
                                                      self.config['rewrite_hostname'], labels)
                 host_obj = Host.get_host(hostname)
                 print(f"\n{cc.HEADER}Process VM: {hostname}{cc.ENDC}")
-                result = dict(map(lambda kv: (kv[0], self.fix_value(kv[1])), labels.items()))
+                result = self.handle_nb_attributes(labels)
                 host_obj.update_host(result)
                 do_save = host_obj.set_account(account_dict=self.config)
                 if do_save:

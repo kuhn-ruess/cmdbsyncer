@@ -260,6 +260,22 @@ class SyncNetbox(Plugin):
 #.
 #   . -- Generic Netbox Syncer Function
 
+
+    def handle_nb_attributes(self, attributes):
+        """
+        Handle Attributes, and the cases when they are nested
+        """
+        out = {}
+        for field, value in attributes.items():
+            if field == 'site':
+                region_id = value.region.id
+                region_name = self.nb.dcim.regions.get(region_id)
+                out['region'] = self.fix_value(region_name)
+                out['site'] = self.fix_value(value)
+            else:
+                out[field] = self.fix_value(value)
+        return out
+
     def fix_value(self, value):
         """
         Fix Nested Netbox Fields so that they 
