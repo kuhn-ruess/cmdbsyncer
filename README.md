@@ -46,32 +46,56 @@ This is runs a Development Version which you can use to test everthing
 ### Ansible
 - Rule Based Inventory Source
 - All Functions for Checkmk Agent Management (Installation, TLS Registration, Bakery Registration)
-- Linux and Windows
+    - Linux and Windows
+- All functions for Checkmk Site Management (Site creation, Version Updates)
 
 ### Netbox
-- Rulebased Export and Import Devices to Netbox
+- Import of VMs
+- Import of Devices
+- Rulebased Exports to
+  - Devices
+  - VMs
+  - Cluster
+  - Interfaces
+  - IP Addresses
+  - Contacts
+  - Dataflow
 
 ### I-Doit
-- Rulebased Export and Import Devices to Netbox
+- Rulebased Export and Import Devices from I-Doit
+
+### PRTG
+- Import of Objects from PRTG
+
+### Jira
+- Import of Cloud Based Jira CMDB
+- Import of onPremise Jira CMDB
+
+### JDISC
+- Import of Objects and Attributes
 
 ### Cisco DNA
 - Import devices and their Interface Information
+
+
+### VMware
+- Export of Custom Attributes to VMware Vcenter
 
 ### CSV
 - Manage Hosts based on CSV File (Import Source)
 - Add Addional Informationen from CSV Files to your Hosts (eg. Overwrite IP Addresses)
 
-### MSSQL
-- Import
+### MSSQL/ FreeDTS/ ODBC
+- Import Objects for Databases
 
 ### MySQL
-- Import
+- Import from Mysql Databases
 
 ### LDAP
-- Import
+- Import Objects from LDAP Servers
 
 ### Rest APIs/ Json Files
-- Import
+- Import Objects from simple Rest APIs or JSON Files
 
 ## Other
 - [Documentation](https://cmdbsyncer.readthedocs.io/en/latest/)
