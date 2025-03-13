@@ -101,10 +101,12 @@ def debug_ansible_rules(hostname):
 #.
 #   .-- Ansible Cache
 
-def _inner_udpate_cache():
+def _inner_update_cache(account=False):
     """
     Update Cache of Ansible
     """
+    # pyint: disable=unused-argument
+    # Account Variable needed because of cronjobs 
     print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
     Host.objects.filter(cache__ansible__exists=True).update(unset__cache__ansible=1)
     print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
@@ -122,7 +124,7 @@ def update_cache():
     """
     Update Cache for Ansible
     """
-    _inner_udpate_cache()
+    _inner_update_cache()
 
 #.
 #   .-- Ansible Source
@@ -207,4 +209,4 @@ def server_source(list, host): #pylint: disable=redefined-builtin
 #    run_agent_playbook()
 #
 #.
-register_cronjob('Ansible: Build Cache', _inner_udpate_cache)
+register_cronjob('Ansible: Build Cache', _inner_update_cache)
