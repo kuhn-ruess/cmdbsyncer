@@ -293,6 +293,13 @@ class Host(db.Document):
                     for x, y in new_data.items()
                     if y
                 }
+        if app.config['LABELS_ITERATE_FIRST_LEVEL']:
+            for upd_key, value in list(update_dict.items()):
+                if isinstance(value, dict):
+                    for sub_key, sub_value in value.items():
+                        update_dict[f'{upd_key}__{sub_key}'] = sub_value
+                    del update_dict[upd_key]
+
         # We always set that, because we deleted before all with the key
         self.inventory.update(update_dict)
 

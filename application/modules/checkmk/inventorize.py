@@ -118,19 +118,16 @@ class InventorizeHosts(CMK2):
 
                 # Get the wanted fiels out of the parsed data
                 for needed_fields in self.fields['cmk_inventory']:
+                    friendly_name = needed_fields.replace('.', '_')
                     data = inv_parsed
-                    fields = needed_fields.split('.')
-                    data_name = "_".join(fields)
-                    for path, values in data.items():
-                        data_name += path
-                        if not values:
-                            continue
-                        if isinstance(values, dict):
-                            for sub_field, sub_value in values.items():
-                                self.hw_sw_inventory[hostname][f"{data_name}_{sub_field}"] = \
-                                        sub_value
+                    collected_data = {}
+                    for sub_path in needed_fields.split('.'):
+                        if not collected_data:
+                            collected_data = data.get(sub_path)
                         else:
-                            self.hw_sw_inventory[hostname][data_name] = values
+                            collected_data = collected_data.get(sub_path)
+
+                    self.hw_sw_inventory[hostname][friendly_name] = collected_data
 
     def get_cmk_services(self):
         """ Get CMK Services"""
