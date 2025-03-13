@@ -208,7 +208,12 @@ class Host(db.Document):
         Args:
             label_dict (dict): Key:Value pairs of labels
         """
-        self.add_log(f"Label Change: {self.labels} to {label_dict}")
+        updates = []
+        for key, value in label_dict.items():
+            if old_value := self.labels.get(key) != value:
+                updates.append(f"{key} from {old_value} to {value}")
+
+        self.add_log(f"Label Change: {','.join(updates)}")
         self.labels = label_dict
         self.cache = {}
 
@@ -294,7 +299,11 @@ class Host(db.Document):
         # If the inventory is changed, the cache
         # is not longer valid
         if check_dict != update_dict:
-            self.add_log(f"Inventory Change: {check_dict} to {update_dict}")
+            updates = []
+            for item_key, value in update_dict.items():
+                if old_value := check_dict.get(item_key) != value:
+                    updates.append(f"{item_key} from {old_value} to {value}")
+            self.add_log(f"Inventory Change: {','.join(updates)}")
             self.cache = {}
 
     def get_inventory(self, key_filter=False):
