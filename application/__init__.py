@@ -23,6 +23,8 @@ from flask_admin.contrib.fileadmin import FileAdmin
 from application.helpers.tablib_formater import ExportObjects
 from tablib.formats import registry as tablib_registry
 
+import mongoengine
+
 tablib_registry.register('syncer_rules', ExportObjects())
 
 VERSION = '3.8.4-dev'
@@ -98,6 +100,12 @@ except ImportError:
     #print(" * HINT: uwsgi modul not loaded")
     # Output makes problems for commands
     db = MongoEngine(app)
+
+def init_db():
+    """DB Init for Multiprocessing Pool"""
+    mongoengine.disconnect()
+    with app.app_context():
+        MongoEngine(app)
 
 
 from application.helpers.sates import get_changes
