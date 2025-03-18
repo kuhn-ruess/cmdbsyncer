@@ -5,7 +5,7 @@ Checkmk Tag Syncronize
 import ast
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application import logger, init_db
+from application import logger, init_db, app
 from application.modules.checkmk.cmk2 import CMK2
 from application.modules.debug import ColorCodes as CC
 from application.modules.checkmk.models import CheckmkTagMngmt
@@ -350,9 +350,10 @@ class CheckmkTagSync(CMK2):
                 else:
                     # Check if we need to update it
                     checkmk_tags = checkmk_ids[syncer_group_id]
-                    flat = [ {'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
+                    checkmk_tags_flat = \
+                            [{'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
 
-                    if {frozenset(d.items()) for d in flat} == \
+                    if {frozenset(d.items()) for d in checkmk_tags_flat} == \
                             {frozenset(d.items()) for d in payload['tags']}:
                         progress.console.print(f" * Group {syncer_group_id} already up to date.")
                     else:
@@ -361,6 +362,15 @@ class CheckmkTagSync(CMK2):
                             'if-match': etag
                         }
                         del payload['ident']
+                        if app.config['CMK_DONT_DELETE_TAGS']:
+                            # In this case, we merge only the new dicts into the existing ones
+                            found = set()
+                            new_tags = []
+                            for tag in payload['tags'] + checkmk_tags_flat:
+                                if tag['ident'] not in found:
+                                    found.add(tag['ident'])
+                                    new_tags.append(tag)
+                            payload['tags'] = sorted(new_tags, key=lambda x: str(x['ident']))
                         payload['repair'] = False
                         try:
                             self.request(url,
