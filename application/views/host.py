@@ -5,10 +5,10 @@ from datetime import datetime
 # pylint: disable=too-few-public-methods
 import re
 from flask_login import current_user
+from flask import flash
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 from flask_admin.model.template import LinkRowAction
 
-from mongoengine.queryset.visitor import Q
 from markupsafe import Markup
 
 
@@ -42,7 +42,7 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        key, value = value.rsplit(':', 1)
+        key, value = value.split(':', 1)
 
         org_value = False
 
@@ -50,6 +50,9 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
             org_value = int(value)
         except ValueError:
             pass
+
+        if value == '*':
+            value = '.*'
 
 
         if org_value:
@@ -63,7 +66,11 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
             pipeline = {
                     f'labels.{key}': {"$regex":  value, "$options": "i"},
             }
-        return query.filter(__raw__=pipeline)
+        try:
+            return query.filter(__raw__=pipeline)
+        except Exception as error:
+            flash('danger', error)
+        return False
 
     def operation(self):
         return "regex search"
@@ -74,7 +81,7 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        key, value = value.rsplit(':', 1)
+        key, value = value.split(':', 1)
         org_value = False
 
         try:
@@ -82,6 +89,8 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
         except ValueError:
             pass
 
+        if value == '*':
+            value = '.*'
 
         if org_value:
             pipeline = {
@@ -94,7 +103,11 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
             pipeline = {
                     f'inventory.{key}': {"$regex":  value, "$options": "i"},
             }
-        return query.filter(__raw__=pipeline)
+        try:
+            return query.filter(__raw__=pipeline)
+        except Exception as error:
+            flash('danger', error)
+        return False
 
     def operation(self):
         return "regex search"
