@@ -39,6 +39,12 @@ object_types = [
     ('network', 'Network Object'),
     ('application', 'Application'),
     ('contact', 'Contact'),
+    ('custom_1', 'Custom Type 1'),
+    ('custom_2', 'Custom Type 2'),
+    ('custom_3', 'Custom Type 3'),
+    ('custom_4', 'Custom Type 4'),
+    ('custom_5', 'Custom Type 5'),
+    ('custom_6', 'Custom Type 6'),
 ]
 
 
