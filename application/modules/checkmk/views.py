@@ -180,6 +180,8 @@ class CheckmkRuleView(RuleModelView):
     """
 
 
+
+
     @expose('/debug')
     def debug(self):
         """
@@ -214,7 +216,6 @@ class CheckmkRuleView(RuleModelView):
 
         return self.render('debug.html', hostname=hostname, output=output,
                            rules=new_rules)
-
 
 
     def __init__(self, model, **kwargs):
@@ -414,11 +415,13 @@ class CheckmkBiRuleView(DefaultModelView):
 
 class CheckmkMngmtRuleView(RuleModelView):
     """
-    Custom Group Model View
+    Management of Rules inside Checkmk
     """
 
     form_rules = [
         rules.FieldSet((
+            rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_setup_rules"]}"'\
+                            'target="_blank" class="badge badge-light">Documentation</a>'),
             rules.Field('name'),
             rules.Field('documentation'),
             div_open,
