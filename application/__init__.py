@@ -263,8 +263,10 @@ admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Chec
 
 
 from application.models.account import Account
-from application.views.account import AccountModelView
-admin.add_view(AccountModelView(Account, name="Accounts"))
+from application.views.account import AccountModelView, ChildAccountModelView
+admin.add_category(name="Accounts")
+admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts"))
+admin.add_view(ChildAccountModelView(Account, name="Config Childs", endpoint='account_childs', category="Accounts"))
 
 from application.models.cron import CronGroup, CronStats
 from application.views.cron import CronStatsView, CronGroupView
