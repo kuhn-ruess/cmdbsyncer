@@ -557,20 +557,27 @@ class SyncCMK2(CMK2):
         url = "domain-types/folder_config/collections/all"
         if not subfolder:
             return
-        body = {
-            "name": subfolder,
-            "title": subfolder,
-            "parent": parent,
-        }
+        title = subfolder
+
         mid_char = ""
         if parent != '/':
             mid_char = '/'
         full_foldername = f'{parent}{mid_char}{subfolder}'
-        self.existing_folders.append(full_foldername)
-        if extra_opts := self.custom_folder_attributes.get(full_foldername):
+
+        extra_opts = self.custom_folder_attributes.get(full_foldername, {})
+        if 'title' in extra_opts:
+            title = extra_opts['title']
+            del extra_opts['title']
+        body = {
+            "name": subfolder,
+            "title": title,
+            "parent": parent,
+        }
+        if extra_opts:
             body.update({'attributes': extra_opts})
         try:
             self.request(url, method="POST", data=body)
+            self.existing_folders.append(full_foldername)
         except CmkException as error:
             logger.debug(f"Error creating Folder {error}")
             self.log_details.append(('error', f"Folder create problem {error}"))
