@@ -360,15 +360,24 @@ class NetboxContactRule(NetboxVariableRule):
             action_param = outcome['param']
             action = outcome['action']
 
-            new_value  = render_jinja(action_param, mode="nullify", **self.attributes).strip()
-
-            if action == 'email':
-                if not '@' in new_value:
+            if action == 'custom_field': # Add this block
+                try:
+                    new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
+                    custom_key, custom_value = new_value.split(':')
+                    custom_value = prepare_value(custom_value)
+                    outcomes['custom_fields'][custom_key] = {'value': custom_value}
+                except ValueError:
                     continue
-                if not new_value or new_value == '':
-                    continue
+            else:
+                new_value  = render_jinja(action_param, mode="nullify", **self.attributes).strip()
 
-            outcomes['fields'][action] = {'value': new_value}
+                if action == 'email':
+                   if not '@' in new_value:
+                      continue
+                   if not new_value or new_value == '':
+                      continue
+
+                outcomes['fields'][action] = {'value': new_value}
         return outcomes
 #.
 #   . -- Dataflow
