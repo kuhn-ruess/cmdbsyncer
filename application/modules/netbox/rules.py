@@ -356,6 +356,7 @@ class NetboxContactRule(NetboxVariableRule):
         """
         # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('fields', {})
+        outcomes.setdefault('custom_fields', {})
         for outcome in rule_outcomes:
             action_param = outcome['param']
             action = outcome['action']
