@@ -111,13 +111,14 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
                 print(f"Error: {error}")
 
 @_cli_csv.command('import_hosts')
+@_cli_csv.command('import_objects')
 @click.argument("csv_path", default="")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
 @click.option("--account", default='')
 def cli_import_hosts(csv_path, delimiter, hostname_field, account):
     """
-    ## Import Hosts from CSV and make File the Master
+    ## Import Objects from CSV and make File the Master
     Every CSV column, other then the host column, will translate
     into key:value attributes.
 
