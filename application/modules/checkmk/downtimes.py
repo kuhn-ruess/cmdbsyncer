@@ -4,7 +4,6 @@ Checkmk Downtime Sync
 
 import datetime
 import calendar
-import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application.modules.checkmk.cmk2 import CmkException, CMK2
@@ -114,6 +113,10 @@ class CheckmkDowntimeSync(CMK2):
 
         now = datetime.datetime.now(datetime.timezone.utc)
         dt_start_time = datetime.time(start_hour, start_minute, 0)
+        overnight_downtime = False
+        if start_hour > end_hour:
+            # End Hour is next Day: Overnight Downtime
+            overnight_downtime = True
         dt_end_time = datetime.time(end_hour, end_minute, 0)
 
 
@@ -125,8 +128,11 @@ class CheckmkDowntimeSync(CMK2):
                 dt_start = \
                         datetime.datetime.combine(day, dt_start_time)\
                             .astimezone(datetime.timezone.utc)
+                end_day = day
+                if overnight_downtime:
+                    end_day = day + datetime.timedelta(days=1)
                 dt_end = \
-                        datetime.datetime.combine(day, dt_end_time)\
+                        datetime.datetime.combine(end_day, dt_end_time)\
                             .astimezone(datetime.timezone.utc)
 
                 if dt_start < now:
@@ -143,8 +149,11 @@ class CheckmkDowntimeSync(CMK2):
                 dt_start = \
                         datetime.datetime.combine(day, dt_start_time)\
                             .astimezone(datetime.timezone.utc)
+                end_day = day
+                if overnight_downtime:
+                    end_day = day + datetime.timedelta(days=1)
                 dt_end = \
-                        datetime.datetime.combine(day, dt_end_time)\
+                        datetime.datetime.combine(end_day, dt_end_time)\
                         .astimezone(datetime.timezone.utc)
                 if dt_start < now:
                     continue

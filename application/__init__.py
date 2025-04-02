@@ -23,9 +23,12 @@ from flask_admin.contrib.fileadmin import FileAdmin
 from application.helpers.tablib_formater import ExportObjects
 from tablib.formats import registry as tablib_registry
 
+import mongoengine
+
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.8.4'
+
+VERSION = '3.9.0-dev'
 
 # create logger
 
@@ -98,6 +101,12 @@ except ImportError:
     #print(" * HINT: uwsgi modul not loaded")
     # Output makes problems for commands
     db = MongoEngine(app)
+
+def init_db():
+    """DB Init for Multiprocessing Pool"""
+    mongoengine.disconnect()
+    with app.app_context():
+        MongoEngine(app)
 
 
 from application.helpers.sates import get_changes
@@ -255,8 +264,10 @@ admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Chec
 
 
 from application.models.account import Account
-from application.views.account import AccountModelView
-admin.add_view(AccountModelView(Account, name="Accounts"))
+from application.views.account import AccountModelView, ChildAccountModelView
+admin.add_category(name="Accounts")
+admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts"))
+admin.add_view(ChildAccountModelView(Account, name="Config Childs", endpoint='account_childs', category="Accounts"))
 
 from application.models.cron import CronGroup, CronStats
 from application.views.cron import CronStatsView, CronGroupView

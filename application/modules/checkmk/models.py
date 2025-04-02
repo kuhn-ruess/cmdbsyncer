@@ -2,6 +2,7 @@
 Checkmk Rules
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
+from mongoengine import DENY
 from cryptography.fernet import Fernet
 from application import db, app
 from application.modules.rule.models import rule_types
@@ -674,7 +675,7 @@ class CheckmkObjectCache(db.Document):
     """
 
     cache_group = db.StringField()
-    account = db.ReferenceField(document_type='Account')
+    account = db.ReferenceField(document_type='Account', reverse_delete_rule=DENY)
     content = db.DictField()
 
     meta = {
