@@ -44,6 +44,7 @@ class CheckmkRuleSync(CMK2):
                 attributes = self.get_host_attributes(db_host, 'cmk_conf')
                 if not attributes:
                     continue
+                progress.advance(task1)
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:
                     self.calculate_rules_of_host(host_actions, attributes)

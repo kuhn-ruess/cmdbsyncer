@@ -85,7 +85,8 @@ def cli_missing_hosts(account):
 
 @cli_cmk.command('export_rules')
 @click.argument("account")
-def cli_export_rules(account):
+@click.option("--debug", is_flag=True)
+def cli_export_rules(account, debug):
     """
     Export all configured Rules to given Checkmk Installations
 
