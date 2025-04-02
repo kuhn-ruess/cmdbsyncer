@@ -28,7 +28,9 @@ class CheckmkRuleSync(CMK2):
         print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
 
 
-        db_objects = Host.objects()
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
+
         total = db_objects.count()
         # pylint: disable=too-many-nested-blocks
         with Progress(SpinnerColumn(),
