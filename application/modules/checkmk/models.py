@@ -6,6 +6,7 @@ from mongoengine import DENY
 from cryptography.fernet import Fernet
 from application import db, app
 from application.modules.rule.models import rule_types
+from application.models.account import Account
 
 
 
@@ -675,7 +676,7 @@ class CheckmkObjectCache(db.Document):
     """
 
     cache_group = db.StringField()
-    account = db.ReferenceField(document_type='Account', reverse_delete_rule=DENY)
+    account = db.ReferenceField(document_type=Account, reverse_delete_rule=DENY)
     content = db.DictField()
 
     meta = {

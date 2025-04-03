@@ -113,6 +113,7 @@ class CheckmkTagSync(CMK2):
                 pool.close()
                 pool.join()
 
+            progress.console.print("Waiting for Calculation to finish")
             task2 = progress.add_task("Apply Hosttags to objects", total=total)
             with multiprocessing.Pool(initializer=init_db) as pool:
                 tags = manager.list()
@@ -123,6 +124,8 @@ class CheckmkTagSync(CMK2):
                 pool.close()
                 pool.join()
 
+            progress.console.print("Waiting for Calculation to finish")
+        groups = dict(groups)
         # Delete Templates
         for group_id, group in list(groups.items()):
             if group.get('is_template'):
@@ -151,6 +154,7 @@ class CheckmkTagSync(CMK2):
         """
         cache_name = 'cmk_tags_tag_choices'
         if cache_name not in db_host.cache:
+            # Not existing Cache normaly can not happen
             return
         hosts_tags = db_host.cache[cache_name]
 
@@ -313,7 +317,7 @@ class CheckmkTagSync(CMK2):
                 found_ids.append(x)
 
         if not tags or len(tags) == 0:
-            print(f"{CC.WARNING} *{CC.ENDC} Group has no tags")
+            logger.debug(f"{CC.WARNING} *{CC.ENDC} Group has no tags")
             return False
         return tags
 
@@ -342,6 +346,8 @@ class CheckmkTagSync(CMK2):
                 if tags := self.prepare_tags_for_checkmk(tag_list):
                     payload['tags'] = tags
                 else:
+                    progress.console.print(f'Not tags for {tag_list}')
+                    progress.update(task1, advance=1)
                     continue
                 if syncer_group_id not in checkmk_ids:
                     # Create the group
