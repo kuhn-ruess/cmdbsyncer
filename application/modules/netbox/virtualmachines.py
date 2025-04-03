@@ -102,7 +102,7 @@ class SyncVirtualMachines(SyncNetbox):
             for db_object in db_objects:
                 hostname = db_object.hostname
                 try:
-                    all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
+                    all_attributes = self.get_host_attributes(db_object, 'netbox')
                     if not all_attributes:
                         progress.advance(task1)
                         continue

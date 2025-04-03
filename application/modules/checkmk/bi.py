@@ -30,7 +30,7 @@ class BI(CMK2):
         unique_rules = {}
         related_packs = []
         for db_host in Host.objects():
-            attributes = self.get_host_attributes(db_host, 'cmk_conf')
+            attributes = self.get_host_attributes(db_host, 'checkmk')
             if not attributes:
                 continue
             host_actions = self.actions.get_outcomes(db_host, attributes['all'])
@@ -100,7 +100,7 @@ class BI(CMK2):
         unique_aggregations = {}
         related_packs = []
         for db_host in Host.objects():
-            attributes = self.get_host_attributes(db_host, 'cmk_conf')
+            attributes = self.get_host_attributes(db_host, 'checkmk')
             if not attributes:
                 continue
             host_actions = self.actions.get_outcomes(db_host, attributes['all'])

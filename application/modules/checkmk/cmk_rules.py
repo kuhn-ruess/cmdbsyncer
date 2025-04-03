@@ -41,7 +41,7 @@ class CheckmkRuleSync(CMK2):
             object_filter = self.config['settings'].get(self.name, {}).get('filter')
             db_objects = Host.objects_by_filter(object_filter)
             for db_host in db_objects:
-                attributes = self.get_host_attributes(db_host, 'cmk_conf')
+                attributes = self.get_host_attributes(db_host, 'checkmk')
                 if not attributes:
                     continue
                 progress.advance(task1)
