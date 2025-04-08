@@ -111,7 +111,6 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
                 print(f"Error: {error}")
 
 @_cli_csv.command('import_hosts')
-@_cli_csv.command('import_objects')
 @click.argument("csv_path", default="")
 @click.option("--delimiter", default=';')
 @click.option("--hostname_field", default='host')
