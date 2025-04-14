@@ -119,7 +119,7 @@ class BaseConfig():
     }
 
 
-    FILEADMIN_PATH = '/srv/cmdbsyncer-files'
+    FILEADMIN_PATH = '/var/cmdbsyncer/files'
 
     ### Checkmk Stuff
 

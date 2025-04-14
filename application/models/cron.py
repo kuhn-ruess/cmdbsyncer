@@ -4,7 +4,7 @@ Cron Jobs
 from application import db, cron_register
 
 intervals = [
-    ("10min", "Every 10 minute"),
+    ("10min", "Every 15 minute"), # Crond runs 15min, but the 10 min makes sure it runs everytime
     ("hour", "Every hour"),
     ("daily", "Once Daily"),
 ]
