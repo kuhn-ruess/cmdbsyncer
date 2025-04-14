@@ -2,7 +2,10 @@
 Account
 """
 from mongoengine import DENY
+from cryptography.fernet import Fernet
+
 from application import db, plugin_register
+from application import app
 
 account_types = [
     ('cmkv1', "Checkmk Version 1.x"),
@@ -78,10 +81,32 @@ class Account(db.Document):
 
     address = db.StringField()
     username = db.StringField()
-    password = db.StringField()
+    password = db.StringField() # Compatibility for existing ones
+    password_crypted = db.StringField()
 
     custom_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CustomEntry"))
     plugin_settings = db.ListField(field=db.EmbeddedDocumentField(document_type="PluginSettings"))
+
+
+    def set_password(self, password):
+        """
+        Encrypt Passwort in Store
+        """
+        f = Fernet(app.config['CRYPTOGRAPHY_KEY'])
+        self.password_crypted = f.encrypt(str.encode(password)).decode('utf-8')
+        self.save()
+
+    def get_password(self):
+        """
+        Get Uncrypted Version of Password
+        """
+        if not self.password_crypted:
+            uncrypted = self.password
+            self.password = None
+            self.set_password(uncrypted)
+        f = Fernet(app.config['CRYPTOGRAPHY_KEY'])
+        return f.decrypt(str.encode(self.password_crypted)).decode('utf-8')
+
 
 
     enabled = db.BooleanField()
