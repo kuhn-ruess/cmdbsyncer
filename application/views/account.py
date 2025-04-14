@@ -323,6 +323,10 @@ class AccountModelView(DefaultModelView):
             for field, content in main_presets:
                 if not getattr(model, field):
                     setattr(model, field, content)
+
+        if form.password.data:
+            model.set_password(form.password.data)
+            model.password = ""
         return super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):
