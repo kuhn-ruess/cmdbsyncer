@@ -21,7 +21,8 @@ RUN apk add --no-cache python3 \
     krb5-dev \
     krb5 \
     openldap-dev \
-    unixodbc-dev
+    unixodbc-dev \
+    dcron
 
 ENV TZ=Etc/Universal
 RUN ln -sf /usr/share/zoneinfo/Ect/Universal /etc/localtime
@@ -34,6 +35,8 @@ RUN pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir -r requirements.txt
 RUN pip3 install --no-cache-dir -r requirements-extras.txt
 RUN pip3 install --no-cache-dir -r requirements-ansible.txt
+
+COPY ./deploy_configs/run_cron.sh /etc/periodic/15min/
 
 
 ARG config
