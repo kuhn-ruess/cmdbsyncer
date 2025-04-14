@@ -39,6 +39,8 @@ RUN pip3 install --no-cache-dir -r requirements-ansible.txt
 ARG config
 ENV config=$config
 
+ENTRYPOINT ["/srv/entrypoint.sh"]
+
 CMD [ "flask", "run", "--host", "0.0.0.0", "--port", "5003" ]
 
 EXPOSE 5003
