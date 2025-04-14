@@ -42,6 +42,7 @@ ENV config=$config
 COPY . /srv/
 
 
+ENTRYPOINT ["/srv/entrypoint.sh"]
 USER uwsgi
 
 CMD [ "uwsgi", "--master", "/srv/deploy_configs/uwsgi_docker.ini" ]
