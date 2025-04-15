@@ -157,7 +157,7 @@ class CheckmkDCDRuleSync(CMK2):
             db_objects = Host.objects_by_filter(object_filter)
             for db_host in db_objects:
                 logger.debug(f'Started with {db_host.hostname}')
-                attributes = self.get_host_attributes(db_host, 'checkmk')
+                attributes = self.get_attributes(db_host, 'checkmk')
                 if not attributes:
                     logger.debug(' -- Skiped no attributes')
                     progress.advance(task1)

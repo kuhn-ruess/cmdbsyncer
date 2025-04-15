@@ -53,7 +53,7 @@ class SyncInterfaces(SyncNetbox):
                 try:
                     hostname = db_object.hostname
 
-                    all_attributes = self.get_host_attributes(db_object, 'netbox')
+                    all_attributes = self.get_attributes(db_object, 'netbox')
                     if not all_attributes:
                         progress.advance(task1)
                         continue

@@ -252,7 +252,7 @@ class SyncCMK2(CMK2):
         """
         All Calculation for a Host
         """
-        attributes = self.get_host_attributes(db_host, 'checkmk')
+        attributes = self.get_attributes(db_host, 'checkmk')
         if not attributes:
             disabled_hosts.append(db_host.hostname)
             return False

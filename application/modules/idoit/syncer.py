@@ -242,7 +242,7 @@ class SyncIdoit(Plugin):
             counter += 1
             process = 100.0 * counter / total
 
-            all_attributes = self.get_host_attributes(db_host, 'idoit')
+            all_attributes = self.get_attributes(db_host, 'idoit')
             if not all_attributes:
                 continue
 

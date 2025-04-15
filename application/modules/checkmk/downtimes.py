@@ -227,7 +227,7 @@ class CheckmkDowntimeSync(CMK2):
             for db_host in db_objects:
                 hostname = db_host.hostname
                 progress.console.print(f"- Started for {hostname}")
-                attributes = self.get_host_attributes(db_host, 'checkmk')
+                attributes = self.get_attributes(db_host, 'checkmk')
                 if not attributes:
                     progress.advance(task1)
                     continue
@@ -256,7 +256,7 @@ class CheckmkDowntimeSync(CMK2):
         #        for db_host in Host.objects():
         #            hostname = db_host.hostname
         #            progress.console.print(f"- Started for {hostname}")
-        #            attributes = self.get_host_attributes(db_host, 'checkmk')
+        #            attributes = self.get_attributes(db_host, 'checkmk')
         #            if not attributes:
         #                progress.advance(task1)
         #                continue

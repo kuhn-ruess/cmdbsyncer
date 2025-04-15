@@ -25,7 +25,7 @@ class CheckmkTagSync(CMK2):
         """
         Calculation of rules and Host Tags
         """
-        object_attributes = self.get_host_attributes(db_host, 'checkmk')
+        object_attributes = self.get_attributes(db_host, 'checkmk')
 
         tags_of_host = {}
         addional_groups = {}
