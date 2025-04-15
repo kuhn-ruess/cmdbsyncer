@@ -27,7 +27,7 @@ def compare_hosts(csv_path, delimiter, hostname_field, label_filter):
         # we need to load the full plugins then
         plugin = Plugin()
         for host in Host.get_export_hosts():
-            if label_filter in plugin.get_host_attributes(host, 'csv')['all']:
+            if label_filter in plugin.get_attributes(host, 'csv')['all']:
                 host_list.append(host.hostname)
     else:
         host_list = list([x.hostname for x in Host.get_export_hosts()])

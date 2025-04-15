@@ -520,7 +520,7 @@ def netbox_host_debug(hostname):
         return
 
 
-    attributes = syncer.get_host_attributes(db_host, 'netbox')
+    attributes = syncer.get_attributes(db_host, 'netbox')
 
     if not attributes:
         print(f"{cc.FAIL}THIS HOST IS IGNORED BY RULE{cc.ENDC}")

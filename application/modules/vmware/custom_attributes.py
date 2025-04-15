@@ -128,7 +128,7 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
             for db_host in db_objects:
                 try:
                     hostname = db_host.hostname
-                    all_attributes = self.get_host_attributes(db_host, 'vmware_vcenter')
+                    all_attributes = self.get_attributes(db_host, 'vmware_vcenter')
                     if not all_attributes:
                         progress.advance(task1)
                         continue
