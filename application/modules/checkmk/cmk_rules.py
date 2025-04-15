@@ -35,7 +35,7 @@ class CheckmkRuleSync(CMK2):
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
-            task1 = progress.add_task("Calculate Ruels", total=total)
+            task1 = progress.add_task("Calculate rules", total=total)
             object_filter = self.config['settings'].get(self.name, {}).get('filter')
             db_objects = Host.objects_by_filter(object_filter)
             for db_host in db_objects:
