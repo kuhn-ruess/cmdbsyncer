@@ -74,6 +74,18 @@ class Rule(): # pylint: disable=too-few-public-methods
             return False
         # Wee need to find out if tag AND tag value match
         for tag, value in self.attributes.items():
+            # Handle special dict key custom_fields
+            if "custom_fields" == tag and isinstance(value, dict):
+                for name, content in value.items():
+                    if f'custom_fields["{name}"]' == needed_tag:
+                        # User writting custom_fields["name"]
+                        tag = f'custom_fields["{name}"]'
+                        value = content
+                    elif f"custom_fields['{name}']" == needed_tag:
+                        # User writting custom_fields['name']
+                        tag = f"custom_fields['{name}']"
+                        value = content
+
             # Check if Tag matchs
             if app.config['ADVANCED_RULE_DEBUG']:
                 logger.debug(f"Check Tag: {tag} vs needed: {needed_tag} "\
