@@ -139,6 +139,7 @@ class CheckmkTagSync(CMK2):
         """
         Update the groups ob
         """
+        db_host.reload()
         cache_name = 'cmk_tags_multigroups'
         if cache_name not in db_host.cache:
             return
@@ -152,6 +153,7 @@ class CheckmkTagSync(CMK2):
         """
         Update the Tags provided by the Host
         """
+        db_host.reload()
         cache_name = 'cmk_tags_tag_choices'
         if cache_name not in db_host.cache:
             # Not existing Cache normaly can not happen
