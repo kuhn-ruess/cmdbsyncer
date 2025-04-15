@@ -29,6 +29,16 @@ from application.models.host import Host
 div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
 
+main_open = rules.HTML('<div class="card">'\
+        '<h5 class="card-header">Main Options</h5>'\
+        '<div class="card-body">')
+main_close = rules.HTML("</div></div><br>")
+
+addional_open = rules.HTML('<div class="card">'\
+        '<h5 class="card-header">Addional Options</h5>'\
+        '<div class="card-body">')
+addional_close = rules.HTML("</div></div>")
+
 def _render_dw_rule(_view, _context, model, _name):
     """
     Render Downtime Rule
@@ -524,6 +534,48 @@ class CheckmkTagMngmtView(DefaultModelView):
 
     column_formatters_export = {
         'name': get_rule_json
+    }
+
+    #addional_open = rules.HTML('<a class="btn btn-primary" data-toggle="collapse" '\
+    #                           'href="#collapseAddional" role="button" '\
+    #                           'aria-expanded="false" aria-controls="collapseAddional">'\
+    #                           'More Options</a>'\
+    #                           '<div class="collapse" id=collapseAddional>')
+
+    form_rules = [
+        rules.FieldSet((
+            rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_hosttags"]}"'\
+                            'target="_blank" class="badge badge-light">Documentation</a>'),
+            )
+       ),
+       main_open,
+       rules.FieldSet(
+           ('group_topic_name', 'group_title', 'group_id', 'group_help',
+           ), "1. Checkmk Group Data"),
+       rules.FieldSet(
+           ( 'rewrite_id', 'rewrite_title',
+           ), "2. Define which ID and Title the Tag should have in Checkmk"),
+       rules.FieldSet(
+           ( 'enabled',
+           ), "3. Enable"),
+       main_close,
+       addional_open,
+       rules.FieldSet(
+           ( 'group_multiply_list', 'group_multiply_by_list', 
+           ), 'Create Multiple Checkmk Groups'),
+       rules.HTML('<br>'),
+       rules.FieldSet(
+           ( 'filter_by_account',
+           ), 'Filter Input Data'),
+        rules.FieldSet(('documentation',), 'Internal Documentation'),
+        addional_close
+    ]
+
+    form_overrides = {
+        'group_topic_name': StringField,
+        'group_title': StringField,
+        'group_id': StringField,
+        'group_help': StringField,
     }
 
     column_exclude_list = [
