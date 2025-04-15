@@ -246,7 +246,8 @@ class CheckmkTagSync(CMK2):
         """
         hostname = db_object.hostname
         tags = {}
-        logger.debug(f"Update Tags from {hostname}")
+        logger.info(f"Update Tags from {hostname}")
+        logger.debug(f"{groups} {tags_of_host}")
 
 
         for group_id, group_data in groups.items():
@@ -348,7 +349,6 @@ class CheckmkTagSync(CMK2):
                 if tags := self.prepare_tags_for_checkmk(tag_list):
                     payload['tags'] = tags
                 else:
-                    progress.console.print(f'Not tags for {tag_list}')
                     progress.update(task1, advance=1)
                     continue
                 if syncer_group_id not in checkmk_ids:
@@ -361,8 +361,9 @@ class CheckmkTagSync(CMK2):
                     checkmk_tags_flat = \
                             [{'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
 
-                    if {frozenset(d.items()) for d in checkmk_tags_flat} == \
-                            {frozenset(d.items()) for d in payload['tags']}:
+                    checkmk_tags_frozen = {frozenset(d.items()) for d in checkmk_tags_flat}
+                    syncer_tags_frozen = {frozenset(d.items()) for d in payload['tags']}
+                    if checkmk_tags_frozen == syncer_tags_frozen:
                         progress.console.print(f" * Group {syncer_group_id} already up to date.")
                     else:
                         url = f"/objects/host_tag_group/{syncer_group_id}"
