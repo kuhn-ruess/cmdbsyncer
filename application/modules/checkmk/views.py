@@ -34,6 +34,11 @@ main_open = rules.HTML('<div class="card">'\
         '<div class="card-body">')
 main_close = rules.HTML("</div></div><br>")
 
+checkmk_open = rules.HTML('<div class="card">'\
+        '<h5 class="card-header">Checkmk Options</h5>'\
+        '<div class="card-body">')
+checkmkl_close = rules.HTML("</div></div>")
+
 addional_open = rules.HTML('<div class="card">'\
         '<h5 class="card-header">Addional Options</h5>'\
         '<div class="card-body">')
@@ -536,12 +541,6 @@ class CheckmkTagMngmtView(DefaultModelView):
         'name': get_rule_json
     }
 
-    #addional_open = rules.HTML('<a class="btn btn-primary" data-toggle="collapse" '\
-    #                           'href="#collapseAddional" role="button" '\
-    #                           'aria-expanded="false" aria-controls="collapseAddional">'\
-    #                           'More Options</a>'\
-    #                           '<div class="collapse" id=collapseAddional>')
-
     form_rules = [
         rules.FieldSet((
             rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_hosttags"]}"'\
@@ -813,12 +812,18 @@ class CheckmkPasswordView(DefaultModelView):
     """
 
     form_rules = [
+        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_password_store"]}"'\
+                        'target="_blank" class="badge badge-light">Documentation</a>'),
+       main_open,
        rules.FieldSet(
            ('name', 'documentation', 'enabled'),
-            "1. Main Options"),
+            "Documentation"),
+       main_close,
+       checkmk_open,
        rules.FieldSet(
            ( 'title', 'comment', 'documentation_url', 'owner', 'password', 'shared',
-           ), "2. Password Settings"),
+           ), "Fields for Checkmk's Passwort Store"),
+        checkmkl_close,
     ]
 
     column_filters = [
