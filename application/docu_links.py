@@ -7,4 +7,5 @@ docu_links = {
     'cmk_groups': 'https://cmdbsyncer.readthedocs.io/en/latest/checkmk/groups_management/',
     'cmk_setup_rules': 'https://cmdbsyncer.readthedocs.io/en/latest/checkmk/rules_management/',
     'cmk_hosttags': 'https://cmdbsyncer.readthedocs.io/en/latest/checkmk/create_hosttags/',
+    'cmk_password_store': 'https://cmdbsyncer.readthedocs.io/en/latest/checkmk/password_store/',
 }
