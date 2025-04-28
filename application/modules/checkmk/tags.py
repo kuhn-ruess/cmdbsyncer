@@ -315,6 +315,11 @@ class CheckmkTagSync(CMK2):
         found_ids = []
         tags = []
         for x, y in config_tags:
+            if x:
+                x = x.strip()
+            y = y.strip()
+            if not y:
+                continue
             if x not in found_ids:
                 tags.append({'ident':x, 'title': y})
                 found_ids.append(x)
@@ -359,27 +364,31 @@ class CheckmkTagSync(CMK2):
                     # Check if we need to update it
                     checkmk_tags = checkmk_ids[syncer_group_id]
                     checkmk_tags_flat = \
-                            [{'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
+                            [{'ident': x['id'], 'title': x['title']} \
+                            for x in checkmk_tags if x['title'].strip()]
 
+                    if app.config['CMK_DONT_DELETE_TAGS']:
+                        # In this case, we merge only the new dicts into the existing ones
+                        found = set()
+                        new_tags = []
+                        for tag in payload['tags'] + checkmk_tags_flat:
+                            if tag['ident'] not in found:
+                                found.add(tag['ident'])
+                                new_tags.append(tag)
+                        payload['tags'] = sorted(new_tags, key=lambda x: str(x['ident']))
                     checkmk_tags_frozen = {frozenset(d.items()) for d in checkmk_tags_flat}
                     syncer_tags_frozen = {frozenset(d.items()) for d in payload['tags']}
                     if checkmk_tags_frozen == syncer_tags_frozen:
                         progress.console.print(f" * Group {syncer_group_id} already up to date.")
                     else:
+                        logger.debug("NEED TO UPDATE TAGS")
+                        logger.debug(f"Checkmk Tags: {checkmk_tags_frozen}")
+                        logger.debug(f"Syncer Tags: {syncer_tags_frozen}")
                         url = f"/objects/host_tag_group/{syncer_group_id}"
                         update_headers = {
                             'if-match': etag
                         }
                         del payload['ident']
-                        if app.config['CMK_DONT_DELETE_TAGS']:
-                            # In this case, we merge only the new dicts into the existing ones
-                            found = set()
-                            new_tags = []
-                            for tag in payload['tags'] + checkmk_tags_flat:
-                                if tag['ident'] not in found:
-                                    found.add(tag['ident'])
-                                    new_tags.append(tag)
-                            payload['tags'] = sorted(new_tags, key=lambda x: str(x['ident']))
                         payload['repair'] = False
                         try:
                             self.request(url,
