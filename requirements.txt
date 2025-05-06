@@ -18,3 +18,4 @@ sortedcontainers==2.4.0
 pyyml==0.0.2
 Flask-Admin @ git+https://github.com/Bastian-Kuhn/flask-admin.git@mongoengine
 uWSGI
+sentry-sdk==2.27.0
