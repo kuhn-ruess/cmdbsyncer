@@ -13,7 +13,7 @@
 
 - name: "Download Checkmk Agent."
   ansible.builtin.uri:
-    url: "https://{{ cmk_server }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=linux_rpm&host_name={{ inventory_hostname }}"
+    url: "https://{{ cmk_server }}:{{cmk_server_port}}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=linux_rpm&host_name={{ inventory_hostname }}"
     dest: "{{ cmk_linux_tmp }}/cmk_agent.rpm"
     method: GET
     validate_certs: no
