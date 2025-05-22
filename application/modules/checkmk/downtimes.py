@@ -97,6 +97,9 @@ class CheckmkDowntimeSync(CMK2):
         start_day = rule['start_day']
         if rule['start_day_template']:
             start_day = render_jinja(rule['start_day_template'], **attributes)
+        if start_day == 'today':
+            now = datetime.datetime.now(datetime.timezone.utc)
+            start_day = now.date()
         every = rule['every']
         if rule['every_template']:
             every = render_jinja(rule['every_template'], **attributes)
@@ -143,8 +146,26 @@ class CheckmkDowntimeSync(CMK2):
                     "duration": duration,
                     "comment": downtime_comment,
                 }
+        elif every == 'once':
+            dt_start = \
+                    datetime.datetime.combine(start_day, dt_start_time)\
+                        .astimezone(datetime.timezone.utc)
+            end_day = start_day
+            if overnight_downtime:
+                end_day = day + datetime.timedelta(days=1)
+            dt_end = \
+                    datetime.datetime.combine(end_day, dt_end_time)\
+                        .astimezone(datetime.timezone.utc)
+
+            yield {
+                "start" : dt_start,
+                "end" : dt_end,
+                "duration": duration,
+                "comment": downtime_comment,
+            }
+
         else:
-            # Fancy Mode
+            # Flexible Mode
             for day in self.calculate_downtime_dates(start_day, every, offset):
                 dt_start = \
                         datetime.datetime.combine(day, dt_start_time)\
