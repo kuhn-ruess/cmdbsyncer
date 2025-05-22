@@ -266,7 +266,7 @@ class CheckmkRuleMngmt(db.Document):
 
 class CheckmkTagMngmt(db.Document):
     """
-    Manage Checkmk Users
+    Manage Checkmk Tags
     """
     documentation = db.StringField()
     group_topic_name = db.StringField()
