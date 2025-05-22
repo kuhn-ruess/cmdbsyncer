@@ -28,6 +28,10 @@
           font-size: 1.2rem !important;
       }
 
+      .hidden {
+          display: none;
+      }
+
     .loader {
       width: 40px;
       aspect-ratio: 1;
@@ -131,7 +135,46 @@
 {% block tail %}
     {{ super() }}
     <script type="text/javascript">
+
+    $(document).on("click", ".btnCondition", function(){
+        var job = $(this).val();
+
+        var host_cond = $(this).nextAll('.cond-host').first();
+        var attr_cond = $(this).nextAll('.cond-attr').first();
+        var match_type = $(this).nextAll('.hidden').first().find('.cond-match-type');
+
+        if (job == 'host'){
+            attr_cond.hide();
+            host_cond.show();
+            match_type.val('host');
+        } else {
+            attr_cond.show();
+            host_cond.hide();
+            match_type.val('tag');
+        }
+    });
+
+
     $( document ).ready(function() {
+
+
+        $('.btnCondition').each(function(i, obj) {
+            var host_cond = $(this).nextAll('.cond-host').first();
+            var attr_cond = $(this).nextAll('.cond-attr').first();
+            var match_type = $(this).nextAll('.hidden').first().find('.cond-match-type');
+
+            if (match_type.val() == 'host'){
+                attr_cond.hide();
+                host_cond.show();
+            } else {
+                attr_cond.show();
+                host_cond.hide();
+            }
+
+        });
+
+
+
         $("a#enabled>span.icon-minus-sign").parents('tr').css("background-color", "#f0f0f0").css("color", "grey");
 
         $('.toggle_activate_modal').click(function(){
@@ -160,6 +203,7 @@
 
             });
         }
+
     });
 
     </script>

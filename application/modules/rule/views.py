@@ -53,6 +53,7 @@ form_subdocuments_template = {
                     'tag': { 'style': 'background-color: #81DAF5;' },
                     'value_match': { 'style': 'background-color: #81DAF5;' },
                     'value': { 'style': 'background-color: #81DAF5;'},
+                    'match_type': {'class': 'cond-match-type'},
                 },
                 'form_overrides' : {
                     'hostname': StringField,
@@ -60,12 +61,19 @@ form_subdocuments_template = {
                     'value': StringField,
                 },
                 'form_rules' : [
+                    rules.HTML("<div class='condition'>"),
+                    rules.HTML('<button type="button" value="host" class="btn btn-info btnCondition">Match by Hostname</button>'),
+                    rules.HTML('<button type="button" value="attr" class="btn btn-info btnCondition">Match by Attribute</button>'),
+                    rules.HTML('<hr>'),
+                    rules.HTML('<div class="hidden">'),
                     rules.Field('match_type',),
-                    rules.HTML("<div class='form-row'><div class='col host'>"),
+                    rules.HTML('</div>'),
+
+                    rules.HTML("<div class='cond-host'>"),
                     rules.FieldSet(
                         ('hostname_match', 'hostname', 'hostname_match_negate'),
                          "Match for Hostname"),
-                    rules.HTML("</div><div class='col tag'>"),
+                    rules.HTML("</div><div class='cond-attr' style='display: none;'>"),
 
                     rules.FieldSet(
                         (
