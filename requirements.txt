@@ -16,3 +16,4 @@ tablib==3.8.0
 Flask-Admin==1.6.1
 uWSGI
 sentry-sdk==2.27.0
+sortedcontainers==2.4.0
