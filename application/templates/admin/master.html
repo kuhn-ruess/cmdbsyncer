@@ -85,7 +85,8 @@
             <!-- navbar content -->
             <div class="collapse navbar-collapse" id="admin-navbar-collapse">
             {% block brand %}
-                <a class="navbar-brand" href="{{ config['BASE_PREFIX'] }}admin">{{ admin_view.admin.name }}</a>
+                <a class="navbar-brand" href="{{ config['BASE_PREFIX'] }}admin"><img src="{{ config['BASE_PREFIX'] }}static/logo_white.png" width=60>{{ admin_view.admin.name }}
+    </a>
             {% endblock %}
             {% block main_menu %}
                 <ul class="nav navbar-nav mr-auto">
