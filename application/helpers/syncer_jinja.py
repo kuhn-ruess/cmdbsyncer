@@ -6,6 +6,7 @@ import ast
 import ipaddress
 import jinja2
 from jinja2 import StrictUndefined
+import datetime
 
 from application import logger
 from application.modules.checkmk.helpers import cmk_cleanup_tag_id, cmk_cleanup_hostname
@@ -115,6 +116,7 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         'get_ip_interface': get_ip_interface,
         'eval': syncer_eval,
         'defined': syncer_defined,
+        'datetime': datetime,
 
     })
 
