@@ -115,6 +115,15 @@ class Rule(): # pylint: disable=too-few-public-methods
             return True
         return False
 
+
+    def handle_match(self, condition, hostname):
+        """
+        Check if a Host or Attribute Condition has a match
+        """
+        if condition['match_type'] == 'tag':
+            return self._check_attribute_match(condition)
+        return self._check_hostname_match(condition, hostname)
+
     def check_rules(self, hostname): #pylint: disable=too-many-branches
         """
         Handle Rule Match logic
@@ -147,28 +156,18 @@ class Rule(): # pylint: disable=too-few-public-methods
             rule = rule.to_mongo()
             rule_hit = False
             if rule['condition_typ'] == 'any':
-                for condtion in rule['conditions']:
-                    local_hit = False
-                    if condtion['match_type'] == 'tag':
-                        local_hit = self._check_attribute_match(condtion)
-                    else:
-                        local_hit = self._check_hostname_match(condtion, hostname)
-                    if local_hit:
+                for condition in rule['conditions']:
+                    if self.handle_match(condition, hostname):
                         rule_hit = True
+                        break
             elif rule['condition_typ'] == 'all':
-                negativ_match = False
-                for condtion in rule['conditions']:
-                    if condtion['match_type'] == 'tag':
-                        if not self._check_attribute_match(condtion):
-                            negativ_match = True
-                    else:
-                        if not self._check_hostname_match(condtion, hostname):
-                            negativ_match = True
-                if not negativ_match:
-                    rule_hit = True
+                rule_hit = True
+                for condition in rule['conditions']:
+                    if not self.handle_match(condition, hostname):
+                        rule_hit = False
+                        break
             elif rule['condition_typ'] == 'anyway':
                 rule_hit = True
-
 
 
             if self.debug:
@@ -211,7 +210,7 @@ class Rule(): # pylint: disable=too-few-public-methods
 
         defaults_for_list = {}
         defaults_by_id = {}
-        hostname = self.db_host.hostname
+        #hostname = self.db_host.hostname
 
         ignore_list = []
 
