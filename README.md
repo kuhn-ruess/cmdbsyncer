@@ -4,8 +4,8 @@ Rule Based and Modular System to syncronize Hosts into and between Checkmk, Netb
 Main Goal is the complete Organization of the Hosts based on CMDB Systems
 
 
-[https://cmdbsyncer.de](Homepage)
-[https://docs.cmdbsyncer.de](Documentation)
+ * [Homepage](https://cmdbsyncer.de)
+ * [Documentation](https://docs.cmdbsyncer.de)
 
 
 ![Rules](https://user-images.githubusercontent.com/899110/201333967-2d7f3f35-cc69-4cad-931f-1da096f94056.png)
@@ -15,6 +15,7 @@ Main Goal is the complete Organization of the Hosts based on CMDB Systems
 I recommend docker-compose:
 - checkout the Repo
 - run ./helper up
+- run ./helper shell (to get inside the container)
 - run ./helper create_user 'mail@address.org' (to create login)
 - Login to the Interface: http://your-host:5003
 This is runs a Development Version which you can use to test everthing
