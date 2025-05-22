@@ -8,6 +8,7 @@ import sys
 import logging
 from logging import config as log_config
 from datetime import datetime
+from sortedcontainers import SortedDict
 from pprint import pformat
 from jinja2 import StrictUndefined
 from flask import Flask, url_for, redirect
@@ -135,7 +136,7 @@ login_manager.login_message = False
 
 
 
-cron_register = {}
+cron_register = SortedDict()
 plugin_register = []
 from plugins import *
 from application.plugins import *
