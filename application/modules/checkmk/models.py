@@ -595,6 +595,7 @@ class CheckmkBiRule(db.Document):
 
 downtime_repeats = [
    ('', 'Use Template'),
+   ('once', 'Only Once'),
    ('day', 'Day'),
    ('workday', 'Workday'),
    ('week', 'Week'),
@@ -607,6 +608,7 @@ downtime_repeats = [
 
 days = [
     ('', 'Use Template'),
+    ('today', "Today"),
     ('mon', 'Monday'),
     ('tue', 'Tuesday'),
     ('wed', 'Wednesday'),
