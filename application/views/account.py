@@ -222,6 +222,8 @@ class AccountModelView(DefaultModelView):
                 ('limit_by_accounts', ""),
                 ('limit_by_hostnames', ""),
                 ('list_disabled_hosts', ""),
+                ('bakery_key_id', ""),
+                ('bakery_passphrase', ""),
                 ('verify_cert', "True"),
             ]
         elif form.typ.data == 'ldap':
