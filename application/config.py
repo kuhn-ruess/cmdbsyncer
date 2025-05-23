@@ -119,7 +119,7 @@ class BaseConfig():
     }
 
 
-    FILEADMIN_PATH = '/srv/cmdbsyncer-files'
+    FILEADMIN_PATH = '/var/cmdbsyncer/files'
 
     ### Checkmk Stuff
 
@@ -130,6 +130,8 @@ class BaseConfig():
     CMK_DONT_DELETE_HOSTS = False
     CMK_BULK_DELETE_HOSTS = True
     CMK_BULK_DELETE_OPERATIONS = 50
+
+    CMK_DONT_DELETE_TAGS = True
 
     CMK_BULK_UPDATE_HOSTS = True
     CMK_BULK_UPDATE_OPERATIONS = 50

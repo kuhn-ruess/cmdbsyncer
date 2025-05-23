@@ -21,7 +21,8 @@ RUN apk add --no-cache python3 \
     krb5-dev \
     krb5 \
     openldap-dev \
-    unixodbc-dev
+    unixodbc-dev \
+    dcron
 
 ENV TZ=Europe/Berlin
 RUN ln -sf /usr/share/zoneinfo/Europe/Berlin /etc/localtime
@@ -36,8 +37,12 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 RUN pip3 install --no-cache-dir -r requirements-extras.txt
 RUN pip3 install --no-cache-dir -r requirements-ansible.txt
 
+COPY ./deploy_configs/run_cron.sh /etc/periodic/15min/
+
 ARG config
 ENV config=$config
+
+ENTRYPOINT ["/srv/entrypoint.sh"]
 
 CMD [ "flask", "run", "--host", "0.0.0.0", "--port", "5003" ]
 

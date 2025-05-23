@@ -38,7 +38,7 @@ class CheckmkGroupSync(CMK2):
         collection_keys = {}
         collection_values = {}
         for db_host in Host.objects():
-            if attributes := self.get_host_attributes(db_host, 'cmk_conf'):
+            if attributes := self.get_attributes(db_host, 'cmk_conf'):
                 for key, value in attributes['all'].items():
                     key, value = str(key), str(value)
                     # Add the Keys

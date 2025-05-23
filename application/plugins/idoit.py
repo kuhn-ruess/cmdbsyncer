@@ -125,7 +125,7 @@ def idoit_host_debug(hostname):
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
         return
 
-    attributes = syncer.get_host_attributes(db_host, 'netbox')
+    attributes = syncer.get_attributes(db_host, 'netbox')
 
     if not attributes:
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY Global RULE{ColorCodes.ENDC}")

@@ -103,7 +103,7 @@ class SyncDevices(SyncNetbox):
                 device = False
                 try:
                     hostname = db_host.hostname
-                    all_attributes = self.get_host_attributes(db_host, 'netbox')
+                    all_attributes = self.get_attributes(db_host, 'netbox')
                     if not all_attributes:
                         progress.advance(task1)
                         continue

@@ -75,7 +75,7 @@ class SyncAnsible(Plugin):
             for db_host in query:
                 hostname = db_host.hostname
 
-                attributes = self.get_host_attributes(db_host, 'ansible')
+                attributes = self.get_attributes(db_host, 'ansible')
                 if not attributes:
                     if show_status:
                         progress.advance(task1)
@@ -111,7 +111,7 @@ class SyncAnsible(Plugin):
         except DoesNotExist:
             return False
 
-        attributes = self.get_host_attributes(db_host, 'ansible')
+        attributes = self.get_attributes(db_host, 'ansible')
         if not attributes:
             return False
         extra_attributes = self.get_host_data(db_host, attributes['all'])

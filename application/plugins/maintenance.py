@@ -7,6 +7,7 @@ import os
 import datetime
 import string
 import secrets
+from cryptography.fernet import Fernet
 from pprint import pformat
 import click
 from mongoengine.errors import DoesNotExist, ValidationError
@@ -265,13 +266,15 @@ def self_configure():
     alphabet = string.ascii_letters + string.digits + string.punctuation
     values = {
         'SECRET_KEY': ''.join(secrets.choice(alphabet) for i in range(120)),
-        'CRYPTOGRAPHY_KEY' : ''.join(secrets.choice(alphabet) for i in range(120)),
+        'CRYPTOGRAPHY_KEY' : Fernet.generate_key(),
         'SESSION_COOKIE_NAME': "cmdb-syncer",
     }
     from local_config import config #pylint: disable=import-outside-toplevel
     for key, value in values.items():
         if key not in config:
             config[key] = value
+    if not isinstance(config['CRYPTOGRAPHY_KEY'], bytes):
+        config['CRYPTOGRAPHY_KEY'] = values['CRYPTOGRAPHY_KEY']
     with open('local_config.py', 'w', encoding="utf-8") as lf:
         lf.write("#!/usr/bin/env python3\n")
         lf.write('"""\nLocal Config File\n"""\n')

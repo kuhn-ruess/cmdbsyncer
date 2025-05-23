@@ -4,7 +4,6 @@ Checkmk Downtime Sync
 
 import datetime
 import calendar
-import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application.modules.checkmk.cmk2 import CmkException, CMK2
@@ -98,6 +97,9 @@ class CheckmkDowntimeSync(CMK2):
         start_day = rule['start_day']
         if rule['start_day_template']:
             start_day = render_jinja(rule['start_day_template'], **attributes)
+        if start_day == 'today':
+            now = datetime.datetime.now(datetime.timezone.utc)
+            start_day = now.date()
         every = rule['every']
         if rule['every_template']:
             every = render_jinja(rule['every_template'], **attributes)
@@ -114,6 +116,10 @@ class CheckmkDowntimeSync(CMK2):
 
         now = datetime.datetime.now(datetime.timezone.utc)
         dt_start_time = datetime.time(start_hour, start_minute, 0)
+        overnight_downtime = False
+        if start_hour > end_hour:
+            # End Hour is next Day: Overnight Downtime
+            overnight_downtime = True
         dt_end_time = datetime.time(end_hour, end_minute, 0)
 
 
@@ -125,8 +131,11 @@ class CheckmkDowntimeSync(CMK2):
                 dt_start = \
                         datetime.datetime.combine(day, dt_start_time)\
                             .astimezone(datetime.timezone.utc)
+                end_day = day
+                if overnight_downtime:
+                    end_day = day + datetime.timedelta(days=1)
                 dt_end = \
-                        datetime.datetime.combine(day, dt_end_time)\
+                        datetime.datetime.combine(end_day, dt_end_time)\
                             .astimezone(datetime.timezone.utc)
 
                 if dt_start < now:
@@ -137,14 +146,35 @@ class CheckmkDowntimeSync(CMK2):
                     "duration": duration,
                     "comment": downtime_comment,
                 }
+        elif every == 'once':
+            dt_start = \
+                    datetime.datetime.combine(start_day, dt_start_time)\
+                        .astimezone(datetime.timezone.utc)
+            end_day = start_day
+            if overnight_downtime:
+                end_day = day + datetime.timedelta(days=1)
+            dt_end = \
+                    datetime.datetime.combine(end_day, dt_end_time)\
+                        .astimezone(datetime.timezone.utc)
+
+            yield {
+                "start" : dt_start,
+                "end" : dt_end,
+                "duration": duration,
+                "comment": downtime_comment,
+            }
+
         else:
-            # Fancy Mode
+            # Flexible Mode
             for day in self.calculate_downtime_dates(start_day, every, offset):
                 dt_start = \
                         datetime.datetime.combine(day, dt_start_time)\
                             .astimezone(datetime.timezone.utc)
+                end_day = day
+                if overnight_downtime:
+                    end_day = day + datetime.timedelta(days=1)
                 dt_end = \
-                        datetime.datetime.combine(day, dt_end_time)\
+                        datetime.datetime.combine(end_day, dt_end_time)\
                         .astimezone(datetime.timezone.utc)
                 if dt_start < now:
                     continue
@@ -218,7 +248,7 @@ class CheckmkDowntimeSync(CMK2):
             for db_host in db_objects:
                 hostname = db_host.hostname
                 progress.console.print(f"- Started for {hostname}")
-                attributes = self.get_host_attributes(db_host, 'cmk_conf')
+                attributes = self.get_attributes(db_host, 'checkmk')
                 if not attributes:
                     progress.advance(task1)
                     continue
@@ -247,7 +277,7 @@ class CheckmkDowntimeSync(CMK2):
         #        for db_host in Host.objects():
         #            hostname = db_host.hostname
         #            progress.console.print(f"- Started for {hostname}")
-        #            attributes = self.get_host_attributes(db_host, 'cmk_conf')
+        #            attributes = self.get_attributes(db_host, 'checkmk')
         #            if not attributes:
         #                progress.advance(task1)
         #                continue

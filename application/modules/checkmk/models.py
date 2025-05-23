@@ -2,9 +2,11 @@
 Checkmk Rules
 """
 # pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
+from mongoengine import DENY
 from cryptography.fernet import Fernet
 from application import db, app
 from application.modules.rule.models import rule_types
+from application.models.account import Account
 
 
 
@@ -264,7 +266,7 @@ class CheckmkRuleMngmt(db.Document):
 
 class CheckmkTagMngmt(db.Document):
     """
-    Manage Checkmk Users
+    Manage Checkmk Tags
     """
     documentation = db.StringField()
     group_topic_name = db.StringField()
@@ -593,6 +595,7 @@ class CheckmkBiRule(db.Document):
 
 downtime_repeats = [
    ('', 'Use Template'),
+   ('once', 'Only Once'),
    ('day', 'Day'),
    ('workday', 'Workday'),
    ('week', 'Week'),
@@ -605,6 +608,7 @@ downtime_repeats = [
 
 days = [
     ('', 'Use Template'),
+    ('today', "Today"),
     ('mon', 'Monday'),
     ('tue', 'Tuesday'),
     ('wed', 'Wednesday'),
@@ -625,6 +629,15 @@ offsets = [
     ('6', "6 day later"),
     ('7', "7 day later"),
 ]
+
+#pylint: disable=consider-using-generator
+hours = list([
+    (str(x), x) for x in range(24)
+])
+
+minutes = list([
+    (str(x), x) for x in range(60)
+])
 class DowtimeRuleOutcome(db.EmbeddedDocument):
     """
     Checkmk Downtime
@@ -635,12 +648,12 @@ class DowtimeRuleOutcome(db.EmbeddedDocument):
     every_template = db.StringField(max_length=120)
     offset_days = db.StringField(choices=offsets)
     offset_days_template = db.StringField()
-    start_time_h = db.StringField()
-    start_time_m = db.StringField()
-    end_time_h = db.StringField()
-    end_time_m = db.StringField()
-    downtime_comment = db.StringField(max_length=120)
-    duration_h =db.StringField(max_length=30)
+    start_time_h = db.StringField(choices=hours, default=0)
+    start_time_m = db.StringField(choices=minutes, default=0)
+    end_time_h = db.StringField(choices=hours, default=0)
+    end_time_m = db.StringField(choices=minutes, default=0)
+    downtime_comment = db.StringField(max_length=120, required=True)
+    duration_h =db.StringField(max_length=30, choices=[('', "Not Use")]+hours)
 
     meta = {
         'strict': False
@@ -674,7 +687,7 @@ class CheckmkObjectCache(db.Document):
     """
 
     cache_group = db.StringField()
-    account = db.ReferenceField(document_type='Account')
+    account = db.ReferenceField(document_type=Account, reverse_delete_rule=DENY)
     content = db.DictField()
 
     meta = {

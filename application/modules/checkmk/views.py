@@ -29,6 +29,21 @@ from application.models.host import Host
 div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
 
+main_open = rules.HTML('<div class="card">'\
+        '<h5 class="card-header">Main Options</h5>'\
+        '<div class="card-body">')
+main_close = rules.HTML("</div></div><br>")
+
+checkmk_open = rules.HTML('<div class="card">'\
+        '<h5 class="card-header">Checkmk Options</h5>'\
+        '<div class="card-body">')
+checkmkl_close = rules.HTML("</div></div>")
+
+addional_open = rules.HTML('<div class="card">'\
+        '<h5 class="card-header">Addional Options</h5>'\
+        '<div class="card-body">')
+addional_close = rules.HTML("</div></div>")
+
 def _render_dw_rule(_view, _context, model, _name):
     """
     Render Downtime Rule
@@ -180,6 +195,8 @@ class CheckmkRuleView(RuleModelView):
     """
 
 
+
+
     @expose('/debug')
     def debug(self):
         """
@@ -214,7 +231,6 @@ class CheckmkRuleView(RuleModelView):
 
         return self.render('debug.html', hostname=hostname, output=output,
                            rules=new_rules)
-
 
 
     def __init__(self, model, **kwargs):
@@ -255,13 +271,16 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
     """
     html = "<table width=100%>"
     for idx, rule in enumerate(model.outcomes):
+        highlighted = \
+                highlight(rule.value_template, DjangoLexer(),
+                          HtmlFormatter(sytle='colorfull'))
         html += f"<tr><td>{idx}</td><td>"\
                "<table width=100%>"\
                f"<tr><th>Ruleset</th><td>{rule.ruleset}</td></tr>" \
                f"<tr><th>Folder</th><td>{rule.folder}</td></tr>" \
                f"<tr><th>Folder Index</th><td>{rule.folder_index}</td></tr>" \
                f"<tr><th>Comment</th><td>{rule.comment}</td></tr>" \
-               f"<tr><th>Value Template</th><td>{rule.value_template}</td></tr>" \
+               f"<tr><th>Value Template</th><td>{highlighted}</td></tr>" \
                f"<tr><th>Condition Label Tmple</th><td>{rule.condition_label_template}</td></tr>"\
                f"<tr><th>Condition Host</th><td>{rule.condition_host}</td></tr>"\
                "</table>"\
@@ -414,11 +433,13 @@ class CheckmkBiRuleView(DefaultModelView):
 
 class CheckmkMngmtRuleView(RuleModelView):
     """
-    Custom Group Model View
+    Management of Rules inside Checkmk
     """
 
     form_rules = [
         rules.FieldSet((
+            rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_setup_rules"]}"'\
+                            'target="_blank" class="badge badge-light">Documentation</a>'),
             rules.Field('name'),
             rules.Field('documentation'),
             div_open,
@@ -518,6 +539,42 @@ class CheckmkTagMngmtView(DefaultModelView):
 
     column_formatters_export = {
         'name': get_rule_json
+    }
+
+    form_rules = [
+        rules.FieldSet((
+            rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_hosttags"]}"'\
+                            'target="_blank" class="badge badge-light">Documentation</a>'),
+            )
+       ),
+       main_open,
+       rules.FieldSet(
+           ('group_topic_name', 'group_title', 'group_id', 'group_help',
+           ), "1. Checkmk Group Data"),
+       rules.FieldSet(
+           ( 'rewrite_id', 'rewrite_title',
+           ), "2. Define which ID and Title the Tag should have in Checkmk"),
+       rules.FieldSet(
+           ( 'enabled',
+           ), "3. Enable"),
+       main_close,
+       addional_open,
+       rules.FieldSet(
+           ( 'group_multiply_list', 'group_multiply_by_list', 
+           ), 'Create Multiple Checkmk Groups'),
+       rules.HTML('<br>'),
+       rules.FieldSet(
+           ( 'filter_by_account',
+           ), 'Filter Input Data'),
+        rules.FieldSet(('documentation',), 'Internal Documentation'),
+        addional_close
+    ]
+
+    form_overrides = {
+        'group_topic_name': StringField,
+        'group_title': StringField,
+        'group_id': StringField,
+        'group_help': StringField,
     }
 
     column_exclude_list = [
@@ -755,12 +812,18 @@ class CheckmkPasswordView(DefaultModelView):
     """
 
     form_rules = [
+        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_password_store"]}"'\
+                        'target="_blank" class="badge badge-light">Documentation</a>'),
+       main_open,
        rules.FieldSet(
            ('name', 'documentation', 'enabled'),
-            "1. Main Options"),
+            "Documentation"),
+       main_close,
+       checkmk_open,
        rules.FieldSet(
            ( 'title', 'comment', 'documentation_url', 'owner', 'password', 'shared',
-           ), "2. Password Settings"),
+           ), "Fields for Checkmk's Passwort Store"),
+        checkmkl_close,
     ]
 
     column_filters = [
