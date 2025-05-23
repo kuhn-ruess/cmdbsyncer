@@ -43,7 +43,8 @@ class DefaultModelView(ModelView):
 
         obj = deepcopy(old_model)
         obj.id = None
-        obj.name += " (Clone)"
+        if hasattr(obj, 'name'):
+            obj.name += " (Clone)"
         try:
             obj.save()
         except NotUniqueError:

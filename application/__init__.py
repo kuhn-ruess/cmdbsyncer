@@ -8,6 +8,7 @@ import sys
 import logging
 from logging import config as log_config
 from datetime import datetime
+from sortedcontainers import SortedDict
 from pprint import pformat
 from jinja2 import StrictUndefined
 from flask import Flask, url_for, redirect
@@ -23,9 +24,12 @@ from flask_admin.contrib.fileadmin import FileAdmin
 from application.helpers.tablib_formater import ExportObjects
 from tablib.formats import registry as tablib_registry
 
+import mongoengine
+
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.8.5'
+
+VERSION = '3.9.0'
 
 # create logger
 
@@ -99,6 +103,12 @@ except ImportError:
     # Output makes problems for commands
     db = MongoEngine(app)
 
+def init_db():
+    """DB Init for Multiprocessing Pool"""
+    mongoengine.disconnect()
+    with app.app_context():
+        MongoEngine(app)
+
 
 from application.helpers.sates import get_changes
 
@@ -126,7 +136,7 @@ login_manager.login_message = False
 
 
 
-cron_register = {}
+cron_register = SortedDict()
 plugin_register = []
 from plugins import *
 from application.plugins import *
@@ -149,7 +159,7 @@ def page_redirect():
 from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
 
-admin = Admin(app, name=f"CMDB Syncer {VERSION} {app.config['HEADER_HINT']}",
+admin = Admin(app, name=f"CMDBsyncer {VERSION} {app.config['HEADER_HINT']}",
                    template_mode='bootstrap4', index_view=IndexView(),
                    category_icon_classes={
                        })
@@ -255,8 +265,10 @@ admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Chec
 
 
 from application.models.account import Account
-from application.views.account import AccountModelView
-admin.add_view(AccountModelView(Account, name="Accounts"))
+from application.views.account import AccountModelView, ChildAccountModelView
+admin.add_category(name="Accounts")
+admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts"))
+admin.add_view(ChildAccountModelView(Account, name="Config Childs", endpoint='account_childs', category="Accounts"))
 
 from application.models.cron import CronGroup, CronStats
 from application.views.cron import CronStatsView, CronGroupView

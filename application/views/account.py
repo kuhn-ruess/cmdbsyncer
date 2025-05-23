@@ -2,13 +2,14 @@
 Account Model View
 """
 from markupsafe import Markup
+from mongoengine.errors import OperationError
 from flask_login import current_user
 from flask_admin.form import rules
 from wtforms import StringField
 from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
-from application.models.account import CustomEntry
+from application.models.account import CustomEntry, Account
 from application.modules.checkmk.models import CheckmkObjectCache
 from application.docu_links import docu_links
 
@@ -40,16 +41,66 @@ def _render_plugin_data(_view, _context, model, _name):
     html += "</table>"
     return Markup(html)
 
-class AccountModelView(DefaultModelView):
+class ChildAccountModelView(DefaultModelView):
     """
-    Account Model
+    Child Account Model
     """
+
+    def get_query(self):
+        """
+        Limit Objects
+        """
+        return Account.objects(is_child=True)
+
+    column_exclude_list = [
+            'custom_fields', 'is_child', 'typ',
+            'is_master', 'address', 'username', 'password']
+
     column_filters = (
        'name',
        'enabled',
     )
 
-    column_exclude_list = ['custom_fields', ]
+    form_rules = [
+        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["accounts"]}"'\
+                        'target="_blank" class="badge badge-light">Documentation</a>'),
+        rules.FieldSet(('name', 'parent'),'Settings'),
+        rules.FieldSet(('is_object', 'object_type'), "Object Settings"),
+        rules.Header("Addional configuration"),
+        rules.Field('custom_fields'),
+        rules.Field('plugin_settings'),
+        rules.Field('enabled'),
+    ]
+
+
+    def on_model_change(self, form, model, is_created):
+        """
+        On Save Operations
+        """
+        model.is_child = True
+        return super().on_model_change(form, model, is_created)
+
+class AccountModelView(DefaultModelView):
+    """
+    Account Model
+    """
+
+    def get_query(self):
+        """
+        Limit Objects
+        """
+        return Account.objects(is_child__ne=True)
+
+    column_filters = (
+       'name',
+       'enabled',
+    )
+
+    column_exclude_list = ['custom_fields', 'is_child', 'parent']
+
+    column_formatters = {
+        'plugin_settings': _render_plugin_data,
+    }
 
     form_subdocuments = {
         'custom_fields': {
@@ -171,6 +222,8 @@ class AccountModelView(DefaultModelView):
                 ('limit_by_accounts', ""),
                 ('limit_by_hostnames', ""),
                 ('list_disabled_hosts', ""),
+                ('bakery_key_id', ""),
+                ('bakery_passphrase', ""),
                 ('verify_cert', "True"),
             ]
         elif form.typ.data == 'ldap':
@@ -272,12 +325,17 @@ class AccountModelView(DefaultModelView):
             for field, content in main_presets:
                 if not getattr(model, field):
                     setattr(model, field, content)
+
+        if form.password.data:
+            model.set_password(form.password.data)
+            model.password = ""
         return super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):
         """
         Prevent deletion of Accounts with Assigned References
         """
+        # Problem: Reverse Delete Rules not woking for EmbeddedDocument
         for group in CronGroup.objects():
             for job in group.jobs:
                 if job.account == model:
@@ -286,6 +344,12 @@ class AccountModelView(DefaultModelView):
         for entry in CheckmkObjectCache.objects():
             if entry.account == model:
                 raise ValidationError("Can't delete: Cache objectes have this Account Assigned")
+
+        try:
+            model.delete()
+        except OperationError as error:
+            raise \
+               ValidationError("Can't delete: Other Objects  have this Account Assigned") from error
 
 
     def is_accessible(self):

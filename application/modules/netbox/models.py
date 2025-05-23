@@ -387,6 +387,7 @@ netbox_contact_outcome_types = [
     ('address', 'Address'),
     ('description', 'Description'),
     ('group', 'Contacts Groupname'),
+    ('custom_field', 'Set a Custom Field key:value (Jinja)'),
     ('ignore', 'Ignore matching objects for sync'),
 ]
 class NetboxContactOutcome(db.EmbeddedDocument):

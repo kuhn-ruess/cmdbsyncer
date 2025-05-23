@@ -13,7 +13,7 @@
 
 - name: "Download Checkmk Agent."
   ansible.builtin.uri:
-    url: "https://{{ cmk_server }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=linux_rpm&host_name={{ inventory_hostname }}"
+    url: "https://{{ cmk_server }}:{{cmk_server_port}}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=linux_rpm&host_name={{ inventory_hostname }}"
     dest: "{{ cmk_linux_tmp }}/cmk_agent.rpm"
     method: GET
     validate_certs: no
@@ -31,5 +31,15 @@
     state: present
     disable_gpg_check: true
   when: cmk_install_agent and checkmk_agent_download_state.status == 200
+
+- name: "Set Firewall to allow Access to {{cmk_agent_port}"
+  when: configure_firewall
+  ansible.posix.firewalld:
+    permanent: 'yes'
+    immediate: 'yes'
+    state: enabled
+    rich_rule: 'rule family="ipv4" source address={{ cmk_server_ip }} port port="{{ cmk_agent_port }}" protocol="tcp" accept'
+    zone: "{{ cmk_agent_configure_firewall_zone | default('public') }}"
+  become: true 
 
 - include_tasks: "Linux-tasks.yml"

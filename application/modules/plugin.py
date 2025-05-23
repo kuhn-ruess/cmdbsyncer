@@ -204,24 +204,19 @@ class Plugin():
                         CustomAttributeRuleModel.objects(enabled=True).order_by('sort_field')
 
 
-    def get_host_attributes(self, db_host, cache):
-        """
-        Return Attribute for Host
-        """
-        return self.get_attributes(db_host, cache)
-
     def get_attributes(self, db_host, cache):
         """
         Return Host Attributes or False if Host should be ignored
         """
         # Get Attributes
-        cache += "_hostattribute"
-        db_host.cache.setdefault(cache, {})
-        if 'attributes' in db_host.cache[cache]:
-            logger.debug(f"Using Attribute Cache for {db_host.hostname}")
-            if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
-                return False
-            return db_host.cache[cache]['attributes']
+        if cache:
+            cache += "_hostattribute"
+            db_host.cache.setdefault(cache, {})
+            if 'attributes' in db_host.cache[cache]:
+                logger.debug(f"Using Attribute Cache for {db_host.hostname}")
+                if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
+                    return False
+                return db_host.cache[cache]['attributes']
         attributes = {}
         attributes.update(db_host.labels.items())
         attributes.update(db_host.inventory.items())
@@ -250,13 +245,14 @@ class Plugin():
         if self.filter:
             attributes_filtered = self.filter.get_outcomes(db_host, attributes)
             data['filtered'] = attributes_filtered
-            if attributes_filtered.get('ignore_host'):
+            if attributes_filtered.get('ignore_host') and cache:
                 db_host.cache[cache]['attributes'] = data
                 db_host.save()
                 return False
 
-        db_host.cache[cache]['attributes'] = data
-        db_host.save()
+        if cache:
+            db_host.cache[cache]['attributes'] = data
+            db_host.save()
         return data
 
 #   .-- Get Host Data
@@ -290,7 +286,7 @@ class Plugin():
             print(f"{cc.FAIL}Host not Found{cc.ENDC}")
             return
 
-        attributes = self.get_host_attributes(db_host, 'netbox')
+        attributes = self.get_attributes(db_host, False)
 
         if not attributes:
             print(f"{cc.FAIL}THIS HOST IS IGNORED BY RULE{cc.ENDC}")

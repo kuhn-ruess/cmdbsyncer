@@ -28,7 +28,9 @@ class CheckmkRuleSync(CMK2):
         print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
 
 
-        db_objects = Host.objects()
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        db_objects = Host.objects_by_filter(object_filter)
+
         total = db_objects.count()
         # pylint: disable=too-many-nested-blocks
         with Progress(SpinnerColumn(),
@@ -37,10 +39,11 @@ class CheckmkRuleSync(CMK2):
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Calculate rules", total=total)
             object_filter = self.config['settings'].get(self.name, {}).get('filter')
-            db_objects = Host.objects_by_filter(object_filter)
             for db_host in db_objects:
-                attributes = self.get_host_attributes(db_host, 'cmk_conf')
+                attributes = self.get_attributes(db_host, 'checkmk')
                 if not attributes:
+                    logger.debug(f"Skipped: {db_host.hostname}")
+                    progress.advance(task1)
                     continue
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:

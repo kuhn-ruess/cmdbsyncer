@@ -2,7 +2,7 @@
 # Install Check_MK Agent on Windows
 - name: "Download Checkmk Agent."
   win_get_url:
-      url: "https://{{ cmk_server }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=windows_msi&host_name={{ inventory_hostname }}"
+    url: "https://{{ cmk_server }}:{{cmk_server_port}}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=windows_msi&host_name={{ inventory_hostname }}"
       dest: "{{ cmk_windows_tmp }}\\cmk_agent.msi"
       headers:
         Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
@@ -23,13 +23,13 @@
   when: cmk_register_tls | bool
 
 - name: "Register Agent on Local Bakery."
-  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_server }} -i {{ cmk_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_secret }} -v"
+  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_server }}:{{cmk_server_port}} -i {{ cmk_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_secret }} -v"
   args:
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_bakery | bool
 
 - name: "Register Agent on Central Bakery."
-  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_main_server }} -i {{ cmk_main_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_secret }} -v"
+  win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_main_server }}:{{cmk_server_port}} -i {{ cmk_main_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{cmk_secret }} -v"
   args:
     chdir: C:\\Program Files (x86)\\checkmk\service
   when: cmk_register_central_bakery | bool

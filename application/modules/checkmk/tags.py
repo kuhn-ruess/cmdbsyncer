@@ -5,13 +5,14 @@ Checkmk Tag Syncronize
 import ast
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application import logger
+from application import logger, init_db, app
 from application.modules.checkmk.cmk2 import CMK2
 from application.modules.debug import ColorCodes as CC
 from application.modules.checkmk.models import CheckmkTagMngmt
 from application.models.host import Host
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.checkmk.helpers import cmk_cleanup_tag_id
+
 
 class CheckmkTagSync(CMK2):
     """
@@ -24,10 +25,11 @@ class CheckmkTagSync(CMK2):
         """
         Calculation of rules and Host Tags
         """
-        object_attributes = self.get_host_attributes(db_host, 'cmk_conf')
+        object_attributes = self.get_attributes(db_host, 'checkmk')
 
         tags_of_host = {}
         addional_groups = {}
+        do_save = False
         if multiply_expressions:
             cache_name_tags = 'cmk_tags_multiply_tags'
             cache_name_groups = 'cmk_tags_multiply_groups'
@@ -39,6 +41,7 @@ class CheckmkTagSync(CMK2):
                                                         multiply_expressions)
                 db_host.cache[cache_name_tags] = tags_of_host
                 db_host.cache[cache_name_groups] = addional_groups
+                do_save = True
 
             tags_of_host = db_host.cache[cache_name_tags]
             addional_groups = db_host.cache[cache_name_groups]
@@ -51,7 +54,9 @@ class CheckmkTagSync(CMK2):
             hosts_tags = self.get_tags_for_host(db_host, object_attributes,
                                                       groups, tags_of_host)
             db_host.cache[cache_name] = hosts_tags
-        db_host.save()
+            do_save = True
+        if do_save:
+            db_host.save()
 
 
     def calculate_rules(self):
@@ -68,7 +73,7 @@ class CheckmkTagSync(CMK2):
             manager = multiprocessing.Manager()
             base_groups = manager.dict()
             multiply_expressions = manager.list()
-            with multiprocessing.Pool() as pool:
+            with multiprocessing.Pool(initializer=init_db) as pool:
                 for rule in db_objects:
                     pool.apply_async(self.create_inital_groups,
                                      args=(rule, base_groups, multiply_expressions),
@@ -99,16 +104,18 @@ class CheckmkTagSync(CMK2):
             mlt_expressions += multiply_expressions
 
             task1 = progress.add_task("Calculating Caches", total=total)
-            with multiprocessing.Pool() as pool:
+            with multiprocessing.Pool(initializer=init_db) as pool:
                 for entry in db_objects:
-                    pool.apply_async(self.build_caches,
+                    x = pool.apply_async(self.build_caches,
                                      args=(entry, groups, mlt_expressions),
                                      callback=lambda x: progress.advance(task1))
+                    x.get()
                 pool.close()
                 pool.join()
 
+            progress.console.print("Waiting for Calculation to finish")
             task2 = progress.add_task("Apply Hosttags to objects", total=total)
-            with multiprocessing.Pool() as pool:
+            with multiprocessing.Pool(initializer=init_db) as pool:
                 tags = manager.list()
                 for entry in db_objects:
                     pool.apply_async(self.update_hosts_tags,
@@ -117,6 +124,8 @@ class CheckmkTagSync(CMK2):
                 pool.close()
                 pool.join()
 
+            progress.console.print("Waiting for Calculation to finish")
+        groups = dict(groups)
         # Delete Templates
         for group_id, group in list(groups.items()):
             if group.get('is_template'):
@@ -130,6 +139,7 @@ class CheckmkTagSync(CMK2):
         """
         Update the groups ob
         """
+        db_host.reload()
         cache_name = 'cmk_tags_multigroups'
         if cache_name not in db_host.cache:
             return
@@ -143,15 +153,19 @@ class CheckmkTagSync(CMK2):
         """
         Update the Tags provided by the Host
         """
+        db_host.reload()
         cache_name = 'cmk_tags_tag_choices'
         if cache_name not in db_host.cache:
+            # Not existing Cache normaly can not happen
             return
         hosts_tags = db_host.cache[cache_name]
 
         for group_id, tags in hosts_tags.items():
+            logger.debug(f"Check Group {group_id} with {tags}")
             tag_id, tag_title = tags
             tag_tuple = (group_id, tag_id, tag_title)
             if tag_tuple not in global_tags:
+                logger.debug(f" - Add {tag_tuple}")
                 global_tags.append(tag_tuple)
 
     def create_inital_groups(self, rule, groups, multiply_expressions):
@@ -232,7 +246,8 @@ class CheckmkTagSync(CMK2):
         """
         hostname = db_object.hostname
         tags = {}
-        logger.debug(f"Update Tags from {hostname}")
+        logger.info(f"Update Tags from {hostname}")
+        logger.debug(f"{groups} {tags_of_host}")
 
 
         for group_id, group_data in groups.items():
@@ -300,12 +315,17 @@ class CheckmkTagSync(CMK2):
         found_ids = []
         tags = []
         for x, y in config_tags:
+            if x:
+                x = x.strip()
+            y = y.strip()
+            if not y:
+                continue
             if x not in found_ids:
                 tags.append({'ident':x, 'title': y})
                 found_ids.append(x)
 
         if not tags or len(tags) == 0:
-            print(f"{CC.WARNING} *{CC.ENDC} Group has no tags")
+            logger.debug(f"{CC.WARNING} *{CC.ENDC} Group has no tags")
             return False
         return tags
 
@@ -334,6 +354,7 @@ class CheckmkTagSync(CMK2):
                 if tags := self.prepare_tags_for_checkmk(tag_list):
                     payload['tags'] = tags
                 else:
+                    progress.update(task1, advance=1)
                     continue
                 if syncer_group_id not in checkmk_ids:
                     # Create the group
@@ -342,12 +363,27 @@ class CheckmkTagSync(CMK2):
                 else:
                     # Check if we need to update it
                     checkmk_tags = checkmk_ids[syncer_group_id]
-                    flat = [ {'ident': x['id'], 'title': x['title']} for x in checkmk_tags]
+                    checkmk_tags_flat = \
+                            [{'ident': x['id'], 'title': x['title']} \
+                            for x in checkmk_tags if x['title'].strip()]
 
-                    if {frozenset(d.items()) for d in flat} == \
-                            {frozenset(d.items()) for d in payload['tags']}:
+                    if app.config['CMK_DONT_DELETE_TAGS']:
+                        # In this case, we merge only the new dicts into the existing ones
+                        found = set()
+                        new_tags = []
+                        for tag in payload['tags'] + checkmk_tags_flat:
+                            if tag['ident'] not in found:
+                                found.add(tag['ident'])
+                                new_tags.append(tag)
+                        payload['tags'] = sorted(new_tags, key=lambda x: str(x['ident']))
+                    checkmk_tags_frozen = {frozenset(d.items()) for d in checkmk_tags_flat}
+                    syncer_tags_frozen = {frozenset(d.items()) for d in payload['tags']}
+                    if checkmk_tags_frozen == syncer_tags_frozen:
                         progress.console.print(f" * Group {syncer_group_id} already up to date.")
                     else:
+                        logger.debug("NEED TO UPDATE TAGS")
+                        logger.debug(f"Checkmk Tags: {checkmk_tags_frozen}")
+                        logger.debug(f"Syncer Tags: {syncer_tags_frozen}")
                         url = f"/objects/host_tag_group/{syncer_group_id}"
                         update_headers = {
                             'if-match': etag

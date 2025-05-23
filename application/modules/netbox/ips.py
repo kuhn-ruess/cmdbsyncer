@@ -46,7 +46,7 @@ class SyncIPS(SyncNetbox):
                 ip_infos = []
                 hostname = db_object.hostname
 
-                all_attributes = self.get_host_attributes(db_object, 'netbox_hostattribute')
+                all_attributes = self.get_attributes(db_object, 'netbox')
                 if not all_attributes:
                     progress.advance(task1)
                     continue
