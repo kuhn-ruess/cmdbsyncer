@@ -1,8 +1,20 @@
 
 - name: "Check if we have the Installation File local"
-  stat:
+  ansible.builtin.stat:
     path: /tmp/{{ cmk_version_filename }}
   register: installation_file
+  delegate_to: localhost
+
+- name: "Fail if the file does not belong to executing user"
+  ansible.builtin.fail:
+    msg: "File does not belong to executing user"
+  when: installation_file.stat.uid != ansible_user_uid or installation_file.stat.gid != ansible_user_gid
+  delegate_to: localhost
+
+- name: "Fail if the file is not writeable"
+  ansible.builtin.fail:
+    msg: "File is not writeable"
+  when: installation_file.stat.writeable == False
   delegate_to: localhost
 
 - name: "Download Installation File from Checkmk Server"
