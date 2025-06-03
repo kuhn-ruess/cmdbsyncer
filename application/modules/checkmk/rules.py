@@ -210,14 +210,10 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                                                         " ", '/', ',','|'
                                                     ]) # Replace Chars not working in Checkmk
 
+
                 python_detectors = ['[', '{']
                 if action_render:
-                    if any(x in action_render for x in python_detectors):
-                        # In this case, the param is a list,
-                        # So we cant't split at comma and use a fallback
-                        attrs = action_render.split('|')
-                    else:
-                        attrs = action_render.split(',')
+                    attrs = action_render.split('||')
                     for attr_pair in attrs:
                         if not attr_pair:
                             continue
