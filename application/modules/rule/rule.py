@@ -155,17 +155,18 @@ class Rule(): # pylint: disable=too-few-public-methods
                 logger.debug('##########################')
             rule = rule.to_mongo()
             rule_hit = False
+
             if rule['condition_typ'] == 'any':
                 for condition in rule['conditions']:
                     if self.handle_match(condition, hostname):
                         rule_hit = True
-                        break
+
             elif rule['condition_typ'] == 'all':
                 rule_hit = True
                 for condition in rule['conditions']:
                     if not self.handle_match(condition, hostname):
                         rule_hit = False
-                        break
+
             elif rule['condition_typ'] == 'anyway':
                 rule_hit = True
 
