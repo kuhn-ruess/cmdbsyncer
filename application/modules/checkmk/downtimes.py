@@ -132,27 +132,33 @@ class CheckmkDowntimeSync(CMK2):
                         datetime.datetime.combine(day, dt_start_time)\
                             .astimezone(datetime.timezone.utc)
                 end_day = day
+
                 if overnight_downtime:
                     end_day = day + datetime.timedelta(days=1)
+
                 dt_end = \
                         datetime.datetime.combine(end_day, dt_end_time)\
                             .astimezone(datetime.timezone.utc)
 
                 if dt_start < now:
                     continue
+
                 yield {
                     "start" : dt_start,
                     "end" : dt_end,
                     "duration": duration,
                     "comment": downtime_comment,
                 }
+
         elif every == 'once':
             dt_start = \
                     datetime.datetime.combine(start_day, dt_start_time)\
                         .astimezone(datetime.timezone.utc)
             end_day = start_day
+
             if overnight_downtime:
-                end_day = day + datetime.timedelta(days=1)
+                end_day = start_day + datetime.timedelta(days=1)
+
             dt_end = \
                     datetime.datetime.combine(end_day, dt_end_time)\
                         .astimezone(datetime.timezone.utc)
@@ -171,13 +177,17 @@ class CheckmkDowntimeSync(CMK2):
                         datetime.datetime.combine(day, dt_start_time)\
                             .astimezone(datetime.timezone.utc)
                 end_day = day
+
                 if overnight_downtime:
                     end_day = day + datetime.timedelta(days=1)
+
                 dt_end = \
                         datetime.datetime.combine(end_day, dt_end_time)\
                         .astimezone(datetime.timezone.utc)
+
                 if dt_start < now:
                     continue
+
                 yield {
                     "start" : dt_start,
                     "end" : dt_end,
