@@ -46,7 +46,7 @@ def _load_rules():
 
 #   . -- Command: Show Hosts
 @cli_cmk.command('show_hosts')
-@click.option("--disabled_only", is_flag=True)
+@click.option("--disabled-only", is_flag=True)
 def show_hosts(disabled_only=False):
     """
     Print List of all Hosts currently synced to Checkmk
