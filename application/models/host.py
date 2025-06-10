@@ -48,9 +48,13 @@ class Host(db.Document):
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
 
+    # If you assign a ID to you import,
+    # that can later be used to simply cleanup
+    # hosts with diffrent ids
+    last_import_id = db.StringField()
+
 
     raw = db.StringField()
-
 
     folder = db.StringField() # Is just Checkmk related, better solution needed
 
@@ -75,6 +79,25 @@ class Host(db.Document):
                 re.compile(r'^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$')
 
         return bool(hostname_regex.fullmatch(self.hostname))
+
+
+    @staticmethod
+    def delete_host_not_found_on_import(account, import_id, raw_filter=None):
+        """
+        Delete all hosts which are not available
+        and match the given pattern
+        """
+
+        db_filter = {
+            'source_account_name': account,
+            'last_import_id__ne': import_id,
+
+        }
+        extra_filter = raw_filter.split(':')
+        if len(extra_filter) == 2:
+            db_filter[extra_filter[0]] = extra_filter[1]
+        print(db_filter)
+        Host.objects(**db_filter).delete()
 
 
     @staticmethod
@@ -335,7 +358,7 @@ class Host(db.Document):
         date = datetime.datetime.now().strftime(app.config['TIME_STAMP_FORMAT'])
         self.log = [f"{date} {entry}"] + entries
 
-    def set_account(self, account_id=False, account_name=False, account_dict=False):
+    def set_account(self, account_id=False, account_name=False, account_dict=False, import_id="N/A"):
         """
         Mark Host with Account he was fetched with.
         Prevent Overwrites if Host is importet from multiple sources.
@@ -371,6 +394,7 @@ class Host(db.Document):
 
 
         self.is_object = is_object
+        self.last_import_id = import_id
 
         self.inventory['syncer_account'] = account_name
         self.inventory['syncer_last_seen'] = self.last_import_seen
@@ -401,7 +425,6 @@ class Host(db.Document):
         """
         Mark that a sync for this host was needed to import
         """
-        self.available = True
         self.last_import_sync = datetime.datetime.now()
         # Delete Cache if new Data is imported
         self.cache = {}
