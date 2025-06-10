@@ -180,6 +180,7 @@ class AccountModelView(DefaultModelView):
                 ('inventorize_match_attribute', ""),
                 ('inventorize_collect_by_key', ""),
                 ('inventorize_rewrite_collect_by_key', ""),
+                ('delete_host_if_not_found_on_import', ""),
             ]
         elif form.typ.data == 'json':
             default_fields = [

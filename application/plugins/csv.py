@@ -81,6 +81,9 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
     if not csv_path:
         raise ValueError("No path given in account config")
 
+
+    import_id = Plugin.get_unique_id()
+
     filename = csv_path.split('/')[-1]
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC}"\
           f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
@@ -100,15 +103,19 @@ def import_hosts(csv_path=None, delimiter=";", hostname_field="host", account=No
                 del row[hostname_field]
                 host_obj.update_host(row)
                 if account:
-                    do_save = host_obj.set_account(account_dict=account)
+                    do_save = host_obj.set_account(account_dict=account, import_id=import_id)
                 else:
                     do_save = True
-                    host_obj.set_account(f"csv_{filename}", filename)
+                    host_obj.set_account(f"csv_{filename}", filename, import_id=import_id)
 
                 if do_save:
                     host_obj.save()
             except Exception as error:
                 print(f"Error: {error}")
+
+
+    if extra_filter := account.get('delete_host_if_not_found_on_import'):
+        Host.delete_host_not_found_on_import(account['name'], import_id, extra_filter)
 
 @_cli_csv.command('import_hosts')
 @click.argument("csv_path", default="")
