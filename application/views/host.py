@@ -219,7 +219,6 @@ class ObjectModelView(DefaultModelView):
         'cache',
         'is_object',
         'last_export',
-        'force_update',
     )
 
     column_details_list = [
@@ -289,8 +288,8 @@ class HostModelView(DefaultModelView):
         return Host.objects(is_object__ne=True)
 
     column_details_list = [
-        'hostname', 'folder', 'available', 'force_update', 'labels', 'inventory', 'log',
-        'last_import_seen', 'last_import_sync', 'last_export', "export_problem",
+        'hostname', 'folder', 'available','labels', 'inventory', 'log',
+        'last_import_seen', 'last_import_sync', 'last_export',
         'source_account_name', 'raw', 'cache'
     ]
     column_sortable_list = ('hostname',
@@ -341,11 +340,6 @@ class HostModelView(DefaultModelView):
         'cache',
         'is_object',
         'last_export',
-        'force_update',
-    )
-
-    column_editable_list = (
-        'force_update',
     )
 
     def get_export_name(self, _export_type):

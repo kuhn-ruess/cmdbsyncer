@@ -65,7 +65,6 @@ class DataGeter():
 
             do_save = host.set_account(account_dict=self.config)
             if do_save:
-                host.set_import_seen()
                 host.save()
 
 
