@@ -40,8 +40,6 @@ class Host(db.Document):
     is_object = db.BooleanField(default=False)
     object_type = db.StringField()
 
-    force_update = db.BooleanField(default=False)
-
     source_account_id = db.StringField()
     source_account_name = db.StringField()
 
@@ -54,9 +52,7 @@ class Host(db.Document):
     raw = db.StringField()
 
 
-    folder = db.StringField()
-
-    export_problem = False
+    folder = db.StringField() # Is just Checkmk related, better solution needed
 
     log = db.ListField(field=db.StringField())
 
@@ -416,29 +412,3 @@ class Host(db.Document):
         """
         self.available = True
         self.last_import_seen = datetime.datetime.now()
-
-
-    def set_source_not_found(self):
-        """
-        Mark when host was not found anymore.
-        Exports will then ignore this system
-        """
-        self.available = False
-        self.add_log("Not found on Source anymore")
-
-    def need_import_sync(self, hours=24):
-        """
-        Check when the last sync on import happend,
-        and if a new sync is needed
-
-        Args:
-            hours (int): Time in which no update is needed
-        """
-        if not self.available:
-            return True
-
-        last_sync = self.last_import_sync
-        timediff = datetime.datetime.now() - last_sync
-        if divmod(timediff.total_seconds(), 3600)[0] > hours:
-            return True
-        return False
