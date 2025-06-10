@@ -7,6 +7,7 @@ from datetime import datetime
 import time
 import json as mod_json
 import atexit
+import uuid
 
 from pprint import pformat
 from collections import namedtuple
@@ -294,3 +295,11 @@ class Plugin():
 
         extra_attributes = self.get_host_data(db_host, attributes['all'])
         attribute_table("Attributes by Rule ", extra_attributes)
+
+    @staticmethod
+    def get_unique_id():
+        """
+        Generates a unqiue ID,
+        to be used e.g. as Import ID
+        """
+        return str(uuid.uuid1())
