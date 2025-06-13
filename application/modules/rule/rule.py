@@ -67,6 +67,8 @@ class Rule(): # pylint: disable=too-few-public-methods
         value_match_negate = condition['value_match_negate']
 
 
+        needed_value = render_jinja(needed_value, **self.attributes)
+
         if tag_match == 'ignore' and tag_match_negate:
             # This Case Checks that Tag NOT Exists
             if needed_tag not in self.attributes.keys():
@@ -90,12 +92,14 @@ class Rule(): # pylint: disable=too-few-public-methods
             if app.config['ADVANCED_RULE_DEBUG']:
                 logger.debug(f"Check Tag: {tag} vs needed: {needed_tag} "\
                              f"for {tag_match}, Negate: {tag_match_negate}")
+            # If the Tag with the Name matches, we cann check if the value is allright
             if match(tag, needed_tag, tag_match, tag_match_negate):
                 if app.config['ADVANCED_RULE_DEBUG']:
                     logger.debug('--> HIT')
-                    logger.debug(f"Check Attr Value: {repr(value)} vs needed: {repr(needed_value)} "\
+                    logger.debug(f"Check Attr Value: {repr(value)} "\
+                                 " vs needed: {repr(needed_value)} "\
                                  f"for {value_match}, Negate: {value_match_negate}")
-                # Tag Match, see if Value Match
+                # Tag had Match, now see if Value Matches too
                 if match(value, needed_value, value_match, value_match_negate):
                     if app.config['ADVANCED_RULE_DEBUG']:
                         logger.debug('--> HIT')
