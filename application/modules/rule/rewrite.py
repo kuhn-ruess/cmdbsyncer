@@ -91,5 +91,8 @@ class Rewrite(Rule):
             if new_value := self.get_new_attribute_value(outcome, old_name):
                 for name in attributes:
                     outcomes[f'add_{name}'] = new_value
+                    # Make new Attribute also available to be used in
+                    # in all of the following outcomes
+                    self.attributes[name] = new_value
 
         return outcomes
