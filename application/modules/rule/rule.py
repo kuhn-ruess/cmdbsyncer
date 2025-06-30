@@ -164,12 +164,14 @@ class Rule(): # pylint: disable=too-few-public-methods
                 for condition in rule['conditions']:
                     if self.handle_match(condition, hostname):
                         rule_hit = True
+                        break # We have a hit, no need to check more
 
             elif rule['condition_typ'] == 'all':
                 rule_hit = True
                 for condition in rule['conditions']:
                     if not self.handle_match(condition, hostname):
                         rule_hit = False
+                        break # One was no hit, no need for loop
 
             elif rule['condition_typ'] == 'anyway':
                 rule_hit = True
