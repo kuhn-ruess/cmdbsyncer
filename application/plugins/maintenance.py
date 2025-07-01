@@ -235,6 +235,20 @@ def seed_user(email):
 #
 #.
 #   .-- Command: self configure
+
+
+def migrate_accounts(old_key, new_key):
+    """
+    There where Setups which did updates without running self_configure
+    Depending on their fernet module version, there in the situation that all
+    theirs Accout Passwords where encrypted with the old key, 
+    while the key need to be replaced with a new one.
+    """
+    for account in Account.objects():
+        password = account.get_password(old_key)
+        account.set_password(password, new_key)
+
+
 @_cli_sys.command('self_configure')
 def self_configure():
     """
@@ -274,7 +288,11 @@ def self_configure():
         if key not in config:
             config[key] = value
     if not isinstance(config['CRYPTOGRAPHY_KEY'], bytes):
-        config['CRYPTOGRAPHY_KEY'] = values['CRYPTOGRAPHY_KEY']
+        old_key = config['CRYPTOGRAPHY_KEY']
+        new_key = values['CRYPTOGRAPHY_KEY']
+        migrate_accounts(old_key, new_key)
+
+        config['CRYPTOGRAPHY_KEY'] = new_key
     with open('local_config.py', 'w', encoding="utf-8") as lf:
         lf.write("#!/usr/bin/env python3\n")
         lf.write('"""\nLocal Config File\n"""\n')

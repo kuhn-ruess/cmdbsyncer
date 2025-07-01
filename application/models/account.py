@@ -88,23 +88,31 @@ class Account(db.Document):
     plugin_settings = db.ListField(field=db.EmbeddedDocumentField(document_type="PluginSettings"))
 
 
-    def set_password(self, password):
+    def set_password(self, password, key=False):
         """
         Encrypt Passwort in Store
         """
-        f = Fernet(app.config['CRYPTOGRAPHY_KEY'])
+        if key:
+            cryptography_key = key
+        else:
+            cryptography_key = app.config['CRYPTOGRAPHY_KEY']
+        f = Fernet(cryptography_key)
         self.password_crypted = f.encrypt(str.encode(password)).decode('utf-8')
         self.save()
 
-    def get_password(self):
+    def get_password(self, key):
         """
         Get Uncrypted Version of Password
         """
+        if key:
+            cryptography_key = key
+        else:
+            cryptography_key = app.config['CRYPTOGRAPHY_KEY']
         if not self.password_crypted:
             uncrypted = self.password
             self.password = None
             self.set_password(uncrypted)
-        f = Fernet(app.config['CRYPTOGRAPHY_KEY'])
+        f = Fernet(cryptography_key)
         return f.decrypt(str.encode(self.password_crypted)).decode('utf-8')
 
 
