@@ -29,7 +29,7 @@ import mongoengine
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-VERSION = '3.9.3'
+VERSION = '3.9.4'
 
 # create logger
 
