@@ -31,6 +31,8 @@ from application.modules.checkmk.models import (
    CheckmkDCDRule,
 )
 
+
+
 def _load_rules():
     """
     Load needed extra Rules
@@ -60,6 +62,7 @@ def export_tags(account, dry_run=False, save_requests=False, debug=False):
         syncer = CheckmkTagSync(account)
         syncer.debug = debug
         syncer.rewrite = rules['rewrite']
+        syncer.filter = rules['filter']
         syncer.dry_run = dry_run
         syncer.save_requests = save_requests
         syncer.name = 'Checkmk: Export Tags'
@@ -85,6 +88,7 @@ def export_bi_rules(account):
         rules = _load_rules()
         syncer = BI(account)
         syncer.rewrite = rules['rewrite']
+        syncer.filter = rules['filter']
 
         class ExportBiRule(DefaultRule):
             """
@@ -113,6 +117,7 @@ def export_bi_aggregations(account):
         rules = _load_rules()
         syncer = BI(account)
         syncer.rewrite = rules['rewrite']
+        syncer.filter = rules['filter']
         class ExportBiAggr(DefaultRule):
             """
             Name overwrite
@@ -241,6 +246,7 @@ def export_groups(account, test_run=False, debug=False):
         syncer = CheckmkGroupSync(account)
         syncer.debug = debug
         syncer.rewrite = rules['rewrite']
+        syncer.filter = rules['filter']
         syncer.name = 'Checkmk: Export Groups'
         syncer.source = "cmk_group_sync"
         syncer.export_cmk_groups(test_run)
@@ -262,8 +268,8 @@ def export_rules(account):
         rules = _load_rules()
         syncer = CheckmkRuleSync(account)
         syncer.filter = rules['filter']
-
         syncer.rewrite = rules['rewrite']
+
         actions = CheckmkRulesetRule()
         actions.rules = CheckmkRuleMngmt.objects(enabled=True)
         syncer.actions = actions
@@ -294,6 +300,8 @@ def export_downtimes(account, debug=False, debug_rules=False):
         if not debug_rules:
             syncer = CheckmkDowntimeSync(account)
             syncer.rewrite = rules['rewrite']
+            syncer.filter = rules['filter']
+
             syncer.actions = actions
             syncer.name = 'Checkmk: Export Downtimes'
             syncer.source = "cmk_downtime_sync"
@@ -301,6 +309,7 @@ def export_downtimes(account, debug=False, debug_rules=False):
         else:
             syncer = CheckmkDowntimeSync(False)
             syncer.rewrite = rules['rewrite']
+            syncer.filter = rules['filter']
             syncer.actions = actions
             syncer.debug_rules(debug_rules, "Checkmk")
 
@@ -319,6 +328,7 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
     """
     details = []
     try:
+        rules = _load_rules()
         class ExportDCD(DefaultRule):
             """
             Name overwrite
@@ -330,12 +340,16 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
             syncer = CheckmkDCDRuleSync(account)
             syncer.debug = debug
             syncer.actions = actions
+            syncer.rewrite = rules['rewrite']
+            syncer.filter = rules['filter']
             syncer.name = 'Checkmk: Export DCD Rules'
             syncer.source = "cmk_dcd_rule_sync"
             syncer.export_rules()
         else:
             syncer = CheckmkDCDRuleSync(False)
             syncer.actions = actions
+            syncer.rewrite = rules['rewrite']
+            syncer.filter = rules['filter']
             syncer.debug_rules(debug_rules, "Checkmk")
 
 
