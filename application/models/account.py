@@ -100,7 +100,7 @@ class Account(db.Document):
         self.password_crypted = f.encrypt(str.encode(password)).decode('utf-8')
         self.save()
 
-    def get_password(self, key):
+    def get_password(self, key=False):
         """
         Get Uncrypted Version of Password
         """
