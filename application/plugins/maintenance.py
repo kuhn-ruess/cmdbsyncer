@@ -7,8 +7,8 @@ import os
 import datetime
 import string
 import secrets
-from cryptography.fernet import Fernet
 from pprint import pformat
+from cryptography.fernet import Fernet
 import click
 from mongoengine.errors import DoesNotExist, ValidationError
 from application import app, logger, log
@@ -245,8 +245,9 @@ def migrate_accounts(old_key, new_key):
     while the key need to be replaced with a new one.
     """
     for account in Account.objects():
-        password = account.get_password(old_key)
-        account.set_password(password, new_key)
+        if account.password_crypted:
+            password = account.get_password(old_key)
+            account.set_password(password, new_key)
 
 
 @_cli_sys.command('self_configure')
