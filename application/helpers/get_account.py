@@ -63,7 +63,7 @@ def get_account_by_name(name, is_id=False):
         # cleanup 2
         for what in ['custom_fields', 'password_crypted',
                      'plugin_settings']:
-            if what in account:
+            if what in account_data:
                 del account_data[what]
 
         return account_data
