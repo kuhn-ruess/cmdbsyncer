@@ -5,6 +5,7 @@ Host Model
 # pylint: disable=logging-fstring-interpolation
 import re
 import datetime
+from mongoengine import Q
 from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
@@ -88,15 +89,22 @@ class Host(db.Document):
         and match the given pattern
         """
 
-        db_filter = {
-            'source_account_name': account,
-            'last_import_id__ne': import_id,
-
-        }
-        extra_filter = raw_filter.split(':')
-        if len(extra_filter) == 2:
-            db_filter[extra_filter[0]] = extra_filter[1]
-        Host.objects(**db_filter).delete()
+        db_filter = Q(source_account_name=account) & Q(last_import_id__ne=import_id)
+        user_filters = raw_filter.split(',')
+        extra_filter = False
+        for user_filter in user_filters:
+            user_filter = user_filter.split(':')
+            if len(user_filter) == 2:
+                field, field_value = map(str.strip, user_filter)
+                if not extra_filter:
+                    extra_filter = Q(**{field: field_value})
+                else:
+                    extra_filter &= Q(**{field: field_value})
+        if extra_filter:
+            full_filter = db_filter & (extra_filter)
+        else:
+            full_filter = db_filter
+        Host.objects(full_filter).delete()
 
 
     @staticmethod
