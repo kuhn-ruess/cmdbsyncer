@@ -31,8 +31,6 @@ tablib_registry.register('syncer_rules', ExportObjects())
 
 VERSION = '3.10.0-dev5'
 
-# create logger
-
 
 app = Flask(__name__)
 env = os.environ.get('config')
