@@ -96,7 +96,6 @@ class Host(db.Document):
         extra_filter = raw_filter.split(':')
         if len(extra_filter) == 2:
             db_filter[extra_filter[0]] = extra_filter[1]
-        print(db_filter)
         Host.objects(**db_filter).delete()
 
 
