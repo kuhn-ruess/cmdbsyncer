@@ -190,7 +190,8 @@ def show_accounts():
     """Print list of all active accounts"""
 
     for account in Account.objects(enabled=True):
-        print(f"- Name: {account.name}, Type: {account.typ}, Address: {account.address}")
+        print(f"- Name: {account.name}, Type: {account.type}, Address: {account.address}")
+
 
 #.
 #   .-- Command: Create User

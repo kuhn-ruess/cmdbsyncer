@@ -168,7 +168,7 @@ class AccountModelView(DefaultModelView):
         """
         main_presets = []
         default_fields = []
-        if form.typ.data == 'csv':
+        if form.type.data == 'csv':
             default_fields = [
                 ('path', ''),
                 ('hostname_field', 'host'),
@@ -182,19 +182,19 @@ class AccountModelView(DefaultModelView):
                 ('inventorize_rewrite_collect_by_key', ""),
                 ('delete_host_if_not_found_on_import', ""),
             ]
-        elif form.typ.data == 'json':
+        elif form.type.data == 'json':
             default_fields = [
                 ('path', ''),
                 ('hostname_field', 'host'),
                 ('rewrite_hostname', ""),
                 ('data_key', ''),
             ]
-        elif form.typ.data == 'maintenance':
+        elif form.type.data == 'maintenance':
             default_fields = [
                 ('delete_hosts_after_days', '0'),
                 ('account_filter', ""),
             ]
-        elif form.typ.data == 'mysql':
+        elif form.type.data == 'mysql':
             default_fields = [
                 ('hostname_field', ''),
                 ('rewrite_hostname', ""),
@@ -208,7 +208,7 @@ class AccountModelView(DefaultModelView):
                 ('inventorize_collect_by_key', ""),
                 ('inventorize_rewrite_collect_by_key', ""),
             ]
-        elif form.typ.data == 'external_restapi':
+        elif form.type.data == 'external_restapi':
             default_fields = [
                 ('auth_type', ""),
                 ('cert', ''),
@@ -218,7 +218,7 @@ class AccountModelView(DefaultModelView):
                 ('rewrite_hostname', ""),
                 ('verify_cert', "True"),
             ]
-        elif form.typ.data == 'cmkv2':
+        elif form.type.data == 'cmkv2':
             default_fields = [
                 ('limit_by_accounts', ""),
                 ('limit_by_hostnames', ""),
@@ -227,7 +227,7 @@ class AccountModelView(DefaultModelView):
                 ('bakery_passphrase', ""),
                 ('verify_cert', "True"),
             ]
-        elif form.typ.data == 'ldap':
+        elif form.type.data == 'ldap':
             default_fields = [
                 ('base_dn', ""),
                 ('search_filter', ""),
@@ -241,7 +241,7 @@ class AccountModelView(DefaultModelView):
                 ('inventorize_collect_by_key', ""),
                 ('inventorize_rewrite_collect_by_key', ""),
             ]
-        elif form.typ.data == 'mssql':
+        elif form.type.data == 'mssql':
             default_fields = [
                 ('fields', ""),
                 ('table', ""),
@@ -258,7 +258,7 @@ class AccountModelView(DefaultModelView):
                 ('inventorize_collect_by_key', ""),
                 ('inventorize_rewrite_collect_by_key', ""),
             ]
-        elif form.typ.data == 'odbc':
+        elif form.type.data == 'odbc':
             default_fields = [
                 ('fields', ""),
                 ('table', ""),
@@ -275,7 +275,7 @@ class AccountModelView(DefaultModelView):
                 ('inventorize_collect_by_key', ""),
                 ('inventorize_rewrite_collect_by_key', ""),
             ]
-        elif form.typ.data == 'bmc_remedy':
+        elif form.type.data == 'bmc_remedy':
             default_fields = [
                 #('attributes', "address,systemname,dnshostname"),
                 ('hostname_field', 'dnshostname'),
@@ -283,30 +283,30 @@ class AccountModelView(DefaultModelView):
                 ('class_name', ""),
                 ('verify_cert', "True"),
             ]
-        elif form.typ.data == 'jira':
+        elif form.type.data == 'jira':
             default_fields = [
                 ('page_size', "1000"),
                 ('verify_cert', "True"),
             ]
-        elif form.typ.data == 'jira_cloud':
+        elif form.type.data == 'jira_cloud':
             default_fields = [
                 ('workspace_id', "Required"),
                 ('ql_query', "Required"),
                 ('verify_cert', "True"),
             ]
 
-        elif form.typ.data == 'i-doit':
+        elif form.type.data == 'i-doit':
             default_fields = [
                 ('api_token', ""),
             ]
-        elif form.typ.data == 'netbox':
+        elif form.type.data == 'netbox':
             default_fields = [
                 ('rewrite_hostname', ""),
                 ('verify_cert', "True"),
                 ('import_filter', ""),
 
             ]
-        elif form.typ.data == 'jdisc':
+        elif form.type.data == 'jdisc':
             main_presets = [
                 ('address', 'https://SERVER/graphql'),
             ]
