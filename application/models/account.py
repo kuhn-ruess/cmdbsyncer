@@ -72,7 +72,18 @@ class Account(db.Document):
     Account
     """
     name = db.StringField(required=True, unique=True)
-    typ = db.StringField(choices=account_types)
+    # Migrate from 'typ' to 'type', keep backward compatibility
+    type = db.StringField(choices=account_types, db_field='typ')
+
+    # Added with 3.10.0
+    @property
+    def typ(self):
+        # For backward compatibility: allow obj.typ to work
+        return self.type
+    @typ.setter
+    def typ(self, value):
+        self.type = value
+
     is_master = db.BooleanField(default=False)
     is_child = db.BooleanField(default=False)
     parent = db.ReferenceField(document_type='Account', reverse_delete_rule=DENY)
