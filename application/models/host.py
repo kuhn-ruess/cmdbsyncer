@@ -90,10 +90,10 @@ class Host(db.Document):
         """
 
         db_filter = Q(source_account_name=account) & Q(last_import_id__ne=import_id)
-        user_filters = raw_filter.split(',')
+        user_filters = raw_filter.split('||')
         extra_filter = False
         for user_filter in user_filters:
-            user_filter = user_filter.split(':')
+            user_filter = user_filter.split(':', 1)
             if len(user_filter) == 2:
                 field, field_value = map(str.strip, user_filter)
                 if not extra_filter:
