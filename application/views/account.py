@@ -53,7 +53,7 @@ class ChildAccountModelView(DefaultModelView):
         return Account.objects(is_child=True)
 
     column_exclude_list = [
-            'custom_fields', 'is_child', 'typ',
+            'custom_fields', 'is_child', 'type',
             'is_master', 'address', 'username', 'password']
 
     column_filters = (
@@ -129,7 +129,7 @@ class AccountModelView(DefaultModelView):
     form_rules = [
         rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["accounts"]}"'\
                         'target="_blank" class="badge badge-light">Documentation</a>'),
-        rules.FieldSet(('name', 'typ'),'Basics'),
+        rules.FieldSet(('name', 'type'),'Basics'),
         rules.FieldSet(('is_master',), "Account Settings"),
         rules.FieldSet(('is_object', 'object_type'), "Object Settings"),
         rules.FieldSet(('address', 'username', 'password'), "Access Config"),
