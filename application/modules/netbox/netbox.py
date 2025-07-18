@@ -268,9 +268,12 @@ class SyncNetbox(Plugin):
         out = {}
         for field, value in attributes.items():
             if field == 'site':
-                region_id = value.region.id
-                region_name = self.nb.dcim.regions.get(region_id)
-                out['region'] = self.fix_value(region_name)
+                region_id = None
+                region_name = None
+                if hasattr(value, 'region') and hasattr(value.region, 'id'):
+                    region_id = value.region.id
+                    region_name = self.nb.dcim.regions.get(region_id)
+                out['region'] = self.fix_value(region_name) if region_name else None
                 out['site'] = self.fix_value(value)
             else:
                 out[field] = self.fix_value(value)
