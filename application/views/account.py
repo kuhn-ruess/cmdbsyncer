@@ -217,6 +217,19 @@ class AccountModelView(DefaultModelView):
                 ('hostname_field', 'host'),
                 ('rewrite_hostname', ""),
                 ('verify_cert', "True"),
+                ('path', ""),
+            ]
+        elif form.type.data == 'yml':
+            default_fields = [
+                ('auth_type', ""),
+                ('cert', ''),
+                ('request_headers', '{"Content-Type": "application/json"}'),
+                ('name_of_hosts_key', ''),
+                ('name_of_variables_key', ''),
+                ('merge_keys_by_key_values', ''),
+                ('rewrite_hostname', ""),
+                ('verify_cert', "True"),
+                ('path', ""),
             ]
         elif form.type.data == 'cmkv2':
             default_fields = [
