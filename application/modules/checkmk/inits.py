@@ -209,10 +209,22 @@ def activate_changes(account):
     Activate Changes of Checkmk Instance
     """
     cmk = CMK2(account)
+
     # Get current activation etag
     url = "/domain-types/activation_run/collections/pending_changes"
-    _, headers = cmk.request(url, "GET")
+    data, headers = cmk.request(url, "GET")
     etag = headers.get('ETag')
+    if cmk.config.get('dont_activate_changes_if_more_then'):
+        user = cmk.config['username']
+        num_changes = len([x['user_id'] for x in data['value'] if x['user_id'] == user])
+        if num_changes > int(cmk.config['dont_activate_changes_if_more_then']):
+            print(f"{ColorCodes.FAIL}Too many changes to activate: {num_changes} > "\
+                  f"{cmk.config['dont_activate_changes_if_more_then']}{ColorCodes.ENDC}")
+            details = [('error', f'Too many changes to activate: {num_changes} > '\
+                             f'{cmk.config["dont_activate_changes_if_more_then"]}')]
+            log.log("Activate Changes aborted, too many changes",
+                    source="Checkmk", details=details)
+            return False
 
     update_headers = {
         'if-match': etag
