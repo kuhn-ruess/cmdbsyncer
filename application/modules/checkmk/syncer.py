@@ -214,21 +214,16 @@ class SyncCMK2(CMK2):
             if host_labels.get('cmdb_syncer') == self.account_id:
                 if host not in self.synced_hosts:
                     # Delete host
-
-                    if app.config['CMK_BULK_DELETE_HOSTS']:
-                        delete_list.append(host)
-                        print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
-                    else:
-                        self.num_deleted += 1
-                        url = f"/objects/host_config/{host}"
-                        try:
-                            self.request(url, method="DELETE")
-                        except CmkException as exp:
-                            self.log_details.append(("error", f"Host deletion failed: {exp}"))
-                            print(f"{CC.WARNING} *{CC.ENDC} Delete host {host} failed {exp}")
-                        else:
-                            print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
-
+                    delete_list.append(host)
+                    print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
+        
+        if delete_limit := self.config['dont_delete_hosts_if_more_then']:
+            if len(delete_list) > int(delete_limit):
+                print(f"{CC.WARNING} *{CC.ENDC} Not deleting {len(delete_list)} hosts, "\
+                      f"because limit is set to {delete_limit}")
+                self.log_details.append(('error', f"Not deleting {len(delete_list)} hosts, "\
+                                        f"because limit is set to {delete_limit}"))
+                return
 
         if app.config['CMK_BULK_DELETE_HOSTS']:
             url = "/domain-types/host_config/actions/bulk-delete/invoke"
@@ -246,6 +241,17 @@ class SyncCMK2(CMK2):
                 else:
                     count += 1
                 self.num_deleted += len(chunk)
+        else:
+            for host in delete_list:
+                url = f"/objects/host_config/{host}"
+                try:
+                    self.request(url, method="DELETE")
+                    self.num_deleted += 1
+                except CmkException as exp:
+                    self.log_details.append(("error", f"Host deletion failed: {exp}"))
+                    print(f"{CC.WARNING} *{CC.ENDC} Delete host {host} failed {exp}")
+                else:
+                    print(f"{CC.WARNING} *{CC.ENDC} Delete host {host}")
 
 
     def handle_host(self, db_host, host_actions, disabled_hosts):
