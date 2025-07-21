@@ -24,6 +24,19 @@ def format_date(v, c, m, p):
     if value := getattr(m,p):
         return datetime.strftime(value, "%d.%m.%Y %H:%M")
 
+def _render_interval(_view, _context, model, _name):
+    """
+    Render Interval
+    """
+    # pylint: disable=unused-argument
+    if model.interval == '10min':
+        return "15 Minutes"
+    if model.interval == 'hour':
+        return "Hourly"
+    if model.interval == 'daily':
+        return "Daily"
+    return "Unknown"
+
 def _render_cronjob(_view, _context, model, _name):
     """
     Render BI Rule
@@ -72,6 +85,7 @@ class CronGroupView(DefaultModelView):
 
     column_formatters = {
         'render_jobs': _render_cronjob,
+        'interval': _render_interval,
     }
 
     form_overrides = {
