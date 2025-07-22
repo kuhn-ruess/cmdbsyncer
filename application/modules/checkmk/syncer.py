@@ -217,7 +217,7 @@ class SyncCMK2(CMK2):
                     delete_list.append(host)
                     print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
         
-        if delete_limit := self.config['dont_delete_hosts_if_more_then']:
+        if delete_limit := self.config.get('dont_delete_hosts_if_more_then'):
             if len(delete_list) > int(delete_limit):
                 print(f"{CC.WARNING} *{CC.ENDC} Not deleting {len(delete_list)} hosts, "\
                       f"because limit is set to {delete_limit}")
