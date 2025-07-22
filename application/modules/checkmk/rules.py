@@ -125,6 +125,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
             ('dont_update_prefixed_labels', []),
             ('parents', []),
             ('dont_move', False),
+            ('dont_create', False),
             ('dont_update', False),
         ]
         for choice, default in possible_outcomes:
@@ -132,8 +133,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
         print_debug(self.debug,
                     "- Handle Special options")
-
-        hostname = self.db_host.hostname
 
         for outcome in rule_outcomes:
             # We add only the outcome of the
@@ -153,6 +152,9 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == 'dont_move':
                 outcomes['dont_move'] = True
+
+            if outcome['action'] == 'dont_create':
+                outcomes['dont_create'] = True
 
             if outcome['action'] == 'dont_update':
                 outcomes['dont_update'] = True
