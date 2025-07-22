@@ -29,41 +29,18 @@ class YMLSyncer(Plugin):
     YML Syncer
     """
 
-    def merge_variables(self, variables):
-        """
-        Merge Variables by Key Values
-        """
-        return_var = {}
-
-        if varsets := self.config.get('merge_keys_by_key_values'):
-            for parirs in varsets.split(','):
-                key, value = parirs.split(':')
-                if key in variables and value in variables:
-                    return_var[variables[key]] = variables[value]
-        return return_var
-
-
 
     def parse_yml(self, data):
         """
         Parse YML Data
         """
         response = []
-        for data_key, values in data.items():
-            host_key = self.config.get('name_of_hosts_key', 'hostname')
-            variables_key = self.config.get('name_of_variables_key', 'variables')
-            if not host_key in values:
+        variables_key = self.config['name_of_variables_key']
+        host_key = self.config['name_of_hosts_key']
+        for _data_key, values in data.items():
+            if not values.get(host_key):
                 continue
-            variables = {}
-            if variables_key in values:
-                variables[self.config['data_key_name']] = data_key
-                for variable in values[variables_key].items():
-                    if isinstance(variable, tuple) and len(variable) == 2:
-                        variables[variable[0]] = variable[1]
-                    elif isinstance(variable, dict):
-                        for key, value in variable.items():
-                            variables[key] = value
-            variables = self.merge_variables(variables)
+            variables = values[variables_key]
             for hostname in values[host_key]:
                 if not hostname:
                     continue
