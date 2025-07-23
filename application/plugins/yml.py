@@ -2,17 +2,17 @@
 YML Plugin
 """
 
-import click
-from application import app, logger
 import ast
-from application.modules.plugin import Plugin, ResponseDataException
+import click
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
+from application import app, logger
 from application.helpers.inventory import run_inventory
+from application.modules.plugin import Plugin, ResponseDataException
 try:
     import yaml as yml
     from yaml import YAMLError
 except ImportError:
-    print("YAML library not found, please install PyYAML to use YML plugin.")
+    pass
 
 from syncerapi.v1 import (
     register_cronjob,
@@ -58,7 +58,7 @@ class YMLSyncer(Plugin):
         headers = {}
         if self.config.get('request_headers'):
             headers = ast.literal_eval(self.config['request_headers'])
-            logger.debug(f"Request Headers: {headers}")
+            logger.debug("Request Headers: %s", headers)
 
 
         auth = None

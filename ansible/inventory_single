@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# Use this script to generate an Ansible inventory file for a specific host.
+# This will deliver a faster response time than the full inventory script.
+
+LIMIT_VALUE=""
+
+while [ "$#" -gt 0 ]; do
+case "$1" in
+    --host)
+        LIMIT_VALUE="$2"
+        shift 2
+        ;;
+    --host=*)
+        LIMIT_VALUE="${1#--limit=}"
+        shift
+        ;;
+    *)
+        shift
+        ;;
+esac
+done
+
+ vars=$(../cmdbsyncer ansible source --host "$LIMIT_VALUE" 2>/dev/null)
+ if [ -z "$vars" ]; then
+     vars="{}"
+ fi
+ printf '{"_meta":{"hostvars": {"%s": %s}}, "all": {"hosts": ["%s"]}}\n' "$LIMIT_VALUE" "$vars" "$LIMIT_VALUE"
