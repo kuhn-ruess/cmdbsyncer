@@ -70,7 +70,27 @@ class CustomEntry(db.EmbeddedDocument):
 
 class Account(db.Document):
     """
-    Account
+    Account model for storing account credentials and related settings.
+
+    Fields:
+        name (str): Unique name of the account.
+        type (str): Type of the account, with backward compatibility for 'typ'.
+        is_master (bool): Indicates if this account is a master account.
+        is_child (bool): Indicates if this account is a child account.
+        parent (Account): Reference to the parent account.
+        is_object (bool): Indicates if this account represents an object.
+        object_type (str): Type of object associated with the account.
+        address (str): Address or endpoint for the account.
+        username (str): Username for authentication.
+        password (str): Plaintext password (for backward compatibility).
+        password_crypted (str): Encrypted password.
+        custom_fields (list): List of custom fields (CustomEntry).
+        plugin_settings (list): List of plugin settings (PluginSettings).
+        enabled (bool): Whether the account is enabled.
+
+    Methods:
+        set_password(password, key=False): Encrypts and stores the password.
+        get_password(key=False): Decrypts and returns the password.
     """
     name = db.StringField(required=True, unique=True)
     # Migrate from 'typ' to 'type', keep backward compatibility
@@ -79,8 +99,16 @@ class Account(db.Document):
     # Added with 3.10.0
     @property
     def typ(self):
+        """
+        Returns the value of the 'type' attribute for backward compatibility.
+        This method allows access to the 'type' attribute using the legacy 'typ' property.
+
+        Returns:
+            The value of the 'type' attribute.
+        """
         # For backward compatibility: allow obj.typ to work
         return self.type
+
     @typ.setter
     def typ(self, value):
         self.type = value
