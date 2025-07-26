@@ -16,9 +16,32 @@ from application.modules.debug import ColorCodes as CC
 
 class SyncCMK2(CMK2):
     """
-    Sync Functions
+    Synchronization class for CheckMK version 2.x installations.
+    
+    This class handles the complete synchronization process between CMDB Syncer
+    and CheckMK monitoring systems. It manages host creation, updates, deletion,
+    cluster management, folder operations, and attribute synchronization with
+    support for bulk operations and multiprocessing.
+    
+    Attributes:
+        bulk_creates (list): Queue for bulk host creation operations
+        bulk_updates (list): Queue for bulk host update operations
+        disabled_hosts (list): List of hosts that are disabled/ignored
+        synced_hosts (list): List of successfully synchronized hosts
+        clusters (list): Queue for cluster creation operations
+        cluster_updates (list): Queue for cluster update operations
+        label_prefix (str|bool): Prefix for host labels, False if not used
+        only_update_prefixed_labels (bool): Whether to only update prefixed labels
+        dont_update_prefixed_labels (bool): Whether to avoid updating prefixed labels
+        num_created (int): Counter for created hosts
+        num_updated (int): Counter for updated hosts
+        num_deleted (int): Counter for deleted hosts
+        console (callable): Console output function for progress reporting
+        limit (bool): Whether sync is running in limited mode
+    
+    Inherits from:
+        CMK2: Base class providing CheckMK API functionality
     """
-    #log_details = []
 
     bulk_creates = []
     bulk_updates = []
@@ -45,14 +68,33 @@ class SyncCMK2(CMK2):
 
     @staticmethod
     def chunks(lst, n):
-        """Yield successive n-sized chunks from lst."""
+        """
+        Split a list into smaller chunks of specified size.
+        
+        Args:
+            lst (list): List to be chunked
+            n (int): Size of each chunk
+            
+        Yields:
+            list: Successive n-sized chunks from the input list
+        """
         for i in range(0, len(lst), n):
             yield lst[i:i + n]
 
 #   .-- Get Host Actions
     def get_host_actions(self, db_host, attributes):
         """
-        Get CMK Specific Actions
+        Get CheckMK-specific actions for a database host.
+        
+        Processes the host and its attributes through configured action rules
+        to determine what operations need to be performed in CheckMK.
+        
+        Args:
+            db_host (Host): Database host object
+            attributes (dict): Host attributes dictionary
+            
+        Returns:
+            dict: Dictionary of actions to be performed for this host
         """
         return self.actions.get_outcomes(db_host, attributes)
 
@@ -60,8 +102,14 @@ class SyncCMK2(CMK2):
 
     def handle_extra_folder_options(self, full_path):
         """
-        We need to set extra Options to a Folder.
-        So we try to find the paths of them and add them to the list
+        Parse and handle extra folder configuration options from path strings.
+        
+        Processes folder paths that contain embedded configuration options
+        (separated by |) and adds them to the custom folder attributes.
+        
+        Args:
+            full_path (str): Folder path potentially containing extra options
+                           Format: "folder|{option1: value1, option2: value2}"
         """
         config_path = ""
         for current_path in full_path.split('/'):
@@ -76,7 +124,11 @@ class SyncCMK2(CMK2):
 
     def handle_folders(self):
         """
-        Check if Folders need Update
+        Update CheckMK folders with custom attributes and titles.
+        
+        Processes all folders that need attribute updates or title changes,
+        making the necessary API calls to synchronize folder configuration
+        with CheckMK.
         """
 
         print(f"{CC.OKGREEN} -- {CC.ENDC}Check if we need to update Folders")
@@ -161,7 +213,10 @@ class SyncCMK2(CMK2):
 
     def fetch_checkmk_hosts(self):
         """
-        Fetch all host currently in Checkmk
+        Retrieve all hosts currently configured in CheckMK.
+        
+        Uses either folder-based or global host fetching depending on
+        configuration settings to populate the checkmk_hosts dictionary.
         """
         if app.config['CMK_GET_HOST_BY_FOLDER']:
             self._fetch_checkmk_host_by_folder()
@@ -171,8 +226,17 @@ class SyncCMK2(CMK2):
 
     def use_host(self, hostname, source_account_name):
         """
-        Return if the Host is to be used
-        for export or not
+        Determine if a host should be included in the synchronization process.
+        
+        Applies configured filters including hostname limits and account filters
+        to decide whether a host should be processed during sync.
+        
+        Args:
+            hostname (str): Name of the host to check
+            source_account_name (str): Source account name for the host
+            
+        Returns:
+            bool: True if host should be synchronized, False otherwise
         """
         if self.config.get('limit_by_hostnames'):
             self.limit = True
@@ -192,7 +256,12 @@ class SyncCMK2(CMK2):
         return True
 
     def handle_clusters(self):
-        """ Create the Clusters """
+        """
+        Process cluster creation and node updates.
+        
+        Creates new clusters that were queued during host processing and
+        updates existing clusters with new node configurations.
+        """
         print(f"{CC.OKBLUE} -- {CC.ENDC}Check if we need to handle Clusters")
         for cluster in self.clusters:
             self.create_cluster(*cluster)
@@ -200,7 +269,13 @@ class SyncCMK2(CMK2):
             self.update_cluster_nodes(*cluster)
 
     def cleanup_hosts(self):
-        """ Cleanup Deleted hosts """
+        """
+        Remove hosts from CheckMK that are no longer in the source system.
+        
+        Identifies hosts with the cmdb_syncer label that weren't part of this
+        sync run and deletes them from CheckMK, either individually or in bulk.
+        Respects deletion limits and configuration settings.
+        """
 
         ## Cleanup, delete Hosts from this Source who are not longer in our DB or synced
         # Get all hosts with cmdb_syncer label and delete if not in synced_hosts
@@ -256,7 +331,19 @@ class SyncCMK2(CMK2):
 
     def handle_host(self, db_host, host_actions, disabled_hosts):
         """
-        All Calculation for a Host
+        Process a single host for synchronization (multiprocessing worker).
+        
+        Calculates host attributes and actions for a database host, adding
+        results to shared dictionaries for later processing. This method
+        is designed to run in separate processes.
+        
+        Args:
+            db_host (Host): Database host object to process
+            host_actions (dict): Shared dictionary for storing host actions
+            disabled_hosts (list): Shared list for disabled/ignored hosts
+            
+        Returns:
+            bool: True if host was processed successfully, False if ignored
         """
         attributes = self.get_attributes(db_host, 'checkmk')
         if not attributes:
@@ -269,7 +356,16 @@ class SyncCMK2(CMK2):
 
     def handle_cmk_folder(self, next_actions):
         """
-        Get the Folder the Hosts needs to Go
+        Determine and create the target folder for a host.
+        
+        Processes folder-related actions including folder creation and movement,
+        ensuring the target folder exists in CheckMK before host operations.
+        
+        Args:
+            next_actions (dict): Dictionary of actions for the current host
+            
+        Returns:
+            str: Target folder path for the host
         """
         folder = '/'
 
@@ -300,9 +396,18 @@ class SyncCMK2(CMK2):
 
     def handle_attributes(self, next_actions, attributes):
         """
-        Determine Hosts Checkmk Attributes
+        Process host attributes and determine which to add or remove.
+        
+        Combines custom attributes, inherited attributes, and removal rules
+        to create the final attribute set for CheckMK host configuration.
+        
+        Args:
+            next_actions (dict): Dictionary of actions for the current host
+            attributes (dict): Host attributes from the database
+            
+        Returns:
+            tuple: (additional_attributes, remove_attributes) dictionaries
         """
-
         additional_attributes = {}
         if 'parents' in next_actions:
             additional_attributes['parents'] = next_actions['parents']
@@ -341,7 +446,22 @@ class SyncCMK2(CMK2):
                                     remove_attributes, dont_move_host,
                                     dont_update_host, dont_create_host):
         """
-        Do creation or update actions
+        Create new hosts or update existing ones in CheckMK.
+        
+        Central method that handles both host creation and updates based on
+        current state. Manages clusters, regular hosts, and conversion between
+        host types when necessary.
+        
+        Args:
+            hostname (str): Name of the host
+            folder (str): Target folder path
+            labels (dict): Host labels dictionary
+            cluster_nodes (list): List of cluster nodes (empty for regular hosts)
+            additional_attributes (dict): Attributes to add/update
+            remove_attributes (list): Attributes to remove
+            dont_move_host (bool): Whether to skip folder movement
+            dont_update_host (bool): Whether to skip host updates
+            dont_create_host (bool): Whether to skip host creation
         """
         is_cluster = False
         if cluster_nodes:
@@ -400,7 +520,14 @@ class SyncCMK2(CMK2):
 
     def calculate_attributes_and_rules(self):
         """
-        Calculate Attributes and Rules
+        Calculate host attributes and rules using multiprocessing.
+        
+        Processes all database hosts in parallel to determine their attributes
+        and required actions. Uses multiprocessing for performance with large
+        host inventories.
+        
+        Returns:
+            dict: Dictionary mapping hostnames to (actions, attributes) tuples
         """
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
@@ -458,7 +585,17 @@ class SyncCMK2(CMK2):
 
 #   .-- Run Sync
     def run(self):
-        """Run Job"""
+        """
+        Execute the complete synchronization process.
+        
+        Main entry point that orchestrates the entire sync workflow:
+        1. Fetch current CheckMK state (folders and hosts)
+        2. Calculate attributes and actions for all hosts
+        3. Process host creation/updates
+        4. Handle clusters and folder operations
+        5. Clean up deleted hosts
+        6. Log synchronization statistics
+        """
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
 
         self.name=f"Sync Hosts to Account: {self.account_name}"
@@ -559,7 +696,16 @@ class SyncCMK2(CMK2):
 #.
 #   .-- Create Folder
     def _create_folder(self, parent, subfolder):
-        """ Helper to create tree of folders """
+        """
+        Create a single folder in CheckMK via API.
+        
+        Helper method to create individual folders with proper title and
+        attributes handling.
+        
+        Args:
+            parent (str): Parent folder path
+            subfolder (str): Name of the subfolder to create
+        """
         url = "domain-types/folder_config/collections/all"
         if not subfolder:
             return
@@ -590,7 +736,15 @@ class SyncCMK2(CMK2):
 
 
     def create_folder(self, folder):
-        """ Create given folder if not yet exsisting """
+        """
+        Create a complete folder hierarchy in CheckMK.
+        
+        Recursively creates all necessary parent folders to ensure the
+        complete path exists in CheckMK.
+        
+        Args:
+            folder (str): Complete folder path to create
+        """
         folder_parts = folder.split('/')[1:]
         self.console(f" * Create Folder in Checkmk {folder}")
         if len(folder_parts) == 1:
@@ -621,7 +775,13 @@ class SyncCMK2(CMK2):
 
     def send_bulk_create_host(self, entries):
         """
-        Send Process to create hosts
+        Send bulk host creation requests to CheckMK API.
+        
+        Processes queued host creation operations in batches to improve
+        performance with large numbers of hosts.
+        
+        Args:
+            entries (list): List of host creation payloads
         """
         chunks = list(self.chunks(entries, app.config['CMK_BULK_CREATE_OPERATIONS']))
         total = len(chunks)
@@ -640,7 +800,13 @@ class SyncCMK2(CMK2):
 
     def add_bulk_create_host(self, body):
         """
-        Add a Host to bulk list, and Send
+        Add a host to the bulk creation queue.
+        
+        Queues host creation operations and triggers bulk processing when
+        batch size limits are reached.
+        
+        Args:
+            body (dict): Host creation payload
         """
         self.bulk_creates.append(body)
         if not app.config['CMK_COLLECT_BULK_OPERATIONS'] and \
@@ -655,7 +821,16 @@ class SyncCMK2(CMK2):
 
     def create_host(self, hostname, folder, labels, additional_attributes=None):
         """
-        Create the not yet existing host in CMK
+        Create a single host in CheckMK.
+        
+        Creates a regular (non-cluster) host either individually or by
+        adding to the bulk creation queue.
+        
+        Args:
+            hostname (str): Name of the host to create
+            folder (str): Target folder path
+            labels (dict): Host labels dictionary
+            additional_attributes (dict, optional): Extra host attributes
         """
         body = {
             'host_name' : hostname,
@@ -686,7 +861,16 @@ class SyncCMK2(CMK2):
 #   .-- Create Cluster
     def create_cluster(self, hostname, folder, labels, nodes, additional_attributes=None):
         """
-        Create a not existing Cluster in CHeckmk
+        Create a cluster host in CheckMK.
+        
+        Creates a cluster configuration with specified nodes and attributes.
+        
+        Args:
+            hostname (str): Name of the cluster
+            folder (str): Target folder path
+            labels (dict): Cluster labels dictionary
+            nodes (list): List of cluster node hostnames
+            additional_attributes (dict, optional): Extra cluster attributes
         """
         if not nodes:
             print(f"{CC.OKGREEN} *{CC.ENDC} Cluster {hostname} not created -> No Nodes")
@@ -714,7 +898,17 @@ class SyncCMK2(CMK2):
 
     def get_etag(self, hostname, reason=""):
         """
-        Return ETAG of host
+        Retrieve ETag for a host (currently returns wildcard).
+        
+        Originally intended to fetch ETags for optimistic locking, but
+        currently returns '*' due to CheckMK API issues.
+        
+        Args:
+            hostname (str): Name of the host
+            reason (str, optional): Reason for ETag retrieval (for logging)
+            
+        Returns:
+            str: ETag value (currently always '*')
         """
         # pylint: disable=unused-argument
         # 2.2 and 2.3p6: This Call here is deleting the host...
@@ -728,7 +922,15 @@ class SyncCMK2(CMK2):
 #   .-- Update Cluster Nodes
     def update_cluster_nodes(self, hostname, cmk_nodes, syncer_nodes):
         """
-        Update the Nodes of Cluster in case of change
+        Update cluster node configuration when changes are detected.
+        
+        Compares current cluster nodes with desired configuration and
+        updates CheckMK when differences are found.
+        
+        Args:
+            hostname (str): Name of the cluster
+            cmk_nodes (list): Current nodes in CheckMK
+            syncer_nodes (list): Desired nodes from syncer
         """
         if sorted(cmk_nodes) != sorted(syncer_nodes):
             print(f"{CC.OKGREEN} *{CC.ENDC} Cluster has new Nodes {syncer_nodes} vs {cmk_nodes}")
@@ -751,7 +953,13 @@ class SyncCMK2(CMK2):
 #   .-- Update Host
     def send_bulk_update_host(self, entries):
         """
-        Send Update requests to CMK
+        Send bulk host update requests to CheckMK API.
+        
+        Processes queued host update operations in batches for improved
+        performance with large numbers of updates.
+        
+        Args:
+            entries (list): List of host update payloads
         """
         chunks = list(self.chunks(entries, app.config['CMK_BULK_UPDATE_OPERATIONS']))
         total = len(chunks)
@@ -772,7 +980,13 @@ class SyncCMK2(CMK2):
 
     def add_bulk_update_host(self, body):
         """
-        Add a Host to bulk list, and Send
+        Add a host to the bulk update queue.
+        
+        Queues host update operations and triggers bulk processing when
+        batch size limits are reached.
+        
+        Args:
+            body (dict): Host update payload
         """
         self.bulk_updates.append(body)
         if not app.config['CMK_COLLECT_BULK_OPERATIONS'] and \
@@ -784,7 +998,20 @@ class SyncCMK2(CMK2):
                     labels, additional_attributes, remove_attributes, \
                     dont_move_host):
         """
-        Update an Existing Host in Checkmk
+        Update an existing host in CheckMK.
+        
+        Comprehensive host update method that handles folder moves, label
+        updates, attribute changes, and removals. Supports both individual
+        and bulk update modes.
+        
+        Args:
+            hostname (str): Name of the host to update
+            cmk_host (dict): Current host data from CheckMK
+            folder (str): Target folder path
+            labels (dict): Updated labels dictionary
+            additional_attributes (dict): Attributes to add/update
+            remove_attributes (list): Attributes to remove
+            dont_move_host (bool): Whether to skip folder movement
         """
         current_folder = cmk_host['extensions']['folder']
         # Hack slash in front, quick solution before redesign
