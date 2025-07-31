@@ -318,6 +318,7 @@ class AccountModelView(DefaultModelView):
                 ('rewrite_hostname', ""),
                 ('verify_cert', "True"),
                 ('import_filter', ""),
+                ('delete_host_if_not_found_on_import', ""),
 
             ]
         elif form.type.data == 'jdisc':
