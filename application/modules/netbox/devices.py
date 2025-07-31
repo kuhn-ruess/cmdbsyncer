@@ -161,6 +161,7 @@ class SyncDevices(SyncNetbox):
         """
         Import Objects from Netbox to the Syncer
         """
+        import_id = self.get_unique_id()
         device_filter = {}
         if import_filter := self.config.get('import_filter'):
             device_filter = dict([x.strip().split(':') for x in import_filter.split(',') if x])
@@ -181,11 +182,13 @@ class SyncDevices(SyncNetbox):
                 print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
                 rendered_labels = self.handle_nb_attributes(labels)
                 host_obj.update_host(rendered_labels)
-                do_save = host_obj.set_account(account_dict=self.config)
+                do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
                 if do_save:
                     host_obj.save()
             except Exception as error:
                 if self.debug:
                     raise
                 self.log_details.append((f'import_error {hostname}', str(error)))
+        if extra_filter := self.config.get('delete_host_if_not_found_on_import'):
+            Host.delete_host_not_found_on_import(self.config['name'], import_id, extra_filter)
 #.

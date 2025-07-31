@@ -365,7 +365,8 @@ class Host(db.Document):
         date = datetime.datetime.now().strftime(app.config['TIME_STAMP_FORMAT'])
         self.log = [f"{date} {entry}"] + entries
 
-    def set_account(self, account_id=False, account_name=False, account_dict=False, import_id="N/A"):
+    def set_account(self, account_id=False, account_name=False,
+                    account_dict=False, import_id="N/A"):
         """
         Mark Host with Account he was fetched with.
         Prevent Overwrites if Host is importet from multiple sources.
