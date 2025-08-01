@@ -393,6 +393,7 @@ class HostModelView(DefaultModelView):
         new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
 
         model.update_host(new_labels)
+        model.set_inventory_attributes('cmdb')
 
         for key in cmdb_fields:
             if key not in new_labels:
