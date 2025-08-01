@@ -375,6 +375,26 @@ class Host(db.Document):
         date = datetime.datetime.now().strftime(app.config['TIME_STAMP_FORMAT'])
         self.log = [f"{date} {entry}"] + entries
 
+    def set_inventory_attributes(self, account_name):
+        """
+        Sets inventory-related attributes for the host.
+
+        This method updates the `inventory` dictionary with the provided account name and
+        the host's last seen and last sync timestamps.
+
+        Args:
+            account_name (str): The name of the account to associate with the inventory.
+
+        Side Effects:
+            Modifies the `inventory` attribute of the host instance by setting the following keys:
+                - 'syncer_account': The provided account name.
+                - 'syncer_last_seen': The value of `self.last_import_seen`.
+                - 'syncer_last_sync': The value of `self.last_import_sync`.
+        """
+        self.inventory['syncer_account'] = account_name
+        self.inventory['syncer_last_seen'] = self.last_import_seen
+        self.inventory['syncer_last_sync'] = self.last_import_sync
+
     def set_account(self, account_id=False, account_name=False,
                     account_dict=False, import_id="N/A"):
         """
@@ -416,9 +436,9 @@ class Host(db.Document):
         self.is_object = is_object
         self.last_import_id = import_id
 
-        self.inventory['syncer_account'] = account_name
-        self.inventory['syncer_last_seen'] = self.last_import_seen
-        self.inventory['syncer_last_sync'] = self.last_import_sync
+
+        self.set_inventory_attributes(account_name)
+
 
         # Everthing Match already, make it short
         if self.source_account_id and self.source_account_id == account_id \
