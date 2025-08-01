@@ -154,7 +154,9 @@ def delete_all_hosts(account):
         db_filter = {
         }
         if account:
-            db_filter['inventory__syncer_account'] = account
+            db_filter['source_account_name'] = account
+        else:
+            db_filter['source_account_name__ne'] = 'cmdb'
         print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
         Host.objects(**db_filter).delete()
     else:
