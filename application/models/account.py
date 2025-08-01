@@ -12,6 +12,7 @@ account_types = [
     ('cisco_dna', "Cisco DNA Account"),
     ('cmkv1', "Checkmk Version 1.x"),
     ('cmkv2', "Checkmk Version 2.x"),
+    ('cmdb', "Object Managed only in Syncer"),
     ('csv', "CSV File"),
     ('custom', "Custom Entries, like DBs"),
     ('external_restapi', "Remote Rest API"),

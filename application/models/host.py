@@ -10,6 +10,7 @@ from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
+from application.models.account import object_types
 
 class HostError(Exception):
     """
@@ -29,17 +30,26 @@ class Target(db.EmbeddedDocument):
     target_account_name = db.StringField()
     last_update = db.DateTimeField()
 
+class CmdbField(db.EmbeddedDocument):
+    """
+    Field used in CMDB Mode 
+    """
+    field_name = db.StringField(max_length=255)
+    field_value = db.StringField(max_length=255)
+
+
 class Host(db.Document):
     """
     Host
     """
     hostname = db.StringField(required=True, unique=True)
     sync_id = db.StringField()
+    cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
     labels = db.DictField()
     inventory = db.DictField()
 
     is_object = db.BooleanField(default=False)
-    object_type = db.StringField()
+    object_type = db.StringField(choices=object_types)
 
     source_account_id = db.StringField()
     source_account_name = db.StringField()
@@ -380,6 +390,8 @@ class Host(db.Document):
             status (bool): Should Object be saved or not
 
         """
+        if self.source_account_name == 'cmdb':
+            raise HostError("Host can't be overwritten, CMDB Mode")
         if not account_id and not account_dict:
             raise ValueError("Either Set account_id or pass account_dict")
 
