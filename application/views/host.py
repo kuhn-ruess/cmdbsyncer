@@ -385,21 +385,17 @@ class HostModelView(DefaultModelView):
         model.last_import_sync = datetime.now()
         model.last_import_seen = datetime.now()
         model.cache = {}
-        model.add_log("Manual Edit")
         model.source_account_id = ""
         model.source_account_name = "cmdb"
-        model.labels = {}
         # Set Extra Fields
         cmdb_fields = app.config['CMDB_MODELS'].get(form.object_type.data, {})
         cmdb_fields.update(app.config['CMDB_MODELS']['all'])
-        current_fields = []
+        new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
 
-        for entry in form.cmdb_fields.data:
-            current_fields.append(entry['field_name'])
-            model.labels[entry['field_name']] = entry['field_value']
+        model.update_host(new_labels)
 
         for key in cmdb_fields:
-            if key not in current_fields:
+            if key not in new_labels:
                 new_field = CmdbField()
                 new_field.field_name = key
                 model.cmdb_fields.append(new_field)
