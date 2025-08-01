@@ -118,6 +118,20 @@ class BaseConfig():
 
     }
 
+    CMDB_MODELS = {
+        'host': {
+            'site' : {"type": "string"},
+            'department' : {"type": "string"},
+            'type' : {"type": "string"},
+        },
+        'all': {
+            'sms_notification': {"type": "bool"},
+            'email_notification': {"type": "bool"},
+
+        }
+
+    }
+
 
     FILEADMIN_PATH = '/var/cmdbsyncer/files'
 
