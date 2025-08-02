@@ -411,7 +411,8 @@ class Host(db.Document):
 
         """
         if self.source_account_name == 'cmdb':
-            raise HostError("Host can't be overwritten, CMDB Mode")
+            print("Host is locked since in CMDB Mode")
+            return False
         if not account_id and not account_dict:
             raise ValueError("Either Set account_id or pass account_dict")
 

@@ -225,7 +225,7 @@ def seed_user(email):
     except ValidationError:
         print(f"Invalid E-Mail: {email}")
         return 1
-    print(f"User passwort set to: {passwd}")
+    print(f"User password set to: {passwd}")
     return 0
 #.
 #   .-- Command: Export Rules

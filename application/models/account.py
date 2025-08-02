@@ -131,7 +131,7 @@ class Account(db.Document):
 
     def set_password(self, password, key=False):
         """
-        Encrypt Passwort in Store
+        Encrypt Password in Store
         """
         if key:
             cryptography_key = key
