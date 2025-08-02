@@ -28,12 +28,15 @@ class DataGeter(CMK2):
     def run(self):
         """Run Actual Job"""
         url = '/domain-types/host_config/collections/all?effective_attributes=true&include_links=false'
-        import_filter = self.config.get('import_filter')
+        filters = False
+        if import_filter := self.config.get('import_filter'):
+            filters = [x.strip().lower() for x in import_filter.split(','):
+
 
         for hostdata in self.request(url, 'GET')[0]['value']:
             hostname = hostdata['id']
             print(f"\n{CC.HEADER} Process: {hostname}{CC.ENDC}")
-            if import_filter and hostname.startswith(import_filter):
+            if import_filter and any(hostname.lower().startswith(f) for f in filters):
                 print(f"{CC.OKBLUE} *{CC.ENDC} Host blacklisted by filter, ignored")
                 continue
 
