@@ -110,6 +110,8 @@ class BaseConfig():
     DEBUG = True
     ADVANCED_RULE_DEBUG = False
 
+    CMDB_MODE = False
+
     MONGODB_SETTINGS = {
         'db': 'cmdb-api',
         'host': '127.0.0.1',

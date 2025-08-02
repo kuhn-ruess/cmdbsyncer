@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from flask import current_app
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from authlib.jose import jwt, JoseError
+from authlib.jose import jwt
 from application import db
 
 roles = [
@@ -56,7 +56,7 @@ class User(db.Document, UserMixin):
         """
         return check_password_hash(self.pwdhash, password)
 
-    def generate_token(self, expiration=3600, custom_values=False):
+    def generate_token(self, expiration=3600):
         """
         Token generator
         """

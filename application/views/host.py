@@ -20,7 +20,33 @@ from application.models.host import Host, CmdbField
 div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
 
+def _render_cmdb_fields(_view, _context, model, _name):
+    """
+    Render CMD Fields
+    """
+    if not model.cmdb_fields:
+        return Markup("")
+    html = '<table class="table table-bordered">'
+    for entry in model.cmdb_fields:
+        if not entry.field_value:
+            continue
+        html += f'''
+            <tr>
+                <th scope="row" style="width: 30%;">
+                    {entry.field_name}
+                </th>
+                <td>
+                    <span class="badge badge-info">{entry.field_value}</span>
+                </td>
+            </tr>
+        '''
+    html += '</table>'
+    return Markup(html)
+
 class StaticLabelWidget:
+    """
+    Design for Lablels in Views
+    """
     def __call__(self, field, **kwargs):
         html = '<div class="card"><div class="card-body">'
         entries = []
@@ -34,12 +60,18 @@ class StaticLabelWidget:
         return Markup(html)
 
 class StaticLabelField(Field):
+    """
+    Helper for Widget
+    """
     widget = StaticLabelWidget()
 
     def _value(self):
         return str(self.data) if self.data else ''
 
 class StaticLogWidget:
+    """
+    Design for Lists in Views
+    """
     def __call__(self, field, **kwargs):
         html = '<div class="card"><div class="card-body">'
         html += "<table class='table'>"
@@ -50,6 +82,9 @@ class StaticLogWidget:
         return Markup(html)
 
 class StaticLogField(Field):
+    """
+    Helper for Widget
+    """
     widget = StaticLogWidget()
 
     def _value(self):
@@ -215,8 +250,8 @@ class ObjectModelView(DefaultModelView):
     Onlye show objects
     """
 
-    can_edit = False
-    can_create = False
+    can_edit = True
+    can_create = True
     can_view_details = True
 
     column_filters = (
@@ -233,6 +268,36 @@ class ObjectModelView(DefaultModelView):
     column_formatters_export = {
         'hostname': get_rule_json
     }
+    form_overrides = {
+        'inventory': StaticLabelField,
+        'log': StaticLogField,
+    }
+
+    form_rules = [
+        rules.Field('hostname'),
+        rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
+        rules.FieldSet(('inventory', 'log'), "Data"),
+    ]
+
+    form_subdocuments = {
+        'cmdb_fields': {
+            'form_subdocuments': {
+                '': {
+                    'form_widget_args': {
+                        'field_name': {'style': 'background-color: #2EFE9A;', 'size': 10},
+                        'field_value': {'style': 'background-color: #81DAF5;', 'size': 40},
+                    },
+                    'form_rules' : [
+                        div_open,
+                        rules.NestedRule(
+                            ('field_name', 'field_value')
+                        ),
+                        div_close,
+                    ]
+                }
+            }
+        }
+    }
 
 
     def get_query(self):
@@ -244,10 +309,11 @@ class ObjectModelView(DefaultModelView):
 
     column_labels = {
         'hostname': "Object Name",
-        'source_account_name': "Account"
+        'source_account_name': "Account",
+        'cmdb_fields': "CMDB Attributes",
     }
 
-    column_exclude_list = (
+    column_exclude_list = [
         'source_account_id',
         'sync_id',
         'labels',
@@ -257,8 +323,7 @@ class ObjectModelView(DefaultModelView):
         'raw',
         'cache',
         'is_object',
-        'cmdb_fields',
-    )
+    ]
 
     column_details_list = [
         'hostname', 'inventory', 'labels', 'cache'
@@ -269,16 +334,41 @@ class ObjectModelView(DefaultModelView):
         'labels': format_labels,
         'inventory': format_inventory,
         'cache': format_cache,
+        'cmdb_fields': _render_cmdb_fields,
     }
 
-    def get_export_name(self, _export_type):
+    def get_export_name(self, export_type):
         """
-        Overwrite Filename
+        Generates a filename for exporting data based on the model name and current timestamp.
+
+        Args:
+            export_type: The type of export being performed (currently unused).
+
+        Returns:
+            str: A string representing the export filename in the format
+                 '<ModelName>_<YYYYMMDDHHMM>.syncer_json'.
         """
         now = datetime.now()
 
         dt_str = now.strftime("%Y%m%d%H%M")
         return f"{self.model.__name__}_{dt_str}.syncer_json"
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Model Changes when saved in GUI -> CMDB Mode
+        """
+        model.last_import_sync = datetime.now()
+        model.last_import_seen = datetime.now()
+        model.cache = {}
+        model.is_object = True
+        model.source_account_id = ""
+        model.source_account_name = "cmdb"
+        # Set Extra Fields
+        new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
+        model.object_type = 'template'
+
+        model.update_host(new_labels)
+        model.set_inventory_attributes('cmdb')
 
     def __init__(self, model, **kwargs):
         """
@@ -286,33 +376,13 @@ class ObjectModelView(DefaultModelView):
 
         """
 
-        if app.config['DEBUG'] is True:
-            self.can_edit = True
+        if not app.config['CMDB_MODE']:
+            self.can_edit = False
+            self.can_create = False
+            self.column_exclude_list.append('cmdb_fields')
 
         super().__init__(model, **kwargs)
 
-def _render_cmdb_fields(_view, _context, model, _name):
-    """
-    Render CMD Fields
-    """
-    if not model.cmdb_fields:
-        return Markup("No CMDB object")
-    html = '<table class="table table-bordered">'
-    for entry in model.cmdb_fields:
-        if not entry.field_value:
-            continue
-        html += f'''
-            <tr>
-                <th scope="row" style="width: 30%;">
-                    {entry.field_name}
-                </th>
-                <td>
-                    <span class="badge badge-info">{entry.field_value}</span>
-                </td>
-            </tr>
-        '''
-    html += '</table>'
-    return Markup(html)
 
 
 class HostModelView(DefaultModelView):
@@ -352,7 +422,7 @@ class HostModelView(DefaultModelView):
     form_rules = [
         rules.FieldSet((
             rules.Field('hostname'),
-            rules.NestedRule(('object_type', 'available')),
+            rules.NestedRule(('object_type', 'available', 'cmdb_template')),
             ), "CMDB Options"),
         rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
         rules.FieldSet(('inventory', 'log'), "Data"),
@@ -448,6 +518,8 @@ class HostModelView(DefaultModelView):
     column_labels = {
         'source_account_name': "Account",
         'folder': "CMK Pool Folder",
+        'cmdb_fields': "CMDB Attributes",
+        'cmdb_template': "Used Template",
     }
 
     page_size = 25
@@ -462,7 +534,7 @@ class HostModelView(DefaultModelView):
         'cmdb_fields': _render_cmdb_fields,
     }
 
-    column_exclude_list = (
+    column_exclude_list = [
         'source_account_id',
         'sync_id',
         'labels',
@@ -472,11 +544,18 @@ class HostModelView(DefaultModelView):
         'raw',
         'cache',
         'is_object',
-    )
+    ]
 
     def get_export_name(self, _export_type):
         """
-        Overwrite Filename
+        Generates a filename for exporting data based on the model name and current timestamp.
+
+        Args:
+            export_type: The type of export being performed (currently unused).
+
+        Returns:
+            str: A string representing the export filename in the format
+                 '<ModelName>_<YYYYMMDDHHMM>.syncer_json'.
         """
         now = datetime.now()
 
@@ -489,8 +568,11 @@ class HostModelView(DefaultModelView):
 
         """
 
-        if app.config['DEBUG'] is True:
-            self.can_edit = True
+        if not app.config['CMDB_MODE']:
+            self.can_edit = False
+            self.can_create = False
+            self.column_exclude_list.append('cmdb_fields')
+            self.column_exclude_list.append('cmdb_template')
 
         super().__init__(model, **kwargs)
 

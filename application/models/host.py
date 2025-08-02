@@ -5,7 +5,7 @@ Host Model
 # pylint: disable=logging-fstring-interpolation
 import re
 import datetime
-from mongoengine import Q
+from mongoengine import Q, DENY
 from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
@@ -22,14 +22,6 @@ class DeprecatedError(Exception):
     Raise for Deprecated functions
     """
 
-class Target(db.EmbeddedDocument):
-    """
-    Target Stats
-    """
-    target_account_id = db.StringField()
-    target_account_name = db.StringField()
-    last_update = db.DateTimeField()
-
 class CmdbField(db.EmbeddedDocument):
     """
     Field used in CMDB Mode 
@@ -45,6 +37,7 @@ class Host(db.Document):
     hostname = db.StringField(required=True, unique=True)
     sync_id = db.StringField()
     cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
+    cmdb_template = db.ReferenceField(document_type='Host', reverse_delete_rule=DENY)
     labels = db.DictField()
     inventory = db.DictField()
 
@@ -90,6 +83,10 @@ class Host(db.Document):
                 re.compile(r'^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$')
 
         return bool(hostname_regex.fullmatch(self.hostname))
+
+    def __str__(self):
+        return f"{self.object_type}: {self.hostname} ({self.source_account_name})"
+
 
 
     @staticmethod
