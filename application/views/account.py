@@ -240,6 +240,7 @@ class AccountModelView(DefaultModelView):
                 ('dont_delete_hosts_if_more_then', ""),
                 ('dont_activate_changes_if_more_then', ""),
                 ('verify_cert', "True"),
+                ('import_filter', ""),
             ]
         elif form.type.data == 'ldap':
             default_fields = [
