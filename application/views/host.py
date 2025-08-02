@@ -401,11 +401,6 @@ class HostModelView(DefaultModelView):
                 new_field.field_name = key
                 model.cmdb_fields.append(new_field)
 
-        
-
-
-    
-
 
     column_extra_row_actions = [
         LinkRowAction("fa fa-rocket", app.config['BASE_PREFIX'] + \
