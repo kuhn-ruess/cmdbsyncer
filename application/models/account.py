@@ -52,6 +52,7 @@ object_types = [
     ('custom_5', 'Custom Type 5'),
     ('custom_6', 'Custom Type 6'),
     ('undefined', 'Undefined'),
+    ('template', 'CMDB Template for Labels'),
 ]
 
 
