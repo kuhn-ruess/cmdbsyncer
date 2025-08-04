@@ -127,8 +127,8 @@ class BaseConfig():
             'type' : {"type": "string"},
         },
         'all': {
-            'sms_notification': {"type": "bool"},
-            'email_notification': {"type": "bool"},
+            'sms_notification': {"type": "boolean"},
+            'email_notification': {"type": "boolean"},
 
         }
 
