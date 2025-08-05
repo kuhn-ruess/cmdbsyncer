@@ -3,6 +3,7 @@ Ansible Api
 """
 # pylint: disable=function-redefined
 # pylint: disable=no-member
+from datetime import datetime
 from mongoengine.errors import DoesNotExist
 
 from flask import request
@@ -15,14 +16,30 @@ from application.helpers.get_account import get_account_by_name
 API = Namespace('objects')
 
 
+def serialize_for_json(data):
+    """
+    Recursive function to convert datetime objects to ISO format strings
+    to make the data JSON serializable
+    """
+    if isinstance(data, dict):
+        return {key: serialize_for_json(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [serialize_for_json(item) for item in data]
+    elif isinstance(data, datetime):
+        return data.strftime('%Y-%m-%dT%H:%M:%SZ')
+    return data
+
+
 def build_host_dict(host_obj):
     """
     Build dict of an object which will be returned
     """
     host_dict = {}
     host_dict['hostname'] = host_obj.hostname
-    host_dict['labels'] = host_obj.get_labels()
-    host_dict['inventory'] = host_obj.get_inventory()
+    
+    # Ensure all values in labels and inventory are JSON serializable
+    host_dict['labels'] = serialize_for_json(host_obj.get_labels())
+    host_dict['inventory'] = serialize_for_json(host_obj.get_inventory())
 
     last_seen = False
     if host_obj.last_import_seen:

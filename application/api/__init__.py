@@ -11,12 +11,14 @@ def require_token(fn): #pylint: disable=invalid-name
     """
     @wraps(fn)
     def decorated_view(*args, **kwargs):
-        login_token = request.headers.get('x-login-token')
-        if not login_token:
-            abort(401, "Invalid Request, x-login-token missing")
+        login_header = request.headers.get('x-login-header')
+        if not login_header:
+            abort(401, "Invalid Request, x-login-header missing")
 
         try:
-            Account.objects.get(typ='restapi', password=login_token, enabled=True)
+            login_user, login_password = login_header.split(':')
+            if Account.objects.get(username=login_user, type="restapi").get_password() != login_password:
+                raise ValueError("Invalid Login")
         except: #pylint: disable=bare-except
             abort(401, "Invalid login Token")
 
