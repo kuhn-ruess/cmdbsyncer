@@ -214,6 +214,8 @@ class AccountModelView(DefaultModelView):
                 ('cert', ''),
                 ('request_headers', '{"Content-Type": "application/json"}'),
                 ('data_key', 'result'),
+                ('method', 'GET'),
+                ('post_body', '{}'),
                 ('hostname_field', 'host'),
                 ('rewrite_hostname', ""),
                 ('verify_cert', "True"),
