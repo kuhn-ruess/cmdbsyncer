@@ -690,6 +690,6 @@ class HostModelView(DefaultModelView):
             self.can_create = False
             self.column_exclude_list.append('cmdb_fields')
             self.column_exclude_list.append('cmdb_template')
-        
+
         # Bugfix, ohne we loose the availibilty to edit after save
         self.can_edit = True
