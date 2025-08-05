@@ -44,11 +44,15 @@ class RestImport(Plugin):
 
         cert = self.config.get('cert')
 
+
         params = {
-            'method': 'get',
+            'method': self.config.get('method', 'GET'),
             'url': self.config['address'],
             'headers': headers,
         }
+
+        if params['method'].lower() == 'post':
+            params['data'] = self.config.get('post_body', {})
 
         if auth:
             params['auth'] = auth
@@ -77,8 +81,8 @@ class RestImport(Plugin):
         """
         if self.config.get('data_key'):
             data = data[self.config['data_key']]
-        for entry in data:
 
+        for entry in data:
             hostname = entry[self.config['hostname_field']]
             if not hostname:
                 continue
