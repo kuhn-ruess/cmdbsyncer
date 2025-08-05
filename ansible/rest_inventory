@@ -1,19 +1,19 @@
 #!/bin/bash
 #START SETTINGS
 API="https://hostname/cmdbsyncer/api/v1/ansible"
-SECRET="TEST123"
+SECRET="USER:TEST123"
 #END SETTINGS
 case "$1" in
 "--list")
     curl -X 'GET' $API/ \
          -H 'accept: application/json' \
-         -H "x-login-token: $SECRET" \
+         -H "x-login-header: $SECRET" \
          2> /dev/null
     ;;
 "--host")
     curl -X 'GET' ${API}/{$2} \
          -H 'accept: application/json' \
-         -H "x-login-token: $SECRET" \
+         -H "x-login-header: $SECRET" \
          2> /dev/null
     ;;
 *)
