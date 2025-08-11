@@ -767,8 +767,30 @@ class HostModelView(DefaultModelView):
                 host = Host.objects(id=host_id).first()
                 if host:
                     host.cmdb_template = template
-                    host.cache =  {}
-                    host.account = "cmdb"
+                    
+                    # Apply the same logic as on_model_change
+                    host.last_import_sync = datetime.now()
+                    host.last_import_seen = datetime.now()
+                    host.cache = {}
+                    host.source_account_name = "cmdb"
+                    
+                    # Set Extra Fields from CMDB config
+                    cmdb_fields = app.config['CMDB_MODELS'].get(host.object_type, {})
+                    cmdb_fields.update(app.config['CMDB_MODELS']['all'])
+                    
+                    # Create labels from existing cmdb_fields
+                    new_labels = {x.field_name: x.field_value for x in host.cmdb_fields if x.field_value}
+                    
+                    host.update_host(new_labels)
+                    host.set_inventory_attributes('cmdb')
+
+                    # Add missing CMDB fields based on configuration
+                    existing_field_names = {x.field_name for x in host.cmdb_fields}
+                    for key in cmdb_fields:
+                        if key not in existing_field_names:
+                            new_field = CmdbField()
+                            new_field.field_name = key
+                            host.cmdb_fields.append(new_field)
 
                     host.save()
                     updated_count += 1
