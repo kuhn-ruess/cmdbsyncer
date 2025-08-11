@@ -768,6 +768,7 @@ class HostModelView(DefaultModelView):
                 if host:
                     host.cmdb_template = template
                     host.cache =  {}
+                    host.account = "cmdb"
 
                     host.save()
                     updated_count += 1
