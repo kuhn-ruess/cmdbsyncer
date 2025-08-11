@@ -79,7 +79,7 @@ def export_tags(account, dry_run=False, save_requests=False, debug=False):
 
 #.
 #   .-- Export BI Rules
-def export_bi_rules(account):
+def export_bi_rules(account, debug):
     """
     Export BI Rules to Checkmk
     """
@@ -89,6 +89,7 @@ def export_bi_rules(account):
         syncer = BI(account)
         syncer.rewrite = rules['rewrite']
         syncer.filter = rules['filter']
+        syncer.debug = debug
 
         class ExportBiRule(DefaultRule):
             """
@@ -106,9 +107,11 @@ def export_bi_rules(account):
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         log.log(f"Exception Export BI Rules to Checkmk Account: {account}",
                 source="cmk_bi_sync", details=details)
+        if debug:
+            raise
 #.
 #   .-- Export BI Aggregations
-def export_bi_aggregations(account):
+def export_bi_aggregations(account, debug):
     """
     Export BI Aggregations to Checkmk
     """
@@ -118,6 +121,7 @@ def export_bi_aggregations(account):
         syncer = BI(account)
         syncer.rewrite = rules['rewrite']
         syncer.filter = rules['filter']
+        syncer.debug = debug
         class ExportBiAggr(DefaultRule):
             """
             Name overwrite
@@ -133,6 +137,8 @@ def export_bi_aggregations(account):
         print(f'{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         log.log(f"Export BI Aggregations to Checkmk Account: {account}",
                 source="Checkmk", details=details)
+        if debug:
+            raise
 
 #.
 #   .-- Inventorize Hosts
