@@ -5,10 +5,13 @@ from datetime import datetime
 # pylint: disable=too-few-public-methods
 import re
 from flask_login import current_user
-from flask import flash
+from flask import flash, request, redirect, url_for, render_template_string
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 from flask_admin.model.template import LinkRowAction
 from flask_admin.form import rules
+from flask_admin.actions import action
+from flask_admin.babel import gettext
+from flask_admin.base import expose
 from wtforms import HiddenField, Field, StringField, BooleanField
 from markupsafe import Markup
 
@@ -693,3 +696,93 @@ class HostModelView(DefaultModelView):
 
         # Bugfix, ohne we loose the availibilty to edit after save
         self.can_edit = True
+
+    @action('set_template', 'Set Template', 
+            'Are you sure you want to update the selected hosts?')
+    def action_set_template(self, ids):
+        """
+        Action to set CMDB template
+        """
+        url = url_for('.set_template_form', ids=','.join(ids))
+        return redirect(url)
+
+    @expose('/set_template_form')
+    def set_template_form(self):
+        """
+        Custom form for template selection
+        """
+        ids = request.args.get('ids', '').split(',')
+        templates = self.get_template_list()
+
+        template_html = """
+        <div class="container mt-4">
+            <h3>Set CMDB Template</h3>
+            <form method="POST" action="{{ url_for('.process_template_assignment') }}">
+                <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
+                
+                <div class="form-group">
+                    <label for="template_id">Select Template:</label>
+                    <select class="form-control" id="template_id" name="template_id" required>
+                        <option value="">Choose a template...</option>
+                        {% for template in templates %}
+                        <option value="{{ template.id }}">{{ template.hostname }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Apply Template</button>
+                    <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+        """
+        return render_template_string(template_html, ids=ids, templates=templates)
+
+    @expose('/process_template_assignment', methods=['POST'])
+    def process_template_assignment(self):
+        """
+        Process the template assignment
+        """
+        host_ids = request.form.get('host_ids', '').split(',')
+        template_id = request.form.get('template_id')
+
+        if not template_id:
+            flash('Please select a template', 'error')
+            return redirect(url_for('.index_view'))
+
+        try:
+            # Get the template
+            template = Host.objects(id=template_id).first()
+            if not template:
+                flash('Template not found', 'error')
+                return redirect(url_for('.index_view'))
+
+            # Apply template to selected hosts
+            updated_count = 0
+            for host_id in host_ids:
+                if not host_id.strip():
+                    continue
+
+                host = Host.objects(id=host_id).first()
+                if host:
+                    host.cmdb_template = template
+                    host.cache =  {}
+
+                    host.save()
+                    updated_count += 1
+
+            flash(f'Template applied to {updated_count} hosts', 'success')
+
+        except Exception as e:
+            flash(f'Error applying template: {str(e)}', 'error')
+
+        return redirect(url_for('.index_view'))
+
+    def get_template_list(self):
+        """Get available CMDB templates for the action form"""
+        try:
+            templates = Host.objects(is_object=True, object_type='template')
+            return list(templates)
+        except Exception:
+            return []
