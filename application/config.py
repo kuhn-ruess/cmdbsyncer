@@ -134,6 +134,8 @@ class BaseConfig():
 
     }
 
+    HOST_PAGESIZE = 100
+
 
     FILEADMIN_PATH = '/var/cmdbsyncer/files'
 

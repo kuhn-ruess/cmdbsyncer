@@ -23,6 +23,48 @@ from application.models.host import Host, CmdbField
 div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
 
+# Icon mappings for object types
+OBJECT_TYPE_ICONS = {
+    'auto': 'fa fa-magic',
+    'application': 'fa fa-code',
+    'contact': 'fa fa-user',
+    'group': 'fa fa-users',
+    'host': 'fa fa-server',
+    'network': 'fa fa-network-wired',
+    'url': 'fa fa-link',
+    'custom_1': 'fa fa-cube',
+    'custom_2': 'fa fa-cube',
+    'custom_3': 'fa fa-cube',
+    'custom_4': 'fa fa-cube',
+    'custom_5': 'fa fa-cube',
+    'custom_6': 'fa fa-cube',
+    'undefined': 'fa fa-question-circle',
+    'template': 'fa fa-file-alt',
+}
+
+def _render_object_type_icon(_view, _context, model, _name):
+    """
+    Render object type with icon
+    """
+    if not model.object_type:
+        return Markup('<span class="text-muted">N/A</span>')
+    
+    icon_class = OBJECT_TYPE_ICONS.get(model.object_type, 'fa fa-question-circle')
+    object_type_display = model.object_type.replace('_', ' ').title()
+    
+    return Markup(f'<i class="{icon_class}" style="margin-right: 5px;"></i>{object_type_display}')
+
+def _render_datetime(view, context, model, name):
+    """
+    Render datetime fields in a human-readable format.
+    """
+    value = getattr(model, name, None)
+    if not value:
+        return Markup('<span class="text-muted">N/A</span>')
+    if isinstance(value, datetime):
+        return Markup(value.strftime('%Y-%m-%d %H:%M:%S'))
+    return Markup(str(value))
+
 def _render_cmdb_fields(_view, _context, model, _name):
     """
     Render CMD Fields
@@ -40,6 +82,29 @@ def _render_cmdb_fields(_view, _context, model, _name):
                 </th>
                 <td>
                     <span class="badge badge-info">{entry.field_value}</span>
+                </td>
+            </tr>
+        '''
+    html += '</table>'
+    return Markup(html)
+
+def _render_labels(_view, _context, model, _name):
+    """
+    Render Labels
+    """
+    if not model.labels:
+        return Markup("")
+    html = '<table class="table table-bordered">'
+    for key, value in model.labels.items():
+        if not value:
+            continue
+        html += f'''
+            <tr>
+                <th scope="row" style="width: 30%;">
+                    {key}
+                </th>
+                <td>
+                    <span class="badge badge-info">{value}</span>
                 </td>
             </tr>
         '''
@@ -343,6 +408,7 @@ class ObjectModelView(DefaultModelView):
         'inventory': format_inventory,
         'cache': format_cache,
         'cmdb_fields': _render_cmdb_fields,
+        'object_type': _render_object_type_icon,
     }
 
     column_formatters_export = {
@@ -452,6 +518,8 @@ class HostModelView(DefaultModelView):
     can_set_page_size = True
     can_view_details = True
 
+    page_size = app.config['HOST_PAGESIZE']
+
     column_details_list = [
         'hostname', 'folder', 'available','labels', 'inventory', 'cmdb_template', 'log',
         'last_import_seen', 'last_import_sync', 'last_import_id',
@@ -461,13 +529,15 @@ class HostModelView(DefaultModelView):
     column_exclude_list = [
         'source_account_id',
         'sync_id',
-        'labels',
+        'cmdb_fields',
         'inventory',
         'log',
         'folder',
         'raw',
         'cache',
         'is_object',
+        'last_import_id',
+        'last_import_sync',
     ]
 
     column_export_list = ('hostname', )
@@ -496,11 +566,12 @@ class HostModelView(DefaultModelView):
 
     column_formatters = {
         'log': format_log,
-        'labels': format_labels,
+        'labels': _render_labels,
         'inventory': format_inventory,
         'cache': format_cache,
-        'cmdb_fields': _render_cmdb_fields,
         'cmdb_template': _render_cmdb_template,
+        'last_import_seen': _render_datetime,
+        'object_type': _render_object_type_icon,
     }
 
     column_formatters_export = {
@@ -510,7 +581,7 @@ class HostModelView(DefaultModelView):
     column_labels = {
         'source_account_name': "Account",
         'folder': "CMK Pool Folder",
-        'cmdb_fields': "CMDB Attributes",
+        #'cmdb_fields': "CMDB Attributes",
         'cmdb_template': "From Template",
         'labels_from_template': "Labels from Template",
     }
@@ -585,7 +656,6 @@ class HostModelView(DefaultModelView):
         }
     }
 
-    page_size = 25
 
     def __init__(self, model, **kwargs):
         """
