@@ -36,10 +36,11 @@ class Host(db.Document):
     """
     hostname = db.StringField(required=True, unique=True)
     sync_id = db.StringField()
-    cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
-    cmdb_template = db.ReferenceField(document_type='Host', reverse_delete_rule=DENY)
     labels = db.DictField()
     inventory = db.DictField()
+
+    cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
+    cmdb_template = db.ReferenceField(document_type='Host', reverse_delete_rule=DENY)
 
     is_object = db.BooleanField(default=False)
     object_type = db.StringField(choices=object_types)
