@@ -394,4 +394,3 @@ if __name__ == '__main__':
     # Run tests when script is executed directly
     # Usage: python tests/test_plugin.py
     unittest.main(verbosity=2)
-    unittest.main(verbosity=2)
