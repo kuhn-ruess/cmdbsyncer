@@ -150,12 +150,15 @@ class Account(db.Document):
             cryptography_key = key
         else:
             cryptography_key = app.config['CRYPTOGRAPHY_KEY']
-        if not self.password_crypted:
+        if not self.password_crypted and self.password:
             uncrypted = self.password
             self.password = None
             self.set_password(uncrypted)
         f = Fernet(cryptography_key)
-        return f.decrypt(str.encode(self.password_crypted)).decode('utf-8')
+        if self.password_crypted:
+            # Prevent Crash if there is no password
+            return f.decrypt(str.encode(self.password_crypted)).decode('utf-8')
+        return ""
 
 
 
