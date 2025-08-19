@@ -29,10 +29,9 @@ import mongoengine
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-VERSION = '3.9.6'
+VERSION = '3.9.7'
 
 # create logger
-
 
 app = Flask(__name__)
 env = os.environ.get('config')
