@@ -83,7 +83,7 @@ class YMLSyncer(Plugin):
 
         response = self.inner_request(**params)
         try:
-            return self.parse_yml(yml.safe_load(response.text()))
+            return self.parse_yml(yml.safe_load(response.text))
         except YAMLError as error:
             raise ResponseDataException(f"{response.text}\n YML is no valid!") from error
 
