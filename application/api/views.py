@@ -24,23 +24,17 @@ def apply_headers(response):
         response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
 
     response.headers["Access-Control-Allow-Headers"] =\
-                        "Origin, x-login-header, x-login-account, Content-Type, Accept"
+                        "Origin, x-login-user, Content-Type, Accept"
     return response
 
 
 AUTHORIZATIONS = {
-    'x-login-header': {
+    'x-login-user': {
         'type': 'apiKey',
         'in': 'header',
-        'name': 'x-login-header',
-        'description': 'Needs to be user:password'
+        'name': 'x-login-user',
+        'description': 'Needs to be user_name:password'
     },
-    'x-login-account': {
-        'type': 'apiKey',
-        'in': 'header',
-        'name': 'x-login-account',
-        'description': 'Needs to be account_name:password'
-    }
 }
 
 PARAMS = {
@@ -50,7 +44,7 @@ SWAGGER_ENABLED = app.config.get("SWAGGER_ENABLED")
 if not SWAGGER_ENABLED:
     PARAMS['doc'] = False
 
-API = Api(API_BP, authorizations=AUTHORIZATIONS, security=['x-login-header', 'x-login-account'], **PARAMS)
+API = Api(API_BP, authorizations=AUTHORIZATIONS, security=['x-login-user'], **PARAMS)
 
 API.add_namespace(ansible, path='/ansible')
 API.add_namespace(syncer, path='/syncer')
