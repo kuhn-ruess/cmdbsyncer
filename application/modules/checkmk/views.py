@@ -822,7 +822,7 @@ class CheckmkPasswordView(DefaultModelView):
        checkmk_open,
        rules.FieldSet(
            ( 'title', 'comment', 'documentation_url', 'owner', 'password', 'shared',
-           ), "Fields for Checkmk's Passwort Store"),
+           ), "Fields for Checkmk's Password Store"),
         checkmkl_close,
     ]
 

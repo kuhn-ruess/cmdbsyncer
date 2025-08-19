@@ -4,7 +4,7 @@
 
 - hosts: all
   gather_facts: false
-  #tasks:
+  tasks:
   #  - name: Check SSH Access
   #    command: echo "Access working"
   #    become: true

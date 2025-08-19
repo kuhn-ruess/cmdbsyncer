@@ -36,7 +36,7 @@ def build_host_dict(host_obj):
     """
     host_dict = {}
     host_dict['hostname'] = host_obj.hostname
-    
+
     # Ensure all values in labels and inventory are JSON serializable
     host_dict['labels'] = serialize_for_json(host_obj.get_labels())
     host_dict['inventory'] = serialize_for_json(host_obj.get_inventory())

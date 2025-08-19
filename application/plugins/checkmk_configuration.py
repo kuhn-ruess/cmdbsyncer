@@ -183,7 +183,8 @@ def cli_inventorize_hosts(account, debug=False):
 
 @cli_cmk.command('export_bi_rules')
 @click.argument("account")
-def cli_export_bi_rules(account):
+@click.option("--debug", is_flag=True)
+def cli_export_bi_rules(account, debug=False):
     """
     Export all BI Rules to given Checkmk Installations
 
@@ -194,11 +195,12 @@ def cli_export_bi_rules(account):
     Args:
         account (string): Name Checkmk Account Config
     """
-    export_bi_rules(account)
+    export_bi_rules(account, debug)
 
 @cli_cmk.command('export_bi_aggregations')
 @click.argument("account")
-def cli_export_bi_aggregations(account):
+@click.option("--debug", is_flag=True)
+def cli_export_bi_aggregations(account, debug=False):
     """
     Export all BI Aggregations to given Checkmk Installations
 
@@ -209,7 +211,7 @@ def cli_export_bi_aggregations(account):
     Args:
         account (string): Name Checkmk Account Config
     """
-    export_bi_aggregations(account)
+    export_bi_aggregations(account, debug)
 #.
 
 @cli_cmk.command('export_users')

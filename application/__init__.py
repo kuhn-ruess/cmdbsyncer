@@ -7,10 +7,9 @@ import os
 import sys
 import logging
 from logging import config as log_config
-from datetime import datetime
+from tablib.formats import registry as tablib_registry
+import mongoengine
 from sortedcontainers import SortedDict
-from pprint import pformat
-from jinja2 import StrictUndefined
 from flask import Flask, url_for, redirect
 from flask_admin import Admin
 from flask_admin.menu import MenuLink
@@ -20,18 +19,13 @@ from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 from flask_admin.contrib.fileadmin import FileAdmin
 
-
 from application.helpers.tablib_formater import ExportObjects
-from tablib.formats import registry as tablib_registry
 
-import mongoengine
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
+VERSION = '3.10.0'
 
-VERSION = '3.9.7'
-
-# create logger
 
 app = Flask(__name__)
 env = os.environ.get('config')

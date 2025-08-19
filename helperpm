@@ -1,0 +1,48 @@
+# filepath: /Users/bkuhn/git/cmdbsyncer/helper_podman
+#!/bin/bash
+# Simple Helper for Podman
+CONTAINER=cmdb_syncer
+APPLICATION=cmdb_syncer-api-1
+
+case "$1" in
+"up")
+    podman-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER rm
+    podman-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER up --build --force-recreate
+    ;;
+"start")
+    podman-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER start
+    ;;
+"stop")
+    podman-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER stop
+    ;;
+"restart")
+    podman-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER stop
+    podman-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER start
+    ;;
+"down")
+    podman-compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER down --rmi local --remove-orphans
+    ;;
+"cmdbsyncer")
+    podman exec -it $APPLICATION ./"$@"
+    ;;
+"logs")
+    echo "Start Container Logs"
+    podman logs -f $APPLICATION
+    ;;
+"shell")
+    echo "Start Container Shell"
+    podman exec -it $APPLICATION sh
+    ;;
+"create_user")
+    echo "Create User"
+    podman exec -it $APPLICATION ./cmdbsyncer sys create_user "$2"
+    ;;
+"bve")
+    python3 -m venv ENV
+    ;;
+*)
+    echo "Simple Helper for CMDB Syncer Jobs (Podman)."
+    echo "For Podman Compose: up, down, start, stop, logs and shell are the options"
+    echo "Create a venv with bve"
+    ;;
+esac

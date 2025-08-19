@@ -4,6 +4,7 @@ API
 from functools import wraps
 from flask import abort, request
 from application.models.account import Account
+from application.models.user import User
 
 def require_token(fn): #pylint: disable=invalid-name
     """
@@ -11,16 +12,16 @@ def require_token(fn): #pylint: disable=invalid-name
     """
     @wraps(fn)
     def decorated_view(*args, **kwargs):
-        login_header = request.headers.get('x-login-header')
-        if not login_header:
-            abort(401, "Invalid Request, x-login-header missing")
-
         try:
-            login_user, login_password = login_header.split(':')
-            if Account.objects.get(username=login_user, type="restapi").get_password() != login_password:
-                raise ValueError("Invalid Login")
+            if login_user := request.headers.get('x-login-user'):
+                username, user_password = login_user.split(':', 1)
+                user_result = User.objects.get(email=username, disabled__ne=True)
+                if not user_result.check_password(user_password):
+                    raise ValueError("Invalid Login")
+            else:
+                abort(401, "Invalid Request, Loginheader missing")
         except: #pylint: disable=bare-except
-            abort(401, "Invalid login Token")
+            abort(401, "Invalid login")
 
         return fn(*args, **kwargs)
 

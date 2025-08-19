@@ -110,6 +110,8 @@ class BaseConfig():
     DEBUG = True
     ADVANCED_RULE_DEBUG = False
 
+    CMDB_MODE = False
+
     MONGODB_SETTINGS = {
         'db': 'cmdb-api',
         'host': '127.0.0.1',
@@ -117,6 +119,22 @@ class BaseConfig():
         'alias': 'default',
 
     }
+
+    CMDB_MODELS = {
+        'host': {
+            'site' : {"type": "string"},
+            'department' : {"type": "string"},
+            'type' : {"type": "string"},
+        },
+        'all': {
+            'sms_notification': {"type": "boolean"},
+            'email_notification': {"type": "boolean"},
+
+        }
+
+    }
+
+    HOST_PAGESIZE = 100
 
 
     FILEADMIN_PATH = '/var/cmdbsyncer/files'

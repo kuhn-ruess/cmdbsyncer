@@ -303,16 +303,6 @@ class RuleModelView(DefaultModelView):
             flash("Duplicate Entry Name", "error")
             return False
 
-    def create_model(self, form):
-        """ 
-        Create model
-        """
-        try:
-            return super().create_model(form)
-        except NotUniqueError:
-            flash("Duplicate Entry Name", "error")
-            return False
-
     def on_model_change(self, form, model, is_created):
         """
         Overwrite Actions on Model Change

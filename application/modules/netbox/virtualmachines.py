@@ -117,7 +117,7 @@ class SyncVirtualMachines(SyncNetbox):
                     query = {
                         'name': object_name,
                     }
-                    logger.debug(f"Object Filter Query: {query}")
+                    logger.debug("Object Filter Query: %r", query)
                     found_hosts.append(hostname)
                     if current_obj := current_nb_objects.get(**query):
                         if payload := self.get_update_keys(current_obj, cfg,
@@ -131,7 +131,7 @@ class SyncVirtualMachines(SyncNetbox):
                         self.console(f"* Create Object {object_name}")
                         payload = self.get_update_keys(False, cfg)
                         payload['name'] = object_name
-                        logger.debug(f"Create Payload: {payload}")
+                        logger.debug("Create Payload: %r", payload)
                         current_obj = self.nb.virtualization.virtual_machines.create(payload)
                 except Exception as error:
                     if self.debug:
@@ -158,6 +158,7 @@ class SyncVirtualMachines(SyncNetbox):
         Import VMS out of Netbox
         """
         vm_filter = {}
+        import_id = self.get_unique_id()
         if import_filter := self.config.get('import_filter'):
             vm_filter  = dict([x.strip().split(':') for x in import_filter.split(',') if x])
         for vm in self.nb.virtualization.virtual_machines.filter(**vm_filter):
@@ -178,10 +179,12 @@ class SyncVirtualMachines(SyncNetbox):
                 print(f"\n{cc.HEADER}Process VM: {hostname}{cc.ENDC}")
                 result = self.handle_nb_attributes(labels)
                 host_obj.update_host(result)
-                do_save = host_obj.set_account(account_dict=self.config)
+                do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
                 if do_save:
                     host_obj.save()
             except Exception as error:
                 if self.debug:
                     raise
                 self.log_details.append((f'import_error {hostname}', str(error)))
+        if extra_filter := self.config.get('delete_host_if_not_found_on_import'):
+            Host.delete_host_not_found_on_import(self.config['name'], import_id, extra_filter)

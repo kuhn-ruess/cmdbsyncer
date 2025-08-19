@@ -5,10 +5,12 @@ Host Model
 # pylint: disable=logging-fstring-interpolation
 import re
 import datetime
+from mongoengine import Q, DENY
 from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
+from application.models.account import object_types
 
 class HostError(Exception):
     """
@@ -20,13 +22,13 @@ class DeprecatedError(Exception):
     Raise for Deprecated functions
     """
 
-class Target(db.EmbeddedDocument):
+class CmdbField(db.EmbeddedDocument):
     """
-    Target Stats
+    Field used in CMDB Mode 
     """
-    target_account_id = db.StringField()
-    target_account_name = db.StringField()
-    last_update = db.DateTimeField()
+    field_name = db.StringField(max_length=255)
+    field_value = db.StringField(max_length=255)
+
 
 class Host(db.Document):
     """
@@ -37,10 +39,11 @@ class Host(db.Document):
     labels = db.DictField()
     inventory = db.DictField()
 
-    is_object = db.BooleanField(default=False)
-    object_type = db.StringField()
+    cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
+    cmdb_template = db.ReferenceField(document_type='Host', reverse_delete_rule=DENY)
 
-    force_update = db.BooleanField(default=False)
+    is_object = db.BooleanField(default=False)
+    object_type = db.StringField(choices=object_types)
 
     source_account_id = db.StringField()
     source_account_name = db.StringField()
@@ -50,13 +53,15 @@ class Host(db.Document):
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
 
+    # If you assign a ID to you import,
+    # that can later be used to simply cleanup
+    # hosts with diffrent ids
+    last_import_id = db.StringField()
+
 
     raw = db.StringField()
 
-
-    folder = db.StringField()
-
-    export_problem = False
+    folder = db.StringField() # Is just Checkmk related, better solution needed
 
     log = db.ListField(field=db.StringField())
 
@@ -79,6 +84,35 @@ class Host(db.Document):
                 re.compile(r'^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$')
 
         return bool(hostname_regex.fullmatch(self.hostname))
+
+    def __str__(self):
+        return f"{self.object_type}: {self.hostname} ({self.source_account_name})"
+
+
+
+    @staticmethod
+    def delete_host_not_found_on_import(account, import_id, raw_filter=None):
+        """
+        Delete all hosts which are not available
+        and match the given pattern
+        """
+
+        db_filter = Q(source_account_name=account) & Q(last_import_id__ne=import_id)
+        user_filters = raw_filter.split('||')
+        extra_filter = False
+        for user_filter in user_filters:
+            user_filter = user_filter.split(':', 1)
+            if len(user_filter) == 2:
+                field, field_value = map(str.strip, user_filter)
+                if not extra_filter:
+                    extra_filter = Q(**{field: field_value})
+                else:
+                    extra_filter &= Q(**{field: field_value})
+        if extra_filter:
+            full_filter = db_filter & (extra_filter)
+        else:
+            full_filter = db_filter
+        Host.objects(full_filter).delete()
 
 
     @staticmethod
@@ -339,7 +373,28 @@ class Host(db.Document):
         date = datetime.datetime.now().strftime(app.config['TIME_STAMP_FORMAT'])
         self.log = [f"{date} {entry}"] + entries
 
-    def set_account(self, account_id=False, account_name=False, account_dict=False):
+    def set_inventory_attributes(self, account_name):
+        """
+        Sets inventory-related attributes for the host.
+
+        This method updates the `inventory` dictionary with the provided account name and
+        the host's last seen and last sync timestamps.
+
+        Args:
+            account_name (str): The name of the account to associate with the inventory.
+
+        Side Effects:
+            Modifies the `inventory` attribute of the host instance by setting the following keys:
+                - 'syncer_account': The provided account name.
+                - 'syncer_last_seen': The value of `self.last_import_seen`.
+                - 'syncer_last_sync': The value of `self.last_import_sync`.
+        """
+        self.inventory['syncer_account'] = account_name
+        self.inventory['syncer_last_seen'] = self.last_import_seen
+        self.inventory['syncer_last_sync'] = self.last_import_sync
+
+    def set_account(self, account_id=False, account_name=False,
+                    account_dict=False, import_id="N/A"):
         """
         Mark Host with Account he was fetched with.
         Prevent Overwrites if Host is importet from multiple sources.
@@ -353,6 +408,9 @@ class Host(db.Document):
             status (bool): Should Object be saved or not
 
         """
+        if self.source_account_name == 'cmdb':
+            print("Host is locked since in CMDB Mode")
+            return False
         if not account_id and not account_dict:
             raise ValueError("Either Set account_id or pass account_dict")
 
@@ -375,10 +433,11 @@ class Host(db.Document):
 
 
         self.is_object = is_object
+        self.last_import_id = import_id
 
-        self.inventory['syncer_account'] = account_name
-        self.inventory['syncer_last_seen'] = self.last_import_seen
-        self.inventory['syncer_last_sync'] = self.last_import_sync
+
+        self.set_inventory_attributes(account_name)
+
 
         # Everthing Match already, make it short
         if self.source_account_id and self.source_account_id == account_id \
@@ -405,7 +464,6 @@ class Host(db.Document):
         """
         Mark that a sync for this host was needed to import
         """
-        self.available = True
         self.last_import_sync = datetime.datetime.now()
         # Delete Cache if new Data is imported
         self.cache = {}
@@ -416,29 +474,3 @@ class Host(db.Document):
         """
         self.available = True
         self.last_import_seen = datetime.datetime.now()
-
-
-    def set_source_not_found(self):
-        """
-        Mark when host was not found anymore.
-        Exports will then ignore this system
-        """
-        self.available = False
-        self.add_log("Not found on Source anymore")
-
-    def need_import_sync(self, hours=24):
-        """
-        Check when the last sync on import happend,
-        and if a new sync is needed
-
-        Args:
-            hours (int): Time in which no update is needed
-        """
-        if not self.available:
-            return True
-
-        last_sync = self.last_import_sync
-        timediff = datetime.datetime.now() - last_sync
-        if divmod(timediff.total_seconds(), 3600)[0] > hours:
-            return True
-        return False

@@ -223,7 +223,6 @@ class CiscoDNA():
                 inventory[attribute] = device[attribute]
             db_host.update_inventory('cisco_dna_', inventory)
             db_host.sync_id = device['id']
-            db_host.set_import_seen()
             do_save = db_host.set_account(account_dict=self.account_dict)
             if do_save:
                 db_host.save()

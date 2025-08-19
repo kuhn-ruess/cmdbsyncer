@@ -43,6 +43,7 @@ def maintenance(account):
 
     account_filter = False
     account_filter_name = False
+    dont_delete_if_more = False
 
     # Hack: You could call the inital command without account,
     # so whe assume if we just get a Integer, this is the legacy mode,
@@ -53,6 +54,7 @@ def maintenance(account):
         account = get_account_by_name(account)
         days = int(account['delete_hosts_after_days'])
         account_filter_name = account.get('account_filter')
+        dont_delete_if_more = account.get('dont_delete_hosts_if_more_then')
         if account_filter_name:
             account_filter = get_account_by_name(account_filter_name)
 
@@ -71,6 +73,18 @@ def maintenance(account):
                                source_account_id=str(account_filter['id']))
     else:
         objects = Host.objects(last_import_seen__lte=timedelta)
+
+    if dont_delete_if_more:
+        if int(dont_delete_if_more) >= len(objects):
+            details.append(
+                (
+                    'error',
+                    "Hosts were not deleted because their number "
+                    "exceeds the configured threshold."
+                )
+            )
+            objects = []
+
     deleted_hosts = 0
     for host in objects:
         print(f"{CC.WARNING}  ** {CC.ENDC}Deleted host {host.hostname}")
@@ -154,7 +168,9 @@ def delete_all_hosts(account):
         db_filter = {
         }
         if account:
-            db_filter['inventory__syncer_account'] = account
+            db_filter['source_account_name'] = account
+        else:
+            db_filter['source_account_name__ne'] = 'cmdb'
         print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
         Host.objects(**db_filter).delete()
     else:
@@ -190,7 +206,8 @@ def show_accounts():
     """Print list of all active accounts"""
 
     for account in Account.objects(enabled=True):
-        print(f"- Name: {account.name}, Type: {account.typ}, Address: {account.address}")
+        print(f"- Name: {account.name}, Type: {account.type}, Address: {account.address}")
+
 
 #.
 #   .-- Command: Create User
@@ -222,7 +239,7 @@ def seed_user(email):
     except ValidationError:
         print(f"Invalid E-Mail: {email}")
         return 1
-    print(f"User passwort set to: {passwd}")
+    print(f"User password set to: {passwd}")
     return 0
 #.
 #   .-- Command: Export Rules
