@@ -46,6 +46,7 @@ if not SWAGGER_ENABLED:
 
 API = Api(API_BP, authorizations=AUTHORIZATIONS, security=['x-login-user'], **PARAMS)
 
+
 API.add_namespace(ansible, path='/ansible')
 API.add_namespace(syncer, path='/syncer')
 API.add_namespace(objects, path='/objects')
