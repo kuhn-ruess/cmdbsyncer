@@ -4,6 +4,7 @@ Checkmk BI Rules
 #pylint: disable=import-error, too-many-locals, no-member
 #pylint: disable=logging-fstring-interpolation
 import ast
+from application import logger
 from application.modules.checkmk.cmk2 import CMK2
 from application.modules.rule.rule import Rule
 
@@ -30,10 +31,13 @@ class BI(CMK2):
         unique_rules = {}
         related_packs = []
         for db_host in Host.objects():
+            logger.debug(f"Working on {db_host.hostname}")
             attributes = self.get_attributes(db_host, 'checkmk')
+            logger.debug(f"His Attributes {attributes}")
             if not attributes:
                 continue
             host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+            logger.debug(f"His Actions {host_actions}")
             if host_actions:
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
@@ -45,6 +49,7 @@ class BI(CMK2):
                         pack_id = rule_dict['pack_id']
                         if pack_id not in related_packs:
                             related_packs.append(rule_dict['pack_id'])
+                            logger.debug(f"Rule for Checkmk {rule_dict}")
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Load Rule Packs from Checkmk")
@@ -100,10 +105,13 @@ class BI(CMK2):
         unique_aggregations = {}
         related_packs = []
         for db_host in Host.objects():
+            logger.debug(f"Working on {db_host.hostname}")
             attributes = self.get_attributes(db_host, 'checkmk')
+            logger.debug(f"His Attributes {attributes}")
             if not attributes:
                 continue
             host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+            logger.debug(f"His Actions {host_actions}")
             if host_actions:
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
@@ -115,6 +123,7 @@ class BI(CMK2):
                         pack_id = aggregation_dict['pack_id']
                         if pack_id not in related_packs:
                             related_packs.append(pack_id)
+                            logger.debug(f"Aggregation for Checkmk {aggregation_dict}")
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Load Rule Packs from Checkmk")

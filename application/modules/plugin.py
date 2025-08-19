@@ -7,6 +7,7 @@ from datetime import datetime
 import time
 import json as mod_json
 import atexit
+import uuid
 
 from pprint import pformat
 from collections import namedtuple
@@ -34,7 +35,26 @@ class ResponseDataException(Exception):
 
 class Plugin():
     """
-    Base Class for all Plugins
+    Base class for all synchronization plugins.
+    
+    This class provides the foundation for all plugins that synchronize data between
+    different systems. It handles common functionality like HTTP requests, caching,
+    attribute processing, custom attributes, and logging.
+    
+    Attributes:
+        rewrite (bool): Whether to enable attribute rewriting rules
+        filter (bool): Whether to enable attribute filtering rules
+        custom_attributes (bool): Whether to process custom attributes
+        debug (bool): Whether to enable debug mode
+        account (bool): Whether an account is associated with this plugin
+        verify (bool): Whether to verify SSL certificates for HTTP requests
+        dry_run (bool): Whether to run in dry-run mode (no actual changes)
+        save_requests (bool): Whether to save HTTP requests to file
+        config (dict): Plugin configuration dictionary
+        log_details (list): List of log details for this plugin run
+        debug_lines (list): Debug lines for GUI debugging
+        name (str): Human-readable name of the plugin
+        source (str): Source identifier for logging purposes
     """
     rewrite = False
     filter = False
@@ -58,7 +78,14 @@ class Plugin():
 
     def __init__(self, account=False):
         """
-        Intit
+        Initialize the plugin instance.
+        
+        Args:
+            account (str|bool, optional): Account identifier to load configuration.
+                                        If False, no account is loaded. Defaults to False.
+                                        
+        Raises:
+            ValueError: If the specified account is invalid or not found.
         """
         self.start_time = time.time()
         self.log_details = []
@@ -72,7 +99,7 @@ class Plugin():
             self.log_details.append(('Account', self.config['name']))
             self.verify = self.config.get('verify_cert')
 
-        if verify := app.config.get('DISABLE_SSL_ERRORS'):
+        if app.config.get('DISABLE_SSL_ERRORS'):
             # Legacy Behavior -> Global Setting Overwrite. Deprecated start v3.8.2
             self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 
@@ -85,7 +112,11 @@ class Plugin():
 
     def save_log(self):
         """
-        Save Details to log
+        Save plugin execution details to the log system.
+        
+        This method is automatically called at exit via atexit.register().
+        It calculates the total execution duration and saves all collected
+        log details including start time, end time, and duration.
         """
         duration = time.time() - self.start_time
         self.log_details.append(('duration', duration))
@@ -96,10 +127,32 @@ class Plugin():
 
 
 
-    def inner_request(self, method, url, data=None, json=None, headers=None, auth=None, params=None, cert=None):
+    def inner_request(self, method, url, data=None, json=None,
+                      headers=None, auth=None, params=None, cert=None):
         """
-        Requst Module for all HTTP Requests
-        by Plugin
+        Execute HTTP requests with built-in retry logic and logging.
+        
+        This method handles all HTTP requests for plugins, providing automatic
+        retries, SSL verification handling, timeout management, and comprehensive
+        debug logging.
+        
+        Args:
+            method (str): HTTP method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS)
+            url (str): Target URL for the request
+            data (dict, optional): Form data to send in request body
+            json (dict, optional): JSON data to send in request body
+            headers (dict, optional): HTTP headers to include
+            auth (tuple, optional): Authentication tuple (username, password)
+            params (dict, optional): URL parameters
+            cert (str|tuple, optional): SSL client certificate
+            
+        Returns:
+            requests.Response: Response object from the HTTP request
+            namedtuple: Mock response object if in dry_run mode
+            
+        Raises:
+            requests.exceptions.Timeout: If request times out after all retries
+            requests.exceptions.ConnectionError: If connection fails after all retries
         """
         logger.debug('\n************ HTTP DEBUG ************')
         logger.debug(f"Request ({method.upper()}) to {url}")
@@ -196,7 +249,11 @@ class Plugin():
 
     def init_custom_attributes(self):
         """
-        Load Rules for custom Attributes
+        Initialize custom attribute processing rules.
+        
+        Loads all enabled custom attribute rules from the database and
+        prepares the CustomAttributeRule processor with debug settings.
+        Sets up the custom_attributes instance variable with sorted rules.
         """
         self.custom_attributes = CustomAttributeRule()
         self.custom_attributes.debug = self.debug
@@ -206,7 +263,22 @@ class Plugin():
 
     def get_attributes(self, db_host, cache):
         """
-        Return Host Attributes or False if Host should be ignored
+        Retrieve and process host attributes with caching support.
+        
+        This method combines host labels, inventory data, custom attributes,
+        and applies rewrite/filter rules to generate the final attribute set.
+        Supports caching to improve performance on subsequent calls.
+        
+        Args:
+            db_host (Host): Database host object containing host information
+            cache (str|bool): Cache key prefix for attribute caching.
+                            If False, caching is disabled.
+                            
+        Returns:
+            dict: Dictionary containing 'all' and 'filtered' attribute sets:
+                - 'all': Complete set of processed attributes
+                - 'filtered': Attributes after applying filter rules
+            bool: False if host should be ignored based on filter rules
         """
         # Get Attributes
         if cache:
@@ -220,6 +292,8 @@ class Plugin():
         attributes = {}
         attributes.update(db_host.labels.items())
         attributes.update(db_host.inventory.items())
+        if db_host.cmdb_template:
+            attributes.update(db_host.cmdb_template.labels.items())
 
         self.init_custom_attributes()
         attributes.update(self.custom_attributes.get_outcomes(db_host, attributes))
@@ -265,8 +339,22 @@ class Plugin():
 
     def debug_rules(self, hostname, model):
         """
-        Debug Mode to see Rule outcomes.
-        Used with --debug-rules switch
+        Debug mode for inspecting rule outcomes on a specific host.
+        
+        This method is used with the --debug-rules command line switch to
+        analyze how rules are applied to a specific host. It clears relevant
+        caches and shows detailed rule processing information.
+        
+        Args:
+            hostname (str): Hostname to debug
+            model (str): Model/plugin type for cache key filtering
+            
+        Returns:
+            None: Prints debug information to console
+            
+        Note:
+            This method prints directly to console and is intended for
+            interactive debugging sessions.
         """
         if self.rewrite:
             self.rewrite.debug = True
@@ -294,3 +382,16 @@ class Plugin():
 
         extra_attributes = self.get_host_data(db_host, attributes['all'])
         attribute_table("Attributes by Rule ", extra_attributes)
+
+    @staticmethod
+    def get_unique_id():
+        """
+        Generate a unique identifier string.
+        
+        Creates a UUID1-based unique identifier that can be used as an
+        import ID or for other purposes requiring unique identification.
+        
+        Returns:
+            str: Unique identifier string based on UUID1
+        """
+        return str(uuid.uuid1())

@@ -305,7 +305,7 @@ class CheckmkUserMngmt(db.Document):
 
     password = db.StringField()
     overwrite_password = db.BooleanField()
-    force_passwort_change = db.BooleanField()
+    force_password_change = db.BooleanField()
     disable_login = db.BooleanField()
     remove_if_found = db.BooleanField()
 
