@@ -311,6 +311,10 @@ class CheckmkUserMngmt(db.Document):
 
     disabled = db.BooleanField(default=False)
 
+    meta = {
+        'strict': False
+    }
+
 #.
 #   .-- Folder Pools
 class CheckmkFolderPool(db.Document):
