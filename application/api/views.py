@@ -24,7 +24,7 @@ def apply_headers(response):
         response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
 
     response.headers["Access-Control-Allow-Headers"] =\
-                        "Origin, x-login-user, Content-Type, Accept"
+                        "Origin, x-login-user, x-login-token, Content-Type, Accept"
     return response
 
 
@@ -35,6 +35,12 @@ AUTHORIZATIONS = {
         'name': 'x-login-user',
         'description': 'Needs to be user_name:password'
     },
+    'x-login-token': {
+        'type': 'apiKey',
+        'in': 'header',
+        'name': 'x-login-token',
+        'description': 'Deprecated, please change to x-login-user'
+    },
 }
 
 PARAMS = {
@@ -44,7 +50,7 @@ SWAGGER_ENABLED = app.config.get("SWAGGER_ENABLED")
 if not SWAGGER_ENABLED:
     PARAMS['doc'] = False
 
-API = Api(API_BP, authorizations=AUTHORIZATIONS, security=['x-login-user'], **PARAMS)
+API = Api(API_BP, authorizations=AUTHORIZATIONS, security=['x-login-user', 'x-login-token'], **PARAMS)
 
 
 API.add_namespace(ansible, path='/ansible')

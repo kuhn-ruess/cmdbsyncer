@@ -129,7 +129,6 @@ class Account(db.Document):
     custom_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CustomEntry"))
     plugin_settings = db.ListField(field=db.EmbeddedDocumentField(document_type="PluginSettings"))
 
-
     def set_password(self, password, key=False):
         """
         Encrypt Password in Store

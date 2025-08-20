@@ -12,16 +12,19 @@ def require_token(fn): #pylint: disable=invalid-name
     """
     @wraps(fn)
     def decorated_view(*args, **kwargs):
-        try:
-            if login_user := request.headers.get('x-login-user'):
-                username, user_password = login_user.split(':', 1)
-                user_result = User.objects.get(email=username, disabled__ne=True)
-                if not user_result.check_password(user_password):
-                    raise ValueError("Invalid Login")
-            else:
-                abort(401, "Invalid Request, Loginheader missing")
-        except: #pylint: disable=bare-except
-            abort(401, "Invalid login")
+        if login_user := request.headers.get('x-login-user'):
+            username, user_password = login_user.split(':', 1)
+            user_result = User.objects.get(email=username, disabled__ne=True)
+            if not user_result.check_password(user_password):
+                abort(401, "Invalid login")
+        elif request.headers.get('x-login-token'):
+            abort(
+                401,
+                "Please Migrate to x-login-user authentication. "
+                "Due to security reasons, this login is no longer possible"
+            )
+        else:
+            abort(401, "Invalid Request, Loginheader missing")
 
         return fn(*args, **kwargs)
 
