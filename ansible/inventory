@@ -1,1 +1,2 @@
-Even in a native (built-in or custom) inventory plugin/module, Ansible does not provide the --limit argument or its value to the inventory plugin. The inventory is always loaded in full first, and then --limit is applied by Ansible core to filter hosts/groups for the playbook run. Inventory plugins cannot access or react to --limit during inventory loading.
+#!/bin/sh
+./cmdbsyncer ansible source $1 $2 2>/dev/null
