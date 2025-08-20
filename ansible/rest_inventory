@@ -7,13 +7,13 @@ case "$1" in
 "--list")
     curl -X 'GET' $API/ \
          -H 'accept: application/json' \
-         -H "x-login-header: $SECRET" \
+         -H "x-login-user: $SECRET" \
          2> /dev/null
     ;;
 "--host")
     curl -X 'GET' ${API}/{$2} \
          -H 'accept: application/json' \
-         -H "x-login-header: $SECRET" \
+         -H "x-login-user: $SECRET" \
          2> /dev/null
     ;;
 *)
