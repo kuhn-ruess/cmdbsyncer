@@ -107,8 +107,15 @@ class User(db.Document, UserMixin):
         Call this once after deployment.
         """
         # Set missing names
-        users = User.objects(name__in=[None, ""])
-        for user in users:
+        users = User.objects()
+        found_names = []
+        for idx, user in enumerate(users):
             if not user.name:
                 user.name = user.email
                 user.save()
+            else:
+                if user.name in found_names:
+                    user.name += f"-{idx}"
+                    user.save()
+                    continue
+            found_names.append(user.name)
