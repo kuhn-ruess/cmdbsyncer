@@ -6,12 +6,12 @@ Ansible Api
 from datetime import datetime
 from mongoengine.errors import DoesNotExist
 
-from flask import request
+from flask import request, abort
 from flask_restx import Namespace, Resource, reqparse, fields
 from application.api import require_token
 from application.models.host import Host
 
-from application.helpers.get_account import get_account_by_name
+from application.helpers.get_account import get_account_by_name, AccountNotFoundError
 
 API = Namespace('objects')
 
@@ -92,7 +92,10 @@ class HostDetailApi(Resource):
         """ Create/ Update a Host Object"""
         req_json = request.json
         account = req_json['account']
-        account_dict = get_account_by_name(account)
+        try:
+            account_dict = get_account_by_name(account)
+        except AccountNotFoundError:
+            abort(400, "Account not found")
         labels = req_json['labels']
         host_obj = Host.get_host(hostname)
         host_obj.update_host(labels)
