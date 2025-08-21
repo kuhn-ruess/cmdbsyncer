@@ -27,6 +27,7 @@ account_types = [
     ('mysql', "Mysql Table"),
     ('netbox', "Netbox Account"),
     ('odbc', "ODBC Conenctions like FreeTDS"),
+    ('from_api', "Object Send from API"),
     ('prtg', "PRTG Monitoring"),
     ('restapi', "Internal Rest API Credentials"),
     ('vmware_vcenter', "Vmware vCenter"),
