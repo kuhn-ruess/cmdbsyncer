@@ -318,5 +318,9 @@ def self_configure():
         lf.write("# Only Update from here inside the config = {} object\n")
         lf.write(f"config = {pformat(config)}\n")
 
+    # Migrate Users
+    print("Migrate users")
+    User.migrate_missing_names()
+
 #.
 register_cronjob("Syncer: Maintenence", maintenance)
