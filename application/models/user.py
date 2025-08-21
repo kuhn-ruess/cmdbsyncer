@@ -22,7 +22,7 @@ class User(db.Document, UserMixin):
 
     email = db.EmailField(unique=True, required=True)
     pwdhash = db.StringField()
-    name = db.StringField()
+    name = db.StringField(unique=True, required=True)
     global_admin = db.BooleanField(default=False)
     roles = db.ListField(field=db.StringField(choices=roles))
 
@@ -99,3 +99,16 @@ class User(db.Document, UserMixin):
         Model representation
         """
         return "User "+ self.email
+
+    @staticmethod
+    def migrate_missing_names():
+        """
+        Migration helper to set a default name for users missing it or with duplicate names.
+        Call this once after deployment.
+        """
+        # Set missing names
+        users = User.objects(name__in=[None, ""])
+        for user in users:
+            if not user.name:
+                user.name = user.email
+                user.save()
