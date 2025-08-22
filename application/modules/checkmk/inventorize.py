@@ -83,6 +83,9 @@ class InventorizeHosts(CMK2):
                 inv_raw = ast.literal_eval(raw_decoded_inventory)
                 inv_parsed = {}
                 # Parsing 3 Levels of HW/SW Inventory
+                if 'Nodes' not in inv_raw:
+                    # Skip Hosts without Inventory Data
+                    continue
                 for node_name, node_content in inv_raw['Nodes'].items():
                     inv_parsed[node_name] = {}
                     if node_content['Attributes']:
