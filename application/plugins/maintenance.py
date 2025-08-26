@@ -70,9 +70,9 @@ def maintenance(account):
     timedelta = now - delta
     if account_filter:
         objects = Host.objects(last_import_seen__lte=timedelta,
-                               source_account_id=str(account_filter['id']))
+                               source_account_id=str(account_filter['id']), no_autodelete__ne=True, object_type__ne = 'template')
     else:
-        objects = Host.objects(last_import_seen__lte=timedelta)
+        objects = Host.objects(last_import_seen__lte=timedelta, no_autodelete__ne=True, object_type__ne = 'template')
 
     if dont_delete_if_more:
         if int(dont_delete_if_more) >= len(objects):
@@ -165,12 +165,9 @@ def delete_all_hosts(account):
     print(f"{CC.HEADER} ***** Delete Hosts ***** {CC.ENDC}")
     answer = input(f" - Enter 'y' and hit enter to procceed (Account Filter: {account}): ")
     if answer.lower() in ['y', 'z']:
-        db_filter = {
-        }
+        db_filter = {'no_autodelete__ne': True, 'object_type__ne': "template"}
         if account:
             db_filter['source_account_name'] = account
-        else:
-            db_filter['source_account_name__ne'] = 'cmdb'
         print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
         Host.objects(**db_filter).delete()
     else:

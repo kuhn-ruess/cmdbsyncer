@@ -746,6 +746,7 @@ class HostModelView(DefaultModelView):
         model.cache = {}
         model.source_account_id = ""
         model.source_account_name = "cmdb"
+        model.no_autodelete = True
         # Set Extra Fields
         cmdb_fields = app.config['CMDB_MODELS'].get(form.object_type.data, {})
         cmdb_fields.update(app.config['CMDB_MODELS']['all'])

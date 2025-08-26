@@ -42,6 +42,9 @@ class Host(db.Document):
     cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
     cmdb_template = db.ReferenceField(document_type='Host', reverse_delete_rule=DENY)
 
+
+    no_autodelete = db.BooleanField(default=False)
+
     is_object = db.BooleanField(default=False)
     object_type = db.StringField(choices=object_types)
 
