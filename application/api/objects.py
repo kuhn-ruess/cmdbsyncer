@@ -53,20 +53,39 @@ def build_host_dict(host_obj):
 
     return host_dict
 
-LABEL = API.model(
-    'label',
-    {
-        'key': fields.String(required=True),
-        'value': fields.String(required=True),
-    },
-)
-
 
 HOST = API.model(
     'host_object',
     {
         'account': fields.String(required=True),
         'labels': fields.Raw({}, required=True),
+    },
+)
+
+HOST_INVENTORY = API.model(
+    'inventory_object',
+    {
+        'key': fields.String(required=True),
+        'inventory': fields.Raw({}, required=True),
+    },
+)
+
+HOST_INVENTORY_BULK = API.model(
+    'inventory_bulk',
+    {
+        'inventories': fields.List(
+            fields.Nested(
+                API.model(
+                    'inventory_bulk_item',
+                    {
+                        'hostname': fields.String(required=True),
+                        'key': fields.String(required=True),
+                        'inventory': fields.Raw({}, required=True),
+                    }
+                )
+            ),
+            required=True
+        ),
     },
 )
 
@@ -120,6 +139,48 @@ class HostDetailApi(Resource):
             status = "deleted"
             status_code = 200
             host_obj.delete()
+
+        return {'status': status}, status_code
+
+@API.route('/inventory/<hostname>')
+class HostDetailInventoryApi(Resource):
+    """Host Attributes """
+
+    @require_token
+    @API.expect(HOST_INVENTORY, validate=True)
+    def post(self, hostname):
+        """ Update Inventory of Host Object """
+        req_json = request.json
+        key = req_json['key']
+        inventory = req_json['inventory']
+        host_obj = Host.get_host(hostname)
+        host_obj.update_inventory(key, inventory)
+        host_obj.save()
+        status = 'saved'
+        status_code = 200
+
+        return {'status': status}, status_code
+
+@API.route('/inventory/bulk')
+class HostDetailInventoryBulkApi(Resource):
+    """Host Attributes """
+
+    @require_token
+    @API.expect(HOST_INVENTORY_BULK, validate=True)
+    def post(self):
+        """ Update Inventories of Hosts in BULK """
+        req_json = request.json
+        count = 0
+        for inv in req_json['inventories']:
+            hostname = inv['hostname']
+            key = inv['key']
+            inventory = inv['inventory']
+            host_obj = Host.get_host(hostname)
+            host_obj.update_inventory(key, inventory)
+            host_obj.save()
+            count += 1
+        status = f'saved {count}'
+        status_code = 200
 
         return {'status': status}, status_code
 
