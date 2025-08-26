@@ -5,12 +5,13 @@ Ansible Api
 # pylint: disable=no-member
 from datetime import datetime, timedelta
 from mongoengine.errors import DoesNotExist
-from flask_restx import Namespace, Resource
+from flask import request
+from flask_restx import Namespace, Resource, fields
 
 from application.api import require_token
 from application.modules.log.models import LogEntry
 from application.models.host import Host
-from application.models.cron import CronStats
+from application.models.cron import CronStats, CronGroup
 
 API = Namespace('syncer')
 
@@ -66,6 +67,13 @@ class SyncerServiceApi(Resource):
                 'error': "No Entry for Service Found",
             }, 404
 
+CRON_MODEL = API.model(
+    'cron_update',
+    {
+        'job_name': fields.String(required=True),
+        'run_once_next': fields.Boolean(required=True),
+    },
+)
 
 @API.route('/cron/')
 class SyncerCronApi(Resource):
@@ -98,6 +106,27 @@ class SyncerCronApi(Resource):
             return {
                 'error': "No Status for CronGroup Found",
             }, 404
+
+    @require_token
+    @API.expect(CRON_MODEL, validate=True)
+    def post(self):
+        """ Update Cronjob """
+        try:
+            req_json = request.json
+            job_name = req_json['job_name']
+            run_once_next = req_json['run_once_next']
+            job = CronGroup.objects.get(name=job_name)
+            job.run_once_next = run_once_next
+            job.save()
+            status = 'saved'
+            status_code = 200
+
+            return {'status': status}, status_code
+        except DoesNotExist:
+            return {
+                'error': "Cron not Found",
+            }, 404
+
 
 
 
