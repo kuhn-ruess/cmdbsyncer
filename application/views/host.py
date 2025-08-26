@@ -241,6 +241,16 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
     def apply(self, query, value):
         key, value = value.split(':', 1)
 
+        # Filter for None values, but only if key exists
+        if value.strip().lower() == 'none':
+            pipeline = {
+                "$and": [
+                    {f"labels.{key}": None},
+                    {f"labels.{key}": {"$exists": True}}
+                ]
+            }
+            return query.filter(__raw__=pipeline)
+
         org_value = False
 
         try:
@@ -279,6 +289,17 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
 
     def apply(self, query, value):
         key, value = value.split(':', 1)
+
+        # Filter for None values, but only if key exists
+        if value.strip().lower() == 'none':
+            pipeline = {
+                "$and": [
+                    {f"inventory.{key}": None},
+                    {f"inventory.{key}": {"$exists": True}}
+                ]
+            }
+            return query.filter(__raw__=pipeline)
+
         org_value = False
 
         try:
