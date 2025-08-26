@@ -224,6 +224,7 @@ def seed_user(email):
     except DoesNotExist:
         user = User()
         user.email = email
+        user.name = email.split('@')[0]
 
     alphabet = string.ascii_letters + string.digits
     passwd = ''.join(secrets.choice(alphabet) for i in range(20))
