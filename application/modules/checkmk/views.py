@@ -265,6 +265,11 @@ class CheckmkRuleView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+
 def _render_rule_mngmt_outcome(_view, _context, model, _name):
     """
     Render Group Outcome
@@ -338,6 +343,11 @@ class CheckmkGroupRuleView(RuleModelView):
         })
 
         super().__init__(model, **kwargs)
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
 
 
 bi_rule_template = form_subdocuments_template.copy()
@@ -430,6 +440,11 @@ class CheckmkBiRuleView(DefaultModelView):
         #self.form_subdocuments = bi_rule_template
         super().__init__(model, **kwargs)
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+
 
 class CheckmkMngmtRuleView(RuleModelView):
     """
@@ -505,6 +520,11 @@ class CheckmkMngmtRuleView(RuleModelView):
 
         return super().on_model_change(form, model, is_created)
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+
 class CheckmkSiteView(DefaultModelView):
     """
     Checkmk Site Management Config
@@ -525,6 +545,11 @@ class CheckmkSiteView(DefaultModelView):
     column_editable_list = [
         'enabled',
     ]
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
 
 class CheckmkTagMngmtView(DefaultModelView):
     """
@@ -590,6 +615,11 @@ class CheckmkTagMngmtView(DefaultModelView):
             'rewrite_title': _render_jinja,
     }
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+
 
 class CheckmkUserMngmtView(DefaultModelView):
     """
@@ -616,6 +646,11 @@ class CheckmkUserMngmtView(DefaultModelView):
         'remove_if_found',
         'disable_login'
     ]
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
 
 
 class CheckmkSettingsView(DefaultModelView):
@@ -651,6 +686,11 @@ class CheckmkSettingsView(DefaultModelView):
             if site.settings_master == model:
                 raise ValidationError(f"Can't delete: Still used by a Siteconfig {site.name}")
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+
 class CheckmkFolderPoolView(DefaultModelView):
     """
     Folder Pool Model
@@ -683,7 +723,7 @@ class CheckmkFolderPoolView(DefaultModelView):
 
     def is_accessible(self):
         """ Overwrite """
-        return current_user.is_authenticated
+        return current_user.is_authenticated and current_user.has_right('checkmk')
 
     def on_model_change(self, form, model, is_created):
         """
@@ -740,7 +780,7 @@ class CheckmkDowntimeView(RuleModelView):
 
     def is_accessible(self):
         """ Overwrite """
-        return current_user.is_authenticated
+        return current_user.is_authenticated and current_user.has_right('checkmk')
 
 class CheckmkCacheView(DefaultModelView):
     """
@@ -752,7 +792,7 @@ class CheckmkCacheView(DefaultModelView):
 
     def is_accessible(self):
         """ Overwrite """
-        return current_user.is_authenticated
+        return current_user.is_authenticated and current_user.has_right('checkmk')
 
 class CheckmkDCDView(RuleModelView):
     """
@@ -785,6 +825,10 @@ class CheckmkDCDView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
 class CheckmkInventorizeAttributesView(DefaultModelView):
     """
     Form rules for Inventorize Attributes
@@ -805,6 +849,10 @@ class CheckmkInventorizeAttributesView(DefaultModelView):
         rules.Field('attribute_names'),
         rules.Field('attribute_source'),
     ]
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
 
 class CheckmkPasswordView(DefaultModelView):
     """
@@ -854,3 +902,7 @@ class CheckmkPasswordView(DefaultModelView):
         if form.password.data:
             model.set_password(form.password.data)
         return super().on_model_change(form, model, is_created)
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')

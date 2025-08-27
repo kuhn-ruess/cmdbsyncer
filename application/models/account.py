@@ -44,6 +44,7 @@ object_types = [
     ('contact', 'Contact'),
     ('group', 'Group Object'),
     ('host', 'Host Object'),
+    ('shadow_host', 'Shadow Host Object'),
     ('network', 'Network Object'),
     ('url', 'URL'),
     ('custom_1', 'Custom Type 1'),

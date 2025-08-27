@@ -9,10 +9,24 @@ from authlib.jose import jwt
 from application import db
 
 roles = [
-  ('rule', "Rule Management"),
-  ('host', "Host Management"),
+  ('host', "Hosts"),
+  ('objects', "Objects"),
   ('account', "Account Management"),
+  ('log', "Log View"),
+  ('global_attributes', "Global Attributes"),
   ('user', "User Management"),
+  ('ansible', "Ansible"),
+  ('checkmk', "Checkmk"),
+  ('i-doit', "I-Doit"),
+  ('netbox', "Netbox"),
+  ('vmware', "VMware"),
+]
+
+api_roles = [
+  ('all', "Full rights"),
+  ('ansible', "Ansible"),
+  ('objects', "Objects"),
+  ('syncer', "Syncer"),
 ]
 
 class User(db.Document, UserMixin):
@@ -25,6 +39,7 @@ class User(db.Document, UserMixin):
     name = db.StringField(unique=True, required=True)
     global_admin = db.BooleanField(default=False)
     roles = db.ListField(field=db.StringField(choices=roles))
+    api_roles = db.ListField(field=db.StringField(choices=api_roles, default="all"))
 
     tfa_secret = db.StringField()
 

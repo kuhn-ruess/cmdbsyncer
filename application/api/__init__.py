@@ -20,6 +20,18 @@ def require_token(fn): #pylint: disable=invalid-name
                     disabled__ne=True,
                     __raw__={'$or': [{'name': username}, {'email': username}]}
                 )
+                roles = user_result.api_roles
+                current_path = request.path.replace('/api/v1/','')
+                if roles:
+                    allowed = False
+                    for role in roles:
+                        if role == 'all':
+                            allowed = True
+                            break
+                        if current_path.startswith(role):
+                            allowed = True
+                    if not allowed:
+                        abort(401, "Not sufficent rights")
             except DoesNotExist:
                 abort(401, "Invalid login")
             if not user_result.check_password(user_password):
