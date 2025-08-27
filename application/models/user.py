@@ -14,6 +14,7 @@ roles = [
   ('account', "Account Management"),
   ('log', "Log View"),
   ('global_attributes', "Global Attributes"),
+  ('fileadmin', "File Management"),
   ('user', "User Management"),
   ('ansible', "Ansible"),
   ('checkmk', "Checkmk"),

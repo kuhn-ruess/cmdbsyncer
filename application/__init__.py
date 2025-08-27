@@ -17,7 +17,6 @@ from flask_login import LoginManager
 from flask_mail import Mail
 from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
-from flask_admin.contrib.fileadmin import FileAdmin
 
 from application.helpers.tablib_formater import ExportObjects
 
@@ -269,8 +268,9 @@ from application.views.cron import CronStatsView, CronGroupView
 admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs"))
 admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs"))
 
+from application.views.fileadmin import FileAdminView
 if os.path.exists(app.config['FILEADMIN_PATH']):
-    admin.add_view(FileAdmin(app.config['FILEADMIN_PATH'], name="Filemanager"))
+    admin.add_view(FileAdminView(app.config['FILEADMIN_PATH'], name="Filemanager"))
 
 from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
