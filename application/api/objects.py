@@ -1,5 +1,5 @@
 """
-Ansible Api
+Objects Api
 """
 # pylint: disable=function-redefined
 # pylint: disable=no-member
@@ -62,6 +62,25 @@ HOST = API.model(
     },
 )
 
+HOST_BULK = API.model(
+    'host_bulk',
+    {
+        'account': fields.String(required=True),
+        'objects': fields.List(
+            fields.Nested(
+                API.model(
+                    'host_bulk_item',
+                    {
+                        'hostname': fields.String(required=True),
+                        'labels': fields.Raw({}, required=True),
+                    }
+                )
+            ),
+            required=True
+        ),
+    },
+)
+
 HOST_INVENTORY = API.model(
     'inventory_object',
     {
@@ -117,6 +136,8 @@ class HostDetailApi(Resource):
             abort(400, "Account not found")
         labels = req_json['labels']
         host_obj = Host.get_host(hostname)
+        host_obj.is_object = req_json['is_object']
+        host_obj.object_type = req_json['object_type']
         host_obj.update_host(labels)
         do_save = host_obj.set_account(account_dict=account_dict)
 
@@ -142,7 +163,41 @@ class HostDetailApi(Resource):
 
         return {'status': status}, status_code
 
-@API.route('/inventory/<hostname>')
+@API.route('/bulk')
+class HostDetailBulkApi(Resource):
+    """Host Bulk Attributes """
+
+    @require_token
+    @API.expect(HOST_BULK, validate=True)
+    def post(self):
+        """ Update of Hosts in BULK """
+        req_json = request.json
+        count = 0
+        account = req_json['account']
+        try:
+            account_dict = get_account_by_name(account)
+        except AccountNotFoundError:
+            abort(400, "Account not found")
+
+        for api_host in req_json['objects']:
+            hostname = api_host['hostname']
+            labels = api_host['labels']
+            host_obj = Host.get_host(hostname)
+            host_obj.update_host(labels)
+            do_save = host_obj.set_account(account_dict=account_dict)
+
+            if do_save:
+                status = 'account_conflict'
+                status_code = 403
+                host_obj.save()
+            count += 1
+
+        status = f'saved {count}'
+        status_code = 200
+
+        return {'status': status}, status_code
+
+@API.route('/<hostname>/inventory')
 class HostDetailInventoryApi(Resource):
     """Host Attributes """
 
@@ -161,7 +216,7 @@ class HostDetailInventoryApi(Resource):
 
         return {'status': status}, status_code
 
-@API.route('/inventory/bulk')
+@API.route('/bulk/inventory')
 class HostDetailInventoryBulkApi(Resource):
     """Host Attributes """
 
