@@ -1,6 +1,7 @@
 """
 i-doit rule views
 """
+from flask_login import current_user
 from markupsafe import Markup
 from wtforms import HiddenField, StringField
 
@@ -45,3 +46,7 @@ class IdoitCustomAttributesView(RuleModelView):
         })
 
         super().__init__(model, **kwargs)
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('i-doit')

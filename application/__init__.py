@@ -184,8 +184,9 @@ admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
 #.
 #   .-- Checkmk
 admin.add_sub_category(name="Checkmk", parent_name="Modules")
-admin.add_link(MenuLink(name='Debug Config', category='Checkmk',
-                        url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
+# @TODO New solution needed, permission needs to be checked to show link
+#admin.add_link(MenuLink(name='Debug Config', category='Checkmk',
+#                        url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
 
 from application.modules.checkmk.models import CheckmkRule, CheckmkGroupRule, CheckmkFilterRule
 from application.modules.checkmk.views import CheckmkRuleView, CheckmkGroupRuleView

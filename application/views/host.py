@@ -528,6 +528,10 @@ class ObjectModelView(DefaultModelView):
         model.update_host(new_labels)
         model.set_inventory_attributes('cmdb')
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('objects')
+
 
 class HostModelView(DefaultModelView):
     """

@@ -80,6 +80,10 @@ class ChildAccountModelView(DefaultModelView):
         model.is_child = True
         return super().on_model_change(form, model, is_created)
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('account')
+
 class AccountModelView(DefaultModelView):
     """
     Account Model

@@ -2,6 +2,7 @@
 Netbox Rule Views
 """
 from datetime import datetime
+from flask_login import current_user
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import DjangoLexer
@@ -112,6 +113,11 @@ class NetboxCustomAttributesView(RuleModelView):
 
         return super().on_model_change(form, model, is_created)
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('netbox')
+
+
 def _render_dataflow_outcome(_view, _context, model, _name):
     """
     Render Dataflow outcomes
@@ -165,6 +171,11 @@ class NetboxDataFlowAttributesView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('netbox')
+
+
 class NetboxDataFlowModelView(DefaultModelView):
     """
     Custom Dataflow Model Model View :-)
@@ -188,3 +199,7 @@ class NetboxDataFlowModelView(DefaultModelView):
 
         dt_str = now.strftime("%Y%m%d%H%M")
         return f"{self.model.__name__}_{dt_str}.syncer_json"
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('netbox')

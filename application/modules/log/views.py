@@ -64,4 +64,4 @@ class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
 
     def is_accessible(self):
         """ Overwrite """
-        return current_user.is_authenticated
+        return current_user.is_authenticated and current_user.has_right('log')

@@ -1,6 +1,7 @@
 """
 Custom Attribute Rule Model View
 """
+from flask_login import current_user
 from wtforms import StringField
 from application.modules.rule.views import RuleModelView
 
@@ -33,3 +34,6 @@ class CustomAttributeView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('global_attributes')
