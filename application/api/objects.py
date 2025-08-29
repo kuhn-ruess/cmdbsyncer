@@ -136,8 +136,6 @@ class HostDetailApi(Resource):
             abort(400, "Account not found")
         labels = req_json['labels']
         host_obj = Host.get_host(hostname)
-        host_obj.is_object = req_json['is_object']
-        host_obj.object_type = req_json['object_type']
         host_obj.update_host(labels)
         do_save = host_obj.set_account(account_dict=account_dict)
 
@@ -178,7 +176,7 @@ class HostDetailBulkApi(Resource):
             account_dict = get_account_by_name(account)
         except AccountNotFoundError:
             abort(400, "Account not found")
-
+        not_save = []
         for api_host in req_json['objects']:
             hostname = api_host['hostname']
             labels = api_host['labels']
@@ -187,15 +185,15 @@ class HostDetailBulkApi(Resource):
             do_save = host_obj.set_account(account_dict=account_dict)
 
             if do_save:
-                status = 'account_conflict'
-                status_code = 403
                 host_obj.save()
-            count += 1
+                count += 1
+            else:
+                not_save.append(hostname)
 
         status = f'saved {count}'
         status_code = 200
 
-        return {'status': status}, status_code
+        return {'status': status, 'not-saved': not_save}, status_code
 
 @API.route('/<hostname>/inventory')
 class HostDetailInventoryApi(Resource):
