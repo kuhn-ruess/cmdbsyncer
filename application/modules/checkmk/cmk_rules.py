@@ -4,6 +4,7 @@ Export Checkmk Rules
 """
 #pylint: disable=logging-fstring-interpolation
 import ast
+from pprint import pformat
 
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -13,6 +14,21 @@ from application.models.host import Host
 from application.modules.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.debug import ColorCodes as CC
+
+def deep_compare(a, b):
+    """
+    Compare Checkmk rules which are nested with key: [list] 
+    Without the function, they may not match if the order in the list is diffrent.
+    @TODO Check for Side effects like not longer detected rules
+    """
+    if isinstance(a, dict) and isinstance(b, dict):
+        if set(a.keys()) != set(b.keys()):
+            return False
+        return all(deep_compare(a[k], b[k]) for k in a)
+    elif isinstance(a, list) and isinstance(b, list):
+        return sorted(a, key=lambda x: str(x)) == sorted(b, key=lambda x: str(x))
+    else:
+        return a == b
 
 class CheckmkRuleSync(CMK2):
     """
@@ -194,7 +210,22 @@ class CheckmkRuleSync(CMK2):
                             logger.debug(f"Invalid Value: '{rule['value']}' or '{value}'")
                             continue
 
-                        if rule['condition'] == cmk_condition and cmk_value == check_value:
+                        condition_match = rule['condition'] == cmk_condition
+
+
+                        value_match = deep_compare(cmk_value, check_value)
+
+                        if not condition_match:
+                            logger.debug("NO MATCH FOR CONDITION")
+                            logger.debug(f"Checkmk Condition: {pformat(cmk_condition)}")
+                            logger.debug(f"Syncer Condition: {pformat(rule['condition'])}")
+                        if not value_match:
+                            logger.debug("NO MATCH ON VALUE")
+                            logger.debug(f"Checkmk Value: {pformat(cmk_value)}")
+                            logger.debug(f"Syncer Value: {pformat(check_value)}")
+
+                        if condition_match and value_match:
+                            logger.debug("FULL MATCH")
                             rule_found = True
                             # Remove from list, so that it not will be created in the next step
                             # pylint: disable=unnecessary-dict-index-lookup
