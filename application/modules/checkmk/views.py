@@ -305,10 +305,20 @@ class CheckmkGroupRuleView(RuleModelView):
 
     form_subdocuments = {
         'outcome': {
-            'form_overrides' : {
+            'form_overrides': {
                 'foreach': StringField,
                 'rewrite': StringField,
                 'rewrite_title': StringField,
+            },
+            'form_widget_args': {
+                'foreach': {
+                    'placeholder': (
+                        'Name of Attribute or Attribute Value, '
+                        'depending on Foreach Type. You can use *'
+                    )
+                },
+                'rewrite': {'placeholder': '{{name}}'},
+                'rewrite_title': {'placeholder': '{{name}}'},
             }
         },
     }
