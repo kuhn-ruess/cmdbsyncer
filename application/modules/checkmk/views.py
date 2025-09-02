@@ -276,8 +276,11 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
     """
     html = "<table width=100%>"
     for idx, rule in enumerate(model.outcomes):
-        highlighted = \
+        value_template = \
                 highlight(rule.value_template, DjangoLexer(),
+                          HtmlFormatter(sytle='colorfull'))
+        condition_service = \
+                highlight(rule.condition_service, DjangoLexer(),
                           HtmlFormatter(sytle='colorfull'))
         html += f"<tr><td>{idx}</td><td>"\
                "<table width=100%>"\
@@ -285,9 +288,10 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                f"<tr><th>Folder</th><td>{rule.folder}</td></tr>" \
                f"<tr><th>Folder Index</th><td>{rule.folder_index}</td></tr>" \
                f"<tr><th>Comment</th><td>{rule.comment}</td></tr>" \
-               f"<tr><th>Value Template</th><td>{highlighted}</td></tr>" \
+               f"<tr><th>Value Template</th><td>{value_template}</td></tr>" \
                f"<tr><th>Condition Label Tmple</th><td>{rule.condition_label_template}</td></tr>"\
                f"<tr><th>Condition Host</th><td>{rule.condition_host}</td></tr>"\
+               f"<tr><th>Condition Service</th><td>{condition_service}</td></tr>"\
                "</table>"\
                "</td></tr>"
     html += "</table>"
