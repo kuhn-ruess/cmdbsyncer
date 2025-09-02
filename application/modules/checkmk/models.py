@@ -169,8 +169,8 @@ class CmkGroupOutcome(db.EmbeddedDocument):
     group_name = db.StringField(choices=cmk_groups)
     foreach_type = db.StringField(choices=foreach_types)
     foreach = db.StringField(required=False)
-    rewrite = db.StringField()
-    rewrite_title = db.StringField()
+    rewrite = db.StringField(default='{{name}}')
+    rewrite_title = db.StringField(default='{{name}}')
 
     meta = {
         'strict': False,
