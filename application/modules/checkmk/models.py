@@ -237,6 +237,7 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     value_template = db.StringField(required=True)
     condition_label_template = db.StringField()
     condition_host = db.StringField()
+    condition_service = db.StringField()
 
     meta = {
         'strict': False,
