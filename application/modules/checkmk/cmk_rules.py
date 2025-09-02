@@ -122,11 +122,25 @@ class CheckmkRuleSync(CMK2):
                         render_jinja(rule_params['condition_host'], **attributes['all'])
                     if host_condition:
                         condition_tpl["host_name"]= {
-                                        "match_on": host_condition.split(','),
+                                        "match_on": [x.strip() for x in host_condition.split(',') if x],
                                         "operator": "one_of"
                                       }
-
                 del rule_params['condition_host']
+
+                if 'condition_service' in rule_params:
+                    # We need to support legacy installations, so the
+                    # extra checking for this (new) field
+                    # The Delete would fail else
+                    if rule_params['condition_service']:
+                        service_condition = \
+                            render_jinja(rule_params['condition_service'], **attributes['all'])
+                        condition_tpl['service_description'] = {
+                            "match_on": [x.strip() for x in service_condition.split(',') if x],
+                            "operator": "one_of"
+                        }
+
+                    del rule_params['condition_service']
+
 
 
                 rule_params['condition'] = condition_tpl
