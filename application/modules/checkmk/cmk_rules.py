@@ -36,7 +36,7 @@ class CheckmkRuleSync(CMK2):
     """
     rulsets_by_type = {}
 
-    def build_condition_and_update_rule_params(self, rule_params, attributes, loop_value=None):
+    def build_condition_and_update_rule_params(self, rule_params, attributes, loop_value=None, loop_idx=None):
         """
         Build condition_tpl and update rule_params accordingly.
         Uses self.checkmk_version.
@@ -53,6 +53,7 @@ class CheckmkRuleSync(CMK2):
         context = dict(attributes['all'])
         if loop_value is not None:
             context['loop'] = loop_value
+            context['loop_idx'] = loop_idx
 
         # Render value and folder
         value = render_jinja(rule_params['value_template'], **context)
@@ -147,11 +148,11 @@ class CheckmkRuleSync(CMK2):
             for rule_params in rules:
                 if rule_params.get('loop_over_list'):
                     loop_list = get_list(attributes['all'][rule_params['list_to_loop']])
-                    for loop_value in loop_list:
+                    for loop_idx, loop_value in enumerate(loop_list):
                         loop_rule_params = dict(rule_params)
                         loop_rule_params.pop('loop_over_list', None)
                         loop_rule_params.pop('list_to_loop', None)
-                        updated_rule = self.build_condition_and_update_rule_params(loop_rule_params, attributes, loop_value)
+                        updated_rule = self.build_condition_and_update_rule_params(loop_rule_params, attributes, loop_value, loop_idx)
                         if updated_rule is None:
                             continue
                         self.rulsets_by_type.setdefault(rule_type, [])
