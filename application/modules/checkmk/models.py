@@ -235,6 +235,8 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     folder = db.StringField(required=True)
     folder_index = db.IntField(default=0)
     comment = db.StringField()
+    loop_over_list = db.BooleanField(default=False)
+    list_to_loop = db.StringField()
     value_template = db.StringField(required=True)
     condition_label_template = db.StringField()
     condition_host = db.StringField()

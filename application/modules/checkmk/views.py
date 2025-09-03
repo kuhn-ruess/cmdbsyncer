@@ -296,6 +296,7 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                f"<tr><th>Folder</th><td>{rule.folder}</td></tr>" \
                f"<tr><th>Folder Index</th><td>{rule.folder_index}</td></tr>" \
                f"<tr><th>Comment</th><td>{rule.comment}</td></tr>" \
+               f"<tr><th>Loop:</th><td>{rule.loop_over_list}</td></tr>" \
                f"<tr><th>Value Template</th><td>{value_template}</td></tr>" \
                f"<tr><th>Condition Label Tmple</th><td>{rule.condition_label_template}</td></tr>"\
                f"<tr><th>Condition Host</th><td>{rule.condition_host}</td></tr>"\
@@ -472,7 +473,6 @@ class CheckmkMngmtRuleView(RuleModelView):
     """
     Management of Rules inside Checkmk
     """
-
     form_rules = [
         rules.FieldSet((
             rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_setup_rules"]}"'\
@@ -519,6 +519,38 @@ class CheckmkMngmtRuleView(RuleModelView):
                             'ruleset': StringField,
                             'folder': StringField,
                             'condition_host': StringField,
+                            'list_to_loop': StringField,
+                            'value_template': StringField,
+                            'condition_label_template': StringField,
+                        },
+                        'form_widget_args': {
+                            'list_to_loop': {
+                                'placeholder': (
+                                    'You can enter an Attribute which contains a List.'
+                                    ' Then the rule will be executed for every entry in this list.'
+                                )
+                            },
+                            'value_template': {
+                                'placeholder': (
+                                    'Jinja. You can use {{loop}} to access variable'
+                                    'when used in loop list mode'
+                                )
+                            },
+                            'condition_label_template': {
+                                'placeholder': (
+                                    'Jinja. Need to return key:value'
+                                )
+                            },
+                            'condition_host': {
+                                'placeholder': (
+                                    'Hostname for Condition, Supports Comma Seperated Lists'
+                                )
+                            },
+                            'condition_service': {
+                                'placeholder': (
+                                    'Service Name for Condition, Supports Comma Seperated Lists'
+                                )
+                            },
                         }
                     },
                 }

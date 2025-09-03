@@ -36,6 +36,75 @@ class CheckmkRuleSync(CMK2):
     """
     rulsets_by_type = {}
 
+    def build_condition_and_update_rule_params(self, rule_params, attributes, loop_value=None):
+        """
+        Build condition_tpl and update rule_params accordingly.
+        Uses self.checkmk_version.
+        Optionally injects loop_value as 'loop' into the template context.
+        """
+        # Setup condition template based on Checkmk version
+        if self.checkmk_version.startswith('2.2'):
+            condition_tpl = {"host_tags": [], "service_labels": []}
+        else:
+            condition_tpl = {"host_tags": [], "service_label_groups": [],
+                             "host_label_groups": []}
+
+        # Prepare context for Jinja rendering
+        context = dict(attributes['all'])
+        if loop_value is not None:
+            context['loop'] = loop_value
+
+        # Render value and folder
+        value = render_jinja(rule_params['value_template'], **context)
+        rule_params['folder'] = render_jinja(rule_params['folder'], **context)
+        rule_params['value'] = value
+        del rule_params['value_template']
+
+        # Handle condition_label_template
+        if rule_params.get('condition_label_template'):
+            label_condition = render_jinja(rule_params['condition_label_template'], **context)
+            label_key, label_value = label_condition.split(':')
+            if not label_key or not label_value:
+                return None  # skip this rule
+            if self.checkmk_version.startswith('2.2'):
+                condition_tpl['host_labels'] = [{
+                    "key": label_key,
+                    "operator": "is",
+                    "value": label_value
+                }]
+            else:
+                condition_tpl['host_label_groups'] = [{
+                    "operator": "and",
+                    "label_group": [{
+                        "operator": "and",
+                        "label": f"{label_key}:{label_value}",
+                    }],
+                }]
+            del rule_params['condition_label_template']
+
+        # Handle condition_host
+        if rule_params.get('condition_host'):
+            host_condition = render_jinja(rule_params['condition_host'], **context)
+            if host_condition:
+                condition_tpl["host_name"] = {
+                    "match_on": get_list(host_condition),
+                    "operator": "one_of"
+                }
+            del rule_params['condition_host']
+
+        # Handle condition_service (legacy support)
+        if 'condition_service' in rule_params:
+            if rule_params['condition_service']:
+                service_condition = render_jinja(rule_params['condition_service'], **context)
+                condition_tpl['service_description'] = {
+                    "match_on": get_list(service_condition),
+                    "operator": "one_of"
+                }
+            del rule_params['condition_service']
+
+        rule_params['condition'] = condition_tpl
+        return rule_params
+
     def export_cmk_rules(self): # pylint: disable=too-many-branches, too-many-statements
         """
         Export config rules to checkmk
@@ -76,78 +145,25 @@ class CheckmkRuleSync(CMK2):
         """
         for rule_type, rules in host_actions.items():
             for rule_params in rules:
-                # Render Template Value
-                if self.checkmk_version.startswith('2.2'):
-                    condition_tpl = {"host_tags": [], "service_labels": []}
+                if rule_params.get('loop_over_list'):
+                    loop_list = get_list(attributes['all'][rule_params['list_to_loop']])
+                    for loop_value in loop_list:
+                        loop_rule_params = dict(rule_params)
+                        loop_rule_params.pop('loop_over_list', None)
+                        loop_rule_params.pop('list_to_loop', None)
+                        updated_rule = self.build_condition_and_update_rule_params(loop_rule_params, attributes, loop_value)
+                        if updated_rule is None:
+                            continue
+                        self.rulsets_by_type.setdefault(rule_type, [])
+                        if updated_rule not in self.rulsets_by_type[rule_type]:
+                            self.rulsets_by_type[rule_type].append(updated_rule)
                 else:
-                    condition_tpl = {"host_tags": [], "service_label_groups": [],
-                                     "host_label_groups": []}
-                value = \
-                    render_jinja(rule_params['value_template'], **attributes['all'])
-
-                rule_params['folder'] =\
-                    render_jinja(rule_params['folder'], **attributes['all'])
-
-                # Overwrite the Params again
-                rule_params['value'] = value
-                del rule_params['value_template']
-
-                if rule_params['condition_label_template']:
-                    label_condition = \
-                        render_jinja(rule_params['condition_label_template'],
-                                                    **attributes['all'])
-
-                    label_key, label_value = label_condition.split(':')
-                    # Fix bug in case of empty Labels in store
-                    if not label_key or not label_value:
+                    updated_rule = self.build_condition_and_update_rule_params(rule_params, attributes)
+                    if updated_rule is None:
                         continue
-                    if self.checkmk_version.startswith('2.2'):
-                        condition_tpl['host_labels'] = [{
-                                                "key": label_key,
-                                                "operator": "is",
-                                                "value": label_value
-                                             }]
-                    else:
-                        condition_tpl['host_label_groups'] = [{
-                                                "operator": "and",
-                                                    "label_group": [{
-                                                        "operator": "and",
-                                                        "label": f"{label_key}:{label_value}",
-                                                        }],
-                                                    }]
-                del rule_params['condition_label_template']
-
-                if rule_params['condition_host']:
-                    host_condition = \
-                        render_jinja(rule_params['condition_host'], **attributes['all'])
-                    if host_condition:
-                        condition_tpl["host_name"]= {
-                                        "match_on": get_list(host_condition),
-                                        "operator": "one_of"
-                                      }
-                del rule_params['condition_host']
-
-                if 'condition_service' in rule_params:
-                    # We need to support legacy installations, so the
-                    # extra checking for this (new) field
-                    # The Delete would fail else
-                    if rule_params['condition_service']:
-                        service_condition = \
-                            render_jinja(rule_params['condition_service'], **attributes['all'])
-                        condition_tpl['service_description'] = {
-                            "match_on": get_list(service_condition),
-                            "operator": "one_of"
-                        }
-
-                    del rule_params['condition_service']
-
-
-
-                rule_params['condition'] = condition_tpl
-
-                self.rulsets_by_type.setdefault(rule_type, [])
-                if rule_params not in self.rulsets_by_type[rule_type]:
-                    self.rulsets_by_type[rule_type].append(rule_params)
+                    self.rulsets_by_type.setdefault(rule_type, [])
+                    if updated_rule not in self.rulsets_by_type[rule_type]:
+                        self.rulsets_by_type[rule_type].append(updated_rule)
 
 
 
