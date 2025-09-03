@@ -12,7 +12,7 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 from application import logger
 from application.models.host import Host
 from application.modules.checkmk.cmk2 import CmkException, CMK2
-from application.helpers.syncer_jinja import render_jinja
+from application.helpers.syncer_jinja import render_jinja, get_list
 from application.modules.debug import ColorCodes as CC
 
 def deep_compare(a, b):
@@ -122,7 +122,7 @@ class CheckmkRuleSync(CMK2):
                         render_jinja(rule_params['condition_host'], **attributes['all'])
                     if host_condition:
                         condition_tpl["host_name"]= {
-                                        "match_on": [x.strip() for x in host_condition.split(',') if x],
+                                        "match_on": get_list(host_condition),
                                         "operator": "one_of"
                                       }
                 del rule_params['condition_host']
@@ -135,7 +135,7 @@ class CheckmkRuleSync(CMK2):
                         service_condition = \
                             render_jinja(rule_params['condition_service'], **attributes['all'])
                         condition_tpl['service_description'] = {
-                            "match_on": [x.strip() for x in service_condition.split(',') if x],
+                            "match_on": get_list(service_condition),
                             "operator": "one_of"
                         }
 

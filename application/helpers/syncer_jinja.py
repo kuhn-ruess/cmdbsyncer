@@ -63,8 +63,14 @@ def get_list(input_list):
     """
     if isinstance(input_list, list):
         return input_list
+    if isinstance(input_list, tuple):
+        return list(input_list)
     if isinstance(input_list, str):
+        # fix malformated inputs:
+        if input_list.endswith(','):
+            input_list = input_list[:-1]
         try:
+            # Try a string witch looks like a list
             input_list = ast.literal_eval(input_list.replace('\n',''))
         except ValueError:
             input_list = [x.strip() for x in input_list.split(',') if x ]
