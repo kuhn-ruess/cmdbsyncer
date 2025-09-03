@@ -19,8 +19,13 @@ from application import app
 from application.views.default import DefaultModelView
 from application.docu_links import docu_links
 
-from application.modules.rule.views import RuleModelView, \
-                    form_subdocuments_template, _render_full_conditions, get_rule_json, _render_jinja
+from application.modules.rule.views import (
+    RuleModelView,
+    form_subdocuments_template,
+    _render_full_conditions,
+    get_rule_json,
+    _render_jinja,
+)
 from application.modules.checkmk.models import action_outcome_types, CheckmkSite
 from application.plugins.checkmk import get_debug_data
 
@@ -124,8 +129,11 @@ def _render_checkmk_outcome(_view, _context, model, _name):
         name = dict(action_outcome_types)[entry.action].split('_',1)[0]
         highlighted_param = ""
         if entry.action_param:
-            highlighted_param = \
-                    highlight(str(entry.action_param), DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+            highlighted_param = highlight(
+                str(entry.action_param),
+                DjangoLexer(),
+                HtmlFormatter(sytle='colorfull')
+            )
         html += f'''
             <div class="card">
               <div class="card-body">
@@ -579,6 +587,26 @@ class CheckmkTagMngmtView(DefaultModelView):
     column_formatters_export = {
         'name': get_rule_json
     }
+    form_widget_args = {
+        'group_topic_name': {
+            'placeholder': 'Name of Topic for Hosttags in Checkmk'
+        },
+        'group_title': {
+            'placeholder': 'Groups Title'
+        },
+        'rewrite_title': {
+            'placeholder': '{{name}}'
+        },
+        'rewrite_id': {
+            'placeholder': '{{name}}'
+        },
+        'group_multiply_list': {
+            'placeholder': (
+                'Name of Attribute containing the list of values to '
+                'create multiple groups'
+            )
+        },
+    }
 
     form_rules = [
         rules.FieldSet((
@@ -599,7 +627,7 @@ class CheckmkTagMngmtView(DefaultModelView):
        main_close,
        addional_open,
        rules.FieldSet(
-           ( 'group_multiply_list', 'group_multiply_by_list', 
+           ( 'group_multiply_list', 'group_multiply_by_list',
            ), 'Create Multiple Checkmk Groups'),
        rules.HTML('<br>'),
        rules.FieldSet(
