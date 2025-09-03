@@ -301,6 +301,7 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                f"<tr><th>Condition Label Tmple</th><td>{rule.condition_label_template}</td></tr>"\
                f"<tr><th>Condition Host</th><td>{rule.condition_host}</td></tr>"\
                f"<tr><th>Condition Service</th><td>{condition_service}</td></tr>"\
+               f"<tr><th>Condition Service Label</th><td>{rule.condition_service_label}</td></tr>"\
                "</table>"\
                "</td></tr>"
     html += "</table>"
@@ -522,6 +523,8 @@ class CheckmkMngmtRuleView(RuleModelView):
                             'list_to_loop': StringField,
                             'value_template': StringField,
                             'condition_label_template': StringField,
+                            'condition_service_label': StringField,
+                            'condition_service': StringField,
                         },
                         'form_widget_args': {
                             'list_to_loop': {
@@ -543,12 +546,17 @@ class CheckmkMngmtRuleView(RuleModelView):
                             },
                             'condition_host': {
                                 'placeholder': (
-                                    'Hostname for Condition, Supports Comma Seperated Lists'
+                                    'Hostname for Condition, Supports Comma Seperated Lists (or)'
                                 )
                             },
                             'condition_service': {
                                 'placeholder': (
-                                    'Service Name for Condition, Supports Comma Seperated Lists'
+                                    'Service Name for Condition, Supports Comma Seperated Lists (or)'
+                                )
+                            },
+                            'condition_service_label': {
+                                'placeholder': (
+                                    'Service Labels for Condition, Supports Comma Seperated Lists (and)'
                                 )
                             },
                         }

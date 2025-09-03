@@ -36,7 +36,9 @@ class CheckmkRuleSync(CMK2):
     """
     rulsets_by_type = {}
 
-    def build_condition_and_update_rule_params(self, rule_params, attributes, loop_value=None, loop_idx=None):
+    def build_condition_and_update_rule_params(
+        self, rule_params, attributes, loop_value=None, loop_idx=None
+    ):
         """
         Build condition_tpl and update rule_params accordingly.
         Uses self.checkmk_version.
@@ -103,6 +105,20 @@ class CheckmkRuleSync(CMK2):
                 }
             del rule_params['condition_service']
 
+        if 'condition_service_label' in rule_params:
+            if rule_params['condition_service_label']:
+                service_label_condition = \
+                    render_jinja(rule_params['condition_service_label'], **context)
+                condition_tpl['service_label_groups'] = {
+                    "label_group": [
+                        {"operator": "and", "label": x}
+                        for x in get_list(service_label_condition)
+                    ],
+                    "operator": "and"
+                }
+            del rule_params['condition_service_label']
+
+
         rule_params['condition'] = condition_tpl
         return rule_params
 
@@ -152,14 +168,18 @@ class CheckmkRuleSync(CMK2):
                         loop_rule_params = dict(rule_params)
                         loop_rule_params.pop('loop_over_list', None)
                         loop_rule_params.pop('list_to_loop', None)
-                        updated_rule = self.build_condition_and_update_rule_params(loop_rule_params, attributes, loop_value, loop_idx)
+                        updated_rule = self.build_condition_and_update_rule_params(
+                            loop_rule_params, attributes, loop_value, loop_idx
+                        )
                         if updated_rule is None:
                             continue
                         self.rulsets_by_type.setdefault(rule_type, [])
                         if updated_rule not in self.rulsets_by_type[rule_type]:
                             self.rulsets_by_type[rule_type].append(updated_rule)
                 else:
-                    updated_rule = self.build_condition_and_update_rule_params(rule_params, attributes)
+                    updated_rule = self.build_condition_and_update_rule_params(
+                        rule_params, attributes
+                    )
                     if updated_rule is None:
                         continue
                     self.rulsets_by_type.setdefault(rule_type, [])
