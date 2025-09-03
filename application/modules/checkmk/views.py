@@ -202,9 +202,6 @@ class CheckmkRuleView(RuleModelView):
     Custom Rule Model View
     """
 
-
-
-
     @expose('/debug')
     def debug(self):
         """
@@ -287,9 +284,12 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
         value_template = \
                 highlight(rule.value_template, DjangoLexer(),
                           HtmlFormatter(sytle='colorfull'))
-        condition_service = \
-                highlight(rule.condition_service, DjangoLexer(),
-                          HtmlFormatter(sytle='colorfull'))
+        condition_service = ""
+        if rule.condition_service:
+            condition_service = highlight(
+                rule.condition_service, DjangoLexer(),
+                HtmlFormatter(sytle='colorfull')
+            )
         html += f"<tr><td>{idx}</td><td>"\
                "<table width=100%>"\
                f"<tr><th>Ruleset</th><td>{rule.ruleset}</td></tr>" \
