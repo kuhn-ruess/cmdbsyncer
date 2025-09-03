@@ -72,7 +72,7 @@ def get_list(input_list):
         try:
             # Try a string witch looks like a list
             input_list = ast.literal_eval(input_list.replace('\n',''))
-        except ValueError:
+        except (ValueError, SyntaxError):
             input_list = [x.strip() for x in input_list.split(',') if x ]
     return input_list
 
