@@ -109,13 +109,13 @@ class CheckmkRuleSync(CMK2):
             if rule_params['condition_service_label']:
                 service_label_condition = \
                     render_jinja(rule_params['condition_service_label'], **context)
-                condition_tpl['service_label_groups'] = {
+                condition_tpl['service_label_groups'] = [{
                     "label_group": [
                         {"operator": "and", "label": x}
                         for x in get_list(service_label_condition)
                     ],
                     "operator": "and"
-                }
+                }]
             del rule_params['condition_service_label']
 
 
