@@ -6,6 +6,7 @@ from mongoengine.errors import DoesNotExist
 from application.modules.checkmk.cmk2 import CMK2, CmkException
 from application.modules.rule.rule import Rule
 from application.modules.checkmk.models import CheckmkGroupRule
+from application.helpers.syncer_jinja import get_list
 
 from application.modules.checkmk.models import CheckmkObjectCache
 
@@ -52,6 +53,22 @@ class CheckmkGroupSync(CMK2):
         # [0] All Values behind Label
         # [1] All Keys which have value
         return collection_keys, collection_values
+    
+    def _add_group_entries(self, items, rewrite_name, rewrite_title, outcome, group_type, groups, str_replace, replace_exceptions):
+        """
+        Hilfsfunktion zum Hinzufügen von Gruppen-Einträgen
+        """
+        for item in items:
+            new_group_title = item
+            new_group_name = item
+            if rewrite_name:
+                new_group_name = render_jinja(outcome.rewrite, name=item, result=item)
+            new_group_name = str_replace(new_group_name, replace_exceptions).strip()
+            if rewrite_title:
+                new_group_title = render_jinja(outcome.rewrite_title, name=item, result=item)
+            new_group_title = str_replace(new_group_title, replace_exceptions).strip()
+            if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
+                groups[group_type].append((new_group_title, new_group_name))
 
     def export_cmk_groups(self, test_run):# pylint: disable=too-many-branches, too-many-statements
         """
@@ -83,23 +100,17 @@ class CheckmkGroupSync(CMK2):
                             keys += keys_values
                 else:
                     keys = attributes[1].get(outcome.foreach, [])
+                self._add_group_entries(
+                    keys,
+                    rewrite_name,
+                    rewrite_title,
+                    outcome,
+                    group_type,
+                    groups,
+                    str_replace,
+                    replace_exceptions
+                )
 
-
-                for key in keys:
-                    new_group_title = key
-                    new_group_name = key
-                    if rewrite_name:
-                        new_group_name = render_jinja(outcome.rewrite,
-                                                                name=key, result=key)
-                    new_group_name = str_replace(new_group_name, replace_exceptions).strip()
-                    if rewrite_title:
-                        new_group_title = render_jinja(outcome.rewrite_title,
-                                                       name=key, result=key)
-                    new_group_title = str_replace(new_group_title, replace_exceptions).strip()
-
-                    if new_group_name and (new_group_title, new_group_name) \
-                                                            not in groups[group_type]:
-                        groups[group_type].append((new_group_title, new_group_name))
             elif outcome.foreach_type == 'label':
                 if outcome.foreach.endswith('*'):
                     values = []
@@ -109,21 +120,17 @@ class CheckmkGroupSync(CMK2):
                             values += label_values
                 else:
                     values = attributes[0].get(outcome.foreach, [])
+                self._add_group_entries(
+                    values,
+                    rewrite_name,
+                    rewrite_title,
+                    outcome,
+                    group_type,
+                    groups,
+                    str_replace,
+                    replace_exceptions
+                )
 
-                for value in values:
-                    new_group_title = value
-                    new_group_name = value
-                    if rewrite_name:
-                        new_group_name = render_jinja(outcome.rewrite,
-                                                      name=value, result=value)
-                    new_group_name = str_replace(new_group_name, replace_exceptions).strip()
-                    if rewrite_title:
-                        new_group_title = render_jinja(outcome.rewrite_title,
-                                                       name=value, result=value)
-                    new_group_title = str_replace(new_group_title, replace_exceptions).strip()
-                    if new_group_name and (new_group_title, new_group_name) \
-                                                        not in groups[group_type]:
-                        groups[group_type].append((new_group_title, new_group_name))
             elif outcome.foreach_type == "object":
                 db_filter = {
                     'is_object': True
@@ -131,21 +138,33 @@ class CheckmkGroupSync(CMK2):
                 object_filter = outcome.foreach
                 if object_filter:
                     db_filter['inventory__syncer_account'] = object_filter
-                for entry in Host.objects(**db_filter):
-                    value = entry.hostname
-                    new_group_title = value
-                    new_group_name = value
-                    if rewrite_name:
-                        new_group_name = render_jinja(outcome.rewrite,
-                                                      name=value, result=value)
-                    new_group_name = str_replace(new_group_name, replace_exceptions).strip()
-                    if rewrite_title:
-                        new_group_title = render_jinja(outcome.rewrite_title,
-                                                       name=value, result=value)
-                    new_group_title = str_replace(new_group_title, replace_exceptions).strip()
-                    if new_group_name and (new_group_title, new_group_name) \
-                                                        not in groups[group_type]:
-                        groups[group_type].append((new_group_title, new_group_name))
+                hostnames = [entry.hostname for entry in Host.objects(**db_filter)]
+                self._add_group_entries(
+                    hostnames,
+                    rewrite_name,
+                    rewrite_title,
+                    outcome,
+                    group_type,
+                    groups,
+                    str_replace,
+                    replace_exceptions
+                )
+
+            elif outcome.foreach_type == "list":
+                total_list = []
+                list_of = attributes[0].get(outcome.foreach, [])
+                for entry in list_of:
+                    total_list += get_list(entry)
+                self._add_group_entries(
+                    total_list,
+                    rewrite_name,
+                    rewrite_title,
+                    outcome,
+                    group_type,
+                    groups,
+                    str_replace,
+                    replace_exceptions
+                )
 
 
         print(f"\n{CC.HEADER}Start Sync{CC.ENDC}")

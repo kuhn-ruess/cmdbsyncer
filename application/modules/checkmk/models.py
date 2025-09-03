@@ -137,6 +137,7 @@ foreach_types = [
  ('label', "Foreach Attribute"),
  ('value', "Foreach Attribute Value"),
  ('object', "Foreach Object from Account (empty for all)"),
+ ('list', "Foreach Value in List for given Attribute"),
 ]
 
 class CmkGroupOutcome(db.EmbeddedDocument):
