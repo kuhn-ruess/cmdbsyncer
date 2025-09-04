@@ -12,6 +12,7 @@ from application.views.default import DefaultModelView
 from application.models.account import CustomEntry, Account
 from application.modules.checkmk.models import CheckmkObjectCache
 from application.docu_links import docu_links
+from mongoengine.queryset.visitor import Q
 
 def _render_custom_data(_view, _context, model, _name):
     """
@@ -50,7 +51,7 @@ class ChildAccountModelView(DefaultModelView):
         """
         Limit Objects
         """
-        return Account.objects(is_child=True)
+        return Account.objects(is_child=True).order_by('name')
 
     column_exclude_list = [
             'custom_fields', 'is_child', 'type',
@@ -93,7 +94,7 @@ class AccountModelView(DefaultModelView):
         """
         Limit Objects
         """
-        return Account.objects(is_child__ne=True)
+        return Account.objects(is_child__ne=True).order_by('name', 'typ')
 
     column_filters = (
        'name',
