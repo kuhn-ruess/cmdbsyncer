@@ -338,6 +338,9 @@ class AccountModelView(DefaultModelView):
                 ('import_unnamed_devices', ""),
             ]
 
+        for field in model.custom_fields:
+            field.value = field.value.strip()
+
         if default_fields:
             for field, content in default_fields:
                 if field not in [x.name for x in model.custom_fields]:
