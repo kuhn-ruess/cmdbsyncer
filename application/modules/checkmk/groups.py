@@ -212,6 +212,7 @@ class CheckmkGroupSync(CMK2):
                     cmk_name = cmk_group['href'].split('/')[-1]
                 cmk_title = cmk_group['title']
 
+
                 # From Cache we get Lists not tuple
                 if [cmk_title, cmk_name] in cached_group_list:
                     syncers_groups_in_cmk.append(cmk_name)
@@ -233,6 +234,8 @@ class CheckmkGroupSync(CMK2):
                 handeled_groups.append(new_group)
                 alias = new_group[0]
                 name = new_group[1]
+                if name in yet_external_groups_in_cmk:
+                    continue
                 if "None" in (alias, name):
                     continue
                 if name not in syncers_groups_in_cmk and name not in syncers_groups_needing_update:
@@ -241,7 +244,7 @@ class CheckmkGroupSync(CMK2):
                         'alias' : alias,
                         'name' : name,
                     })
-                elif name in syncers_groups_needing_update or name in yet_external_groups_in_cmk:
+                elif name in syncers_groups_needing_update:
                     print(f"{CC.OKBLUE}  *{CC.ENDC} Updated {new_group}")
                     update_entries.append({
                         'name' : name,
