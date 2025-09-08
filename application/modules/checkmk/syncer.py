@@ -630,6 +630,8 @@ class SyncCMK2(CMK2):
                     label_prefix = self.label_prefix
                 labels = {f"{label_prefix}{k}":str(v).replace(':','-') \
                         for k,v in attributes['filtered'].items()}
+                if app.config['CMK_LOWERCASE_LABEL_VALUES']:
+                    labels = {k:v.lower() for k, v in labels.items()}
 
                 self.only_update_prefixed_labels = next_actions.get('only_update_prefixed_labels')
                 self.dont_update_prefixed_labels = next_actions.get('dont_update_prefixed_labels')
