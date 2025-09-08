@@ -155,6 +155,7 @@ class BaseConfig():
     CMK_BULK_UPDATE_OPERATIONS = 50
 
     CMK_LOWERCASE_FOLDERNAMES = True
+    CMK_LOWERCASE_LABEL_VALUES = False
 
     # If set, the Syncer will first calculate everhting,
     # and then send bulk operations finally.
