@@ -311,7 +311,7 @@ class CheckmkGroupRuleView(RuleModelView):
     """
     Custom Group Model View
     """
-
+    column_default_sort = "name"
 
     form_subdocuments = {
         'outcome': {
