@@ -18,7 +18,7 @@ def cli_mssql():
 
 
 #   . CLI and Cron
-def mssql_import(account, debug):
+def mssql_import(account, debug=False):
     """
     MSSQL Inner Import
     """
@@ -36,7 +36,7 @@ def cli_mssql_import(account, debug):
     mssql_import(account, debug)
 
 
-def mssql_inventorize(account, debug):
+def mssql_inventorize(account, debug=False):
     """
     MSSQL Inner Inventorize
     """
