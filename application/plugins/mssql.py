@@ -18,37 +18,41 @@ def cli_mssql():
 
 
 #   . CLI and Cron
-def mssql_import(account):
+def mssql_import(account, debug):
     """
     MSSQL Inner Import
     """
     mssql = ODBC(account)
     mssql.name = f"Import data from {account}"
     mssql.source = "mssql_import"
+    mssql.debug = debug
     mssql.sql_import()
 
 @cli_mssql.command('import_hosts')
+@click.option("--debug", default=False, is_flag=True)
 @click.argument('account')
-def cli_mssql_import(account):
+def cli_mssql_import(account, debug):
     """Import MSSQL Hosts"""
-    mssql_import(account)
+    mssql_import(account, debug)
 
 
-def mssql_inventorize(account):
+def mssql_inventorize(account, debug):
     """
     MSSQL Inner Inventorize
     """
     mssql = ODBC(account)
     mssql.name = f"Inventorized data from {account}"
     mssql.source = "mssql_inventorize"
+    mssql.debug = debug
     mssql.sql_inventorize()
 
 
 @cli_mssql.command('inventorize_hosts')
+@click.option("--debug", default=False, is_flag=True)
 @click.argument('account')
-def cli_mssql_inventorize(account):
+def cli_mssql_inventorize(account, debug):
     """Inventorize MSSQL Data"""
-    mssql_inventorize(account)
+    mssql_inventorize(account, debug)
 
 register_cronjob("MsSQL: Import Hosts", mssql_import)
 register_cronjob("MsSQL: Inventorize Data", mssql_inventorize)
