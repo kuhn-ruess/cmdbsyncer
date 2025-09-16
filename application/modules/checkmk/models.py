@@ -639,14 +639,7 @@ offsets = [
     ('7', "7 day later"),
 ]
 
-#pylint: disable=consider-using-generator
-hours = list([
-    (str(x), x) for x in range(24)
-])
 
-minutes = list([
-    (str(x), x) for x in range(60)
-])
 class DowtimeRuleOutcome(db.EmbeddedDocument):
     """
     Checkmk Downtime
@@ -657,12 +650,12 @@ class DowtimeRuleOutcome(db.EmbeddedDocument):
     every_template = db.StringField(max_length=120)
     offset_days = db.StringField(choices=offsets)
     offset_days_template = db.StringField()
-    start_time_h = db.StringField(choices=hours, default=0)
-    start_time_m = db.StringField(choices=minutes, default=0)
-    end_time_h = db.StringField(choices=hours, default=0)
-    end_time_m = db.StringField(choices=minutes, default=0)
+    start_time_h = db.StringField(max_length=255, default=0)
+    start_time_m = db.StringField(max_length=255, default=0)
+    end_time_h = db.StringField(max_length=255, default=0)
+    end_time_m = db.StringField(max_length=255, default=0)
     downtime_comment = db.StringField(max_length=120, required=True)
-    duration_h =db.StringField(max_length=30, choices=[('', "Not Use")]+hours)
+    duration_h =db.StringField(max_length=255)
 
     meta = {
         'strict': False
