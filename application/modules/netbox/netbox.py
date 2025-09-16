@@ -49,7 +49,7 @@ class SyncNetbox(Plugin):
         Parse nested Object
         """
         try:
-            attributes = attr_chain.split(".")
+            attributes = attr_chain.split('.')
             for attr in attributes:
                 obj = getattr(obj, attr)
             return obj

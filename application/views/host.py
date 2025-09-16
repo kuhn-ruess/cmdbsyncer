@@ -10,10 +10,13 @@ from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 from flask_admin.model.template import LinkRowAction
 from flask_admin.form import rules
 from flask_admin.actions import action
-from flask_admin.babel import gettext
 from flask_admin.base import expose
 from wtforms import HiddenField, Field, StringField, BooleanField
 from markupsafe import Markup
+from mongoengine.errors import DoesNotExist
+
+from application.plugins.checkmk import get_host_debug_data as cmk_host_debug
+from application.plugins.netbox import get_device_debug_data as netbox_host_debug
 
 
 from application import app
@@ -41,6 +44,47 @@ OBJECT_TYPE_ICONS = {
     'undefined': 'fa fa-question-circle',
     'template': 'fa fa-file-alt',
 }
+
+def get_debug(hostname, mode):
+    """
+    Get Output for Host Debug Page
+    """
+
+    try:
+        Host.objects.get(hostname=hostname)
+
+        output = {}
+        output_rules = {}
+
+        #@TODO Restrict by user Rights
+        debug_funcs = {
+            'checkmk_host': cmk_host_debug,
+            'netbox_device': netbox_host_debug,
+        }
+
+        attributes, actions, debug_log = debug_funcs[mode](hostname)
+
+        for type_name, data in debug_log.items():
+            output_rules[type_name] = data
+
+        if attributes:
+            output["Full Attribute List"] = attributes['all']
+            if attributes.get('filtered'):
+                output["Filtered"] = attributes['filtered']
+            output["Outcomes"] =  actions
+            additional_attributes = {}
+            additional_attributes =  actions.get('custom_attributes', {})
+
+            for additional_attr in actions.get('attributes',[]):
+                if attr_value := attributes['all'].get(additional_attr):
+                    additional_attributes[additional_attr] = attr_value
+            if additional_attributes:
+                output["Custom Attributes"] = additional_attributes
+        else:
+            output["Info: Host disabled by Filter"] = None
+        return output, output_rules
+    except DoesNotExist:
+        return {'Error': "Host not found in Database"}, {}
 
 def _render_object_type_icon(_view, _context, model, _name):
     """
@@ -569,7 +613,7 @@ class HostModelView(DefaultModelView):
 
     column_extra_row_actions = [
         LinkRowAction("fa fa-rocket", app.config['BASE_PREFIX'] + \
-                    "admin/checkmkrule/debug?obj_id={row_id}"),
+                    "admin/host/debug?obj_id={row_id}"),
     ]
 
     column_filters = (
@@ -680,6 +724,48 @@ class HostModelView(DefaultModelView):
             }
         }
     }
+
+    @expose('/debug')
+    def debug(self):
+        """
+        Checkmk specific Debug Page
+        """
+        if obj_id := request.args.get('obj_id'):
+            hostname = Host.objects.get(id=obj_id).hostname
+        else:
+            hostname = request.args.get('hostname','').strip()
+        mode = request.args.get('mode', 'checkmk_host')
+
+
+
+        output= {}
+        output_rules = {}
+
+        if hostname:
+            output, output_rules = get_debug(hostname, mode)
+
+        base_urls = {
+            #'filter': f"{app.config['BASE_PREFIX']}admin/checkmkfilterrule/edit/?id=",
+            #'rewrite': f"{app.config['BASE_PREFIX']}admin/checkmkrewriteattributerule/edit/?id=",
+            #'actions': f"{app.config['BASE_PREFIX']}admin/checkmkrule/edit/?id=",
+            'CustomAttributes': f"{app.config['BASE_PREFIX']}admin/customattributerule/edit/?id=",
+        }
+        new_rules = {}
+        for rule_group, rule_data in output_rules.items():
+            new_rules.setdefault(rule_group, [])
+            for rule in rule_data:
+                #if rule_group in base_urls:
+                if rule_group in base_urls:
+                    rule['rule_url'] = f"{base_urls[rule_group]}{rule['id']}"
+                else:
+                    rule['rule_url'] = '#'
+                new_rules[rule_group].append(rule)
+
+        if "Error" in output:
+            output = f"Error: {output['Error']}"
+
+        return self.render('debug_host.html', hostname=hostname, output=output,
+                           rules=new_rules, mode=mode)
 
 
     def __init__(self, model, **kwargs):

@@ -30,6 +30,53 @@ from syncerapi.v1 import (
     Host,
 )
 
+def get_device_debug_data(hostname):
+
+    rules = load_device_rules()
+    rule_logs = {}
+
+    syncer = SyncDevices(False)
+    syncer.debug = True
+    syncer.config = {
+        '_id': "debugmode",
+    }
+
+    if rules['filter']:
+        rules['filter'].debug = True
+    syncer.filter = rules['filter']
+
+    rules['rewrite'].debug = True
+    syncer.rewrite = rules['rewrite']
+
+    rules['actions'].debug=True
+    syncer.actions = rules['actions']
+
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+        for key in list(db_host.cache.keys()):
+            if key.lower().startswith('netbox'):
+                del db_host.cache[key]
+        if "CustomAttributeRule" in db_host.cache:
+            del db_host.cache['CustomAttributeRule']
+        db_host.save()
+    except DoesNotExist:
+        print(f"{cc.FAIL}Host not Found{cc.ENDC}")
+        return
+
+
+    attributes = syncer.get_attributes(db_host, 'netbox')
+
+
+    extra_attributes = syncer.get_host_data(db_host, attributes['all'])
+
+    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_lines
+    if rules['filter']:
+        rule_logs['filter'] = rules['filter'].debug_lines
+    rule_logs['rewrite'] = rules['rewrite'].debug_lines
+    rule_logs['actions'] = rules['actions'].debug_lines
+
+    return attributes, extra_attributes, rule_logs
+
 def load_device_rules():
     """
     Cache all needed Rules for operation
@@ -489,44 +536,15 @@ def netbox_host_debug(hostname):
     """Debug Host Rules"""
     print(f"{cc.HEADER} ***** Run Rules ***** {cc.ENDC}")
 
-    rules = load_device_rules()
-
-    syncer = SyncDevices(False)
-    syncer.debug = True
-    syncer.config = {
-        '_id': "debugmode",
-    }
-
-    if rules['filter']:
-        rules['filter'].debug = True
-    syncer.filter = rules['filter']
-
-    rules['rewrite'].debug = True
-    syncer.rewrite = rules['rewrite']
-
-    rules['actions'].debug=True
-    syncer.actions = rules['actions']
-
     try:
-        db_host = Host.objects.get(hostname=hostname)
-        for key in list(db_host.cache.keys()):
-            if key.lower().startswith('netbox'):
-                del db_host.cache[key]
-        if "CustomAttributeRule" in db_host.cache:
-            del db_host.cache['CustomAttributeRule']
-        db_host.save()
+        attributes, extra_attributes, _debug_log  = get_device_debug_data(hostname)
     except DoesNotExist:
-        print(f"{cc.FAIL}Host not Found{cc.ENDC}")
         return
-
-
-    attributes = syncer.get_attributes(db_host, 'netbox')
 
     if not attributes:
         print(f"{cc.FAIL}THIS HOST IS IGNORED BY RULE{cc.ENDC}")
         return
 
-    extra_attributes = syncer.get_host_data(db_host, attributes['all'])
 
     attribute_table("Full Attribute List", attributes['all'])
     attribute_table("Filtered Attribute for Netbox Rules", attributes['filtered'])

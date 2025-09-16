@@ -149,7 +149,7 @@ def export_hosts(account, limit, debug, dry_run, save_requests):
 #.
 #   .-- Command: Host Debug
 
-def get_debug_data(hostname):
+def get_host_debug_data(hostname):
     """
     Returns Debug Data
     """
@@ -218,7 +218,7 @@ def debug_host(hostname, debug):
     """
 
     try:
-        attributes, actions, _debug_log  = get_debug_data(hostname)
+        attributes, actions, _debug_log  = get_host_debug_data(hostname)
     except DoesNotExist:
         return
 

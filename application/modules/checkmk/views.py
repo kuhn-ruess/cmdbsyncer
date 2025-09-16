@@ -9,13 +9,9 @@ from pygments.lexers import DjangoLexer
 
 from wtforms import HiddenField, StringField, PasswordField
 from wtforms.validators import ValidationError
-from flask import request
-from flask_admin import expose
 from flask_admin.form import rules
-from mongoengine.errors import DoesNotExist
 
 from flask_login import current_user
-from application import app
 from application.views.default import DefaultModelView
 from application.docu_links import docu_links
 
@@ -27,9 +23,7 @@ from application.modules.rule.views import (
     _render_jinja,
 )
 from application.modules.checkmk.models import action_outcome_types, CheckmkSite
-from application.plugins.checkmk import get_debug_data
 
-from application.models.host import Host
 
 div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
@@ -163,80 +157,12 @@ def _render_group_outcome(_view, _context, model, _name):
            "</table>"
     return Markup(html)
 
-def get_host_debug(hostname):
-    """
-    Get Output for Host Debug Page
-    """
-
-    try:
-        Host.objects.get(hostname=hostname)
-
-        output = {}
-        output_rules = {}
-
-        attributes, actions, debug_log = get_debug_data(hostname)
-
-        for type_name, data in debug_log.items():
-            output_rules[type_name] = data
-
-        if attributes:
-            output["Full Attribute List"] = attributes['all']
-            output["Filtered Labels for Checkmk"] = attributes['filtered']
-            output["Actions"] =  actions
-            additional_attributes = {}
-            additional_attributes =  actions.get('custom_attributes', {})
-
-            for additional_attr in actions.get('attributes',[]):
-                if attr_value := attributes['all'].get(additional_attr):
-                    additional_attributes[additional_attr] = attr_value
-            output["Custom Attributes"] = additional_attributes
-        else:
-            output["Info: Host disabled by Filter"] = None
-        return output, output_rules
-    except DoesNotExist:
-        return {'Error': "Host not found in Database"}, {}
 
 #pylint: disable=too-few-public-methods
 class CheckmkRuleView(RuleModelView):
     """
     Custom Rule Model View
     """
-
-    @expose('/debug')
-    def debug(self):
-        """
-        Checkmk specific Debug Page
-        """
-        if obj_id := request.args.get('obj_id'):
-            hostname = Host.objects.get(id=obj_id).hostname
-        else:
-            hostname = request.args.get('hostname','').strip()
-        output= {}
-        output_rules = {}
-
-        if hostname:
-            output, output_rules = get_host_debug(hostname)
-
-        base_urls = {
-            'filter': f"{app.config['BASE_PREFIX']}admin/checkmkfilterrule/edit/?id=",
-            'rewrite': f"{app.config['BASE_PREFIX']}admin/checkmkrewriteattributerule/edit/?id=",
-            'actions': f"{app.config['BASE_PREFIX']}admin/checkmkrule/edit/?id=",
-            'CustomAttributes': f"{app.config['BASE_PREFIX']}admin/customattributerule/edit/?id=",
-        }
-        new_rules = {}
-        for rule_group, rule_data in output_rules.items():
-            new_rules.setdefault(rule_group, [])
-            for rule in rule_data:
-                #if rule_group in base_urls:
-                rule['rule_url'] = f"{base_urls[rule_group]}{rule['id']}"
-                new_rules[rule_group].append(rule)
-
-        if "Error" in output:
-            output = f"Error: {output['Error']}"
-
-        return self.render('debug.html', hostname=hostname, output=output,
-                           rules=new_rules)
-
 
     def __init__(self, model, **kwargs):
         """
