@@ -112,11 +112,11 @@ def jobs(): #pylint: disable=invalid-name
     """
     Run all configured Jobs
     """
-    now = datetime.now()
     stats = False
     try:
         for job in CronGroup.objects(enabled=True).order_by('sort_field'):
             stats = get_stats(job.name)
+            now = datetime.now()
 
 
             force_run = False
