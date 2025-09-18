@@ -149,6 +149,7 @@ def jobs(): #pylint: disable=invalid-name
                 stats.last_message = f"{now}: Started Job: {job.name} (PID: {os.getpid()})"
                 stats.all_messages = f"{now}: Started Job: {job.name} (PID: {os.getpid()})\n"
                 for task in job.jobs:
+                    now = datetime.now()
                     print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
                     stats.last_message = f"{now}: Started Task: {task.name} (PID: {os.getpid()})"
                     stats.all_messages += f"{now}: Started Task:  {task.name} (PID: {os.getpid()})\n"
