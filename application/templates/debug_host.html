@@ -28,6 +28,22 @@
 
 
 <h2>Rules</h2>
+  {% set condition_types = {
+    'equal': "is equal",
+    'in': "contains",
+    'not_in': "not contains",
+    'in_list': "found in given list",
+    'string_in_list': "found in list",
+    'ewith': "endswith",
+    'swith': "startswith",
+    'regex': "regex match",
+    'bool': "Boolean",
+    'ignore': "always match"
+  } %}
+  {% set negate = {
+    true: 'not ',
+    false: ' ',
+  } %}
   <div id="accordion-export">
    <p>
     {% for rule_name in rules.keys() %}
@@ -46,6 +62,7 @@
          <tr>
            <th scope="col" style="width:300px">Rule Name</th>
 	   <th scope="col">Hit</th>
+	   <th scope="col">First reason the rule wont match</th>
 	   <th scope="col">Condition Type</th>
 	   <th scope="col">Last Match</th>
       </tr>
@@ -55,6 +72,45 @@
          <tr {% if rule['hit'] %} class="table-success" {%endif%}>
            <td><a href="{{rule['rule_url']}}">{{rule['name']}}</a></td>
            <td>{{rule['hit']}}</td>
+           {% if rule['no_match_reason'] %}
+           <td>
+            {% set no_match = rule['no_match_reason'] %}
+            {% if no_match['match_type'] == 'host' %}
+                <div class="card">
+                  <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Hostname</h6>
+                    <p class="card-text">
+                     <span class="badge badge-primary">
+                     {{negate[no_match['hostname_match_negate']]}}
+                     {{condition_types[no_match['hostname_match']]}}</span>
+                    <span class="badge badge-info">{{no_match['hostname']}}</span>
+                    </p>
+                  </div>
+                </div>
+            {% else %}
+                <div class="card">
+                  <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Key</h6>
+                    <p class="card-text">
+                     <span class="badge badge-primary">
+                        {{ negate[no_match['tag_match_negate']] }} {{condition_types[no_match['tag_match']]}}
+                     </span>
+                     <span class="badge badge-info">{{ no_match['tag']}}</span>
+                    </p>
+                    <h6 class="card-subtitle mb-2 text-muted">Value</h6>
+                    <p class="card-text">
+                    <span class="badge badge-primary">
+                        {{negate[no_match['value_match_negate']]}} {{condition_types[no_match['value_match']]}}
+                    </span>
+                    <span class="badge badge-info">{{no_match['value']}}</span>
+                    </p>
+                  </div>
+                </div>
+            {% endif %}
+           </td>
+           {% else %}
+           <td></td>
+           {%endif%}
            <td>{{rule['condition_type']}}</td>
            <td>{{rule['last_match']}}</td>
          </tr>
