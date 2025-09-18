@@ -39,7 +39,7 @@ checkmk_open = rules.HTML('<div class="card">'\
 checkmkl_close = rules.HTML("</div></div>")
 
 addional_open = rules.HTML('<div class="card">'\
-        '<h5 class="card-header">Addional Options</h5>'\
+    '<h5 class="card-header">Addional Options</h5>'\
         '<div class="card-body">')
 addional_close = rules.HTML("</div></div>")
 
@@ -675,6 +675,29 @@ class CheckmkSettingsView(DefaultModelView):
         'name': get_rule_json
     }
 
+    form_widget_args = {
+        'cmk_version_filename': {
+            'placeholder': (
+                'Filename of installation file. '
+                'You can use {{CMK_VERSION}} and {{CMK_EDITION}} as placeholders'
+            )
+        },
+        'cmk_version': {
+            'placeholder': "Target Checkmk Version Number",
+        },
+        'server_user': {
+            'placeholder': "User to connect to server where the site is running",
+        },
+        'inital_password': {
+            'placeholder': "Initial Passwort if we need to create the site",
+        },
+        'subscription_username': {
+            'placeholder': (
+                "Enter Data if you want the syncer to download this "
+                "Versions directly from checkmk"
+            ),
+        },
+    }
 
     column_exclude_list = [
         'inital_password',
