@@ -138,21 +138,11 @@ def _render_labels(_view, _context, model, _name):
     """
     if not model.labels:
         return Markup("")
-    html = '<table class="table table-bordered">'
+    html = ""
     for key, value in model.labels.items():
         if not value:
             continue
-        html += f'''
-            <tr>
-                <th scope="row" style="width: 30%;">
-                    {key}
-                </th>
-                <td>
-                    <span class="badge badge-info">{value}</span>
-                </td>
-            </tr>
-        '''
-    html += '</table>'
+        html += f'<span class="badge badge-primary mr-1" style="margin: 2px;">{key}:{value}</span>'
     return Markup(html)
 
 def _render_cmdb_template(_view, _context, model, _name):
