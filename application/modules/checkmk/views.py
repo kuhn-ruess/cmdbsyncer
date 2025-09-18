@@ -10,6 +10,9 @@ from pygments.lexers import DjangoLexer
 from wtforms import HiddenField, StringField, PasswordField
 from wtforms.validators import ValidationError
 from flask_admin.form import rules
+from flask_admin.actions import action
+from flask_admin.base import expose
+from flask import redirect, url_for, request, render_template_string, flash
 
 from flask_login import current_user
 from application.views.default import DefaultModelView
@@ -22,7 +25,7 @@ from application.modules.rule.views import (
     get_rule_json,
     _render_jinja,
 )
-from application.modules.checkmk.models import action_outcome_types, CheckmkSite
+from application.modules.checkmk.models import action_outcome_types, CheckmkSite, CheckmkSettings
 
 
 div_open = rules.HTML('<div class="form-check form-check-inline">')
@@ -720,6 +723,68 @@ class CheckmkSettingsView(DefaultModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    @action('set_cmk_version', 'Set CMK Version',
+            'Are you sure you want to set the CMK Version for the selected Entries?')
+    def action_set_cmk_version(self, ids):
+        """
+        Action to set CMK Version for selected Entries
+        """
+        url = url_for('.set_cmk_version_form', ids=','.join(ids))
+        return redirect(url)
+
+    @expose('/set_cmk_version_form')
+    def set_cmk_version_form(self):
+        """
+        Custom form for CMK Version selection
+        """
+        ids = request.args.get('ids', '').split(',')
+
+        version_html = """
+        <div class="container mt-4">
+            <h3>Set CMK Version</h3>
+            <form method="POST" action="{{ url_for('.process_cmk_version_assignment') }}">
+                <input type="hidden" name="rule_ids" value="{{ ids|join(',') }}">
+                <div class="form-group">
+                    <label for="cmk_version">CMK Version:</label>
+                    <input type="text" class="form-control" id="cmk_version" name="cmk_version" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Apply Version</button>
+                    <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+        """
+        return render_template_string(version_html, ids=ids)
+
+    @expose('/process_cmk_version_assignment', methods=['POST'])
+    def process_cmk_version_assignment(self):
+        """
+        Process the CMK Version assignment
+        """
+        rule_ids = request.form.get('rule_ids', '').split(',')
+        cmk_version = request.form.get('cmk_version', '').strip()
+
+        if not cmk_version:
+            flash('Please enter a CMK Version', 'error')
+            return redirect(url_for('.index_view'))
+
+        updated_count = 0
+        try:
+            for rule_id in rule_ids:
+                if not rule_id.strip():
+                    continue
+                entry = CheckmkSettings.objects(id=rule_id).first()
+                if entry:
+                    entry.cmk_version = cmk_version
+                    entry.save()
+                    updated_count += 1
+            flash(f'CMK Version "{cmk_version}" applied to {updated_count} entries', 'success')
+        except Exception as e:
+            flash(f'Error applying CMK Version: {str(e)}', 'error')
+
+        return redirect(url_for('.index_view'))
 
 
 class CheckmkFolderPoolView(DefaultModelView):
