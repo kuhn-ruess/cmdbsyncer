@@ -168,6 +168,12 @@ class SyncIdoit(Plugin):
         print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: "\
               f"Read all servers")
 
+        # ToDo
+        # Loop over OBJTYPE from config
+        # Get all objects
+        # Query all categories
+        # Make data available for syncer
+
         json_data = {
             "version": "2.0",
             "method": "cmdb.objects.read",
