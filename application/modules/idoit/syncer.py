@@ -114,28 +114,26 @@ class SyncIdoit(Plugin):
             'version': '2.0',
             'method': 'cmdb.object_type_categories.read',
             'params': {
-                'apikey': self.config['api_token'],
+                'apikey': self.config['password'],
                 'language': 'de',
                 'type': obj_id,
             },
         }
 
-        response = self.request(json_data)['result']
-        blacklist = [
-            'C__CATG__LOGBOOK',
-        ]
+        response = self.request(json_data)["result"]
+
         for cat in response['catg']:
-            if cat['const'] in blacklist:
-                continue
             if cat['const'] not in CATEGORY_TEMPLATES.keys():
                 continue
-            cache_name = f"{cat['id']}_{cat['const']}"
-            if cache_name not in self.category_cache:
-                self.category_cache[cache_name] = \
-                        self.get_category_attributes(obj_id, cat['const'])
-                self.category_cache['const'] = cat['const']
 
-            yield self.category_cache[cache_name]
+            #cache_name = f"{cat['id']}_{cat['const']}"
+            #if cache_name not in self.category_cache:
+            #    self.category_cache[cache_name] = \
+            #            self.get_category_attributes(obj_id, cat['const'])
+            #    self.category_cache['const'] = cat['const']
+
+            #yield self.category_cache[cache_name]
+            yield self.get_category_attributes(obj_id, cat['const'])
 
 #.
 #   .-- Get I-Doit Category Attributes
@@ -148,52 +146,53 @@ class SyncIdoit(Plugin):
             'version': '2.0',
             'method': 'cmdb.category.read',
             'params': {
-                'apikey': self.config['api_token'],
+                'apikey': self.config['password'],
                 'language': 'de',
                 'category': const_id,
                 'objID': obj_id,
             },
         }
         response = self.request(json_data)
+
         if 'result' in response:
             return response['result']
         return {}
 #.
 #   .-- Get I-doit Objects
-    def get_objects(self, get_categories=False):
+    def get_objects(self, object_type="C__OBJTYPE__SERVER", get_categories=False):
         """
         Read full list of devices
         """
 
         print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: "\
-              f"Read all servers")
-
-        # ToDo
-        # Loop over OBJTYPE from config
-        # Get all objects
-        # Query all categories
-        # Make data available for syncer
+              f"Read all object from {object_type}")
 
         json_data = {
             "version": "2.0",
             "method": "cmdb.objects.read",
             "params": {
                 "filter": {
-                    "type": "C__OBJTYPE__SERVER",
+                    "type": f"{object_type}",
                     "status": "C__RECORD_STATUS__NORMAL"
                 },
-                "apikey": self.config["api_token"],
+                "apikey": self.config["password"],
                 "language": "de"
             },
             "id": 1
         }
+
         servers = {}
         for server in self.request(json_data)['result']:
+            logger.debug(f"server: {server}")
+
             title = server['title']
+
             if get_categories:
                 categories = [x for x in self.get_object_categories(server['id']) if x]
                 server['categories'] = categories
+
             servers[title] = server
+
         return servers.items()
 #.
 #   .--- Get Object Payload
@@ -216,7 +215,7 @@ class SyncIdoit(Plugin):
                "type": object_type,
                "title": hostname,
                "description": object_description,
-               "apikey": self.config.get("api_token", "DEFINE API TOKEN"),
+               "apikey": self.config.get("password", "DEFINE API TOKEN"),
                "language": "de",
                "categories": rules.get('id_category', {})
            },
@@ -271,20 +270,29 @@ class SyncIdoit(Plugin):
                 print(f"{CC.WARNING} *{CC.ENDC}  Host already existed")
 
 
+#.
 #   .--- Import Hosts
     def import_hosts(self):
         """
         Import objects from i-doit
         """
 
-        if objects := self.get_objects(get_categories=True):
-            for device, labels in objects:
-                host_obj = Host.get_host(device)
-                print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
-                host_obj.update_host(labels)
-                do_save = host_obj.set_account(account_dict=self.config)
-                if do_save:
-                    host_obj.save()
-        else:
-            print(f"\n{CC.HEADER}no devices found{CC.ENDC}")
-#.
+        # loop for object type
+        object_types = self.config.get("object_types", "")
+        object_types = [x.strip() for x in object_types.split(",")]
+
+        for object_type in object_types:
+            # get objects from types
+            if objects := self.get_objects(object_type=object_type, get_categories=True):
+
+                for device, labels in objects:
+                    host_obj = Host.get_host(device)
+                    print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
+                    host_obj.update_host(labels)
+                    do_save = host_obj.set_account(account_dict=self.config)
+
+                    if do_save:
+                        host_obj.save()
+
+            else:
+                print(f"\n{CC.HEADER}no devices found{CC.ENDC}")
