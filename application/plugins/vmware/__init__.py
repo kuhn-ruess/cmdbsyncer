@@ -6,17 +6,17 @@ import click
 from application.modules.rule.rewrite import Rewrite
 
 
-from application.modules.vmware.models import (
+from .models import (
         VMwareRewriteAttributes,
         VMwareCustomAttributes,
 
         )
 
-from application.modules.vmware.custom_attributes import (
+from .custom_attributes import (
         VMwareCustomAttributesPlugin,
         )
 
-from application.modules.vmware.rules import VmwareCustomAttributesRule
+from .rules import VmwareCustomAttributesRule
 
 from syncerapi.v1 import (
     register_cronjob,
