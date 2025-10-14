@@ -2,9 +2,9 @@
 Checkmk Users Sync
 """
 from application import logger
-from application.modules.checkmk.cmk2 import CMK2
+from application.plugins.checkmk.cmk2 import CMK2
 from application.modules.rule.rule import Rule
-from application.modules.checkmk.models import CheckmkUserMngmt
+from application.plugins.checkmk.models import CheckmkUserMngmt
 
 from syncerapi.v1 import cc as CC
 

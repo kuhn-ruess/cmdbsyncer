@@ -11,7 +11,7 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 
 from application import logger
 from application.models.host import Host
-from application.modules.checkmk.cmk2 import CmkException, CMK2
+from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
 from application.modules.debug import ColorCodes as CC
 

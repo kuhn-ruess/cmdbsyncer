@@ -3,12 +3,12 @@ Checkmk Groups Export
 """
 from mongoengine.errors import DoesNotExist
 
-from application.modules.checkmk.cmk2 import CMK2, CmkException
+from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.rule.rule import Rule
-from application.modules.checkmk.models import CheckmkGroupRule
+from application.plugins.checkmk.models import CheckmkGroupRule
 from application.helpers.syncer_jinja import get_list
 
-from application.modules.checkmk.models import CheckmkObjectCache
+from application.plugins.checkmk.models import CheckmkObjectCache
 
 from syncerapi.v1 import render_jinja, cc as CC, Host
 

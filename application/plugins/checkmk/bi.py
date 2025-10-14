@@ -5,7 +5,7 @@ Checkmk BI Rules
 #pylint: disable=logging-fstring-interpolation
 import ast
 from application import logger
-from application.modules.checkmk.cmk2 import CMK2
+from application.plugins.checkmk.cmk2 import CMK2
 from application.modules.rule.rule import Rule
 
 from syncerapi.v1 import render_jinja, cc as CC, Host

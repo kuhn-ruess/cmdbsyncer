@@ -4,7 +4,7 @@
 Helper to find a free Poolfolder
 """
 from mongoengine.errors import DoesNotExist
-from application.modules.checkmk.models import CheckmkFolderPool
+from application.plugins.checkmk.models import CheckmkFolderPool
 
 
 def get_folder(only_pools=None):

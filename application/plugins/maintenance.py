@@ -14,10 +14,10 @@ from mongoengine.errors import DoesNotExist, ValidationError
 from application import app, logger, log
 from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
-from application.modules.checkmk.poolfolder import remove_seat
+from application.plugins.checkmk.poolfolder import remove_seat
 from application.models.account import Account
 from application.models.user import User
-from application.modules.checkmk.models import CheckmkFolderPool
+from application.plugins.checkmk.models import CheckmkFolderPool
 from application.models.config import Config
 from application.helpers.cron import register_cronjob
 from application.helpers.get_account import get_account_by_name

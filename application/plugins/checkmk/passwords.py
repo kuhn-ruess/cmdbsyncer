@@ -4,8 +4,8 @@ Checkmk DCD Manager
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from application.modules.checkmk.models import CheckmkPassword
-from application.modules.checkmk.cmk2 import CMK2
+from application.plugins.checkmk.models import CheckmkPassword
+from application.plugins.checkmk.cmk2 import CMK2
 
 
 class CheckmkPasswordSync(CMK2):
