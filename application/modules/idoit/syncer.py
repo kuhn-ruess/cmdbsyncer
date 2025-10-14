@@ -282,6 +282,10 @@ class SyncIdoit(Plugin):
         object_types = [x.strip() for x in object_types.split(",")]
 
         for object_type in object_types:
+
+            if not object_type:
+                continue
+
             # get objects from types
             if objects := self.get_objects(object_type=object_type, get_categories=True):
 
