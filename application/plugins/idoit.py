@@ -65,9 +65,8 @@ def cli_import_hosts(account, debug):
     """
 
     import_hosts(account, debug)
+
 #.
-
-
 #   .-- Command: export hosts
 def export_hosts(account):
     """
