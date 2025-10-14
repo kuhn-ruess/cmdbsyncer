@@ -25,7 +25,7 @@ from application.modules.rule.views import (
     get_rule_json,
     _render_jinja,
 )
-from application.modules.checkmk.models import action_outcome_types, CheckmkSite, CheckmkSettings
+from .models import action_outcome_types, CheckmkSite, CheckmkSettings
 
 
 div_open = rules.HTML('<div class="form-check form-check-inline">')

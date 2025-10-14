@@ -6,12 +6,12 @@ import ast
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import logger, init_db, app
-from application.modules.checkmk.cmk2 import CMK2
+from application.plugins.checkmk.cmk2 import CMK2
 from application.modules.debug import ColorCodes as CC
-from application.modules.checkmk.models import CheckmkTagMngmt
+from application.plugins.checkmk.models import CheckmkTagMngmt
 from application.models.host import Host
 from application.helpers.syncer_jinja import render_jinja
-from application.modules.checkmk.helpers import cmk_cleanup_tag_id
+from application.plugins.checkmk.helpers import cmk_cleanup_tag_id
 
 
 class CheckmkTagSync(CMK2):

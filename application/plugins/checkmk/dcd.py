@@ -3,7 +3,7 @@ Checkmk DCD Manager
 """
 from jinja2.exceptions import UndefinedError
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application.modules.checkmk.cmk2 import CMK2
+from application.plugins.checkmk.cmk2 import CMK2
 
 from application import logger
 

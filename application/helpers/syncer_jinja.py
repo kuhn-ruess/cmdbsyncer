@@ -9,8 +9,24 @@ from jinja2 import StrictUndefined
 import datetime
 
 from application import logger
-from application.modules.checkmk.helpers import cmk_cleanup_tag_id, cmk_cleanup_hostname
+def _cmk_cleanup_tag_id(value):
+    """
+    Lazily import the Checkmk helper to avoid circular imports while still
+    exposing the cleanup function to Jinja templates.
+    """
+    from application.plugins.checkmk.helpers import cmk_cleanup_tag_id as _cleanup
 
+    return _cleanup(value)
+
+
+def _cmk_cleanup_hostname(value):
+    """
+    Lazily import the Checkmk helper to avoid circular imports while still
+    exposing the cleanup function to Jinja templates.
+    """
+    from application.plugins.checkmk.helpers import cmk_cleanup_hostname as _cleanup
+
+    return _cleanup(value)
 
 
 def syncer_eval(string, default=None):
@@ -118,8 +134,8 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     value_tpl.globals.update({
         'get_list': get_list,
         'merge_list_of_dicts': merge_list_of_dicts,
-        'cmk_cleanup_tag_id': cmk_cleanup_tag_id,
-        'cmk_cleanup_hostname': cmk_cleanup_hostname,
+        'cmk_cleanup_tag_id': _cmk_cleanup_tag_id,
+        'cmk_cleanup_hostname': _cmk_cleanup_hostname,
         'get_ip_network': get_ip_network,
         'get_ip4_interface': get_ip_interface,
         'get_ip_interface': get_ip_interface,

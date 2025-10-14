@@ -6,10 +6,10 @@ import ast
 import json
 
 from application.models.host import Host, app
-from application.modules.checkmk.models import (
+from application.plugins.checkmk.models import (
    CheckmkInventorizeAttributes
 )
-from application.modules.checkmk.cmk2 import CMK2, CmkException
+from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 
 

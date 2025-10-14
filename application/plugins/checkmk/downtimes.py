@@ -6,7 +6,7 @@ import datetime
 import calendar
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from application.modules.checkmk.cmk2 import CmkException, CMK2
+from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from syncerapi.v1 import Host, cc, render_jinja
 
 _weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]

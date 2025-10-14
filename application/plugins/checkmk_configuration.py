@@ -3,9 +3,9 @@ Add Configuration in Checkmk
 """
 #pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member, too-many-locals
 import click
-from application.modules.checkmk.cmk2 import cli_cmk
+from application.plugins.checkmk.cmk2 import cli_cmk
 from application.helpers.cron import register_cronjob
-from application.modules.checkmk.inits import (
+from application.plugins.checkmk.inits import (
     export_bi_rules,
     export_bi_aggregations,
     export_rules,

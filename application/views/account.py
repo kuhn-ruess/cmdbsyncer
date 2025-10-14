@@ -10,7 +10,8 @@ from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
 from application.models.account import CustomEntry, Account
-from application.modules.checkmk.models import CheckmkObjectCache
+#@TODO Won't work with Plugin style
+from application.plugins.checkmk.models import CheckmkObjectCache
 from application.docu_links import docu_links
 from mongoengine.queryset.visitor import Q
 

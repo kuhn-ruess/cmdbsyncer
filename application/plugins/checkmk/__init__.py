@@ -6,22 +6,19 @@ Commands to handle Checkmk Sync
 import click
 from mongoengine.errors import DoesNotExist
 from application import log
-from application.modules.checkmk.syncer import SyncCMK2
-from application.modules.checkmk.cmk2 import cli_cmk
+from .cmk2 import cli_cmk
 from application.helpers.cron import register_cronjob
 from application.modules.debug import ColorCodes, attribute_table
 
 
 from application.modules.rule.filter import Filter
-from application.modules.checkmk.models import CheckmkFilterRule
+from .models import CheckmkFilterRule
 
 from application.modules.rule.rewrite import Rewrite
-from application.modules.checkmk.models import CheckmkRewriteAttributeRule
+from .models import CheckmkRewriteAttributeRule
 
-from application.modules.checkmk.rules import CheckmkRule
-from application.modules.checkmk.models import CheckmkRule as CheckmkRuleModel
-
-from application.models.host import Host
+from .rules import CheckmkRule
+from .models import CheckmkRule as CheckmkRuleModel
 
 def _load_rules():
     """
@@ -58,6 +55,9 @@ def show_hosts(disabled_only=False):
     Args:
         disabled_only (bool): Only not synced hosts
     """
+    from .syncer import SyncCMK2
+    from application.models.host import Host
+
     rules = _load_rules()
     syncer = SyncCMK2()
     syncer.filter = rules['filter']
@@ -83,6 +83,9 @@ def show_labels():
     ### Example
     _./cmdbsyncer checkmk show_labels_
     """
+    from .syncer import SyncCMK2
+    from application.models.host import Host
+
     rules = _load_rules()
     syncer = SyncCMK2()
     syncer.filter = rules['filter']
@@ -105,6 +108,7 @@ def show_labels():
 #   .-- Command: Export Hosts
 def _inner_export_hosts(account, limit=False, debug=False, dry_run=False, save_requests=False):
     try:
+        from .syncer import SyncCMK2
         rules = _load_rules()
         syncer = SyncCMK2(account)
         syncer.dry_run = dry_run
@@ -153,6 +157,9 @@ def get_host_debug_data(hostname):
     """
     Returns Debug Data
     """
+    from .syncer import SyncCMK2
+    from application.models.host import Host
+
     rules = _load_rules()
 
     rule_logs = {}

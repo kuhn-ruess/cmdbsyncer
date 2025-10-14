@@ -4,7 +4,7 @@ Ansible Checkmk Modul
 """
 import jinja2
 from mongoengine.errors import DoesNotExist
-from application.modules.checkmk.models import CheckmkSite
+from application.plugins.checkmk.models import CheckmkSite
 from application.modules.plugin import Plugin
 
 class SyncSites(Plugin):

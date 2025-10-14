@@ -2,26 +2,26 @@
 Inits for the Plugins
 """
 from application import log
-from application.modules.checkmk.cmk2 import CMK2, CmkException
+from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 from application.models.host import Host
 from application.modules.rule.filter import Filter
 
-from application.modules.checkmk.tags import CheckmkTagSync
-from application.modules.checkmk.cmk_rules import CheckmkRuleSync
-from application.modules.checkmk.downtimes import CheckmkDowntimeSync
-from application.modules.checkmk.rules import CheckmkRulesetRule, DefaultRule
-from application.modules.checkmk.inventorize import InventorizeHosts
-from application.modules.checkmk.dcd import CheckmkDCDRuleSync
-from application.modules.checkmk.passwords import CheckmkPasswordSync
-from application.modules.checkmk.groups import CheckmkGroupSync
-from application.modules.checkmk.users import CheckmkUserSync
-from application.modules.checkmk.bi import BI
+from application.plugins.checkmk.tags import CheckmkTagSync
+from application.plugins.checkmk.cmk_rules import CheckmkRuleSync
+from application.plugins.checkmk.downtimes import CheckmkDowntimeSync
+from application.plugins.checkmk.rules import CheckmkRulesetRule, DefaultRule
+from application.plugins.checkmk.inventorize import InventorizeHosts
+from application.plugins.checkmk.dcd import CheckmkDCDRuleSync
+from application.plugins.checkmk.passwords import CheckmkPasswordSync
+from application.plugins.checkmk.groups import CheckmkGroupSync
+from application.plugins.checkmk.users import CheckmkUserSync
+from application.plugins.checkmk.bi import BI
 
 
 
 from application.modules.rule.rewrite import Rewrite
-from application.modules.checkmk.models import (
+from application.plugins.checkmk.models import (
    CheckmkRuleMngmt,
    CheckmkBiRule,
    CheckmkBiAggregation,

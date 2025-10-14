@@ -11,7 +11,7 @@ from application import logger
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
-from application.modules.checkmk import poolfolder
+from . import poolfolder
 
 class CheckmkRulesetRule(Rule): # pylint: disable=too-few-public-methods, too-many-locals, too-many-nested-blocks
     """

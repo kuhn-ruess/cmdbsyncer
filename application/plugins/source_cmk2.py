@@ -3,11 +3,11 @@
 Get Hosts from a CMKv2 Instance
 """
 import click
-from application.modules.checkmk.cmk2 import cli_cmk
+from application.plugins.checkmk.cmk2 import cli_cmk
 from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
 from application.helpers.cron import register_cronjob
-from application.modules.checkmk.cmk2 import CMK2, CmkException
+from application.plugins.checkmk.cmk2 import CMK2, CmkException
 
 
 
