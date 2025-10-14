@@ -19,7 +19,7 @@ from syncerapi.v1.inventory import (
 
 from application import logger
 from application import app
-from application.modules.vmware.vmware import VMWareVcenterPlugin
+from .vmware import VMWareVcenterPlugin
 
 
 class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):

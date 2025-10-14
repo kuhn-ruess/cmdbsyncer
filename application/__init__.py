@@ -251,16 +251,6 @@ admin.add_view(NetboxDataFlowModelView(NetboxDataflowModels,\
 admin.add_view(NetboxDataFlowAttributesView(NetboxDataflowAttributes,\
         name="Field Definition", category="Plugin: Dataflow"))
 #.
-#   .-- VMware
-admin.add_sub_category(name="VMware", parent_name="Modules")
-
-from application.modules.vmware.models import VMwareRewriteAttributes, VMwareCustomAttributes
-from application.modules.vmware.views import VMwareCustomAttributeView
-admin.add_view(RewriteAttributeView(VMwareRewriteAttributes, name="Rewrite Attributes",
-                                                            category="VMware"))
-admin.add_view(VMwareCustomAttributeView(VMwareCustomAttributes, name="Custom Attributes",
-                                                            category="VMware"))
-#.
 #   .-- Config
 from application.models.user import User
 from application.views.user import UserView
