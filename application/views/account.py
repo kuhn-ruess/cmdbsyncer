@@ -320,16 +320,10 @@ class AccountModelView(DefaultModelView):
             ]
 
         elif form.type.data == 'i-doit':
-            # ToDo
-            # Add OBJTYPE for querying as list
-            # C__OBJTYPE__SERVER, C__OBJECT_TYPE__1455712502, C__OBJTYPE__VIRTUAL_SERVER, C__OBJTYPE__BLADE_SERVER, ...
-
-            # Add CATG for querying as list for transfering data
-            # C__CATG__IP, C__CATG__MONITORING, ...
-
-            # Remove username and password: it is not needed
             default_fields = [
-                ('api_token', ""),
+                ('object_types', "C__OBJTYPE__SERVER,C__OBJTYPE__VIRTUAL_SERVER,"),
+                ('object_categories', "C__CATG__IP,C__CATG__MONITORING,"),
+                ('language', "de"),
             ]
         elif form.type.data == 'netbox':
             default_fields = [

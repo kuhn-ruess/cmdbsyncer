@@ -43,7 +43,7 @@ def _cli_idoit():
 
 
 #   .-- Command: import hosts
-def import_hosts(account):
+def import_hosts(account, debug=False):
     """
     Import hosts from i-doit
     """
@@ -51,18 +51,20 @@ def import_hosts(account):
 
     target_config = get_account_by_name(account)
     syncer = SyncIdoit()
+    syncer.debug = debug
     syncer.config = target_config
     syncer.import_hosts()
 
 
 @_cli_idoit.command('import_hosts')
 @click.option("--account")
-def cli_import_hosts(account):
+@click.option("--debug", default=False, is_flag=True)
+def cli_import_hosts(account, debug):
     """
     Import hosts from i-doit
     """
 
-    import_hosts(account)
+    import_hosts(account, debug)
 #.
 
 
