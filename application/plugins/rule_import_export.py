@@ -11,7 +11,7 @@ from mongoengine.errors import NotUniqueError, ValidationError
 from application import app
 
 enabled_rules = {
-    'ansible_customvars': ('application.modules.ansible.models', 'AnsibleCustomVariablesRule'),
+    'ansible_customvars': ('application.plugins.ansible.models', 'AnsibleCustomVariablesRule'),
     'custom_attributes': ('application.modules.custom_attributes.models', 'CustomAttributeRule'),
     'cmk_tags': ('application.plugins.checkmk.models', 'CheckmkTagMngmt'),
     'cmk_filter': ('application.plugins.checkmk.models', 'CheckmkFilterRule'),
