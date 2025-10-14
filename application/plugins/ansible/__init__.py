@@ -15,11 +15,12 @@ from application.modules.debug import ColorCodes, attribute_table
 from application.modules.rule.filter import Filter
 from application.modules.rule.rewrite import Rewrite
 
-from application.modules.ansible.models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
-                                               AnsibleCustomVariablesRule
-from application.modules.ansible.rules import AnsibleVariableRule
-from application.modules.ansible.syncer import SyncAnsible
-from application.modules.ansible.site_syncer import SyncSites
+from .models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
+                    AnsibleCustomVariablesRule
+from .rules import AnsibleVariableRule
+from .syncer import SyncAnsible
+from .site_syncer import SyncSites
+
 from application.helpers.cron import register_cronjob
 
 @app.cli.group(name='ansible')

@@ -5,7 +5,7 @@ Ansible Api
 # pylint: disable=no-member
 from flask_restx import Namespace, Resource
 from application.api import require_token
-from application.modules.ansible.syncer import SyncAnsible
+from application.plugins.ansible.syncer import SyncAnsible
 from application.plugins.ansible import load_rules
 
 API = Namespace('ansible')

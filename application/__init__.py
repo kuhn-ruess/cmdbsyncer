@@ -170,18 +170,6 @@ from application.modules.custom_attributes.views import CustomAttributeView
 admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules"))
 
 #.
-#   .-- Ansible
-admin.add_sub_category(name="Ansible", parent_name="Modules")
-from application.modules.ansible.models import AnsibleCustomVariablesRule, \
-                                        AnsibleFilterRule, AnsibleRewriteAttributesRule
-from application.modules.ansible.views import AnsibleCustomVariablesView
-
-admin.add_view(RewriteAttributeView(AnsibleRewriteAttributesRule, name="Rewrite Attributes",
-                                                            category="Ansible"))
-admin.add_view(FiltereModelView(AnsibleFilterRule, name="Filter", category="Ansible"))
-admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
-                                    name="Ansible Attributes", category="Ansible"))
-#.
 
 
 from application.models.account import Account
