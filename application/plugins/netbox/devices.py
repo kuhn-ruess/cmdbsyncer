@@ -2,23 +2,20 @@
 Create Devices in Netbox
 """
 #pylint: disable=no-member, too-many-locals, import-error
-
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application.modules.netbox.netbox import SyncNetbox
-from application import logger
 
-from syncerapi.v1 import (
-    cc,
-    Host,
-)
+from .netbox import SyncNetbox
+
+from application.models.host import Host
+from application.modules.debug import ColorCodes as CC
 
 
-class SyncVirtualMachines(SyncNetbox):
+class SyncDevices(SyncNetbox):
     """
-    Netbox Virutal Machine Operations
+    Netbox Device Operations
     """
+
     console = None
-
     set_syncer_id = True
 
     @staticmethod
@@ -27,17 +24,19 @@ class SyncVirtualMachines(SyncNetbox):
         Return Fields needed for Devices
         """
         return {
+            'manufacturer': {
+                'type': 'dcim.manufacturers',
+                'has_slug' : True,
+                #'sub_fields' : ['manufacturer'],
+            },
             'site': {
                 'type': 'dcim.sites',
                 'has_slug': True,
             },
-            'manufacturer': {
-                'type': 'dcim.manufacturers',
-                'has_slug' : True,
-            },
-            'cluster': {
-                'type': 'virtualization.clusters',
+            'device_type': {
+                'type': 'dcim.device-types',
                 'has_slug': True,
+                'sub_fields' : ['manufacturer', 'model'],
             },
             'role': {
                 'type': 'dcim.device-roles',
@@ -47,7 +46,6 @@ class SyncVirtualMachines(SyncNetbox):
                 'type': 'dcim.platforms',
                  'has_slug' : True,
                  'sub_fields' : ['manufacturer'],
-
             },
             'primary_ip4' : {
                 'type': 'ipam.ip-addresses',
@@ -58,8 +56,9 @@ class SyncVirtualMachines(SyncNetbox):
                 'type': 'ipam.ip-addresses',
                 'has_slug': False,
                 'name_field': 'id',
-            }
+            },
         }
+
 
     def get_ip_id(self, custom_rules, all_attributes, mode):
         """
@@ -82,103 +81,107 @@ class SyncVirtualMachines(SyncNetbox):
                     del custom_rules['fields'][mode]
         return custom_rules
 
-#   .--- Sync Virtual Machines
-    def sync_virtualmachines(self):
+#   .--- Export Devices
+    def export_hosts(self):
         """
         Update Devices Table in Netbox
         """
+        #pylint: disable=too-many-locals
+        current_netbox_devices = self.nb.dcim.devices
+
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
+        found_hosts = []
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             self.console = progress.console.print
             task1 = progress.add_task("Updating Objects", total=total)
-
-            current_nb_objects = self.nb.virtualization.virtual_machines
-            found_hosts = []
-            for db_object in db_objects:
-                hostname = db_object.hostname
+            for db_host in db_objects:
+                device = False
                 try:
-                    all_attributes = self.get_attributes(db_object, 'netbox')
+                    hostname = db_host.hostname
+                    all_attributes = self.get_attributes(db_host, 'netbox')
                     if not all_attributes:
                         progress.advance(task1)
                         continue
-                    cfg = self.get_host_data(db_object, all_attributes['all'])
-                    if not cfg:
+                    custom_rules = self.get_host_data(db_host, all_attributes['all'])
+                    if not custom_rules:
                         progress.advance(task1)
                         continue
-                    cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip4')
-                    cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip6')
 
-                    object_name = hostname
-                    query = {
-                        'name': object_name,
-                    }
-                    logger.debug("Object Filter Query: %r", query)
+                    if custom_rules.get('ignore_host'):
+                        progress.advance(task1)
+                        continue
+
+                    custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip4')
+                    custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
+
+
                     found_hosts.append(hostname)
-                    if current_obj := current_nb_objects.get(**query):
-                        if payload := self.get_update_keys(current_obj, cfg,
-                                                           ['primary_ip4', 'primary_ip6']):
-                            self.console(f"* Update Object: {object_name} {payload}")
-                            current_obj.update(payload)
+                    if device := current_netbox_devices.get(name=hostname):
+                        # Update
+                        if update_keys := self.get_update_keys(device, custom_rules,
+                                                               ['primary_ip4', 'primary_ip6']):
+                            self.console(f" * Update Device {hostname}: {update_keys}")
+                            device.update(update_keys)
                         else:
-                            self.console(f"* Object {object_name} already up to date")
+                            self.console(f" * Already up to date {hostname}")
                     else:
                         ### Create
-                        self.console(f"* Create Object {object_name}")
-                        payload = self.get_update_keys(False, cfg)
-                        payload['name'] = object_name
-                        logger.debug("Create Payload: %r", payload)
-                        current_obj = self.nb.virtualization.virtual_machines.create(payload)
+                        self.console(f" * Create Device {hostname}")
+                        payload = self.get_update_keys(False, custom_rules)
+                        payload['name'] = hostname
+                        device = self.nb.dcim.devices.create(payload)
+
                 except Exception as error:
                     if self.debug:
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
-                    print(f" Error in process: {error}")
-                if current_obj:
-                    attr_name = f"{self.config['name']}_virtualmachine_id"
-                    db_object.set_inventory_attribute(attr_name, current_obj.id)
-
+                    self.console(f" Error in process: {error}")
                 progress.advance(task1)
 
+                if device:
+                    attr_name = f"{self.config['name']}_device_id"
+                    db_host.set_inventory_attribute(attr_name, device.id)
+
             task2 = progress.add_task("Cleanup netbox", total=None)
-            for vm in current_nb_objects.filter(cf_cmdbsyncer_id=str(self.account_id)):
-                if str(vm.status) == 'Decommissioning':
+            for device in current_netbox_devices.filter(cf_cmdbsyncer_id=str(self.account_id)):
+                if str(device.status) == 'Decommissioning':
                     continue
-                if vm.name not in found_hosts:
-                    self.console(f"* Set Decommissioning for {vm.name}")
-                    vm.update({"status": 'decommissioning'})
+                if device.name not in found_hosts:
+                    self.console(f"* Set Inactive for {device.name}")
+                    device.update({"status": 'decommissioning'})
                     progress.advance(task2)
 #.
+#   .--- Import Devices
     def import_hosts(self):
         """
-        Import VMS out of Netbox
+        Import Objects from Netbox to the Syncer
         """
-        vm_filter = {}
         import_id = self.get_unique_id()
+        device_filter = {}
         if import_filter := self.config.get('import_filter'):
-            vm_filter  = dict([x.strip().split(':') for x in import_filter.split(',') if x])
-        for vm in self.nb.virtualization.virtual_machines.filter(**vm_filter):
+            device_filter = dict([x.strip().split(':') for x in import_filter.split(',') if x])
+        for device in self.nb.dcim.devices.filter(**device_filter):
             try:
-                hostname = vm.name
+                hostname = device.name
                 if not hostname:
                     continue
-                labels = vm.__dict__
+                labels = device.__dict__
                 for what in ['has_details', 'api',
                              'default_ret', 'endpoint',
                              '_full_cache', '_init_cache']:
                     del labels[what]
-
                 if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
                     hostname = Host.rewrite_hostname(hostname,
                                                      self.config['rewrite_hostname'], labels)
                 host_obj = Host.get_host(hostname)
-                print(f"\n{cc.HEADER}Process VM: {hostname}{cc.ENDC}")
-                result = self.handle_nb_attributes(labels)
-                host_obj.update_host(result)
+                print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
+                rendered_labels = self.handle_nb_attributes(labels)
+                host_obj.update_host(rendered_labels)
                 do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
                 if do_save:
                     host_obj.save()
@@ -188,3 +191,4 @@ class SyncVirtualMachines(SyncNetbox):
                 self.log_details.append((f'import_error {hostname}', str(error)))
         if extra_filter := self.config.get('delete_host_if_not_found_on_import'):
             Host.delete_host_not_found_on_import(self.config['name'], import_id, extra_filter)
+#.

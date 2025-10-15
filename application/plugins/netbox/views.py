@@ -12,14 +12,14 @@ from wtforms import HiddenField, StringField
 
 from application.views.default import DefaultModelView
 from application.modules.rule.views import RuleModelView, get_rule_json
-from application.modules.netbox.models import (netbox_outcome_types,
-                                               netbox_ipam_ipaddress_outcome_types,
-                                               netbox_device_interface_outcome_types,
-                                               netbox_contact_outcome_types,
-                                               netbox_cluster_outcomes,
-                                               netbox_virtualmachines_types,
-                                               netbox_prefix_outcome_types,
-                                              )
+from .models import (netbox_outcome_types,
+                     netbox_ipam_ipaddress_outcome_types,
+                     netbox_device_interface_outcome_types,
+                     netbox_contact_outcome_types,
+                     netbox_cluster_outcomes,
+                     netbox_virtualmachines_types,
+                     netbox_prefix_outcome_types,
+                    )
 
 def _render_netbox_outcome(_view, _context, model, _name):
     """

@@ -3,7 +3,7 @@ Create Prefixes in Netbox
 """
 #pylint: disable=no-member, too-many-locals, import-error
 
-from application.modules.netbox.netbox import SyncNetbox
+from .netbox import SyncNetbox
 
 class SyncPrefixes(SyncNetbox):
     """

@@ -4,7 +4,7 @@ IPAM Syncronisation
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application import logger
-from application.modules.netbox.netbox import SyncNetbox
+from .netbox import SyncNetbox
 from application.models.host import Host
 
 

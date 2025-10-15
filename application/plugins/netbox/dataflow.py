@@ -6,10 +6,10 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 from rich.console import Console
 
 from application import logger
-from application.modules.netbox.netbox import SyncNetbox
+from .netbox import SyncNetbox
 from application.models.host import Host
 
-from application.modules.netbox.models import NetboxDataflowModels
+from .models import NetboxDataflowModels
 
 class DictObj:
     def __init__(self, in_dict:dict):

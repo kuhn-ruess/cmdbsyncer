@@ -4,7 +4,7 @@ Create Devices in Netbox
 #pylint: disable=no-member, too-many-locals, import-error
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application.modules.netbox.netbox import SyncNetbox
+from .netbox import SyncNetbox
 from application import logger
 
 from application.models.host import Host
