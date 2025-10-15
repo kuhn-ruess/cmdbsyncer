@@ -176,7 +176,7 @@ from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
 
 admin = Admin(app, name=f"CMDBsyncer {VERSION} {app.config['HEADER_HINT']}",
-                   template_mode='bootstrap4', index_view=IndexView(),
+                   index_view=IndexView(),
                    category_icon_classes={
                        })
 
