@@ -90,9 +90,6 @@ class SyncIdoit(Plugin):
         self.object_categories = self.config.get("object_categories", "")
         self.object_categories = [x.strip() for x in self.object_categories.split(",")]
 
-        print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: "\
-              f"Processing objects categories")
-
         for category in self.object_categories:
             json_data = {
                 "id": 1,
@@ -114,11 +111,35 @@ class SyncIdoit(Plugin):
             elif not response["result"]:
                 continue
 
-            response = response["result"][0]
+            response = response["result"]
             cache_name = f"{obj_id}__{category}"
+            name = category.split("_")[-1].lower()
 
-            if cache_name not in self.category_cache.keys():
-                self.category_cache[cache_name] = response
+            if len(response) == 1:
+                counter = ""
+            else:
+                counter = "_1"
+
+            for item in response:
+                data = {}
+
+                for key, values in item.items():
+                    if isinstance(values, dict):
+
+                        for item, value in values.items():
+                            data[f"{name}{counter}_{key}_{item}"] = value
+
+                    else:
+                        data[f"{name}{counter}_{key}"] = values
+
+                if counter:
+                    counter = f"_{int(counter[-1]) + 1}"
+
+                if cache_name not in self.category_cache.keys():
+                    self.category_cache[cache_name] = data
+
+                else:
+                    self.category_cache[cache_name].update(data)
 
             yield {cache_name: self.category_cache[cache_name]}
 
@@ -128,9 +149,6 @@ class SyncIdoit(Plugin):
         """
         Read full list of devices
         """
-
-        print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: "\
-              f"Read all objects from {object_type}")
 
         json_data = {
             "version": "2.0",
@@ -148,22 +166,13 @@ class SyncIdoit(Plugin):
 
         servers = {}
         for server in self.request(json_data)["result"]:
-            print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: "\
-                  f"Processing host {server['title']}")
-
             title = server["title"]
 
             if get_categories:
                 for result in self.get_object_categories(server["id"]):
 
                     for cat, values in result.items():
-                        cat = cat.split("__")[-1].lower()
-
-                        for key, value in values.items():
-                            if isinstance(value, dict) and "title" in value.keys():
-                                value = value["title"]
-
-                            name = f"{cat}_{key}"
+                        for name, value in values.items():
                             server[name] = value
 
             servers[title] = server
@@ -262,14 +271,14 @@ class SyncIdoit(Plugin):
             if not object_type:
                 continue
 
-            print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: Processing {object_type}")
+            print(f"{CC.OKGREEN} -- {CC.ENDC}i-doit: Processing object type {object_type}")
 
             if objects := self.get_objects(object_type=object_type, get_categories=True):
 
                 for device, labels in objects:
                     host_obj = Host.get_host(device)
 
-                    print(f"\n{CC.HEADER}Process Device: {device}{CC.ENDC}")
+                    print(f"{CC.HEADER}Process Device: {device}{CC.ENDC}")
 
                     host_obj.update_host(labels)
                     do_save = host_obj.set_account(account_dict=self.config)
@@ -278,4 +287,6 @@ class SyncIdoit(Plugin):
                         host_obj.save()
 
             else:
-                print(f"\n{CC.HEADER}no devices found{CC.ENDC}")
+                print(f"{CC.HEADER}no devices found{CC.ENDC}")
+
+            print()
