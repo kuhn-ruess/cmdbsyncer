@@ -20,6 +20,22 @@ from .models import CheckmkRewriteAttributeRule
 from .rules import CheckmkRule
 from .models import CheckmkRule as CheckmkRuleModel
 
+from .inits import (
+    export_bi_rules,
+    export_bi_aggregations,
+    export_rules,
+    export_groups,
+    activate_changes,
+    bake_and_sign_agents,
+    inventorize_hosts,
+    show_missing,
+    export_users,
+    export_tags,
+    export_downtimes,
+    export_dcd_rules,
+    export_passwords,
+)
+
 def _load_rules():
     """
     Cache all needed Rules for operation
@@ -254,6 +270,284 @@ def debug_host(hostname, debug):
 
 
 #.
+#   .-- Command: Export Downtimes
+@cli_cmk.command('export_downtimes')
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
+@click.argument('account')
+#pylint: disable=too-many-locals
+def cli_export_downtimes(account, debug, debug_rules):
+    """
+    Export Dowtimes to Checkmk
 
+    ### Example
+    _./cmdbsyncer checkmk export_downtimes SITEACCOUNT_
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_downtimes(account, debug, debug_rules)
+
+
+
+#.
+#   .-- Command: Export Tags
+@cli_cmk.command('export_tags')
+@click.argument('account')
+@click.option("--dry-run", default=False, is_flag=True)
+@click.option("--save-requests", default='')
+@click.option("--debug", is_flag=True)
+#pylint: disable=too-many-locals
+def cli_export_tags(account, dry_run, save_requests, debug=False):
+    """
+    Export Hosttags Groups to Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk show_missing_hosts SITEACCOUNT_
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_tags(account, dry_run, save_requests, debug)
+
+#.
+#   .-- Command: Show Hosts not in Syncer
+@cli_cmk.command('show_missing_hosts')
+@click.argument('account')
+#pylint: disable=too-many-locals
+def cli_missing_hosts(account):
+    """
+    Check which Hosts are in Checkmk but not in Syncer
+
+    ### Example
+    _./cmdbsyncer checkmk show_missing_hosts SITEACCOUNT_
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    show_missing(account)
+#.
+#   .-- Command: Export Rulesets
+
+@cli_cmk.command('export_rules')
+@click.argument("account")
+@click.option("--debug", is_flag=True)
+def cli_export_rules(account, debug):
+    """
+    Export all configured Rules to given Checkmk Installations
+
+    ### Example
+    _./cmdbsyncer checkmk export_rules SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_rules(account)
+
+#.
+#   .-- Command: Export Group
+@cli_cmk.command('export_groups')
+@click.argument("account")
+@click.option('-t', '--test-run', is_flag=True)
+@click.option("--debug", is_flag=True)
+#pylint: disable=too-many-locals, too-many-branches
+def cli_export_groups(account, test_run, debug=False):
+    """
+    Create Groups in Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_groups SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Account Config
+        test_run (bool): Only Print Result ( default is False )
+    """
+    export_groups(account, test_run, debug)
+
+
+#.
+#   .-- Command: Activate Changes
+@cli_cmk.command('activate_changes')
+@click.argument("account")
+#pylint: disable=too-many-locals, too-many-branches
+def cli_activate_changes(account):
+    """
+    Activate Changes in given Checkmk Instance
+
+    ### Example
+    _./cmdbsyncer checkmk activate_changes SITEACCOUNT_
+
+
+    Args:
+        account (string): Name CHeckmk Account Config
+    """
+    activate_changes(account)
+
+
+
+#.
+#   .-- Command: Bake and Sign agents
+@cli_cmk.command('bake_and_sign_agents')
+@click.argument("account")
+#pylint: disable=too-many-locals, too-many-branches
+def cli_bake_and_sign_agents(account):
+    """
+    Bake and Sign Agents for given Checkmk Instance
+
+    ### Example
+    _./cmdbsyncer checkmk bake_and_sign_agents SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    bake_and_sign_agents(account)
+
+#.
+#   .-- Command: Host Inventory
+
+@cli_cmk.command('inventorize_hosts')
+@click.argument('account')
+@click.option("--debug", is_flag=True)
+#pylint: disable=too-many-locals
+def cli_inventorize_hosts(account, debug=False):
+    """
+    Do an Status Data inventory on given Checkmk Instance.
+    Requires CMK Version greater then 2.1p9
+
+    ### Example
+    _./cmdbsyncer checkmk inventorize_hosts SITEACCOUNT_
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    inventorize_hosts(account, debug)
+#.
+#   .-- Command: Checkmk BI
+
+@cli_cmk.command('export_bi_rules')
+@click.argument("account")
+@click.option("--debug", is_flag=True)
+def cli_export_bi_rules(account, debug=False):
+    """
+    Export all BI Rules to given Checkmk Installations
+
+    ### Example
+    _./cmdbsyncer checkmk export_bi_rules SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_bi_rules(account, debug)
+
+@cli_cmk.command('export_bi_aggregations')
+@click.argument("account")
+@click.option("--debug", is_flag=True)
+def cli_export_bi_aggregations(account, debug=False):
+    """
+    Export all BI Aggregations to given Checkmk Installations
+
+    ### Example
+    _./cmdbsyncer checkmk export_bi_aggregations SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_bi_aggregations(account, debug)
+#.
+#   .-- Command: Export User
+@cli_cmk.command('export_users')
+@click.argument("account")
+def cli_cmk_users(account):
+    """
+    Export configured Users and their settings to Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_users SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_users(account)
+#.
+#   .-- Command: Export DCD Rules
+@cli_cmk.command('export_dcd_rules')
+@click.option("--debug-rules", default="")
+@click.option("--debug", is_flag=True)
+@click.argument("account")
+def cli_cmk_dcd(account, debug_rules, debug=False):
+    """
+    Export Rules for DCD Deamon
+
+    ### Example
+    _./cmdbsyncer checkmk export_dcd_rules SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_dcd_rules(account, debug, debug_rules)
+#.
+#   .-- Command: Export Passwords
+@cli_cmk.command('export_passwords')
+@click.argument("account")
+def cli_cmk_passwords(account):
+    """
+    Export Rules for Password Export
+
+    ### Example
+    _./cmdbsyncer checkmk export_passwords SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_passwords(account)
+#.
+#   .-- Import Checkmk V1
+from .import_v1 import ImportCheckmk1
+@cli_cmk.command('import_v1')
+@click.argument("account")
+def get_cmk_data(account):
+    """Get All hosts from a CMK 1.x Installation and add them to local db"""
+    source_config = get_account_by_name(account)
+    if source_config:
+        getter = ImportCheckmk1(source_config)
+        getter.run()
+    else:
+        print("Source not found")
+#.
+#   .-- Import Checkmk V2
+from .import_v2 import import_hosts
+@cli_cmk.command('import_v2')
+@click.argument("account")
+@click.option("--debug", default=False, is_flag=True)
+def get_cmk_data(account, debug=False):
+    """Get All hosts from a CMK 2.x Installation and add them to local db"""
+    try:
+        import_hosts(account, debug)
+    except CmkException as error_obj:
+        if debug:
+            raise
+        print(f'CMK Connection Error: {error_obj}')
+#.
 
 register_cronjob('Checkmk: Export Hosts', _inner_export_hosts)
+register_cronjob('Checkmk: Export Rules', export_rules)
+register_cronjob('Checkmk: Export Groups', export_groups)
+register_cronjob('Checkmk: Export BI Rules', export_bi_rules)
+register_cronjob('Checkmk: Export BI Aggregations', export_bi_aggregations)
+register_cronjob('Checkmk: Inventorize', inventorize_hosts)
+register_cronjob('Checkmk: Activate Changes', activate_changes)
+register_cronjob('Checkmk: Bake and Sign Agents', bake_and_sign_agents)
+register_cronjob('Checkmk: Export Users', export_users)
+register_cronjob('Checkmk: Export Tags', export_tags)
+register_cronjob('Checkmk: Export Downtimes', export_downtimes)
+register_cronjob('Checkmk: Export DCD Rules', export_dcd_rules)
+register_cronjob('Checkmk: Export Passwords', export_passwords)
+register_cronjob('Checkmk: Import Hosts (V2)', import_hosts)
