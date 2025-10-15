@@ -54,6 +54,7 @@ class CronGroup(db.Document):
     name = db.StringField(required=True, unique=True)
 
     interval = db.StringField(choices=intervals)
+    custom_interval_in_minutes = db.IntField()
     timerange_from = db.StringField(choices=hours, default='0')
     timerange_to = db.StringField(choices=hours, default='24')
     jobs = db.ListField(field=db.EmbeddedDocumentField(document_type="GroupEntry"))

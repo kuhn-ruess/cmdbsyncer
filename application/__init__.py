@@ -25,7 +25,7 @@ from application.helpers.tablib_formater import ExportObjects
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.11.0-dev1'
+VERSION = '3.11.0-dev2'
 
 
 app = Flask(__name__)
