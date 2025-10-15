@@ -13,7 +13,7 @@ rich==14.0.0
 pynetbox==7.4.1
 python-slugify==8.0.4
 tablib==3.8.0
-Flask-Admin==1.6.1
+Flask-Admin @ git+https://github.com/Bastian-Kuhn/flask-admin.git@master
 uWSGI
 sentry-sdk==2.27.0
 sortedcontainers==2.4.0
