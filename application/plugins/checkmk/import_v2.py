@@ -3,11 +3,9 @@
 Get Hosts from a CMKv2 Instance
 """
 import click
-from application.plugins.checkmk.cmk2 import cli_cmk
 from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
-from application.helpers.cron import register_cronjob
-from application.plugins.checkmk.cmk2 import CMK2, CmkException
+from .cmk2 import CMK2, CmkException
 
 
 
@@ -58,17 +56,3 @@ class DataGeter(CMK2):
             else:
                 print(f"{CC.OKBLUE} *{CC.ENDC} Host owned by diffrent source, ignored")
 
-
-register_cronjob('Checkmk: Import Hosts (V2)', import_hosts)
-
-@cli_cmk.command('import_v2')
-@click.argument("account")
-@click.option("--debug", default=False, is_flag=True)
-def get_cmk_data(account, debug=False):
-    """Get All hosts from a CMK 2.x Installation and add them to local db"""
-    try:
-        import_hosts(account, debug)
-    except CmkException as error_obj:
-        if debug:
-            raise
-        print(f'CMK Connection Error: {error_obj}')

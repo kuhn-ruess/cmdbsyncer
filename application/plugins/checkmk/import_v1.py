@@ -6,13 +6,12 @@ import ast
 import click
 import requests
 from mongoengine.errors import DoesNotExist
-from application.plugins.checkmk.cmk2 import cli_cmk
 from application import log
 from application.models.host import Host, HostError
 from application.helpers.get_account import get_account_by_name
 
 
-class DataGeter():
+class ImportCheckmk1():
     """
     Get Data from CMK
     """
@@ -67,14 +66,3 @@ class DataGeter():
             if do_save:
                 host.save()
 
-
-@cli_cmk.command('import_v1')
-@click.argument("account")
-def get_cmk_data(account):
-    """Get All hosts from a CMK 1.x Installation and add them to local db"""
-    source_config = get_account_by_name(account)
-    if source_config:
-        getter = DataGeter(source_config)
-        getter.run()
-    else:
-        print("Source not found")
