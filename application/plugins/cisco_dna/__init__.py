@@ -8,7 +8,7 @@ import click
 from application import app
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
-from application.modules.cisco_dna.syncer import CiscoDNA
+from .syncer import CiscoDNA
 from application.helpers.cron import register_cronjob
 
 @app.cli.group(name='cisco-dna')

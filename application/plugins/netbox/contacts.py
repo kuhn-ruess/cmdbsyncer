@@ -1,7 +1,7 @@
 """
 Contact Syncronisation
 """
-from application.modules.netbox.netbox import SyncNetbox
+from .netbox import SyncNetbox
 
 class SyncContacts(SyncNetbox):
     """

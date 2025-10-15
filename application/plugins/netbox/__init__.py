@@ -11,17 +11,17 @@ from application import log
 
 from application.modules.rule.rewrite import Rewrite
 
-from application.modules.netbox.models import *
-from application.modules.netbox.rules import *
+from .models import *
+from .rules import *
 
-from application.modules.netbox.devices import SyncDevices
-from application.modules.netbox.ips import SyncIPS
-from application.modules.netbox.interfaces import SyncInterfaces, SyncVirtInterfaces
-from application.modules.netbox.contacts import SyncContacts
-from application.modules.netbox.dataflow import SyncDataFlow
-from application.modules.netbox.cluster import SyncCluster
-from application.modules.netbox.virtualmachines import SyncVirtualMachines
-from application.modules.netbox.prefixes import SyncPrefixes
+from .devices import SyncDevices
+from .ips import SyncIPS
+from .interfaces import SyncInterfaces, SyncVirtInterfaces
+from .contacts import SyncContacts
+from .dataflow import SyncDataFlow
+from .cluster import SyncCluster
+from .virtualmachines import SyncVirtualMachines
+from .prefixes import SyncPrefixes
 from application.modules.debug import attribute_table
 
 from syncerapi.v1 import (
