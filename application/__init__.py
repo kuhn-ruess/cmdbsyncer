@@ -148,6 +148,29 @@ def page_redirect():
     """
     return redirect(url_for("admin.index"))
 
+def _register_all_plugin_admin_views():
+    import application.plugins as plugins_package
+
+    for _, module_name, _ in pkgutil.iter_modules(
+        plugins_package.__path__, plugins_package.__name__ + "."
+    ):
+        admin_module_name = f"{module_name}.admin_views"
+        try:
+            admin_module = importlib.import_module(admin_module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name == admin_module_name:
+                continue
+            raise
+        except Exception:  # pylint: disable=broad-except
+            logger.exception(
+                "Failed to register admin views for plugin %s", module_name
+            )
+            continue
+
+        register = getattr(admin_module, "register_admin_views", None)
+        if callable(register):
+            register(admin)
+
 
 from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
@@ -170,6 +193,9 @@ from application.modules.custom_attributes.views import CustomAttributeView
 admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules"))
 
 #.
+
+
+_register_all_plugin_admin_views()
 
 
 from application.models.account import Account
@@ -228,31 +254,9 @@ admin.add_link(MenuLink(name='Commit Changes',
                         class_name="toggle_activate_modal btn btn-primary"))
 
 
-def _register_all_plugin_admin_views():
-    import application.plugins as plugins_package
-
-    for _, module_name, _ in pkgutil.iter_modules(
-        plugins_package.__path__, plugins_package.__name__ + "."
-    ):
-        admin_module_name = f"{module_name}.admin_views"
-        try:
-            admin_module = importlib.import_module(admin_module_name)
-        except ModuleNotFoundError as exc:
-            if exc.name == admin_module_name:
-                continue
-            raise
-        except Exception:  # pylint: disable=broad-except
-            logger.exception(
-                "Failed to register admin views for plugin %s", module_name
-            )
-            continue
-
-        register = getattr(admin_module, "register_admin_views", None)
-        if callable(register):
-            register(admin)
 
 
-_register_all_plugin_admin_views()
 
 from plugins import *
 from application.plugins import *
+
