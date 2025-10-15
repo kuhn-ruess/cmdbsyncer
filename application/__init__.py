@@ -150,10 +150,21 @@ def page_redirect():
 
 def _register_all_plugin_admin_views():
     import application.plugins as plugins_package
+    import plugins as external_plugins_package
+
+    modules = []
+
+    for _, module_name, _ in pkgutil.iter_modules(
+        external_plugins_package.__path__, external_plugins_package.__name__ + "."
+    ):
+        modules.append(module_name)
 
     for _, module_name, _ in pkgutil.iter_modules(
         plugins_package.__path__, plugins_package.__name__ + "."
     ):
+        modules.append(module_name)
+
+    for module_name in modules:
         admin_module_name = f"{module_name}.admin_views"
         try:
             admin_module = importlib.import_module(admin_module_name)
