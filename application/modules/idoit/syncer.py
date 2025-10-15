@@ -99,7 +99,7 @@ class SyncIdoit(Plugin):
                 "version": "2.0",
                 "method": "cmdb.category.read",
                 "params": {
-                    "apikey": self.config["password"],
+                    "apikey": self.config["api_token"],
                     "language": self.config.get("language", "en"),
                     "category": category,
                     "objID": obj_id,
@@ -140,7 +140,7 @@ class SyncIdoit(Plugin):
                     "type": f"{object_type}",
                     "status": "C__RECORD_STATUS__NORMAL"
                 },
-                "apikey": self.config["password"],
+                "apikey": self.config["api_token"],
                 "language": self.config.get("language", "en")
             },
             "id": 1
@@ -190,7 +190,7 @@ class SyncIdoit(Plugin):
                "type": object_type,
                "title": hostname,
                "description": object_description,
-               "apikey": self.config["password"],
+               "apikey": self.config["api_token"],
                "language": self.config.get("language", "en"),
                "categories": rules.get("id_category", {})
            },
