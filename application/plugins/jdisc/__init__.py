@@ -3,9 +3,9 @@
 #pylint: disable=logging-fstring-interpolation
 import click
 
-from application.modules.jdisc.devices import JdiscDevices
-from application.modules.jdisc.applications import JdiscApplications
-from application.modules.jdisc.executables import JdiscExecutables
+from .devices import JdiscDevices
+from .applications import JdiscApplications
+from .executables import JdiscExecutables
 
 from syncerapi.v1 import (
     register_cronjob,
