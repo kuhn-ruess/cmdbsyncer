@@ -1,7 +1,7 @@
 """
 JDISC Executables
 """
-from application.modules.jdisc.jdisc import JDisc
+from .jdisc import JDisc
 
 from syncerapi.v1.inventory import run_inventory
 
