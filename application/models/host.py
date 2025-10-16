@@ -146,6 +146,7 @@ class Host(db.Document):
         Args:
             create (bool): Create a object if not yet existing (default)
         """
+        hostname = hostname.strip()
         if not isinstance(hostname, str):
             raise HostError("Hostname field does not contain a string")
         if app.config['LOWERCASE_HOSTNAMES']:
