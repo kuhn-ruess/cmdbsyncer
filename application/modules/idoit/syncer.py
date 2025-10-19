@@ -130,6 +130,22 @@ class SyncIdoit(Plugin):
                         for item, value in values.items():
                             data[f"{name}{counter}_{key}_{item}"] = value
 
+                    elif isinstance(values, list):
+
+                        if len(values) == 1:
+                            item_counter = ""
+
+                        else:
+                            item_counter = "_1"
+
+                        for entry in values:
+
+                            for item, value in entry.items():
+                                data[f"{name}{counter}_{key}_{item}{item_counter}"] = value
+
+                            if item_counter:
+                                item_counter = f"_{int(item_counter[-1]) +1}"
+
                     else:
                         data[f"{name}{counter}_{key}"] = values
 
