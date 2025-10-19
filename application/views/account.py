@@ -320,10 +320,12 @@ class AccountModelView(DefaultModelView):
 
         elif form.type.data == 'i-doit':
             default_fields = [
-                ('api_token', ""),
-                ('object_types', "C__OBJTYPE__SERVER,C__OBJTYPE__VIRTUAL_SERVER"),
-                ('object_categories', "C__CATG__IP,C__CATG__MONITORING"),
-                ('language', "de"),
+                ("api_token", ""),
+                ("object_types", "C__OBJTYPE__SERVER,C__OBJTYPE__VIRTUAL_SERVER"),
+                ("object_categories", "C__CATG__IP,C__CATG__MONITORING"),
+                ("language", "en"),
+                ("filter_cmdb_status", "6"),
+                ("filter_monitoring_status", "False"),
             ]
         elif form.type.data == 'netbox':
             default_fields = [
