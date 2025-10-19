@@ -87,17 +87,17 @@ class SyncIdoit(Plugin):
         Get all needed categories for an object in i-doit
         """
 
-        self.object_categories = self.config.get("object_categories", "")
-        self.object_categories = [x.strip() for x in self.object_categories.split(",")]
+        object_categories = self.config.get("object_categories", "")
+        object_categories = [x.strip() for x in object_categories.split(",")]
 
-        for category in self.object_categories:
+        for category in object_categories:
             json_data = {
                 "id": 1,
                 "version": "2.0",
                 "method": "cmdb.category.read",
                 "params": {
                     "apikey": self.config["api_token"],
-                    "language": self.config.get("language", "en"),
+                    "language": self.config["language"],
                     "category": category,
                     "objID": obj_id,
                 },
@@ -124,6 +124,7 @@ class SyncIdoit(Plugin):
                 data = {}
 
                 for key, values in item.items():
+
                     if isinstance(values, dict):
 
                         for item, value in values.items():
@@ -159,13 +160,23 @@ class SyncIdoit(Plugin):
                     "status": "C__RECORD_STATUS__NORMAL"
                 },
                 "apikey": self.config["api_token"],
-                "language": self.config.get("language", "en")
+                "language": self.config["language"]
             },
             "id": 1
         }
 
         servers = {}
         for server in self.request(json_data)["result"]:
+            states = self.config.get("filter_cmdb_status", "")
+
+            if states.strip().endswith(","):
+                states = states[:-1]
+
+            states = [x.strip() for x in states.split(",")]
+
+            if server["cmdb_status"] not in map(int, states):
+                continue
+
             title = server["title"]
 
             if get_categories:
@@ -175,7 +186,11 @@ class SyncIdoit(Plugin):
                         for name, value in values.items():
                             server[name] = value
 
-            servers[title] = server
+            if "True" == self.config["filter_monitoring_status"].capitalize():
+                if "monitoring_active_value" in server and "1" == server["monitoring_active_value"]:
+                    servers[title] = server
+            else:
+                servers[title] = server
 
         return servers.items()
 
