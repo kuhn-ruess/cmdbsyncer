@@ -37,7 +37,8 @@ class User(db.Document, UserMixin):
 
     email = db.EmailField(unique=True, required=True)
     pwdhash = db.StringField()
-    name = db.StringField(unique=True, required=True)
+    #name = db.StringField(unique=True, required=True)
+    name = db.StringField(required=True)
     global_admin = db.BooleanField(default=False)
     roles = db.ListField(field=db.StringField(choices=roles))
     api_roles = db.ListField(field=db.StringField(choices=api_roles, default="all"))
@@ -123,6 +124,10 @@ class User(db.Document, UserMixin):
         Call this once after deployment.
         """
         # Set missing names
+        try:
+            User._get_collection().drop_index('name_1')
+        except:
+            pass
         users = User.objects()
         found_names = []
         for idx, user in enumerate(users):
