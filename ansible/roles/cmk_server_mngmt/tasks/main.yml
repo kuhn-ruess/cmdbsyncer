@@ -5,6 +5,17 @@
   register: installation_file
   delegate_to: localhost
 
+- name: "Download Installation File from Checkmk Server"
+  ansible.builtin.uri:
+    url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_version_filename}}"
+    dest: "/tmp/{{ cmk_version_filename }}"
+    method: GET
+    user: "{{ subscription_username }}"
+    password: "{{ subscription_password }}"
+    force_basic_auth: True
+  when: installation_file.stat.exists != True
+  delegate_to: localhost
+
 - name: "Fail if the file does not belong to executing user"
   ansible.builtin.fail:
     msg: "File does not belong to executing user"
@@ -15,17 +26,6 @@
   ansible.builtin.fail:
     msg: "File is not writeable"
   when: installation_file.stat.writeable == False
-  delegate_to: localhost
-
-- name: "Download Installation File from Checkmk Server"
-  ansible.builtin.uri:
-    url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_version_filename}}"
-    dest: "/tmp/{{ cmk_version_filename }}"
-    method: GET
-    user: "{{ subscription_username }}"
-    password: "{{ subscription_password }}"
-    force_basic_auth: True
-  when: installation_file.stat.exists != True
   delegate_to: localhost
 
 - name: "Check if Version is already installed on the Servers"
