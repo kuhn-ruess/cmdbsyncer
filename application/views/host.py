@@ -599,6 +599,7 @@ class HostModelView(DefaultModelView):
         'last_import_sync',
     ]
 
+
     column_export_list = ('hostname', )
 
     column_extra_row_actions = [
@@ -768,6 +769,9 @@ class HostModelView(DefaultModelView):
             self.can_create = False
             self.column_exclude_list.append('cmdb_fields')
             self.column_exclude_list.append('cmdb_template')
+
+        if app.config['LABEL_PREVIEW_DISABLED']:
+            self.column_exclude_list.append('labels')
 
         super().__init__(model, **kwargs)
 
