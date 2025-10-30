@@ -138,11 +138,24 @@ def _render_labels(_view, _context, model, _name):
     """
     if not model.labels:
         return Markup("")
+    #If the Cache is set, we also show the attributes which we Send to Checkmk
+    checkmk_labels = model.cache.get('checkmk_hostattribute', {}).get('attributes', {}).get('all', {})
     html = ""
     for key, value in model.labels.items():
         if not value:
             continue
+        if checkmk_labels.get(key) == value:
+            del checkmk_labels[key]
         html += f'<span class="badge badge-primary mr-1" style="margin: 2px;">{key}:{value}</span>'
+
+    for key, value in checkmk_labels.items():
+        if not value:
+            continue
+        if model.inventory.get(key) == value:
+            continue
+        html += f'<span class="badge mr-1" style="margin: 2px; background-color: rgb(43, 181, 120);">{key}:{value}</span>'
+
+
     return Markup(html)
 
 def _render_cmdb_template(_view, _context, model, _name):
