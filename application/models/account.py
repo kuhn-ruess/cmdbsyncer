@@ -163,7 +163,7 @@ class Account(db.Document):
 
 
 
-    enabled = db.BooleanField()
+    enabled = db.BooleanField(default=True)
 
     meta = {
         'strict': False,
