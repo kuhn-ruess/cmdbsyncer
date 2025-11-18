@@ -10,6 +10,7 @@ from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
 from application.models.account import CustomEntry, Account
+from application.helpers.plugins import discover_plugins
 #@TODO Won't work with Plugin style
 from application.plugins.checkmk.models import CheckmkObjectCache
 from application.docu_links import docu_links
@@ -174,6 +175,7 @@ class AccountModelView(DefaultModelView):
         """
         main_presets = []
         default_fields = []
+        # @TODO Move them all to the plugin.json files
         if form.type.data == 'csv':
             default_fields = [
                 ('path', ''),
@@ -238,18 +240,6 @@ class AccountModelView(DefaultModelView):
                 ('rewrite_hostname', ""),
                 ('verify_cert', "True"),
                 ('path', ""),
-            ]
-        elif form.type.data == 'cmkv2':
-            default_fields = [
-                ('limit_by_accounts', ""),
-                ('limit_by_hostnames', ""),
-                ('list_disabled_hosts', ""),
-                ('bakery_key_id', ""),
-                ('bakery_passphrase', ""),
-                ('dont_delete_hosts_if_more_then', ""),
-                ('dont_activate_changes_if_more_then', ""),
-                ('verify_cert', "True"),
-                ('import_filter', ""),
             ]
         elif form.type.data == 'ldap':
             default_fields = [
@@ -318,32 +308,11 @@ class AccountModelView(DefaultModelView):
                 ('ql_query', "Required"),
                 ('verify_cert', "True"),
             ]
-
-        elif form.type.data == 'i-doit':
-            default_fields = [
-                ("api_token", ""),
-                ("object_types", "C__OBJTYPE__SERVER,C__OBJTYPE__VIRTUAL_SERVER"),
-                ("object_categories", "C__CATG__IP,C__CATG__MONITORING"),
-                ("language", "en"),
-                ("filter_cmdb_status", "6"),
-                ("filter_monitoring_status", "False"),
-            ]
-        elif form.type.data == 'netbox':
-            default_fields = [
-                ('rewrite_hostname', ""),
-                ('verify_cert', "True"),
-                ('import_filter', ""),
-                ('delete_host_if_not_found_on_import', ""),
-
-            ]
-        elif form.type.data == 'jdisc':
-            main_presets = [
-                ('address', 'https://SERVER/graphql'),
-            ]
-            default_fields = [
-                ('rewrite_hostname', ""),
-                ('import_unnamed_devices', ""),
-            ]
+        else:
+            plugins = discover_plugins()
+            if plugin_data := plugins.get(form.type.data):
+                main_presets = plugin_data.get('account_presets', {}).items()
+                default_fields = plugin_data.get('account_custom_field_presets', {}).items()
 
         for field in model.custom_fields:
             field.value = field.value.strip()

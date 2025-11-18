@@ -1,0 +1,17 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "I-doit",
+    "ident": "i-doit",
+    "account_presets" : {
+        "address": "https://servername/path"
+    },
+    "account_custom_field_presets": {
+        "api_token": "",
+        "object_types": "C__OBJTYPE__SERVER,C__OBJTYPE__VIRTUAL_SERVER",
+        "object_categories": "C__CATG__IP,C__CATG__MONITORING",
+        "language": "en",
+        "filter_cmdb_status": "6",
+        "filter_monitoring_status": "False"
+    }
+}
