@@ -6,7 +6,7 @@ from markupsafe import Markup
 from wtforms import HiddenField, StringField
 
 from application.modules.rule.views import RuleModelView
-from application.modules.idoit.models import idoit_outcome_types
+from .models import idoit_outcome_types
 
 def _render_idoit_outcome(_view, _context, model, _name):
     """

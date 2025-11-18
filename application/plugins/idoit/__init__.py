@@ -7,11 +7,11 @@ import click
 from mongoengine.errors import DoesNotExist
 
 from application import app
-from application.modules.idoit.models import IdoitCustomAttributes, IdoitRewriteAttributeRule
-from application.modules.idoit.rules import IdoitVariableRule
+from .models import IdoitCustomAttributes, IdoitRewriteAttributeRule
+from .rules import IdoitVariableRule
 from application.modules.rule.rewrite import Rewrite
 from application.modules.debug import ColorCodes, attribute_table
-from application.modules.idoit.syncer import SyncIdoit
+from .syncer import SyncIdoit
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.helpers.cron import register_cronjob
