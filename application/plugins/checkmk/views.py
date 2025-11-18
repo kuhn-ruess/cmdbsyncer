@@ -111,10 +111,20 @@ def _render_bi_rule(_view, _context, model, _name):
     """
     Render BI Rule
     """
-    html = "<table width=100%>"
+    html = f'''
+        <div class="card">
+            <div class="card-body">
+            <p class="card-text">
+            <ul class="list-group">
+    '''
     for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{entry['description']}</td></tr>"
-    html += "</table>"
+        html += f"<li class='list-group-item'>{idx}: {entry['description']}</li>"
+    html += f'''
+            </ul>
+            </p>
+            </div>
+        </div>
+    '''
     return Markup(html)
 
 def _render_checkmk_outcome(_view, _context, model, _name):
@@ -151,13 +161,23 @@ def _render_group_outcome(_view, _context, model, _name):
     Render Group Outcome
     """
     entry = model.outcome
-    html = "<table width=100%>"\
-           f"<tr><th>Type</th><td>{entry.group_name}</td></tr>"\
-           f"<tr><th>Foreach</th><td>{entry.foreach_type}</td></tr>" \
-           f"<tr><th>Value</th><td>{entry.foreach}</td></tr>" \
-           f"<tr><th>Jinja Name Rewrite</th><td>{entry.rewrite}</td></tr>" \
-           f"<tr><th>Jinja Title Rewrite</th><td>{entry.rewrite_title}</td></tr>" \
-           "</table>"
+    html = f'''
+        <div class="card">
+            <div class="card-body">
+            <p class="card-text">
+                <h6 class="card-subtitle mb-2 text-muted">{entry.group_name}</h6>
+            </p>
+            <p class="card-text">
+            <ul>
+            <li>Foreach: {entry.foreach_type}</li>
+            <li>Value: {entry.foreach}</li>
+            <li>Jinja Name Rewrite: {entry.rewrite}</li>
+            <li>Jinja Title Rewrite: {entry.rewrite_title}</li>
+            </ul>
+            </p>
+            </div>
+        </div>
+    '''
     return Markup(html)
 
 
