@@ -202,9 +202,7 @@ admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects"))
 from application.modules.custom_attributes.models import CustomAttributeRule
 from application.modules.custom_attributes.views import CustomAttributeView
 admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules"))
-
 #.
-
 
 _register_all_plugin_admin_views()
 
@@ -228,17 +226,6 @@ from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
 admin.add_view(LogView(LogEntry, name="Log"))
 
-#.
-#   .-- i-doit
-admin.add_sub_category(name="i-doit", parent_name="Modules")
-
-from application.modules.idoit.views import IdoitCustomAttributesView
-from application.modules.idoit.models import IdoitCustomAttributes, \
-                                            IdoitRewriteAttributeRule
-admin.add_view(RewriteAttributeView(IdoitRewriteAttributeRule, name="Rewrite Attributes",
-                                                            category="i-doit"))
-admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
-                                    name="Custom Attributes", category="i-doit"))
 #.
 #   .-- Config
 from application.models.user import User
