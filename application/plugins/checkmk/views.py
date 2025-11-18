@@ -234,7 +234,7 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                    <li>Loop over: {rule.list_to_loop}</li>
             '''
         html += "</ul></p>"
-        html += f'''
+        html += '''
                <p class="card-text">
                 <h6 class="card-subtitle mb-2">Conditions:</h6>
                </p>
@@ -242,32 +242,17 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                <ul>
         '''
         if rule.condition_host:
-            html += '<li>Host: {rule.condition_host}</li>'
+            html += f'<li>Host: {rule.condition_host}</li>'
         if rule.condition_service:
-            html += '<li>Service: {rule.condition_service}</li>'
+            html += f'<li>Service: {rule.condition_service}</li>'
         if rule.condition_service_label:
-            html += '<li>Label {rule.condition_service_label}</li>'
+            html += f'<li>Label {rule.condition_service_label}</li>'
         html += '''
                    </ul>
                    </p>
                  </div>
                </div>
             '''
-        #html += f"<tr><td>{idx}</td><td>"\
-        #       "<table width=100%>"\
-        #       f"<tr><th>Ruleset</th><td>{rule.ruleset}</td></tr>" \
-        #       f"<tr><th>Folder</th><td>{rule.folder}</td></tr>" \
-        #       f"<tr><th>Folder Index</th><td>{rule.folder_index}</td></tr>" \
-        #       f"<tr><th>Comment</th><td>{rule.comment}</td></tr>" \
-        #       f"<tr><th>Loop:</th><td>{rule.loop_over_list}</td></tr>" \
-        #       f"<tr><th>Value Template</th><td>{value_template}</td></tr>" \
-        #       f"<tr><th>Condition Label Tmple</th><td>{rule.condition_label_template}</td></tr>"\
-        #       f"<tr><th>Condition Host</th><td>{rule.condition_host}</td></tr>"\
-        #       f"<tr><th>Condition Service</th><td>{condition_service}</td></tr>"\
-        #       f"<tr><th>Condition Service Label</th><td>{rule.condition_service_label}</td></tr>"\
-        #       "</table>"\
-        #       "</td></tr>"
-    #html += "</table>"
     return Markup(html)
 
 class CheckmkGroupRuleView(RuleModelView):
