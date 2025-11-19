@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Export Checkmk Rules
 """
@@ -36,6 +36,14 @@ class CheckmkRuleSync(CMK2):
     """
     rulsets_by_type = {}
 
+
+    def build_rule_hash(self, rule_template, conditions):
+        """
+        Create a hash which can identify the rule
+        """
+        return hash(str(rule_template)+str(conditions))
+
+
     def build_condition_and_update_rule_params(
         self, rule_params, attributes, loop_value=None, loop_idx=None
     ):
@@ -62,8 +70,10 @@ class CheckmkRuleSync(CMK2):
         rule_params['folder'] = render_jinja(rule_params['folder'], **context)
         rule_params['value'] = value
         del rule_params['value_template']
+        rule_params['optimize'] = False
 
         # Handle condition_label_template
+        has_hostlabel_condition = False
         if rule_params.get('condition_label_template'):
             label_condition = render_jinja(rule_params['condition_label_template'], **context)
             label_key, label_value = label_condition.split(':')
@@ -83,17 +93,9 @@ class CheckmkRuleSync(CMK2):
                         "label": f"{label_key}:{label_value}",
                     }],
                 }]
+            has_hostlabel_condition = True
             del rule_params['condition_label_template']
 
-        # Handle condition_host
-        if rule_params.get('condition_host'):
-            host_condition = render_jinja(rule_params['condition_host'], **context)
-            if host_condition:
-                condition_tpl["host_name"] = {
-                    "match_on": get_list(host_condition),
-                    "operator": "one_of"
-                }
-            del rule_params['condition_host']
 
         # Handle condition_service (legacy support)
         if 'condition_service' in rule_params:
@@ -118,9 +120,53 @@ class CheckmkRuleSync(CMK2):
                 }]
             del rule_params['condition_service_label']
 
+        # Handle condition_host. It's always at the end to calculate correct identification hash of entry
+        if rule_params.get('condition_host'):
+            host_condition = render_jinja(rule_params['condition_host'], **context)
+            owner_hostname = context['HOSTNAME']
+
+            if host_condition:
+                if not has_hostlabel_condition and owner_hostname == host_condition:
+                    # This rule is for the current Object and there are no other conditions
+                    # hash is build with the Condition Template which not includes the hostname conditoin
+                    rule_hash = self.build_rule_hash(rule_params, condition_tpl)
+                    rule_params['optimize_rule_hash'] = rule_hash
+                    rule_params['optimize'] = True
+                condition_tpl["host_name"] = {
+                    "match_on": get_list(host_condition),
+                    "operator": "one_of"
+                }
+            del rule_params['condition_host']
 
         rule_params['condition'] = condition_tpl
         return rule_params
+
+    def optimize_rules(self):
+        """
+        optimize rules to prevent to many duplicates
+        """
+        host_on_rule = 2
+        for rule_type, rules in list(self.rulsets_by_type.items()):
+            final_rules = []
+            host_for_hash = {}
+            rule_by_hash = {}
+            for rule in rules:
+                if rule['optimize']:
+                    condition_host = rule['condition']['host_name']['match_on'][0]
+                    rule_hash = rule['optimize_rule_hash']
+                    host_for_hash.setdefault(rule_hash, [])
+                    host_for_hash[rule_hash].append(condition_host)
+                    if rule_hash not in rule_by_hash:
+                        rule['condition']['host_name']['match_on'] = []
+                        rule_by_hash[rule_hash] = rule
+                    rule_by_hash[rule_hash]['condition']['host_name']['match_on'].append(condition_host)
+                else:
+                    # nothing to optimize, so just add
+                    final_rules.append(rule)
+            final_rules.extend(rule_by_hash.values())
+            self.rulsets_by_type[rule_type] = final_rules
+
+
 
     def export_cmk_rules(self): # pylint: disable=too-many-branches, too-many-statements
         """
@@ -154,6 +200,8 @@ class CheckmkRuleSync(CMK2):
                     self.calculate_rules_of_host(host_actions, attributes)
                 progress.advance(task1)
 
+
+        self.optimize_rules()
         self.clean_rules()
         self.create_rules()
 
