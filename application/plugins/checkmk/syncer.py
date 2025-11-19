@@ -630,6 +630,7 @@ class SyncCMK2(CMK2):
                     label_prefix = self.label_prefix
                 labels = {f"{label_prefix}{k}":str(v).replace(':','-') \
                         for k,v in attributes['filtered'].items()}
+                labels.update({x:y for x,y in attributes['all'].items() if x.startswith('cmdbsyncer/')})
                 if app.config['CMK_LOWERCASE_LABEL_VALUES']:
                     labels = {k:v.lower() for k, v in labels.items()}
 
