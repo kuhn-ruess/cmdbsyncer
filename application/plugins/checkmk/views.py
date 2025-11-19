@@ -516,7 +516,7 @@ class CheckmkMngmtRuleView(RuleModelView):
                             },
                             'condition_host': {
                                 'placeholder': (
-                                    'Hostname for Condition, Supports Comma Seperated Lists (or)'
+                                    'Hostname for Condition, Supports Comma Seperated Lists (or). Use {{HOSTNAME}} for actual Host'
                                 )
                             },
                             'condition_service': {
