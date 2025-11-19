@@ -247,11 +247,11 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                </p>
                <p class="card-text">
                <ul>
-                <li>Template: {value_template}</li>
+                <li><b>Template</b>: {value_template}</li>
         '''
         if rule.loop_over_list:
             html += f'''
-                   <li>Loop over: {rule.list_to_loop}</li>
+                   <li><b>Loop over</b>: {rule.list_to_loop}</li>
             '''
         html += "</ul></p>"
         html += '''
@@ -262,11 +262,13 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                <ul>
         '''
         if rule.condition_host:
-            html += f'<li>Host: {rule.condition_host}</li>'
+            html += f'<li><b>Host</b>: {rule.condition_host}</li>'
+        if rule.condition_label_template:
+            html += f'<li><b>Host Label</b>: {rule.condition_label_template}</li>'
         if rule.condition_service:
-            html += f'<li>Service: {rule.condition_service}</li>'
+            html += f'<li><b>Service</b>: {rule.condition_service}</li>'
         if rule.condition_service_label:
-            html += f'<li>Label {rule.condition_service_label}</li>'
+            html += f'<li><b>Service Label</b>: {rule.condition_service_label}</li>'
         html += '''
                    </ul>
                    </p>
