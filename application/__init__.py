@@ -22,10 +22,12 @@ from flask_mongoengine import MongoEngine
 
 from application.helpers.tablib_formater import ExportObjects
 
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.11.0-dev4'
+VERSION = '3.11.0-dev5'
 
 
 app = Flask(__name__)
