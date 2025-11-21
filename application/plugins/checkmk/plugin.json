@@ -2,6 +2,7 @@
     "version": "1.0.0",
     "author": "Kuhn & Rueß GmbH",
     "name": "Checkmk Version 2.x",
+    "description": "",
     "ident": "cmkv2",
     "account_presets" : {
         "address": "https://servername/sitename"

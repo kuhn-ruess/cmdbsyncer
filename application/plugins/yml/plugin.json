@@ -1,0 +1,20 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "YML",
+    "description": "",
+    "ident": "yml",
+    "account_presets" : {
+    },
+    "account_custom_field_presets": {
+        "auth_type": "",
+        "cert": "",
+        "request_headers": "{'Content-Type': 'application/json'}",
+        "name_of_hosts_key": "",
+        "name_of_variables_key": "",
+        "rewrite_hostname": "",
+        "verify_cert": "True",
+        "path": "",
+    },
+    "enabled": true
+}

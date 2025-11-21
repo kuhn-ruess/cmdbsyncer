@@ -68,23 +68,17 @@ API Output:
  'prtg-version': '25.1.102.1373',
  'treesize': 6}
 """
-import click
 from syncerapi.v1 import (
-    register_cronjob,
     cc,
     Host,
 )
 
 from syncerapi.v1.core import (
-   app,
    Plugin,
 )
 
 from syncerapi.v1.inventory import run_inventory
 
-@app.cli.group(name='prtg')
-def prtg_cli():
-    """PRTG Commands"""
 
 class Prtg(Plugin):
     """
@@ -160,22 +154,6 @@ def import_prtg(account, debug=False):
 
     prtg.import_objects()
 
-@prtg_cli.command('import_devices')
-@click.argument("account")
-@click.option("--debug", is_flag=True)
-def cmd_import_prtg(account, debug):
-    """
-    Import Objects from PRTG Monitoring
-    """
-    try:
-        import_prtg(account, debug)
-    except Exception as error:
-        if debug:
-            raise
-        print(f"Error: {error}")
-
-register_cronjob('PRTG Monitoring: Import Objects', import_prtg)
-
 def inventorize_prtg(account, debug=False):
     """
     Inventorize
@@ -188,18 +166,3 @@ def inventorize_prtg(account, debug=False):
 
     prtg.inventorize_objects()
 
-@prtg_cli.command('inventorize_devices')
-@click.argument("account")
-@click.option("--debug", is_flag=True)
-def cmd_inventorize_prtg(account, debug):
-    """
-    Inventorize Objects from PRTG Monitoring
-    """
-    try:
-        inventorize_prtg(account, debug)
-    except Exception as error:
-        if debug:
-            raise
-        print(f"Error: {error}")
-
-register_cronjob('PRTG Monitoring: Inventorize Objects', inventorize_prtg)

@@ -2,18 +2,13 @@
 Import Jira Data
 """
 #pylint: disable=too-many-locals
-import click
 import requests
 from application import app
 from application import logger
-from application.helpers.cron import register_cronjob
 from application.helpers.get_account import get_account_by_name
 from application.models.host import Host
 from application.modules.debug import ColorCodes
 
-@app.cli.group(name='jira')
-def jira_cli():
-    """Jira commands"""
 
 def import_jira(account):
     """
@@ -79,13 +74,3 @@ def import_jira(account):
         do_save = host_obj.set_account(account_dict=config)
         if do_save:
             host_obj.save()
-
-@jira_cli.command('import_onprem')
-@click.argument("account")
-def cmd_import_jira(account):
-    """
-    Import from On Premise Jira
-    """
-    import_jira(account)
-
-register_cronjob('Jira OnPrem: Import  Hosts', import_jira)

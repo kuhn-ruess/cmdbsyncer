@@ -1,0 +1,28 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "Microsoft SQL Server",
+    "description": "",
+    "ident": "mssql",
+    "account_presets" : {
+    },
+    "account_custom_field_presets": {
+                "fields": "",
+                "table": "",
+                "instance": "",
+                "serverport": "",
+                "database": "",
+                "custom_query": "",
+                "hostname_field": "host",
+                "rewrite_hostname": "",
+                "driver": "ODBC Driver 18 for SQL Server",
+                "inventorize_key": "",
+                "inventorize_match_by_domain": "",
+                "inventorize_match_attribute": "",
+                "inventorize_collect_by_key": "",
+                "inventorize_rewrite_collect_by_key": ""
+    },
+    "depends_on_py_modules": [ "pypyodbc"],
+    "depends_on_syncer_plugins" : ["pypyodbc"],
+    "enabled": true
+}

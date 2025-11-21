@@ -2,19 +2,14 @@
 BMC Remedy Plugin
 """
 import requests
-import click
 
 from application import app
 
 from syncerapi.v1 import (
     get_account,
-    register_cronjob,
     cc,
 )
 
-@app.cli.group(name='bmc-remedy')
-def _cli_bmc_remedy():
-    """BMC Remedy Import"""
 
 class RemedySyncer():
     """
@@ -99,13 +94,3 @@ def get_hosts(account):
             print(f"{cc.FAIL} Target not found {cc.ENDC}")
     except Exception as error_obj: #pylint: disable=broad-except
         print(f'C{cc.FAIL}Error: {error_obj} {cc.ENDC}')
-
-
-@_cli_bmc_remedy.command('get_hosts')
-@click.argument('account')
-def cli_get_hosts(account):
-    """Sync Hosts from Remedy"""
-    get_hosts(account)
-
-
-register_cronjob("BMC Remedy: Get Hosts", get_hosts)

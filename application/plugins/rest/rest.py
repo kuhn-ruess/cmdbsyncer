@@ -7,14 +7,11 @@ import json
 import ast
 from requests.exceptions import JSONDecodeError
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
-import click
-
 
 from application import app, logger
 from application.models.host import Host
 from application.modules.plugin import Plugin, ResponseDataException
 from application.modules.debug import ColorCodes
-from application.helpers.cron import register_cronjob
 from application.helpers.inventory import run_inventory
 
 
@@ -110,16 +107,6 @@ class RestImport(Plugin):
                                     data if x[hostname_field]])
 
 
-def import_hosts_json(account, debug=False):
-    """
-    Inner Function for Import JSON Data
-    """
-    json_data = RestImport(account)
-    json_data.debug = debug
-    json_data.name = f"Import data from {account}"
-    json_data.source = "json_file_import"
-    data = json_data.get_from_file()
-    json_data.import_hosts(data)
 
 def import_hosts_rest(account, debug=False):
     """
@@ -143,45 +130,3 @@ def inventorize_hosts_rest(account, debug=False):
     data = json_data.get_by_http()
     json_data.inventorize_objects(data)
 
-
-@app.cli.group(name='json')
-def _cli_json():
-    """JSON File Import/ Inventorize"""
-
-@_cli_json.command('import_hosts')
-@click.argument("account")
-@click.option("--debug", default=False, is_flag=True)
-def import_hosts(account, debug):
-    """
-    ## Import Hosts from JSON File
-    """
-    #pylint: disable=no-member, consider-using-generator
-    import_hosts_json(account, debug)
-
-
-@app.cli.group(name='rest')
-def _cli_rest():
-    """REST API related Commands"""
-
-
-@_cli_rest.command('import_hosts')
-@click.argument("account")
-@click.option("--debug", default=False, is_flag=True)
-def cli_import_hosts_rest(account, debug):
-    """
-    Import Json direct from Rest API
-    """
-    return import_hosts_rest(account, debug)
-
-@_cli_rest.command('inventorize_objects')
-@click.argument("account")
-@click.option("--debug", default=False, is_flag=True)
-def cli_inventorize_hosts_rest(account, debug):
-    """
-    Import Json direct from Rest API
-    """
-    return inventorize_hosts_rest(account, debug)
-
-register_cronjob('REST API: Import Objects', import_hosts_rest)
-register_cronjob('REST API: Inventorize Objects', inventorize_hosts_rest)
-register_cronjob('JSON FILE: Import Hosts', import_hosts_json)
