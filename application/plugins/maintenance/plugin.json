@@ -1,0 +1,15 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "Syncer Maintenance",
+    "description": "",
+    "ident": "maintenance",
+    "account_presets" : {
+    },
+    "account_custom_field_presets": {
+        "delete_hosts_after_days": "0",
+        "dont_delete_hosts_if_more_then": "",
+        "account_filter": ""
+    },
+    "enabled": true
+}

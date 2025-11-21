@@ -3,14 +3,11 @@ Import Jira Data
 """
 #pylint: disable=too-many-locals
 import json
-import click
 from syncerapi.v1 import (
-    register_cronjob,
     cc,
     Host,
 )
 
-from application.plugins.jira import jira_cli
 from application.modules.plugin import Plugin
 
 class JiraCloud(Plugin):
@@ -111,19 +108,3 @@ def import_jira_cloud(account, debug=False):
     jira.source = "jira_cloud_import"
 
     jira.import_objects()
-
-@jira_cli.command('import_cloud')
-@click.argument("account")
-@click.option("--debug", is_flag=True)
-def cmd_import_jira(account, debug):
-    """
-    Import from Cloud Instance
-    """
-    try:
-        import_jira_cloud(account, debug)
-    except Exception as error:
-        if debug:
-            raise
-        print(f"Error: {error}")
-
-register_cronjob('Jira Cloud: Import  Hosts', import_jira_cloud)

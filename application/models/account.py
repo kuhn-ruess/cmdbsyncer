@@ -10,26 +10,12 @@ from application.helpers.plugins import discover_plugins
 
 
 def get_account_types():
-    # @TODO Move to plugin.json if is a plugin
     account_types = [
-        ('bmc_remedy', "BMC Remedy (WIP)"),
         ('cmkv1', "Checkmk Version 1.x"),
         ('cmdb', "Object Managed only in Syncer"),
-        ('csv', "CSV File"),
         ('custom', "Custom Entries, like DBs"),
-        ('external_restapi', "Remote Rest API"),
-        ('jira', "Jira CMDB"),
-        ('jira_cloud', "Jira Cloud CMDB"),
-        ('json', "Json File"),
-        ('ldap', "Ldap Connect"),
-        ('maintenance', "Maintanence Jobs"),
-        ('mssql', "MSSQL Table"),
-        ('mysql', "Mysql Table"),
-        ('odbc', "ODBC Conenctions like FreeTDS"),
         ('from_api', "Object Send from API"),
-        ('prtg', "PRTG Monitoring"),
         ('restapi', "Internal Rest API Credentials"),
-        ('yml', "YML File"),
     ]
 
     # Add dynamically discovered plugin account types
