@@ -6,6 +6,7 @@ from datetime import datetime
 from flask_login import current_user
 from markupsafe import Markup
 from wtforms import HiddenField
+from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 
 from application.views.default import DefaultModelView
 
@@ -74,8 +75,14 @@ class CronGroupView(DefaultModelView):
     }
 
     column_filters = (
-       'name',
-       'enabled',
+       FilterLike(
+            "name",
+           'Name'
+       ),
+       BooleanEqualFilter(
+            "enabled",
+           'Enabled'
+       )
     )
 
     column_editable_list = [

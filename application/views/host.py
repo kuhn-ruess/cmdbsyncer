@@ -266,6 +266,16 @@ def get_rule_json(_view, _context, model, _name):
     """
     return model.to_json()
 
+class FilterAccountRegex(BaseMongoEngineFilter):
+    """
+    Filter Value with Regex
+    """
+
+    def apply(self, query, value):
+        return query.filter(source_account_name__icontains=value)
+
+    def operation(self):
+        return "contains"
 
 class FilterHostnameRegex(BaseMongoEngineFilter):
     """
@@ -279,6 +289,16 @@ class FilterHostnameRegex(BaseMongoEngineFilter):
     def operation(self):
         return "regex"
 
+class FilterObjectType(BaseMongoEngineFilter):
+    """
+    Filter Value with Regex
+    """
+
+    def apply(self, query, value):
+        return query.filter(object_type__icontains=value)
+
+    def operation(self):
+        return "contains"
 
 class FilterLabelKeyAndValue(BaseMongoEngineFilter):
     """
@@ -316,6 +336,7 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
                     {f'labels.{key}': org_value}
                 ]
             }
+
         else:
             pipeline = {
                     f'labels.{key}': {"$regex":  value, "$options": "i"},
@@ -466,8 +487,14 @@ class ObjectModelView(DefaultModelView):
     column_export_list = ('hostname', )
 
     column_filters = (
-       'hostname',
-       'object_type',
+       FilterHostnameRegex(
+        Host,
+        "Hostname",
+       ),
+       FilterObjectType(
+        Host,
+        "Object Type",
+       ),
     )
 
     column_formatters = {
@@ -625,8 +652,10 @@ class HostModelView(DefaultModelView):
         Host,
         "Hostname",
        ),
-       'source_account_name',
-       'available',
+       FilterAccountRegex(
+           Host,
+           'Account',
+       ),
        FilterLabelKeyAndValue(
         Host,
         "Label Key:Value"

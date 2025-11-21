@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.11.0-dev5'
+VERSION = '3.11.0-dev6'
 
 
 app = Flask(__name__)
@@ -43,6 +43,7 @@ else:
 
 log_config.dictConfig(app.config['LOGGING'])
 logger = logging.getLogger('debug')
+
 
 try:
     from local_config import config
