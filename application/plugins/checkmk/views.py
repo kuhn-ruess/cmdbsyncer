@@ -12,6 +12,7 @@ from wtforms.validators import ValidationError
 from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
+from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from flask import redirect, url_for, request, render_template_string, flash
 
 from flask_login import current_user
@@ -849,9 +850,14 @@ class CheckmkFolderPoolView(DefaultModelView):
     ]
 
     column_filters = (
-       'folder_name',
-       'folder_seats',
-       'enabled',
+       FilterLike(
+            "folder_name",
+           'Folder Name'
+       ),
+       BooleanEqualFilter(
+            "enabled",
+           'Enabled'
+       )
     )
 
     form_widget_args = {
@@ -1011,10 +1017,16 @@ class CheckmkPasswordView(DefaultModelView):
         checkmkl_close,
     ]
 
-    column_filters = [
-        'title',
-        'comment',
-    ]
+    column_filters = (
+       FilterLike(
+            "title",
+           'Title'
+       ),
+       FilterLike(
+            "comment",
+           'Comment'
+       ),
+    )
 
     column_editable_list = [
         'enabled'

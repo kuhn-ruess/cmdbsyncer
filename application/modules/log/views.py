@@ -4,6 +4,7 @@ Log Model View
 from flask_login import current_user
 from markupsafe import Markup
 from application.views.default import DefaultModelView
+from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 
 def format_log(v, c, m, p):
     """ Format Log view"""
@@ -57,8 +58,22 @@ class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
     }
 
     column_filters = (
-        'source', 'message', 'affected_hosts',
-        'has_error',
+       FilterLike(
+            "source",
+           'Error Source'
+       ),
+       FilterLike(
+            "message",
+           'Message'
+       ),
+       FilterLike(
+            "affected_hosts",
+           'Hosts Affected'
+       ),
+       BooleanEqualFilter(
+            "has_error",
+           'Entries with Error'
+       )
     )
     page_size = 100
 

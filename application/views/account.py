@@ -5,6 +5,7 @@ from markupsafe import Markup
 from mongoengine.errors import OperationError
 from flask_login import current_user
 from flask_admin.form import rules
+from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from wtforms import StringField
 from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
@@ -60,8 +61,14 @@ class ChildAccountModelView(DefaultModelView):
             'is_master', 'address', 'username', 'password']
 
     column_filters = (
-       'name',
-       'enabled',
+       FilterLike(
+            "name",
+           'Name'
+       ),
+       BooleanEqualFilter(
+            "enabled",
+           'Enabled'
+       )
     )
 
     form_rules = [
@@ -99,8 +106,14 @@ class AccountModelView(DefaultModelView):
         return Account.objects(is_child__ne=True).order_by('name', 'typ')
 
     column_filters = (
-       'name',
-       'enabled',
+       FilterLike(
+            "name",
+           'Name'
+       ),
+       BooleanEqualFilter(
+            "enabled",
+           'Enabled'
+       )
     )
 
     column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted']
