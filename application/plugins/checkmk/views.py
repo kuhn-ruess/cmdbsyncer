@@ -742,7 +742,32 @@ class CheckmkSettingsView(DefaultModelView):
                 "Versions directly from checkmk"
             ),
         },
+        'webserver_certificate_full': {
+            'placeholder': (
+                "Optional: Add Paths to your Webserver Certificate Files "
+                "to automaticly update them if needed"
+            ),
+        },
     }
+
+    form_rules = [
+        rules.FieldSet((
+            rules.Field('name'),
+            rules.Field('documentation'),
+            ), "Documentation"),
+       rules.FieldSet(
+           ( 'server_user',
+           ), "Ansible Settings"),
+       rules.FieldSet(
+           ( 'cmk_edition', 'cmk_version_filename', 'inital_password'
+           ), "Checkmk Site Settings"),
+       rules.FieldSet(
+           ( 'subscription_username', 'subscription_password',
+           ), "Automatic Download Settings (optional)"),
+       rules.FieldSet(
+           ( 'webserver_certificate_full', 'webserver_certificate_private_key',
+           ), "Server Managment (optional)"),
+    ]
 
     column_exclude_list = [
         'inital_password',

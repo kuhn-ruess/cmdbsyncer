@@ -391,6 +391,9 @@ class CheckmkSettings(db.Document):
     subscription_username = db.StringField()
     subscription_password = db.StringField()
 
+    webserver_certificate_full = db.StringField()
+    webserver_certificate_private_key = db.StringField()
+
     def __str__(self):
         """
         Self representation
