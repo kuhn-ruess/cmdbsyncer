@@ -1,0 +1,21 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "Checkmk Version 2.x",
+    "description": "",
+    "ident": "cmkv2",
+    "account_presets" : {
+        "address": "https://servername/sitename"
+    },
+    "account_custom_field_presets": {
+        "limit_by_accounts": "",
+        "limit_by_hostnames": "",
+        "list_disabled_hosts": "",
+        "bakery_key_id": "",
+        "bakery_passphrase": "",
+        "dont_delete_hosts_if_more_then": "",
+        "dont_activate_changes_if_more_then": "",
+        "verify_cert": "True",
+        "import_filter": ""
+    }
+}

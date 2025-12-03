@@ -5,12 +5,14 @@ from markupsafe import Markup
 from mongoengine.errors import OperationError
 from flask_login import current_user
 from flask_admin.form import rules
+from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from wtforms import StringField
 from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
 from application.models.account import CustomEntry, Account
-from application.modules.checkmk.models import CheckmkObjectCache
+from application.helpers.plugins import discover_plugins
+from application.plugins.checkmk.models import CheckmkObjectCache # TODO: Make Plugin Compatible
 from application.docu_links import docu_links
 from mongoengine.queryset.visitor import Q
 
@@ -58,8 +60,14 @@ class ChildAccountModelView(DefaultModelView):
             'is_master', 'address', 'username', 'password']
 
     column_filters = (
-       'name',
-       'enabled',
+       FilterLike(
+            "name",
+           'Name'
+       ),
+       BooleanEqualFilter(
+            "enabled",
+           'Enabled'
+       )
     )
 
     form_rules = [
@@ -97,8 +105,14 @@ class AccountModelView(DefaultModelView):
         return Account.objects(is_child__ne=True).order_by('name', 'typ')
 
     column_filters = (
-       'name',
-       'enabled',
+       FilterLike(
+            "name",
+           'Name'
+       ),
+       BooleanEqualFilter(
+            "enabled",
+           'Enabled'
+       )
     )
 
     column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted']
@@ -173,171 +187,10 @@ class AccountModelView(DefaultModelView):
         """
         main_presets = []
         default_fields = []
-        if form.type.data == 'csv':
-            default_fields = [
-                ('path', ''),
-                ('hostname_field', 'host'),
-                ('delimiter', ';'),
-                ('encoding', 'utf-8'),
-                ('rewrite_hostname', ""),
-                ('inventorize_key', ""),
-                ('inventorize_match_by_domain', ""),
-                ('inventorize_match_attribute', ""),
-                ('inventorize_collect_by_key', ""),
-                ('inventorize_rewrite_collect_by_key', ""),
-                ('delete_host_if_not_found_on_import', ""),
-            ]
-        elif form.type.data == 'json':
-            default_fields = [
-                ('path', ''),
-                ('hostname_field', 'host'),
-                ('rewrite_hostname', ""),
-                ('data_key', ''),
-            ]
-        elif form.type.data == 'maintenance':
-            default_fields = [
-                ('delete_hosts_after_days', '0'),
-                ('dont_delete_hosts_if_more_then', ""),
-                ('account_filter', ""),
-            ]
-        elif form.type.data == 'mysql':
-            default_fields = [
-                ('hostname_field', ''),
-                ('rewrite_hostname', ""),
-                ('table', ""),
-                ('fields', ""),
-                ('database', ""),
-                ('custom_query', ""),
-                ('inventorize_key', ""),
-                ('inventorize_match_by_domain', ""),
-                ('inventorize_match_attribute', ""),
-                ('inventorize_collect_by_key', ""),
-                ('inventorize_rewrite_collect_by_key', ""),
-            ]
-        elif form.type.data == 'external_restapi':
-            default_fields = [
-                ('auth_type', ""),
-                ('cert', ''),
-                ('request_headers', '{"Content-Type": "application/json"}'),
-                ('data_key', 'result'),
-                ('method', 'GET'),
-                ('post_body', '{}'),
-                ('hostname_field', 'host'),
-                ('rewrite_hostname', ""),
-                ('verify_cert', "True"),
-                ('path', ""),
-            ]
-        elif form.type.data == 'yml':
-            default_fields = [
-                ('auth_type', ""),
-                ('cert', ''),
-                ('request_headers', '{"Content-Type": "application/json"}'),
-                ('name_of_hosts_key', ''),
-                ('name_of_variables_key', ''),
-                ('rewrite_hostname', ""),
-                ('verify_cert', "True"),
-                ('path', ""),
-            ]
-        elif form.type.data == 'cmkv2':
-            default_fields = [
-                ('limit_by_accounts', ""),
-                ('limit_by_hostnames', ""),
-                ('list_disabled_hosts', ""),
-                ('bakery_key_id', ""),
-                ('bakery_passphrase', ""),
-                ('dont_delete_hosts_if_more_then', ""),
-                ('dont_activate_changes_if_more_then', ""),
-                ('verify_cert', "True"),
-                ('import_filter', ""),
-            ]
-        elif form.type.data == 'ldap':
-            default_fields = [
-                ('base_dn', ""),
-                ('search_filter', ""),
-                ('attributes', "memberOf"),
-                ('hostname_field', 'host'),
-                ('encoding', 'ascii'),
-                ('rewrite_hostname', ""),
-                ('inventorize_key', ""),
-                ('inventorize_match_by_domain', ""),
-                ('inventorize_match_attribute', ""),
-                ('inventorize_collect_by_key', ""),
-                ('inventorize_rewrite_collect_by_key', ""),
-            ]
-        elif form.type.data == 'mssql':
-            default_fields = [
-                ('fields', ""),
-                ('table', ""),
-                ('instance', ""),
-                ('serverport', ""),
-                ('database', ""),
-                ('custom_query', ""),
-                ('hostname_field', 'host'),
-                ('rewrite_hostname', ""),
-                ('driver', "ODBC Driver 18 for SQL Server"),
-                ('inventorize_key', ""),
-                ('inventorize_match_by_domain', ""),
-                ('inventorize_match_attribute', ""),
-                ('inventorize_collect_by_key', ""),
-                ('inventorize_rewrite_collect_by_key', ""),
-            ]
-        elif form.type.data == 'odbc':
-            default_fields = [
-                ('fields', ""),
-                ('table', ""),
-                ('instance', ""),
-                ('serverport', ""),
-                ('database', ""),
-                ('custom_query', ""),
-                ('hostname_field', 'host'),
-                ('rewrite_hostname', ""),
-                ('driver', "FreeTDS"),
-                ('inventorize_key', ""),
-                ('inventorize_match_by_domain', ""),
-                ('inventorize_match_attribute', ""),
-                ('inventorize_collect_by_key', ""),
-                ('inventorize_rewrite_collect_by_key', ""),
-            ]
-        elif form.type.data == 'bmc_remedy':
-            default_fields = [
-                #('attributes', "address,systemname,dnshostname"),
-                ('hostname_field', 'dnshostname'),
-                ('namespace', ""),
-                ('class_name', ""),
-                ('verify_cert', "True"),
-            ]
-        elif form.type.data == 'jira':
-            default_fields = [
-                ('page_size', "1000"),
-                ('verify_cert', "True"),
-            ]
-        elif form.type.data == 'jira_cloud':
-            default_fields = [
-                ('workspace_id', "Required"),
-                ('ql_query', "Required"),
-                ('verify_cert', "True"),
-            ]
-
-        elif form.type.data == 'i-doit':
-            default_fields = [
-                ('api_token', ""),
-            ]
-        elif form.type.data == 'netbox':
-            default_fields = [
-                ('rewrite_hostname', ""),
-                ('verify_cert', "True"),
-                ('import_filter', ""),
-                ('delete_host_if_not_found_on_import', ""),
-
-            ]
-        elif form.type.data == 'jdisc':
-            main_presets = [
-                ('address', 'https://SERVER/graphql'),
-            ]
-            default_fields = [
-                ('rewrite_hostname', ""),
-                ('import_unnamed_devices', ""),
-            ]
+        plugins = discover_plugins()
+        if plugin_data := plugins.get(form.type.data):
+            main_presets = plugin_data.get('account_presets', {}).items()
+            default_fields = plugin_data.get('account_custom_field_presets', {}).items()
 
         for field in model.custom_fields:
             field.value = field.value.strip()

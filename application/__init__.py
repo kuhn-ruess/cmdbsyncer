@@ -6,6 +6,8 @@
 import os
 import sys
 import logging
+import importlib
+import pkgutil
 from logging import config as log_config
 from tablib.formats import registry as tablib_registry
 import mongoengine
@@ -20,11 +22,12 @@ from flask_mongoengine import MongoEngine
 
 from application.helpers.tablib_formater import ExportObjects
 
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.10.10'
-
+VERSION = '3.11.0'
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -39,6 +42,7 @@ else:
 
 log_config.dictConfig(app.config['LOGGING'])
 logger = logging.getLogger('debug')
+
 
 try:
     from local_config import config
@@ -130,8 +134,7 @@ login_manager.login_message = False
 
 cron_register = SortedDict()
 plugin_register = []
-from plugins import *
-from application.plugins import *
+
 
 from application.views.default import IndexView, DefaultModelView
 
@@ -147,12 +150,46 @@ def page_redirect():
     """
     return redirect(url_for("admin.index"))
 
+def _register_all_plugin_admin_views():
+    import application.plugins as plugins_package
+    import plugins as external_plugins_package
+
+    modules = []
+
+    for _, module_name, _ in pkgutil.iter_modules(
+        external_plugins_package.__path__, external_plugins_package.__name__ + "."
+    ):
+        modules.append(module_name)
+
+    for _, module_name, _ in pkgutil.iter_modules(
+        plugins_package.__path__, plugins_package.__name__ + "."
+    ):
+        modules.append(module_name)
+
+    for module_name in modules:
+        admin_module_name = f"{module_name}.admin_views"
+        try:
+            admin_module = importlib.import_module(admin_module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name == admin_module_name:
+                continue
+            raise
+        except Exception:  # pylint: disable=broad-except
+            logger.exception(
+                "Failed to register admin views for plugin %s", module_name
+            )
+            continue
+
+        register = getattr(admin_module, "register_admin_views", None)
+        if callable(register):
+            register(admin)
+
 
 from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
 
 admin = Admin(app, name=f"CMDBsyncer {VERSION} {app.config['HEADER_HINT']}",
-                   template_mode='bootstrap4', index_view=IndexView(),
+                   index_view=IndexView(),
                    category_icon_classes={
                        })
 
@@ -167,94 +204,9 @@ admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects"))
 from application.modules.custom_attributes.models import CustomAttributeRule
 from application.modules.custom_attributes.views import CustomAttributeView
 admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules"))
-
 #.
-#   .-- Ansible
-admin.add_sub_category(name="Ansible", parent_name="Modules")
-from application.modules.ansible.models import AnsibleCustomVariablesRule, \
-                                        AnsibleFilterRule, AnsibleRewriteAttributesRule
-from application.modules.ansible.views import AnsibleCustomVariablesView
 
-admin.add_view(RewriteAttributeView(AnsibleRewriteAttributesRule, name="Rewrite Attributes",
-                                                            category="Ansible"))
-admin.add_view(FiltereModelView(AnsibleFilterRule, name="Filter", category="Ansible"))
-admin.add_view(AnsibleCustomVariablesView(AnsibleCustomVariablesRule,\
-                                    name="Ansible Attributes", category="Ansible"))
-#.
-#   .-- Checkmk
-admin.add_sub_category(name="Checkmk", parent_name="Modules")
-# @TODO New solution needed, permission needs to be checked to show link
-#admin.add_link(MenuLink(name='Debug Config', category='Checkmk',
-#                        url=f"{app.config['BASE_PREFIX']}admin/checkmkrule/debug"))
-
-from application.modules.checkmk.models import CheckmkRule, CheckmkGroupRule, CheckmkFilterRule
-from application.modules.checkmk.views import CheckmkRuleView, CheckmkGroupRuleView
-
-
-from application.modules.checkmk.models import CheckmkRewriteAttributeRule
-admin.add_view(RewriteAttributeView(CheckmkRewriteAttributeRule, name="Rewrite and Create Custom Syncer Attributes",
-                                                            category="Checkmk"))
-admin.add_view(FiltereModelView(CheckmkFilterRule, name="Filter Hosts and Whiteliste Checkmk Labels", category="Checkmk"))
-admin.add_view(CheckmkRuleView(CheckmkRule, name="Set Folder and  Attributes of Host", category="Checkmk"))
-admin.add_view(CheckmkGroupRuleView(CheckmkGroupRule, \
-                                    name="Manage Host-/Contact-/Service- Groups", category="Checkmk"))
-
-
-from application.modules.checkmk.models import CheckmkRuleMngmt
-from application.modules.checkmk.views import CheckmkMngmtRuleView
-admin.add_view(CheckmkMngmtRuleView(CheckmkRuleMngmt, \
-                                    name="Manage Checkmk Setup Rules", category="Checkmk"))
-
-from application.modules.checkmk.models import CheckmkTagMngmt
-from application.modules.checkmk.views import CheckmkTagMngmtView
-admin.add_view(CheckmkTagMngmtView(CheckmkTagMngmt, name="Manage Hosttags", category="Checkmk"))
-
-from application.modules.checkmk.models import CheckmkUserMngmt
-from application.modules.checkmk.views import CheckmkUserMngmtView
-admin.add_view(CheckmkUserMngmtView(CheckmkUserMngmt, name="Manage Checkmk Users", category="Checkmk"))
-
-from application.modules.checkmk.models import CheckmkDowntimeRule
-from application.modules.checkmk.views import CheckmkDowntimeView
-admin.add_view(CheckmkDowntimeView(CheckmkDowntimeRule, name="Manage Downtimes", category="Checkmk"))
-
-
-from application.modules.checkmk.models import CheckmkDCDRule
-from application.modules.checkmk.views import CheckmkDCDView
-admin.add_view(CheckmkDCDView(CheckmkDCDRule, name="Manage DCD Rules", category="Checkmk"))
-
-from application.modules.checkmk.models import CheckmkPassword
-from application.modules.checkmk.views import CheckmkPasswordView
-admin.add_view(CheckmkPasswordView(CheckmkPassword, name="Manage Password Store", category="Checkmk"))
-
-admin.add_sub_category(name="Manage Business Intelligence", parent_name="Checkmk")
-from application.modules.checkmk.models import CheckmkBiAggregation, CheckmkBiRule
-from application.modules.checkmk.views import CheckmkBiRuleView
-admin.add_view(CheckmkBiRuleView(CheckmkBiAggregation, name="BI Aggregation",\
-                                                            category="Manage Business Intelligence"))
-admin.add_view(CheckmkBiRuleView(CheckmkBiRule, name="BI Rule", category="Manage Business Intelligence"))
-
-
-from application.modules.checkmk.models import CheckmkFolderPool
-from application.modules.checkmk.views import CheckmkFolderPoolView
-admin.add_view(CheckmkFolderPoolView(CheckmkFolderPool, name="Folder Pools", category="Checkmk"))
-
-from application.modules.checkmk.views import CheckmkInventorizeAttributesView
-from application.modules.checkmk.models import CheckmkInventorizeAttributes
-admin.add_view(CheckmkInventorizeAttributesView(CheckmkInventorizeAttributes, name="Inventorize from Checkmk Settings",
-                                                            category="Checkmk"))
-
-from application.modules.checkmk.models import CheckmkObjectCache
-from application.modules.checkmk.views import CheckmkCacheView
-
-admin.add_view(CheckmkCacheView(CheckmkObjectCache, \
-                                    name="Cache", category="Checkmk"))
-
-admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
-from application.modules.checkmk.models import CheckmkSettings, CheckmkSite
-from application.modules.checkmk.views import CheckmkSettingsView, CheckmkSiteView
-admin.add_view(CheckmkSettingsView(CheckmkSettings, name="Checkmk Site Updates and Creation", \
-                                                            category="Checkmk Server"))
-admin.add_view(CheckmkSiteView(CheckmkSite, name="Site Settings", category="Checkmk Server"))
+_register_all_plugin_admin_views()
 
 
 from application.models.account import Account
@@ -276,75 +228,6 @@ from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
 admin.add_view(LogView(LogEntry, name="Log"))
 
-#.
-#   .-- i-doit
-admin.add_sub_category(name="i-doit", parent_name="Modules")
-
-from application.modules.idoit.views import IdoitCustomAttributesView
-from application.modules.idoit.models import IdoitCustomAttributes, \
-                                            IdoitRewriteAttributeRule
-admin.add_view(RewriteAttributeView(IdoitRewriteAttributeRule, name="Rewrite Attributes",
-                                                            category="i-doit"))
-admin.add_view(IdoitCustomAttributesView(IdoitCustomAttributes,\
-                                    name="Custom Attributes", category="i-doit"))
-#.
-#   .-- Netbox
-admin.add_sub_category(name="Netbox", parent_name="Modules")
-
-from application.modules.netbox.views import (
-                                            NetboxCustomAttributesView,
-                                            NetboxDataFlowAttributesView,
-                                            NetboxDataFlowModelView,
-                                        )
-from application.modules.netbox.models import (
-                                            NetboxCustomAttributes,
-                                            NetboxRewriteAttributeRule,
-                                            NetboxIpamIpaddressattributes,
-                                            NetboxDcimInterfaceAttributes,
-                                            NetboxContactAttributes,
-                                            NetboxDataflowAttributes,
-                                            NetboxDataflowModels,
-                                            NetboxClusterAttributes,
-                                            NetboxVirtualMachineAttributes,
-                                            NetboxIpamPrefixAttributes,
-                                            NetboxVirtualizationInterfaceAttributes,
-                                        )
-admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
-                                                            category="Netbox"))
-
-admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
-        name="DCIM: Devices", category="Netbox"))
-admin.add_view(NetboxCustomAttributesView(NetboxDcimInterfaceAttributes,\
-        name="DCIM: Interfaces", category="Netbox"))
-admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
-        name="IPAM: IP Addresses", category="Netbox"))
-admin.add_view(NetboxCustomAttributesView(NetboxIpamPrefixAttributes,\
-        name="IPAM: Prefix", category="Netbox"))
-admin.add_view(NetboxCustomAttributesView(NetboxClusterAttributes,\
-        name="Virtualization: Cluster", category="Netbox"))
-admin.add_view(NetboxCustomAttributesView(NetboxVirtualMachineAttributes,\
-        name="Virtualization: Virtual Machines", category="Netbox"))
-admin.add_view(NetboxCustomAttributesView(NetboxVirtualizationInterfaceAttributes,\
-        name="Virtualization: Interfaces", category="Netbox"))
-admin.add_view(NetboxCustomAttributesView(NetboxContactAttributes,\
-        name="Tenancy: Contacts", category="Netbox"))
-
-admin.add_sub_category(name="Plugin: Dataflow", parent_name="Netbox")
-admin.add_view(NetboxDataFlowModelView(NetboxDataflowModels,\
-        name="Model Defintion", category="Plugin: Dataflow"))
-
-admin.add_view(NetboxDataFlowAttributesView(NetboxDataflowAttributes,\
-        name="Field Definition", category="Plugin: Dataflow"))
-#.
-#   .-- VMware
-admin.add_sub_category(name="VMware", parent_name="Modules")
-
-from application.modules.vmware.models import VMwareRewriteAttributes, VMwareCustomAttributes
-from application.modules.vmware.views import VMwareCustomAttributeView
-admin.add_view(RewriteAttributeView(VMwareRewriteAttributes, name="Rewrite Attributes",
-                                                            category="VMware"))
-admin.add_view(VMwareCustomAttributeView(VMwareCustomAttributes, name="Custom Attributes",
-                                                            category="VMware"))
 #.
 #   .-- Config
 from application.models.user import User
@@ -369,3 +252,11 @@ admin.add_link(MenuLink(name='Logout', category='Profil',
 admin.add_link(MenuLink(name='Commit Changes',
                         url="#activate_changes",
                         class_name="toggle_activate_modal btn btn-primary"))
+
+
+
+
+
+from plugins import *
+from application.plugins import *
+

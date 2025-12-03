@@ -1,7 +1,7 @@
 services:
 
   mongo:
-    image: mongo:7.0.14
+    image: mongo:8.0
     volumes:
       - data_db:/data/db
 

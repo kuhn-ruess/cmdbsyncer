@@ -1,0 +1,15 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "Jira Cloud",
+    "description": "",
+    "ident": "jira_cloud",
+    "account_presets" : {
+    },
+    "account_custom_field_presets": {
+        "workspace_id": "Required",
+        "ql_query": "Required",
+        "verify_cert": "True"
+    },
+    "enabled": true
+}

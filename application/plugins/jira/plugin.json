@@ -1,0 +1,14 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "Jira on premise",
+    "description": "",
+    "ident": "jira",
+    "account_presets" : {
+    },
+    "account_custom_field_presets": {
+        "page_size": "1000",
+        "verify_cert": "True"
+    },
+    "enabled": true
+}

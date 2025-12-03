@@ -51,13 +51,16 @@ def calc_next_run(job, last_start, was_outdated=False):
         minutes = False
         hours = False
         days = False
-        interval = job.interval
-        if interval == '10min':
-            minutes = 10
-        elif interval == 'hour':
-            hours = 1
-        elif interval == 'daily':
-            days = 1
+        if job.custom_interval_in_minutes:
+            minutes = job.custom_interval_in_minutes
+        else:
+            interval = job.interval
+            if interval == '10min':
+                minutes = 10
+            elif interval == 'hour':
+                hours = 1
+            elif interval == 'daily':
+                days = 1
 
         if minutes:
             return last_start + timedelta(minutes=minutes)

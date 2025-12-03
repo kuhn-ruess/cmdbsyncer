@@ -6,36 +6,25 @@ from cryptography.fernet import Fernet
 
 from application import db, plugin_register
 from application import app
-
-account_types = [
-    ('bmc_remedy', "BMC Remedy (WIP)"),
-    ('cisco_dna', "Cisco DNA Account"),
-    ('cmkv1', "Checkmk Version 1.x"),
-    ('cmkv2', "Checkmk Version 2.x"),
-    ('cmdb', "Object Managed only in Syncer"),
-    ('csv', "CSV File"),
-    ('custom', "Custom Entries, like DBs"),
-    ('external_restapi', "Remote Rest API"),
-    ('i-doit', "i-doit API"),
-    ('jdisc', "Jdisc Device Discovery System"),
-    ('jira', "Jira CMDB"),
-    ('jira_cloud', "Jira Cloud CMDB"),
-    ('json', "Json File"),
-    ('ldap', "Ldap Connect"),
-    ('maintenance', "Maintanence Jobs"),
-    ('mssql', "MSSQL Table"),
-    ('mysql', "Mysql Table"),
-    ('netbox', "Netbox Account"),
-    ('odbc', "ODBC Conenctions like FreeTDS"),
-    ('from_api', "Object Send from API"),
-    ('prtg', "PRTG Monitoring"),
-    ('restapi', "Internal Rest API Credentials"),
-    ('vmware_vcenter', "Vmware vCenter"),
-    ('yml', "YML File"),
-]
+from application.helpers.plugins import discover_plugins
 
 
-account_types.sort()
+def get_account_types():
+    account_types = [
+        ('cmkv1', "Checkmk Version 1.x"), # Legacy remaining
+        ('cmdb', "Object Managed only in Syncer"),
+        ('custom', "Custom Entries, like DBs"),
+        ('from_api', "Object Send from API"),
+        ('restapi', "Internal Rest API Credentials"),
+    ]
+
+    # Add dynamically discovered plugin account types
+    plugin_types = [(x['ident'], x['name']) for x in discover_plugins().values() if x ]
+    account_types.extend(plugin_types)
+
+    account_types.sort()
+
+    return account_types
 
 
 object_types = [
@@ -98,7 +87,7 @@ class Account(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     # Migrate from 'typ' to 'type', keep backward compatibility
-    type = db.StringField(choices=account_types, db_field='typ')
+    type = db.StringField(choices=get_account_types(), db_field='typ')
 
     # Added with 3.10.0
     @property
@@ -163,7 +152,7 @@ class Account(db.Document):
 
 
 
-    enabled = db.BooleanField()
+    enabled = db.BooleanField(default=True)
 
     meta = {
         'strict': False,

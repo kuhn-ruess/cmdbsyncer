@@ -1,0 +1,23 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "MySQL",
+    "description": "",
+    "ident": "mysql",
+    "account_presets" : {
+    },
+    "account_custom_field_presets": {
+        "hostname_field": "",
+        "rewrite_hostname": "",
+        "table": "",
+        "fields": "",
+        "database": "",
+        "custom_query": "",
+        "inventorize_key": "",
+        "inventorize_match_by_domain": "",
+        "inventorize_match_attribute": "",
+        "inventorize_collect_by_key": "",
+        "inventorize_rewrite_collect_by_key": ""
+    },
+    "enabled": true
+}

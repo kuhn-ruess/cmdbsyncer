@@ -1,0 +1,24 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "LDAP Server",
+    "description": "",
+    "ident": "ldap",
+    "account_presets" : {
+    },
+    "account_custom_field_presets": {
+        "base_dn": "",
+        "search_filter": "",
+        "attributes": "memberOf",
+        "hostname_field": "host",
+        "encoding": "ascii",
+        "rewrite_hostname": "",
+        "inventorize_key": "",
+        "inventorize_match_by_domain": "",
+        "inventorize_match_attribute": "",
+        "inventorize_collect_by_key": "",
+        "inventorize_rewrite_collect_by_key": ""
+    },
+    "depends_on_py_modules": [ "ldap"],
+    "enabled": true
+}

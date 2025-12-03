@@ -1,0 +1,12 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "PRTG",
+    "description": "",
+    "ident": "prtg",
+    "account_presets" : {
+    },
+    "account_custom_field_presets": {
+    },
+    "enabled": true
+}
