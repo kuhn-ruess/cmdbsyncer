@@ -1,0 +1,20 @@
+---
+# This Playbook is suplied with information by the cmdb_syncer
+# See Docu there about how to use
+# This Playbook manges Server Settings not directly related to Checkmk Versions and Updates
+
+- hosts: all
+  gather_facts: false
+  #tasks:
+  #  - name: Check SSH Access
+  #    command: echo "Access working"
+  #    become: true
+  #    run_once: true
+  #    tags:
+  #      - always
+
+
+- hosts: all
+
+  roles:
+    - server_mngmt

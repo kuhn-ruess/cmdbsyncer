@@ -34,6 +34,8 @@ class SyncSites(Plugin):
             'cmk_version_filename': filename,
             'subscription_username': site.settings_master.subscription_username,
             'subscription_password': site.settings_master.subscription_password,
+            'webserver_certificate': site.settings_master.webserver_certificate_full,
+            'webserver_private_certificate': site.settings_master.webserver_certificate_private,
         })
         for custom_var in site.custom_ansible_variables:
             inventory[custom_var.variable_name] = custom_var.variable_value
