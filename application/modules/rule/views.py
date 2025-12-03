@@ -18,6 +18,7 @@ from application.views.default import DefaultModelView
 from application.modules.rule.models import filter_actions, rule_types, condition_types
 from application.docu_links import docu_links
 from application.helpers.sates import add_changes
+from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 
 
 
@@ -263,8 +264,14 @@ class RuleModelView(DefaultModelView):
     column_default_sort = ("sort_field", False)
 
     column_filters = (
-       'name',
-       'enabled',
+       FilterLike(
+            "name",
+           'Name'
+       ),
+       BooleanEqualFilter(
+            "enabled",
+           'Enabled'
+       )
     )
 
     column_editable_list = [
@@ -389,8 +396,14 @@ class FiltereModelView(DefaultModelView):
     )
 
     column_filters = (
-       'name',
-       'enabled',
+       FilterLike(
+            "name",
+           'Name'
+       ),
+       BooleanEqualFilter(
+            "enabled",
+           'Enabled'
+       )
     )
 
     column_editable_list = [

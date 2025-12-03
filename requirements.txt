@@ -13,8 +13,8 @@ rich==14.0.0
 pynetbox==7.4.1
 python-slugify==8.0.4
 tablib==3.8.0
-Flask-Admin==1.6.1
 uWSGI
 sentry-sdk==2.27.0
 sortedcontainers==2.4.0
 pyyml==0.0.2
+Flask-Admin==2.0.2

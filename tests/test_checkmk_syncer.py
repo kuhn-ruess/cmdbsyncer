@@ -7,8 +7,8 @@ import ast
 import multiprocessing
 from collections import namedtuple
 
-from application.modules.checkmk.syncer import SyncCMK2
-from application.modules.checkmk.cmk2 import CmkException
+from application.plugins.checkmk.syncer import SyncCMK2
+from application.plugins.checkmk.cmk2 import CmkException
 
 
 class TestSyncCMK2(unittest.TestCase):
@@ -46,7 +46,7 @@ class TestSyncCMK2(unittest.TestCase):
             self_param.console = Mock()
             return None
         
-        with patch('application.modules.checkmk.syncer.CMK2.__init__', mock_init):
+        with patch('application.plugins.checkmk.syncer.CMK2.__init__', mock_init):
             self.syncer = SyncCMK2()
 
     def test_chunks(self):
@@ -94,7 +94,7 @@ class TestSyncCMK2(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.syncer.handle_extra_folder_options(full_path)
 
-    @patch('application.modules.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.app')
     def test_fetch_checkmk_hosts_by_folder(self, mock_app):
         """Test fetch_checkmk_hosts with folder mode"""
         mock_app.config = {**self.mock_app_config, 'CMK_GET_HOST_BY_FOLDER': True}
@@ -103,7 +103,7 @@ class TestSyncCMK2(unittest.TestCase):
             self.syncer.fetch_checkmk_hosts()
             mock_fetch_folder.assert_called_once()
 
-    @patch('application.modules.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.app')
     def test_fetch_checkmk_hosts_all(self, mock_app):
         """Test fetch_checkmk_hosts with all hosts mode"""
         mock_app.config = {**self.mock_app_config, 'CMK_GET_HOST_BY_FOLDER': False}
@@ -159,8 +159,8 @@ class TestSyncCMK2(unittest.TestCase):
             mock_create.assert_called_once_with('cluster1', '/folder', {}, ['node1', 'node2'], {})
             mock_update.assert_called_once_with('cluster2', ['old_node'], ['new_node'])
 
-    @patch('application.modules.checkmk.syncer.app')
-    @patch('application.modules.checkmk.syncer.CC')
+    @patch('application.plugins.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.CC')
     @patch('builtins.print')
     def test_cleanup_hosts_disabled(self, mock_print, mock_cc, mock_app):
         """Test cleanup_hosts when deletion is disabled"""
@@ -176,8 +176,8 @@ class TestSyncCMK2(unittest.TestCase):
         self.assertTrue(any('Check if we need to cleanup hosts' in call for call in print_calls))
         self.assertTrue(any('Deletion of Hosts is disabled by setting' in call for call in print_calls))
 
-    @patch('application.modules.checkmk.syncer.app')
-    @patch('application.modules.checkmk.syncer.CC')
+    @patch('application.plugins.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.CC')
     @patch('builtins.print')
     def test_cleanup_hosts_delete_limit_exceeded(self, mock_print, mock_cc, mock_app):
         """Test cleanup_hosts with delete limit exceeded"""
@@ -353,7 +353,7 @@ class TestSyncCMK2(unittest.TestCase):
             
             mock_update.assert_called_once()
 
-    @patch('application.modules.checkmk.syncer.logger')
+    @patch('application.plugins.checkmk.syncer.logger')
     def test_create_folder_single_level(self, mock_logger):
         """Test _create_folder method"""
         parent = '/'
@@ -403,7 +403,7 @@ class TestSyncCMK2(unittest.TestCase):
                 data=expected_body
             )
 
-    @patch('application.modules.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.app')
     def test_send_bulk_create_host(self, mock_app):
         """Test send_bulk_create_host method"""
         mock_app.config = self.mock_app_config
@@ -425,7 +425,7 @@ class TestSyncCMK2(unittest.TestCase):
             )
             self.assertEqual(self.syncer.num_created, 2)
 
-    @patch('application.modules.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.app')
     def test_create_host_individual(self, mock_app):
         """Test create_host individual mode"""
         mock_app.config = {**self.mock_app_config, 'CMK_BULK_CREATE_HOSTS': False}
@@ -495,7 +495,7 @@ class TestSyncCMK2(unittest.TestCase):
             self.syncer.update_cluster_nodes('cluster1', cmk_nodes, syncer_nodes)
             mock_request.assert_not_called()
 
-    @patch('application.modules.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.app')
     def test_send_bulk_update_host(self, mock_app):
         """Test send_bulk_update_host method"""
         mock_app.config = self.mock_app_config
@@ -517,7 +517,7 @@ class TestSyncCMK2(unittest.TestCase):
             )
             self.assertEqual(self.syncer.num_updated, 2)
 
-    @patch('application.modules.checkmk.syncer.logger')
+    @patch('application.plugins.checkmk.syncer.logger')
     def test_update_host_no_changes(self, mock_logger):
         """Test update_host when no changes are needed"""
         hostname = 'test-host'
@@ -540,9 +540,9 @@ class TestSyncCMK2(unittest.TestCase):
             # Should not make any API calls since no changes
             mock_request.assert_not_called()
 
-    @patch('application.modules.checkmk.syncer.multiprocessing')
-    @patch('application.modules.checkmk.syncer.Host')
-    @patch('application.modules.checkmk.syncer.Progress')
+    @patch('application.plugins.checkmk.syncer.multiprocessing')
+    @patch('application.plugins.checkmk.syncer.Host')
+    @patch('application.plugins.checkmk.syncer.Progress')
     def test_calculate_attributes_and_rules(self, mock_progress, mock_host, mock_mp):
         """Test calculate_attributes_and_rules method"""
         # Mock database query with proper queryset behavior
@@ -570,9 +570,9 @@ class TestSyncCMK2(unittest.TestCase):
             
             self.assertEqual(result, mock_dict)
 
-    @patch('application.modules.checkmk.syncer.Progress')
-    @patch('application.modules.checkmk.syncer.print')
-    @patch('application.modules.checkmk.syncer.log')
+    @patch('application.plugins.checkmk.syncer.Progress')
+    @patch('application.plugins.checkmk.syncer.print')
+    @patch('application.plugins.checkmk.syncer.log')
     def test_run_method_basic_flow(self, mock_log, mock_print, mock_progress):
         """Test basic flow of run method"""
         # Mock required methods

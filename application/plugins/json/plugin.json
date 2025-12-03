@@ -1,0 +1,18 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "JSON Files",
+    "description": "",
+    "ident": "json",
+    "account_presets": {},
+    "account_custom_field_presets": {
+          "path": "",
+          "hostname_field": "host",
+          "rewrite_hostname": "",
+          "data_key": ""
+    },
+    "depends_on_syncer_plugins": [
+        "rest"
+    ],
+    "enabled": true
+}
