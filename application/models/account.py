@@ -11,7 +11,7 @@ from application.helpers.plugins import discover_plugins
 
 def get_account_types():
     account_types = [
-        ('cmkv1', "Checkmk Version 1.x"),
+        ('cmkv1', "Checkmk Version 1.x"), # Legacy remaining
         ('cmdb', "Object Managed only in Syncer"),
         ('custom', "Custom Entries, like DBs"),
         ('from_api', "Object Send from API"),
