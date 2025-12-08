@@ -35,7 +35,7 @@ class SyncSites(Plugin):
             'subscription_username': site.settings_master.subscription_username,
             'subscription_password': site.settings_master.subscription_password,
             'webserver_certificate': site.settings_master.webserver_certificate_full,
-            'webserver_private_certificate': site.settings_master.webserver_certificate_private,
+            'webserver_private_certificate': site.settings_master.webserver_certificate_private_key,
         })
         for custom_var in site.custom_ansible_variables:
             inventory[custom_var.variable_name] = custom_var.variable_value
