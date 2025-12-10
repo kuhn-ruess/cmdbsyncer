@@ -16,7 +16,7 @@ class FileAdminView(FileAdmin):
     edit_modal = True
 
 
-    allowed_extensions = ('md', 'txt', 'csv', 'yml', 'json')
+    allowed_extensions = ('md', 'txt', 'csv', 'yml', 'json', 'pem', 'cert')
     editable_extensions = ('md', 'txt', 'csv', 'yml', 'json')
 
     def is_accessible(self):
