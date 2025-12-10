@@ -1,17 +1,29 @@
 ---
    - name: Create Folder to store Webserver Certificates
-     file:
+     ansible.builtin.file:
         path: /etc/ssl/checkmk
         owner: root
-        group: www-data
+        group: root
         state: directory
         mode: 0755
      when: webserver_certificate is defined
- 
+
    - name: Copy Webserver Certificate
-     copy: "src={{ webserver_certificate }} dest=/etc/ssl/checkmk/certificate.pem follow=yes mode=0755"
+     ansible.builtin.copy:
+        src: "{{ webserver_certificate }}"
+        dest: /etc/ssl/checkmk/certificate.pem
+        follow: true
+        mode: "0755"
+        owner: root
+        group: root
      when: webserver_certificate is defined
 
    - name: Copy Private Certificate
-     copy: "src={{ webserver_private_certificate }} dest=/etc/ssl/checkmk/certificate.pem follow=yes mode=0755"
+     ansible.builtin.copy:
+        src: "{{ webserver_private_certificate }}"
+        dest: /etc/ssl/checkmk/private.pem
+        follow: true
+        mode: "0755"
+        owner: root
+        group: root
      when: webserver_private_certificate is defined
