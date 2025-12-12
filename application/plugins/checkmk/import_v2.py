@@ -25,11 +25,17 @@ class DataGeter(CMK2):
 
     def run(self):
         """Run Actual Job"""
-        url = (
-            '/domain-types/host_config/collections/all'
-            '?effective_attributes=true'
-            '&include_links=false'
-        )
+        if self.checkmk_version.startswith('2.2'):
+            url = (
+                '/domain-types/host_config/collections/all'
+                '?effective_attributes=true'
+            )
+        else:
+            url = (
+                '/domain-types/host_config/collections/all'
+                '?effective_attributes=true'
+                '&include_links=false'
+            )
         filters = False
         if import_filter := self.config.get('import_filter'):
             filters = [x.strip().lower() for x in import_filter.split(',')]
