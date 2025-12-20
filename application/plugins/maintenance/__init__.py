@@ -75,7 +75,7 @@ def maintenance(account):
         objects = Host.objects(last_import_seen__lte=timedelta, no_autodelete__ne=True, object_type__ne = 'template')
 
     if dont_delete_if_more:
-        if int(dont_delete_if_more) >= len(objects):
+        if len(objects) >= int(dont_delete_if_more):
             details.append(
                 (
                     'error',
