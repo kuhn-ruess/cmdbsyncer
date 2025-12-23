@@ -38,7 +38,10 @@ def _inner_import(config):
     Base LDAP Connect and Query
     """
     if not config['address'].startswith('ldap'):
-        raise ValueError("Address needs to start with ldap:// or ldaps://")
+        print("Error: Address needs to start with ldap:// or ldaps://")
+        if config['debug']:
+            raise ValueError("Address needs to start with ldap:// or ldaps://")
+        return []
 
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
           f"{ColorCodes.UNDERLINE}{config['name']}{ColorCodes.ENDC}")
@@ -47,7 +50,15 @@ def _inner_import(config):
     connect = ldap.initialize(config['address'])
     connect.set_option(ldap.OPT_REFERRALS, 0)
 
-    connect.simple_bind_s(config['username'], config['password'])
+
+    try:
+        connect.simple_bind_s(config['username'], config['password'])
+    except ldap.SERVER_DOWN:
+        print("Error: Ldap Server not reachable")
+        if config['debug']:
+            raise
+        return []
+
 
 
     scope = ldap.SCOPE_SUBTREE
@@ -89,11 +100,12 @@ def _inner_import(config):
 
 
 
-def ldap_import(account):
+def ldap_import(account, debug=False):
     """
     LDAP Import
     """
     config = get_account_by_name(account)
+    config['debug'] = debug
     for hostname, labels in _inner_import(config):
         print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
         host_obj = Host.get_host(hostname)
