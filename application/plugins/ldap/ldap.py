@@ -64,10 +64,16 @@ def _inner_import(config):
     scope = ldap.SCOPE_SUBTREE
     base_dn = config['base_dn']
     search_filter = config['search_filter']
+    if config['debug']:
+        print(f"INFO: Use Filter: {search_filter}") 
+
     #pylint: disable=consider-using-generator
     attributes = []
     if config['attributes']:
         attributes = list([x.strip() for x in config['attributes'].split(',')])
+
+    if config['debug']:
+        print(f"INFO: Search the following Attributes: {attributes}") 
 
     page_control = SimplePagedResultsControl(True, size=1000, cookie='')
 
