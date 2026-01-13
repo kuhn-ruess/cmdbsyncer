@@ -7,6 +7,7 @@
         state: directory
         mode: 0755
      when: webserver_certificate is defined
+     become: True
 
    - name: Copy Webserver Certificate
      ansible.builtin.copy:
@@ -17,6 +18,7 @@
         owner: root
         group: root
      when: webserver_certificate is defined
+     become: True
 
    - name: Copy Private Certificate
      ansible.builtin.copy:
@@ -27,3 +29,18 @@
         owner: root
         group: root
      when: webserver_private_certificate is defined
+     become: True
+
+
+   - name: Update SSL Paths in ssl.conf
+     ansible.builtin.lineinfile:
+       path: /etc/httpd/conf.d/ssl.conf
+       regexp: "{{ item.regexp }}"
+       line: "{{ item.line }}"
+       backup: yes
+     loop:
+       - { regexp: '^\s*SSLCertificateFile\b',        line: 'SSLCertificateFile /etc/ssl/checkmk/certificate.pem' }
+       - { regexp: '^\s*SSLCertificateKeyFile\b',     line: 'SSLCertificateKeyFile /etc/ssl/checkmk/private.pem' }
+       #- { regexp: '^\s*SSLCertificateChainFile\b',   line: 'SSLCertificateChainFile /NEU/chain.pem' }
+     notify: reload httpd
+     become: True
