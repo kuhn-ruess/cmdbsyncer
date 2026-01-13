@@ -742,7 +742,7 @@ class CheckmkSettingsView(DefaultModelView):
                 "Versions directly from checkmk"
             ),
         },
-        'webserver_certificate_full': {
+        'webserver_certificate': {
             'placeholder': (
                 "Optional: Add Paths to your Webserver Certificate Files "
                 "to automaticly update them if needed"
@@ -765,7 +765,7 @@ class CheckmkSettingsView(DefaultModelView):
            ( 'subscription_username', 'subscription_password',
            ), "Automatic Download Settings (optional)"),
        rules.FieldSet(
-           ( 'webserver_certificate_full', 'webserver_certificate_private_key',
+           ( 'webserver_certificate', 'webserver_certificate_private_key', 'webserver_certificate_intermediate',
            ), "Server Managment (optional)"),
     ]
 

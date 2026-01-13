@@ -391,8 +391,14 @@ class CheckmkSettings(db.Document):
     subscription_username = db.StringField()
     subscription_password = db.StringField()
 
-    webserver_certificate_full = db.StringField()
+    webserver_certificate = db.StringField()
     webserver_certificate_private_key = db.StringField()
+    webserver_certificate_intermediate = db.StringField()
+
+
+    meta = {
+        'strict': False
+    }
 
     def __str__(self):
         """
