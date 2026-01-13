@@ -18,3 +18,10 @@
 
   roles:
     - server_mngmt
+
+  handlers:
+    - name: Restart httpd
+      ansible.builtin.service:
+        name: httpd
+        state: restared
+      become: True
