@@ -6,7 +6,9 @@
         group: root
         state: directory
         mode: 0755
-     when: webserver_certificate is defined
+     when:
+       - webserver_certificate is defined
+       - webserver_certificate | length > 0
      become: True
 
    - name: Copy Webserver Certificate
@@ -17,7 +19,9 @@
         mode: "0755"
         owner: root
         group: root
-     when: webserver_certificate is defined
+     when:
+       - webserver_certificate is defined
+       - webserver_certificate | length > 0
      become: True
 
    - name: Copy Private Certificate
@@ -28,19 +32,51 @@
         mode: "0755"
         owner: root
         group: root
-     when: webserver_private_certificate is defined
+     when:
+       - webserver_private_certificate is defined
+       - webserver_private_certificate | length > 0
      become: True
 
+   - name: Copy Intermediate Certificate
+     ansible.builtin.copy:
+        src: "{{ webserver_intermediate_certificate }}"
+        dest: /etc/ssl/checkmk/intermediate.pem
+        follow: true
+        mode: "0755"
+        owner: root
+        group: root
+     when:
+       - webserver_intermediate_certificate is defined
+       - webserver_intermediate_certificate | length > 0
+     become: true
 
-   - name: Update SSL Paths in ssl.conf
+   - name: Update ssl.conf for certificate
      ansible.builtin.lineinfile:
        path: /etc/httpd/conf.d/ssl.conf
-       regexp: "{{ item.regexp }}"
-       line: "{{ item.line }}"
-       backup: yes
-     loop:
-       - { regexp: '^\s*SSLCertificateFile\b',        line: 'SSLCertificateFile /etc/ssl/checkmk/certificate.pem' }
-       - { regexp: '^\s*SSLCertificateKeyFile\b',     line: 'SSLCertificateKeyFile /etc/ssl/checkmk/private.pem' }
-       #- { regexp: '^\s*SSLCertificateChainFile\b',   line: 'SSLCertificateChainFile /NEU/chain.pem' }
-     notify: reload httpd
-     become: True
+       regexp: '^\s*SSLCertificateFile\b'
+       line: 'SSLCertificateFile /etc/ssl/checkmk/certificate.pem'
+     when:
+       - webserver_certificate is defined
+       - webserver_certificate | length > 0
+     become: true
+
+   - name: Update ssl.conf for private
+     ansible.builtin.lineinfile:
+       path: /etc/httpd/conf.d/ssl.conf
+       regexp: '^\s*SSLCertificateKeyFile\b'
+       line: 'SSLCertificateKeyFile /etc/ssl/checkmk/private.pem'
+     when:
+       - webserver_private_certificate is defined
+       - webserver_private_certificate | length > 0
+     become: true
+
+   - name: Update ssl.conf for intermediate
+     ansible.builtin.lineinfile:
+       path: /etc/httpd/conf.d/ssl.conf
+       regexp: '^\s*SSLCertificateChainFile\b'
+       line: 'SSLCertificateChainFile /etc/ssl/checkmk/intermediate.pem'
+     when:
+       - webserver_intermediate_certificate is defined
+       - webserver_intermediate_certificate | length > 0
+     become: true
+
