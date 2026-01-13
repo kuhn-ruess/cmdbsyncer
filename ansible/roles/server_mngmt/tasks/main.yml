@@ -27,3 +27,22 @@
         owner: root
         group: root
      when: webserver_private_certificate is defined
+
+
+   - name: Update SSL Paths in ssl.conf
+     ansible.builtin.lineinfile:
+       path: /etc/httpd/conf.d/ssl.conf
+       regexp: "{{ item.regexp }}"
+       line: "{{ item.line }}"
+       backup: yes
+     loop:
+       - { regexp: '^\s*SSLCertificateFile\b',        line: 'SSLCertificateFile /etc/ssl/checkmk/certifcate.pem' }
+       - { regexp: '^\s*SSLCertificateKeyFile\b',     line: 'SSLCertificateKeyFile /etc/ssl/checkmk/privkey.pem' }
+       #- { regexp: '^\s*SSLCertificateChainFile\b',   line: 'SSLCertificateChainFile /NEU/chain.pem' }
+     notify: reload httpd
+     handlers:
+
+  - name: reload httpd
+    ansible.builtin.service:
+      name: httpd
+      state: reloaded
