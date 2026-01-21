@@ -11,24 +11,27 @@ def cli_ldap():
     """LDAP Import/ Inventorize"""
 
 @cli_ldap.command('import_objects')
+@click.option("--debug", default=False, is_flag=True)
 @click.argument('account')
-def cli_ldap_import(account):
+def cli_ldap_import(account, debug):
     """Import LDAP Objects"""
-    ldap_import(account)
+    ldap_import(account, debug)
 
-def ldap_inventorize(account):
+def ldap_inventorize(account, debug=False):
     """
     LDAP Inventorize
     """
     config = get_account_by_name(account)
+    config['debug'] = debug
     run_inventory(config, _inner_import(config))
 
 
 @cli_ldap.command('inventorize_objects')
 @click.argument('account')
-def cli_ldap_inventorize(account):
+@click.option("--debug", default=False, is_flag=True)
+def cli_ldap_inventorize(account, debug):
     """Inventorize LDAP Objects"""
-    ldap_inventorize(account)
+    ldap_inventorize(account, debug)
 
 register_cronjob("LDAP: Inventorize Data", ldap_inventorize)
 register_cronjob("LDAP: Import Objects", ldap_import)
