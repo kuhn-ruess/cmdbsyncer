@@ -38,7 +38,10 @@ def _inner_import(config):
     Base LDAP Connect and Query
     """
     if not config['address'].startswith('ldap'):
-        raise ValueError("Address needs to start with ldap:// or ldaps://")
+        print("Error: Address needs to start with ldap:// or ldaps://")
+        if config['debug']:
+            raise ValueError("Address needs to start with ldap:// or ldaps://")
+        return []
 
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
           f"{ColorCodes.UNDERLINE}{config['name']}{ColorCodes.ENDC}")
@@ -47,16 +50,30 @@ def _inner_import(config):
     connect = ldap.initialize(config['address'])
     connect.set_option(ldap.OPT_REFERRALS, 0)
 
-    connect.simple_bind_s(config['username'], config['password'])
+
+    try:
+        connect.simple_bind_s(config['username'], config['password'])
+    except ldap.SERVER_DOWN:
+        print("Error: Ldap Server not reachable")
+        if config['debug']:
+            raise
+        return []
+
 
 
     scope = ldap.SCOPE_SUBTREE
     base_dn = config['base_dn']
     search_filter = config['search_filter']
+    if config['debug']:
+        print(f"INFO: Use Filter: {search_filter}") 
+
     #pylint: disable=consider-using-generator
     attributes = []
     if config['attributes']:
         attributes = list([x.strip() for x in config['attributes'].split(',')])
+
+    if config['debug']:
+        print(f"INFO: Search the following Attributes: {attributes}") 
 
     page_control = SimplePagedResultsControl(True, size=1000, cookie='')
 
@@ -89,11 +106,12 @@ def _inner_import(config):
 
 
 
-def ldap_import(account):
+def ldap_import(account, debug=False):
     """
     LDAP Import
     """
     config = get_account_by_name(account)
+    config['debug'] = debug
     for hostname, labels in _inner_import(config):
         print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
         host_obj = Host.get_host(hostname)
