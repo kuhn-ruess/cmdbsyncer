@@ -41,6 +41,10 @@ AUTHORIZATIONS = {
         'name': 'x-login-token',
         'description': 'Deprecated, please change to x-login-user'
     },
+    'basicAuth' : {
+        'type': 'basic',
+        'description': 'Only used for custom Plugins'
+    }
 }
 
 PARAMS = {
@@ -50,7 +54,8 @@ SWAGGER_ENABLED = app.config.get("SWAGGER_ENABLED")
 if not SWAGGER_ENABLED:
     PARAMS['doc'] = False
 
-API = Api(API_BP, authorizations=AUTHORIZATIONS, security=['x-login-user', 'x-login-token'], **PARAMS)
+API = Api(API_BP, authorizations=AUTHORIZATIONS,
+          security=['x-login-user', 'x-login-token', 'basicAuth'], **PARAMS)
 
 
 API.add_namespace(ansible, path='/ansible')
