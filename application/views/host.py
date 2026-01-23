@@ -15,7 +15,7 @@ from wtforms import HiddenField, Field, StringField, BooleanField
 from markupsafe import Markup
 from mongoengine.errors import DoesNotExist
 
-from application.plugins.checkmk.models import CheckmkFolderPool
+from application.plugins.checkmk.models import CheckmkFolderPool #@TODO pre_deletion method for Host so no import needed
 from application.plugins.checkmk import get_host_debug_data as cmk_host_debug
 from application.plugins.netbox import get_device_debug_data as netbox_host_debug
 
@@ -935,6 +935,7 @@ class HostModelView(DefaultModelView):
         """
         url = url_for('.set_template_form', ids=','.join(ids))
         return redirect(url)
+
 
     @expose('/set_template_form')
     def set_template_form(self):
