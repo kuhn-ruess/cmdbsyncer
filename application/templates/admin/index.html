@@ -1,7 +1,8 @@
 {% extends 'admin/master.html' %}
 
 {% block body %}
-  <h1>Welcome to CMDBsyncer</h1>
+<h1>Welcome to CMDBsyncer</h1>
+<p>
   This tool is <b>Open Source</b> and developed by <b>Kuhn &amp; Rue&szlig; GmbH</b> in Germany.
   <h2>Links</h2>
   <ul>
@@ -10,4 +11,8 @@
     <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">Source Code</a></li>
     <li><a href="https://kuhn-ruess.de">Kuhn & Rueß GmbH</a></li>
   </ul>
+</p>
+<p>
+Build: {{config.BUILD_DATE}}</h1>
+</p>
 {% endblock %}

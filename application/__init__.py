@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.11.3'
+VERSION = '3.11.4'
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -39,6 +39,11 @@ else:
     app.config.from_object('application.config.BaseConfig')
     app.jinja_env.auto_reload = True
 
+
+## Read Build Data
+for line in open("buildinfo.txt").readlines():
+    name, key = line.split('=')
+    app.config[name] = key.strip()
 
 log_config.dictConfig(app.config['LOGGING'])
 logger = logging.getLogger('debug')
@@ -252,8 +257,6 @@ admin.add_link(MenuLink(name='Logout', category='Profil',
 admin.add_link(MenuLink(name='Commit Changes',
                         url="#activate_changes",
                         class_name="toggle_activate_modal btn btn-primary"))
-
-
 
 
 
