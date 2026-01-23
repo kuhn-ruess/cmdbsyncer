@@ -10,6 +10,7 @@ from flask import request, abort
 from flask_restx import Namespace, Resource, reqparse, fields
 from application.api import require_token
 from application.models.host import Host
+from application.plugins.checkmk.models import CheckmkFolderPool #@TODO pre_deletion method for Host so no import needed
 
 from application.helpers.get_account import get_account_by_name, AccountNotFoundError
 
@@ -155,6 +156,11 @@ class HostDetailApi(Resource):
         status = "not found"
         status_code = 404
         if host_obj:
+            if folder := host_obj.folder:
+                folder = CheckmkFolderPool.objects.get(folder_name__iexact=folder)
+                if folder.folder_seats_taken > 0:
+                    folder.folder_seats_taken -= 1
+                    folder.save()
             status = "deleted"
             status_code = 200
             host_obj.delete()
