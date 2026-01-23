@@ -14,11 +14,16 @@ def _get_folders(limited=False):
 
 def get_folder(only_pools=None):
     """ Try to find a free Pool Folder """
-    # @TODO Possible Race condition due to multiporcessing
+    
     for folder in _get_folders():
-        if folder.has_free_seat():
-            folder.folder_seats_taken += 1
-            folder.save()
+        result = CheckmkFolderPool.objects(
+            folder_name=folder.folder_name,
+            folder_seats_taken__lt=folder.folder_seats,
+        ).update_one(inc__folder_seats_taken=1)
+        
+        if result:
+            # Successfully incremented, reload the folder object
+            folder.reload()
             return folder
     return False
 
