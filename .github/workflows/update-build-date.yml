@@ -1,0 +1,25 @@
+name: Update build date on merge
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update-build-date:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set build date
+        run: |
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "BUILD_DATE=$DATE" > buildinfo.txt
+
+      - name: Commit and push build date
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add buildinfo.txt
+          git commit -m "Update build date [skip ci]" || echo "No changes"
+          git push
