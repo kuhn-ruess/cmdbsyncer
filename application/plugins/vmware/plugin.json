@@ -2,5 +2,6 @@
     "version": "1.0.0",
     "author": "Kuhn & Rueß GmbH",
     "name": "Vmware vCenter",
-    "ident": "vmware_vcenter"
+    "ident": "vmware_vcenter",
+    "enabled": true
 }

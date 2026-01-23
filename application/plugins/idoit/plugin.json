@@ -13,5 +13,6 @@
         "language": "en",
         "filter_cmdb_status": "6",
         "filter_monitoring_status": "False"
-    }
+    },
+    "enabled": true
 }

@@ -1,4 +1,4 @@
-plugins/*.py
+plugins/*
 !plugins/example_*.py
 !plugins/__init__.py
 application/config.local.py
