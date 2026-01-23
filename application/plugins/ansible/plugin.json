@@ -2,5 +2,6 @@
     "version": "1.0.0",
     "author": "Kuhn & Rueß GmbH",
     "name": "Ansible",
-    "ident": "ansible"
+    "ident": "ansible",
+    "enabled": true
 }

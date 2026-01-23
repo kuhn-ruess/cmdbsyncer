@@ -2,5 +2,6 @@
     "version": "1.0.0",
     "author": "Kuhn & Rueß GmbH",
     "name": "Cisco DNA",
-    "ident": "cisco_dna"
+    "ident": "cisco_dna",
+    "enabled": true
 }

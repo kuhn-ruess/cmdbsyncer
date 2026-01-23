@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.11.4'
+VERSION = '3.11.5'
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -262,4 +262,3 @@ admin.add_link(MenuLink(name='Commit Changes',
 
 from plugins import *
 from application.plugins import *
-
