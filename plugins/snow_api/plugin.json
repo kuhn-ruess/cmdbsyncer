@@ -1,0 +1,16 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "SNOW API Translator",
+    "description": "Custom Plugin to ACK Services in Checkmk ",
+    "ident": "snow_api",
+    "account_presets" : false,
+    "account_custom_field_presets": false,
+    "conifg_custom_keys": {
+        "CMK_ACCOUNT_NAME": "Name of Account with Config",
+        "VERIFY_SSL": true
+    },
+    "depends_on_py_modules": [ "flask-httpauth"],
+    "depends_on_syncer_plugins" : false,
+    "enabled": true
+}
