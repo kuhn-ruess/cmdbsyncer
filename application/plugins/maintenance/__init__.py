@@ -169,6 +169,33 @@ def delete_all_hosts(account):
         if account:
             db_filter['source_account_name'] = account
         print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
+
+        raw_match = {
+            "no_autodelete": {"$ne": True},
+            "object_type": {"$ne": "template"},
+        }
+        if account:
+            raw_match['source_account_name'] = account
+        pipline = [
+            {
+                "$match": raw_match
+            },
+            {
+                "$group": {
+                    "_id" : "$folder",
+                    "count": {"$sum": 1},
+                }
+            }
+        ]
+        for folder_pool in Host.objects.aggregate(*pipline):
+            if folder_name := folder_pool['_id']:
+                count = folder_pool['count']
+                folder = CheckmkFolderPool.objects.get(folder_name__iexact=folder_name)
+                if folder.folder_seats_taken > count:
+                    folder.folder_seats_taken -= count
+                else:
+                    folder.folder_seats_taken = 0
+                folder.save()
         Host.objects(**db_filter).delete()
     else:
         print(f"{CC.OKGREEN}  ** {CC.ENDC}Aborted")
@@ -239,15 +266,6 @@ def seed_user(email):
         return 1
     print(f"User password set to: {passwd}")
     return 0
-#.
-#   .-- Command: Export Rules
-#@_cli_sys.command('export_rules')
-#@click.argument("rule_model")
-#def export_rules(rule_model):
-#    """Export given Rule Model"""
-#    models = [
-#    ]
-#
 #.
 #   .-- Command: self configure
 

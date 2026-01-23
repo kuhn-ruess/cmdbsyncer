@@ -15,6 +15,7 @@ from wtforms import HiddenField, Field, StringField, BooleanField
 from markupsafe import Markup
 from mongoengine.errors import DoesNotExist
 
+from application.plugins.checkmk.models import CheckmkFolderPool
 from application.plugins.checkmk import get_host_debug_data as cmk_host_debug
 from application.plugins.netbox import get_device_debug_data as netbox_host_debug
 
@@ -883,6 +884,17 @@ class HostModelView(DefaultModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('host')
+
+    def on_model_delete(self, model):
+        """
+        Housekeeping on host deletion
+        """
+        if model.folder:
+            folder = CheckmkFolderPool.objects.get(folder_name__iexact=model.folder)
+            if folder.folder_seats_taken > 0:
+                folder.folder_seats_taken -= 1
+                folder.save()
+
 
     def on_model_change(self, form, model, is_created):
         """
