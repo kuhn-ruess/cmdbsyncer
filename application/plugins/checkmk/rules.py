@@ -178,22 +178,32 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
             if outcome['action'] == 'folder_pool':
                 self.found_poolfolder_rule = True
+                # Check if the Host is assigned to an folder already
                 if self.db_host.get_folder():
-                    pool_folder = self.db_host.get_folder()
-                    outcomes['extra_folder_options'] += pool_folder
-                    outcomes['move_folder'] += pool_folder
+                    folder_name = self.db_host.get_folder()
+                    outcomes['extra_folder_options'] += folder_name
+                    outcomes['move_folder'] += folder_name
                 else:
-                    # Find new Pool Folder
+                    # Assign an new, free folder to Host
                     only_pools = None
                     if action_param:
                         only_pools = [x.strip() for x in action_param.split(',')]
                     folder = poolfolder.get_folder(only_pools)
                     if not folder:
                         raise ValueError(f"No Pool Folder left for {self.db_host.hostname}")
-                    folder = self.format_foldername(folder)
-                    self.db_host.lock_to_folder(folder)
-                    outcomes['extra_folder_options'] += folder
-                    outcomes['move_folder'] += folder
+                    folder_name = self.format_foldername(folder.folder_name)
+                    self.db_host.lock_to_folder(folder_name)
+                    extra_ops = {}
+                    if folder.folder_title:
+                        extra_ops['title'] = folder.folder_title
+                    if folder.assigned_site_id:
+                        extra_ops['site'] = folder.assigned_site_id
+                    folder_w_ops = folder_name
+                    if extra_ops:
+                        folder_w_ops = f"{folder_name}|{str(extra_ops)}"
+
+                    outcomes['extra_folder_options'] += self.format_foldername(folder_w_ops)
+                    outcomes['move_folder'] += self.fix_and_format_foldername(folder_w_ops)
 
             if outcome['action'] == 'attribute':
                 outcomes['attributes'].append(action_param)
@@ -306,8 +316,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         self.found_poolfolder_rule = False
         self.db_host = db_host
         outcomes = self.check_rules(hostname)
-        # Cleanup Pool folder since no match
-        # to a poolfolder rule anymore
+        # This Host does not match to an poolfolder rule
         if not self.found_poolfolder_rule:
             if db_host.get_folder():
                 old_folder = db_host.get_folder()
