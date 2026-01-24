@@ -91,7 +91,7 @@ def pack(ident):
     plugin = get_plugin_by_name(ident)
     if plugin:
         plugin_path = plugin['path'].replace('plugin.json', '')
-        tar_filename = f"{plugin['data']['ident']}.syncerplugin"
+        tar_filename = f"{plugin['data']['ident']}-{plugin['data']['version']}.syncerplugin"
         with tarfile.open(tar_filename, 'w') as tar:
             tar.add(plugin_path, arcname=plugin['data']['ident'])
         print(f"Plugin packed to {tar_filename}")
