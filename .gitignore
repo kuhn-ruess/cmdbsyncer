@@ -1,5 +1,6 @@
 plugins/*
 !plugins/example_*.py
+*.syncerplugin
 !plugins/__init__.py
 application/config.local.py
 cmdbsyncer-files
