@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 tablib_registry.register('syncer_rules', ExportObjects())
 
-VERSION = '3.11.5'
+VERSION = '3.11.6'
 
 app = Flask(__name__)
 env = os.environ.get('config')
@@ -41,7 +41,8 @@ else:
 
 
 ## Read Build Data
-for line in open("buildinfo.txt").readlines():
+
+for line in open(f"{app.root_path}/../buildinfo.txt").readlines():
     name, key = line.split('=')
     app.config[name] = key.strip()
 
