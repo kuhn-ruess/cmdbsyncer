@@ -65,28 +65,26 @@ class InventorizeHosts(CMK2):
         params={
             "query":
                '{ "op": "=", "left": "description", "right": "Check_MK HW/SW Inventory"}',
-            "columns": ['host_name', 'host_mk_inventory']
+            "columns": ['host_name']
         }
-        # We run that only on first line, thats the Checkmk_Service
 
         api_response = self.request(url, params=params, method="GET")
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
-        for service in api_response[0]['value']:
-            hostname = service['extensions']['host_name']
+        for host_data in api_response[0]['value']:
+            hostname = host_data['extensions']['host_name']
             self.add_host(hostname)
             self.hw_sw_inventory.setdefault(hostname, {})
-            if not 'host_mk_inventory' in service['extensions']:
-                continue
-            raw_inventory = service['extensions']['host_mk_inventory']['value'].encode('ascii')
-            raw_decoded_inventory = base64.b64decode(raw_inventory).decode('utf-8')
-            if raw_decoded_inventory:
-                inv_raw = ast.literal_eval(raw_decoded_inventory)
+            url = f"host_inv_api.py?host={hostname}&output_format=json"
+            dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
+            if dict_inventory:
                 inv_parsed = {}
                 # Parsing 3 Levels of HW/SW Inventory
-                if 'Nodes' not in inv_raw:
+                print(1)
+                if 'Nodes' not in dict_inventory:
                     # Skip Hosts without Inventory Data
                     continue
-                for node_name, node_content in inv_raw['Nodes'].items():
+                print(2)
+                for node_name, node_content in dict_inventory['Nodes'].items():
                     inv_parsed[node_name] = {}
                     if node_content['Attributes']:
                         for attr_name, attribute_value in \
