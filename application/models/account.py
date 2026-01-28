@@ -42,6 +42,7 @@ object_types = [
     ('custom_4', 'Custom Type 4'),
     ('custom_5', 'Custom Type 5'),
     ('custom_6', 'Custom Type 6'),
+    ('cmk_site', 'Checkmk Site Object'),
     ('undefined', 'Undefined'),
     ('template', 'CMDB Template for Labels'),
 ]

@@ -43,7 +43,8 @@ OBJECT_TYPE_ICONS = {
     'custom_5': 'fa fa-cube',
     'custom_6': 'fa fa-cube',
     'undefined': 'fa fa-question-circle',
-    'template': 'fa fa-file-alt',
+    'template': 'fa fa-file',
+    'cmk_site': 'fa fa-sitemap',
 }
 
 def get_debug(hostname, mode):
