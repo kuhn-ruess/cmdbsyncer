@@ -6,6 +6,7 @@ import ast
 import json
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
+import multiprocessing
 
 from application.models.host import Host, app
 from application.plugins.checkmk.models import (
@@ -57,11 +58,11 @@ class InventorizeHosts(CMK2):
             self.fields[rule.attribute_source] += field_list
 
 
-    def get_hw_sw_inventory_data(self, hostname):
+    def get_hw_sw_inventory_data(self, hostname, host_data):
         url = f"host_inv_api.py?host={hostname}&output_format=json"
         dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
         if not dict_inventory:
-            return {}
+            return False
         inv_parsed = {}
         # Parsing 3 Levels of HW/SW Inventory
         for node_name, node_content in dict_inventory['Nodes'].items():
@@ -109,8 +110,9 @@ class InventorizeHosts(CMK2):
                     else:
                         collected_data = collected_data.get(sub_path)
                 return_data[friendly_name] = collected_data
-            return return_data
-        return {}
+            host_data[hostname] = return_data
+            return True
+        return False 
 
 
     def get_hw_sw_inventory(self):
@@ -132,11 +134,17 @@ class InventorizeHosts(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Requesting HW/SW Inventory Data from Checkmk", total=total)
-            for host_data in response:
-                hostname = host_data['extensions']['host_name']
-                self.add_host(hostname)
-                self.hw_sw_inventory[hostname] = self.get_hw_sw_inventory_data(hostname)
-                progress.advance(task1)
+            manager = multiprocessing.Manager()
+            host_data = manager.dict()
+            with multiprocessing.Pool() as pool:
+                for host_data in response:
+                    hostname = host_data['extensions']['host_name']
+                    self.add_host(hostname)
+                    task = pool.apply_async(self.get_hw_sw_inventory_data,
+                                     args=(hostname, host_data),
+                                     callback=lambda x: progress.advance(task1))
+                    progress.advance(task1)
+            self.hw_sw_inventory.update(dict(host_data))
 
     def get_cmk_services(self):
         """ Get CMK Services"""
