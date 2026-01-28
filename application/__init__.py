@@ -184,6 +184,8 @@ def _register_all_plugin_admin_views():
             logger.exception(
                 "Failed to register admin views for plugin %s", module_name
             )
+            if '--debug' in sys.argv:
+                raise
             continue
 
         register = getattr(admin_module, "register_admin_views", None)
