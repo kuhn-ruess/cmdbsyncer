@@ -17,6 +17,7 @@ from application.plugins.checkmk.passwords import CheckmkPasswordSync
 from application.plugins.checkmk.groups import CheckmkGroupSync
 from application.plugins.checkmk.users import CheckmkUserSync
 from application.plugins.checkmk.bi import BI
+from application.plugins.checkmk.sites import CheckmkSites
 
 
 
@@ -391,9 +392,20 @@ def export_passwords(account):
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
         details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporting Passwords to Checkmk Account: {account}",
+        log.log(f"Error Syncing Sites from Checkmk: {account}",
             source="cmk_password_sync", details=details)
 #.
+#   . Import Sites
+def import_sites(account):
+    details = []
+    try:
+        syncer = CheckmkSites(account)
+        syncer.import_sites()
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        details.append(('error', f'CMK Error: {error_obj}'))
+        log.log(f"Error Exporting Passwords to Checkmk Account: {account}",
+            source="cmk_site_sync", details=details)
 #   . Export Users
 def export_users(account):
     """
