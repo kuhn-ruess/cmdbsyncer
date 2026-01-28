@@ -59,6 +59,7 @@ class InventorizeHosts(CMK2):
 
 
     def get_hw_sw_inventory_data(self, hostname, host_data):
+
         url = f"host_inv_api.py?host={hostname}&output_format=json"
         dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
         if not dict_inventory:
@@ -110,6 +111,7 @@ class InventorizeHosts(CMK2):
                     else:
                         collected_data = collected_data.get(sub_path)
                 return_data[friendly_name] = collected_data
+            #host_data.append((hostname, return_data))
             host_data[hostname] = return_data
             return True
         return False 
@@ -137,13 +139,29 @@ class InventorizeHosts(CMK2):
             manager = multiprocessing.Manager()
             host_data = manager.dict()
             with multiprocessing.Pool() as pool:
-                for host_data in response:
-                    hostname = host_data['extensions']['host_name']
+                tasks = []
+                for host_resp in response:
+                    hostname = host_resp['extensions']['host_name']
                     self.add_host(hostname)
                     task = pool.apply_async(self.get_hw_sw_inventory_data,
                                      args=(hostname, host_data),
                                      callback=lambda x: progress.advance(task1))
                     progress.advance(task1)
+                    tasks.append(task)
+
+                progress.console.print("Waiting for Calculation to finish")
+                for task in tasks:
+                    try:
+                        task.get(timeout=app.config['PROCESS_TIMEOUT'])
+                    except multiprocessing.TimeoutError:
+                        progress.console.print("- ERROR: Timeout for a object")
+                    except Exception as error:
+                        if self.debug:
+                            raise
+                        progress.console.print(f"- ERROR: Timeout error for object ({error})")
+                pool.close()
+                pool.join()
+            print(host_data)
             self.hw_sw_inventory.update(dict(host_data))
 
     def get_cmk_services(self):
