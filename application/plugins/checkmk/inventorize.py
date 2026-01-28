@@ -146,7 +146,6 @@ class InventorizeHosts(CMK2):
                     task = pool.apply_async(self.get_hw_sw_inventory_data,
                                      args=(hostname, host_data),
                                      callback=lambda x: progress.advance(task1))
-                    progress.advance(task1)
                     tasks.append(task)
 
                 progress.console.print("Waiting for Calculation to finish")
