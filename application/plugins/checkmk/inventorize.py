@@ -64,57 +64,41 @@ class InventorizeHosts(CMK2):
         dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
         if not dict_inventory:
             return False
-        inv_parsed = {}
-        # Parsing 3 Levels of HW/SW Inventory
-        for node_name, node_content in dict_inventory['Nodes'].items():
-            inv_parsed[node_name] = {}
-            if node_content['Attributes']:
-                for attr_name, attribute_value in \
-                                        node_content['Attributes']['Pairs'].items():
-                    inv_parsed[node_name][attr_name] = attribute_value
-            if node_content['Nodes']:
-                for sub_node_name, sub_node_content in node_content['Nodes'].items():
-                    inv_parsed[node_name][sub_node_name] = {}
-                    if sub_node_attributes := sub_node_content.get('Table'):
-                        key_column = sub_node_attributes['KeyColumns'][0]
-                        for line in sub_node_attributes['Rows']:
-                            entry_name = str(line[key_column])
-                            inv_parsed[node_name][sub_node_name][entry_name] = line
+        
+        def flatten_inventory(data, path=""):
+            result = {}
+            
+            if data.get('Attributes') and data['Attributes'].get('Pairs'):
+                for key, value in data['Attributes']['Pairs'].items():
+                    flat_key = f"{path}.{key}" if path else key
+                    result[flat_key] = value
+            
+            if data.get('Table') and data['Table'].get('Rows'):
+                rows = data['Table']['Rows']
+                result[path] = rows
 
-                    if sub_node_attributes := sub_node_content.get('Attributes'):
-                        for attr_name, attribute_value in \
-                                    sub_node_attributes['Pairs'].items():
-                            inv_parsed[node_name][sub_node_name][attr_name] = \
-                                                                        attribute_value
-                    if sub_node_nodes := sub_node_content.get('Nodes'):
-                        for sub_sub_node_name, sub_sub_node_content in \
-                                                                sub_node_nodes.items():
-                            inv_parsed[node_name][sub_node_name][sub_sub_node_name] = {}
-                            if sub_sub_node_attributes := \
-                                                sub_sub_node_content.get('Attributes'):
-                                for attr_name, attribute_value in \
-                                            sub_sub_node_attributes['Pairs'].items():
-                                    inv_parsed[node_name][sub_node_name]\
-                                        [sub_sub_node_name][attr_name] = attribute_value
+            if data.get('Nodes'):
+                for node_name, node_data in data['Nodes'].items():
+                    new_path = f"{path}.{node_name}" if path else node_name
+                    result.update(flatten_inventory(node_data, new_path))
+            
+            return result
+        
+        flat_inventory = flatten_inventory(dict_inventory)
+        
+        return_data = {}
+        for needed_field in self.fields['cmk_inventory']:
+            # Now Always a Wildcard
+            if needed_field.endswith('*'):
+                needed_field = needed_field[:-1]
 
+            for key, data in flat_inventory.items():
+                friendly_name = key.replace('.', '_')
+                if key.startswith(needed_field):
+                    return_data[friendly_name] = data
 
-
-            # Get the wanted fiels out of the parsed data
-            return_data = {}
-            for needed_fields in self.fields['cmk_inventory']:
-                collected_data = {}
-                friendly_name = needed_fields.replace('.', '_')
-                data = inv_parsed
-                for sub_path in needed_fields.split('.'):
-                    if not collected_data:
-                        collected_data = data.get(sub_path)
-                    else:
-                        collected_data = collected_data.get(sub_path)
-                return_data[friendly_name] = collected_data
-            #host_data.append((hostname, return_data))
-            host_data[hostname] = return_data
-            return True
-        return False 
+        host_data[hostname] = return_data
+        return True
 
 
     def get_hw_sw_inventory(self):
@@ -148,7 +132,6 @@ class InventorizeHosts(CMK2):
                                      callback=lambda x: progress.advance(task1))
                     tasks.append(task)
 
-                progress.console.print("Waiting for Calculation to finish")
                 for task in tasks:
                     try:
                         task.get(timeout=app.config['PROCESS_TIMEOUT'])
@@ -160,7 +143,6 @@ class InventorizeHosts(CMK2):
                         progress.console.print(f"- ERROR: Timeout error for object ({error})")
                 pool.close()
                 pool.join()
-            print(host_data)
             self.hw_sw_inventory.update(dict(host_data))
 
     def get_cmk_services(self):
