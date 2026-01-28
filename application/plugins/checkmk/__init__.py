@@ -6,7 +6,7 @@ Commands to handle Checkmk Sync
 import click
 from mongoengine.errors import DoesNotExist
 from application import log
-from .cmk2 import cli_cmk
+from .cmk2 import cli_cmk, CmkException
 from application.helpers.cron import register_cronjob
 from application.modules.debug import ColorCodes, attribute_table
 
@@ -34,6 +34,7 @@ from .inits import (
     export_downtimes,
     export_dcd_rules,
     export_passwords,
+    import_sites,
 )
 
 def _load_rules():
@@ -509,12 +510,29 @@ def cli_cmk_passwords(account):
     """
     export_passwords(account)
 #.
+#   .-- Command: Import Sites
+@cli_cmk.command('import_sites')
+@click.argument("account")
+def cli_cmk_import_istes(account):
+    """
+    Import Checkmk Sites into the Object Table
+
+    ### Example
+    _./cmdbsyncer checkmk import_sites SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    import_sites(account)
+#.
 #   .-- Import Checkmk V1
 from .import_v1 import ImportCheckmk1
 @cli_cmk.command('import_v1')
 @click.argument("account")
 def get_cmk_data(account):
     """Get All hosts from a CMK 1.x Installation and add them to local db"""
+    from application.helpers.get_account import get_account_by_name
     source_config = get_account_by_name(account)
     if source_config:
         getter = ImportCheckmk1(source_config)
@@ -551,3 +569,4 @@ register_cronjob('Checkmk: Export Downtimes', export_downtimes)
 register_cronjob('Checkmk: Export DCD Rules', export_dcd_rules)
 register_cronjob('Checkmk: Export Passwords', export_passwords)
 register_cronjob('Checkmk: Import Hosts (V2)', import_hosts)
+register_cronjob('Checkmk: Import Sites', import_sites)
