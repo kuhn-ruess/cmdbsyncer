@@ -64,15 +64,15 @@ class InventorizeHosts(CMK2):
         dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
         if not dict_inventory:
             return False
-        
+
         def flatten_inventory(data, path=""):
             result = {}
-            
+
             if data.get('Attributes') and data['Attributes'].get('Pairs'):
                 for key, value in data['Attributes']['Pairs'].items():
                     flat_key = f"{path}.{key}" if path else key
                     result[flat_key] = value
-            
+
             if data.get('Table') and data['Table'].get('Rows'):
                 rows = data['Table']['Rows']
                 result[path] = rows
@@ -81,11 +81,11 @@ class InventorizeHosts(CMK2):
                 for node_name, node_data in data['Nodes'].items():
                     new_path = f"{path}.{node_name}" if path else node_name
                     result.update(flatten_inventory(node_data, new_path))
-            
+
             return result
-        
+
         flat_inventory = flatten_inventory(dict_inventory)
-        
+
         return_data = {}
         for needed_field in self.fields['cmk_inventory']:
             # Now Always a Wildcard
