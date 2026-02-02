@@ -66,21 +66,31 @@ class DefaultModelView(ModelView):
         flash("Entry Cloned", 'success')
         return redirect(return_url)
 
+    def handle_view_exception(self, exc):
+        """
+        Handle view exceptions
+        """
+        if isinstance(exc, NotUniqueError):
+            flash("Duplicate Entry Name - this name already exists", "error")
+            return True  # Tell Flask-Admin we handled the exception
+        
+        # Let Flask-Admin handle other exceptions
+        return super().handle_view_exception(exc)
 
     def on_model_change(self, form, model, is_created):
         """
         Cleanup Fields
         """
 
-        for attr in [x for x in dir(model) if not x.startswith('_')]:
-            current = getattr(model, attr)
-            if isinstance(current, str):
-                setattr(model, attr, current.strip())
-
         try:
-            return super().on_model_change(form, model, is_created)
-        except NotUniqueError as exce:
-            raise ValidationError(f"NotUniqueError: Object name not Unique {exce}")
+            for attr in [x for x in dir(model) if not x.startswith('_')]:
+                current = getattr(model, attr)
+                if isinstance(current, str):
+                    setattr(model, attr, current.strip())
+
+                return super().on_model_change(form, model, is_created)
+        except Exception as e:
+            raise ValidationError(f"Error saving entry: {e}")
 
 
     def is_accessible(self):
