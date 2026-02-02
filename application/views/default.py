@@ -11,6 +11,8 @@ from flask_admin.model.template import EndpointLinkRowAction
 from flask_admin.helpers import get_redirect_target
 from flask_admin.model.helpers import get_mdict_item_or_list
 
+from wtforms.validators import ValidationError
+
 from mongoengine.errors import NotUniqueError
 
 class DefaultModelView(ModelView):
@@ -21,6 +23,16 @@ class DefaultModelView(ModelView):
     column_extra_row_actions = [
         EndpointLinkRowAction("fa fa-clone", ".clone_view"),
     ]
+
+    def create_model(self, form):
+        """ 
+        Create model with NotUniqueError handling
+        """
+        try:
+            return super().create_model(form)
+        except NotUniqueError:
+            flash("Duplicate Fields in entry", "error")
+            return False
 
     @expose("/clone", methods=("GET",))
     def clone_view(self):
@@ -54,22 +66,31 @@ class DefaultModelView(ModelView):
         flash("Entry Cloned", 'success')
         return redirect(return_url)
 
+    def handle_view_exception(self, exc):
+        """
+        Handle view exceptions
+        """
+        if isinstance(exc, NotUniqueError):
+            flash("Duplicate Entry Name - this name already exists", "error")
+            return True  # Tell Flask-Admin we handled the exception
+        
+        # Let Flask-Admin handle other exceptions
+        return super().handle_view_exception(exc)
 
     def on_model_change(self, form, model, is_created):
         """
         Cleanup Fields
         """
 
-        for attr in [x for x in dir(model) if not x.startswith('_')]:
-            current = getattr(model, attr)
-            if isinstance(current, str):
-                setattr(model, attr, current.strip())
-
         try:
-            return super().on_model_change(form, model, is_created)
-        except NotUniqueError as exce:
-            flash("Duplicate Entry Name", "error")
-            raise ValueError("NotUniqueError: Object name not Unique") from exce
+            for attr in [x for x in dir(model) if not x.startswith('_')]:
+                current = getattr(model, attr)
+                if isinstance(current, str):
+                    setattr(model, attr, current.strip())
+
+                return super().on_model_change(form, model, is_created)
+        except Exception as e:
+            raise ValidationError(f"Error saving entry: {e}")
 
 
     def is_accessible(self):
