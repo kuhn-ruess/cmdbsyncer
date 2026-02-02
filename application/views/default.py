@@ -11,6 +11,8 @@ from flask_admin.model.template import EndpointLinkRowAction
 from flask_admin.helpers import get_redirect_target
 from flask_admin.model.helpers import get_mdict_item_or_list
 
+from wtforms.validators import ValidationError
+
 from mongoengine.errors import NotUniqueError
 
 class DefaultModelView(ModelView):
@@ -21,6 +23,16 @@ class DefaultModelView(ModelView):
     column_extra_row_actions = [
         EndpointLinkRowAction("fa fa-clone", ".clone_view"),
     ]
+
+    def create_model(self, form):
+        """ 
+        Create model with NotUniqueError handling
+        """
+        try:
+            return super().create_model(form)
+        except NotUniqueError:
+            flash("Duplicate Fields in entry", "error")
+            return False
 
     @expose("/clone", methods=("GET",))
     def clone_view(self):
@@ -68,8 +80,7 @@ class DefaultModelView(ModelView):
         try:
             return super().on_model_change(form, model, is_created)
         except NotUniqueError as exce:
-            flash("Duplicate Entry Name", "error")
-            raise ValueError("NotUniqueError: Object name not Unique") from exce
+            raise ValidationError(f"NotUniqueError: Object name not Unique {exce}")
 
 
     def is_accessible(self):

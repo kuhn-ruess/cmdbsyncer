@@ -2,6 +2,7 @@
 Checkmk Rule Views
 """
 from markupsafe import Markup
+from mongoengine.errors import NotUniqueError
 
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
