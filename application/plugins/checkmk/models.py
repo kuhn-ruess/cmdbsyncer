@@ -329,6 +329,7 @@ class CheckmkFolderPool(db.Document):
 
 
     documentation = db.StringField()
+    name = db.StringField(unique=True, sparse=True)
     folder_name = db.StringField(required=True, unique=True, max_length=255)
     folder_title = db.StringField(max_length=255)
     folder_seats = db.IntField(required=True)
