@@ -47,7 +47,7 @@ class CMK2(Plugin):
             self.checkmk_version = data['versions']['checkmk']
 
 
-    def request(self, url, method='GET', data=None, params=None, additional_header=None):
+    def request(self, url, method='GET', data=None, params=None, additional_header=None, api_version="api/1.0/"):
         """
         Handle Request to CMK
         """
@@ -57,7 +57,7 @@ class CMK2(Plugin):
         if url.startswith('/'):
             url = url[1:]
 
-        url = f'{address}/check_mk/api/1.0/{url}'
+        url = f'{address}/check_mk/{api_version}{url}'
         headers = {
             'Authorization': f'Bearer {username} {password}',
             'Accept': 'application/json',
