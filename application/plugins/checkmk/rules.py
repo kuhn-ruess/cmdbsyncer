@@ -187,6 +187,7 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                     # Assign an new, free folder to Host
                     only_pools = None
                     if action_param:
+                        action_param = render_jinja(action_param, mode="nullify", **self.attributes)
                         only_pools = [x.strip() for x in action_param.split(',')]
                     folder = poolfolder.get_folder(only_pools)
                     if not folder:
