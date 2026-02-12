@@ -1,4 +1,4 @@
-name: Update build date on merge
+name: Update build date on push
 
 on:
   push
