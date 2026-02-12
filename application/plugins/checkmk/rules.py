@@ -314,7 +314,11 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         hostname = db_host.hostname
         #pylint: disable=too-many-branches
 
+        # Variable will set possibly to true since
+        # self.check_rules() will check the add_outcomes method.
+        # @Todo something simpler to understand would be better.
         self.found_poolfolder_rule = False
+
         self.db_host = db_host
         outcomes = self.check_rules(hostname)
         # This Host does not match to an poolfolder rule
