@@ -15,7 +15,7 @@ def _get_folders(limited=False):
 def get_folder(only_pools=None):
     """ Try to find a free Pool Folder """
     
-    for folder in _get_folders():
+    for folder in _get_folders(only_pools):
         result = CheckmkFolderPool.objects(
             folder_name=folder.folder_name,
             folder_seats_taken__lt=folder.folder_seats,
