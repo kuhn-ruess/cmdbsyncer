@@ -293,11 +293,22 @@ class FilterHostnameRegex(BaseMongoEngineFilter):
 
 class FilterObjectType(BaseMongoEngineFilter):
     """
-    Filter Value with Regex
+    Filter Value
     """
 
     def apply(self, query, value):
         return query.filter(object_type__icontains=value)
+
+    def operation(self):
+        return "contains"
+
+class FilterPoolFolder(BaseMongoEngineFilter):
+    """
+    Filter Value
+    """
+
+    def apply(self, query, value):
+        return query.filter(folder__iexact=value)
 
     def operation(self):
         return "contains"
@@ -665,6 +676,10 @@ class HostModelView(DefaultModelView):
        FilterInventoryKeyAndValue(
         Host,
         "Inventory Key:Value"
+       ),
+       FilterPoolFolder(
+           Host,
+           'CMK Pool Folder'
        ),
     )
 
