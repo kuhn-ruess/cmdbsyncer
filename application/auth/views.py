@@ -10,7 +10,7 @@ from flask import request, render_template, current_app, \
 from flask_login import current_user, login_user, logout_user, login_required
 from authlib.jose import jwt, JoseError
 
-from application import login_manager
+from application import login_manager, app
 
 from application.models.user import User
 from application.models.forms import LoginForm, RequestPasswordForm, ResetPasswordForm
@@ -38,6 +38,24 @@ def login():
     if current_user.is_authenticated:
         flash('Already Logged in')
         return redirect(url_for("admin.index"))
+
+    if app.config['REMOTE_USER_LOGIN'] and request.remote_user:
+        try:
+            if user_result := User.objects(name=request.remote_user, disabled__ne=True):
+                existing_user = user_result[0]
+                login_user(
+                    existing_user,
+                    remember=False,
+                    duration=timedelta(
+                        hours=(current_app.config['ADMIN_SESSION_HOURS'] or 8)
+                    )
+                )
+                existing_user.last_login = datetime.now()
+                existing_user.save()
+                return redirect(url_for("admin.index"))
+        except Exception as exp:
+            flash('Remote User Error {exp}')
+
 
     login_form = LoginForm(request.form)
 
