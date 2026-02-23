@@ -308,7 +308,7 @@ class FilterPoolFolder(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        return query.filter(folder__iexact=value)
+        return query.filter(folder__icontains=value)
 
     def operation(self):
         return "contains"
