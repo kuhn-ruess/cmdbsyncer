@@ -2,8 +2,6 @@ name: Update build date on merge
 
 on:
   push:
-    branches:
-      - main
 
 permissions:
     contents: write
