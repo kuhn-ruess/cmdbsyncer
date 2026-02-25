@@ -15,7 +15,7 @@ def cli_rules():
 
 @cli_rules.command('export_rules')
 @click.argument("rule_type", default="")
-def export_rules(rule_type):
+def cli_export_rules(rule_type):
     """
     Export Rules by Category
     """
@@ -23,7 +23,7 @@ def export_rules(rule_type):
 
 @cli_rules.command('import_rules')
 @click.argument("rulefile_path")
-def import_rules(rulefile_path):
+def cli_import_rules(rulefile_path):
     """
     Import Rules into the CMDB Syncer
     """
