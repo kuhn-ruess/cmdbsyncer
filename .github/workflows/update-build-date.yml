@@ -1,7 +1,7 @@
-name: Update build date on merge
+name: Update build date on push
 
 on:
-  push:
+  push
 
 permissions:
     contents: write
