@@ -177,9 +177,7 @@ class CheckmkRuleSync(CMK2):
 
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
-        if object_filter:
-            db_objects = Host.objects_by_filter(object_filter)
-        db_objects = Host.objects()
+        db_objects = Host.objects_by_filter(object_filter)
 
         total = db_objects.count()
         # pylint: disable=too-many-nested-blocks
