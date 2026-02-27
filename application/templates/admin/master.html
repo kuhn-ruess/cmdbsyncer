@@ -178,7 +178,31 @@
 
         $("a#enabled>span.icon-minus-sign").parents('tr').css("background-color", "#f0f0f0").css("color", "grey");
 
-        $('.toggle_activate_modal').click(function(){
+        // Gray out Commit Changes button when no changes pending
+        function updateCommitButton() {
+            var changesCount = {% if config['CHANGES'] %}{{ config['CHANGES'] }}{% else %}0{% endif %};
+            var commitBtn = $('.commit-changes-btn');
+            if (changesCount == 0 || !changesCount) {
+                commitBtn.removeClass('btn-primary').addClass('btn-secondary').prop('disabled', true);
+                commitBtn.css('opacity', '0.6');
+            } else {
+                commitBtn.removeClass('btn-secondary').addClass('btn-primary').prop('disabled', false);
+                commitBtn.css('opacity', '1');
+            }
+        }
+        updateCommitButton();
+
+        $('.toggle_activate_modal').click(function(e){
+            var changesCount = {% if config['CHANGES'] %}{{ config['CHANGES'] }}{% else %}0{% endif %};
+            if (changesCount == 0 || !changesCount) {
+                e.preventDefault();
+                return false;
+            }
+            // Gray out button immediately when commit starts
+            var commitBtn = $('.commit-changes-btn');
+            commitBtn.removeClass('btn-primary').addClass('btn-secondary').prop('disabled', true);
+            commitBtn.css('opacity', '0.6');
+            
             $("#activate_result").html("<div class=loader></div>");
             $('#activate_changes').modal();
             $.get("{{config['BASE_PREFIX']}}admin/config/commit_changes", function(data) {

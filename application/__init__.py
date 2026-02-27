@@ -200,19 +200,23 @@ app.register_blueprint(api, url_prefix="/api/v1")
 admin = Admin(app, name=f"CMDBsyncer {VERSION} {app.config['HEADER_HINT']}",
                    index_view=IndexView(),
                    category_icon_classes={
+                       'Accounts': 'fa fa-users',
+                       'Cronjobs': 'fa fa-clock-o',
+                       'Modules': 'fa fa-puzzle-piece',
+                       'Profile': 'fa fa-user-cog'
                        })
 
 
 #   .-- Host
 from application.models.host import Host
 from application.views.host import HostModelView, ObjectModelView
-admin.add_view(HostModelView(Host, name="Hosts"))
-admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects"))
+admin.add_view(HostModelView(Host, name="Hosts", menu_icon_type='fa', menu_icon_value='fa-server'))
+admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects", menu_icon_type='fa', menu_icon_value='fa-cubes'))
 #.
 #   .-- Global
 from application.modules.custom_attributes.models import CustomAttributeRule
 from application.modules.custom_attributes.views import CustomAttributeView
-admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules"))
+admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules", menu_icon_type='fa', menu_icon_value='fa-cog'))
 #.
 
 _register_all_plugin_admin_views()
@@ -220,47 +224,52 @@ _register_all_plugin_admin_views()
 
 from application.models.account import Account
 from application.views.account import AccountModelView, ChildAccountModelView
-admin.add_category(name="Accounts")
-admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts"))
-admin.add_view(ChildAccountModelView(Account, name="Config Childs", endpoint='account_childs', category="Accounts"))
+admin.add_category(name="Accounts", icon_type='fa', icon_value='fa-users')
+admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts", menu_icon_type='fa', menu_icon_value='fa-user-circle'))
+admin.add_view(ChildAccountModelView(Account, name="Config Childs", endpoint='account_childs', category="Accounts", menu_icon_type='fa', menu_icon_value='fa-users'))
 
 from application.models.cron import CronGroup, CronStats
 from application.views.cron import CronStatsView, CronGroupView
-admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs"))
-admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs"))
+admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs", menu_icon_type='fa', menu_icon_value='fa-calendar'))
+admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs", menu_icon_type='fa', menu_icon_value='fa-table'))
 
 from application.views.fileadmin import FileAdminView
 if os.path.exists(app.config['FILEADMIN_PATH']):
-    admin.add_view(FileAdminView(app.config['FILEADMIN_PATH'], name="Filemanager"))
+    admin.add_view(FileAdminView(app.config['FILEADMIN_PATH'], name="Filemanager", menu_icon_type='fa', menu_icon_value='fa-folder-open'))
 
 from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
-admin.add_view(LogView(LogEntry, name="Log"))
+admin.add_view(LogView(LogEntry, name="Log", menu_icon_type='fa', menu_icon_value='fa-file-text-o'))
 
 #.
 #   .-- Config
+admin.add_category(name="Profile", icon_type='fa', icon_value='fa-user-cog')
 from application.models.user import User
 from application.views.user import UserView
-admin.add_view(UserView(User, category='Syncer Config'))
+admin.add_view(UserView(User, category='Profile', menu_icon_type='fa', menu_icon_value='fa-user'))
 
 from application.models.config import Config
 from application.views.config import ConfigModelView
 
-admin.add_view(ConfigModelView(Config, name="System Config", category="Syncer Config"))
+admin.add_view(ConfigModelView(Config, name="System Config", category="Profile", menu_icon_type='fa', menu_icon_value='fa-cogs'))
 #.
 
 #   .-- Rest
-admin.add_link(MenuLink(name='Change Password', category='Profil',
-                        url=f"{app.config['BASE_PREFIX']}change-password"))
-admin.add_link(MenuLink(name='Set 2FA Code', category='Profil',
-                        url=f"{app.config['BASE_PREFIX']}set-2fa"))
-admin.add_link(MenuLink(name='Logout', category='Profil',
-                        url=f"{app.config['BASE_PREFIX']}logout"))
+admin.add_link(MenuLink(name='Change Password', category='Profile',
+                        url=f"{app.config['BASE_PREFIX']}change-password",
+                        icon_type='fa', icon_value='fa-key'))
+admin.add_link(MenuLink(name='Set 2FA Code', category='Profile',
+                        url=f"{app.config['BASE_PREFIX']}set-2fa",
+                        icon_type='fa', icon_value='fa-shield'))
+admin.add_link(MenuLink(name='Logout', category='Profile',
+                        url=f"{app.config['BASE_PREFIX']}logout",
+                        icon_type='fa', icon_value='fa-sign-out'))
 
 #.
 admin.add_link(MenuLink(name='Commit Changes',
                         url="#activate_changes",
-                        class_name="toggle_activate_modal btn btn-primary"))
+                        class_name="toggle_activate_modal btn btn-primary commit-changes-btn",
+                        icon_type='fa', icon_value='fa-check-circle'))
 
 
 
