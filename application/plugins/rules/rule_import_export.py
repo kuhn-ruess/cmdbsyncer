@@ -5,45 +5,11 @@ Rule Import/ Export
 import json
 from json.decoder import JSONDecodeError
 import importlib
-import click
 
 from mongoengine.errors import NotUniqueError, ValidationError
 from application import app
+from .rule_definitions import rules as enabled_rules
 
-enabled_rules = {
-    'ansible_customvars': ('application.plugins.ansible.models', 'AnsibleCustomVariablesRule'),
-    'custom_attributes': ('application.modules.custom_attributes.models', 'CustomAttributeRule'),
-    'cmk_tags': ('application.plugins.checkmk.models', 'CheckmkTagMngmt'),
-    'cmk_filter': ('application.plugins.checkmk.models', 'CheckmkFilterRule'),
-    'cmk_inventory': ('application.plugins.checkmk.models', 'CheckmkInventorizeAttributes'),
-    'cmk_export_rules': ('application.plugins.checkmk.models', 'CheckmkRule'),
-    'cmk_rules': ('application.plugins.checkmk.models', 'CheckmkRuleMngmt'),
-    'cmk_groups': ('application.plugins.checkmk.models', 'CheckmkGroupRule'),
-    'cmk_user': ('application.plugins.checkmk.models', 'CheckmkUserMngmt'),
-    'cmk_rewrite': ('application.plugins.checkmk.models', 'CheckmkRewriteAttributeRule'),
-    'cmk_sites': ('application.plugins.checkmk.models', 'CheckmkSite'),
-    'cmk_site_settings': ('application.plugins.checkmk.models', 'CheckmkSettings'),
-    'cmk_bi_aggregation': ('application.plugins.checkmk.models', 'CheckmkBiAggregation'),
-    'cmk_bi_rule': ('application.plugins.checkmk.models', 'CheckmkBiRule'),
-    'cmk_downtimes': ('application.plugins.checkmk.models', 'CheckmkDowntimeRule'),
-    'cmk_dcd_rules': ('application.plugins.checkmk.models', 'CheckmkDCDRule'),
-    'cmk_filter': ('application.plugins.checkmk.models', 'CheckmkFilterRule'),
-    'host_objects': ('application.models.host', 'Host'),
-    'accounts': ('application.models.account', 'Account'),
-    'idoit_rules': ('application.modules.idoit.models', 'IdoitCustomAttributes'),
-    'netbox_dcim_interfaces': ('application.modules.netbox.models',
-                                'NetboxDcimInterfaceAttributes'),
-    'netbox_virtual_interfaces': ('application.modules.netbox.models',
-                                  'NetboxVirtualizationInterfaceAttributes'),
-    'netbox_devices': ('application.modules.netbox.models', 'NetboxCustomAttributes'),
-    'netbox_ips': ('application.modules.netbox.models', 'NetboxIpamIpaddressattributes'),
-    'netbox_vms': ('application.modules.netbox.models', 'NetboxVirtualMachineAttributes'),
-    'netbox_cluster': ('application.modules.netbox.models', 'NetboxClusterAttributes'),
-    'netbox_contacts': ('application.modules.netbox.models', 'NetboxContactAttributes'),
-    'netbox_dataflow_models': ('application.modules.netbox.models', 'NetboxDataflowModels'),
-    'netbox_dataflow_fields': ('application.modules.netbox.models', 'NetboxDataflowAttributes'),
-    'netbox_rewrites': ('application.modules.netbox.models', 'NetboxRewriteAttributeRule'),
-}
 
 
 def get_ruletype_by_filename(filename):
@@ -65,13 +31,8 @@ def export_rules_from_model(rule_type):
     for db_rule in getattr(model, enabled_rules[rule_type][1]).objects():
         yield db_rule.to_json()
 
-@app.cli.group(name='rules')
-def cli_rules():
-    """Syner Rules import and Export"""
 
 
-@cli_rules.command('export_rules')
-@click.argument("rule_type", default="")
 def export_rules(rule_type):
     """
     Export Rules by Category
@@ -102,8 +63,6 @@ def import_line(json_dict, model, rule_type):
     except ValidationError:
         print(f"Problem with entry: {json_dict}")
 
-@cli_rules.command('import_rules')
-@click.argument("rulefile_path")
 def import_rules(rulefile_path):
     """
     Import Rules into the CMDB Syncer

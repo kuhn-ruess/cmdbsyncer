@@ -7,17 +7,21 @@ class FileAdminView(FileAdmin):
     Fileadmin Settings
     """
 
-
     can_rename = True
     rename_modal = True
     upload_modal = True
-
     mkdir_modal = True
     edit_modal = True
 
-
     allowed_extensions = ('md', 'txt', 'csv', 'yml', 'json', 'pem', 'cert')
     editable_extensions = ('md', 'txt', 'csv', 'yml', 'json', 'pem')
+
+
+    # Define the columns to show
+    possible_columns = ('name', 'rel_path')
+    column_list = ('name', 'size', 'date')
+
+    list_template = 'admin/file/list.html'
 
     def is_accessible(self):
         """ Overwrite """

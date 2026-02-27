@@ -25,7 +25,10 @@ class Log():
         log_entry.datetime = datetime.now()
         log_entry.message = message['message']
         log_entry.source = message['source']
-        log_entry.affected_hosts = message['affected_hosts']
+        affected_hosts = []
+        if message['affected_hosts']:
+            affected_hosts += message['affected_hosts']
+
         details = []
         if message['details']:
             for detail in message['details']:
@@ -36,9 +39,15 @@ class Log():
                     log_entry.has_error = True
                 else:
                     logger.info(f"{detail[0]}: {detail[1]}")
+                if 'affected' in detail[0]:
+                    if isinstance(detail[1], list):
+                        affected_hosts.extend(detail[1])
+                    else:
+                        affected_hosts.append(detail[1])
                 new.level = level
                 new.message = str(detail[1])
                 details.append(new)
+        log_entry.affected_hosts = affected_hosts
         log_entry.details = details
         log_entry.traceback = message['traceback']
         log_entry.save()

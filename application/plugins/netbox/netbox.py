@@ -6,7 +6,7 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 
 from application.models.host import Host
 from application.modules.plugin import Plugin
-from application import logger
+from application import logger, app
 
 try:
     import pynetbox
@@ -265,6 +265,13 @@ class SyncNetbox(Plugin):
         """
         Handle Attributes, and the cases when they are nested
         """
+        if not app.config['NETBOX_IMPORT_NESTED']:
+            return attributes
+        # @TODO The following code is really slow and should be replaced
+        # by all() instead of get() to receive everhting by one call
+        # See: https://github.com/kuhn-ruess/cmdbsyncer/issues/63
+        # Off Switch solution until a Project where the code is needed again
+        # an can be refactored.
         out = {}
         for field, value in attributes.items():
             if field == 'site':
