@@ -197,7 +197,7 @@ def _register_all_plugin_admin_views():
 from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
 
-admin = Admin(app, name=f"CMDBsyncer {VERSION} {app.config['HEADER_HINT']}",
+admin = Admin(app, name=f"cmdbsyncer {VERSION}",
                    index_view=IndexView(),
                    category_icon_classes={
                        'Accounts': 'fa fa-users',

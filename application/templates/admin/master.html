@@ -18,10 +18,107 @@
 
        .navbar {
            background-color: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }} !important;
+           width: 100vw;
+           position: relative;
+           left: 50%;
+           right: 50%;
+           margin-left: -50vw;
+           margin-right: -50vw;
+           padding-left: 0;
+           padding-right: 0;
+           border-radius: 0;
+       }
+       
+       .navbar .container {
+           max-width: 100% !important;
+           padding-left: 15px;
+           padding-right: 15px;
        }
 
        .navbar .nav-link {
            color: {{ config['STYLE_NAV_LINK_COLOR'] }} !important;
+           padding: 0.35rem 0.7rem !important;
+           margin: 0 0.175rem;
+       }
+       
+       .navbar-nav .nav-item {
+           margin: 0 0.14rem;
+       }
+
+       /* Navbar Brand Styling */
+       .navbar-brand {
+           color: white !important;
+           font-weight: 600;
+           transition: all 0.3s ease;
+           padding: 0.25rem 0.75rem;
+           display: flex;
+           align-items: center;
+           height: auto;
+           min-height: 48px;
+       }
+       
+       .navbar-brand:hover {
+           color: #f8f9fa !important;
+           text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+           transform: translateY(-1px);
+       }
+       
+       .navbar-logo {
+           width: 38px;
+           height: 38px;
+           object-fit: contain;
+           filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+           transition: all 0.3s ease;
+           margin-right: 12px;
+           flex-shrink: 0;
+       }
+       
+       .navbar-brand:hover .navbar-logo {
+           filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+           transform: scale(1.05);
+       }
+       
+       .brand-text {
+           display: flex;
+           flex-direction: column;
+           line-height: 1.1;
+       }
+       
+       .brand-name {
+           font-size: 1.2rem;
+           font-weight: 700;
+           letter-spacing: -0.5px;
+           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+       }
+       
+       .brand-hint {
+           font-size: 0.65rem;
+           opacity: 0.85;
+           font-weight: 400;
+           margin-top: -2px;
+           text-transform: uppercase;
+           letter-spacing: 0.5px;
+       }
+       
+       /* Responsive Design */
+       @media (max-width: 576px) {
+           .navbar-logo {
+               width: 32px;
+               height: 32px;
+           }
+           
+           .brand-name {
+               font-size: 1rem;
+           }
+           
+           .brand-hint {
+               font-size: 0.55rem;
+           }
+           
+           .navbar-brand {
+               padding: 0.2rem 0.5rem;
+               min-height: 40px;
+           }
        }
 
       h3 {
@@ -85,8 +182,15 @@
             <!-- navbar content -->
             <div class="collapse navbar-collapse" id="admin-navbar-collapse">
             {% block brand %}
-                <a class="navbar-brand" href="{{ config['BASE_PREFIX'] }}admin"><img src="{{ config['BASE_PREFIX'] }}static/logo_white.png" width=60>{{ admin_view.admin.name }}
-    </a>
+                <a class="navbar-brand d-flex align-items-center text-decoration-none" href="{{ config['BASE_PREFIX'] }}admin">
+                    <img src="{{ config['BASE_PREFIX'] }}static/logo_white.png" alt="Logo" class="navbar-logo me-2">
+                    <div class="brand-text">
+                        <span class="brand-name">{{ admin_view.admin.name }}</span>
+                        {% if config['HEADER_HINT'] %}
+                        <small class="brand-hint">{{config['HEADER_HINT']}}</small>
+                        {% endif %}
+                    </div>
+                </a>
             {% endblock %}
             {% block main_menu %}
                 <ul class="nav navbar-nav mr-auto">
