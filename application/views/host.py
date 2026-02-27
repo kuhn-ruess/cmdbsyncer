@@ -52,6 +52,16 @@ def get_debug(hostname, mode):
     """
     Get Output for Host Debug Page
     """
+    
+    # Check permissions based on debug mode
+    mode_role_mapping = {
+        'checkmk_host': 'checkmk',
+        'netbox_device': 'netbox',
+    }
+    
+    required_role = mode_role_mapping.get(mode)
+    if required_role and not current_user.has_right(required_role):
+        return {'Error': f"You need the '{required_role}' role to access {mode} debug mode"}, {}
 
     try:
         Host.objects.get(hostname=hostname)
@@ -59,7 +69,6 @@ def get_debug(hostname, mode):
         output = {}
         output_rules = {}
 
-        #@TODO Restrict by user Rights
         debug_funcs = {
             'checkmk_host': cmk_host_debug,
             'netbox_device': netbox_host_debug,
