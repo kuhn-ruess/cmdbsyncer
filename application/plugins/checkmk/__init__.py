@@ -35,6 +35,7 @@ from .inits import (
     export_dcd_rules,
     export_passwords,
     import_sites,
+    sync_folderpools,
 )
 
 def _load_rules():
@@ -526,6 +527,18 @@ def cli_cmk_import_istes(account):
     """
     import_sites(account)
 #.
+#   .-- Command: Import Sites
+@cli_cmk.command('sync_folderpools')
+def cli_cmk_sync_folderpools():
+    """
+    Import Checkmk Sites into the Object Table
+
+    ### Example
+    _./cmdbsyncer checkmk sync_folderpools
+
+    """
+    sync_folderpools()
+#.
 #   .-- Import Checkmk V1
 from .import_v1 import ImportCheckmk1
 @cli_cmk.command('import_v1')
@@ -570,3 +583,4 @@ register_cronjob('Checkmk: Export DCD Rules', export_dcd_rules)
 register_cronjob('Checkmk: Export Passwords', export_passwords)
 register_cronjob('Checkmk: Import Hosts (V2)', import_hosts)
 register_cronjob('Checkmk: Import Sites', import_sites)
+register_cronjob('Checkmk: Sync Folder Pools', sync_folderpools)

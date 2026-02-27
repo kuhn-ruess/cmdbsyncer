@@ -30,6 +30,7 @@ from application.plugins.checkmk.models import (
    CheckmkRewriteAttributeRule,
    CheckmkFilterRule,
    CheckmkDCDRule,
+   CheckmkFolderPool,
 )
 
 
@@ -421,3 +422,23 @@ def export_users(account):
         log.log(f"Error exporting Users to Checkmk Account: {account}",
                 source="cmk_user_sync", details=details)
 #.
+#   . Sync Folder Pools
+def sync_folderpools(account=False, debug=False):
+
+    pool_usage = {}
+    for host in Host.objects():
+        if host.folder:
+            pool_usage.setdefault(host.folder, 0)
+            pool_usage[host.folder] += 1
+
+    for pool_folder, usage in pool_usage.items():
+        print(f"Folder {pool_folder} uses {usage} seats")
+        folder = CheckmkFolderPool.objects.get(folder_name=pool_folder)
+        if folder.folder_seats_taken != usage:
+            print(f" - Changed seats from {folder.folder_seats_taken} to {usage}")
+            folder.folder_seats_taken = usage
+            folder.save()
+        else:
+            print(f" - Is already up to date")
+#.
+
