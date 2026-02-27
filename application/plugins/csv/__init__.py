@@ -12,7 +12,9 @@ def _cli_csv():
 @click.argument("account", required=False)
 @click.option("--debug", default=False, is_flag=True)
 @click.option("--legacy", default=None, help="Path to CSV file for legacy mode (bypasses account config)")
-def cli_inventorize_hosts(account, debug, legacy):
+@click.option("--key", default=None, help="Inventory key for legacy mode (required when using --legacy)")
+@click.option("--hostname_field", default="host", help="Name of the hostname column in CSV (default: host)")
+def cli_inventorize_hosts(account, debug, legacy, key, hostname_field):
     """
     Add Inventory Information to hosts
     Source is a CSV. Every other Column then the hostname Column, will translate
@@ -20,11 +22,13 @@ def cli_inventorize_hosts(account, debug, legacy):
 
     ### Example
     _./cmdbsyncer csv inventorize_hosts ACCOUNT_
-    _./cmdbsyncer csv inventorize_hosts --legacy /path/to/file.csv_
+    _./cmdbsyncer csv inventorize_hosts --legacy /path/to/file.csv --key my_inventory_key_
 
     Args:
         account (string): Name of Account to read config from
         legacy (string): Path to CSV file for legacy mode
+        key (string): Inventory key for legacy mode (required when using --legacy)
+        hostname_field (string): Name of the hostname column in CSV
     """
     if legacy and account:
         click.echo("Error: Cannot use both account and --legacy option")
@@ -32,13 +36,16 @@ def cli_inventorize_hosts(account, debug, legacy):
     if not legacy and not account:
         click.echo("Error: Either account or --legacy option is required")
         return
-    inventorize_hosts(account, debug, legacy)
+    if legacy and not key:
+        click.echo("Error: --key is required when using --legacy option")
+        return
+    inventorize_hosts(account, debug, legacy, key, hostname_field)
 
 
-def inventorize_hosts(account=None, debug=False, legacy=None):
+def inventorize_hosts(account=None, debug=False, legacy=None, key=None, hostname_field="host"):
     if legacy:
         csv = CSV()
-        csv.config = _create_legacy_config(legacy)
+        csv.config = _create_legacy_config(legacy, key, hostname_field)
         csv.account_name = "legacy"
         csv.account_id = "legacy"
     else:
@@ -54,7 +61,8 @@ register_cronjob('CSV: Inventorize Hosts', inventorize_hosts)
 @click.argument("account", required=False)
 @click.option("--debug", default=False, is_flag=True)
 @click.option("--legacy", default=None, help="Path to CSV file for legacy mode (bypasses account config)")
-def cli_import_hosts(account, debug, legacy):
+@click.option("--hostname_field", default="host", help="Name of the hostname column in CSV (default: host)")
+def cli_import_hosts(account, debug, legacy, hostname_field):
     """
     Import Objects from CSV and make File the Master
     Every CSV column, other then the host column, will translate
@@ -69,6 +77,7 @@ def cli_import_hosts(account, debug, legacy):
     Args:
         account (string): Name of Account to read config from
         legacy (string): Path to CSV file for legacy mode
+        hostname_field (string): Name of the hostname column in CSV
     """
     if legacy and account:
         click.echo("Error: Cannot use both account and --legacy option")
@@ -76,12 +85,12 @@ def cli_import_hosts(account, debug, legacy):
     if not legacy and not account:
         click.echo("Error: Either account or --legacy option is required")
         return
-    import_hosts(account, debug, legacy)
+    import_hosts(account, debug, legacy, hostname_field)
 
-def import_hosts(account=None, debug=False, legacy=None):
+def import_hosts(account=None, debug=False, legacy=None, hostname_field="host"):
     if legacy:
         csv = CSV()
-        csv.config = _create_legacy_config(legacy)
+        csv.config = _create_legacy_config(legacy, None, hostname_field)
         csv.account_name = "legacy"
         csv.account_id = "legacy"
     else:
@@ -89,28 +98,35 @@ def import_hosts(account=None, debug=False, legacy=None):
     csv.debug = debug
     csv.import_hosts()
 
-def _create_legacy_config(csv_path):
+def _create_legacy_config(csv_path, inventorize_key=None, hostname_field="host"):
     """
     Create a minimal configuration for legacy mode
     
     Args:
         csv_path (string): Path to the CSV file
+        inventorize_key (string): Key for inventory (only needed for inventorize_hosts)
+        hostname_field (string): Name of the hostname column in CSV
         
     Returns:
         dict: Minimal configuration dictionary
     """
-    return {
+    config = {
         'name': 'legacy_csv',
         'id': 'legacy_csv',
         '_id': 'legacy_csv', 
         'path': csv_path,
         'encoding': 'utf-8',
         'delimiter': ';',
-        'hostname_field': 'host',
+        'hostname_field': hostname_field,
         'rewrite_hostname': None,
         'delete_host_if_not_found_on_import': None,
         'verify_cert': True
     }
+    
+    if inventorize_key:
+        config['inventorize_key'] = inventorize_key
+    
+    return config
 
 register_cronjob('CSV: Import Hosts', import_hosts)
 
