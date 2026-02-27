@@ -510,15 +510,69 @@ def format_log(v, c, m, p):
 def format_cache(v, c, m, p):
     """ Format cache"""
     # pylint: disable=invalid-name, unused-argument
-    html = "<table>"
-    for key, value in m.cache.items():
-        html += f"<tr><th>{key}</th><td>"
-        html += "<table>"
-        for sub_key, sub_value in value.items():
-            html += f"<tr><td>{sub_key}</td><td>{sub_value}</td></tr>"
-        html += "</table>"
-        html += "</td></tr>"
-    html += "</table>"
+    if not m.cache:
+        return Markup('<span class="text-muted">No cache data</span>')
+    
+    # Show summary (number of cache entries)
+    cache_count = len(m.cache)
+    html = f'<span class="text-muted">{cache_count} cache entrie(s)</span>'
+    
+    if m.cache:
+        cache_id = f"cache_{m.id}"
+        
+        html += f'''
+        <br>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleCache('{cache_id}')">
+            <i class="fa fa-database"></i> View Cache Details
+        </button>
+        
+        <div id="{cache_id}" style="display: none; margin-top: 10px;">
+            <div class="border rounded p-3" style="background-color: #f8f9fa;">
+                <table class="table table-sm table-striped">
+        '''
+        
+        for key, value in m.cache.items():
+            html += f'<tr><th colspan="2" class="bg-light">{key}</th></tr>'
+            if isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    # Truncate very long values
+                    if isinstance(sub_value, str) and len(sub_value) > 100:
+                        display_value = sub_value[:100] + '...'
+                    else:
+                        display_value = str(sub_value)
+                    html += f'<tr><td class="pl-4" style="width: 30%;">{sub_key}</td><td>{display_value}</td></tr>'
+            else:
+                # If value is not a dict, show it directly
+                if isinstance(value, str) and len(value) > 100:
+                    display_value = value[:100] + '...'
+                else:
+                    display_value = str(value)
+                html += f'<tr><td class="pl-4" style="width: 30%;">Value</td><td>{display_value}</td></tr>'
+        
+        html += '''
+                </table>
+            </div>
+        </div>
+        
+        <script>
+        function toggleCache(cacheId) {
+            var cacheDiv = document.getElementById(cacheId);
+            var button = event.target;
+            if (!button.classList.contains('btn')) {
+                button = button.closest('.btn');
+            }
+            
+            if (cacheDiv.style.display === 'none') {
+                cacheDiv.style.display = 'block';
+                button.innerHTML = '<i class="fa fa-database"></i> Hide Cache Details';
+            } else {
+                cacheDiv.style.display = 'none';
+                button.innerHTML = '<i class="fa fa-database"></i> View Cache Details';
+            }
+        }
+        </script>
+        '''
+    
     return Markup(html)
 
 def format_labels(v, c, m, p):
