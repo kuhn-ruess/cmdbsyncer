@@ -23,6 +23,7 @@ from application.plugins.netbox import get_device_debug_data as netbox_host_debu
 from application import app
 from application.views.default import DefaultModelView
 from application.models.host import Host, CmdbField
+from application.modules.log.models import LogEntry
 
 div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
@@ -416,8 +417,94 @@ def format_log(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     html = "<ul>"
     for entry in m.log:
-        html+=f"<li>{entry[:200]}</li>"
+        html+=f"<li>{entry[:200]}{'...' if len(entry) > 200 else ''}</li>"
     html += "</ul>"
+    
+    if m.log:
+        modal_id = f"logModal_{m.id}"
+        
+        # Find LogEntry records where hostname is in affected_hosts (StringField)
+        related_log_entries = LogEntry.objects(affected_hosts__icontains=m.hostname).order_by('-datetime')
+        
+        html += f'''
+        <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#{modal_id}">
+            View Full Logs
+        </button>
+        
+        <!-- Modal -->
+        <div class="modal fade" id="{modal_id}" tabindex="-1" role="dialog" aria-labelledby="{modal_id}Label" aria-hidden="true">
+            <div class="modal-dialog modal-xl" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="{modal_id}Label">Full Logs for: {m.hostname}</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Host-specific logs -->
+                        <h6 class="mb-3"><i class="fa fa-server"></i> Host-specific Logs</h6>
+                        <div class="log-container" style="max-height: 40vh; overflow-y: auto; font-family: monospace; font-size: 0.9em; margin-bottom: 20px;">
+        '''
+        for log_entry in m.log:
+            # HTML escape the log entry content
+            escaped_entry = str(log_entry).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+            html += f'''
+                            <div class="log-entry mb-2 p-2" style="background-color: #f8f9fa; border-left: 3px solid #007bff; white-space: pre-wrap; word-wrap: break-word;">
+                                {escaped_entry}
+                            </div>
+            '''
+        
+        html += f'''
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Host-specific log entries: {len(m.log)}</small>
+                        </div>
+        '''
+        
+        # Add related LogEntry records
+        if related_log_entries:
+            html += '''
+                        <!-- Related system logs -->
+                        <h6 class="mb-3"><i class="fa fa-list"></i> Related System Logs</h6>
+                        <div class="log-container" style="max-height: 40vh; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
+            '''
+            for log_entry in related_log_entries[:50]:  # Limit to 50 most recent entries
+                escaped_message = str(log_entry.message).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
+                timestamp = log_entry.datetime.strftime('%Y-%m-%d %H:%M:%S') if log_entry.datetime else 'N/A'
+                
+                # Determine color based on error status or source
+                if log_entry.has_error:
+                    level_color = '#dc3545'  # Red for errors
+                    level_text = 'ERROR'
+                else:
+                    level_color = '#007bff'  # Default blue
+                    level_text = 'INFO'
+                
+                html += f'''
+                            <div class="log-entry mb-2 p-2" style="background-color: #f8f9fa; border-left: 3px solid {level_color}; white-space: pre-wrap; word-wrap: break-word;">
+                                <small class="text-muted">[{timestamp}] <span style="color: {level_color}; font-weight: bold;">{level_text}</span></small><br>
+                                {escaped_message}
+                            </div>
+                '''
+            
+            html += f'''
+                        </div>
+                        <div class="mt-3">
+                            <small class="text-muted">Related system log entries: {len(related_log_entries)} (showing most recent 50)</small>
+                        </div>
+            '''
+        
+        html += f'''
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        '''
+    
     return Markup(html)
 
 def format_cache(v, c, m, p):
