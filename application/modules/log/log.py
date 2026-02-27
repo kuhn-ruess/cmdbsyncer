@@ -27,7 +27,7 @@ class Log():
         log_entry.source = message['source']
         affected_hosts = []
         if message['affected_hosts']:
-            affected_hosts =+ message['affected_hosts']
+            affected_hosts += message['affected_hosts']
 
         details = []
         if message['details']:
@@ -40,7 +40,10 @@ class Log():
                 else:
                     logger.info(f"{detail[0]}: {detail[1]}")
                 if 'affected' in detail[0]:
-                    affected_hosts += detail[1]
+                    if isinstance(detail[1], list):
+                        affected_hosts.extend(detail[1])
+                    else:
+                        affected_hosts.append(detail[1])
                 new.level = level
                 new.message = str(detail[1])
                 details.append(new)
