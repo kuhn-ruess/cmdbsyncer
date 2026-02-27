@@ -28,7 +28,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-VERSION = '3.12-beta1'
+VERSION = '3.12.0'
 
 app = Flask(__name__)
 env = os.environ.get('config')
