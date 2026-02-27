@@ -1,17 +1,26 @@
 {% extends 'admin/master.html' %}
 
 {% block body %}
-<h1>Welcome to CMDBsyncer</h1>
+<h1>Welcome to cmdbsyncer</h1>
 <p>
   This tool is <b>Open Source</b> and developed by <b>Kuhn &amp; Rue&szlig; GmbH</b> in Germany.
-  <h2>Links</h2>
-  <ul>
-    <li><a href="https://cmdbsyncer.de">Homepage</a></li>
-    <li><a href="https://docs.cmdbsyncer.de">Documentation</a></li>
-    <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">Source Code</a></li>
-    <li><a href="https://kuhn-ruess.de">Kuhn & Rueß GmbH</a></li>
-  </ul>
 </p>
+
+{% if changelog_html %}
+<h2>Changelog</h2>
+<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
+  {{ changelog_html|safe }}
+</div>
+{% endif %}
+
+<h2>Links</h2>
+<ul>
+  <li><a href="https://cmdbsyncer.de">Homepage</a></li>
+  <li><a href="https://docs.cmdbsyncer.de">Documentation</a></li>
+  <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">Source Code</a></li>
+  <li><a href="https://kuhn-ruess.de">Kuhn & Rueß GmbH</a></li>
+</ul>
+
 <p>
 Build: {{config.BUILD_DATE}}</h1>
 </p>

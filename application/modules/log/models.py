@@ -17,7 +17,7 @@ class LogEntry(db.Document): #pylint: disable=too-few-public-methods
 
     datetime = db.DateTimeField()
     message = db.StringField()
-    affected_hosts = db.StringField()
+    affected_hosts = db.ListField(field=db.StringField())
     has_error = db.BooleanField(default=False)
     source = db.StringField()
     details = db.ListField(field=db.EmbeddedDocumentField(document_type="DetailEntry"))

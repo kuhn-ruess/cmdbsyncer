@@ -137,6 +137,8 @@ class BaseConfig():
     HOST_PAGESIZE = 100
     LABEL_PREVIEW_DISABLED = False
 
+    REMOTE_USER_LOGIN = False
+
 
     FILEADMIN_PATH = '/var/cmdbsyncer/files'
 
@@ -175,6 +177,8 @@ class BaseConfig():
 
     CMK_JINJA_USE_REPLACERS = False
     CMK_JINJA_USE_REPLACERS_FOR_HOSTNAMES = False
+
+    NETBOX_IMPORT_NESTED = False
 
     PROCESS_TIMEOUT = 15
 

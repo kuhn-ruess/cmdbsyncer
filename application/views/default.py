@@ -1,6 +1,7 @@
 """
 Default Model Views
 """
+import os
 from copy import deepcopy
 from flask import url_for, redirect, flash, request
 from flask_login import current_user
@@ -113,3 +114,66 @@ class IndexView(AdminIndexView):
 
     def inaccessible_callback(self, name, **kwargs):
         return redirect(url_for('auth.login', next=url_for('admin.index')))
+
+    def _markdown_to_html(self, text):
+        """
+        Simple Markdown to HTML converter for basic formatting
+        """
+        if not text:
+            return text
+            
+        lines = text.split('\n')
+        html_lines = []
+        in_list = False
+        
+        for line in lines:
+            stripped = line.strip()
+            
+            # Handle headers
+            if stripped.startswith('###'):
+                html_lines.append(f'<h3>{stripped[3:].strip()}</h3>')
+            elif stripped.startswith('##'):
+                html_lines.append(f'<h2>{stripped[2:].strip()}</h2>')
+            elif stripped.startswith('#'):
+                html_lines.append(f'<h1>{stripped[1:].strip()}</h1>')
+            # Handle list items
+            elif stripped.startswith('- ') or stripped.startswith('* '):
+                if not in_list:
+                    html_lines.append('<ul>')
+                    in_list = True
+                html_lines.append(f'<li>{stripped[2:].strip()}</li>')
+            # Handle empty lines and regular text
+            else:
+                if in_list:
+                    html_lines.append('</ul>')
+                    in_list = False
+                if stripped:  # Non-empty line
+                    html_lines.append(f'<p>{stripped}</p>')
+                else:  # Empty line
+                    html_lines.append('<br>')
+        
+        # Close any open list
+        if in_list:
+            html_lines.append('</ul>')
+            
+        return '\n'.join(html_lines)
+
+    @expose('/')
+    def index(self):
+        """
+        Index view with changelog
+        """
+        changelog_content = None
+        changelog_html = None
+        try:
+            # Get the absolute path to the changelog file
+            changelog_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'changelog.md')
+            with open(changelog_path, 'r', encoding='utf-8') as file:
+                changelog_content = file.read()
+                changelog_html = self._markdown_to_html(changelog_content)
+        except FileNotFoundError:
+            changelog_html = "<p>Changelog not found.</p>"
+        except Exception:
+            changelog_html = "<p>Error loading changelog.</p>"
+        
+        return self.render('admin/index.html', changelog_html=changelog_html)

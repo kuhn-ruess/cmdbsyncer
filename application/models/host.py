@@ -455,7 +455,7 @@ class Host(db.Document):
             return True
 
         # If we are here, there is no match. Only Chance, this Account is master
-        if account_dict['is_master']:
+        if account_dict.get('is_master'):
             self.source_account_id = account_id
             self.source_account_name = account_name
             return True

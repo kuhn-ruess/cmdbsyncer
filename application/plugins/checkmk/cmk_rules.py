@@ -15,13 +15,28 @@ from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
 from application.modules.debug import ColorCodes as CC
 
+
+def clean_postproccessed(input):
+    # @TODO Problem this way a Passwort Change wont be detected
+    output = {}
+    for key, value in input.items():
+        if isinstance(value, tuple):
+            if value[0] == 'cmk_postprocessed' and \
+                    value[1] == 'explicit_password':
+                new_tuple = (None, None)
+                new_value = (value[0], value[1], new_tuple)
+                value = new_value
+        output[key] = value
+    return output
+
 def deep_compare(a, b):
     """
     Compare Checkmk rules which are nested with key: [list] 
     Without the function, they may not match if the order in the list is diffrent.
-    @TODO Check for Side effects like not longer detected rules
     """
     if isinstance(a, dict) and isinstance(b, dict):
+        a = clean_postproccessed(a)
+        b = clean_postproccessed(b)
         if set(a.keys()) != set(b.keys()):
             return False
         return all(deep_compare(a[k], b[k]) for k in a)
@@ -177,9 +192,7 @@ class CheckmkRuleSync(CMK2):
 
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
-        if object_filter:
-            db_objects = Host.objects_by_filter(object_filter)
-        db_objects = Host.objects()
+        db_objects = Host.objects_by_filter(object_filter)
 
         total = db_objects.count()
         # pylint: disable=too-many-nested-blocks

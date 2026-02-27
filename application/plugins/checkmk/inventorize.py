@@ -5,6 +5,9 @@ import base64
 import ast
 import json
 
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
+import multiprocessing
+
 from application.models.host import Host, app
 from application.plugins.checkmk.models import (
    CheckmkInventorizeAttributes
@@ -55,82 +58,92 @@ class InventorizeHosts(CMK2):
             self.fields[rule.attribute_source] += field_list
 
 
+    def get_hw_sw_inventory_data(self, hostname, host_data):
+
+        url = f"host_inv_api.py?host={hostname}&output_format=json"
+        dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
+        if not dict_inventory:
+            return False
+
+        def flatten_inventory(data, path=""):
+            result = {}
+
+            if data.get('Attributes') and data['Attributes'].get('Pairs'):
+                for key, value in data['Attributes']['Pairs'].items():
+                    flat_key = f"{path}.{key}" if path else key
+                    result[flat_key] = value
+
+            if data.get('Table') and data['Table'].get('Rows'):
+                rows = data['Table']['Rows']
+                result[path] = rows
+
+            if data.get('Nodes'):
+                for node_name, node_data in data['Nodes'].items():
+                    new_path = f"{path}.{node_name}" if path else node_name
+                    result.update(flatten_inventory(node_data, new_path))
+
+            return result
+
+        flat_inventory = flatten_inventory(dict_inventory)
+
+        return_data = {}
+        for needed_field in self.fields['cmk_inventory']:
+            # Now Always a Wildcard
+            if needed_field.endswith('*'):
+                needed_field = needed_field[:-1]
+
+            for key, data in flat_inventory.items():
+                friendly_name = key.replace('.', '_')
+                if key.startswith(needed_field):
+                    return_data[friendly_name] = data
+
+        host_data[hostname] = return_data
+        return True
 
 
     def get_hw_sw_inventory(self):
         """ Query HW/SW Inventory"""
-        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting HW/SW Inventory")
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting possible Hosts for HW/SW")
         url = "domain-types/service/collections/all"
 
         params={
             "query":
                '{ "op": "=", "left": "description", "right": "Check_MK HW/SW Inventory"}',
-            "columns": ['host_name', 'host_mk_inventory']
+            "columns": ['host_name']
         }
-        # We run that only on first line, thats the Checkmk_Service
 
         api_response = self.request(url, params=params, method="GET")
-        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Parsing HW/SW Inventory Data")
-        for service in api_response[0]['value']:
-            hostname = service['extensions']['host_name']
-            self.add_host(hostname)
-            self.hw_sw_inventory.setdefault(hostname, {})
-            if not 'host_mk_inventory' in service['extensions']:
-                continue
-            raw_inventory = service['extensions']['host_mk_inventory']['value'].encode('ascii')
-            raw_decoded_inventory = base64.b64decode(raw_inventory).decode('utf-8')
-            if raw_decoded_inventory:
-                inv_raw = ast.literal_eval(raw_decoded_inventory)
-                inv_parsed = {}
-                # Parsing 3 Levels of HW/SW Inventory
-                if 'Nodes' not in inv_raw:
-                    # Skip Hosts without Inventory Data
-                    continue
-                for node_name, node_content in inv_raw['Nodes'].items():
-                    inv_parsed[node_name] = {}
-                    if node_content['Attributes']:
-                        for attr_name, attribute_value in \
-                                                node_content['Attributes']['Pairs'].items():
-                            inv_parsed[node_name][attr_name] = attribute_value
-                    if node_content['Nodes']:
-                        for sub_node_name, sub_node_content in node_content['Nodes'].items():
-                            inv_parsed[node_name][sub_node_name] = {}
-                            if sub_node_attributes := sub_node_content.get('Table'):
-                                key_column = sub_node_attributes['KeyColumns'][0]
-                                for line in sub_node_attributes['Rows']:
-                                    entry_name = str(line[key_column])
-                                    inv_parsed[node_name][sub_node_name][entry_name] = line
+        response = api_response[0]['value']
+        total = len(response)
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            task1 = progress.add_task("Requesting HW/SW Inventory Data from Checkmk", total=total)
+            manager = multiprocessing.Manager()
+            host_data = manager.dict()
+            with multiprocessing.Pool() as pool:
+                tasks = []
+                for host_resp in response:
+                    hostname = host_resp['extensions']['host_name']
+                    self.add_host(hostname)
+                    task = pool.apply_async(self.get_hw_sw_inventory_data,
+                                     args=(hostname, host_data),
+                                     callback=lambda x: progress.advance(task1))
+                    tasks.append(task)
 
-                            if sub_node_attributes := sub_node_content.get('Attributes'):
-                                for attr_name, attribute_value in \
-                                            sub_node_attributes['Pairs'].items():
-                                    inv_parsed[node_name][sub_node_name][attr_name] = \
-                                                                                attribute_value
-                            if sub_node_nodes := sub_node_content.get('Nodes'):
-                                for sub_sub_node_name, sub_sub_node_content in \
-                                                                        sub_node_nodes.items():
-                                    inv_parsed[node_name][sub_node_name][sub_sub_node_name] = {}
-                                    if sub_sub_node_attributes := \
-                                                        sub_sub_node_content.get('Attributes'):
-                                        for attr_name, attribute_value in \
-                                                    sub_sub_node_attributes['Pairs'].items():
-                                            inv_parsed[node_name][sub_node_name]\
-                                                [sub_sub_node_name][attr_name] = attribute_value
-
-
-
-                # Get the wanted fiels out of the parsed data
-                for needed_fields in self.fields['cmk_inventory']:
-                    friendly_name = needed_fields.replace('.', '_')
-                    data = inv_parsed
-                    collected_data = {}
-                    for sub_path in needed_fields.split('.'):
-                        if not collected_data:
-                            collected_data = data.get(sub_path)
-                        else:
-                            collected_data = collected_data.get(sub_path)
-
-                    self.hw_sw_inventory[hostname][friendly_name] = collected_data
+                for task in tasks:
+                    try:
+                        task.get(timeout=app.config['PROCESS_TIMEOUT'])
+                    except multiprocessing.TimeoutError:
+                        progress.console.print("- ERROR: Timeout for a object")
+                    except Exception as error:
+                        if self.debug:
+                            raise
+                        progress.console.print(f"- ERROR: Timeout error for object ({error})")
+                pool.close()
+                pool.join()
+            self.hw_sw_inventory.update(dict(host_data))
 
     def get_cmk_services(self):
         """ Get CMK Services"""

@@ -25,9 +25,37 @@ def inventorize_host(host_obj, labels, key, config):
 
 def run_inventory(config, objects, sub_key=None):
     """
-    Run the inventory proccess
-    Objects needs to be a list of tuples
-    (hostname, labels).
+    Execute the inventory process for a collection of hosts and their associated labels.
+    
+    This function processes host inventory data by iterating through host objects,
+    applying hostname transformations, and storing inventory information. It supports
+    collecting hosts by a specified key and can match hosts by domain patterns.
+    
+    Args:
+        config (dict): Configuration dictionary containing inventory settings including:
+            - inventorize_key: Base key for inventory storage
+            - rewrite_hostname: Optional hostname rewriting configuration
+            - inventorize_collect_by_key: Key to collect hosts by
+            - inventorize_rewrite_collect_by_key: Jinja template for rewriting collect key values
+            - inventorize_match_by_domain: Boolean flag for domain-based host matching
+        objects (list): List of tuples in the format (hostname, labels) where:
+            - hostname (str): The hostname of the host
+            - labels (dict or list): Dictionary of labels or list that will be converted to {'list': labels}
+        sub_key (str, optional): Additional key suffix to append to the inventory key. Defaults to None.
+    
+    Returns:
+        None
+    
+    Side Effects:
+        - Prints progress information to stdout
+        - Calls inventorize_host() to store inventory data
+        - May create or update Host objects in the database
+        - Processes collected hosts in a second pass for additional data aggregation
+    
+    Note:
+        The function performs a two-pass process:
+        1. First pass: Process individual hosts and collect grouped hosts
+        2. Second pass: Process collected host groups as enumerated collections
     """
     inv_key = config['inventorize_key']
     if sub_key:
