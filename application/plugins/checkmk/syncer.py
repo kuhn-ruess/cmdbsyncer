@@ -797,8 +797,8 @@ class SyncCMK2(CMK2):
                 self.request(url, method="POST", data={'entries': chunk})
                 self.num_created += len(chunk)
             except CmkException as error:
-                self.log_details.append(('error', f"Bulk Create Error: {error}"))
-                self.log_details.append(('error_affected', str([x['host_name'] for x in chunk])))
+                self.log_details.append((f'error_bulk_{count}', f"Bulk Create Error: {error}"))
+                self.log_details.append((f'error_affected_{count}', str([x['host_name'] for x in chunk])))
                 self.console(f" * CMK API ERROR {error}")
 
     def add_bulk_create_host(self, body):

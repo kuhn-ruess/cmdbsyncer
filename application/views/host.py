@@ -433,7 +433,7 @@ def format_log(v, c, m, p):
         modal_id = f"logModal_{m.id}"
         
         # Find LogEntry records where hostname is in affected_hosts (StringField)
-        related_log_entries = LogEntry.objects(affected_hosts__icontains=m.hostname).order_by('-datetime')
+        related_log_entries = LogEntry.objects(affected_hosts__in=m.hostname).order_by('-datetime')
         
         html += f'''
         <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#{modal_id}">
