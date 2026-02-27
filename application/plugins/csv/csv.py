@@ -58,13 +58,13 @@ class CSV(Plugin):
                             del row[dkey]
                     if self.config['rewrite_hostname']:
                         hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], row)
-                    print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
                     host_obj = Host.get_host(hostname)
                     del row[hostname_field]
                     host_obj.update_host(row)
                     do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
                     if do_save:
                         host_obj.save()
+                    print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname} Saved: {do_save}")
                 except Exception as error:
                     print(f"Error: {error}")
     

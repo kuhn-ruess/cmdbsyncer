@@ -46,8 +46,6 @@ def inventorize_hosts(account=None, debug=False, legacy=None, key=None, hostname
     if legacy:
         csv = CSV()
         csv.config = _create_legacy_config(legacy, key, hostname_field)
-        csv_filename = legacy.split('/')[-1]
-        csv.account_name = csv_filename
     else:
         csv = CSV(account)
     csv.debug = debug
@@ -91,8 +89,6 @@ def import_hosts(account=None, debug=False, legacy=None, hostname_field="host"):
     if legacy:
         csv = CSV()
         csv.config = _create_legacy_config(legacy, None, hostname_field)
-        csv_filename = legacy.split('/')[-1]
-        csv.account_name = csv_filename
     else:
         csv = CSV(account)
     csv.debug = debug
@@ -110,17 +106,18 @@ def _create_legacy_config(csv_path, inventorize_key=None, hostname_field="host")
     Returns:
         dict: Minimal configuration dictionary
     """
+    csv_filename = csv_path.split('/')[-1]
     config = {
-        'name': 'legacy_csv',
+        'name': csv_filename,
         'id': 'legacy_csv',
         '_id': 'legacy_csv', 
         'path': csv_path,
         'encoding': 'utf-8',
         'delimiter': ';',
+        'is_master': True,
         'hostname_field': hostname_field,
         'rewrite_hostname': None,
         'delete_host_if_not_found_on_import': None,
-        'verify_cert': True
     }
     
     if inventorize_key:
