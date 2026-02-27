@@ -178,6 +178,8 @@ class BaseConfig():
     CMK_JINJA_USE_REPLACERS = False
     CMK_JINJA_USE_REPLACERS_FOR_HOSTNAMES = False
 
+    NETBOX_IMPORT_NESTED = False
+
     PROCESS_TIMEOUT = 15
 
 class ProductionConfig(BaseConfig):
