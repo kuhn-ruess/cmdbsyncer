@@ -6,10 +6,6 @@
     <div class="col-md-12">
       <div class="login-form">
           <h3>Login</h3>
-          <p>
-          Enter E-Mail and Password
-          </p>
-
           {{ wtf.quick_form(LoginForm) }}
       </div>
   </div>
@@ -18,4 +14,9 @@
 
 {% block scripts %}
     {{super()}}
+<script>
+  <!--
+    document.addEventListener('DOMContentLoaded', focusLogin);
+  -->
+</script>
 {% endblock %}
