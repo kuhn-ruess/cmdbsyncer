@@ -31,7 +31,7 @@ def cli_import_rules(rulefile_path):
 
 @cli_rules.command('create_rules')
 @click.option("--debug", default=False, is_flag=True)
-def import_rules(debug):
+def cli_create_rules(debug):
     """
     Create Syncer Rules based on Config
     """

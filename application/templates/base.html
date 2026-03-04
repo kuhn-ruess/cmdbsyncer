@@ -86,12 +86,6 @@
            min-height: 48px;
        }
        
-       .navbar-brand:hover {
-           color: #f8f9fa !important;
-           text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
-           transform: translateY(-1px);
-       }
-       
        .navbar-logo {
            width: 38px;
            height: 38px;
@@ -100,11 +94,6 @@
            transition: all 0.3s ease;
            margin-right: 12px;
            flex-shrink: 0;
-       }
-       
-       .navbar-brand:hover .navbar-logo {
-           filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
-           transform: scale(1.05);
        }
        
        .brand-text {
@@ -128,6 +117,21 @@
            text-transform: uppercase;
            letter-spacing: 0.5px;
        }
+
+       .login-form {
+           max-width: 30%;
+           text-align: center;
+           margin-left: auto;
+           margin-right: auto;
+       }
+
+       .login-form h3 {
+           margin-top: 3rem;
+       }
+
+       .form {
+           padding-top: 3rem;
+       }
        
        /* Responsive Design */
        @media (max-width: 576px) {
@@ -150,7 +154,6 @@
            }
        }
 </style>
-   <link rel="stylesheet" href="{{url_for('static', filename="css/main.css")}}">
 {% endblock %}
 
 {% block scripts %}
