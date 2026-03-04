@@ -45,6 +45,45 @@ def deep_compare(a, b):
     else:
         return a == b
 
+
+def analyze_value_differences(expected, actual):
+    """
+    Analyze and describe differences between two values
+    """
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        differences = []
+        # Check for different keys
+        expected_keys = set(expected.keys())
+        actual_keys = set(actual.keys())
+        
+        missing_keys = expected_keys - actual_keys
+        extra_keys = actual_keys - expected_keys
+        common_keys = expected_keys & actual_keys
+        
+        if missing_keys:
+            differences.append(f"Missing keys: {', '.join(missing_keys)}")
+        if extra_keys:
+            differences.append(f"Extra keys: {', '.join(extra_keys)}")
+            
+        for key in common_keys:
+            if expected[key] != actual[key]:
+                differences.append(f"Key '{key}': expected {repr(expected[key])}, got {repr(actual[key])}")
+                
+        return '; '.join(differences) if differences else "No specific differences found"
+        
+    elif isinstance(expected, list) and isinstance(actual, list):
+        if len(expected) != len(actual):
+            return f"List length differs: expected {len(expected)}, got {len(actual)}"
+        
+        differences = []
+        for i, (exp_item, act_item) in enumerate(zip(expected, actual)):
+            if exp_item != act_item:
+                differences.append(f"Index {i}: expected {repr(exp_item)}, got {repr(act_item)}")
+        
+        return '; '.join(differences) if differences else "List order differs"
+    else:
+        return f"Expected: {repr(expected)}, Got: {repr(actual)}"
+
 class CheckmkRuleSync(CMK2):
     """
     Export Checkmk Rules
@@ -316,6 +355,9 @@ class CheckmkRuleSync(CMK2):
                     value = cmk_rule['extensions']['value_raw']
                     cmk_condition = cmk_rule['extensions']['conditions']
                     rule_found = False
+                    deletion_reason = "Rule not found in desired rules"
+                    detailed_reason = ""
+                    
                     for rule in rules:
                         try:
                             cmk_value = ast.literal_eval(rule['value'])
@@ -325,9 +367,27 @@ class CheckmkRuleSync(CMK2):
                             continue
 
                         condition_match = rule['condition'] == cmk_condition
-
-
                         value_match = deep_compare(cmk_value, check_value)
+
+                        # Collect detailed information about mismatches
+                        if condition_match and not value_match:
+                            deletion_reason = "Condition matches but value differs"
+                            value_diff = analyze_value_differences(cmk_value, check_value)
+                            detailed_reason = f"Value differences: {value_diff}"
+                            logger.info(f"Rule deletion reason - Condition match but value differs:")
+                            logger.info(f"Expected: {pformat(cmk_value)}")
+                            logger.info(f"Actual: {pformat(check_value)}")
+                            logger.info(f"Differences: {value_diff}")
+                        elif not condition_match and value_match:
+                            deletion_reason = "Value matches but condition differs"  
+                            detailed_reason = f"Condition differs - Expected: {pformat(rule['condition'])}, Actual: {pformat(cmk_condition)}"
+                            logger.info(f"Rule deletion reason - Value match but condition differs:")
+                            logger.info(f"Expected: {pformat(rule['condition'])}")
+                            logger.info(f"Actual: {pformat(cmk_condition)}")
+                        elif not condition_match and not value_match:
+                            deletion_reason = "Both condition and value differ"
+                            value_diff = analyze_value_differences(cmk_value, check_value)
+                            detailed_reason = f"Condition differs AND Value differs: {value_diff}"
 
                         if not condition_match:
                             logger.debug("NO MATCH FOR CONDITION")
@@ -341,15 +401,23 @@ class CheckmkRuleSync(CMK2):
                         if condition_match and value_match:
                             logger.debug("FULL MATCH")
                             rule_found = True
+                            deletion_reason = ""  # Reset since rule was found
+                            detailed_reason = ""
                             # Remove from list, so that it not will be created in the next step
                             # pylint: disable=unnecessary-dict-index-lookup
                             self.rulsets_by_type[ruleset_name].remove(rule)
+                            break
 
                     if not rule_found: # Not existing any more
                         rule_id = cmk_rule['id']
                         print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in {ruleset_name} {rule_id}")
+                        print(f"{CC.WARNING}   Reason: {deletion_reason}{CC.ENDC}")
+                        if detailed_reason:
+                            print(f"{CC.WARNING}   Details: {detailed_reason}{CC.ENDC}")
                         url = f'/objects/rule/{rule_id}'
                         self.request(url, method="DELETE")
-                        self.log_details.append(("INFO",
-                                                 f"Deleted Rule in {ruleset_name} {rule_id}"))
+                        log_entry = f"Deleted Rule in {ruleset_name} {rule_id} - Reason: {deletion_reason}"
+                        if detailed_reason:
+                            log_entry += f" - {detailed_reason}"
+                        self.log_details.append(("INFO", log_entry))
                 progress.advance(task1)
