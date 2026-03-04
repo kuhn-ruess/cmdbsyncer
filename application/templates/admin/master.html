@@ -100,6 +100,29 @@
            letter-spacing: 0.5px;
        }
        
+       /* Changes Badge Styling */
+       #changes {
+           margin-left: 1px;
+           display: flex;
+           align-items: center;
+       }
+       
+       #changes .badge {
+           font-size: 0.8rem;
+           padding: 0.4rem 0.6rem;
+           border-radius: 50px;
+           white-space: nowrap;
+           max-width: 60px;
+           overflow: hidden;
+           text-overflow: ellipsis;
+       }
+       
+       .navbar-nav.navbar-right {
+           margin-right: 15px !important;
+           max-width: calc(100vw - 300px);
+           overflow: hidden;
+       }
+
        /* Responsive Design */
        @media (max-width: 576px) {
            .navbar-logo {
@@ -118,6 +141,17 @@
            .navbar-brand {
                padding: 0.2rem 0.5rem;
                min-height: 40px;
+           }
+           
+           .navbar-nav.navbar-right {
+               margin-right: 5px !important;
+               max-width: calc(100vw - 200px);
+           }
+           
+           #changes .badge {
+               font-size: 0.7rem;
+               padding: 0.3rem 0.5rem;
+               max-width: 50px;
            }
        }
 
