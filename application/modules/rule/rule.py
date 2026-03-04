@@ -26,6 +26,8 @@ class Rule(): # pylint: disable=too-few-public-methods
     hostname = False
     db_host = False
     cache_name = False
+    first_matching_tag = None # Is this set here, it can be accessed in Ninja currently for rewrites
+    first_matching_value = None
 
 
     def __init__(self):
@@ -77,6 +79,8 @@ class Rule(): # pylint: disable=too-few-public-methods
         # Wee need to find out if tag AND tag value match
         for tag, value in self.attributes.items():
             # Handle special dict key custom_fields
+            # @Todo Find out where this is used and add it to the documentation
+            # the clue is Idoit.
             if "custom_fields" == tag and isinstance(value, dict):
                 for name, content in value.items():
                     if f'custom_fields["{name}"]' == needed_tag:
@@ -103,6 +107,8 @@ class Rule(): # pylint: disable=too-few-public-methods
                 if match(value, needed_value, value_match, value_match_negate):
                     if app.config['ADVANCED_RULE_DEBUG']:
                         logger.debug('--> HIT')
+                        self.first_matching_tag = tag
+                        self.first_matching_value = value
                     return True
         return False
 
