@@ -355,7 +355,7 @@ class CheckmkRuleSync(CMK2):
                     value = cmk_rule['extensions']['value_raw']
                     cmk_condition = cmk_rule['extensions']['conditions']
                     rule_found = False
-                    deletion_details = ""  # Only for interesting cases
+                    condition_matches = []  # Collect all rules with matching conditions
                     
                     for rule in rules:
                         try:
@@ -368,16 +368,14 @@ class CheckmkRuleSync(CMK2):
                         condition_match = rule['condition'] == cmk_condition
                         value_match = deep_compare(cmk_value, check_value)
 
-                        # Only show details for the interesting case: same condition, different value
-                        # This indicates rules that might be "flapping" (alternately deleted/created)
-                        if condition_match and not value_match:
-                            value_diff = analyze_value_differences(cmk_value, check_value)
-                            deletion_details = f"🔄 POTENTIAL FLAPPING RULE - Same condition, different value: {value_diff}"
-                            logger.warning(f"Potential flapping rule detected in {ruleset_name}:")
-                            logger.warning(f"Condition: {pformat(cmk_condition)}")
-                            logger.warning(f"Expected value: {pformat(cmk_value)}")
-                            logger.warning(f"Actual value: {pformat(check_value)}")
-                            logger.warning(f"Difference: {value_diff}")
+                        # Collect all rules with matching conditions
+                        if condition_match:
+                            condition_matches.append({
+                                'rule': rule,
+                                'expected_value': cmk_value,
+                                'actual_value': check_value,
+                                'value_match': value_match
+                            })
 
                         if condition_match and value_match:
                             logger.debug("FULL MATCH")
@@ -386,6 +384,24 @@ class CheckmkRuleSync(CMK2):
                             # pylint: disable=unnecessary-dict-index-lookup
                             self.rulsets_by_type[ruleset_name].remove(rule)
                             break
+
+                    # Show details for all condition matches if no exact match was found
+                    deletion_details = ""
+                    if not rule_found and condition_matches:
+                        logger.warning(f"🔄 POTENTIAL FLAPPING RULES detected in {ruleset_name}:")
+                        logger.warning(f"Condition: {pformat(cmk_condition)}")
+                        logger.warning(f"Found {len(condition_matches)} rules with same condition but different values:")
+                        
+                        deletion_details_list = []
+                        for i, match in enumerate(condition_matches, 1):
+                            if not match['value_match']:
+                                value_diff = analyze_value_differences(match['expected_value'], match['actual_value'])
+                                deletion_details_list.append(f"Option {i}: {value_diff}")
+                                logger.warning(f"  Option {i} - Expected: {pformat(match['expected_value'])}")
+                                logger.warning(f"  Option {i} - Actual: {pformat(match['actual_value'])}")
+                                logger.warning(f"  Option {i} - Difference: {value_diff}")
+                        
+                        deletion_details = f"🔄 FLAPPING RULE - {len(condition_matches)} possible values: " + "; ".join(deletion_details_list)
 
                     if not rule_found: # Not existing any more
                         rule_id = cmk_rule['id']
