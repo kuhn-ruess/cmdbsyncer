@@ -27,13 +27,14 @@ class SyncAnsible(Plugin):
             'cmk_register_central_bakery',
             'cmk_install_agent',
             'cmk_discover',
+            'dont_bypass',
         ]
         # If not at leas one of the attributes is True,
         # we have to ignore the host
         for check in checks:
-            if attributes1.get(check.lower(), "false") == "true":
+            if attributes1.get(check.lower(), "false").lower() == "true":
                 return False
-            if attributes2.get(check.lower(), "false") == "true":
+            if attributes2.get(check.lower(), "false").lower() == "true":
                 return False
         return True
 
@@ -51,6 +52,18 @@ class SyncAnsible(Plugin):
         db_host.save()
         return outcomes
 
+    def _convert_string_booleans(self, data):
+        """
+        Convert string "true"/"false" values to Python booleans recursively
+        """
+        if isinstance(data, dict):
+            return {k: self._convert_string_booleans(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._convert_string_booleans(item) for item in data]
+        elif isinstance(data, str) and data.lower() in ['true', 'false']:
+            return data.lower() == 'true'
+        else:
+            return data
 
     def get_full_inventory(self, show_status=False):
         """
@@ -93,6 +106,7 @@ class SyncAnsible(Plugin):
 
                 inventory = attributes['filtered']
                 inventory.update(extra_attributes)
+                inventory = self._convert_string_booleans(inventory)
 
                 data['_meta']['hostvars'][hostname] = inventory
                 data['all']['hosts'].append(hostname)
@@ -120,4 +134,5 @@ class SyncAnsible(Plugin):
 
         inventory = attributes['filtered']
         inventory.update(extra_attributes)
+        inventory = self._convert_string_booleans(inventory)
         return inventory
