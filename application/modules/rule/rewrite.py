@@ -26,7 +26,10 @@ class Rewrite(Rule):
             new_name = outcome['new_attribute_name']
             if mode == 'jinja':
                 new_name = render_jinja(new_name, mode="nullify",
-                                        HOSTNAME=self.hostname, **self.attributes)
+                                        HOSTNAME=self.hostname, 
+                                        FIRST_MATCHING_TAG=self.first_matching_tag,
+                                        FIST_MATCHING_VALUE=self.first_matching_value,
+                                        **self.attributes)
         return old_name, new_name
 
     def get_new_attribute_value(self, outcome, attribute_name):
@@ -49,6 +52,8 @@ class Rewrite(Rule):
                         return old_value
                 elif value_mode == 'jinja':
                     new_value = render_jinja(new_value, mode="nullify",
+                                             FIRST_MATCHING_TAG=self.first_matching_tag,
+                                             FIST_MATCHING_VALUE=self.first_matching_value,
                                              HOSTNAME=self.hostname, **self.attributes)
         return new_value
 
