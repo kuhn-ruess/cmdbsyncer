@@ -435,7 +435,8 @@ class Host(db.Document):
                 raise HostError(f"{self.hostname} is not a valid Hostname,"
                                    "but object type for import is set to host")
 
-
+        if account_dict['typ'] == 'from_api':
+            self.no_autodelete = True
         self.is_object = is_object
         self.last_import_id = import_id
 
