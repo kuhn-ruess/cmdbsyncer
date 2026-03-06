@@ -783,7 +783,7 @@ class HostModelView(DefaultModelView):
     page_size = app.config['HOST_PAGESIZE']
 
     column_details_list = [
-        'hostname', 'folder', 'available','labels', 'inventory', 'cmdb_template', 'log',
+        'hostname', 'folder', 'no_autodelete', 'available','labels', 'inventory', 'cmdb_template', 'log',
         'last_import_seen', 'last_import_sync', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
