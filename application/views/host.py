@@ -631,7 +631,7 @@ class ObjectModelView(DefaultModelView):
     can_view_details = True
 
     column_details_list = [
-        'hostname', 'inventory', 'labels', 'cache'
+        'hostname', 'no_autodelete', 'inventory', 'labels', 'cache'
     ]
 
     column_exclude_list = [
