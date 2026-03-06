@@ -4,6 +4,7 @@
 Custom Attributes for Host
 """
 from application.modules.rule.rule import Rule
+from application.helpers.syncer_jinja import render_jinja
 
 
 
@@ -26,5 +27,10 @@ class CustomAttributeRule(Rule): # pylint: disable=too-few-public-methods
                 attribute_value = True
             elif attribute_value == 'False':
                 attribute_value = False
+            else:
+                attribute_value = render_jinja(attribute_value, mode="nullify",
+                                             FIRST_MATCHING_TAG=self.first_matching_tag,
+                                             FIST_MATCHING_VALUE=self.first_matching_value,
+                                             HOSTNAME=self.hostname, **self.attributes)
             outcomes[outcome['attribute_name']] = attribute_value
         return outcomes
