@@ -1,6 +1,50 @@
 {% extends 'admin/master.html' %}
 
 {% block body %}
+<style>
+/* Style for INCOMPATIBLE changelog entries */
+li:has-text("INCOMPATIBLE") {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+/* Alternative approach using CSS contains */
+li:contains("INCOMPATIBLE") {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+/* Style for FIX changelog entries */
+li:has-text("FIX:") {
+  color: #28a745;
+  font-weight: bold;
+}
+
+li:contains("FIX:") {
+  color: #28a745;
+  font-weight: bold;
+}
+
+/* Fallback approach using JavaScript */
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Find all list items and style them based on content
+  const listItems = document.querySelectorAll('li');
+  listItems.forEach(function(item) {
+    const text = item.textContent;
+    
+    if (text.includes('INCOMPATIBLE')) {
+      item.style.color = '#dc3545'; // Red
+      item.style.fontWeight = 'bold';
+    } else if (text.includes('FIX:')) {
+      item.style.color = '#28a745'; // Green
+      item.style.fontWeight = 'bold';
+    }
+  });
+});
+</script>
 <h1>Welcome to cmdbsyncer</h1>
 <p>
   This tool is <b>Open Source</b> and developed by <b>Kuhn &amp; Rue&szlig; GmbH</b> in Germany.
