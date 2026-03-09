@@ -52,7 +52,7 @@ class Log():
         log_entry.traceback = message['traceback']
         log_entry.save()
 
-    def log(self, message, affected_hosts=None, source="SYSTEM", details=False):
+    def log(self, message, affected_hosts=None, source="SYSTEM", details=None):
         """ LOG Messages"""
         self._log_function({'message' : message,
                            'affected_hosts': affected_hosts,

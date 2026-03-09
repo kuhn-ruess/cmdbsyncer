@@ -66,15 +66,16 @@ class Plugin():
     dry_run = False
     save_requests = False
 
-    config = None
+    config = {}
     log_details = None
 
 
-    debug_lines = [] # Used for GUI Debuging
+    debug_lines = None # Used for GUI Debuging
+
 
 
     name = "Undefined"
-    source = None
+    source = ""
 
     def __init__(self, account=False):
         """
@@ -89,6 +90,7 @@ class Plugin():
         """
         self.start_time = time.time()
         self.log_details = []
+        self.debug_lines = []
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
@@ -212,7 +214,7 @@ class Plugin():
         # Python pre 3.10 suppport.....:
         max_retries = app.config['HTTP_MAX_RETRIES']
         retry_wait = app.config['HTTP_REPEAT_TIMEOUT']
-        resp = {}
+        resp = None
         for attempt in range(1, max_retries+1):
             try:
                 if method == "get":
@@ -239,9 +241,11 @@ class Plugin():
                     raise
 
         try:
-            logger.debug(f"Response Json: {mod_json.dumps(resp.json())}")
+            if resp:
+                logger.debug(f"Response Json: {mod_json.dumps(resp.json())}")
         except requests.exceptions.JSONDecodeError:
-            logger.debug(f"Response Text: {pformat(resp.text)}")
+            if resp:
+                logger.debug(f"Response Text: {pformat(resp.text)}")
         except AttributeError:
             logger.debug(f"Response Raw: {pformat(resp)}")
         return resp
