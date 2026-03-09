@@ -6,6 +6,7 @@ import jinja2
 from mongoengine.errors import DoesNotExist
 from application.plugins.checkmk.models import CheckmkSite
 from application.modules.plugin import Plugin
+from application.helpers.syncer_jinja import render_jinja
 
 class SyncSites(Plugin):
     """
@@ -21,19 +22,39 @@ class SyncSites(Plugin):
         if site.settings_master.server_user:
             inventory['ansible_user'] =  site.settings_master.server_user
 
-
+        # Render Jinja Templates for various settings
         file_template = jinja2.Template(site.settings_master.cmk_version_filename,)
         filename = file_template.render(CMK_VERSION=site.settings_master.cmk_version,
                                         CMK_EDITION=site.settings_master.cmk_edition)
 
+        # Prepare context for syncer_jinja
+        jinja_context = {
+            'CMK_VERSION': site.settings_master.cmk_version,
+            'CMK_EDITION': site.settings_master.cmk_edition,
+            'SITE_NAME': site.name,
+            'SERVER_ADDRESS': site.server_address,
+            'CMK_SITE': site.settings_master.cmk_site_name or site.name,
+            'CMK_SERVER': site.settings_master.cmk_server_address or site.server_address,
+        }
+
+        # Render user, secret, and server with syncer_jinja
+        cmk_user = render_jinja(site.settings_master.cmk_user or "")
+        cmk_secret = render_jinja(site.settings_master.cmk_secret or "")
+        cmk_main_server = render_jinja(site.settings_master.cmk_server_address or "")
+
         inventory.update({
-            'cmk_site': site.name,
+            'cmk_site': site.settings_master.cmk_site_name or site.name,
             'inital_password': site.settings_master.inital_password,
             'cmk_edition': site.settings_master.cmk_edition,
             'cmk_version': site.settings_master.cmk_version,
             'cmk_version_filename': filename,
             'subscription_username': site.settings_master.subscription_username,
             'subscription_password': site.settings_master.subscription_password,
+            'cmk_user': cmk_user,
+            'cmk_secret': cmk_secret,
+            'cmk_server': site.settings_master.cmk_server_address or site.server_address,
+            'cmk_main_server': cmk_main_server,
+            'cmk_main_site': site.settings_master.cmk_site_name or site.name,
             'webserver_certificate': site.settings_master.webserver_certificate,
             'webserver_private_certificate': site.settings_master.webserver_certificate_private_key,
             'webserver_intermediate_certificate': site.settings_master.webserver_certificate_intermediate,

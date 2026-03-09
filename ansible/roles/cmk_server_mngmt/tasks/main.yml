@@ -70,6 +70,29 @@
   when: server_site_version.stderr.startswith("No such site")
   register: site_just_installed
 
+- name: "Set host to downtime before site update"
+  ansible.builtin.uri:
+    url: "https://{{ cmk_main_server | default(cmk_server) }}/{{ cmk_main_site | default(cmk_site) }}/check_mk/api/1.0/domain-types/downtime/collections/host"
+    method: POST
+    validate_certs: no
+    headers:
+      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
+      Accept: "application/json"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      start_time: "{{ ansible_date_time.epoch }}"
+      end_time: "{{ ansible_date_time.epoch | int + 3600 }}"  # 1 hour downtime
+      recur: "fixed"
+      duration: 3600
+      comment: "Site update in progress - Ansible managed downtime"
+      downtime_type: "host"
+      host_name: "{{ inventory_hostname }}"
+  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed and cmk_user is defined and cmk_secret is defined
+  ignore_errors: yes
+  delegate_to: localhost
+  register: downtime_result
+
 - name: "Update Sites to {{ cmk_version }}.{{ cmk_edition }}"
   become: True
   ansible.builtin.shell: |
@@ -79,3 +102,20 @@
   args:
     executable: /bin/bash
   when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed
+
+- name: "Remove host downtime after site update"
+  ansible.builtin.uri:
+    url: "https://{{ cmk_main_server | default(cmk_server) }}/{{ cmk_main_site | default(cmk_site) }}/check_mk/api/1.0/domain-types/downtime/collections/host"
+    method: DELETE
+    validate_certs: no
+    headers:
+      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
+      Accept: "application/json"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      delete_type: "by_id"
+      downtime_id: "{{ downtime_result.json.id | default('') }}"
+  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed and downtime_result.json.id is defined
+  ignore_errors: yes
+  delegate_to: localhost

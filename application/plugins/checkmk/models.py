@@ -395,6 +395,12 @@ class CheckmkSettings(db.Document):
     subscription_username = db.StringField()
     subscription_password = db.StringField()
 
+    # CheckMK API Credentials for automation
+    cmk_user = db.StringField()
+    cmk_secret = db.StringField()
+    cmk_server_address = db.StringField()
+    cmk_site_name = db.StringField()
+
     webserver_certificate = db.StringField()
     webserver_certificate_private_key = db.StringField()
     webserver_certificate_intermediate = db.StringField()
