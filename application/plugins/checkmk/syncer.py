@@ -62,7 +62,7 @@ class SyncCMK2(CMK2):
     num_updated  = 0
     num_deleted  = 0
 
-    console = None
+    console = print
 
     limit = False
 
@@ -145,6 +145,8 @@ class SyncCMK2(CMK2):
                         update_attributes[attr_name] = attr_value
             folder_name_url = folder_name.replace('/', '~')
             url = f'/objects/folder_config/{folder_name_url}'
+            curren_folder = {}
+            etag = None
             if add_attributes or update_attributes:
                 # get current E-Tag
                 try:
@@ -156,7 +158,7 @@ class SyncCMK2(CMK2):
                     continue
                 etag = headers['etag']
             if 'title' in update_attributes and \
-                curren_folder['title'] != update_attributes['title']:
+                curren_folder.get('title') != update_attributes['title']:
                 new_title = update_attributes['title']
                 print(f"{CC.OKGREEN} *{CC.ENDC} Update Title: {folder_name} to '{new_title}'")
                 payload = {
@@ -250,7 +252,13 @@ class SyncCMK2(CMK2):
 
         if self.config.get('limit_by_accounts'):
             filters = [x.strip() for x in self.config['limit_by_accounts'].split(',')]
-            if source_account_name not in filters:
+            allowed_filters = [f for f in filters if not f.startswith('!')]
+            denied_filters = [f[1:] for f in filters if f.startswith('!')]
+
+            if denied_filters and source_account_name in denied_filters:
+                return False
+
+            if allowed_filters and source_account_name not in allowed_filters:
                 return False
 
         return True
