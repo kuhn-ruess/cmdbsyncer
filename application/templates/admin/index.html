@@ -143,49 +143,57 @@ function toggleAllFilters() {
   This tool is <b>Open Source</b> and developed by <b>Kuhn &amp; Rue&szlig; GmbH</b> in Germany.
 </p>
 
-{% if changelog_html %}
-<h2>Changelog</h2>
+<div class="row mt-4">
+  <!-- Left Column: Links -->
+  <div class="col-md-4">
+    <h2>Links</h2>
+    <ul>
+      <li><a href="https://cmdbsyncer.de">🏠 Homepage</a></li>
+      <li><a href="https://docs.cmdbsyncer.de">📚 Documentation</a></li>
+      <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">⚙️ Source Code</a></li>
+      <li><a href="https://kuhn-ruess.de">🏢 Kuhn & Rueß GmbH</a></li>
+    </ul>
+    
+    <p>
+      Build: {{config.BUILD_DATE}}
+    </p>
+  </div>
 
-<!-- Changelog Filter -->
-<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
-  <h5>Filter Changelog:</h5>
-  <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-    <label style="display: flex; align-items: center; cursor: pointer;">
-      <input type="checkbox" id="filter-feat" checked style="margin-right: 5px;">
-      <span style="color: #007bff; font-weight: bold;">FEAT</span>
-    </label>
-    <label style="display: flex; align-items: center; cursor: pointer;">
-      <input type="checkbox" id="filter-fix" checked style="margin-right: 5px;">
-      <span style="color: #28a745; font-weight: bold;">FIX</span>
-    </label>
-    <label style="display: flex; align-items: center; cursor: pointer;">
-      <input type="checkbox" id="filter-incompatible" checked style="margin-right: 5px;">
-      <span style="color: #dc3545; font-weight: bold;">INCOMPATIBLE</span>
-    </label>
-    <label style="display: flex; align-items: center; cursor: pointer;">
-      <input type="checkbox" id="filter-other" checked style="margin-right: 5px;">
-      <span style="color: #6c757d; font-weight: bold;">OTHER</span>
-    </label>
-    <button onclick="toggleAllFilters()" style="background: #6c757d; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">
-      Alle umschalten
-    </button>
+  <!-- Right Column: Changelog -->
+  <div class="col-md-8">
+    {% if changelog_html %}
+    <h2>Changelog</h2>
+
+    <!-- Changelog Filter -->
+    <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
+      <h5>Filter Changelog:</h5>
+      <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-feat" checked style="margin-right: 5px;">
+          <span style="color: #007bff; font-weight: bold;">FEAT</span>
+        </label>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-fix" checked style="margin-right: 5px;">
+          <span style="color: #28a745; font-weight: bold;">FIX</span>
+        </label>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-incompatible" checked style="margin-right: 5px;">
+          <span style="color: #dc3545; font-weight: bold;">INCOMPATIBLE</span>
+        </label>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-other" checked style="margin-right: 5px;">
+          <span style="color: #6c757d; font-weight: bold;">OTHER</span>
+        </label>
+        <button onclick="toggleAllFilters()" style="background: #6c757d; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">
+          Alle umschalten
+        </button>
+      </div>
+    </div>
+
+    <div id="changelog-content" style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
+      {{ changelog_html|safe }}
+    </div>
+    {% endif %}
   </div>
 </div>
-
-<div id="changelog-content" style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
-  {{ changelog_html|safe }}
-</div>
-{% endif %}
-
-<h2>Links</h2>
-<ul>
-  <li><a href="https://cmdbsyncer.de">Homepage</a></li>
-  <li><a href="https://docs.cmdbsyncer.de">Documentation</a></li>
-  <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">Source Code</a></li>
-  <li><a href="https://kuhn-ruess.de">Kuhn & Rueß GmbH</a></li>
-</ul>
-
-<p>
-Build: {{config.BUILD_DATE}}</h1>
-</p>
 {% endblock %}
