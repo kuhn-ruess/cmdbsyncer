@@ -1,27 +1,199 @@
 {% extends 'admin/master.html' %}
 
 {% block body %}
+<style>
+/* Ensure changelog list items are properly spaced */
+#changelog-content li {
+  margin-bottom: 5px;
+  line-height: 1.4;
+}
+
+/* Filter section styling */
+#changelog-filter {
+  margin-bottom: 15px;
+}
+
+/* Checkbox styling */
+input[type="checkbox"] {
+  margin-right: 5px;
+}
+
+/* Ensure proper spacing for filter labels */
+label {
+  font-size: 14px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Style changelog entries and add filter functionality
+  styleAndInitializeFilter();
+  
+  // Restore filter settings from localStorage
+  restoreFilterSettings();
+  
+  // Add event listeners to filter checkboxes
+  document.getElementById('filter-feat').addEventListener('change', function() {
+    saveFilterSettings();
+    filterChangelog();
+  });
+  document.getElementById('filter-fix').addEventListener('change', function() {
+    saveFilterSettings();
+    filterChangelog();
+  });
+  document.getElementById('filter-incompatible').addEventListener('change', function() {
+    saveFilterSettings();
+    filterChangelog();
+  });
+  document.getElementById('filter-other').addEventListener('change', function() {
+    saveFilterSettings();
+    filterChangelog();
+  });
+  
+  // Apply initial filter after restoring settings
+  filterChangelog();
+});
+
+function styleAndInitializeFilter() {
+  const listItems = document.querySelectorAll('#changelog-content li');
+  listItems.forEach(function(item) {
+    const text = item.textContent.trim();
+    
+    // Add data attributes for filtering
+    if (text.includes('INCOMPATIBLE')) {
+      item.setAttribute('data-type', 'incompatible');
+      item.style.color = '#dc3545'; // Red
+      item.style.fontWeight = 'bold';
+    } else if (text.match(/^[^:]*FIX:/)) {
+      item.setAttribute('data-type', 'fix');
+      item.style.color = '#28a745'; // Green
+      item.style.fontWeight = 'bold';
+    } else if (text.match(/^[^:]*Feat:/i)) {
+      item.setAttribute('data-type', 'feat');
+      item.style.color = '#007bff'; // Blue
+      item.style.fontWeight = 'bold';
+    } else {
+      item.setAttribute('data-type', 'other');
+      item.style.color = '#6c757d'; // Gray
+    }
+  });
+}
+
+function saveFilterSettings() {
+  const settings = {
+    feat: document.getElementById('filter-feat').checked,
+    fix: document.getElementById('filter-fix').checked,
+    incompatible: document.getElementById('filter-incompatible').checked,
+    other: document.getElementById('filter-other').checked
+  };
+  localStorage.setItem('changelog-filter-settings', JSON.stringify(settings));
+}
+
+function restoreFilterSettings() {
+  const savedSettings = localStorage.getItem('changelog-filter-settings');
+  if (savedSettings) {
+    try {
+      const settings = JSON.parse(savedSettings);
+      document.getElementById('filter-feat').checked = settings.feat !== undefined ? settings.feat : true;
+      document.getElementById('filter-fix').checked = settings.fix !== undefined ? settings.fix : true;
+      document.getElementById('filter-incompatible').checked = settings.incompatible !== undefined ? settings.incompatible : true;
+      document.getElementById('filter-other').checked = settings.other !== undefined ? settings.other : true;
+    } catch (e) {
+      // If parsing fails, use defaults
+      console.log('Failed to restore filter settings');
+    }
+  }
+}
+
+function filterChangelog() {
+  const showFeat = document.getElementById('filter-feat').checked;
+  const showFix = document.getElementById('filter-fix').checked;
+  const showIncompatible = document.getElementById('filter-incompatible').checked;
+  const showOther = document.getElementById('filter-other').checked;
+  
+  const listItems = document.querySelectorAll('#changelog-content li');
+  listItems.forEach(function(item) {
+    const type = item.getAttribute('data-type');
+    let show = false;
+    
+    if (type === 'feat' && showFeat) show = true;
+    if (type === 'fix' && showFix) show = true;
+    if (type === 'incompatible' && showIncompatible) show = true;
+    if (type === 'other' && showOther) show = true;
+    
+    item.style.display = show ? 'block' : 'none';
+  });
+}
+
+function toggleAllFilters() {
+  const checkboxes = ['filter-feat', 'filter-fix', 'filter-incompatible', 'filter-other'];
+  const anyUnchecked = checkboxes.some(id => !document.getElementById(id).checked);
+  
+  // If any is unchecked, check all. If all are checked, uncheck all.
+  checkboxes.forEach(id => {
+    document.getElementById(id).checked = anyUnchecked;
+  });
+  
+  saveFilterSettings();
+  filterChangelog();
+}
+</script>
 <h1>Welcome to cmdbsyncer</h1>
 <p>
   This tool is <b>Open Source</b> and developed by <b>Kuhn &amp; Rue&szlig; GmbH</b> in Germany.
 </p>
 
-{% if changelog_html %}
-<h2>Changelog</h2>
-<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
-  {{ changelog_html|safe }}
+<div class="row mt-4">
+  <!-- Left Column: Links -->
+  <div class="col-md-4">
+    <h2>Links</h2>
+    <ul>
+      <li><a href="https://cmdbsyncer.de">🏠 Homepage</a></li>
+      <li><a href="https://docs.cmdbsyncer.de">📚 Documentation</a></li>
+      <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">⚙️ Source Code</a></li>
+      <li><a href="https://kuhn-ruess.de">🏢 Kuhn & Rueß GmbH</a></li>
+    </ul>
+    
+    <p>
+      Build: {{config.BUILD_DATE}}
+    </p>
+  </div>
+
+  <!-- Right Column: Changelog -->
+  <div class="col-md-8">
+    {% if changelog_html %}
+    <h2>Changelog</h2>
+
+    <!-- Changelog Filter -->
+    <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
+      <h5>Filter Changelog:</h5>
+      <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-feat" checked style="margin-right: 5px;">
+          <span style="color: #007bff; font-weight: bold;">FEAT</span>
+        </label>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-fix" checked style="margin-right: 5px;">
+          <span style="color: #28a745; font-weight: bold;">FIX</span>
+        </label>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-incompatible" checked style="margin-right: 5px;">
+          <span style="color: #dc3545; font-weight: bold;">INCOMPATIBLE</span>
+        </label>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-other" checked style="margin-right: 5px;">
+          <span style="color: #6c757d; font-weight: bold;">OTHER</span>
+        </label>
+        <button onclick="toggleAllFilters()" style="background: #6c757d; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">
+          Alle umschalten
+        </button>
+      </div>
+    </div>
+
+    <div id="changelog-content" style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
+      {{ changelog_html|safe }}
+    </div>
+    {% endif %}
+  </div>
 </div>
-{% endif %}
-
-<h2>Links</h2>
-<ul>
-  <li><a href="https://cmdbsyncer.de">Homepage</a></li>
-  <li><a href="https://docs.cmdbsyncer.de">Documentation</a></li>
-  <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">Source Code</a></li>
-  <li><a href="https://kuhn-ruess.de">Kuhn & Rueß GmbH</a></li>
-</ul>
-
-<p>
-Build: {{config.BUILD_DATE}}</h1>
-</p>
 {% endblock %}
