@@ -399,7 +399,6 @@ class CheckmkSettings(db.Document):
     cmk_user = db.StringField()
     cmk_secret = db.StringField()
     cmk_server_address = db.StringField()
-    cmk_site_name = db.StringField()
 
     webserver_certificate = db.StringField()
     webserver_certificate_private_key = db.StringField()

@@ -749,10 +749,7 @@ class CheckmkSettingsView(DefaultModelView):
             'placeholder': "API secret/password for CheckMK automation ({{ACCOUNT:x:password}}",
         },
         'cmk_server_address': {
-            'placeholder': "CheckMK server address for API calls (different from site server)",
-        },
-        'cmk_site_name': {
-            'placeholder': "CheckMK site name for API calls (different from configured site name)",
+            'placeholder': "CheckMK server address for API calls (with site, or {{ACCOUTN:x:address}})",
         },
         'webserver_certificate': {
             'placeholder': (
@@ -774,7 +771,7 @@ class CheckmkSettingsView(DefaultModelView):
            ( 'cmk_edition', 'cmk_version', 'cmk_version_filename', 'inital_password'
            ), "Checkmk Site Settings"),
        rules.FieldSet(
-           ( 'cmk_user', 'cmk_secret', 'cmk_server_address', 'cmk_site_name',
+           ( 'cmk_user', 'cmk_secret', 'cmk_server_address',
            ), "CheckMK API Settings (optional: for automated Downtimes)"),
        rules.FieldSet(
            ( 'subscription_username', 'subscription_password',
