@@ -4,11 +4,13 @@ Syncers Jinja Functions
 #pylint: disable=logging-fstring-interpolation
 import ast
 import ipaddress
+import re
 import jinja2
 from jinja2 import StrictUndefined
 import datetime
 
 from application import logger
+from application.helpers.get_account import get_account_variable
 def _cmk_cleanup_tag_id(value):
     """
     Lazily import the Checkmk helper to avoid circular imports while still
@@ -107,6 +109,13 @@ def merge_list_of_dicts(input_list):
     dict_obj = {k: v for d in input_list for k, v in d.items() if v}
     return dict_obj
 
+def replace_account_variable(match):
+    account_var = match.group(0)
+    try:
+        return get_account_variable(account_var)
+    except ValueError:
+        return account_var
+
 
 def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     """
@@ -118,6 +127,11 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     - nullify: Nullify string in nase of missing Variables
     """
     #logger.debug(f"JINJA: Rewrite String: {value}")
+    
+    # Process ACCOUNT variables anywhere in the string
+    if isinstance(value, str) and '{{ACCOUNT:' in value:
+        value = re.sub(r'\{\{ACCOUNT:[^}]+\}\}', replace_account_variable, value)
+    
     payload = {}
 
     if replace_newlines:
@@ -144,6 +158,8 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         'datetime': datetime,
 
     })
+
+    
 
 
     if mode == 'nullify':

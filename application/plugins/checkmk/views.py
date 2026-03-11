@@ -742,6 +742,15 @@ class CheckmkSettingsView(DefaultModelView):
                 "Versions directly from checkmk"
             ),
         },
+        'cmk_user': {
+            'placeholder': "API user for CheckMK automation (for downtime management). You can use {{ACCOUNT:x:username}} as Placeholder",
+        },
+        'cmk_secret': {
+            'placeholder': "API secret/password for CheckMK automation ({{ACCOUNT:x:password}}",
+        },
+        'cmk_server_address': {
+            'placeholder': "CheckMK server address for API calls (with site, or {{ACCOUTN:x:address}})",
+        },
         'webserver_certificate': {
             'placeholder': (
                 "Optional: Add Paths to your Webserver Certificate Files "
@@ -762,17 +771,21 @@ class CheckmkSettingsView(DefaultModelView):
            ( 'cmk_edition', 'cmk_version', 'cmk_version_filename', 'inital_password'
            ), "Checkmk Site Settings"),
        rules.FieldSet(
+           ( 'cmk_user', 'cmk_secret', 'cmk_server_address',
+           ), "CheckMK API Settings (optional: for automated Downtimes)"),
+       rules.FieldSet(
            ( 'subscription_username', 'subscription_password',
-           ), "Automatic Download Settings (optional)"),
+           ), "Automatic Download Settings (optional: For automated Version Download)"),
        rules.FieldSet(
            ( 'webserver_certificate', 'webserver_certificate_private_key', 'webserver_certificate_intermediate',
-           ), "Server Managment (optional)"),
+           ), "Server Managment (optional: For automated Certificate Updates)"),
     ]
 
     column_exclude_list = [
         'inital_password',
         'subscription_username',
         'subscription_password',
+        'cmk_secret',
     ]
 
     column_sortable_list = (
