@@ -139,7 +139,7 @@
                 {{ timestamp_format(date) }}
             </td>
             {% endif %}
-            <td>{% if path %}{{ config.FILEADMIN_PATH }}/{{ path }}/{{ name }}{% endif %}</td>
+            <td>{% if path %}{{ config.FILEADMIN_PATH }}/{{ path }}{% endif %}</td>
             {% endblock %}
         </tr>
         {% endfor %}
