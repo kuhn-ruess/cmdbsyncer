@@ -4,8 +4,10 @@ Host Model View
 from datetime import datetime
 # pylint: disable=too-few-public-methods
 import re
+import csv
+import io
 from flask_login import current_user
-from flask import flash, request, redirect, url_for, render_template_string
+from flask import flash, request, redirect, url_for, render_template_string, Response
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 from flask_admin.model.template import LinkRowAction
 from flask_admin.form import rules
@@ -23,6 +25,7 @@ from application.plugins.netbox import get_device_debug_data as netbox_host_debu
 from application import app
 from application.views.default import DefaultModelView
 from application.models.host import Host, CmdbField
+from application.models.config import Config
 from application.modules.log.models import LogEntry
 
 div_open = rules.HTML('<div class="form-check form-check-inline">')
@@ -1206,3 +1209,92 @@ class HostModelView(DefaultModelView):
             return list(templates)
         except Exception:
             return []
+
+    @expose('/csv')
+    def export_csv(self):
+        """
+        Export all hosts as CSV
+        """
+        if not current_user.is_authenticated or not current_user.has_right('host'):
+            return Response("Unauthorized", status=401)
+
+
+        try:
+            config = Config.objects().first()
+            export_labels = config.export_labels_list if config and config.export_labels_list else []
+            export_inventory = config.export_inventory_list if config and config.export_inventory_list else []
+        except Exception:
+            export_labels = []
+            export_inventory = []
+
+        # Create CSV string in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write CSV header
+        headers = [
+            'hostname',
+            'object_type',
+            'available',
+            'source_account_name',
+            'folder',
+            'last_import_seen',
+            'last_import_sync',
+            'no_autodelete'
+        ]
+
+        # Add configured label fields
+        for label_field in export_labels:
+            headers.append(f'label_{label_field}')
+
+        # Add configured inventory fields
+        for inventory_field in export_inventory:
+            headers.append(f'inventory_{inventory_field}')
+
+        writer.writerow(headers)
+
+        # Get all hosts (excluding objects/templates)
+        hosts = Host.objects(is_object__ne=True).order_by('hostname')
+
+        # Write host data
+        for host in hosts:
+            row = [
+                host.hostname or '',
+                host.object_type or '',
+                host.available if host.available is not None else '',
+                host.source_account_name or '',
+                host.folder or '',
+                host.last_import_seen.strftime('%Y-%m-%d %H:%M:%S') if host.last_import_seen else '',
+                host.last_import_sync.strftime('%Y-%m-%d %H:%M:%S') if host.last_import_sync else '',
+                host.no_autodelete if host.no_autodelete is not None else ''
+            ]
+
+            # Add configured label values
+            for label_field in export_labels:
+                value = host.labels.get(label_field, '') if host.labels else ''
+                row.append(value)
+
+            # Add configured inventory values
+            for inventory_field in export_inventory:
+                value = host.inventory.get(inventory_field, '') if host.inventory else ''
+                row.append(value)
+
+            writer.writerow(row)
+
+        # Create response with CSV content
+        csv_content = output.getvalue()
+        output.close()
+
+        # Generate filename with timestamp
+        now = datetime.now()
+        filename = f"hosts_export_{now.strftime('%Y%m%d_%H%M%S')}.csv"
+
+        response = Response(
+            csv_content,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"'
+            }
+        )
+
+        return response
