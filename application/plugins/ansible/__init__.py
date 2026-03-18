@@ -7,8 +7,6 @@ import click
 
 from mongoengine.errors import DoesNotExist
 
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-
 from application import app
 from application.models.host import Host
 from application.modules.debug import ColorCodes, attribute_table
@@ -18,10 +16,12 @@ from application.modules.rule.rewrite import Rewrite
 from .models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
                     AnsibleCustomVariablesRule
 from .rules import AnsibleVariableRule
-from .syncer import SyncAnsible
+from .inventory import AnsibleInventory
 from .site_syncer import SyncSites
 
 from application.helpers.cron import register_cronjob
+
+
 
 @app.cli.group(name='ansible')
 def cli_ansible():
@@ -59,7 +59,7 @@ def debug_ansible_rules(hostname):
     """
     rules = load_rules()
 
-    syncer = SyncAnsible()
+    syncer = AnsibleInventory()
     syncer.debug = True
     rules['filter'].debug = True
     syncer.filter = rules['filter']
@@ -112,7 +112,7 @@ def _inner_update_cache(account=False):
     Host.objects.filter(cache__ansible__exists=True).update(unset__cache__ansible=1)
     print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
     rules = load_rules()
-    syncer = SyncAnsible()
+    syncer = AnsibleInventory()
     syncer.name = "Rebuild Ansible Cache"
     syncer.filter = rules['filter']
     syncer.rewrite = rules['rewrite']
@@ -136,7 +136,7 @@ def source(list, host): #pylint: disable=redefined-builtin
     """Inventory Source for Ansible"""
     #pylint: disable=no-else-return
     rules = load_rules()
-    syncer = SyncAnsible()
+    syncer = AnsibleInventory()
     syncer.filter = rules['filter']
     syncer.rewrite = rules['rewrite']
     syncer.actions = rules['actions']
@@ -168,46 +168,10 @@ def server_source(list, host): #pylint: disable=redefined-builtin
     return False
 
 #.
-#   . -- Ansible Playbook
-
-#def print_out(data, runner_config):
-#    """
-#    Debug print
-#    """
-#    print(data, runner_config)
-#
-#def run_agent_playbook():
-#    """
-#    Run Ansible Playbook
-#    """
-#
-#    rules = load_rules()
-#    syncer = SyncAnsible()
-#    syncer.filter = rules['filter']
-#    syncer.rewrite = rules['rewrite']
-#    syncer.actions = rules['actions']
-#
-#    inventory = syncer.get_full_inventory()
-#    playbook = './ansible/cmk_agent_mngmt.yml'
-#
-#    path = os.path.abspath(os.getcwd())
-#    path += "/ansible"
-#    envvars = {
-#        'PATH': path,
-#        'ANSIBLE_ROLES_PATH': path,
-#    }
-#    result = ansible_runner.run(playbook=playbook,
-#                                status_handler=print_out,
-#                                envvars = envvars,
-#                                inventory=inventory)
-#    print(result)
-#
-#@cli_ansible.command('run_agent_playbook')
-#def cli_run_agent_playbook():
-#    """
-#    Run Ansible Playbook
-#    """
-#    run_agent_playbook()
-#
-#.
 register_cronjob('Ansible: Build Cache', _inner_update_cache)
+
+# Iniate API
+from syncerapi.v1.rest import API
+
+from .rest_api.ansible import API as ansible
+API.add_namespace(ansible, path='/ansible')

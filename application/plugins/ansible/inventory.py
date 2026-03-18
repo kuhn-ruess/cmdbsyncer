@@ -7,7 +7,7 @@ from mongoengine.errors import DoesNotExist
 from application.models.host import Host
 from application.modules.plugin import Plugin
 
-class SyncAnsible(Plugin):
+class AnsibleInventory(Plugin):
     """
     Class for the Ansible Actions
     """
