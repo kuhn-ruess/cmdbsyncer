@@ -787,7 +787,7 @@ class HostModelView(DefaultModelView):
 
     column_details_list = [
         'hostname', 'folder', 'no_autodelete', 'available','labels', 'inventory', 'cmdb_template', 'log',
-        'last_import_seen', 'last_import_sync', 'last_import_id',
+        'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
 
@@ -843,6 +843,8 @@ class HostModelView(DefaultModelView):
         'cache': format_cache,
         'cmdb_template': _render_cmdb_template,
         'last_import_seen': _render_datetime,
+        'last_import_sync': _render_datetime,
+        'create_time': _render_datetime,
         'object_type': _render_object_type_icon,
     }
 
