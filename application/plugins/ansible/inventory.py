@@ -23,6 +23,7 @@ class AnsibleInventory(Plugin):
         """
         checks = [
             'cmk_register_tls',
+            'cmk_create_host',
             'cmk_register_bakery',
             'cmk_register_central_bakery',
             'cmk_install_agent',
