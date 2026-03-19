@@ -331,7 +331,6 @@ class Host(db.Document):
                 update_dict = {
                     f"{key}__{self._fix_key(x)}": y
                     for x, y in new_data.items()
-                    if y
                 }
         if app.config['LABELS_ITERATE_FIRST_LEVEL']:
             for upd_key, value in list(update_dict.items()):
