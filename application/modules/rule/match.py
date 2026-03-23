@@ -16,6 +16,8 @@ def make_bool(value):
     """
     Make Bool from given object
     """
+    if value == None:
+        return False
     if isinstance(value, bool):
         return value
     if value.lower() == 'false':
