@@ -7,6 +7,9 @@ import click
 
 from mongoengine.errors import DoesNotExist
 
+from rich.console import Console
+from rich.table import Table
+
 from application import app
 from application.models.host import Host
 from application.modules.debug import ColorCodes, attribute_table
@@ -20,8 +23,6 @@ from .inventory import AnsibleInventory
 from .site_syncer import SyncSites
 
 from application.helpers.cron import register_cronjob
-
-
 
 @app.cli.group(name='ansible')
 def cli_ansible():
@@ -168,10 +169,103 @@ def server_source(list, host): #pylint: disable=redefined-builtin
     return False
 
 #.
+#   .-- Debug Filter
+@cli_ansible.command('debug_filter')
+@click.option('--list-rules', '-l', is_flag=True, help='List all available filter rules')
+@click.option('--filter-name', '-f', default=None, help='Name of specific filter rule to test')
+@click.option('--show-matched', '-m', is_flag=True, help='Show hosts matched by filter (will be processed)')
+@click.option('--show-ignored', '-i', is_flag=True, help='Show hosts NOT matched (ignored by filter)')
+def debug_filter(list_rules, filter_name, show_matched, show_ignored):
+    """
+    Debug filter rules against all hosts.
+
+    Examples:
+        ansible debug_filter -l
+        ansible debug_filter -m -i
+        ansible debug_filter -f "MyRule" -m
+        ansible debug_filter -f "MyRule" -i
+    """
+    console = Console()
+
+    if list_rules:
+        rules = AnsibleFilterRule.objects()
+        table = Table(title="Ansible Filter Rules")
+        table.add_column("Name", style="cyan")
+        table.add_column("Enabled", style="green")
+        table.add_column("Condition Type", style="yellow")
+        table.add_column("Sort", style="magenta")
+        table.add_column("Conditions", style="blue")
+
+        for rule in rules:
+            table.add_row(
+                rule.name,
+                "Yes" if rule.enabled else "No",
+                rule.condition_typ,
+                str(rule.sort_field),
+                str(len(rule.conditions))
+            )
+        console.print(table)
+        return
+
+    with app.app_context():
+        if filter_name:
+            rules = AnsibleFilterRule.objects(name=filter_name, enabled=True)
+            if not rules:
+                console.print(f"[red]Rule '{filter_name}' not found or not enabled![/red]")
+                return
+        else:
+            rules = AnsibleFilterRule.objects(enabled=True)
+
+        if not rules:
+            console.print("[yellow]No enabled filter rules found![/yellow]")
+            return
+
+        console.print(f"\n[green]Testing {rules.count()} filter rule(s)...[/green]\n")
+
+        attribute_filter = Filter()
+        attribute_filter.cache_name = 'ansible_filter_debug'
+        attribute_filter.rules = rules.order_by('sort_field')
+
+        hosts = Host.objects()
+        total_hosts = hosts.count()
+
+        console.print(f"Total hosts in database: {total_hosts}\n")
+
+        matched_table = Table(title="Hosts MATCHED by Filter (will be processed)")
+        matched_table.add_column("Hostname", style="cyan")
+        matched_table.add_column("Labels", style="yellow")
+
+        ignored_table = Table(title="Hosts NOT matched (ignored by filter)")
+        ignored_table.add_column("Hostname", style="cyan")
+        ignored_table.add_column("Labels", style="yellow")
+
+        matched_count = 0
+        ignored_count = 0
+
+        for db_host in hosts:
+            hostname = db_host.hostname
+            labels = str(db_host.labels)[:50] if db_host.labels else ""
+
+            attributes = attribute_filter.get_outcomes(db_host, db_host.labels)
+
+            if attributes.get('ignore_host'):
+                ignored_count += 1
+                if show_ignored:
+                    ignored_table.add_row(hostname, labels)
+            else:
+                matched_count += 1
+                if show_matched:
+                    matched_table.add_row(hostname, labels)
+
+        console.print(f"[green]Matched (will be processed): {matched_count}[/green]")
+        console.print(f"[red]Ignored (filtered out): {ignored_count}[/red]")
+
+        if matched_count > 0 and show_matched:
+            console.print("\n")
+            console.print(matched_table)
+
+        if ignored_count > 0 and show_ignored:
+            console.print("\n")
+            console.print(ignored_table)
+
 register_cronjob('Ansible: Build Cache', _inner_update_cache)
-
-# Iniate API
-from syncerapi.v1.rest import API
-
-from .rest_api.ansible import API as ansible
-API.add_namespace(ansible, path='/ansible')
