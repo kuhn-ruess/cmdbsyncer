@@ -24,15 +24,15 @@ from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLi
 
 #   .-- Renderer
 condition_types={
-    'equal': "is equal",
+    'equal': "exact match",
     'in': "contains",
-    'not_in': "not contains",
-    'in_list': "found in given list",
-    'string_in_list': "found in list",
-    'ewith': "endswith",
-    'swith': "startswith",
+    'not_in': "not contains", 
+    'in_list': "value in your list",
+    'string_in_list': "string in Python list",
+    'ewith': "ends with",
+    'swith': "starts with",
     'regex': "regex match",
-    'bool': "Boolean",
+    'bool': "boolean match",
     'ignore': "always match",
 }
 
