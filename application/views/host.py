@@ -253,6 +253,62 @@ class StaticTemplateLabelField(Field):
     def _value(self):
         return str(self.data) if self.data else ''
 
+class CmdbMatchWidget:
+    """
+    Widget for CMDB Match key:value input with styling
+    """
+    def __call__(self, field, **kwargs):
+        # Split existing value if any
+        key = ""
+        value = ""
+        if field.data and ':' in field.data:
+            key, value = field.data.split(':', 1)
+        
+        html = f'''
+        <div class="cmdb-match-container" style="margin-bottom: 15px;">
+            <div class="form-row align-items-center">
+                <div class="col-auto">
+                    <input type="text" id="cmdb_match_key" value="{key}" placeholder="Key" 
+                           style="background-color: #2EFE9A; border-radius: 5px; padding: 8px 12px; 
+                                  font-weight: bold; border: 1px solid #1abc9c; margin-right: 10px; width: 150px;">
+                </div>
+                <div class="col-auto">
+                    <input type="text" id="cmdb_match_value" value="{value}" placeholder="Value"
+                           style="background-color: #81DAF5; border-radius: 5px; padding: 8px 12px; 
+                                  font-family: monospace; border: 1px solid #3498db; width: 200px;">
+                </div>
+            </div>
+            <input type="hidden" name="{field.name}" id="{field.id}" value="{field.data or ''}" />
+            <small class="form-text text-muted">Enter Attribute which should lead to automatic match</small>
+        </div>
+        <script>
+        function updateCmdbMatch() {{
+            var key = document.getElementById('cmdb_match_key').value;
+            var value = document.getElementById('cmdb_match_value').value;
+            var hiddenField = document.getElementById('{field.id}');
+            
+            if (key && value) {{
+                hiddenField.value = key + ':' + value;
+            }} else {{
+                hiddenField.value = '';
+            }}
+        }}
+        
+        document.getElementById('cmdb_match_key').addEventListener('input', updateCmdbMatch);
+        document.getElementById('cmdb_match_value').addEventListener('input', updateCmdbMatch);
+        </script>
+        '''
+        return Markup(html)
+
+class CmdbMatchField(Field):
+    """
+    Custom field for CMDB Match key:value input
+    """
+    widget = CmdbMatchWidget()
+
+    def _value(self):
+        return str(self.data) if self.data else ''
+
 class StaticLogWidget:
     """
     Design for Lists in Views
@@ -688,17 +744,20 @@ class ObjectModelView(DefaultModelView):
         'inventory': StaticLabelField,
         'log': StaticLogField,
         'hostname': StringField,
+        'cmdb_match': CmdbMatchField,
     }
 
     form_rules = [
         rules.Field('hostname'),
         rules.FieldSet(('cmdb_fields', 'cmdb_match'), "CMDB Fields"),
-        #rules.FieldSet(('inventory', 'log'), "Data"),
     ]
 
     form_args = {
         "hostname": {
             "label": 'Object Name'
+        },
+        "cmdb_match": {
+            "label": 'CMDB Match Rule'
         }
     }
 
@@ -707,15 +766,42 @@ class ObjectModelView(DefaultModelView):
             'form_subdocuments': {
                 '': {
                     'form_widget_args': {
-                        'field_name': {'style': 'background-color: #2EFE9A;', 'size': 10},
-                        'field_value': {'style': 'background-color: #81DAF5;', 'size': 40},
+                        'field_name': {
+                            'style': (
+                                'background-color: #2EFE9A; '
+                                'border-radius: 5px; '
+                                'padding: 8px 12px; '
+                                'margin-right: 5px; '
+                                'font-weight: bold; '
+                                'border: 1px solid #1abc9c; '
+                                'width: 220px;'
+                            ),
+                            'size': 20,
+                            'placeholder': 'Key'
+                        },
+                        'field_value': {
+                            'style': (
+                                'background-color: #81DAF5; '
+                                'border-radius: 5px; '
+                                'padding: 8px 12px; '
+                                'font-family: monospace; '
+                                'margin-left: 5px; '
+                                'border: 1px solid #3498db; '
+                                'width: 450px;'
+                            ),
+                            'size': 40,
+                            'placeholder': 'Value'
+                        },
                     },
-                    'form_rules' : [
-                        div_open,
-                        rules.NestedRule(
-                            ('field_name', 'field_value')
-                        ),
-                        div_close,
+                    'form_rules': [
+                        rules.HTML('<div class="form-row align-items-center" style="margin-bottom: 10px;">'),
+                        rules.HTML('<div class="col-auto">'),
+                        rules.Field('field_name'),
+                        rules.HTML('</div>'),
+                        rules.HTML('<div class="col-auto">'),
+                        rules.Field('field_value'),
+                        rules.HTML('</div>'),
+                        rules.HTML('</div>'),
                     ]
                 }
             }
