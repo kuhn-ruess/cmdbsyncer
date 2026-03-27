@@ -100,10 +100,10 @@ class AnsibleInventory(Plugin):
                         progress.advance(task1)
                     continue
 
-                if self.bypass_host(attributes['all'], extra_attributes):
-                    if show_status:
-                        progress.advance(task1)
-                    continue
+                #if self.bypass_host(attributes['all'], extra_attributes):
+                #    if show_status:
+                #        progress.advance(task1)
+                #    continue
 
                 inventory = attributes['filtered']
                 inventory.update(extra_attributes)

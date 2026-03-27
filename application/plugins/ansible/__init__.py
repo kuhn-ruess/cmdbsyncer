@@ -269,3 +269,9 @@ def debug_filter(list_rules, filter_name, show_matched, show_ignored):
             console.print(ignored_table)
 
 register_cronjob('Ansible: Build Cache', _inner_update_cache)
+
+# Iniate API
+from syncerapi.v1.rest import API
+
+from .rest_api.ansible import API as ansible
+API.add_namespace(ansible, path='/ansible')
