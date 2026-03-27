@@ -111,6 +111,7 @@ class Account(db.Document):
     is_child = db.BooleanField(default=False)
     parent = db.ReferenceField(document_type='Account', reverse_delete_rule=DENY)
     is_object = db.BooleanField(default=False)
+    cmdb_object = db.BooleanField(default=False)
     object_type = db.StringField(choices=object_types)
 
     address = db.StringField()

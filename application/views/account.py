@@ -150,7 +150,7 @@ class AccountModelView(DefaultModelView):
                         'target="_blank" class="badge badge-light">Documentation</a>'),
         rules.FieldSet(('name', 'type'),'Basics'),
         rules.FieldSet(('is_master',), "Account Settings"),
-        rules.FieldSet(('is_object', 'object_type'), "Object Settings"),
+        rules.FieldSet(('is_object', 'cmdb_object', 'object_type'), "Object Settings"),
         rules.FieldSet(('address', 'username', 'password'), "Access Config"),
         rules.Header("Addional configuration"),
         rules.Field('custom_fields'),

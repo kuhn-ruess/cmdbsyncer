@@ -41,6 +41,7 @@ class Host(db.Document):
 
     cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
     cmdb_template = db.ReferenceField(document_type='Host', reverse_delete_rule=DENY)
+    cmdb_match = db.StringField()
 
 
     no_autodelete = db.BooleanField(default=False)
@@ -174,6 +175,11 @@ class Host(db.Document):
         if template:
             return render_jinja(template, HOSTNAME=old_name, **attributes)
         return old_name
+
+
+    def get_cmdb_template(self):
+        match_attribute = "x"
+        pass
 
     def lock_to_folder(self, folder_name):
         """
@@ -438,6 +444,11 @@ class Host(db.Document):
 
         if account_dict['typ'] == 'from_api':
             self.no_autodelete = True
+
+        if account_dict.get('cmdb_object'):
+            self.no_autodelete = True
+            self.cmdb_template = self.get_cmdb_template()
+
         self.is_object = is_object
         self.last_import_id = import_id
 
