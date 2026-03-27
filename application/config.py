@@ -122,7 +122,7 @@ class BaseConfig():
 
     CMDB_MODELS = {
         'host': {
-            'site' : {"type": "string"},
+            'ipaddress' : {"type": "string"},
             'department' : {"type": "string"},
             'type' : {"type": "string"},
         },

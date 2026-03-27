@@ -687,13 +687,20 @@ class ObjectModelView(DefaultModelView):
     form_overrides = {
         'inventory': StaticLabelField,
         'log': StaticLogField,
+        'hostname': StringField,
     }
 
     form_rules = [
         rules.Field('hostname'),
         rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
-        rules.FieldSet(('inventory', 'log'), "Data"),
+        #rules.FieldSet(('inventory', 'log'), "Data"),
     ]
+
+    form_args = {
+        "hostname": {
+            "label": 'Object Name'
+        }
+    }
 
     form_subdocuments = {
         'cmdb_fields': {
@@ -889,7 +896,7 @@ class HostModelView(DefaultModelView):
             rules.NestedRule(('object_type', 'available', 'cmdb_template', 'labels_from_template')),
             ), "CMDB Options"),
         rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
-        rules.FieldSet(('inventory', 'log'), "Data"),
+        #rules.FieldSet(('inventory', 'log'), "Data"),
     ]
 
     form_subdocuments = {
@@ -1015,6 +1022,11 @@ class HostModelView(DefaultModelView):
     def scaffold_form(self):
         form_class = super().scaffold_form()
         form_class.labels_from_template = StaticTemplateLabelField()
+        
+        # Filter cmdb_template to show only template objects
+        if hasattr(form_class, 'cmdb_template'):
+            form_class.cmdb_template.kwargs['queryset'] = Host.objects(object_type='template')
+        
         return form_class
 
     def edit_form(self, obj=None):
