@@ -154,7 +154,7 @@ def _render_labels(_view, _context, model, _name):
     if not model.labels:
         return Markup("")
     #If the Cache is set, we also show the attributes which we Send to Checkmk
-    checkmk_labels = model.cache.get('checkmk_hostattribute', {}).get('attributes', {}).get('all', {})
+    checkmk_labels = model.cache.get('checkmk_hostattribute', {}).get('attributes', {}).get('filtered', {})
     html = ""
     for key, value in model.labels.items():
         if not value:
