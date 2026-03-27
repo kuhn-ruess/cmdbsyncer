@@ -748,6 +748,20 @@ class ObjectModelView(DefaultModelView):
     }
 
     form_rules = [
+        rules.HTML('''
+        <style>
+        [id^="cmdb_fields-"] legend { display: none !important; }
+        [id^="cmdb_fields-"] .card { 
+            margin-bottom: 8px !important; 
+            padding: 10px !important; 
+            background-color: #f8f9fa !important;
+            border-radius: 8px !important;
+        }
+        [id^="cmdb_fields-"] label { display: none !important; }
+        [id^="cmdb_fields-"] .form-group { margin-bottom: 0 !important; }
+        [id^="cmdb_fields-"] .inline-field { margin-bottom: 8px !important; }
+        </style>
+        '''),
         rules.Field('hostname'),
         rules.FieldSet(('cmdb_fields', 'cmdb_match'), "CMDB Fields"),
     ]
@@ -770,7 +784,7 @@ class ObjectModelView(DefaultModelView):
                             'style': (
                                 'background-color: #2EFE9A; '
                                 'border-radius: 5px; '
-                                'padding: 8px 12px; '
+                                'padding: 6px 10px; '
                                 'margin-right: 5px; '
                                 'font-weight: bold; '
                                 'border: 1px solid #1abc9c; '
@@ -783,7 +797,7 @@ class ObjectModelView(DefaultModelView):
                             'style': (
                                 'background-color: #81DAF5; '
                                 'border-radius: 5px; '
-                                'padding: 8px 12px; '
+                                'padding: 6px 10px; '
                                 'font-family: monospace; '
                                 'margin-left: 5px; '
                                 'border: 1px solid #3498db; '
@@ -794,10 +808,11 @@ class ObjectModelView(DefaultModelView):
                         },
                     },
                     'form_rules': [
-                        rules.HTML('<div class="form-row align-items-center" style="margin-bottom: 10px;">'),
+                        rules.HTML('<div class="form-row align-items-center" style="margin-bottom: 5px; margin-top: 0;">'),
                         rules.HTML('<div class="col-auto">'),
                         rules.Field('field_name'),
                         rules.HTML('</div>'),
+                        rules.HTML('<div class="col-auto"><span style="font-size: 16px; margin: 0 3px;">:</span></div>'),
                         rules.HTML('<div class="col-auto">'),
                         rules.Field('field_value'),
                         rules.HTML('</div>'),
