@@ -6,6 +6,7 @@ Add Hosts into CMK Version 2 Installations
 #pylint: disable=too-many-branches, too-many-instance-attributes, too-many-public-methods
 #pylint: disable=too-many-lines
 import ast
+from datetime import datetime
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import app, logger, log
@@ -474,44 +475,25 @@ class SyncCMK2(CMK2):
         is_cluster = False
         if cluster_nodes:
             is_cluster = True
-        if hostname not in self.checkmk_hosts:
-            # If here so that it not goes into update mode
-            if not dont_create_host:
-                # Create since missing
-                if is_cluster:
-                    print(f"{CC.OKBLUE} *{CC.ENDC} Will be created as Cluster")
-                    # We need to create them Later, since we not know that we have all nodes
+        if hostname in self.checkmk_hosts:
+            self.set_status_attribute(hostname, True)
+            if not dont_update_host:
+                cmk_host = self.checkmk_hosts[hostname]
+
+                if is_cluster and not cmk_host['extensions']['is_cluster']:
+                    url = f"/objects/host_config/{hostname}"
+                    try:
+                        self.request(url, method="DELETE")
+                    except CmkException as exp:
+                        self.log_details.append(("error", f"Host deletion failed: {exp}"))
+                        print(f"{CC.WARNING} *{CC.ENDC} Host deletion failed failed {exp}")
+                        return
+
+                    print(f"{CC.WARNING} *{CC.ENDC} Deleted host to create it as Cluster")
+                    # Make sure it's added again
                     self.clusters.append((hostname, folder, labels, \
                                         cluster_nodes, additional_attributes))
-                else:
-                    print(f"{CC.OKBLUE} *{CC.ENDC} Need to created in Checkmk")
-                    self.create_host(hostname, folder, labels, additional_attributes)
-                # Add Host information to the dict, for later cleanup.
-                # So no need to query all the hosta again
-                self.checkmk_hosts[hostname] = \
-                            {'extensions': {
-                                'attributes':{
-                                     'labels': {
-                                          'cmdb_syncer': self.account_id
-                                }}
-                             }}
-        elif not dont_update_host:
-            cmk_host = self.checkmk_hosts[hostname]
-
-            if is_cluster and not cmk_host['extensions']['is_cluster']:
-                url = f"/objects/host_config/{hostname}"
-                try:
-                    self.request(url, method="DELETE")
-                except CmkException as exp:
-                    self.log_details.append(("error", f"Host deletion failed: {exp}"))
-                    print(f"{CC.WARNING} *{CC.ENDC} Host deletion failed failed {exp}")
                     return
-
-                print(f"{CC.WARNING} *{CC.ENDC} Deleted host to create it as Cluster")
-                # Make sure it's added again
-                self.clusters.append((hostname, folder, labels, \
-                                    cluster_nodes, additional_attributes))
-                return
 
 
             # Update if needed
@@ -521,8 +503,35 @@ class SyncCMK2(CMK2):
             if is_cluster:
                 cmk_cluster = cmk_host['extensions']['cluster_nodes']
                 self.cluster_updates.append((hostname, cmk_cluster, cluster_nodes))
+        
+
+            return
+        elif not dont_create_host:
+            # Create since missing
+            if is_cluster:
+                print(f"{CC.OKBLUE} *{CC.ENDC} Will be created as Cluster")
+                # We need to create them Later, since we not know that we have all nodes
+                self.clusters.append((hostname, folder, labels, \
+                                    cluster_nodes, additional_attributes))
+            else:
+                print(f"{CC.OKBLUE} *{CC.ENDC} Need to created in Checkmk")
+                self.create_host(hostname, folder, labels, additional_attributes)
+            self.set_status_attribute(hostname, True)
+            # Add Host information to the dict, for later cleanup.
+            # So no need to query all the hosta again
+            self.checkmk_hosts[hostname] = \
+                        {'extensions': {
+                            'attributes':{
+                                    'labels': {
+                                        'cmdb_syncer': self.account_id
+                            }}
+                            }}
+            return
         else:
             self.console(" * Host is not to be updated")
+
+        self.set_status_attribute(hostname, False)
+        print(f"DO NOT {hostname}")
 
 
 
@@ -589,6 +598,28 @@ class SyncCMK2(CMK2):
                         progress.console.print(f"- Disabled-> {host} disabled")
         return dict(host_actions)
 
+    def set_status_attribute(self, hostname, is_existing=True):
+        """
+        Set inventory attribute for hosts that already exist in CheckMK.
+        
+        Args:
+            hostname (str): Name of the host to set inventory for
+            is_existing (bool): Status of object in Checkmk
+        """
+        if not app.config['CMK_WRITE_STATUS_BACK']:
+            return
+        try:
+            db_host = Host.objects(hostname=hostname).first()
+            if db_host:
+                # Set inventory attribute indicating this host exists in CheckMK
+                inventory_data = {
+                    'is_existing': is_existing,
+                }
+                db_host.update_inventory('checkmk_status', inventory_data)
+                db_host.save()
+        except Exception as exp:
+            self.log_details.append(('error', f"Failed to set inventory for {hostname}: {exp}"))
+            print(f"{CC.WARNING} *{CC.ENDC} Failed to set inventory for {hostname}: {exp}")
 
 
 #   .-- Run Sync

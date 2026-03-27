@@ -5,8 +5,8 @@ Ansible Api
 # pylint: disable=no-member
 from flask_restx import Namespace, Resource
 from application.api import require_token
-from application.plugins.ansible.syncer import SyncAnsible
-from application.plugins.ansible import load_rules
+from ..inventory import AnsibleInventory
+from .. import load_rules
 
 API = Namespace('ansible')
 
@@ -19,7 +19,7 @@ class AnsibleApi(Resource):
     def get(self):
         """ Return complete Ansible Inventory """
         rules = load_rules()
-        syncer = SyncAnsible()
+        syncer = AnsibleInventory()
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
         syncer.actions = rules['actions']
@@ -33,7 +33,7 @@ class AnsibleDetailApi(Resource):
     def get(self, hostname):
         """ Return Hosts Ansible Inventory """
         rules = load_rules()
-        syncer = SyncAnsible()
+        syncer = AnsibleInventory()
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
         syncer.actions = rules['actions']

@@ -1,11 +1,29 @@
 ---
+- name: "Create Host in CheckMK"
+  ansible.builtin.uri:
+    url: "https://{{ cmk_main_server }}/{{ cmk_main_site }}/check_mk/api/1.0/domain-types/host_config/collections/all"
+    method: POST
+    validate_certs: {{ validate_certs }}
+    headers:
+      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
+      Accept: "application/json"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      host_name: "{{ inventory_hostname }}"
+      folder: "{{ cmk_create_folder | default('/') }}"
+    status_code: [200, 201, 409]
+  when: cmk_create_host | bool
+  delegate_to: localhost
+  ignore_errors: yes
+
 - include_tasks: "{{ ansible_os_family }}-tasks.yml"
 
 - name: "Discover Services"
   ansible.builtin.uri:
     url: "https://{{ cmk_main_server }}/{{ cmk_main_site }}/check_mk/api/1.0/domain-types/service_discovery_run/actions/start/invoke"
     method: POST
-    validate_certs: no
+    validate_certs: {{ validate_certs }}
     headers:
       Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
       Accept: "application/json"

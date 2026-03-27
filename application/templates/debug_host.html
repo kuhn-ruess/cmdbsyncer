@@ -29,15 +29,15 @@
 
 <h2>Rules</h2>
   {% set condition_types = {
-    'equal': "is equal",
+    'equal': "exact match",
     'in': "contains",
     'not_in': "not contains",
-    'in_list': "found in given list",
-    'string_in_list': "found in list",
-    'ewith': "endswith",
-    'swith': "startswith",
+    'in_list': "value in your list",
+    'string_in_list': "string in Python list",
+    'ewith': "ends with",
+    'swith': "starts with",
     'regex': "regex match",
-    'bool': "Boolean",
+    'bool': "boolean match",
     'ignore': "always match"
   } %}
   {% set negate = {

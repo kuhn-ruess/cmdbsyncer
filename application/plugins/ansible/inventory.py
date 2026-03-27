@@ -7,7 +7,7 @@ from mongoengine.errors import DoesNotExist
 from application.models.host import Host
 from application.modules.plugin import Plugin
 
-class SyncAnsible(Plugin):
+class AnsibleInventory(Plugin):
     """
     Class for the Ansible Actions
     """
@@ -23,6 +23,7 @@ class SyncAnsible(Plugin):
         """
         checks = [
             'cmk_register_tls',
+            'cmk_create_host',
             'cmk_register_bakery',
             'cmk_register_central_bakery',
             'cmk_install_agent',
@@ -99,10 +100,10 @@ class SyncAnsible(Plugin):
                         progress.advance(task1)
                     continue
 
-                if self.bypass_host(attributes['all'], extra_attributes):
-                    if show_status:
-                        progress.advance(task1)
-                    continue
+                #if self.bypass_host(attributes['all'], extra_attributes):
+                #    if show_status:
+                #        progress.advance(task1)
+                #    continue
 
                 inventory = attributes['filtered']
                 inventory.update(extra_attributes)
