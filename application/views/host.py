@@ -175,24 +175,20 @@ def _render_labels(_view, _context, model, _name):
 
 def _render_cmdb_template(_view, _context, model, _name):
     """
-    Render CMD Template
+    Render all assigned CMDB templates
     """
-    if not model.cmdb_template:
+    if not model.cmdb_templates:
         return Markup("")
-    html = '<table class="table table-bordered">'
-    for key, value in model.cmdb_template.labels.items():
-        html += f'''
-            <tr>
-                <th scope="row" style="width: 30%;">
-                    {key}
-                </th>
-                <td>
-                    <span class="badge badge-info">{value}</span>
-                </td>
-            </tr>
-        '''
-    html += '</table>'
-    return Markup(html)
+    parts = []
+    for tmpl in model.cmdb_templates:
+        header = f'<caption style="caption-side:top;font-weight:bold">{tmpl.hostname}</caption>'
+        rows = ''.join(
+            f'<tr><th scope="row" style="width:30%;">{k}</th>'
+            f'<td><span class="badge badge-info">{v}</span></td></tr>'
+            for k, v in tmpl.labels.items()
+        )
+        parts.append(f'<table class="table table-bordered">{header}{rows}</table>')
+    return Markup(''.join(parts))
 
 class StaticLabelWidget:
     """
@@ -225,24 +221,23 @@ class StaticTemplateLabelWidget:
     """
     def __call__(self, field, **kwargs):
         model = field.object_data
-        if not model or not hasattr(model, 'cmdb_template') or not model.cmdb_template:
-            return Markup('<div class="alert alert-info">No Template selected</div>')
+        if not model or not hasattr(model, 'cmdb_templates') or not model.cmdb_templates:
+            return Markup('<div class="alert alert-info">No Templates selected</div>')
 
-        template = model.cmdb_template
-
-        if not hasattr(template, 'labels') or not template.labels:
-            return Markup('<div class="alert alert-warning">No Labels in Template</div>')
-
-        html = '<div class="card"><div class="card-body">'
-        entries = []
-        for key, value in template.labels.items():
-            html_entry = ""
-            html_entry += f'<span class="badge badge-primary">{key}</span>:'
-            html_entry += f'<span class="badge badge-info">{value}</span>'
-            entries.append(html_entry)
-        html += ", ".join(entries)
-        html += '</div></div>'
-        return Markup(html)
+        html = ''
+        for template in model.cmdb_templates:
+            if not hasattr(template, 'labels') or not template.labels:
+                continue
+            entries = [
+                f'<span class="badge badge-primary">{key}</span>:<span class="badge badge-info">{value}</span>'
+                for key, value in template.labels.items()
+            ]
+            html += (
+                f'<div class="card" style="margin-bottom:4px">'
+                f'<div class="card-header p-1"><strong>{template.hostname}</strong></div>'
+                f'<div class="card-body p-2">{" ".join(entries)}</div></div>'
+            )
+        return Markup(html) if html else Markup('<div class="alert alert-warning">No Labels in Templates</div>')
 
 class StaticTemplateLabelField(Field):
     """
@@ -695,7 +690,7 @@ class ObjectModelView(DefaultModelView):
 
     column_exclude_list = [
         'source_account_id',
-        'cmdb_template',
+        'cmdb_templates',
         'sync_id',
         'labels',
         'inventory',
@@ -894,7 +889,7 @@ class HostModelView(DefaultModelView):
     page_size = app.config['HOST_PAGESIZE']
 
     column_details_list = [
-        'hostname', 'folder', 'no_autodelete', 'available','labels', 'inventory', 'cmdb_template', 'log',
+        'hostname', 'folder', 'no_autodelete', 'available','labels', 'inventory', 'cmdb_templates', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
@@ -949,7 +944,7 @@ class HostModelView(DefaultModelView):
         'labels': _render_labels,
         'inventory': format_inventory,
         'cache': format_cache,
-        'cmdb_template': _render_cmdb_template,
+        'cmdb_templates': _render_cmdb_template,
         'last_import_seen': _render_datetime,
         'last_import_sync': _render_datetime,
         'create_time': _render_datetime,
@@ -964,7 +959,7 @@ class HostModelView(DefaultModelView):
         'source_account_name': "Account",
         'folder': "CMK Pool Folder",
         #'cmdb_fields': "CMDB Attributes",
-        'cmdb_template': "From Template",
+        'cmdb_templates': "From Templates",
         'labels_from_template': "Labels from Template",
     }
 
@@ -994,7 +989,7 @@ class HostModelView(DefaultModelView):
     form_rules = [
         rules.FieldSet((
             rules.Field('hostname'),
-            rules.NestedRule(('object_type', 'available', 'cmdb_template', 'labels_from_template')),
+            rules.NestedRule(('object_type', 'available', 'cmdb_templates', 'labels_from_template')),
             ), "CMDB Options"),
         rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
         #rules.FieldSet(('inventory', 'log'), "Data"),
@@ -1090,7 +1085,7 @@ class HostModelView(DefaultModelView):
             self.can_edit = False
             self.can_create = False
             self.column_exclude_list.append('cmdb_fields')
-            self.column_exclude_list.append('cmdb_template')
+            self.column_exclude_list.append('cmdb_templates')
 
         if app.config['LABEL_PREVIEW_DISABLED']:
             self.column_exclude_list.append('labels')
@@ -1124,9 +1119,9 @@ class HostModelView(DefaultModelView):
         form_class = super().scaffold_form()
         form_class.labels_from_template = StaticTemplateLabelField()
         
-        # Filter cmdb_template to show only template objects
-        if hasattr(form_class, 'cmdb_template'):
-            form_class.cmdb_template.kwargs['queryset'] = Host.objects(object_type='template')
+        # Filter cmdb_templates to show only template objects
+        if hasattr(form_class, 'cmdb_templates'):
+            form_class.cmdb_templates.kwargs['queryset'] = Host.objects(object_type='template')
         
         return form_class
 
@@ -1206,7 +1201,7 @@ class HostModelView(DefaultModelView):
             self.can_edit = False
             self.can_create = False
             self.column_exclude_list.append('cmdb_fields')
-            self.column_exclude_list.append('cmdb_template')
+            self.column_exclude_list.append('cmdb_templates')
 
         # Bugfix, ohne we loose the availibilty to edit after save
         self.can_edit = True
@@ -1281,8 +1276,11 @@ class HostModelView(DefaultModelView):
 
                 host = Host.objects(id=host_id).first()
                 if host:
-                    host.cmdb_template = template
-                    
+                    # Append template if not already in the list
+                    existing_ids = [t.id for t in host.cmdb_templates]
+                    if template.id not in existing_ids:
+                        host.cmdb_templates.append(template)
+
                     # Apply the same logic as on_model_change
                     host.last_import_sync = datetime.now()
                     host.last_import_seen = datetime.now()

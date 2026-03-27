@@ -5,7 +5,7 @@ Host Model
 # pylint: disable=logging-fstring-interpolation
 import re
 import datetime
-from mongoengine import Q, DENY
+from mongoengine import Q, DENY, PULL
 from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
@@ -40,8 +40,11 @@ class Host(db.Document):
     inventory = db.DictField()
 
     cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
-    cmdb_template = db.ReferenceField(document_type='Host', reverse_delete_rule=DENY)
+    cmdb_templates = db.ListField(field=db.ReferenceField(document_type='Host', reverse_delete_rule=PULL))
     cmdb_match = db.StringField(max_length=255)
+
+    # Class-level cache for template matching (populated via prefetch_templates())
+    _template_match_cache = None
 
 
     no_autodelete = db.BooleanField(default=False)
@@ -177,42 +180,64 @@ class Host(db.Document):
         return old_name
 
 
+    @classmethod
+    def prefetch_templates(cls):
+        """
+        Pre-load all matchable templates into a class-level cache.
+        Call this once before processing many hosts to avoid repeated DB queries.
+        Only fetches the fields needed for matching (id, cmdb_match).
+        """
+        cls._template_match_cache = list(
+            cls.objects(object_type='template', cmdb_match__ne=None).only('id', 'cmdb_match')
+        )
+
+    @classmethod
+    def clear_template_cache(cls):
+        """Invalidate the template match cache (e.g. after template changes)."""
+        cls._template_match_cache = None
+
     def get_cmdb_template(self):
         """
-        Find and assign a CMDB template based on simple label matching.
+        Find and assign ALL matching CMDB templates based on label matching.
 
-        This method searches for template objects (object_type='template') and checks if their
-        cmdb_match pattern matches against the labels of this host. If a match is found,
-        the template is assigned to this host and saved.
+        Searches template objects (object_type='template') whose cmdb_match pattern
+        matches against the labels of this host. ALL matching templates are collected
+        and assigned to self.cmdb_templates.
+
+        For performance with many hosts, call Host.prefetch_templates() once before
+        processing a batch — the template list is then reused without further DB queries.
 
         Pattern syntax in cmdb_match:
-        - Simple format: "label:value" for exact match
+        - Format: "label:value" for exact match (whitespace around colon is stripped)
 
         Returns:
-            bool: True if a template was successfully matched and assigned, False otherwise
+            bool: True if at least one template was matched and assigned, False otherwise
         """
-        
-        # No labels to match against
         if not self.labels:
             return False
 
-        # Find all template objects
-        try:
-            templates = Host.objects(object_type='template', cmdb_match__ne=None)
-        except Exception:
-            return False
+        if Host._template_match_cache is not None:
+            template_list = Host._template_match_cache
+        else:
+            try:
+                template_list = list(
+                    Host.objects(object_type='template', cmdb_match__ne=None).only('id', 'cmdb_match')
+                )
+            except Exception:
+                return False
 
-        for template in templates:
+        matched = []
+        for template in template_list:
             if not template.cmdb_match or ':' not in template.cmdb_match:
                 continue
-
             key, value = template.cmdb_match.split(':', 1)
             key, value = key.strip(), value.strip()
-
             if self.labels.get(key) == value:
-                self.cmdb_template = template
-                return True
+                matched.append(template)
 
+        if matched:
+            self.cmdb_templates = matched
+            return True
         return False
 
     def lock_to_folder(self, folder_name):
