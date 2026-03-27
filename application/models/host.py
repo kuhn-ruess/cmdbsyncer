@@ -41,7 +41,7 @@ class Host(db.Document):
 
     cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
     cmdb_template = db.ReferenceField(document_type='Host', reverse_delete_rule=DENY)
-    cmdb_match = db.StringField()
+    cmdb_match = db.StringField(max_length=255)
 
 
     no_autodelete = db.BooleanField(default=False)
@@ -178,8 +178,42 @@ class Host(db.Document):
 
 
     def get_cmdb_template(self):
-        match_attribute = "x"
-        pass
+        """
+        Find and assign a CMDB template based on simple label matching.
+
+        This method searches for template objects (object_type='template') and checks if their
+        cmdb_match pattern matches against the labels of this host. If a match is found,
+        the template is assigned to this host and saved.
+
+        Pattern syntax in cmdb_match:
+        - Simple format: "label:value" for exact match
+
+        Returns:
+            bool: True if a template was successfully matched and assigned, False otherwise
+        """
+        
+        # No labels to match against
+        if not self.labels:
+            return False
+
+        # Find all template objects
+        try:
+            templates = Host.objects(object_type='template', cmdb_match__ne=None)
+        except Exception:
+            return False
+
+        for template in templates:
+            if not template.cmdb_match or ':' not in template.cmdb_match:
+                continue
+
+            key, value = template.cmdb_match.split(':', 1)
+            key, value = key.strip(), value.strip()
+
+            if self.labels.get(key) == value:
+                self.cmdb_template = template
+                return True
+
+        return False
 
     def lock_to_folder(self, folder_name):
         """
@@ -447,7 +481,7 @@ class Host(db.Document):
 
         if account_dict.get('cmdb_object'):
             self.no_autodelete = True
-            self.cmdb_template = self.get_cmdb_template()
+            self.get_cmdb_template()
 
         self.is_object = is_object
         self.last_import_id = import_id

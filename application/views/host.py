@@ -692,7 +692,7 @@ class ObjectModelView(DefaultModelView):
 
     form_rules = [
         rules.Field('hostname'),
-        rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
+        rules.FieldSet(('cmdb_fields', 'cmdb_match'), "CMDB Fields"),
         #rules.FieldSet(('inventory', 'log'), "Data"),
     ]
 
