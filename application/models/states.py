@@ -7,3 +7,8 @@ class State(db.Document):
     Config Values
     """
     open_changes = db.IntField()
+
+
+    meta = {
+        'strict': False,
+    }

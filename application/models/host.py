@@ -55,6 +55,7 @@ class Host(db.Document):
 
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
+    create_time = db.DateTimeField()
 
     # If you assign a ID to you import,
     # that can later be used to simply cleanup
@@ -161,6 +162,7 @@ class Host(db.Document):
         if create:
             new_host = Host()
             new_host.hostname = hostname
+            new_host.create_time = datetime.datetime.now()
             return new_host
         return False
 
@@ -329,7 +331,6 @@ class Host(db.Document):
                 update_dict = {
                     f"{key}__{self._fix_key(x)}": y
                     for x, y in new_data.items()
-                    if y
                 }
         if app.config['LABELS_ITERATE_FIRST_LEVEL']:
             for upd_key, value in list(update_dict.items()):

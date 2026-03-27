@@ -8,16 +8,16 @@ from application import db
 #   .-- Condition Types
 # IMPORTANT: Always also add in Views if new condition types
 condition_types = [
-    ('equal', "String Equal (x == y)"),
-    ('in', "String contains String (in)"),
-    ('not_in', "String not contains String (not in)"),
-    ('in_list', "Hosts Attribute equals a String in given comma separated list"),
-    ('string_in_list', "String included in Attributes (Python) List"),
-    ('ewith', "String ends with (x.endswith(y)"),
-    ('swith', "String starts with (x.startswith(y)"),
-    ('regex', "Regex Match"),
-    ('bool', "Match Bool, True or False bool(value)"),
-    ('ignore', "Match All (*) (Negate for Not exist)"),
+    ('equal', "Exact Match - Attribute exactly equals the given value"),
+    ('in', "Contains - Is the given string contained in the attribute? (works with strings, JSON/Python lists)"),
+    ('not_in', "Not Contains - Is the given string NOT contained in the attribute? (works with strings, JSON/Python lists)"),
+    ('in_list', "Value in List - Is the attribute value found in your comma-separated list? (e.g., 'server1,server2,server3')"),
+    ('string_in_list', "String in Python List - Is your string found in the attribute's Python list? (auto-converts comma-separated strings to lists)"),
+    ('ewith', "Ends With - Does the attribute end with your string?"),
+    ('swith', "Starts With - Does the attribute start with your string?"),
+    ('regex', "Regular Expression - Does the attribute match your regex pattern?"),
+    ('bool', "Boolean Match - Does the attribute match your True/False value?"),
+    ('ignore', "Always Match - Matches everything (use negate to check 'does not exist')"),
 ]
 
 class FullCondition(db.EmbeddedDocument):
@@ -47,41 +47,64 @@ class FullCondition(db.EmbeddedDocument):
     Negate will match everything not matching your expression.
 
 
-    Condition Types
-    ===============
-    All are not case-sensitive
+    Condition Types (All are case-insensitive except regex)
+    =============================================================
 
-    String Equal
-    ------------
-    String need exactly match the other
-
-    String Contains
-    ---------------
-    String need be part in other string
-
-    String in list
-    --------------
-    String is contained in a comma separated list you provided
-
-    String ends with
-    ---------------
-    String ends with the string you given
-
-    String start swith
-    -----------------
-    String start with the string you given
-
-    Regex Match
+    Exact Match
     -----------
-    String need to match the given Regular Expression
+    Attribute must exactly equal your value.
+    Example: hostname = "webserver01" matches "webserver01"
 
-    Match Bool
-    ----------
-    Boolean match against True or False. Please enter True oder False in the Field.
+    Contains
+    --------
+    Your string is contained anywhere in the attribute.
+    Works with strings and JSON/Python lists.
+    Example: "web" matches hostname "webserver01" or ["webserver01", "dbserver"]
 
-    Match All (Negate for: Does not Exist)
+    Not Contains
+    ------------
+    Your string is NOT found in the attribute.
+    Works with strings and JSON/Python lists.
+    Example: "db" does not match hostname "webserver01" or ["web01", "web02"]
+
+    Value in List
+    -------------
+    Check if the attribute value exists in your comma-separated list.
+    Example: Host has hostname="web01", your list="web01,web02,db01" → Matches
+    Use case: Check if server is in a specific list of allowed servers
+
+    String in Python List  
+    --------------------
+    Check if your string exists in the attribute's Python list.
+    Works with both actual Python lists and comma-separated string attributes.
+    Example: Attribute=['app1','app2'] or "app1,app2", your string="app1" → Matches
+    Use case: Check if a service is installed on the server
+
+    Ends With
     ---------
-    Match anyway
+    Attribute ends with your string.
+    Example: hostname ending with ".prod" for production servers
+
+    Starts With
+    -----------
+    Attribute starts with your string.
+    Example: hostname starting with "web-" for web servers
+
+    Regular Expression
+    -----------------
+    Attribute matches your regex pattern (case-sensitive).
+    Example: "^web-\d+\.prod$" matches "web-01.prod"
+
+    Boolean Match
+    -------------
+    Attribute matches your True/False value.
+    Accepts: true, false, True, False, none, None, empty values
+    Example: Check if maintenance_mode is True
+
+    Always Match (Ignore)
+    --------------------
+    Always matches (useful for catch-all rules).
+    When negated: Only matches if the attribute does NOT exist.
     """
     match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Attribute")])
 

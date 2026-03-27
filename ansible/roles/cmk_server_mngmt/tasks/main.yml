@@ -75,8 +75,8 @@
   register: checkmk_downtime_start
   delegate_to: localhost
 
-- name: "Calculation downtime end +{{ checkmk_downtime_range }} hours"
-  command: "date +'%Y-%m-%dT%H:%M:%S%:z' --date '+{{ checkmk_downtime_range }} hours'"
+- name: "Calculation downtime end +{{ cmk_downtime_range }} hours"
+  command: "date +'%Y-%m-%dT%H:%M:%S%:z' --date '+{{ cmk_downtime_range }} hours'"
   register: checkmk_downtime_end
   delegate_to: localhost
 

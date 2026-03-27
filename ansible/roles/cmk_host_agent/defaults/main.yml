@@ -2,6 +2,8 @@
 cmk_install_agent: False
 cmk_register_tls: False
 cmk_register_bakery: False
+cmk_create_host: False
+cmk_create_folder: /inbox
 cmk_register_central_bakery: False
 cmk_delete_manual_files: False
 cmk_discover: False
@@ -14,3 +16,4 @@ cmk_main_server_ip: False
 cmk_agent_port: 6556
 cmk_agent_configure_firewall_zone: public
 configure_firewall: False
+validate_certs: True

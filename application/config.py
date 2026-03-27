@@ -144,6 +144,8 @@ class BaseConfig():
 
     ### Checkmk Stuff
 
+    CMK_WRITE_STATUS_BACK = False # Syncer updates if Host existing in checkmk
+
     CMK_BULK_CREATE_HOSTS = True
     CMK_BULK_CREATE_OPERATIONS = 300
 
