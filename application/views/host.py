@@ -989,6 +989,7 @@ class HostModelView(DefaultModelView):
         'is_object',
         'last_import_id',
         'last_import_sync',
+        'cmdb_match',
     ]
 
 
@@ -1041,9 +1042,7 @@ class HostModelView(DefaultModelView):
     column_labels = {
         'source_account_name': "Account",
         'folder': "CMK Pool Folder",
-        #'cmdb_fields': "CMDB Attributes",
-        'cmdb_templates': "From Templates",
-        'labels_from_template': "Labels from Template",
+        'cmdb_templates': "CMDB",
     }
 
     column_sortable_list = ('hostname',

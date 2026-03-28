@@ -110,7 +110,7 @@ class BaseConfig():
     DEBUG = True
     ADVANCED_RULE_DEBUG = False
 
-    CMDB_MODE = False
+    CMDB_MODE = True
 
     MONGODB_SETTINGS = {
         'db': 'cmdb-api',
@@ -122,13 +122,10 @@ class BaseConfig():
 
     CMDB_MODELS = {
         'host': {
-            'ipaddress' : {"type": "string"},
-            'department' : {"type": "string"},
-            'type' : {"type": "string"},
+            #'ipaddress' : {"type": "string"},
         },
         'all': {
-            'sms_notification': {"type": "boolean"},
-            'email_notification': {"type": "boolean"},
+            #'notification': {"type": "boolean"},
 
         }
 
