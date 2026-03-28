@@ -201,9 +201,18 @@ admin = Admin(app, name=f"cmdbsyncer {VERSION}",
                    index_view=IndexView(),
                    category_icon_classes={
                        'Accounts': 'fa fa-users',
+                       'Ansible': 'fa fa-cogs',
+                       'Checkmk': 'fa fa-heartbeat',
+                       'Checkmk Server': 'fa fa-building',
                        'Cronjobs': 'fa fa-clock-o',
+                       'i-doit': 'fa fa-sitemap',
+                       'Manage Business Intelligence': 'fa fa-sitemap',
                        'Modules': 'fa fa-puzzle-piece',
-                       'Profile': 'fa fa-user-cog'
+                       'Netbox': 'fa fa-database',
+                       'Plugin: Dataflow': 'fa fa-arrows',
+                       'Profile': 'fa fa-user-cog',
+                       'Syncer Rules': 'fa fa-bolt',
+                       'VMware': 'fa fa-server'
                        })
 
 

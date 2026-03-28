@@ -9,6 +9,10 @@ def register_admin_views(admin):
     admin.add_sub_category(name="VMware", parent_name="Modules")
 
     admin.add_view(RewriteAttributeView(VMwareRewriteAttributes, name="Rewrite Attributes",
-                                                                category="VMware"))
+                                                                category="VMware",
+                                                                menu_icon_type='fa',
+                                                                menu_icon_value='fa-exchange'))
     admin.add_view(VMwareCustomAttributeView(VMwareCustomAttributes, name="Custom Attributes",
-                                                                category="VMware"))
+                                                                category="VMware",
+                                                                menu_icon_type='fa',
+                                                                menu_icon_value='fa-tags'))
