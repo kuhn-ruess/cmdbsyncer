@@ -209,9 +209,11 @@ admin = Admin(app, name=f"cmdbsyncer {VERSION}",
 
 #   .-- Host
 from application.models.host import Host
-from application.views.host import HostModelView, ObjectModelView
+from application.views.host import HostModelView, ObjectModelView, TemplateModelView
 admin.add_view(HostModelView(Host, name="Hosts", menu_icon_type='fa', menu_icon_value='fa-server'))
-admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects", menu_icon_type='fa', menu_icon_value='fa-cubes'))
+admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
+admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",category="Objects", menu_icon_type='fa', menu_icon_value='fa-cubes'))
+admin.add_view(TemplateModelView(Host, name="Templates", endpoint="Objects Templates",category="Objects", menu_icon_type='fa', menu_icon_value='fa-files-o'))
 #.
 #   .-- Global
 from application.modules.custom_attributes.models import CustomAttributeRule

@@ -154,7 +154,7 @@ def _render_labels(_view, _context, model, _name):
     if not model.labels:
         return Markup("")
     #If the Cache is set, we also show the attributes which we Send to Checkmk
-    checkmk_labels = model.cache.get('checkmk_hostattribute', {}).get('attributes', {}).get('filtered', {})
+    checkmk_labels = model.cache.get('checkmk_hostattribute', {}).get('attributes', {}).get('all', {})
     html = ""
     for key, value in model.labels.items():
         if not value:
@@ -189,6 +189,14 @@ def _render_cmdb_template(_view, _context, model, _name):
         )
         parts.append(f'<table class="table table-bordered">{header}{rows}</table>')
     return Markup(''.join(parts))
+
+def _render_cmdb_match_label(_view, _context, model, _name):
+    """
+    Render CMDB Match as badge label
+    """
+    if not model.cmdb_match:
+        return Markup('<span class="text-muted">N/A</span>')
+    return Markup(f'<span class="badge badge-primary">{model.cmdb_match}</span>')
 
 class StaticLabelWidget:
     """
@@ -692,6 +700,9 @@ class ObjectModelView(DefaultModelView):
         'source_account_id',
         'cmdb_templates',
         'sync_id',
+        'cmdb_match',
+        'last_import_id',
+        'create_time',
         'labels',
         'inventory',
         'log',
@@ -720,6 +731,7 @@ class ObjectModelView(DefaultModelView):
         'inventory': format_inventory,
         'cache': format_cache,
         'cmdb_fields': _render_cmdb_fields,
+        'cmdb_match': _render_cmdb_match_label,
         'object_type': _render_object_type_icon,
     }
 
@@ -758,12 +770,16 @@ class ObjectModelView(DefaultModelView):
         </style>
         '''),
         rules.Field('hostname'),
-        rules.FieldSet(('cmdb_fields', 'cmdb_match'), "CMDB Fields"),
+        rules.Field('object_type'),
+        rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
     ]
 
     form_args = {
         "hostname": {
             "label": 'Object Name'
+        },
+        "object_type": {
+            "label": 'Object Type'
         },
         "cmdb_match": {
             "label": 'CMDB Match Rule'
@@ -852,7 +868,7 @@ class ObjectModelView(DefaultModelView):
         """
         Limit Objects
         """
-        return Host.objects(is_object=True)
+        return Host.objects(is_object=True, object_type__ne='template')
 
     def on_model_change(self, form, model, is_created):
         """
@@ -864,9 +880,10 @@ class ObjectModelView(DefaultModelView):
         model.is_object = True
         model.source_account_id = ""
         model.source_account_name = "cmdb"
+        model.no_autodelete = True
         # Set Extra Fields
         new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
-        model.object_type = 'template'
+        #model.object_type = 'template'
 
         model.update_host(new_labels)
         model.set_inventory_attributes('cmdb')
@@ -874,6 +891,72 @@ class ObjectModelView(DefaultModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('objects')
+
+class TemplateModelView(ObjectModelView):
+
+    form_rules = [
+        rules.HTML('''
+        <style>
+        [id^="cmdb_fields-"] legend { display: none !important; }
+        [id^="cmdb_fields-"] .card {
+            margin-bottom: 8px !important;
+            padding: 10px !important;
+            background-color: #f8f9fa !important;
+            border-radius: 8px !important;
+        }
+        [id^="cmdb_fields-"] label { display: none !important; }
+        [id^="cmdb_fields-"] .form-group { margin-bottom: 0 !important; }
+        [id^="cmdb_fields-"] .inline-field { margin-bottom: 8px !important; }
+        </style>
+        '''),
+        rules.Field('hostname'),
+        rules.FieldSet(('cmdb_fields', 'cmdb_match'), "CMDB Fields"),
+    ]
+
+    column_exclude_list = [
+        'source_account_id',
+        'cmdb_templates',
+        'sync_id',
+        'object_type',
+        'last_import_seen',
+        'create_time',
+        'last_import_id',
+        'last_import_sync',
+        'available',
+        'no_autodelete',
+        'source_account_name',
+        'labels',
+        'inventory',
+        'log',
+        'folder',
+        'raw',
+        'cache',
+        'is_object',
+    ]
+
+    def get_query(self):
+        """
+        Limit Objects
+        """
+        return Host.objects(is_object=True, object_type="template")
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Model Changes when saved in GUI -> CMDB Mode
+        """
+        model.last_import_sync = datetime.now()
+        model.last_import_seen = datetime.now()
+        model.cache = {}
+        model.is_object = True
+        model.source_account_id = ""
+        model.source_account_name = "cmdb"
+        model.no_autodelete = True
+        # Set Extra Fields
+        new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
+        model.object_type = 'template'
+
+        model.update_host(new_labels)
+        model.set_inventory_attributes('cmdb')
 
 
 class HostModelView(DefaultModelView):
