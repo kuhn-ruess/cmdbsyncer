@@ -463,6 +463,32 @@ class Host(db.Document):
         self.inventory['syncer_last_seen'] = self.last_import_seen
         self.inventory['syncer_last_sync'] = self.last_import_sync
 
+    def ensure_cmdb_default_fields(self):
+        """Ensure configured CMDB default fields exist on this host/object."""
+        cmdb_models = app.config.get('CMDB_MODELS', {})
+        object_fields = cmdb_models.get(self.object_type, {})
+        global_fields = cmdb_models.get('all', {})
+
+        configured_keys = list(object_fields.keys())
+        configured_keys.extend([key for key in global_fields.keys() if key not in object_fields])
+
+        if not configured_keys:
+            return
+
+        if self.cmdb_fields is None:
+            self.cmdb_fields = []
+
+        existing_keys = {
+            entry.field_name for entry in self.cmdb_fields
+            if getattr(entry, 'field_name', None)
+        }
+
+        for key in configured_keys:
+            if key not in existing_keys:
+                new_field = CmdbField()
+                new_field.field_name = key
+                self.cmdb_fields.append(new_field)
+
     def set_account(self, account_id=False, account_name=False,
                     account_dict=False, import_id="N/A"):
         """
@@ -507,6 +533,7 @@ class Host(db.Document):
         if account_dict.get('cmdb_object'):
             self.no_autodelete = True
             self.get_cmdb_template()
+            self.ensure_cmdb_default_fields()
 
         self.is_object = is_object
         self.last_import_id = import_id
