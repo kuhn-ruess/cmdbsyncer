@@ -1222,6 +1222,20 @@ class HostModelView(DefaultModelView):
         if hasattr(form, 'cmdb_templates'):
             form.cmdb_templates.queryset = Host.objects(object_type='template')
 
+        if obj and hasattr(form, 'cmdb_fields'):
+            existing_field_names = {
+                str(getattr(entry, 'field_name', None).data)
+                for entry in form.cmdb_fields.entries
+                if getattr(getattr(entry, 'field_name', None), 'data', None)
+            }
+            for label_key, label_value in (obj.labels or {}).items():
+                if label_key not in existing_field_names:
+                    form.cmdb_fields.append_entry({
+                        'field_name': label_key,
+                        'field_value': str(label_value) if label_value is not None else ''
+                    })
+                    existing_field_names.add(label_key)
+
         # Sort cmdb_fields alphabetically and set correct field types
         cmdb_entries = getattr(getattr(form, 'cmdb_fields', None), 'entries', None)
         if not cmdb_entries:
@@ -1283,10 +1297,31 @@ class HostModelView(DefaultModelView):
         # Set Extra Fields
         cmdb_fields = app.config['CMDB_MODELS'].get(form.object_type.data, {})
         cmdb_fields.update(app.config['CMDB_MODELS']['all'])
-        new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
+        new_labels = {
+            entry['field_name']: entry['field_value']
+            for entry in form.cmdb_fields.data
+            if entry.get('field_name')
+        }
+
+        existing_labels = model.labels or {}
+        for label_key, label_value in existing_labels.items():
+            if label_key not in new_labels:
+                new_labels[label_key] = label_value
 
         model.update_host(new_labels)
         model.set_inventory_attributes('cmdb')
+
+        existing_cmdb_fields = {
+            field.field_name for field in (model.cmdb_fields or [])
+            if getattr(field, 'field_name', None)
+        }
+        for label_key, label_value in new_labels.items():
+            if label_key not in existing_cmdb_fields:
+                new_field = CmdbField()
+                new_field.field_name = label_key
+                new_field.field_value = str(label_value) if label_value is not None else ''
+                model.cmdb_fields.append(new_field)
+                existing_cmdb_fields.add(label_key)
 
         for key in cmdb_fields:
             if key not in new_labels:
