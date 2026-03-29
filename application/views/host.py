@@ -14,6 +14,7 @@ from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
 from wtforms import HiddenField, Field, StringField, BooleanField
+from wtforms.validators import Optional
 from markupsafe import Markup
 from mongoengine.errors import DoesNotExist
 
@@ -1068,6 +1069,12 @@ class HostModelView(DefaultModelView):
 
     }
 
+    form_args = {
+        'cmdb_templates': {
+            'validators': [Optional()]
+        }
+    }
+
     form_rules = [
         rules.FieldSet((
             rules.Field('hostname'),
@@ -1212,6 +1219,9 @@ class HostModelView(DefaultModelView):
         if obj and hasattr(form, 'labels_from_template'):
             form.labels_from_template.object_data = obj
 
+        if hasattr(form, 'cmdb_templates'):
+            form.cmdb_templates.queryset = Host.objects(object_type='template')
+
         # Sort cmdb_fields alphabetically and set correct field types
         cmdb_entries = getattr(getattr(form, 'cmdb_fields', None), 'entries', None)
         if not cmdb_entries:
@@ -1240,6 +1250,8 @@ class HostModelView(DefaultModelView):
         form = super().create_form(obj)
         if hasattr(form, 'labels_from_template'):
             form.labels_from_template.object_data = obj
+        if hasattr(form, 'cmdb_templates'):
+            form.cmdb_templates.queryset = Host.objects(object_type='template')
         return form
 
     def is_accessible(self):
@@ -1267,6 +1279,7 @@ class HostModelView(DefaultModelView):
         model.source_account_id = ""
         model.source_account_name = "cmdb"
         model.no_autodelete = True
+        model.cmdb_templates = form.cmdb_templates.data or []
         # Set Extra Fields
         cmdb_fields = app.config['CMDB_MODELS'].get(form.object_type.data, {})
         cmdb_fields.update(app.config['CMDB_MODELS']['all'])
