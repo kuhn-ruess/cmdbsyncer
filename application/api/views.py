@@ -23,7 +23,7 @@ def apply_headers(response):
         response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
 
     response.headers["Access-Control-Allow-Headers"] =\
-                        "Origin, x-login-user, x-login-token, Content-Type, Accept"
+                        "Origin, x-login-user, Content-Type, Accept"
     return response
 
 
