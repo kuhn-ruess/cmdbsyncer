@@ -30,14 +30,16 @@ tablib_registry.register('syncer_rules', ExportObjects())
 
 VERSION = '3.12.4'
 
+CONFIG_MAP = {
+    'prod': 'application.config.ProductionConfig',
+    'compose': 'application.config.ComposeConfig',
+    'base': 'application.config.BaseConfig',
+}
+
 app = Flask(__name__)
-env = os.environ.get('config')
-if env == "prod":
-    app.config.from_object('application.config.ProductionConfig')
-elif env == "compose":
-    app.config.from_object('application.config.ComposeConfig')
-else:
-    app.config.from_object('application.config.BaseConfig')
+config_name = os.environ.get('config', 'base').lower()
+app.config.from_object(CONFIG_MAP.get(config_name, CONFIG_MAP['base']))
+if config_name == "base":
     app.jinja_env.auto_reload = True
 
 
