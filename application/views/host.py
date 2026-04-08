@@ -15,7 +15,7 @@ from flask_admin.actions import action
 from flask_admin.base import expose
 from wtforms import HiddenField, Field, StringField, BooleanField
 from wtforms.validators import Optional
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from mongoengine.errors import DoesNotExist
 
 from application.plugins.checkmk.models import CheckmkFolderPool #@TODO pre_deletion method for Host so no import needed
@@ -321,7 +321,7 @@ class StaticLogWidget:
         html = '<div class="card"><div class="card-body">'
         html += "<table class='table'>"
         for line in field.data:
-            html += f"<tr><td>{line[:160]}</td></tr>"
+            html += f"<tr><td>{escape(line[:160])}</td></tr>"
         html += "</table>"
         html += "</div></div>"
         return Markup(html)
@@ -652,7 +652,7 @@ def format_labels(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for key, value in m.labels.items():
-        html += f"<tr><th>{key}</th><td>{value}</td></tr>"
+        html += f"<tr><th>{escape(key)}</th><td>{escape(value)}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -661,7 +661,7 @@ def format_inventory(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for key, value in m.inventory.items():
-        html += f"<tr><th>{key}</th><td>{value}</td></tr>"
+        html += f"<tr><th>{escape(key)}</th><td>{escape(value)}</td></tr>"
     html += "</table>"
     return Markup(html)
 

@@ -1,7 +1,7 @@
 """
 Checkmk Rule Views
 """
-from markupsafe import Markup
+from markupsafe import Markup, escape
 
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
@@ -119,7 +119,7 @@ def _render_bi_rule(_view, _context, model, _name):
             <ul class="list-group">
     '''
     for idx, entry in enumerate(model.outcomes):
-        html += f"<li class='list-group-item'>{idx}: {entry['description']}</li>"
+        html += f"<li class='list-group-item'>{idx}: {escape(entry['description'])}</li>"
     html += f'''
             </ul>
             </p>

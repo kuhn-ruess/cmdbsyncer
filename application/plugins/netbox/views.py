@@ -7,7 +7,7 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import DjangoLexer
 
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import HiddenField, StringField
 
 from application.views.default import DefaultModelView
@@ -127,7 +127,7 @@ def _render_dataflow_outcome(_view, _context, model, _name):
         highlighted_param = highlight(str(entry.field_value),
                                       DjangoLexer(),
                                       HtmlFormatter(sytle='colorfull'))
-        html += f"<tr><td>{idx}</td><td>{entry.field_name}</td>"
+        html += f"<tr><td>{idx}</td><td>{escape(entry.field_name)}</td>"
         html += f"<td><b>{highlighted_param}</b></td></tr>"
     html += "</table>"
     return Markup(html)

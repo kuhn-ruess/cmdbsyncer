@@ -2,7 +2,7 @@
 Log Model View
 """
 from flask_login import current_user
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from application.views.default import DefaultModelView
 from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 
@@ -11,7 +11,7 @@ def format_log(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for entry in m.details:
-        html += f"<tr><th>{entry.level}</th><td>{entry.message}</td></tr>"
+        html += f"<tr><th>{escape(entry.level)}</th><td>{escape(entry.message)}</td></tr>"
     html += "</table>"
     return Markup(html)
 
