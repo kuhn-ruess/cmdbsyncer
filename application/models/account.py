@@ -28,11 +28,11 @@ def get_account_types():
 
 
 object_types = [
-    ('auto', 'Autodetect by Plugin'),
+    ('auto', 'Undefined'),
+    ('host', 'Host Object'),
     ('application', 'Application'),
     ('contact', 'Contact'),
     ('group', 'Group Object'),
-    ('host', 'Host Object'),
     ('shadow_host', 'Shadow Host Object'),
     ('network', 'Network Object'),
     ('url', 'URL'),
@@ -43,8 +43,7 @@ object_types = [
     ('custom_5', 'Custom Type 5'),
     ('custom_6', 'Custom Type 6'),
     ('cmk_site', 'Checkmk Site Object'),
-    ('undefined', 'Undefined'),
-    ('template', 'CMDB Template for Labels'),
+    ('template', 'CMDB Template'),
 ]
 
 
@@ -111,6 +110,7 @@ class Account(db.Document):
     is_child = db.BooleanField(default=False)
     parent = db.ReferenceField(document_type='Account', reverse_delete_rule=DENY)
     is_object = db.BooleanField(default=False)
+    cmdb_object = db.BooleanField(default=False)
     object_type = db.StringField(choices=object_types)
 
     address = db.StringField()

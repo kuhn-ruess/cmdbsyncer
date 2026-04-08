@@ -13,6 +13,7 @@ from syncerapi.v1.core import (
     Plugin,
 )
 from syncerapi.v1.inventory import run_inventory
+from application.helpers.sql import build_select_query, validate_custom_query
 
 try:
     import pypyodbc as pyodbc
@@ -51,9 +52,9 @@ class ODBC(Plugin):
             cursor = cnxn.cursor()
 
             if "custom_query" in self.config and self.config['custom_query']:
-                query = self.config['custom_query']
+                query = validate_custom_query(self.config['custom_query'])
             else:
-                query = f"select {self.config['fields']} from {self.config['table']};"
+                query = build_select_query(self.config['fields'], self.config['table'])
             logger.debug(query)
             cursor.execute(query)
             logger.debug("Cursor Executed")

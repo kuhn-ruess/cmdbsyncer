@@ -4,7 +4,7 @@ Cron Model View
 # pylint: disable=too-few-public-methods
 from datetime import datetime
 from flask_login import current_user
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import HiddenField
 from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 
@@ -44,8 +44,8 @@ def _render_cronjob(_view, _context, model, _name):
     """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.jobs):
-        html += f"<tr><td>{idx}</td><td>{entry['name']}</td>"\
-                f"<td>{entry['command']}</td><td>{entry['account']}</td></tr>"
+        html += f"<tr><td>{idx}</td><td>{escape(entry['name'])}</td>"\
+                f"<td>{escape(entry['command'])}</td><td>{escape(entry['account'])}</td></tr>"
     html += "</table>"
     return Markup(html)
 

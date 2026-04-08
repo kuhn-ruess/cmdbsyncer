@@ -48,12 +48,64 @@ form_subdocuments_template = {
         'form_subdocuments' : {
             '': {
                 'form_widget_args': {
-                    'hostname_match': {'style': 'background-color: #2EFE9A;' },
-                    'hostname': { 'style': 'background-color: #2EFE9A;', 'size': 50},
-                    'tag_match': { 'style': 'background-color: #81DAF5;' },
-                    'tag': { 'style': 'background-color: #81DAF5;' },
-                    'value_match': { 'style': 'background-color: #81DAF5;' },
-                    'value': { 'style': 'background-color: #81DAF5;'},
+                    'hostname_match': {
+                        'style': (
+                            'background-color: #2EFE9A; '
+                            'border-radius: 5px; '
+                            'padding: 6px 10px; '
+                            'border: 1px solid #1abc9c; '
+                            'width: 900px;'
+                        )
+                    },
+                    'hostname': {
+                        'style': (
+                            'background-color: #2EFE9A; '
+                            'border-radius: 5px; '
+                            'padding: 6px 10px; '
+                            'font-weight: bold; '
+                            'border: 1px solid #1abc9c; '
+                            'width: 300px;'
+                        ),
+                        'size': 35
+                    },
+                    'tag_match': {
+                        'style': (
+                            'background-color: #81DAF5; '
+                            'border-radius: 5px; '
+                            'padding: 6px 10px; '
+                            'border: 1px solid #3498db; '
+                            'width: 900px;'
+                        )
+                    },
+                    'tag': {
+                        'style': (
+                            'background-color: #81DAF5; '
+                            'border-radius: 5px; '
+                            'padding: 6px 10px; '
+                            'font-family: monospace; '
+                            'border: 1px solid #3498db; '
+                            'width: 300px;'
+                        )
+                    },
+                    'value_match': {
+                        'style': (
+                            'background-color: #81DAF5; '
+                            'border-radius: 5px; '
+                            'padding: 6px 10px; '
+                            'border: 1px solid #3498db; '
+                            'width: 900px;'
+                        )
+                    },
+                    'value': {
+                        'style': (
+                            'background-color: #81DAF5; '
+                            'border-radius: 5px; '
+                            'padding: 6px 10px; '
+                            'font-family: monospace; '
+                            'border: 1px solid #3498db; '
+                            'width: 300px;'
+                        )
+                    },
                     'match_type': {'class': 'cond-match-type'},
                 },
                 'form_overrides' : {
@@ -71,16 +123,53 @@ form_subdocuments_template = {
                     rules.HTML('</div>'),
 
                     rules.HTML("<div class='cond-host'>"),
-                    rules.FieldSet(
-                        ('hostname_match', 'hostname', 'hostname_match_negate'),
-                         "Match for Hostname"),
+                    rules.HTML("<div class='form-row mb-2'>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('hostname'),
+                    rules.HTML("</div>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('hostname_match'),
+                    rules.HTML("</div>"),
+                    rules.HTML("</div>"),
+                    
+                    rules.HTML("<div class='form-row mb-3'>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('hostname_match_negate'),
+                    rules.HTML("</div>"),
+                    rules.HTML("</div>"),
+                    
                     rules.HTML("</div><div class='cond-attr' style='display: none;'>"),
 
-                    rules.FieldSet(
-                        (
-                            'tag_match', 'tag', 'tag_match_negate',
-                            'value_match', 'value', 'value_match_negate',
-                        ), "Match for Attribute"),
+                    rules.HTML("<div class='form-row mb-2'>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('tag'),
+                    rules.HTML("</div>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('tag_match'),
+                    rules.HTML("</div>"),
+                    rules.HTML("</div>"),
+                    
+                    rules.HTML("<div class='form-row mb-3'>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('tag_match_negate'),
+                    rules.HTML("</div>"),
+                    rules.HTML("</div>"),
+                    
+                    rules.HTML("<div class='form-row mb-2'>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('value'),
+                    rules.HTML("</div>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('value_match'),
+                    rules.HTML("</div>"),
+                    rules.HTML("</div>"),
+                    
+                    rules.HTML("<div class='form-row'>"),
+                    rules.HTML("<div class='col-auto'>"),
+                    rules.Field('value_match_negate'),
+                    rules.HTML("</div>"),
+                    rules.HTML("</div>"),
+                    
                     rules.HTML("</div></div>"),
                 ]
             }
@@ -231,6 +320,28 @@ class RuleModelView(DefaultModelView):
     }
 
     form_rules = [
+        rules.HTML('''
+        <style>
+        [id^="conditions-"] legend { display: none !important; }
+        [id^="conditions-"] .card { 
+            margin-bottom: 8px !important; 
+            padding: 10px !important; 
+            background-color: #f8f9fa !important;
+            border-radius: 8px !important;
+        }
+        [id^="conditions-"] .form-group { margin-bottom: 5px !important; }
+        [id^="conditions-"] .inline-field { margin-bottom: 8px !important; }
+        [id^="outcomes-"] legend { display: none !important; }
+        [id^="outcomes-"] .card { 
+            margin-bottom: 8px !important; 
+            padding: 10px !important; 
+            background-color: #f8f9fa !important;
+            border-radius: 8px !important;
+        }
+        [id^="outcomes-"] .form-group { margin-bottom: 5px !important; }
+        [id^="outcomes-"] .inline-field { margin-bottom: 8px !important; }
+        </style>
+        '''),
         rules.FieldSet((
             rules.Field('name'),
             rules.Field('documentation'),
@@ -366,6 +477,28 @@ class FiltereModelView(DefaultModelView):
     form_subdocuments = form_subdocuments_template
 
     form_rules = [
+        rules.HTML('''
+        <style>
+        [id^="conditions-"] legend { display: none !important; }
+        [id^="conditions-"] .card { 
+            margin-bottom: 8px !important; 
+            padding: 10px !important; 
+            background-color: #f8f9fa !important;
+            border-radius: 8px !important;
+        }
+        [id^="conditions-"] .form-group { margin-bottom: 5px !important; }
+        [id^="conditions-"] .inline-field { margin-bottom: 8px !important; }
+        [id^="outcomes-"] legend { display: none !important; }
+        [id^="outcomes-"] .card { 
+            margin-bottom: 8px !important; 
+            padding: 10px !important; 
+            background-color: #f8f9fa !important;
+            border-radius: 8px !important;
+        }
+        [id^="outcomes-"] .form-group { margin-bottom: 5px !important; }
+        [id^="outcomes-"] .inline-field { margin-bottom: 8px !important; }
+        </style>
+        '''),
         rules.FieldSet((
             rules.Field('name'),
             rules.Field('documentation'),

@@ -17,6 +17,8 @@ def register_admin_views(admin):
             AnsibleRewriteAttributesRule,
             name="Rewrite Attributes",
             category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-exchange',
         )
     )
     admin.add_view(
@@ -24,6 +26,8 @@ def register_admin_views(admin):
             AnsibleFilterRule,
             name="Filter",
             category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-filter',
         )
     )
     admin.add_view(
@@ -31,5 +35,7 @@ def register_admin_views(admin):
             AnsibleCustomVariablesRule,
             name="Ansible Attributes",
             category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-tags',
         )
     )

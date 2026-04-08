@@ -1,14 +1,22 @@
 """ Config File """
 #pylint: disable=too-few-public-methods
+import os
+
+def _get_mongo_settings(default_host):
+    return {
+        'db': os.environ.get('CMDBSYNCER_MONGODB_DB', 'cmdb-api'),
+        'host': os.environ.get('CMDBSYNCER_MONGODB_HOST', default_host),
+        'port': int(os.environ.get('CMDBSYNCER_MONGODB_PORT', '27017')),
+        'alias': os.environ.get('CMDBSYNCER_MONGODB_ALIAS', 'default'),
+    }
 
 class BaseConfig():
     """
     Generel System white Configuration.
     Can be overwritten later if needed.
     """
-    SECRET_KEY = "[1dmBlwnsY788wI3x<[R34qlUF2Xc/>2o7grl{L9C9Yj)8£/O3/2l="
-    CRYPTOGRAPHY_KEY = b'nto4ioGgQDlJ-r5jqvyEtTpUQC2fkOAG4Df-E8OlVm8='
-
+    SECRET_KEY = None # To be overwritten in local_conifg.py
+    CRYPTOGRAPHY_KEY = None # To be overwritten in local_config.py
     TIME_STAMP_FORMAT = "%d.%m.%Y %H:%M"
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
@@ -100,35 +108,26 @@ class BaseConfig():
     ]
 
 
-    DISABLE_SSL_ERRORS = True
+    DISABLE_SSL_ERRORS = False
     HTTP_REQUEST_TIMEOUT = 30
 
     HTTP_REPEAT_TIMEOUT = 3
     HTTP_MAX_RETRIES = 2
 
     SWAGGER_ENABLED = True
-    DEBUG = True
+    DEBUG = False
     ADVANCED_RULE_DEBUG = False
 
     CMDB_MODE = False
 
-    MONGODB_SETTINGS = {
-        'db': 'cmdb-api',
-        'host': '127.0.0.1',
-        'port': 27017,
-        'alias': 'default',
-
-    }
+    MONGODB_SETTINGS = _get_mongo_settings('127.0.0.1')
 
     CMDB_MODELS = {
         'host': {
-            'site' : {"type": "string"},
-            'department' : {"type": "string"},
-            'type' : {"type": "string"},
+            #'ipaddress' : {"type": "string"},
         },
         'all': {
-            'sms_notification': {"type": "boolean"},
-            'email_notification': {"type": "boolean"},
+            #'notification': {"type": "boolean"},
 
         }
 
@@ -140,7 +139,7 @@ class BaseConfig():
     REMOTE_USER_LOGIN = False
 
 
-    FILEADMIN_PATH = '/var/cmdbsyncer/files'
+    FILEADMIN_PATH = os.environ.get('CMDBSYNCER_FILEADMIN_PATH', '/var/cmdbsyncer/files')
 
     ### Checkmk Stuff
 
@@ -195,9 +194,4 @@ class ComposeConfig(BaseConfig):
     Config to run in docker_compose
     """
     DEBUG = False
-    MONGODB_SETTINGS = {
-        'db': 'cmdb-api',
-        'host': 'mongo',
-        'port': 27017,
-        'alias': 'default',
-    }
+    MONGODB_SETTINGS = _get_mongo_settings('mongo')

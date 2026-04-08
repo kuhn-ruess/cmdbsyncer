@@ -19,6 +19,7 @@ from flask_login import LoginManager
 from flask_mail import Mail
 from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
+from flask_wtf.csrf import CSRFProtect
 
 from application.helpers.tablib_formater import ExportObjects
 
@@ -28,17 +29,20 @@ warnings.filterwarnings('ignore', category=UserWarning)
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-VERSION = '3.12.3'
+VERSION = '3.12.4'
+
+CONFIG_MAP = {
+    'prod': 'application.config.ProductionConfig',
+    'compose': 'application.config.ComposeConfig',
+    'base': 'application.config.BaseConfig',
+}
 
 app = Flask(__name__)
-env = os.environ.get('config')
-if env == "prod":
-    app.config.from_object('application.config.ProductionConfig')
-elif env == "compose":
-    app.config.from_object('application.config.ComposeConfig')
-else:
-    app.config.from_object('application.config.BaseConfig')
+config_name = os.environ.get('config', 'base').lower()
+app.config.from_object(CONFIG_MAP.get(config_name, CONFIG_MAP['base']))
+if config_name == "base":
     app.jinja_env.auto_reload = True
+csrf = CSRFProtect(app)
 
 
 ## Read Build Data
@@ -196,22 +200,34 @@ def _register_all_plugin_admin_views():
 
 from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
+csrf.exempt(api)
 
 admin = Admin(app, name=f"cmdbsyncer {VERSION}",
                    index_view=IndexView(),
                    category_icon_classes={
                        'Accounts': 'fa fa-users',
+                       'Ansible': 'fa fa-cogs',
+                       'Checkmk': 'fa fa-heartbeat',
+                       'Checkmk Server': 'fa fa-building',
                        'Cronjobs': 'fa fa-clock-o',
+                       'i-doit': 'fa fa-sitemap',
+                       'Manage Business Intelligence': 'fa fa-sitemap',
                        'Modules': 'fa fa-puzzle-piece',
-                       'Profile': 'fa fa-user-cog'
+                       'Netbox': 'fa fa-database',
+                       'Plugin: Dataflow': 'fa fa-arrows',
+                       'Profile': 'fa fa-user-cog',
+                       'Syncer Rules': 'fa fa-bolt',
+                       'VMware': 'fa fa-server'
                        })
 
 
 #   .-- Host
 from application.models.host import Host
-from application.views.host import HostModelView, ObjectModelView
+from application.views.host import HostModelView, ObjectModelView, TemplateModelView
 admin.add_view(HostModelView(Host, name="Hosts", menu_icon_type='fa', menu_icon_value='fa-server'))
-admin.add_view(ObjectModelView(Host, name="Objects", endpoint="Objects", menu_icon_type='fa', menu_icon_value='fa-cubes'))
+admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
+admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",category="Objects", menu_icon_type='fa', menu_icon_value='fa-cubes'))
+admin.add_view(TemplateModelView(Host, name="Templates", endpoint="Objects Templates",category="Objects", menu_icon_type='fa', menu_icon_value='fa-files-o'))
 #.
 #   .-- Global
 from application.modules.custom_attributes.models import CustomAttributeRule

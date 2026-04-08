@@ -155,6 +155,21 @@ def delete_inventory(prefix_only):
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
 #.
+#   .-- Command: Update CMDB Templates
+
+@_cli_sys.command('update_cmdb')
+def update_cmdb():
+    """
+    Updats Templates on all Hosts in Database
+    """
+    print(f"{CC.HEADER} ***** Update Templates ***** {CC.ENDC}")
+    for host in Host.get_export_hosts():
+        logger.debug(f"Handling Host {host.hostname}")
+        host.get_cmdb_template()
+        host.save()
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
+
+#.
 #   .-- Command: Delete all Hosts
 @_cli_sys.command('delete_all_hosts')
 @click.argument("account", default="")

@@ -7,10 +7,14 @@ import ipaddress
 import re
 import jinja2
 from jinja2 import StrictUndefined
+from jinja2.sandbox import SandboxedEnvironment
 import datetime
 
 from application import logger
 from application.helpers.get_account import get_account_variable
+
+
+JINJA_ENV = SandboxedEnvironment(autoescape=False)
 def _cmk_cleanup_tag_id(value):
     """
     Lazily import the Checkmk helper to avoid circular imports while still
@@ -144,7 +148,8 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         #logger.debug("JINJA: Strict Undefined defined")
 
 
-    value_tpl = jinja2.Template(str(value), **payload)
+    env = JINJA_ENV.overlay(**payload)
+    value_tpl = env.from_string(str(value))
     value_tpl.globals.update({
         'get_list': get_list,
         'merge_list_of_dicts': merge_list_of_dicts,

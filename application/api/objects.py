@@ -259,8 +259,8 @@ class HostDetailListApi(Resource):
     def get(self):
         """ Get all Objects """
         results = []
-        start = int(request.args['start'])
-        limit = int(request.args['limit'])
+        start = int(request.args.get('start', 1))
+        limit = int(request.args.get('limit', 100))
         end = start+limit
 
         db_objecs = Host.objects(is_object__ne=True)

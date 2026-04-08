@@ -14,7 +14,8 @@ from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
 from wtforms import HiddenField, Field, StringField, BooleanField
-from markupsafe import Markup
+from wtforms.validators import Optional
+from markupsafe import Markup, escape
 from mongoengine.errors import DoesNotExist
 
 from application.plugins.checkmk.models import CheckmkFolderPool #@TODO pre_deletion method for Host so no import needed
@@ -50,6 +51,21 @@ OBJECT_TYPE_ICONS = {
     'template': 'fa fa-file',
     'cmk_site': 'fa fa-sitemap',
 }
+
+FILTER_KEY_RE = re.compile(r'^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$')
+
+
+def _validate_filter_key(key):
+    clean_key = key.strip()
+    if not FILTER_KEY_RE.fullmatch(clean_key):
+        raise ValueError("Invalid filter key")
+    return clean_key
+
+
+def _build_safe_regex(value):
+    if value == '*':
+        return '.*'
+    return re.escape(value).replace(r'\*', '.*')
 
 def get_debug(hostname, mode):
     """
@@ -175,24 +191,28 @@ def _render_labels(_view, _context, model, _name):
 
 def _render_cmdb_template(_view, _context, model, _name):
     """
-    Render CMD Template
+    Render all assigned CMDB templates
     """
-    if not model.cmdb_template:
+    if not model.cmdb_templates:
         return Markup("")
-    html = '<table class="table table-bordered">'
-    for key, value in model.cmdb_template.labels.items():
-        html += f'''
-            <tr>
-                <th scope="row" style="width: 30%;">
-                    {key}
-                </th>
-                <td>
-                    <span class="badge badge-info">{value}</span>
-                </td>
-            </tr>
-        '''
-    html += '</table>'
-    return Markup(html)
+    parts = []
+    for tmpl in model.cmdb_templates:
+        header = f'<caption style="caption-side:top;font-weight:bold">{tmpl.hostname}</caption>'
+        rows = ''.join(
+            f'<tr><th scope="row" style="width:30%;">{k}</th>'
+            f'<td><span class="badge badge-info">{v}</span></td></tr>'
+            for k, v in tmpl.labels.items()
+        )
+        parts.append(f'<table class="table table-bordered">{header}{rows}</table>')
+    return Markup(''.join(parts))
+
+def _render_cmdb_match_label(_view, _context, model, _name):
+    """
+    Render CMDB Match as badge label
+    """
+    if not model.cmdb_match:
+        return Markup('<span class="text-muted">N/A</span>')
+    return Markup(f'<span class="badge badge-primary">{model.cmdb_match}</span>')
 
 class StaticLabelWidget:
     """
@@ -225,30 +245,85 @@ class StaticTemplateLabelWidget:
     """
     def __call__(self, field, **kwargs):
         model = field.object_data
-        if not model or not hasattr(model, 'cmdb_template') or not model.cmdb_template:
-            return Markup('<div class="alert alert-info">No Template selected</div>')
+        if not model or not hasattr(model, 'cmdb_templates') or not model.cmdb_templates:
+            return Markup('<div class="alert alert-info">No Templates selected</div>')
 
-        template = model.cmdb_template
-
-        if not hasattr(template, 'labels') or not template.labels:
-            return Markup('<div class="alert alert-warning">No Labels in Template</div>')
-
-        html = '<div class="card"><div class="card-body">'
-        entries = []
-        for key, value in template.labels.items():
-            html_entry = ""
-            html_entry += f'<span class="badge badge-primary">{key}</span>:'
-            html_entry += f'<span class="badge badge-info">{value}</span>'
-            entries.append(html_entry)
-        html += ", ".join(entries)
-        html += '</div></div>'
-        return Markup(html)
+        html = ''
+        for template in model.cmdb_templates:
+            if not hasattr(template, 'labels') or not template.labels:
+                continue
+            entries = [
+                f'<span class="badge badge-primary">{key}</span>:<span class="badge badge-info">{value}</span>'
+                for key, value in template.labels.items()
+            ]
+            html += (
+                f'<div class="card" style="margin-bottom:4px">'
+                f'<div class="card-header p-1"><strong>{template.hostname}</strong></div>'
+                f'<div class="card-body p-2">{" ".join(entries)}</div></div>'
+            )
+        return Markup(html) if html else Markup('<div class="alert alert-warning">No Labels in Templates</div>')
 
 class StaticTemplateLabelField(Field):
     """
     Helper for Widget
     """
     widget = StaticTemplateLabelWidget()
+
+    def _value(self):
+        return str(self.data) if self.data else ''
+
+class CmdbMatchWidget:
+    """
+    Widget for CMDB Match key:value input with styling
+    """
+    def __call__(self, field, **kwargs):
+        # Split existing value if any
+        key = ""
+        value = ""
+        if field.data and ':' in field.data:
+            key, value = field.data.split(':', 1)
+        
+        html = f'''
+        <div class="cmdb-match-container" style="margin-bottom: 15px;">
+            <div class="form-row align-items-center">
+                <div class="col-auto">
+                    <input type="text" id="cmdb_match_key" value="{key}" placeholder="Key" 
+                           style="background-color: #2EFE9A; border-radius: 5px; padding: 8px 12px; 
+                                  font-weight: bold; border: 1px solid #1abc9c; margin-right: 10px; width: 150px;">
+                </div>
+                <div class="col-auto">
+                    <input type="text" id="cmdb_match_value" value="{value}" placeholder="Value"
+                           style="background-color: #81DAF5; border-radius: 5px; padding: 8px 12px; 
+                                  font-family: monospace; border: 1px solid #3498db; width: 200px;">
+                </div>
+            </div>
+            <input type="hidden" name="{field.name}" id="{field.id}" value="{field.data or ''}" />
+            <small class="form-text text-muted">Enter Attribute which should lead to automatic match</small>
+        </div>
+        <script>
+        function updateCmdbMatch() {{
+            var key = document.getElementById('cmdb_match_key').value;
+            var value = document.getElementById('cmdb_match_value').value;
+            var hiddenField = document.getElementById('{field.id}');
+            
+            if (key && value) {{
+                hiddenField.value = key + ':' + value;
+            }} else {{
+                hiddenField.value = '';
+            }}
+        }}
+        
+        document.getElementById('cmdb_match_key').addEventListener('input', updateCmdbMatch);
+        document.getElementById('cmdb_match_value').addEventListener('input', updateCmdbMatch);
+        </script>
+        '''
+        return Markup(html)
+
+class CmdbMatchField(Field):
+    """
+    Custom field for CMDB Match key:value input
+    """
+    widget = CmdbMatchWidget()
 
     def _value(self):
         return str(self.data) if self.data else ''
@@ -261,7 +336,7 @@ class StaticLogWidget:
         html = '<div class="card"><div class="card-body">'
         html += "<table class='table'>"
         for line in field.data:
-            html += f"<tr><td>{line[:160]}</td></tr>"
+            html += f"<tr><td>{escape(line[:160])}</td></tr>"
         html += "</table>"
         html += "</div></div>"
         return Markup(html)
@@ -332,42 +407,42 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        key, value = value.split(':', 1)
-
-        # Filter for None values, but only if key exists
-        if value.strip().lower() == 'none':
-            pipeline = {
-                "$and": [
-                    {f"labels.{key}": None},
-                    {f"labels.{key}": {"$exists": True}}
-                ]
-            }
-            return query.filter(__raw__=pipeline)
-
-        org_value = False
-
         try:
-            org_value = int(value)
-        except ValueError:
-            pass
+            key, value = value.split(':', 1)
+            key = _validate_filter_key(key)
+            value = value.strip()
 
-        if value == '*':
-            value = '.*'
+            # Filter for None values, but only if key exists
+            if value.lower() == 'none':
+                pipeline = {
+                    "$and": [
+                        {f"labels.{key}": None},
+                        {f"labels.{key}": {"$exists": True}}
+                    ]
+                }
+                return query.filter(__raw__=pipeline)
 
+            org_value = None
 
-        if org_value:
-            pipeline = {
-                    "$or": [
-                    {f'labels.{key}': {"$regex":  value, "$options": "i"}},
-                    {f'labels.{key}': org_value}
-                ]
-            }
+            try:
+                org_value = int(value)
+            except ValueError:
+                pass
 
-        else:
-            pipeline = {
-                    f'labels.{key}': {"$regex":  value, "$options": "i"},
-            }
-        try:
+            safe_regex = _build_safe_regex(value)
+
+            if org_value is not None:
+                pipeline = {
+                        "$or": [
+                        {f'labels.{key}': {"$regex": safe_regex, "$options": "i"}},
+                        {f'labels.{key}': org_value}
+                    ]
+                }
+
+            else:
+                pipeline = {
+                        f'labels.{key}': {"$regex": safe_regex, "$options": "i"},
+                }
             return query.filter(__raw__=pipeline)
         except Exception as error:
             flash('danger', error)
@@ -382,40 +457,41 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        key, value = value.split(':', 1)
-
-        # Filter for None values, but only if key exists
-        if value.strip().lower() == 'none':
-            pipeline = {
-                "$and": [
-                    {f"inventory.{key}": None},
-                    {f"inventory.{key}": {"$exists": True}}
-                ]
-            }
-            return query.filter(__raw__=pipeline)
-
-        org_value = False
-
         try:
-            org_value = int(value)
-        except ValueError:
-            pass
+            key, value = value.split(':', 1)
+            key = _validate_filter_key(key)
+            value = value.strip()
 
-        if value == '*':
-            value = '.*'
+            # Filter for None values, but only if key exists
+            if value.lower() == 'none':
+                pipeline = {
+                    "$and": [
+                        {f"inventory.{key}": None},
+                        {f"inventory.{key}": {"$exists": True}}
+                    ]
+                }
+                return query.filter(__raw__=pipeline)
 
-        if org_value:
-            pipeline = {
-                    "$or": [
-                    {f'inventory.{key}': {"$regex":  value, "$options": "i"}},
-                    {f'inventory.{key}': org_value}
-                ]
-            }
-        else:
-            pipeline = {
-                    f'inventory.{key}': {"$regex":  value, "$options": "i"},
-            }
-        try:
+            org_value = None
+
+            try:
+                org_value = int(value)
+            except ValueError:
+                pass
+
+            safe_regex = _build_safe_regex(value)
+
+            if org_value is not None:
+                pipeline = {
+                        "$or": [
+                        {f'inventory.{key}': {"$regex": safe_regex, "$options": "i"}},
+                        {f'inventory.{key}': org_value}
+                    ]
+                }
+            else:
+                pipeline = {
+                        f'inventory.{key}': {"$regex": safe_regex, "$options": "i"},
+                }
             return query.filter(__raw__=pipeline)
         except Exception as error:
             flash('danger', error)
@@ -592,7 +668,7 @@ def format_labels(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for key, value in m.labels.items():
-        html += f"<tr><th>{key}</th><td>{value}</td></tr>"
+        html += f"<tr><th>{escape(key)}</th><td>{escape(value)}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -601,7 +677,7 @@ def format_inventory(v, c, m, p):
     # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for key, value in m.inventory.items():
-        html += f"<tr><th>{key}</th><td>{value}</td></tr>"
+        html += f"<tr><th>{escape(key)}</th><td>{escape(value)}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -639,8 +715,11 @@ class ObjectModelView(DefaultModelView):
 
     column_exclude_list = [
         'source_account_id',
-        'cmdb_template',
+        'cmdb_templates',
         'sync_id',
+        'cmdb_match',
+        'last_import_id',
+        'create_time',
         'labels',
         'inventory',
         'log',
@@ -669,6 +748,7 @@ class ObjectModelView(DefaultModelView):
         'inventory': format_inventory,
         'cache': format_cache,
         'cmdb_fields': _render_cmdb_fields,
+        'cmdb_match': _render_cmdb_match_label,
         'object_type': _render_object_type_icon,
     }
 
@@ -687,28 +767,84 @@ class ObjectModelView(DefaultModelView):
     form_overrides = {
         'inventory': StaticLabelField,
         'log': StaticLogField,
+        'hostname': StringField,
+        'cmdb_match': CmdbMatchField,
     }
 
     form_rules = [
+        rules.HTML('''
+        <style>
+        [id^="cmdb_fields-"] legend { display: none !important; }
+        [id^="cmdb_fields-"] .card { 
+            margin-bottom: 8px !important; 
+            padding: 10px !important; 
+            background-color: #f8f9fa !important;
+            border-radius: 8px !important;
+        }
+        [id^="cmdb_fields-"] label { display: none !important; }
+        [id^="cmdb_fields-"] .form-group { margin-bottom: 0 !important; }
+        [id^="cmdb_fields-"] .inline-field { margin-bottom: 8px !important; }
+        </style>
+        '''),
         rules.Field('hostname'),
+        rules.Field('object_type'),
         rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
-        rules.FieldSet(('inventory', 'log'), "Data"),
     ]
+
+    form_args = {
+        "hostname": {
+            "label": 'Object Name'
+        },
+        "object_type": {
+            "label": 'Object Type'
+        },
+        "cmdb_match": {
+            "label": 'CMDB Match Rule'
+        }
+    }
 
     form_subdocuments = {
         'cmdb_fields': {
             'form_subdocuments': {
                 '': {
                     'form_widget_args': {
-                        'field_name': {'style': 'background-color: #2EFE9A;', 'size': 10},
-                        'field_value': {'style': 'background-color: #81DAF5;', 'size': 40},
+                        'field_name': {
+                            'style': (
+                                'background-color: #2EFE9A; '
+                                'border-radius: 5px; '
+                                'padding: 6px 10px; '
+                                'margin-right: 5px; '
+                                'font-weight: bold; '
+                                'border: 1px solid #1abc9c; '
+                                'width: 220px;'
+                            ),
+                            'size': 20,
+                            'placeholder': 'Key'
+                        },
+                        'field_value': {
+                            'style': (
+                                'background-color: #81DAF5; '
+                                'border-radius: 5px; '
+                                'padding: 6px 10px; '
+                                'font-family: monospace; '
+                                'margin-left: 5px; '
+                                'border: 1px solid #3498db; '
+                                'width: 450px;'
+                            ),
+                            'size': 40,
+                            'placeholder': 'Value'
+                        },
                     },
-                    'form_rules' : [
-                        div_open,
-                        rules.NestedRule(
-                            ('field_name', 'field_value')
-                        ),
-                        div_close,
+                    'form_rules': [
+                        rules.HTML('<div class="form-row align-items-center" style="margin-bottom: 5px; margin-top: 0;">'),
+                        rules.HTML('<div class="col-auto">'),
+                        rules.Field('field_name'),
+                        rules.HTML('</div>'),
+                        rules.HTML('<div class="col-auto"><span style="font-size: 16px; margin: 0 3px;">:</span></div>'),
+                        rules.HTML('<div class="col-auto">'),
+                        rules.Field('field_value'),
+                        rules.HTML('</div>'),
+                        rules.HTML('</div>'),
                     ]
                 }
             }
@@ -749,7 +885,7 @@ class ObjectModelView(DefaultModelView):
         """
         Limit Objects
         """
-        return Host.objects(is_object=True)
+        return Host.objects(is_object=True, object_type__ne='template')
 
     def on_model_change(self, form, model, is_created):
         """
@@ -761,9 +897,10 @@ class ObjectModelView(DefaultModelView):
         model.is_object = True
         model.source_account_id = ""
         model.source_account_name = "cmdb"
+        model.no_autodelete = True
         # Set Extra Fields
         new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
-        model.object_type = 'template'
+        #model.object_type = 'template'
 
         model.update_host(new_labels)
         model.set_inventory_attributes('cmdb')
@@ -771,6 +908,72 @@ class ObjectModelView(DefaultModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('objects')
+
+class TemplateModelView(ObjectModelView):
+
+    form_rules = [
+        rules.HTML('''
+        <style>
+        [id^="cmdb_fields-"] legend { display: none !important; }
+        [id^="cmdb_fields-"] .card {
+            margin-bottom: 8px !important;
+            padding: 10px !important;
+            background-color: #f8f9fa !important;
+            border-radius: 8px !important;
+        }
+        [id^="cmdb_fields-"] label { display: none !important; }
+        [id^="cmdb_fields-"] .form-group { margin-bottom: 0 !important; }
+        [id^="cmdb_fields-"] .inline-field { margin-bottom: 8px !important; }
+        </style>
+        '''),
+        rules.Field('hostname'),
+        rules.FieldSet(('cmdb_fields', 'cmdb_match'), "CMDB Fields"),
+    ]
+
+    column_exclude_list = [
+        'source_account_id',
+        'cmdb_templates',
+        'sync_id',
+        'object_type',
+        'last_import_seen',
+        'create_time',
+        'last_import_id',
+        'last_import_sync',
+        'available',
+        'no_autodelete',
+        'source_account_name',
+        'labels',
+        'inventory',
+        'log',
+        'folder',
+        'raw',
+        'cache',
+        'is_object',
+    ]
+
+    def get_query(self):
+        """
+        Limit Objects
+        """
+        return Host.objects(is_object=True, object_type="template")
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Model Changes when saved in GUI -> CMDB Mode
+        """
+        model.last_import_sync = datetime.now()
+        model.last_import_seen = datetime.now()
+        model.cache = {}
+        model.is_object = True
+        model.source_account_id = ""
+        model.source_account_name = "cmdb"
+        model.no_autodelete = True
+        # Set Extra Fields
+        new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
+        model.object_type = 'template'
+
+        model.update_host(new_labels)
+        model.set_inventory_attributes('cmdb')
 
 
 class HostModelView(DefaultModelView):
@@ -786,7 +989,7 @@ class HostModelView(DefaultModelView):
     page_size = app.config['HOST_PAGESIZE']
 
     column_details_list = [
-        'hostname', 'folder', 'no_autodelete', 'available','labels', 'inventory', 'cmdb_template', 'log',
+        'hostname', 'folder', 'no_autodelete', 'available','labels', 'inventory', 'cmdb_templates', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
@@ -803,6 +1006,7 @@ class HostModelView(DefaultModelView):
         'is_object',
         'last_import_id',
         'last_import_sync',
+        'cmdb_match',
     ]
 
 
@@ -841,7 +1045,7 @@ class HostModelView(DefaultModelView):
         'labels': _render_labels,
         'inventory': format_inventory,
         'cache': format_cache,
-        'cmdb_template': _render_cmdb_template,
+        'cmdb_templates': _render_cmdb_template,
         'last_import_seen': _render_datetime,
         'last_import_sync': _render_datetime,
         'create_time': _render_datetime,
@@ -855,9 +1059,7 @@ class HostModelView(DefaultModelView):
     column_labels = {
         'source_account_name': "Account",
         'folder': "CMK Pool Folder",
-        #'cmdb_fields': "CMDB Attributes",
-        'cmdb_template': "From Template",
-        'labels_from_template': "Labels from Template",
+        'cmdb_templates': "CMDB",
     }
 
     column_sortable_list = ('hostname',
@@ -883,13 +1085,19 @@ class HostModelView(DefaultModelView):
 
     }
 
+    form_args = {
+        'cmdb_templates': {
+            'validators': [Optional()]
+        }
+    }
+
     form_rules = [
         rules.FieldSet((
             rules.Field('hostname'),
-            rules.NestedRule(('object_type', 'available', 'cmdb_template', 'labels_from_template')),
+            rules.NestedRule(('object_type', 'available', 'cmdb_templates', 'labels_from_template')),
             ), "CMDB Options"),
         rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
-        rules.FieldSet(('inventory', 'log'), "Data"),
+        #rules.FieldSet(('inventory', 'log'), "Data"),
     ]
 
     form_subdocuments = {
@@ -982,7 +1190,7 @@ class HostModelView(DefaultModelView):
             self.can_edit = False
             self.can_create = False
             self.column_exclude_list.append('cmdb_fields')
-            self.column_exclude_list.append('cmdb_template')
+            self.column_exclude_list.append('cmdb_templates')
 
         if app.config['LABEL_PREVIEW_DISABLED']:
             self.column_exclude_list.append('labels')
@@ -1015,12 +1223,34 @@ class HostModelView(DefaultModelView):
     def scaffold_form(self):
         form_class = super().scaffold_form()
         form_class.labels_from_template = StaticTemplateLabelField()
+        
+        # Filter cmdb_templates to show only template objects
+        if hasattr(form_class, 'cmdb_templates'):
+            form_class.cmdb_templates.kwargs['queryset'] = Host.objects(object_type='template')
+        
         return form_class
 
     def edit_form(self, obj=None):
         form = super().edit_form(obj)
         if obj and hasattr(form, 'labels_from_template'):
             form.labels_from_template.object_data = obj
+
+        if hasattr(form, 'cmdb_templates'):
+            form.cmdb_templates.queryset = Host.objects(object_type='template')
+
+        if obj and hasattr(form, 'cmdb_fields'):
+            existing_field_names = {
+                str(getattr(entry, 'field_name', None).data)
+                for entry in form.cmdb_fields.entries
+                if getattr(getattr(entry, 'field_name', None), 'data', None)
+            }
+            for label_key, label_value in (obj.labels or {}).items():
+                if label_key not in existing_field_names:
+                    form.cmdb_fields.append_entry({
+                        'field_name': label_key,
+                        'field_value': str(label_value) if label_value is not None else ''
+                    })
+                    existing_field_names.add(label_key)
 
         # Sort cmdb_fields alphabetically and set correct field types
         cmdb_entries = getattr(getattr(form, 'cmdb_fields', None), 'entries', None)
@@ -1050,6 +1280,8 @@ class HostModelView(DefaultModelView):
         form = super().create_form(obj)
         if hasattr(form, 'labels_from_template'):
             form.labels_from_template.object_data = obj
+        if hasattr(form, 'cmdb_templates'):
+            form.cmdb_templates.queryset = Host.objects(object_type='template')
         return form
 
     def is_accessible(self):
@@ -1077,13 +1309,35 @@ class HostModelView(DefaultModelView):
         model.source_account_id = ""
         model.source_account_name = "cmdb"
         model.no_autodelete = True
+        model.cmdb_templates = form.cmdb_templates.data or []
         # Set Extra Fields
         cmdb_fields = app.config['CMDB_MODELS'].get(form.object_type.data, {})
         cmdb_fields.update(app.config['CMDB_MODELS']['all'])
-        new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
+        new_labels = {
+            entry['field_name']: entry['field_value']
+            for entry in form.cmdb_fields.data
+            if entry.get('field_name')
+        }
+
+        existing_labels = model.labels or {}
+        for label_key, label_value in existing_labels.items():
+            if label_key not in new_labels:
+                new_labels[label_key] = label_value
 
         model.update_host(new_labels)
         model.set_inventory_attributes('cmdb')
+
+        existing_cmdb_fields = {
+            field.field_name for field in (model.cmdb_fields or [])
+            if getattr(field, 'field_name', None)
+        }
+        for label_key, label_value in new_labels.items():
+            if label_key not in existing_cmdb_fields:
+                new_field = CmdbField()
+                new_field.field_name = label_key
+                new_field.field_value = str(label_value) if label_value is not None else ''
+                model.cmdb_fields.append(new_field)
+                existing_cmdb_fields.add(label_key)
 
         for key in cmdb_fields:
             if key not in new_labels:
@@ -1093,7 +1347,7 @@ class HostModelView(DefaultModelView):
             self.can_edit = False
             self.can_create = False
             self.column_exclude_list.append('cmdb_fields')
-            self.column_exclude_list.append('cmdb_template')
+            self.column_exclude_list.append('cmdb_templates')
 
         # Bugfix, ohne we loose the availibilty to edit after save
         self.can_edit = True
@@ -1168,8 +1422,11 @@ class HostModelView(DefaultModelView):
 
                 host = Host.objects(id=host_id).first()
                 if host:
-                    host.cmdb_template = template
-                    
+                    # Append template if not already in the list
+                    existing_ids = [t.id for t in host.cmdb_templates]
+                    if template.id not in existing_ids:
+                        host.cmdb_templates.append(template)
+
                     # Apply the same logic as on_model_change
                     host.last_import_sync = datetime.now()
                     host.last_import_seen = datetime.now()

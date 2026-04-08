@@ -5,6 +5,7 @@ from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
 from application.helpers.inventory import run_inventory
+from application.helpers.sql import build_select_query, validate_custom_query
 try:
     import mysql.connector
 except ImportError:
@@ -26,9 +27,10 @@ def mysql_import(account):
       database=config["database"]
     )
     mycursor = mydb.cursor()
-    query = f"SELECT {config['fields']} FROM {config['table']};"
     if "custom_query" in config and config['custom_query']:
-        query = config['custom_query']
+        query = validate_custom_query(config['custom_query'])
+    else:
+        query = build_select_query(config['fields'], config['table'])
     logger.debug(query)
     mycursor.execute(query)
     all_hosts = mycursor.fetchall()
@@ -70,9 +72,10 @@ def mysql_inventorize(account):
       database=config["database"]
     )
     mycursor = mydb.cursor()
-    query = f"SELECT {config['fields']} FROM {config['table']};"
     if "custom_query" in config and config['custom_query']:
-        query = config['custom_query']
+        query = validate_custom_query(config['custom_query'])
+    else:
+        query = build_select_query(config['fields'], config['table'])
     mycursor.execute(query)
     field_names = config['fields'].split(',')
 

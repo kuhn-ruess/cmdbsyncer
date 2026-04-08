@@ -296,8 +296,8 @@ class Plugin():
         attributes = {}
         attributes.update(db_host.labels.items())
         attributes.update(db_host.inventory.items())
-        if db_host.cmdb_template:
-            attributes.update(db_host.cmdb_template.labels.items())
+        for tmpl in (db_host.cmdb_templates or []):
+            attributes.update(tmpl.labels.items())
 
         self.init_custom_attributes()
         attributes.update(self.custom_attributes.get_outcomes(db_host, attributes))
