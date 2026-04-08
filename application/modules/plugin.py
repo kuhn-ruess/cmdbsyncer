@@ -94,7 +94,7 @@ class Plugin():
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
-            if not self.configCheckmk :
+            if not self.config:
                 raise ValueError("Account Invalid or not found")
             self.account_name = self.config['name']
             self.account_id = str(self.config['_id'])
