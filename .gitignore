@@ -7,6 +7,7 @@ cmdbsyncer-files
 nogit_*
 local_*
 .obsidian*
+.claude*
 */artifacts
 
 *.swp

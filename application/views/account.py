@@ -1,7 +1,7 @@
 """
 Account Model View
 """
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from mongoengine.errors import OperationError
 from flask_login import current_user
 from flask_admin.form import rules
@@ -26,7 +26,7 @@ def _render_custom_data(_view, _context, model, _name):
         value = entry.value[:max_len]
         if len(entry.value) > max_len:
             value += "..."
-        html += f"<tr><td>{entry.name}</td><td>{value}</td></tr>"
+        html += f"<tr><td>{escape(entry.name)}</td><td>{escape(value)}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -40,7 +40,7 @@ def _render_plugin_data(_view, _context, model, _name):
         value = entry.object_filter[:max_len]
         if len(entry.object_filter) > max_len:
             value += "..."
-        html += f"<tr><td>{entry.plugin}</td><td>{value}</td></tr>"
+        html += f"<tr><td>{escape(entry.plugin)}</td><td>{escape(value)}</td></tr>"
     html += "</table>"
     return Markup(html)
 
@@ -150,7 +150,7 @@ class AccountModelView(DefaultModelView):
                         'target="_blank" class="badge badge-light">Documentation</a>'),
         rules.FieldSet(('name', 'type'),'Basics'),
         rules.FieldSet(('is_master',), "Account Settings"),
-        rules.FieldSet(('is_object', 'object_type'), "Object Settings"),
+        rules.FieldSet(('is_object', 'cmdb_object', 'object_type'), "Object Settings"),
         rules.FieldSet(('address', 'username', 'password'), "Access Config"),
         rules.Header("Addional configuration"),
         rules.Field('custom_fields'),

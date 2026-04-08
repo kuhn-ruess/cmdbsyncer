@@ -10,5 +10,7 @@ def register_admin_views(admin):
             SyncerRuleAutomation,
             name="Automate Syncer Rule Creation",
             category="Syncer Rules",
+            menu_icon_type='fa',
+            menu_icon_value='fa-rocket',
         )
     )

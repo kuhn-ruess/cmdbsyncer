@@ -7,7 +7,7 @@ Checkmk Rules
 import ast
 from application import app
 from application.helpers.syncer_jinja import render_jinja
-from application import logger
+from application import logger, log
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
@@ -191,6 +191,11 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
                         only_pools = [x.strip() for x in action_param.split(',')]
                     folder = poolfolder.get_folder(only_pools)
                     if not folder:
+                        log.log("No Pool Folder left",
+                                affected_hosts=[self.db_host.hostname],
+                                source="folder_pool",
+                                details=[("error", f"No free pool folder for "\
+                                          f"{self.db_host.hostname} (pools: {only_pools})")])
                         raise ValueError(f"No Pool Folder left for {self.db_host.hostname}")
                     folder_name = self.format_foldername(folder.folder_name)
                     self.db_host.lock_to_folder(folder_name)

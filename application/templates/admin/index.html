@@ -72,6 +72,10 @@ function styleAndInitializeFilter() {
       item.setAttribute('data-type', 'feat');
       item.style.color = '#007bff'; // Blue
       item.style.fontWeight = 'bold';
+    } else if (text.match(/^[^:]*SEC:/i)) {
+      item.setAttribute('data-type', 'sec');
+      item.style.color = '#fd7e14'; // Orange
+      item.style.fontWeight = 'bold';
     } else {
       item.setAttribute('data-type', 'other');
       item.style.color = '#6c757d'; // Gray
@@ -84,6 +88,7 @@ function saveFilterSettings() {
     feat: document.getElementById('filter-feat').checked,
     fix: document.getElementById('filter-fix').checked,
     incompatible: document.getElementById('filter-incompatible').checked,
+    sec: document.getElementById('filter-sec').checked,
     other: document.getElementById('filter-other').checked
   };
   localStorage.setItem('changelog-filter-settings', JSON.stringify(settings));
@@ -97,6 +102,7 @@ function restoreFilterSettings() {
       document.getElementById('filter-feat').checked = settings.feat !== undefined ? settings.feat : true;
       document.getElementById('filter-fix').checked = settings.fix !== undefined ? settings.fix : true;
       document.getElementById('filter-incompatible').checked = settings.incompatible !== undefined ? settings.incompatible : true;
+      document.getElementById('filter-sec').checked = settings.sec !== undefined ? settings.sec : true;
       document.getElementById('filter-other').checked = settings.other !== undefined ? settings.other : true;
     } catch (e) {
       // If parsing fails, use defaults
@@ -109,16 +115,18 @@ function filterChangelog() {
   const showFeat = document.getElementById('filter-feat').checked;
   const showFix = document.getElementById('filter-fix').checked;
   const showIncompatible = document.getElementById('filter-incompatible').checked;
+  const showSec = document.getElementById('filter-sec').checked;
   const showOther = document.getElementById('filter-other').checked;
-  
+
   const listItems = document.querySelectorAll('#changelog-content li');
   listItems.forEach(function(item) {
     const type = item.getAttribute('data-type');
     let show = false;
-    
+
     if (type === 'feat' && showFeat) show = true;
     if (type === 'fix' && showFix) show = true;
     if (type === 'incompatible' && showIncompatible) show = true;
+    if (type === 'sec' && showSec) show = true;
     if (type === 'other' && showOther) show = true;
     
     item.style.display = show ? 'block' : 'none';
@@ -126,7 +134,7 @@ function filterChangelog() {
 }
 
 function toggleAllFilters() {
-  const checkboxes = ['filter-feat', 'filter-fix', 'filter-incompatible', 'filter-other'];
+  const checkboxes = ['filter-feat', 'filter-fix', 'filter-incompatible', 'filter-sec', 'filter-other'];
   const anyUnchecked = checkboxes.some(id => !document.getElementById(id).checked);
   
   // If any is unchecked, check all. If all are checked, uncheck all.
@@ -179,6 +187,10 @@ function toggleAllFilters() {
         <label style="display: flex; align-items: center; cursor: pointer;">
           <input type="checkbox" id="filter-incompatible" checked style="margin-right: 5px;">
           <span style="color: #dc3545; font-weight: bold;">INCOMPATIBLE</span>
+        </label>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="filter-sec" checked style="margin-right: 5px;">
+          <span style="color: #fd7e14; font-weight: bold;">SEC</span>
         </label>
         <label style="display: flex; align-items: center; cursor: pointer;">
           <input type="checkbox" id="filter-other" checked style="margin-right: 5px;">
