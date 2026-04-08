@@ -42,6 +42,10 @@ def get_account_by_name(name, is_id=False):
         for field, value  in [(x['name'], x.get('value')) for x in account_data['custom_fields']]:
             if not value:
                 value = False
+            elif value in ('True', 'true'):
+                value = True
+            elif value in ('False', 'false'):
+                value = False
             account_data[field] = value
 
         account_data['settings'] = {}
