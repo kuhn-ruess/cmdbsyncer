@@ -118,7 +118,7 @@ class BaseConfig():
     DEBUG = False
     ADVANCED_RULE_DEBUG = False
 
-    CMDB_MODE = True
+    CMDB_MODE = False
 
     MONGODB_SETTINGS = _get_mongo_settings('127.0.0.1')
 
