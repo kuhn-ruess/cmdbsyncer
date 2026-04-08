@@ -6,6 +6,7 @@ from flask import abort, request, current_app
 from application.models.account import Account
 from application.models.user import User
 from mongoengine.errors import DoesNotExist
+from application import log
 
 
 def _is_secure_api_request():
@@ -32,8 +33,16 @@ def _extract_login_credentials():
         return login_user.split(':', 1)
     return None, None
 
-def _abort_unauthorized():
-    abort(401, "Unauthorized")
+def _abort_unauthorized(reason="Unauthorized"):
+    details = [
+        ('reason', reason),
+        ('user', f"{request.authorization.username if request.authorization else 'unknown'}"),
+        ('ip', request.remote_addr),
+    ]
+    log.log("API Login failed",
+            details=details,
+            source="API")
+    abort(401, "unauthorized")
 
 
 def require_token(fn): #pylint: disable=invalid-name
@@ -45,6 +54,12 @@ def require_token(fn): #pylint: disable=invalid-name
         username, user_password = _extract_login_credentials()
         if username:
             if not _is_secure_api_request():
+                details = [
+                    ('reason', 'HTTPS required'),
+                    ('user', username),
+                    ('ip', request.remote_addr),
+                ]
+                log.log("API Login failed", details=details, source="API")
                 abort(401, "HTTPS is required for password-based API authentication")
             try:
                 user_result = User.objects.get(
@@ -62,15 +77,15 @@ def require_token(fn): #pylint: disable=invalid-name
                         if current_path.startswith(role):
                             allowed = True
                     if not allowed:
-                        _abort_unauthorized()
+                        _abort_unauthorized(f"User '{username}' not allowed for path '{current_path}'")
             except DoesNotExist:
-                _abort_unauthorized()
+                _abort_unauthorized(f"User '{username}' not found")
             if not user_result.check_password(user_password):
-                _abort_unauthorized()
+                _abort_unauthorized(f"Wrong password for user '{username}'")
         elif request.headers.get('x-login-token'):
-            _abort_unauthorized()
+            _abort_unauthorized("Invalid or removed login token")
         else:
-            _abort_unauthorized()
+            _abort_unauthorized("No credentials provided")
 
         return fn(*args, **kwargs)
 
