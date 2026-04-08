@@ -117,7 +117,7 @@ class BaseConfig():
     HTTP_MAX_RETRIES = 2
 
     SWAGGER_ENABLED = True
-    DEBUG = True
+    DEBUG = False
     ADVANCED_RULE_DEBUG = False
 
     CMDB_MODE = True
