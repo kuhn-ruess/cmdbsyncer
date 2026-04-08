@@ -2,7 +2,6 @@
 #pylint: disable=too-few-public-methods
 import os
 
-
 def _get_mongo_settings(default_host):
     return {
         'db': os.environ.get('CMDBSYNCER_MONGODB_DB', 'cmdb-api'),
@@ -16,9 +15,8 @@ class BaseConfig():
     Generel System white Configuration.
     Can be overwritten later if needed.
     """
-    SECRET_KEY = "[1dmBlwnsY788wI3x<[R34qlUF2Xc/>2o7grl{L9C9Yj)8£/O3/2l="
-    CRYPTOGRAPHY_KEY = b'nto4ioGgQDlJ-r5jqvyEtTpUQC2fkOAG4Df-E8OlVm8='
-
+    SECRET_KEY = None # To be overwritten in local_conifg.py
+    CRYPTOGRAPHY_KEY = None # To be overwritten in local_config.py
     TIME_STAMP_FORMAT = "%d.%m.%Y %H:%M"
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
@@ -110,7 +108,7 @@ class BaseConfig():
     ]
 
 
-    DISABLE_SSL_ERRORS = True
+    DISABLE_SSL_ERRORS = False
     HTTP_REQUEST_TIMEOUT = 30
 
     HTTP_REPEAT_TIMEOUT = 3
