@@ -1,5 +1,15 @@
 """ Config File """
 #pylint: disable=too-few-public-methods
+import os
+
+
+def _get_mongo_settings(default_host):
+    return {
+        'db': os.environ.get('CMDBSYNCER_MONGODB_DB', 'cmdb-api'),
+        'host': os.environ.get('CMDBSYNCER_MONGODB_HOST', default_host),
+        'port': int(os.environ.get('CMDBSYNCER_MONGODB_PORT', '27017')),
+        'alias': os.environ.get('CMDBSYNCER_MONGODB_ALIAS', 'default'),
+    }
 
 class BaseConfig():
     """
@@ -112,13 +122,7 @@ class BaseConfig():
 
     CMDB_MODE = True
 
-    MONGODB_SETTINGS = {
-        'db': 'cmdb-api',
-        'host': '127.0.0.1',
-        'port': 27017,
-        'alias': 'default',
-
-    }
+    MONGODB_SETTINGS = _get_mongo_settings('127.0.0.1')
 
     CMDB_MODELS = {
         'host': {
@@ -137,7 +141,7 @@ class BaseConfig():
     REMOTE_USER_LOGIN = False
 
 
-    FILEADMIN_PATH = '/var/cmdbsyncer/files'
+    FILEADMIN_PATH = os.environ.get('CMDBSYNCER_FILEADMIN_PATH', '/var/cmdbsyncer/files')
 
     ### Checkmk Stuff
 
@@ -192,9 +196,4 @@ class ComposeConfig(BaseConfig):
     Config to run in docker_compose
     """
     DEBUG = False
-    MONGODB_SETTINGS = {
-        'db': 'cmdb-api',
-        'host': 'mongo',
-        'port': 27017,
-        'alias': 'default',
-    }
+    MONGODB_SETTINGS = _get_mongo_settings('mongo')
