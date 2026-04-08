@@ -52,6 +52,21 @@ OBJECT_TYPE_ICONS = {
     'cmk_site': 'fa fa-sitemap',
 }
 
+FILTER_KEY_RE = re.compile(r'^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$')
+
+
+def _validate_filter_key(key):
+    clean_key = key.strip()
+    if not FILTER_KEY_RE.fullmatch(clean_key):
+        raise ValueError("Invalid filter key")
+    return clean_key
+
+
+def _build_safe_regex(value):
+    if value == '*':
+        return '.*'
+    return re.escape(value).replace(r'\*', '.*')
+
 def get_debug(hostname, mode):
     """
     Get Output for Host Debug Page
@@ -392,42 +407,42 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        key, value = value.split(':', 1)
-
-        # Filter for None values, but only if key exists
-        if value.strip().lower() == 'none':
-            pipeline = {
-                "$and": [
-                    {f"labels.{key}": None},
-                    {f"labels.{key}": {"$exists": True}}
-                ]
-            }
-            return query.filter(__raw__=pipeline)
-
-        org_value = False
-
         try:
-            org_value = int(value)
-        except ValueError:
-            pass
+            key, value = value.split(':', 1)
+            key = _validate_filter_key(key)
+            value = value.strip()
 
-        if value == '*':
-            value = '.*'
+            # Filter for None values, but only if key exists
+            if value.lower() == 'none':
+                pipeline = {
+                    "$and": [
+                        {f"labels.{key}": None},
+                        {f"labels.{key}": {"$exists": True}}
+                    ]
+                }
+                return query.filter(__raw__=pipeline)
 
+            org_value = None
 
-        if org_value:
-            pipeline = {
-                    "$or": [
-                    {f'labels.{key}': {"$regex":  value, "$options": "i"}},
-                    {f'labels.{key}': org_value}
-                ]
-            }
+            try:
+                org_value = int(value)
+            except ValueError:
+                pass
 
-        else:
-            pipeline = {
-                    f'labels.{key}': {"$regex":  value, "$options": "i"},
-            }
-        try:
+            safe_regex = _build_safe_regex(value)
+
+            if org_value is not None:
+                pipeline = {
+                        "$or": [
+                        {f'labels.{key}': {"$regex": safe_regex, "$options": "i"}},
+                        {f'labels.{key}': org_value}
+                    ]
+                }
+
+            else:
+                pipeline = {
+                        f'labels.{key}': {"$regex": safe_regex, "$options": "i"},
+                }
             return query.filter(__raw__=pipeline)
         except Exception as error:
             flash('danger', error)
@@ -442,40 +457,41 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        key, value = value.split(':', 1)
-
-        # Filter for None values, but only if key exists
-        if value.strip().lower() == 'none':
-            pipeline = {
-                "$and": [
-                    {f"inventory.{key}": None},
-                    {f"inventory.{key}": {"$exists": True}}
-                ]
-            }
-            return query.filter(__raw__=pipeline)
-
-        org_value = False
-
         try:
-            org_value = int(value)
-        except ValueError:
-            pass
+            key, value = value.split(':', 1)
+            key = _validate_filter_key(key)
+            value = value.strip()
 
-        if value == '*':
-            value = '.*'
+            # Filter for None values, but only if key exists
+            if value.lower() == 'none':
+                pipeline = {
+                    "$and": [
+                        {f"inventory.{key}": None},
+                        {f"inventory.{key}": {"$exists": True}}
+                    ]
+                }
+                return query.filter(__raw__=pipeline)
 
-        if org_value:
-            pipeline = {
-                    "$or": [
-                    {f'inventory.{key}': {"$regex":  value, "$options": "i"}},
-                    {f'inventory.{key}': org_value}
-                ]
-            }
-        else:
-            pipeline = {
-                    f'inventory.{key}': {"$regex":  value, "$options": "i"},
-            }
-        try:
+            org_value = None
+
+            try:
+                org_value = int(value)
+            except ValueError:
+                pass
+
+            safe_regex = _build_safe_regex(value)
+
+            if org_value is not None:
+                pipeline = {
+                        "$or": [
+                        {f'inventory.{key}': {"$regex": safe_regex, "$options": "i"}},
+                        {f'inventory.{key}': org_value}
+                    ]
+                }
+            else:
+                pipeline = {
+                        f'inventory.{key}': {"$regex": safe_regex, "$options": "i"},
+                }
             return query.filter(__raw__=pipeline)
         except Exception as error:
             flash('danger', error)
