@@ -19,6 +19,7 @@ from flask_login import LoginManager
 from flask_mail import Mail
 from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
+from flask_wtf.csrf import CSRFProtect
 
 from application.helpers.tablib_formater import ExportObjects
 
@@ -41,6 +42,7 @@ config_name = os.environ.get('config', 'base').lower()
 app.config.from_object(CONFIG_MAP.get(config_name, CONFIG_MAP['base']))
 if config_name == "base":
     app.jinja_env.auto_reload = True
+csrf = CSRFProtect(app)
 
 
 ## Read Build Data
@@ -198,6 +200,7 @@ def _register_all_plugin_admin_views():
 
 from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
+csrf.exempt(api)
 
 admin = Admin(app, name=f"cmdbsyncer {VERSION}",
                    index_view=IndexView(),
