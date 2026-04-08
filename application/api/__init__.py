@@ -32,6 +32,10 @@ def _extract_login_credentials():
         return login_user.split(':', 1)
     return None, None
 
+def _abort_unauthorized():
+    abort(401, "Unauthorized")
+
+
 def require_token(fn): #pylint: disable=invalid-name
     """
     Decorator for Endpoints with token
@@ -58,19 +62,15 @@ def require_token(fn): #pylint: disable=invalid-name
                         if current_path.startswith(role):
                             allowed = True
                     if not allowed:
-                        abort(401, "Not sufficent rights")
+                        _abort_unauthorized()
             except DoesNotExist:
-                abort(401, "Invalid login")
+                _abort_unauthorized()
             if not user_result.check_password(user_password):
-                abort(401, "Invalid login")
+                _abort_unauthorized()
         elif request.headers.get('x-login-token'):
-            abort(
-                401,
-                "Please Migrate to x-login-user authentication. "
-                "Due to security reasons, this login is no longer possible"
-            )
+            _abort_unauthorized()
         else:
-            abort(401, "Invalid Request, Loginheader missing")
+            _abort_unauthorized()
 
         return fn(*args, **kwargs)
 
