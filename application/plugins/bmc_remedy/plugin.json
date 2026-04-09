@@ -10,7 +10,9 @@
         "hostname_field": "dnshostname",
         "namespace": "",
         "class_name": "",
-        "verify_cert": "True"
+        "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": ""
     },
     "enabled": true
 }
