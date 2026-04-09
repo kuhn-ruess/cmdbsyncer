@@ -2,6 +2,8 @@
 Default Model Views
 """
 import os
+import re
+import html
 from copy import deepcopy
 from flask import url_for, redirect, flash, request
 from flask_login import current_user
@@ -158,6 +160,33 @@ class IndexView(AdminIndexView):
             
         return '\n'.join(html_lines)
 
+    def _load_notices(self):
+        """
+        Load all notice files from the notices/ directory.
+        Returns list of dicts with 'id' and 'content'.
+        """
+        notices = []
+        notices_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'notices')
+        if not os.path.isdir(notices_dir):
+            return notices
+        for filename in sorted(os.listdir(notices_dir)):
+            if filename.endswith('.txt'):
+                notice_id = filename[:-4]  # strip .txt
+                filepath = os.path.join(notices_dir, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                    escaped = html.escape(content)
+                    linked = re.sub(
+                        r'(https?://[^\s]+)',
+                        r'<a href="\1" target="_blank">\1</a>',
+                        escaped
+                    )
+                    notices.append({'id': notice_id, 'content': linked})
+                except Exception:
+                    pass
+        return notices
+
     @expose('/')
     def index(self):
         """
@@ -175,5 +204,7 @@ class IndexView(AdminIndexView):
             changelog_html = "<p>Changelog not found.</p>"
         except Exception:
             changelog_html = "<p>Error loading changelog.</p>"
-        
-        return self.render('admin/index.html', changelog_html=changelog_html)
+
+        notices = self._load_notices()
+
+        return self.render('admin/index.html', changelog_html=changelog_html, notices=notices)
