@@ -1,7 +1,9 @@
 name: Update build date on push
 
 on:
-  push
+  push:
+    branches:
+      - main
 
 permissions:
     contents: write

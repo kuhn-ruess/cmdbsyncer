@@ -6,6 +6,8 @@
     "account_custom_field_presets": {
         "rewrite_hostname": "",
         "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": "",
         "import_filter": "",
         "delete_host_if_not_found_on_import": ""
     },
