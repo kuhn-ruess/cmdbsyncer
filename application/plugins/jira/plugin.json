@@ -8,7 +8,9 @@
     },
     "account_custom_field_presets": {
         "page_size": "1000",
-        "verify_cert": "True"
+        "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": ""
     },
     "enabled": true
 }

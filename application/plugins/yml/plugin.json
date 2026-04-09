@@ -14,6 +14,8 @@
         "name_of_variables_key": "",
         "rewrite_hostname": "",
         "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": "",
         "path": "",
     },
     "enabled": true

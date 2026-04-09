@@ -16,6 +16,8 @@
         "dont_delete_hosts_if_more_then": "",
         "dont_activate_changes_if_more_then": "",
         "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": "",
         "import_filter": ""
     },
     "enabled": true
