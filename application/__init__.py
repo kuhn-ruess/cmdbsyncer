@@ -29,7 +29,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-VERSION = '3.12.4'
+VERSION = '3.12.5'
 
 CONFIG_MAP = {
     'prod': 'application.config.ProductionConfig',

@@ -29,10 +29,7 @@ class SyncNetbox(Plugin):
         if self.config:
             # Not needed in Debug_host Mode
             self.nb = pynetbox.api(self.config['address'], token=self.config['password'])
-            verify = False
-            if 'true' in self.config.get('verify_cert', 'true').lower():
-                verify = True
-            self.nb.http_session.verify = verify
+            self.nb.http_session.verify = self.verify
 #.
 #   . -- Helpers
     @staticmethod

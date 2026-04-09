@@ -1,0 +1,6 @@
+IMPORTANT: Starting with this version, CMDBSyncer enforces strict SSL certificate verification by default.
+
+Please check if your exports are still running without errors.
+If you encounter connection errors, configure the certificates in the respective accounts.
+
+More information: https://docs.cmdbsyncer.de/basics/accounts/#ssl-certificate-verification

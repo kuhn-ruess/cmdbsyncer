@@ -8,6 +8,8 @@ import time
 import json as mod_json
 import atexit
 import uuid
+import os
+import tempfile
 
 from pprint import pformat
 from collections import namedtuple
@@ -80,17 +82,18 @@ class Plugin():
     def __init__(self, account=False):
         """
         Initialize the plugin instance.
-        
+
         Args:
             account (str|bool, optional): Account identifier to load configuration.
                                         If False, no account is loaded. Defaults to False.
-                                        
+
         Raises:
             ValueError: If the specified account is invalid or not found.
         """
         self.start_time = time.time()
         self.log_details = []
         self.debug_lines = []
+        self._ca_cert_tempfile = None
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
@@ -99,12 +102,29 @@ class Plugin():
             self.account_name = self.config['name']
             self.account_id = str(self.config['_id'])
             self.log_details.append(('Account', self.config['name']))
-            self.verify = self.config.get('verify_cert')
+            verify_cert = self.config.get('verify_cert')
+            self.verify = verify_cert if verify_cert is not None else True
 
         if app.config.get('DISABLE_SSL_ERRORS'):
             # Legacy Behavior -> Global Setting Overwrite. Deprecated start v3.8.2
             self.verify = not app.config.get('DISABLE_SSL_ERRORS')
 
+        if account and self.verify not in ["", False]:
+            chain_path = (self.config.get('ca_cert_chain') or '').strip()
+            root_path = (self.config.get('ca_root_cert') or '').strip()
+            cert_parts = []
+            for cert_file_path in filter(None, [chain_path, root_path]):
+                try:
+                    with open(cert_file_path, 'r', encoding='utf-8') as f:
+                        cert_parts.append(f.read().strip())
+                except OSError as e:
+                    logger.warning(f"Could not read CA cert file '{cert_file_path}': {e}")
+            if cert_parts:
+                fd, path = tempfile.mkstemp(suffix='.pem', prefix='cmdbsyncer_ca_')
+                with os.fdopen(fd, 'w') as bundle_file:
+                    bundle_file.write('\n'.join(cert_parts))
+                self._ca_cert_tempfile = path
+                self.verify = path
 
         if not self.source:
             self.source = self.__class__.__qualname__.replace('.','')
@@ -115,7 +135,7 @@ class Plugin():
     def save_log(self):
         """
         Save plugin execution details to the log system.
-        
+
         This method is automatically called at exit via atexit.register().
         It calculates the total execution duration and saves all collected
         log details including start time, end time, and duration.
@@ -125,6 +145,12 @@ class Plugin():
         self.log_details.append(('ended', datetime.now()))
 
         log.log(self.name, source=self.source, details=self.log_details)
+
+        if self._ca_cert_tempfile:
+            try:
+                os.unlink(self._ca_cert_tempfile)
+            except OSError:
+                pass
 
 
 

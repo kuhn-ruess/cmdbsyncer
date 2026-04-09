@@ -25,7 +25,43 @@ label {
 </style>
 
 <script>
+function confirmNotice(noticeId) {
+  if (!confirm('Have you checked and confirmed this notice?')) return;
+  const confirmed = JSON.parse(localStorage.getItem('confirmed-notices') || '[]');
+  if (!confirmed.includes(noticeId)) {
+    confirmed.push(noticeId);
+    localStorage.setItem('confirmed-notices', JSON.stringify(confirmed));
+  }
+  const el = document.getElementById('notice-' + noticeId);
+  if (el) el.style.display = 'none';
+
+  // Hide section header if all notices are gone
+  const remaining = document.querySelectorAll('.notice-box');
+  const anyVisible = Array.from(remaining).some(n => n.style.display !== 'none');
+  if (!anyVisible) {
+    const section = document.getElementById('notices-section');
+    if (section) section.style.display = 'none';
+  }
+}
+
+function applyConfirmedNotices() {
+  const confirmed = JSON.parse(localStorage.getItem('confirmed-notices') || '[]');
+  confirmed.forEach(function(noticeId) {
+    const el = document.getElementById('notice-' + noticeId);
+    if (el) el.style.display = 'none';
+  });
+
+  const remaining = document.querySelectorAll('.notice-box');
+  const anyVisible = Array.from(remaining).some(n => n.style.display !== 'none');
+  if (!anyVisible) {
+    const section = document.getElementById('notices-section');
+    if (section) section.style.display = 'none';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+  applyConfirmedNotices();
+
   // Style changelog entries and add filter functionality
   styleAndInitializeFilter();
   
@@ -165,6 +201,23 @@ function toggleAllFilters() {
     <p>
       Build: {{config.BUILD_DATE}}
     </p>
+
+    {% if notices %}
+    <div id="notices-section" style="margin-top: 20px;">
+      <h4>Messages</h4>
+      {% for notice in notices %}
+      <div id="notice-{{ notice.id }}"
+           class="notice-box"
+           style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 0.375rem; padding: 0.75rem 1rem; margin-bottom: 10px;">
+        <div style="white-space: pre-wrap; margin-bottom: 8px;">{{ notice.content|safe }}</div>
+        <button onclick="confirmNotice('{{ notice.id }}')"
+                style="background: #ffc107; color: #212529; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold;">
+          Confirm
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 
   <!-- Right Column: Changelog -->
