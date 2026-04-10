@@ -322,19 +322,23 @@ class RuleModelView(DefaultModelView):
     form_rules = [
         rules.HTML('''
         <style>
-        [id^="conditions-"] legend { display: none !important; }
-        [id^="conditions-"] .card { 
-            margin-bottom: 8px !important; 
-            padding: 10px !important; 
+        [id^="conditions-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
+        [id^="conditions-"] legend small { font-size: 0 !important; }
+        [id^="conditions-"] legend small .pull-right { font-size: 1rem !important; }
+        [id^="conditions-"] .card {
+            margin-bottom: 8px !important;
+            padding: 10px !important;
             background-color: #f8f9fa !important;
             border-radius: 8px !important;
         }
         [id^="conditions-"] .form-group { margin-bottom: 5px !important; }
         [id^="conditions-"] .inline-field { margin-bottom: 8px !important; }
-        [id^="outcomes-"] legend { display: none !important; }
-        [id^="outcomes-"] .card { 
-            margin-bottom: 8px !important; 
-            padding: 10px !important; 
+        [id^="outcomes-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
+        [id^="outcomes-"] legend small { font-size: 0 !important; }
+        [id^="outcomes-"] legend small .pull-right { font-size: 1rem !important; }
+        [id^="outcomes-"] .card {
+            margin-bottom: 8px !important;
+            padding: 10px !important;
             background-color: #f8f9fa !important;
             border-radius: 8px !important;
         }
@@ -479,19 +483,23 @@ class FiltereModelView(DefaultModelView):
     form_rules = [
         rules.HTML('''
         <style>
-        [id^="conditions-"] legend { display: none !important; }
-        [id^="conditions-"] .card { 
-            margin-bottom: 8px !important; 
-            padding: 10px !important; 
+        [id^="conditions-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
+        [id^="conditions-"] legend small { font-size: 0 !important; }
+        [id^="conditions-"] legend small .pull-right { font-size: 1rem !important; }
+        [id^="conditions-"] .card {
+            margin-bottom: 8px !important;
+            padding: 10px !important;
             background-color: #f8f9fa !important;
             border-radius: 8px !important;
         }
         [id^="conditions-"] .form-group { margin-bottom: 5px !important; }
         [id^="conditions-"] .inline-field { margin-bottom: 8px !important; }
-        [id^="outcomes-"] legend { display: none !important; }
-        [id^="outcomes-"] .card { 
-            margin-bottom: 8px !important; 
-            padding: 10px !important; 
+        [id^="outcomes-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
+        [id^="outcomes-"] legend small { font-size: 0 !important; }
+        [id^="outcomes-"] legend small .pull-right { font-size: 1rem !important; }
+        [id^="outcomes-"] .card {
+            margin-bottom: 8px !important;
+            padding: 10px !important;
             background-color: #f8f9fa !important;
             border-radius: 8px !important;
         }

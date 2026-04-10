@@ -6,15 +6,13 @@ on:
       - main
 
 permissions:
-    contents: write
+  contents: write
 
 jobs:
   update-build-date:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{secrets.KR_GUARDIAN_ACCESS_TOKEN}}
 
       - name: Set build date
         run: |
