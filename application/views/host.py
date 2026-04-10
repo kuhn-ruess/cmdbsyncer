@@ -774,7 +774,9 @@ class ObjectModelView(DefaultModelView):
     form_rules = [
         rules.HTML('''
         <style>
-        [id^="cmdb_fields-"] legend { display: none !important; }
+        [id^="cmdb_fields-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
+        [id^="cmdb_fields-"] legend small { font-size: 0 !important; }
+        [id^="cmdb_fields-"] legend small .pull-right { font-size: 1rem !important; }
         [id^="cmdb_fields-"] .card { 
             margin-bottom: 8px !important; 
             padding: 10px !important; 
@@ -914,7 +916,9 @@ class TemplateModelView(ObjectModelView):
     form_rules = [
         rules.HTML('''
         <style>
-        [id^="cmdb_fields-"] legend { display: none !important; }
+        [id^="cmdb_fields-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
+        [id^="cmdb_fields-"] legend small { font-size: 0 !important; }
+        [id^="cmdb_fields-"] legend small .pull-right { font-size: 1rem !important; }
         [id^="cmdb_fields-"] .card {
             margin-bottom: 8px !important;
             padding: 10px !important;
