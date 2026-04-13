@@ -1,5 +1,6 @@
 """ Main entry """
-# pyright: reportImportCycles=false
+# Flask app factory with intentional deferred imports to avoid circular imports.
+# pylint: disable=wrong-import-position,import-outside-toplevel,ungrouped-imports,line-too-long,wildcard-import,unused-wildcard-import,cyclic-import
 import os
 import sys
 import logging
@@ -207,7 +208,7 @@ def _register_all_plugin_admin_views():
             if exc.name == admin_module_name:
                 continue
             raise
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to register admin views for plugin %s", module_name
             )
