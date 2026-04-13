@@ -8,6 +8,36 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+echo "BUILD_DATE=$DATE" > buildinfo.txt
+git add buildinfo.txt
+echo "Updated buildinfo.txt -> $DATE"
+
+PYLINT_BIN=""
+if [ -x "$REPO_ROOT/.venv/bin/pylint" ]; then
+    PYLINT_BIN="$REPO_ROOT/.venv/bin/pylint"
+elif [ -x "$REPO_ROOT/venv/bin/pylint" ]; then
+    PYLINT_BIN="$REPO_ROOT/venv/bin/pylint"
+elif command -v pylint >/dev/null 2>&1; then
+    PYLINT_BIN="$(command -v pylint)"
+fi
+
+if [ -n "$PYLINT_BIN" ]; then
+    CHANGED_PY=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+    if [ -n "$CHANGED_PY" ]; then
+        echo "Running pylint on staged Python files..."
+        # shellcheck disable=SC2086
+        if ! "$PYLINT_BIN" $CHANGED_PY; then
+            echo
+            echo "Pylint reported issues — commit aborted."
+            exit 1
+        fi
+        echo "Pylint passed."
+    fi
+else
+    echo "pylint not found — skipping lint check."
+fi
+
 echo "Running unit tests before commit..."
 if ! ./run_tests.sh > /tmp/cmdbsyncer_pretest.log 2>&1; then
     echo
@@ -17,8 +47,3 @@ if ! ./run_tests.sh > /tmp/cmdbsyncer_pretest.log 2>&1; then
     exit 1
 fi
 echo "All tests passed."
-
-DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "BUILD_DATE=$DATE" > buildinfo.txt
-git add buildinfo.txt
-echo "Updated buildinfo.txt -> $DATE"
