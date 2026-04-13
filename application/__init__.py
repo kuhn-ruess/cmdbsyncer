@@ -29,7 +29,31 @@ warnings.filterwarnings('ignore', category=UserWarning)
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-VERSION = '3.12.5'
+def _read_version_from_changelog():
+    """
+    Resolve the current version from the newest changelog/v*.md file by
+    reading its first `## Version x.y.z` header. This keeps VERSION in sync
+    with the changelog without requiring a manual bump on every release.
+    """
+    import glob
+    import re as _re
+    changelog_dir = os.path.join(os.path.dirname(__file__), "..", "changelog")
+    files = glob.glob(os.path.join(changelog_dir, "v*.md"))
+
+    def _key(path):
+        m = _re.search(r"v(\d+)\.(\d+)\.md$", path)
+        return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+    for path in sorted(files, key=_key, reverse=True):
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                m = _re.match(r"^## Version (\d+\.\d+\.\d+)\s*$", line)
+                if m:
+                    return m.group(1)
+    return "0.0.0"
+
+
+VERSION = _read_version_from_changelog()
 
 CONFIG_MAP = {
     'prod': 'application.config.ProductionConfig',
