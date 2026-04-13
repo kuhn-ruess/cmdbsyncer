@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Pre-commit hook:
+#   1. Run the unit-test suite; abort the commit on failure.
+#   2. Refresh buildinfo.txt with the current UTC timestamp and stage it.
+# Activate once with:  git config core.hooksPath .githooks
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "Running unit tests before commit..."
+if ! ./run_tests.sh > /tmp/cmdbsyncer_pretest.log 2>&1; then
+    echo
+    echo "Unit tests failed — commit aborted."
+    echo "Full output:"
+    cat /tmp/cmdbsyncer_pretest.log
+    exit 1
+fi
+echo "All tests passed."
+
+DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+echo "BUILD_DATE=$DATE" > buildinfo.txt
+git add buildinfo.txt
+echo "Updated buildinfo.txt -> $DATE"
