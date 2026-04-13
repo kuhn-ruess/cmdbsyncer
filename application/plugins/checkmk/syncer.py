@@ -1,8 +1,8 @@
 """
 Add Hosts into CMK Version 2 Installations
 """
+# pylint: disable=too-many-lines
 import ast
-from datetime import datetime
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import app, logger, log
@@ -11,6 +11,7 @@ from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes as CC
 
 
+# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class SyncCMK2(CMK2):
     """
     Synchronization class for CheckMK version 2.x installations.
@@ -119,6 +120,7 @@ class SyncCMK2(CMK2):
                         self.custom_folder_attributes[config_path] = ast.literal_eval(splitted[1])
 
 
+    # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements
     def handle_folders(self):
         """
         Update CheckMK folders with custom attributes and titles.
@@ -273,6 +275,7 @@ class SyncCMK2(CMK2):
         for cluster in self.cluster_updates:
             self.update_cluster_nodes(*cluster)
 
+    # pylint: disable-next=too-many-branches
     def cleanup_hosts(self):
         """
         Remove hosts from CheckMK that are no longer in the source system.
@@ -421,20 +424,20 @@ class SyncCMK2(CMK2):
         if 'remove_attributes' in next_actions:
             remove_attributes = next_actions['remove_attributes']
 
-        logger.debug(f'Attributes will be removed: {remove_attributes}')
+        logger.debug('Attributes will be removed: %s', remove_attributes)
 
 
         for custom_attr, custom_value in next_actions.get('custom_attributes', {}).items():
-            logger.debug(f"Check to add Custom Attribute: {custom_attr}")
+            logger.debug("Check to add Custom Attribute: %s", custom_attr)
 
             if custom_attr in remove_attributes:
-                logger.debug(f"Don't add Attribute {custom_attr}, its in remove_attributes")
+                logger.debug("Don't add Attribute %s, its in remove_attributes", custom_attr)
                 continue
 
             additional_attributes[custom_attr] = custom_value
 
         for additional_attr in next_actions.get('attributes', []):
-            logger.debug(f"Check to add Attribute: {additional_attr}")
+            logger.debug("Check to add Attribute: %s", additional_attr)
             if attr_value := attributes['all'].get(additional_attr):
                 additional_attributes[additional_attr] = attr_value
 
@@ -446,6 +449,7 @@ class SyncCMK2(CMK2):
         return additional_attributes, remove_attributes
 
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
     def create_or_update_host(self, hostname, folder, labels,
                                     cluster_nodes, additional_attributes,
                                     remove_attributes, dont_move_host,
@@ -499,10 +503,11 @@ class SyncCMK2(CMK2):
             if is_cluster:
                 cmk_cluster = cmk_host['extensions']['cluster_nodes']
                 self.cluster_updates.append((hostname, cmk_cluster, cluster_nodes))
-        
+
 
             return
-        elif not dont_create_host:
+
+        if not dont_create_host:
             # Create since missing
             if is_cluster:
                 print(f"{CC.OKBLUE} *{CC.ENDC} Will be created as Cluster")
@@ -523,14 +528,15 @@ class SyncCMK2(CMK2):
                             }}
                             }}
             return
-        else:
-            self.console(" * Host is not to be updated")
+
+        self.console(" * Host is not to be updated")
 
         self.set_status_attribute(hostname, False)
         print(f"DO NOT {hostname}")
 
 
 
+    # pylint: disable-next=too-many-locals
     def calculate_attributes_and_rules(self):
         """
         Calculate host attributes and rules using multiprocessing.
@@ -578,7 +584,7 @@ class SyncCMK2(CMK2):
                         task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
                         progress.console.print("- ERROR: Timeout for a object")
-                    except Exception as error:
+                    except Exception as error:  # pylint: disable=broad-exception-caught
                         if self.debug:
                             raise
                         progress.console.print(f"- ERROR: Timeout error for object ({error})")
@@ -605,7 +611,7 @@ class SyncCMK2(CMK2):
         if not app.config['CMK_WRITE_STATUS_BACK']:
             return
         try:
-            db_host = Host.objects(hostname=hostname).first()
+            db_host = Host.get_host(hostname, create=False)
             if db_host:
                 # Set inventory attribute indicating this host exists in CheckMK
                 inventory_data = {
@@ -613,12 +619,13 @@ class SyncCMK2(CMK2):
                 }
                 db_host.update_inventory('checkmk_status', inventory_data)
                 db_host.save()
-        except Exception as exp:
+        except Exception as exp:  # pylint: disable=broad-exception-caught
             self.log_details.append(('error', f"Failed to set inventory for {hostname}: {exp}"))
             print(f"{CC.WARNING} *{CC.ENDC} Failed to set inventory for {hostname}: {exp}")
 
 
 #   .-- Run Sync
+    # pylint: disable-next=too-many-locals,too-many-statements
     def run(self):
         """
         Execute the complete synchronization process.
@@ -665,7 +672,8 @@ class SyncCMK2(CMK2):
                     label_prefix = self.label_prefix
                 labels = {f"{label_prefix}{k}":str(v).replace(':','-') \
                         for k,v in attributes['filtered'].items()}
-                labels.update({x:y for x,y in attributes['all'].items() if x.startswith('cmdbsyncer/')})
+                labels.update({x:y for x,y in attributes['all'].items()
+                               if x.startswith('cmdbsyncer/')})
                 if app.config['CMK_LOWERCASE_LABEL_VALUES']:
                     labels = {k:v.lower() for k, v in labels.items()}
 
@@ -769,7 +777,7 @@ class SyncCMK2(CMK2):
             self.request(url, method="POST", data=body)
             self.existing_folders.append(full_foldername)
         except CmkException as error:
-            logger.debug(f"Error creating Folder {error}")
+            logger.debug("Error creating Folder %s", error)
             self.log_details.append(('error', f"Folder create problem {error}"))
 
 
@@ -833,7 +841,8 @@ class SyncCMK2(CMK2):
                 self.num_created += len(chunk)
             except CmkException as error:
                 self.log_details.append((f'error_bulk_{count}', f"Bulk Create Error: {error}"))
-                self.log_details.append((f'error_affected_{count}', str([x['host_name'] for x in chunk])))
+                affected = str([x['host_name'] for x in chunk])
+                self.log_details.append((f'error_affected_{count}', affected))
                 self.console(f" * CMK API ERROR {error}")
 
     def add_bulk_create_host(self, body):
@@ -897,6 +906,7 @@ class SyncCMK2(CMK2):
 
 #.
 #   .-- Create Cluster
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
     def create_cluster(self, hostname, folder, labels, nodes, additional_attributes=None):
         """
         Create a cluster host in CheckMK.
@@ -934,7 +944,7 @@ class SyncCMK2(CMK2):
 #.
 #   .-- Get Etag
 
-    def get_etag(self, hostname, reason=""):
+    def get_etag(self, hostname, reason=""):  # pylint: disable=unused-argument
         """
         Retrieve ETag for a host (currently returns wildcard).
 
@@ -1031,15 +1041,202 @@ class SyncCMK2(CMK2):
             self.send_bulk_update_host(self.bulk_updates)
             self.bulk_updates = []
 
-    def update_host(self, hostname, cmk_host, folder, \
-                    labels, additional_attributes, remove_attributes, \
+    @staticmethod
+    def _normalize_cmk_folder(current_folder):
+        """Normalize a folder path returned by CheckMK (leading /, no trailing /)."""
+        if not current_folder.startswith('/'):
+            current_folder = "/" + current_folder
+        # 2022-08-03 Problem with CMK:
+        # Sometimes we have the / at the end, sometimes not. This should solve this
+        if current_folder.endswith('/') and current_folder != '/':
+            current_folder = current_folder[:-1]
+        return current_folder
+
+    def _move_host_if_needed(self, hostname, current_folder, folder, dont_move_host):
+        """
+        Move host to target folder if current and target differ.
+
+        Returns:
+            tuple(etag, ok): etag to reuse for subsequent requests (False if none),
+                             ok=False if the move failed and the caller should abort.
+        """
+        check_folder = folder
+        if self.checkmk_version.startswith('2.2') and folder.endswith('/'):
+            check_folder = folder[:-1]
+
+        if dont_move_host:
+            if current_folder != folder:
+                self.console(f" * Folder Move to {folder} disabled. ")
+            return False, True
+
+        if current_folder == check_folder:
+            return False, True
+
+        etag = self.get_etag(hostname, "Move Host")
+        update_headers = {'if-match': etag}
+        update_url = f"/objects/host_config/{hostname}/actions/move/invoke"
+        update_body = {'target_folder': folder.replace('/', '~')}
+        header = {}
+        try:
+            _, header = self.request(update_url, method="POST",
+                                     data=update_body,
+                                     additional_header=update_headers)
+        except CmkException as exp:
+            self.log_details.append(('error', f'Move exception: {hostname} {exp}'))
+        if 'error' in header:
+            self.console(f" * Host Move Problem: {header['error']}")
+            self.log_details.append(('error', f"Move Error: {hostname} {header['error']}"))
+            return False, False
+        self.console(f" * Host Moved from Folder: {current_folder} to {folder}")
+        return header.get('ETag', etag), True
+
+    def _secure_existing_labels(self, labels, cmk_labels):
+        """Preserve CMK-side labels according to dont_/only_update_prefixed_labels."""
+        if self.dont_update_prefixed_labels:
+            for label, value in cmk_labels.items():
+                for chk_label in self.dont_update_prefixed_labels:
+                    if label.startswith(chk_label):
+                        labels[label] = value
+
+        if self.only_update_prefixed_labels:
+            for label, value in cmk_labels.items():
+                if (label != 'cmdb_syncer'
+                        and not label.startswith(self.only_update_prefixed_labels)
+                        and label not in labels):
+                    labels[label] = value
+
+    # pylint: disable-next=too-many-locals
+    def _build_host_update_body(self, cmk_host, labels,
+                                additional_attributes, remove_attributes):
+        """
+        Decide what to update for this host and assemble the update body.
+
+        Mutates `labels` (to preserve existing CMK labels) and `remove_attributes`
+        (drops attributes that are not present in CheckMK to avoid API errors).
+
+        Returns:
+            tuple(update_body, update_reasons): update_body is {} if no update needed.
+        """
+        update_reasons = []
+        cmk_attributes = cmk_host['extensions']['attributes']
+        cmk_labels = cmk_attributes.get('labels', {})
+
+        self._secure_existing_labels(labels, cmk_labels)
+
+        do_update_labels = labels != cmk_labels
+        if do_update_labels:
+            update_reasons.append("Labels not match")
+
+        do_update_attributes = False
+        for key, value in additional_attributes.items():
+            attr = cmk_attributes.get(key)
+            if attr != value:
+                update_reasons.append(
+                    f"Update Extra Attribute: {key} Currently: {attr} != {value}")
+                do_update_attributes = True
+                break
+
+        do_remove_attributes = False
+        not_existing = []
+        for attr in remove_attributes:
+            if attr in cmk_attributes:
+                update_reasons.append(f"Remove Extra Attribute: {attr}")
+                do_remove_attributes = True
+            else:
+                not_existing.append(attr)
+        # If we would try to remove an attribute not existing in checkmk,
+        # the API would respond with an exception
+        for attr in not_existing:
+            remove_attributes.remove(attr)
+
+        if not (do_update_labels or do_update_attributes or do_remove_attributes):
+            return {}, update_reasons
+
+        update_body = {'update_attributes': {}, 'tags': {}}
+        if do_update_labels:
+            update_body['labels'] = labels
+        if do_update_attributes and additional_attributes:
+            update_body['update_attributes'].update(
+                {x: y for x, y in additional_attributes.items()
+                 if not x.startswith('tag_')})
+            update_body['tags'] = {x: y for x, y in additional_attributes.items()
+                                   if x.startswith('tag_')}
+        if do_remove_attributes and remove_attributes:
+            update_body['remove_attributes'] = remove_attributes
+
+        return update_body, update_reasons
+
+    @staticmethod
+    def _build_update_payload(what, update_body):
+        """Build the per-field payload for a CheckMK update request.
+
+        Returns None if there is nothing to send for this field.
+        """
+        if what == 'tags':
+            if not update_body['tags']:
+                return None
+            return {"update_attributes": update_body['tags']}
+        if what == 'labels':
+            return {"update_attributes": {'labels': update_body[what]}}
+        return {what: update_body[what]}
+
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
+    def _send_single_host_update(self, hostname, update_url, what,
+                                 payload, update_reasons, etag):
+        """Send a single per-field update for a host. Returns the (possibly reset) etag."""
+        if not etag:
+            etag = self.get_etag(hostname, "Update Host (1)")
+        update_headers = {'if-match': etag}
+        try:
+            self.request(update_url, method="PUT",
+                         data=payload, additional_header=update_headers)
+            self.num_updated += 1
+            etag = False
+        except CmkException as error:
+            self.log_details.append(('error', f"CMK API Error: {error}"))
+            self.log_details.append(('affected_hosts', hostname))
+            self.console(f" * CMK API ERROR {error}")
+        else:
+            self.console(" * Updated Host in Checkmk")
+            self.console(f"   Reasons: {what}: {', '.join(update_reasons)}")
+        return etag
+
+    def _dispatch_host_update(self, hostname, update_body, update_reasons, etag):
+        """
+        Send the update to CheckMK, one field at a time.
+
+        CheckMK currently fails if you send labels and tags at the same time,
+        and you can't send update and remove attributes together either.
+        """
+        logger.debug("Syncer Update Body: %s", update_body)
+        update_url = f"objects/host_config/{hostname}"
+
+        for what in ('attributes', 'update_attributes',
+                     'remove_attributes', 'labels', 'tags'):
+            if what not in update_body:
+                continue
+            payload = self._build_update_payload(what, update_body)
+            if payload is None:
+                continue
+
+            if app.config['CMK_BULK_UPDATE_HOSTS']:
+                payload['host_name'] = hostname
+                self.add_bulk_update_host(payload)
+                self.console(f" * Add to Bulk Update List for {what} update")
+                continue
+
+            etag = self._send_single_host_update(
+                hostname, update_url, what, payload, update_reasons, etag)
+
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
+    def update_host(self, hostname, cmk_host, folder,
+                    labels, additional_attributes, remove_attributes,
                     dont_move_host):
         """
         Update an existing host in CheckMK.
 
-        Comprehensive host update method that handles folder moves, label
-        updates, attribute changes, and removals. Supports both individual
-        and bulk update modes.
+        Orchestrates folder moves, label/attribute updates, and attribute
+        removals by delegating to dedicated helpers.
 
         Args:
             hostname (str): Name of the host to update
@@ -1050,176 +1247,19 @@ class SyncCMK2(CMK2):
             remove_attributes (list): Attributes to remove
             dont_move_host (bool): Whether to skip folder movement
         """
-        current_folder = cmk_host['extensions']['folder']
-        # Hack slash in front, quick solution before redesign
-        if not current_folder.startswith('/'):
-            current_folder = "/" + current_folder
+        current_folder = self._normalize_cmk_folder(cmk_host['extensions']['folder'])
+        logger.debug("Checkmk Body: %s", cmk_host)
 
-        # 2022-08-03 Problem with CMK:
-        # Sometimes we have the / at the end,
-        # sometimes not. This should solve this
-        if current_folder.endswith('/') and current_folder != '/':
-            current_folder = current_folder[:-1]
+        etag, ok = self._move_host_if_needed(
+            hostname, current_folder, folder, dont_move_host)
+        if not ok:
+            return
 
-        logger.debug(f"Checkmk Body: {cmk_host}")
+        update_body, update_reasons = self._build_host_update_body(
+            cmk_host, labels, additional_attributes, remove_attributes)
 
-
-        etag = False
-        # Check if we really need to move
-        check_folder = folder
-        if self.checkmk_version.startswith('2.2') and folder.endswith('/'):
-            check_folder = folder[:-1]
-        if not dont_move_host and current_folder != check_folder:
-            etag = self.get_etag(hostname, "Move Host")
-            update_headers = {
-                'if-match': etag
-            }
-            update_url = f"/objects/host_config/{hostname}/actions/move/invoke"
-            update_body = {
-                'target_folder': folder.replace('/','~')
-            }
-            header = {}
-            try:
-                _, header = self.request(update_url, method="POST",
-                             data=update_body,
-                             additional_header=update_headers)
-            except CmkException as exp:
-                self.log_details.append(('error', f'Move exception: {hostname} {exp}'))
-            if 'error' in header:
-                self.console(f" * Host Move Problem: {header['error']}")
-                self.log_details.append(('error', f"Move Error: {hostname} {header['error']}"))
-                return
-            self.console(f" * Host Moved from Folder: {current_folder} to {folder}")
-
-            # Need to update the header after last request
-            if new_etag := header.get('ETag'):
-                etag = new_etag
-            update_headers = {
-                'if-match': etag,
-            }
-
-        if dont_move_host and current_folder != folder:
-            self.console(f" * Folder Move to {folder} disabled. ")
-
-        do_update = False
-        do_update_labels = False
-        do_update_attributes = False
-        do_remove_attributes = False
-        update_reasons = []
-        cmk_attributes = cmk_host['extensions']['attributes']
-        cmk_labels = cmk_attributes.get('labels', {})
-
-        if self.dont_update_prefixed_labels:
-            for label, value in cmk_labels.items():
-                # in this case, we keep the original cmk label
-                for chk_label in self.dont_update_prefixed_labels:
-                    if label.startswith(chk_label):
-                        labels[label] = value
-
-        if self.only_update_prefixed_labels:
-            for label, value in cmk_labels.items():
-                # In this case, we secure all labels without the prefix
-                if label != 'cmdb_syncer' \
-                    and not label.startswith(self.only_update_prefixed_labels):
-                    if label not in labels:
-                        # Of course only update if not already there,
-                        # otherwise we have maybe old data
-                        labels[label] = value
-
-        if labels != cmk_labels:
-            do_update = True
-            do_update_labels = True
-            update_reasons.append("Labels not match")
-
-        for key, value in additional_attributes.items():
-            attr = cmk_attributes.get(key)
-            if attr != value:
-                update_reasons.append(f"Update Extra Attribute: {key} Currently: {attr} != {value}")
-                do_update = True
-                do_update_attributes = True
-                break
-
-
-        not_existing = []
-        for attr in remove_attributes:
-            if attr in cmk_attributes:
-                update_reasons.append(f"Remove Extra Attribute: {attr}")
-                do_update = True
-                do_remove_attributes = True
-            else:
-                not_existing.append(attr)
-        for attr in not_existing:
-            # If we would try to remove
-            # A attribute not exiting in checkmk,
-            # The API would respond with an exception
-            remove_attributes.remove(attr)
-
-
-        if do_update:
-            update_url = f"objects/host_config/{hostname}"
-            update_body = {
-                'update_attributes': {},
-                'tags': {},
-            }
-
-            if do_update_labels:
-                update_body['labels'] = labels
-            if do_update_attributes and additional_attributes:
-                update_body['update_attributes'].update({x:y for x,y in \
-                                additional_attributes.items() if not x.startswith('tag_')})
-                update_body['tags'] = {x:y for x,y in additional_attributes.items() \
-                                                if x.startswith('tag_')}
-
-            if do_remove_attributes and remove_attributes:
-                update_body['remove_attributes'] = remove_attributes
-
-
-            logger.debug(f"Syncer Update Body: {update_body}")
-
-
-            # CHeckmk currently fails if you send labels and tags the same time
-            # and you cant send update and remove attributes at the same time
-            for what in ['attributes', 'update_attributes',
-                         'remove_attributes', 'labels', 'tags']:
-                if what in update_body:
-                    if what == 'tags':
-                        if not update_body['tags']:
-                            continue
-                        payload = {
-                            "update_attributes": update_body['tags']
-                        }
-                    elif what == 'labels':
-                        payload = {
-                            "update_attributes": {'labels': update_body[what]},
-                        }
-                    else:
-                        payload = {
-                            what: update_body[what],
-                        }
-
-                    if not app.config['CMK_BULK_UPDATE_HOSTS']:
-                        if not etag: # We may already have one
-                            etag = self.get_etag(hostname, "Update Host (1)")
-                        update_headers = {
-                            'if-match': etag,
-                        }
-                        try:
-                            self.request(update_url, method="PUT",
-                                         data=payload,
-                                         additional_header=update_headers)
-                            self.num_updated += 1
-                            etag = False
-                        except CmkException as error:
-                            self.log_details.append(('error', f"CMK API Error: {error}"))
-                            self.log_details.append(('affected_hosts', hostname))
-                            self.console(f" * CMK API ERROR {error}")
-                        else:
-                            self.console(" * Updated Host in Checkmk")
-                            self.console(f"   Reasons: {what}: {', '.join(update_reasons)}")
-                    else:
-                        payload['host_name'] = hostname
-                        self.add_bulk_update_host(payload)
-                        self.console(f" * Add to Bulk Update List for {what} update")
+        if update_body:
+            self._dispatch_host_update(hostname, update_body, update_reasons, etag)
 
 
 #.

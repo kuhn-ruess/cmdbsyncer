@@ -3,7 +3,7 @@ Host Model
 """
 import re
 import datetime
-from mongoengine import Q, DENY, PULL
+from mongoengine import Q, PULL
 from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
@@ -20,14 +20,15 @@ class DeprecatedError(Exception):
     Raise for Deprecated functions
     """
 
-class CmdbField(db.EmbeddedDocument):
+class CmdbField(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
-    Field used in CMDB Mode 
+    Field used in CMDB Mode
     """
     field_name = db.StringField(max_length=255)
     field_value = db.StringField(max_length=255)
 
 
+# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class Host(db.Document):
     """
     Host
@@ -38,7 +39,8 @@ class Host(db.Document):
     inventory = db.DictField()
 
     cmdb_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CmdbField"))
-    cmdb_templates = db.ListField(field=db.ReferenceField(document_type='Host', reverse_delete_rule=PULL))
+    cmdb_templates = db.ListField(
+        field=db.ReferenceField(document_type='Host', reverse_delete_rule=PULL))
     cmdb_match = db.StringField(max_length=255)
 
     # Class-level cache for template matching (populated via prefetch_templates())
@@ -136,7 +138,7 @@ class Host(db.Document):
         if not object_list:
             logger.debug("HOST FILTER OFF")
             return Host.objects(is_object__ne=True)
-        logger.debug(f"HOST FILTER {object_list}")
+        logger.debug("HOST FILTER %s", object_list)
         return Host.objects(object_type__in=object_list)
 
 
@@ -219,9 +221,10 @@ class Host(db.Document):
         else:
             try:
                 template_list = list(
-                    Host.objects(object_type='template', cmdb_match__ne=None).only('id', 'cmdb_match')
+                    Host.objects(object_type='template', cmdb_match__ne=None)
+                        .only('id', 'cmdb_match')
                 )
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 return False
 
         matched = []
@@ -341,6 +344,32 @@ class Host(db.Document):
         self.save()
 
 
+    def _inventory_match_passes(self, new_data, config):
+        """
+        Feature: Inventorize Match Attribute.
+        Returns True if the host should proceed with inventory update.
+        """
+        attr_match = config.get('inventorize_match_attribute')
+        if not attr_match:
+            return True
+        attr_match = attr_match.split('=')
+        if len(attr_match) == 2:
+            host_attr, inv_attr = attr_match
+        else:
+            host_attr, inv_attr = attr_match[0], attr_match[0]
+        try:
+            attr_value = self.get_labels()[host_attr]
+            inv_attr_value = new_data[inv_attr].strip()
+        except KeyError:
+            print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
+                  f" Host has no Label {host_attr}")
+            return False
+        if attr_value != inv_attr_value:
+            print(f" {CC.WARNING} * {CC.ENDC} Attribute '{host_attr}' "
+                  f"is '{attr_value}' but '{inv_attr}' is '{inv_attr_value}'")
+            return False
+        return True
+
     def update_inventory(self, key, new_data, config=False):
         """
         Updates all inventory entries, with names who starting with given key.
@@ -354,46 +383,21 @@ class Host(db.Document):
         """
         if not key:
             raise ValueError("Inventory Key not set")
-        if config:
-            # Feature: Inventorize Match Attribute
-            if attr_match := config.get('inventorize_match_attribute'):
-                attr_match = attr_match.split('=')
-                if len(attr_match) == 2:
-                    host_attr, inv_attr = attr_match
-                else:
-                    host_attr, inv_attr = attr_match[0], attr_match[0]
-                try:
-                    attr_value = self.get_labels()[host_attr]
-                    inv_attr_value= new_data[inv_attr].strip()
-                    if attr_value != inv_attr_value:
-                        print(f" {CC.WARNING} * {CC.ENDC} Attribute '{host_attr}' "\
-                              f"is '{attr_value}' but '{inv_attr}' is '{inv_attr_value}'")
-                        return
-                except KeyError:
-                    print(f" {CC.WARNING} * {CC.ENDC} Cant match Attribute."
-                          f" Host has no Label {host_attr}")
-                    return
+        if config and not self._inventory_match_passes(new_data, config):
+            return
 
         check_dict = {}
         # Prevent RuntimeError: dictionary changed size during iteration
-        for name, value in [(x,y) for x,y in self.inventory.items()]:
+        for name, value in list(self.inventory.items()):
             # Delete all existing keys of type
             if name and name.startswith(key+"__"):
                 check_dict[name] = value
                 del self.inventory[name]
-        if not new_data:
-            update_dict = {}
-        else:
-            if app.config['LABELS_IMPORT_EMPTY']:
-                update_dict = {
-                    f"{key}__{self._fix_key(x)}": y
-                    for x, y in new_data.items()
-                }
-            else:
-                update_dict = {
-                    f"{key}__{self._fix_key(x)}": y
-                    for x, y in new_data.items()
-                }
+
+        update_dict = {
+            f"{key}__{self._fix_key(x)}": y
+            for x, y in (new_data or {}).items()
+        }
         if app.config['LABELS_ITERATE_FIRST_LEVEL']:
             for upd_key, value in list(update_dict.items()):
                 if isinstance(value, dict):
@@ -407,10 +411,11 @@ class Host(db.Document):
         # If the inventory is changed, the cache
         # is not longer valid
         if check_dict != update_dict:
-            updates = []
-            for item_key, value in update_dict.items():
-                if check_dict.get(item_key) != value:
-                    updates.append(f"{item_key} to {value}")
+            updates = [
+                f"{item_key} to {value}"
+                for item_key, value in update_dict.items()
+                if check_dict.get(item_key) != value
+            ]
             self.add_log(f"Inventory Change: {','.join(updates)}")
             self.cache = {}
 
