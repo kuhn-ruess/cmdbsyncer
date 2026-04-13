@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# pylint: disable=no-member
 """
 Custom Attributes for Host
 """
@@ -8,7 +7,7 @@ from application.helpers.syncer_jinja import render_jinja
 
 
 
-class CustomAttributeRule(Rule): # pylint: disable=too-few-public-methods
+class CustomAttributeRule(Rule):
     """
     Return Custom Attributes for given Host
     """

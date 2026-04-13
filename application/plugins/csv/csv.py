@@ -1,7 +1,6 @@
 """
 CSV Function
 """
-#pylint: disable=too-many-arguments
 import csv
 from application.models.host import Host
 from application.modules.plugin import Plugin

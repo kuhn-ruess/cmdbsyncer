@@ -4,7 +4,7 @@ Filter
 """
 from application.modules.rule.rule import Rule
 
-class Filter(Rule):# pylint: disable=too-few-public-methods
+class Filter(Rule):
     """
     Filter Attributes
     """
@@ -15,7 +15,6 @@ class Filter(Rule):# pylint: disable=too-few-public-methods
         """
         Filter if attributes match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         for outcome in rule_outcomes:
             if outcome['action'] == 'whitelist_attribute':
                 attribute_name = outcome['attribute_name']

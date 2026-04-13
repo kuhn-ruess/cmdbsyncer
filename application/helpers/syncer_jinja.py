@@ -1,7 +1,6 @@
 """
 Syncers Jinja Functions
 """
-#pylint: disable=logging-fstring-interpolation
 import ast
 import ipaddress
 import re

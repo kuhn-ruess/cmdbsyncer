@@ -2,7 +2,6 @@
 """
 Netbox Rules
 """
-#pylint: disable=too-few-public-methods
 from application.modules.rule.rule import Rule
 from application.helpers.syncer_jinja import render_jinja
 
@@ -20,7 +19,7 @@ def prepare_value(value):
     return value
 
 #   . -- Devices
-class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
+class NetboxVariableRule(Rule):
     """
     Add custom Variables for Netbox Devices
     """
@@ -31,7 +30,6 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
         """
         Filter if labels match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
 
         # list of fields, which can not be Null when send to netbox
         not_null_fields = [
@@ -80,7 +78,7 @@ class NetboxVariableRule(Rule):# pylint: disable=too-few-public-methods
         return outcomes
 #.
 #   . -- Cluster Rule
-class NetboxCluserRule(Rule):# pylint: disable=too-few-public-methods
+class NetboxCluserRule(Rule):
     """
     Add custom Variables for Cluster
     """
@@ -91,7 +89,6 @@ class NetboxCluserRule(Rule):# pylint: disable=too-few-public-methods
         """
         Filter if labels match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         sub_values = [
         ]
         outcomes.setdefault('fields', {})
@@ -121,7 +118,7 @@ class NetboxCluserRule(Rule):# pylint: disable=too-few-public-methods
         return outcomes
 #.
 #   .-- Virutal Machines
-class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
+class NetboxVirutalMachineRule(Rule):
     """
     Add custom Variables for Virutal Machines
     """
@@ -132,7 +129,6 @@ class NetboxVirutalMachineRule(Rule):# pylint: disable=too-few-public-methods
         """
         Filter if labels match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         sub_values = [
             'serial', 'cluster'
         ]
@@ -181,7 +177,6 @@ class NetboxIpamIPaddressRule(NetboxVariableRule):
         """
         Filter if labels match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('ips', [])
         sub_fields = [
         ]
@@ -229,7 +224,6 @@ class NetboxIpamPrefixRule(NetboxVariableRule):
         """
         Filter if labels match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('prefixes', [])
         sub_fields = [
         ]
@@ -303,7 +297,6 @@ class NetboxInterfaceRule(NetboxVariableRule):
         """
         Filter if labels match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         rule_name = rule['name']
         outcomes.setdefault('interfaces', [])
         sub_fields = [
@@ -354,7 +347,6 @@ class NetboxContactRule(NetboxVariableRule):
         """
         Filter if labels match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('fields', {})
         outcomes.setdefault('custom_fields', {})
         for outcome in rule_outcomes:
@@ -392,7 +384,6 @@ class NetboxDataflowRule(NetboxVariableRule):
         """
         Filter if labels match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('rules', [])
         rule_name = rule['name']
         unique_fields = {}

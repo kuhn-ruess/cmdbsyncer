@@ -6,7 +6,6 @@ from wtforms import StringField
 from application.modules.rule.views import RuleModelView
 
 
-#pylint: disable=too-few-public-methods
 class CustomAttributeView(RuleModelView):
     """
     Custom Attribute Model View
@@ -16,7 +15,6 @@ class CustomAttributeView(RuleModelView):
         """
         Update elements
         """
-        #pylint: disable=access-member-before-definition
         base_config = dict(self.form_subdocuments)
         base_config.update({
             'outcomes': {

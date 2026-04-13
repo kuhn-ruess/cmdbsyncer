@@ -1,8 +1,6 @@
 """
 Handle Netbox
 """
-#pylint: disable=no-member, too-many-locals
-#pylint: disable=wildcard-import, unused-wildcard-import
 import click
 from mongoengine.errors import DoesNotExist
 
@@ -118,7 +116,7 @@ def netbox_device_export(account, debug=False, debug_rules=False):
         syncer.name = "Netbox: Update Devices"
         syncer.source = "netbox_device_sync"
         syncer.export_hosts()
-    except Exception as error_obj: #pylint: disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         log.log(f"Export Devices to Account: {account} Failed",
@@ -162,11 +160,11 @@ def netbox_virtual_machines_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'netbox')
-    except KeyError as error_obj: #pylint:disable=broad-except
+    except KeyError as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -209,11 +207,11 @@ def netbox_cluster_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'netbox')
-    except KeyError as error_obj: #pylint:disable=broad-except
+    except KeyError as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -235,7 +233,7 @@ def netbox_device_import(account, debug=False):
         syncer = SyncDevices(account)
         syncer.debug = debug
         syncer.import_hosts()
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -255,7 +253,7 @@ def netbox_vm_import(account, debug=False):
         syncer = SyncVirtualMachines(account)
         syncer.debug = debug
         syncer.import_hosts()
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
         if debug:
             raise
@@ -295,7 +293,7 @@ def netbox_ip_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -336,7 +334,7 @@ def netbox_prefix_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -377,11 +375,11 @@ def netbox_interface_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
-    except KeyError as error_obj: #pylint:disable=broad-except
+    except KeyError as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -423,11 +421,11 @@ def netbox_virt_interface_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
-    except KeyError as error_obj: #pylint:disable=broad-except
+    except KeyError as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -469,11 +467,11 @@ def netbox_contacts_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
-    except KeyError as error_obj: #pylint:disable=broad-except
+    except KeyError as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -513,11 +511,11 @@ def netbox_dataflow_sync(account, debug=False, debug_rules=False):
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
 
-    except KeyError as error_obj: #pylint:disable=broad-except
+    except KeyError as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj: #pylint:disable=broad-except
+    except Exception as error_obj:
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')

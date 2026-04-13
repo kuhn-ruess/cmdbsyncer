@@ -1,8 +1,6 @@
 """
 Host Model
 """
-# pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
-# pylint: disable=logging-fstring-interpolation
 import re
 import datetime
 from mongoengine import Q, DENY, PULL
@@ -377,7 +375,6 @@ class Host(db.Document):
                     return
 
         check_dict = {}
-        #pylint: disable=unnecessary-comprehension
         # Prevent RuntimeError: dictionary changed size during iteration
         for name, value in [(x,y) for x,y in self.inventory.items()]:
             # Delete all existing keys of type

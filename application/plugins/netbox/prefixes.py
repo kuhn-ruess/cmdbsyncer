@@ -1,7 +1,6 @@
 """
 Create Prefixes in Netbox
 """
-#pylint: disable=no-member, too-many-locals, import-error
 
 from .netbox import SyncNetbox
 

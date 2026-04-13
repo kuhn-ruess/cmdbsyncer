@@ -64,7 +64,6 @@ class SyncSites(Plugin):
                 'hosts' : []
             },
         }
-        #pylint: disable=no-member
         for site in CheckmkSite.objects(enabled=True):
             hostname = site.server_address
             data['_meta']['hostvars'][hostname] = self.get_site_data(site)
@@ -77,7 +76,6 @@ class SyncSites(Plugin):
         Get Inventory for single host
         """
         try:
-            #pylint: disable=no-member
             site = CheckmkSite.objects.get(server_address=hostname, available=True)
         except DoesNotExist:
             return False

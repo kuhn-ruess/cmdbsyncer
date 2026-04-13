@@ -146,7 +146,6 @@ class CheckmkDCDRuleSync(CMK2):
 
         db_objects = Host.objects()
         total = db_objects.count()
-        # pylint: disable=too-many-nested-blocks
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),

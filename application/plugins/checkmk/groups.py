@@ -70,7 +70,7 @@ class CheckmkGroupSync(CMK2):
             if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
                 groups[group_type].append((new_group_title, new_group_name))
 
-    def export_cmk_groups(self, test_run):# pylint: disable=too-many-branches, too-many-statements
+    def export_cmk_groups(self, test_run):
         """
         Export all Checkmk Groups
         """

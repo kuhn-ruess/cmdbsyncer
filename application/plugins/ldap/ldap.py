@@ -67,7 +67,6 @@ def _inner_import(config):
     if config['debug']:
         print(f"INFO: Use Filter: {search_filter}") 
 
-    #pylint: disable=consider-using-generator
     attributes = []
     if config['attributes']:
         attributes = list([x.strip() for x in config['attributes'].split(',')])

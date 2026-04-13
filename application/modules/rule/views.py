@@ -295,7 +295,6 @@ def _render_full_conditions(_view, _context, model, _name):
 
 #.
 #   .-- Rule Model
-#pylint: disable=too-few-public-methods
 
 def get_rule_json(_view, _context, model, _name):
     """
@@ -461,7 +460,6 @@ class RuleModelView(DefaultModelView):
 
 #.
 #   .-- Filter
-#pylint: disable=too-few-public-methods
 class FiltereModelView(DefaultModelView):
     """
     Filter
@@ -614,7 +612,6 @@ class FiltereModelView(DefaultModelView):
         """
         Update elements
         """
-        #pylint: disable=access-member-before-definition
         base_config = dict(self.form_subdocuments)
         base_config.update({
             'outcomes': {
@@ -666,7 +663,6 @@ def _render_attribute_rewrite(_view, _context, model, _name):
     return Markup(html)
 
 
-#pylint: disable=too-few-public-methods
 class RewriteAttributeView(RuleModelView):
     """
     Custom Attribute Model View
@@ -688,7 +684,6 @@ class RewriteAttributeView(RuleModelView):
             'render_attribute_rewrite': "Attribute Rewrites",
         })
 
-        #pylint: disable=access-member-before-definition
         base_config = dict(self.form_subdocuments)
         base_config.update({
             'outcomes': {

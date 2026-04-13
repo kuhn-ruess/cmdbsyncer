@@ -1,8 +1,6 @@
 """
 Checkmk BI Rules
 """
-#pylint: disable=import-error, too-many-locals, no-member
-#pylint: disable=logging-fstring-interpolation
 import ast
 from application import logger
 from application.plugins.checkmk.cmk2 import CMK2
@@ -20,7 +18,7 @@ class BI(CMK2):
 
 
 #   .-- Export Bi Rules
-    def export_bi_rules(self):# pylint: disable=too-many-branches, too-many-statements
+    def export_bi_rules(self):
         """
         Export BI Rules
         """
@@ -94,7 +92,7 @@ class BI(CMK2):
                     self.request(url, data=data,  method="PUT")
 #.
 #   .-- Export BI Aggregations
-    def export_bi_aggregations(self): #pylint: disable=too-many-branches
+    def export_bi_aggregations(self):
         """
         Export BI Aggregations
         """

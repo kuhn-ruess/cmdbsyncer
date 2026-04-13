@@ -1,7 +1,6 @@
 """
 Cron Model View
 """
-# pylint: disable=too-few-public-methods
 from datetime import datetime
 from flask_login import current_user
 from markupsafe import Markup, escape
@@ -14,7 +13,6 @@ def format_error_flag(v, c, m, p):
     """
     Format Has error flag"
     """
-    # pylint: disable=invalid-name, unused-argument
     if m.failure:
         return Markup('<span style="color:red;" class="fa fa-warning"></span>')
     return Markup('<span style="color:green;" class="fa fa-circle"></span>')
@@ -29,7 +27,6 @@ def _render_interval(_view, _context, model, _name):
     """
     Render Interval
     """
-    # pylint: disable=unused-argument
     if model.interval == '10min':
         return "15 Minutes"
     if model.interval == 'hour':

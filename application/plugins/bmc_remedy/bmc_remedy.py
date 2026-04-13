@@ -54,7 +54,6 @@ class RemedySyncer():
 
         if response.status_code == 200:
             return response.text
-        #pylint: disable=broad-exception-raised
         raise Exception(f"Connection Problem {response.status_code}: {response.text}")
 #.
 #    .-- Get Hosts
@@ -92,5 +91,5 @@ def get_hosts(account):
             job.get_hosts()
         else:
             print(f"{cc.FAIL} Target not found {cc.ENDC}")
-    except Exception as error_obj: #pylint: disable=broad-except
+    except Exception as error_obj:
         print(f'C{cc.FAIL}Error: {error_obj} {cc.ENDC}')

@@ -1,7 +1,6 @@
 """
 Login Routes
 """
-# pylint: disable=no-member
 from datetime import datetime
 from datetime import timedelta
 import pyotp
@@ -184,7 +183,7 @@ def request_password():
 
     return render_template('formular.html', form=form)
 
-def get_userid(token):  # pylint: disable=inconsistent-return-statements
+def get_userid(token):
     """
     Helper to read Userid from token
     """

@@ -1,7 +1,6 @@
 """
 Model
 """
-# pylint: disable=no-member, too-few-public-methods
 from application import db
 from application.modules.rule.models import rule_types
 

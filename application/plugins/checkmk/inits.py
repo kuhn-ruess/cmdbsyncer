@@ -187,7 +187,6 @@ def bake_and_sign_agents(account):
     """
     Bake and Sign Agents in Checkmk
     """
-    #pylint: disable = import-outside-toplevel
     from application.helpers.get_account import get_account_by_name
     account_config = get_account_by_name(account)
     if account_config['typ'] != 'cmkv2':

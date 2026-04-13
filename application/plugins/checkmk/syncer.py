@@ -1,10 +1,6 @@
 """
 Add Hosts into CMK Version 2 Installations
 """
-#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
-#pylint: disable=logging-fstring-interpolation, too-many-locals, too-many-positional-arguments
-#pylint: disable=too-many-branches, too-many-instance-attributes, too-many-public-methods
-#pylint: disable=too-many-lines
 import ast
 from datetime import datetime
 import multiprocessing
@@ -952,7 +948,6 @@ class SyncCMK2(CMK2):
         Returns:
             str: ETag value (currently always '*')
         """
-        # pylint: disable=unused-argument
         # 2.2 and 2.3p6: This Call here is deleting the host...
         #self.console(f" * Read ETAG in CMK -> {reason}")
         #url = f"/objects/host_config/{hostname}?effective_attributes=false"

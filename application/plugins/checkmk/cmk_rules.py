@@ -2,7 +2,6 @@
 """
 Export Checkmk Rules
 """
-#pylint: disable=logging-fstring-interpolation
 import ast
 from pprint import pformat
 
@@ -222,7 +221,7 @@ class CheckmkRuleSync(CMK2):
 
 
 
-    def export_cmk_rules(self): # pylint: disable=too-many-branches, too-many-statements
+    def export_cmk_rules(self):
         """
         Export config rules to checkmk
         """
@@ -238,7 +237,6 @@ class CheckmkRuleSync(CMK2):
             db_objects = Host.objects_by_filter(object_filter)
 
         total = db_objects.count()
-        # pylint: disable=too-many-nested-blocks
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
@@ -385,7 +383,6 @@ class CheckmkRuleSync(CMK2):
                             logger.debug("FULL MATCH")
                             rule_found = True
                             # Remove from list, so that it not will be created in the next step
-                            # pylint: disable=unnecessary-dict-index-lookup
                             self.rulsets_by_type[ruleset_name].remove(rule)
                             break
 

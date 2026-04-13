@@ -2,7 +2,6 @@
 """
 Cisco DNA Inventory
 """
-#pylint: disable=too-many-arguments
 
 import click
 from application import app
@@ -32,7 +31,7 @@ def get_hosts(account):
             job.get_hosts()
         else:
             print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
-    except Exception as error_obj: #pylint: disable=broad-except
+    except Exception as error_obj:
         print(f'C{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
         raise
 
@@ -51,7 +50,7 @@ def get_interfaces(account):
             job.get_interfaces()
         else:
             print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
-    except Exception as error_obj: #pylint: disable=broad-except
+    except Exception as error_obj:
         print(f'C{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
 
 

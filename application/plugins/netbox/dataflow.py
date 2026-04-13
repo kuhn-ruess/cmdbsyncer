@@ -1,7 +1,6 @@
 """
 Dataflow Sync
 """
-#pylint: disable=unnecessary-dunder-call
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from rich.console import Console
 

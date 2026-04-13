@@ -1,5 +1,4 @@
 """ Config File """
-#pylint: disable=too-few-public-methods
 import os
 
 def _get_mongo_settings(default_host):

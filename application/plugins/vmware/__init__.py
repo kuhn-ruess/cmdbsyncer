@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """VMware Support"""
-#pylint: disable=logging-fstring-interpolation
 import click
 
 from application.modules.rule.rewrite import Rewrite

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Import JDISC Data"""
-#pylint: disable=logging-fstring-interpolation
 import click
 
 from .devices import JdiscDevices

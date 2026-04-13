@@ -1,7 +1,6 @@
 """
 Ansible Inventory Modul
 """
-#pylint: disable=too-many-arguments, no-member
 import json
 import click
 
@@ -133,9 +132,8 @@ def update_cache():
 @cli_ansible.command('source')
 @click.option("--list", is_flag=True)
 @click.option("--host")
-def source(list, host): #pylint: disable=redefined-builtin
+def source(list, host):
     """Inventory Source for Ansible"""
-    #pylint: disable=no-else-return
     rules = load_rules()
     syncer = AnsibleInventory()
     syncer.filter = rules['filter']
@@ -155,9 +153,8 @@ def source(list, host): #pylint: disable=redefined-builtin
 @cli_ansible.command('cmk-server-source')
 @click.option("--list", is_flag=True)
 @click.option("--host")
-def server_source(list, host): #pylint: disable=redefined-builtin
+def server_source(list, host):
     """Inventory Source for Checkmk Server Data"""
-    #pylint: disable=no-else-return
     cmksitemngmt = SyncSites()
     if list:
         print(json.dumps(cmksitemngmt.get_full_inventory()))

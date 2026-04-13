@@ -8,7 +8,6 @@ from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLi
 
 def format_log(v, c, m, p):
     """ Format Log view"""
-    # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for entry in m.details:
         html += f"<tr><th>{escape(entry.level)}</th><td>{escape(entry.message)}</td></tr>"
@@ -19,13 +18,12 @@ def format_error_flag(v, c, m, p):
     """
     Format Has error flag"
     """
-    # pylint: disable=invalid-name, unused-argument
     if m.has_error:
         return Markup('<span style="color:red;" class="fa fa-warning"></span>')
     return Markup('<span style="color:green;" class="fa fa-circle"></span>')
 
 
-class LogView(DefaultModelView): #pylint: disable=too-few-public-methods
+class LogView(DefaultModelView):
     """
     Log Model
     """

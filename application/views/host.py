@@ -2,7 +2,6 @@
 Host Model View
 """
 from datetime import datetime
-# pylint: disable=too-few-public-methods
 import re
 import csv
 import io
@@ -502,7 +501,6 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
 
 def format_log(v, c, m, p):
     """ Format Log view"""
-    # pylint: disable=invalid-name, unused-argument
     html = "<ul>"
     for entry in m.log:
         html+=f"<li>{entry[:200]}{'...' if len(entry) > 200 else ''}</li>"
@@ -597,7 +595,6 @@ def format_log(v, c, m, p):
 
 def format_cache(v, c, m, p):
     """ Format cache"""
-    # pylint: disable=invalid-name, unused-argument
     if not m.cache:
         return Markup('<span class="text-muted">No cache data</span>')
     
@@ -665,7 +662,6 @@ def format_cache(v, c, m, p):
 
 def format_labels(v, c, m, p):
     """ Format Labels view"""
-    # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for key, value in m.labels.items():
         html += f"<tr><th>{escape(key)}</th><td>{escape(value)}</td></tr>"
@@ -674,7 +670,6 @@ def format_labels(v, c, m, p):
 
 def format_inventory(v, c, m, p):
     """ Format Inventory view"""
-    # pylint: disable=invalid-name, unused-argument
     html = "<table>"
     for key, value in m.inventory.items():
         html += f"<tr><th>{escape(key)}</th><td>{escape(value)}</td></tr>"
@@ -683,7 +678,6 @@ def format_inventory(v, c, m, p):
 
 def format_labels_export(v, c, m, p):
     """ Format Labels view"""
-    # pylint: disable=invalid-name, unused-argument
     labels = []
     for entry in m.labels:
         labels.append(f"{entry.key}:{entry.value}")
@@ -691,7 +685,6 @@ def format_labels_export(v, c, m, p):
 
 def format_inventory_export(v, c, m, p):
     """ Format Inventory view"""
-    # pylint: disable=invalid-name, unused-argument
     inventory = []
     for key, value in m.inventory.items():
         inventory.append(f"{key}:{value}")

@@ -1,7 +1,6 @@
 """
 Interface Syncronisation
 """
-#pylint: disable = broad-exception-caught, too-many-locals, too-many-branches, too-many-statements, too-many-nested-blocks
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import logger
 from .netbox import SyncNetbox

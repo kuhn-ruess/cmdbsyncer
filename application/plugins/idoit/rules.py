@@ -6,7 +6,7 @@ from ast import literal_eval
 import jinja2
 from application.modules.rule.rule import Rule
 
-class IdoitVariableRule(Rule):# pylint: disable=too-few-public-methods
+class IdoitVariableRule(Rule):
     """
     Add custom variables for i-doit
     """
@@ -18,7 +18,6 @@ class IdoitVariableRule(Rule):# pylint: disable=too-few-public-methods
         Filter if labels match to a rule
         """
 
-        # pylint: disable=too-many-nested-blocks
         for outcome in rule_outcomes:
             action = outcome['action']
 

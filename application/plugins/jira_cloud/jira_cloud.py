@@ -1,7 +1,6 @@
 """
 Import Jira Data
 """
-#pylint: disable=too-many-locals
 import json
 from syncerapi.v1 import (
     cc,

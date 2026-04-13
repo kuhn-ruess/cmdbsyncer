@@ -182,7 +182,6 @@ def _render_group_outcome(_view, _context, model, _name):
     return Markup(html)
 
 
-#pylint: disable=too-few-public-methods
 class CheckmkRuleView(RuleModelView):
     """
     Custom Rule Model View
@@ -481,7 +480,6 @@ class CheckmkMngmtRuleView(RuleModelView):
             'render_cmk_rule_mngmt': "Create following Rules",
         })
 
-        #pylint: disable=access-member-before-definition
         base_config = dict(self.form_subdocuments)
         base_config.update({
             'outcomes': {

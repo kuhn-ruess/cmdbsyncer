@@ -1,9 +1,6 @@
 """
 Models for flask_admin
 """
-#pylint: disable=no-member
-#pylint: disable=missing-function-docstring
-#pylint: disable=no-self-use
 from datetime import datetime
 from wtforms import PasswordField
 from flask_login import current_user

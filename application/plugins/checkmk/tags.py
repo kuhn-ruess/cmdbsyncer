@@ -1,7 +1,6 @@
 """
 Checkmk Tag Syncronize
 """
-#pylint: disable=logging-fstring-interpolation
 import ast
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -196,7 +195,6 @@ class CheckmkTagSync(CMK2):
         Update the Group Config to,
         render special options
         """
-        #pylint: disable=too-many-locals
 
         tags_of_host = {}
         addional_groups = {}
