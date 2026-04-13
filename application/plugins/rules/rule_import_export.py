@@ -5,6 +5,7 @@ Rule Import/ Export
 import json
 from json.decoder import JSONDecodeError
 import importlib
+from datetime import datetime
 
 from mongoengine.errors import NotUniqueError, ValidationError
 from application import app
@@ -49,6 +50,27 @@ def export_rules(rule_type):
             print(rulename)
 
 
+def export_all_rules(target_path=None):
+    """
+    Export all Rules of every known type into a single file.
+    """
+    if not target_path:
+        target_path = f"syncer_rules_export_{datetime.now():%Y%m%d_%H%M%S}.jsonl"
+    total = 0
+    with open(target_path, 'w', encoding='utf-8') as outfile:
+        for rule_type in sorted(enabled_rules):
+            header_written = False
+            for rule in export_rules_from_model(rule_type):
+                if not header_written:
+                    outfile.write(json.dumps({"rule_type": rule_type}) + "\n")
+                    header_written = True
+                outfile.write(rule + "\n")
+                total += 1
+            if header_written:
+                print(f"* Exported {rule_type}")
+    print(f"Wrote {total} rules to {target_path}")
+
+
 def import_line(json_dict, model, rule_type):
     """
     Import a Single line
@@ -65,32 +87,43 @@ def import_line(json_dict, model, rule_type):
 
 def import_rules(rulefile_path):
     """
-    Import Rules into the CMDB Syncer
+    Import Rules into the CMDB Syncer.
+    Supports single-type files and multi-type files with multiple
+    {"rule_type": "..."} header lines.
     """
-    import_firstline = False
     with open(rulefile_path, encoding='utf-8') as rulefile:
         rule_type = False
+        model = None
+        first_json_line = True
         for line in rulefile.readlines():
             try:
                 json_dict = json.loads(line)
             except JSONDecodeError:
-                print (line)
+                print(line)
                 continue
-            if not rule_type:
-                try:
-                    rule_type = json_dict['rule_type']
-                except KeyError:
-                    # Mode get type by filename
-                    # This mode is for export from GUI
-                    rule_type = get_ruletype_by_filename(rulefile_path)
-                    import_firstline = True
+            if 'rule_type' in json_dict and len(json_dict) == 1:
+                rule_type = json_dict['rule_type']
+                if rule_type not in enabled_rules:
+                    print(f"Ruletype {rule_type} not supported, skipping block")
+                    model = None
+                    first_json_line = False
+                    continue
+                model = importlib.import_module(enabled_rules[rule_type][0])
+                print(f"== Importing {rule_type} ==")
+                first_json_line = False
+                continue
+            if not rule_type and first_json_line:
+                # No header: guess the type by filename (GUI export mode)
+                rule_type = get_ruletype_by_filename(rulefile_path)
+                first_json_line = False
                 if rule_type not in enabled_rules:
                     print("Ruletype not supported")
                     print(f"Currently supported: {', '.join(enabled_rules.keys())}")
                     return
                 model = importlib.import_module(enabled_rules[rule_type][0])
-                if import_firstline:
-                    # This is the case for imports where we guess the type
-                    import_line(json_dict, model, rule_type)
-            else:
                 import_line(json_dict, model, rule_type)
+                continue
+            first_json_line = False
+            if model is None:
+                continue
+            import_line(json_dict, model, rule_type)
