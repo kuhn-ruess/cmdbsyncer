@@ -18,3 +18,4 @@ sentry-sdk==2.27.0
 sortedcontainers==2.4.0
 pyyml==0.0.2
 Flask-Admin==2.0.2
+pylint==4.0.5

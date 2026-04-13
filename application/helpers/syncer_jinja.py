@@ -2,12 +2,12 @@
 Syncers Jinja Functions
 """
 import ast
+import datetime
 import ipaddress
 import re
 import jinja2
 from jinja2 import StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
-import datetime
 
 from application import logger
 from application.helpers.get_account import get_account_variable
@@ -130,11 +130,11 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     - nullify: Nullify string in nase of missing Variables
     """
     #logger.debug(f"JINJA: Rewrite String: {value}")
-    
+
     # Process ACCOUNT variables anywhere in the string
     if isinstance(value, str) and '{{ACCOUNT:' in value:
         value = re.sub(r'\{\{ACCOUNT:[^}]+\}\}', replace_account_variable, value)
-    
+
     payload = {}
 
     if replace_newlines:
@@ -163,7 +163,7 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
 
     })
 
-    
+
 
 
     if mode == 'nullify':
