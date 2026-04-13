@@ -1,4 +1,7 @@
-from application import db, app
+"""
+Model to save Syncer Automation RUles
+"""
+from application import db
 from application.models.account import object_types
 from .rule_definitions import rule_names
 
@@ -18,4 +21,3 @@ class SyncerRuleAutomation(db.Document):
     meta = {
         'strict': False
     }
-
