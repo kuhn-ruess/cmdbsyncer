@@ -24,7 +24,6 @@ class VMWareVcenterPlugin(Plugin):
         Connect to VMware
         """
         if app.config.get('DISABLE_SSL_ERRORS'):
-            # pylint: disable=protected-access
             context = ssl._create_unverified_context()
         else:
             context = ssl.create_default_context()

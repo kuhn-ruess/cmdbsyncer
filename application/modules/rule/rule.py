@@ -2,8 +2,6 @@
 """
 Handle Rule Matching
 """
-# pylint: disable=import-error
-# pylint: disable=logging-fstring-interpolation
 import ast
 import re
 from rich.console import Console
@@ -14,7 +12,7 @@ from application import logger, app
 from application.modules.rule.match import match
 from application.helpers.syncer_jinja import render_jinja
 
-class Rule(): # pylint: disable=too-few-public-methods
+class Rule():
     """
     Base Rule Class
     """
@@ -134,11 +132,10 @@ class Rule(): # pylint: disable=too-few-public-methods
             return self._check_attribute_match(condition)
         return self._check_hostname_match(condition, hostname)
 
-    def check_rules(self, hostname): #pylint: disable=too-many-branches
+    def check_rules(self, hostname):
         """
         Handle Rule Match logic
         """
-        #pylint: disable=too-many-branches
 
         rule_descriptions = {
             'any' : "ANY can match",
@@ -217,7 +214,6 @@ class Rule(): # pylint: disable=too-few-public-methods
         Default, overwrite if needed
         Rewrites Attributes if needed in get_multilist_outcomes mode
         """
-        #pylint: disable= unused-argument
         return field_value
 
     def get_multilist_outcomes(self, rule_outcomes, ignore_field):

@@ -1,7 +1,6 @@
 """
 Rule Import/ Export
 """
-#pylint: disable=too-many-arguments
 import json
 from json.decoder import JSONDecodeError
 import importlib

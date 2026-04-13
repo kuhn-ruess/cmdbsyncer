@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Import ODBC Data"""
-#pylint: disable=logging-fstring-interpolation
 
 from syncerapi.v1 import (
     cc,
@@ -17,7 +16,7 @@ from application.helpers.sql import build_select_query, validate_custom_query
 
 try:
     import pypyodbc as pyodbc
-except: #pylint: disable=bare-except
+except:
     logger.info("Info: ODBC Plugin was not able to load required modules")
 
 try:

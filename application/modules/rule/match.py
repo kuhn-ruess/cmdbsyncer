@@ -11,7 +11,6 @@ class MatchException(Exception):
     """
 
 
-# pylint: disable=inconsistent-return-statements
 def make_bool(value):
     """
     Make Bool from given object
@@ -35,7 +34,6 @@ def check_condition(attr_value, needle, condition):
     """
     Check the Condition Match
     """
-    # pylint: disable=too-many-branches, too-many-return-statements
     if condition == 'equal':
         if attr_value == needle:
             return True

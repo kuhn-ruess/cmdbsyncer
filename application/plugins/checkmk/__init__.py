@@ -1,7 +1,6 @@
 """
 Commands to handle Checkmk Sync
 """
-#pylint: disable=too-many-arguments, too-many-statements, consider-using-get, no-member
 
 import click
 from mongoengine.errors import DoesNotExist
@@ -277,7 +276,6 @@ def debug_host(hostname, debug):
 @click.option("--debug", is_flag=True)
 @click.option("--debug-rules", default="")
 @click.argument('account')
-#pylint: disable=too-many-locals
 def cli_export_downtimes(account, debug, debug_rules):
     """
     Export Dowtimes to Checkmk
@@ -299,7 +297,6 @@ def cli_export_downtimes(account, debug, debug_rules):
 @click.option("--dry-run", default=False, is_flag=True)
 @click.option("--save-requests", default='')
 @click.option("--debug", is_flag=True)
-#pylint: disable=too-many-locals
 def cli_export_tags(account, dry_run, save_requests, debug=False):
     """
     Export Hosttags Groups to Checkmk
@@ -316,7 +313,6 @@ def cli_export_tags(account, dry_run, save_requests, debug=False):
 #   .-- Command: Show Hosts not in Syncer
 @cli_cmk.command('show_missing_hosts')
 @click.argument('account')
-#pylint: disable=too-many-locals
 def cli_missing_hosts(account):
     """
     Check which Hosts are in Checkmk but not in Syncer
@@ -353,7 +349,6 @@ def cli_export_rules(account, debug):
 @click.argument("account")
 @click.option('-t', '--test-run', is_flag=True)
 @click.option("--debug", is_flag=True)
-#pylint: disable=too-many-locals, too-many-branches
 def cli_export_groups(account, test_run, debug=False):
     """
     Create Groups in Checkmk
@@ -373,7 +368,6 @@ def cli_export_groups(account, test_run, debug=False):
 #   .-- Command: Activate Changes
 @cli_cmk.command('activate_changes')
 @click.argument("account")
-#pylint: disable=too-many-locals, too-many-branches
 def cli_activate_changes(account):
     """
     Activate Changes in given Checkmk Instance
@@ -393,7 +387,6 @@ def cli_activate_changes(account):
 #   .-- Command: Bake and Sign agents
 @cli_cmk.command('bake_and_sign_agents')
 @click.argument("account")
-#pylint: disable=too-many-locals, too-many-branches
 def cli_bake_and_sign_agents(account):
     """
     Bake and Sign Agents for given Checkmk Instance
@@ -413,7 +406,6 @@ def cli_bake_and_sign_agents(account):
 @cli_cmk.command('inventorize_hosts')
 @click.argument('account')
 @click.option("--debug", is_flag=True)
-#pylint: disable=too-many-locals
 def cli_inventorize_hosts(account, debug=False):
     """
     Do an Status Data inventory on given Checkmk Instance.

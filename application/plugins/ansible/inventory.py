@@ -82,7 +82,6 @@ class AnsibleInventory(Plugin):
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
-            #pylint: disable=no-member
             query = Host.objects()
             if show_status:
                 task1 = progress.add_task("Calculating Variables", total=query.count())
@@ -121,7 +120,6 @@ class AnsibleInventory(Plugin):
         Get Inventory for single host
         """
         try:
-            #pylint: disable=no-member
             db_host = Host.objects.get(hostname=hostname, available=True)
         except DoesNotExist:
             return False

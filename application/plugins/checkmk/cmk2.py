@@ -1,7 +1,6 @@
 """
 Central Request Modul to CMK 2.x
 """
-#pylint: disable=logging-fstring-interpolation
 import multiprocessing
 import requests
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -21,7 +20,6 @@ if app.config.get("DISABLE_SSL_ERRORS"):
 class CmkException(Exception):
     """Cmk Errors"""
 
-#pylint: disable=too-few-public-methods
 class CMK2(Plugin):
     """
     Get Data from CMK
@@ -72,7 +70,6 @@ class CMK2(Plugin):
 
 
         try:
-            #pylint: disable=missing-timeout
             response = self.inner_request(method, url, json=data, headers=headers, params=params)
 
             try:
@@ -82,7 +79,6 @@ class CMK2(Plugin):
 
             resp_header = response.headers
 
-            #pylint: disable=line-too-long
             error_whitelist = [
                 #'Path already exists',
                 'Not Found',
@@ -108,7 +104,6 @@ class CMK2(Plugin):
                 return {}, {'status_code': response.status_code}
             return {}, {"error": "Checkmk Connections broken"}
         except ConnectionError:
-            #pylint: disable=raise-missing-from
             raise CmkException("Can't connect to Checkmk")
 
     def fetch_checkmk_folders(self):

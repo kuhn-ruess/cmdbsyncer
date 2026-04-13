@@ -1,8 +1,6 @@
 """
 Alle Stuff shared by the plugins
 """
-#pylint: disable=too-few-public-methods
-#pylint: disable=logging-fstring-interpolation
 from datetime import datetime
 import time
 import json as mod_json
@@ -211,13 +209,12 @@ class Plugin():
         logger.debug(f"Payload: {log_dict}")
 
         if path := self.save_requests:
-            #pylint: disable=consider-using-with
             open(path, "a", encoding="utf-8").write(f"{method}||{url}||{payload}\n")
 
         if self.dry_run:
             logger.info(f"Body: {pformat(data)}")
             Struct = namedtuple('response', ['status_code', 'headers', 'json'])
-            json_obj = lambda: {} #pylint: disable=unnecessary-lambda-assignment
+            json_obj = lambda: {}
             if method != 'get':
                 return Struct(status_code=200, headers={}, json=json_obj)
 

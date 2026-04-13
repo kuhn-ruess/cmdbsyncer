@@ -1,8 +1,6 @@
 """
 Ansible Api
 """
-# pylint: disable=function-redefined
-# pylint: disable=no-member
 from flask_restx import Namespace, Resource
 from application.api import require_token
 from ..inventory import AnsibleInventory

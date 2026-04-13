@@ -1,5 +1,4 @@
 #!/usr/bin/env/python
-#pylint: disable=no-member
 """
 Helper to find a free Poolfolder
 """

@@ -2,8 +2,6 @@
 """
 Checkmk Rules
 """
-#pylint: disable=import-error
-#pylint: disable=logging-fstring-interpolation
 import ast
 from application import app
 from application.helpers.syncer_jinja import render_jinja
@@ -13,7 +11,7 @@ from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
 from . import poolfolder
 
-class CheckmkRulesetRule(Rule): # pylint: disable=too-few-public-methods, too-many-locals, too-many-nested-blocks
+class CheckmkRulesetRule(Rule):
     """
     Rule to create Rulesets in Checkmk
     """
@@ -55,7 +53,7 @@ class DefaultRule(Rule):
             outcomes['default'].append(outcome)
         return outcomes
 
-class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
+class CheckmkRule(Rule):
     """
     Class to get actions for rule
     """
@@ -107,8 +105,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
 
     def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """ Handle the Outcomes """
-        #pylint: disable=too-many-branches, too-many-statements
-        #pylint: disable=too-many-locals, too-many-nested-blocks
 
         possible_outcomes = [
             ('move_folder',""),
@@ -317,7 +313,6 @@ class CheckmkRule(Rule): # pylint: disable=too-few-public-methods
         """
 
         hostname = db_host.hostname
-        #pylint: disable=too-many-branches
 
         # Variable will set possibly to true since
         # self.check_rules() will check the add_outcomes method.

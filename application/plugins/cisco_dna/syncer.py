@@ -117,11 +117,9 @@ class CiscoDNA():
         base_url = f"{self.address}/dna/intent/api/v1/interface/network-device/"
         headers = {"x-auth-token": token}
 
-        #pylint: disable=no-member
         for db_host in Host.objects(available=True, source_account_id=self.account_id):
             print(f"{ColorCodes.HEADER}{db_host.hostname}{ColorCodes.ENDC}")
             url = base_url + db_host.sync_id
-            #pylint: disable=missing-timeout
             response = requests.request("GET", url, headers=headers, verify=self.verify)
             response_json = response.json()['response']
             inventory = {}
@@ -206,7 +204,6 @@ class CiscoDNA():
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
         url = f"{self.address}/dna/intent/api/v1/network-device?hostname=.*"
         headers = {"x-auth-token": token}
-        #pylint: disable=missing-timeout
         response = requests.request("GET", url, headers=headers, verify=self.verify)
         response_json = response.json()['response']
         total = len(response_json)

@@ -17,8 +17,6 @@ from application.modules.debug import ColorCodes
 
 
 #@TODO Refactor into class with small methods
-#pylint: disable=too-many-locals, too-many-branches, too-many-statements
-#pylint: disable=too-many-nested-blocks
 
 class InventorizeHosts(CMK2):
     """
@@ -305,7 +303,6 @@ class InventorizeHosts(CMK2):
 
         print(f"{ColorCodes.UNDERLINE}Write to DB{ColorCodes.ENDC}")
 
-        # pylint: disable=consider-using-dict-items
         for hostname in self.found_hosts:
             db_host = Host.get_host(hostname, False)
             if db_host:

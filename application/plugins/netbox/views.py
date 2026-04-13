@@ -64,7 +64,6 @@ def _render_netbox_outcome(_view, _context, model, _name):
     return Markup(html)
 
 
-#pylint: disable=too-few-public-methods
 class NetboxCustomAttributesView(RuleModelView):
     """
     Custom Rule Model View
@@ -86,7 +85,6 @@ class NetboxCustomAttributesView(RuleModelView):
         self.column_labels.update({
             'render_netbox_outcome': "Netbox Actions",
         })
-        #pylint: disable=access-member-before-definition
         base_config = dict(self.form_subdocuments)
         base_config.update({
             'outcomes': {
@@ -154,7 +152,6 @@ class NetboxDataFlowAttributesView(RuleModelView):
             'render_netbox_outcome': "Netbox Actions",
         })
 
-        #pylint: disable=access-member-before-definition
         base_config = dict(self.form_subdocuments)
         base_config.update({
             'outcomes': {

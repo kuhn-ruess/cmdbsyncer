@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Sync VMware Vsphere Custom Attributes"""
-#pylint: disable=logging-fstring-interpolation
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 

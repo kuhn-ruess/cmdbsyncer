@@ -1,7 +1,6 @@
 """
 CronJobs
 """
-#pylint: disable=too-many-arguments
 import os
 from datetime import datetime, timedelta
 import click
@@ -111,7 +110,7 @@ def run_job(group_name):
         print("Group does not exist")
 
 @_cli_cron.command('run_jobs')
-def jobs(): #pylint: disable=invalid-name
+def jobs():
     """
     Run all configured Jobs
     """

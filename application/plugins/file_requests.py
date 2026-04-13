@@ -1,7 +1,6 @@
 """
 Rule Import/ Export
 """
-#pylint: disable=too-many-arguments
 from ast import literal_eval
 import requests
 import click

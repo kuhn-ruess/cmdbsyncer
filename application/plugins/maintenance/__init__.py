@@ -2,7 +2,6 @@
 """
 Maintenance Module
 """
-#pylint: disable=too-many-arguments, logging-fstring-interpolation
 import os
 import datetime
 import string
@@ -332,7 +331,7 @@ def self_configure():
         'CRYPTOGRAPHY_KEY' : Fernet.generate_key(),
         'SESSION_COOKIE_NAME': "cmdb-syncer",
     }
-    from local_config import config #pylint: disable=import-outside-toplevel
+    from local_config import config
     for key, value in values.items():
         if key not in config:
             config[key] = value

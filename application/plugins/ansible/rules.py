@@ -6,7 +6,7 @@ from application.modules.rule.rule import Rule
 from application.helpers.get_account import get_account_variable
 from application.helpers.syncer_jinja import render_jinja
 
-class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
+class AnsibleVariableRule(Rule):
     """
     Add custom Variables for Ansible
     """
@@ -17,7 +17,6 @@ class AnsibleVariableRule(Rule):# pylint: disable=too-few-public-methods
         """
         Filter if Attributes match to a rule
         """
-        # pylint: disable=too-many-nested-blocks
         for outcome in rule_outcomes:
             attr_value = outcome['attribute_value']
             new_value  = render_jinja(attr_value, mode="nullify", **self.attributes).strip()

@@ -12,7 +12,7 @@ class DetailEntry(db.EmbeddedDocument):
     level = db.StringField()
     message = db.StringField()
 
-class LogEntry(db.Document): #pylint: disable=too-few-public-methods
+class LogEntry(db.Document):
     """Log Entry"""
 
     datetime = db.DateTimeField()

@@ -1,8 +1,6 @@
 """
 Models Config
 """
-#pylint: disable=no-member
-#pylint: disable=missing-function-docstring
 from application import app
 from application.models.host import Host
 from application.views.default import DefaultModelView

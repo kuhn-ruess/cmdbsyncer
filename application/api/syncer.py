@@ -1,8 +1,6 @@
 """
 Ansible Api
 """
-# pylint: disable=function-redefined
-# pylint: disable=no-member
 from datetime import datetime, timedelta
 from mongoengine.errors import DoesNotExist
 from flask import request

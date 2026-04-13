@@ -1,7 +1,6 @@
 """
 Checkmk Rules
 """
-# pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes
 from mongoengine import DENY
 from cryptography.fernet import Fernet
 from application import db, app

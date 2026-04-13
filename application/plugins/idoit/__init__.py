@@ -1,7 +1,6 @@
 """
 i-doit
 """
-#pylint: disable=too-many-arguments
 import pprint
 import click
 from mongoengine.errors import DoesNotExist
@@ -20,7 +19,6 @@ def load_rules():
     """
     Load all rules
     """
-    #pylint: disable=no-member
     attribute_rewrite = Rewrite()
     attribute_rewrite.cache_name = 'idoit_rewrite'
     attribute_rewrite.rules = \
@@ -47,7 +45,6 @@ def import_hosts(account, debug=False):
     """
     Import hosts from i-doit
     """
-    #pylint: disable=no-member, consider-using-generator
 
     target_config = get_account_by_name(account)
     syncer = SyncIdoit()

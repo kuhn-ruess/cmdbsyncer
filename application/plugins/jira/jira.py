@@ -1,7 +1,6 @@
 """
 Import Jira Data
 """
-#pylint: disable=too-many-locals
 import requests
 from application import app
 from application import logger
@@ -51,7 +50,6 @@ def import_jira(account):
     total = len(all_data)
     counter = 0
     for host in all_data:
-        # pylint: disable=logging-fstring-interpolation
         logger.debug(f'Host Data: {host}')
         counter += 1
         hostname = host['name']

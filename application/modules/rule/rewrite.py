@@ -2,7 +2,6 @@
 """
 Rewrite
 """
-#pylint: disable=logging-fstring-interpolation
 import ast
 from application.modules.rule.rule import Rule
 from application import logger

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Import JDISC Data"""
-#pylint: disable=logging-fstring-interpolation
 
 from syncerapi.v1 import (
     cc,

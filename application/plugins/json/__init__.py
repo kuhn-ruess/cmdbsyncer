@@ -15,7 +15,6 @@ def import_hosts(account, debug):
     """
     ## Import Hosts from JSON File
     """
-    #pylint: disable=no-member, consider-using-generator
     import_hosts_json(account, debug)
 
 

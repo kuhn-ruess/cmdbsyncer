@@ -46,7 +46,6 @@ class CheckmkDowntimeSync(CMK2):
         Calculate configured day for a datime,
         like first of month
         """
-        #pylint: disable=too-many-locals
         if offset:
             start_day = _weekdays[_weekdays.index(start_day)+offset]
 
@@ -89,7 +88,6 @@ class CheckmkDowntimeSync(CMK2):
         """
         Calculate the Downtime payload
         """
-        #pylint: disable=too-many-locals
         start_hour = int(render_jinja(rule['start_time_h'], **attributes))
         start_minute = int(render_jinja(rule['start_time_m'], **attributes))
         end_hour = int(render_jinja(rule['end_time_h'], **attributes))

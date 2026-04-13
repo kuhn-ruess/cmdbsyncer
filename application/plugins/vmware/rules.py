@@ -2,13 +2,12 @@
 """
 Vmware Rules
 """
-#pylint: disable=too-few-public-methods
 from application.modules.rule.rule import Rule
 from application.helpers.syncer_jinja import render_jinja
 
 
 #   . -- Custom Attributes
-class VmwareCustomAttributesRule(Rule):# pylint: disable=too-few-public-methods
+class VmwareCustomAttributesRule(Rule):
     """
     Define Custom Attributes in Vmware
     """
@@ -19,7 +18,6 @@ class VmwareCustomAttributesRule(Rule):# pylint: disable=too-few-public-methods
         """
         Add Attributes to VMware
         """
-        # pylint: disable=too-many-nested-blocks
         outcomes.setdefault('attributes', {})
         for outcome in rule_outcomes:
             attr_name = outcome['attribute_name']

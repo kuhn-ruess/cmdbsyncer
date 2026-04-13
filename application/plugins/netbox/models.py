@@ -2,7 +2,6 @@
 """
 Netbox Rule
 """
-# pylint: disable=no-member, too-few-public-methods, too-many-instance-attributes, import-error
 from mongoengine import CASCADE
 from application import db
 from application.modules.rule.models import rule_types

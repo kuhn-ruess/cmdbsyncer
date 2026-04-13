@@ -45,7 +45,7 @@ def _abort_unauthorized(reason="Unauthorized"):
     abort(401, "unauthorized")
 
 
-def require_token(fn): #pylint: disable=invalid-name
+def require_token(fn):
     """
     Decorator for Endpoints with token
     """

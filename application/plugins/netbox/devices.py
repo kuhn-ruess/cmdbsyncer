@@ -1,7 +1,6 @@
 """
 Create Devices in Netbox
 """
-#pylint: disable=no-member, too-many-locals, import-error
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from .netbox import SyncNetbox
@@ -86,7 +85,6 @@ class SyncDevices(SyncNetbox):
         """
         Update Devices Table in Netbox
         """
-        #pylint: disable=too-many-locals
         current_netbox_devices = self.nb.dcim.devices
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')

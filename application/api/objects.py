@@ -1,8 +1,6 @@
 """
 Objects Api
 """
-# pylint: disable=function-redefined
-# pylint: disable=no-member
 from datetime import datetime
 from mongoengine.errors import DoesNotExist
 

@@ -29,7 +29,7 @@ def attribute_table(title, data):
     print()
 
 
-class ColorCodes(): #pylint: disable=too-few-public-methods
+class ColorCodes():
     """
     Color Definitions
 

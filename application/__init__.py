@@ -1,8 +1,5 @@
 """ Main entry """
-# pylint: disable=invalid-name
-# pylint: disable=wrong-import-position
-# pylint: disable=ungrouped-imports
-# pylint: disable=line-too-long
+# pyright: reportImportCycles=false
 import os
 import sys
 import logging
@@ -209,7 +206,7 @@ def _register_all_plugin_admin_views():
             if exc.name == admin_module_name:
                 continue
             raise
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             logger.exception(
                 "Failed to register admin views for plugin %s", module_name
             )

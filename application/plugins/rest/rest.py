@@ -2,7 +2,6 @@
 """
 JSON Plugin
 """
-#pylint: disable=too-many-arguments, logging-fstring-interpolation
 import json
 import ast
 from requests.exceptions import JSONDecodeError

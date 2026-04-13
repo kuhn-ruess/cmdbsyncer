@@ -1,7 +1,6 @@
 """
 Sync objects with i-doit
 """
-#pylint: disable=no-member, too-many-locals, import-error
 import requests
 from requests.auth import HTTPBasicAuth
 
@@ -61,7 +60,6 @@ class SyncIdoit(Plugin):
             logger.debug(f"Request JSON Body: {data}")
 
             if method == "post":
-                #pylint: disable=missing-timeout
                 response = requests.post(url, auth=auth, json=data)
 
             logger.debug(f"Response Text: {response.text}")
@@ -246,7 +244,6 @@ class SyncIdoit(Plugin):
         Update device table in i-doit
         """
 
-        #pylint: disable=too-many-locals
 
         print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read all objects from i-doit")
         current_idoit_objects = dict(self.get_objects())

@@ -22,7 +22,6 @@ def _render_idoit_outcome(_view, _context, model, _name):
     return Markup(html)
 
 
-#pylint: disable=too-few-public-methods
 class IdoitCustomAttributesView(RuleModelView):
     """
     Custom rule model view

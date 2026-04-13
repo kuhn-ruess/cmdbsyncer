@@ -205,7 +205,6 @@ class SyncNetbox(Plugin):
                                        'CMDB Syncer Not defined'] and current_field:
                         continue
                     field_value = self.get_name_or_id(field, field_value, config)
-                    #pylint: disable=singleton-comparison
                     if field_value == False:
                         continue
                     if '.' in field:
