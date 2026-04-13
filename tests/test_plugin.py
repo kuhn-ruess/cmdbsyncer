@@ -168,16 +168,17 @@ class TestPlugin(unittest.TestCase):
             self.assertEqual(mock_print.call_count, 4)  # 2 failure messages + 2 timeout messages
 
     @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.time')
     @patch('builtins.print')
-    def test_inner_request_max_retries_exceeded(self, mock_print, mock_app):
-        """Test request failing after max retries"""
+    def test_inner_request_max_retries_exceeded(self, mock_print, mock_time, mock_app):
+        """Test request failing after max retries (time patched so the test is instant)"""
         mock_app.config = self.mock_app_config
-        
+
         with patch('application.modules.plugin.requests') as mock_requests:
             # Set up the actual exception classes
             mock_requests.exceptions = requests.exceptions
             mock_requests.get.side_effect = requests.exceptions.Timeout("Max retries exceeded")
-            
+
             plugin = Plugin()
             with self.assertRaises(requests.exceptions.Timeout):
                 plugin.inner_request('GET', 'http://example.com')
