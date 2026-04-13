@@ -5,6 +5,7 @@ import sys
 import logging
 import importlib
 import pkgutil
+import warnings
 from logging import config as log_config
 from tablib.formats import registry as tablib_registry
 import mongoengine
@@ -20,7 +21,6 @@ from flask_wtf.csrf import CSRFProtect
 
 from application.helpers.tablib_formater import ExportObjects
 
-import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 
 tablib_registry.register('syncer_rules', ExportObjects())
@@ -32,10 +32,10 @@ def _read_version_from_changelog():
     reading its first `## Version x.y.z` header. This keeps VERSION in sync
     with the changelog without requiring a manual bump on every release.
     """
-    import glob
+    import glob as _glob
     import re as _re
     changelog_dir = os.path.join(os.path.dirname(__file__), "..", "changelog")
-    files = glob.glob(os.path.join(changelog_dir, "v*.md"))
+    files = _glob.glob(os.path.join(changelog_dir, "v*.md"))
 
     def _key(path):
         m = _re.search(r"v(\d+)\.(\d+)\.md$", path)
@@ -43,8 +43,8 @@ def _read_version_from_changelog():
 
     for path in sorted(files, key=_key, reverse=True):
         with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                m = _re.match(r"^## Version (\d+\.\d+\.\d+)\s*$", line)
+            for changelog_line in fh:
+                m = _re.match(r"^## Version (\d+\.\d+\.\d+)\s*$", changelog_line)
                 if m:
                     return m.group(1)
     return "0.0.0"
@@ -68,9 +68,10 @@ csrf = CSRFProtect(app)
 
 ## Read Build Data
 
-for line in open(f"{app.root_path}/../buildinfo.txt").readlines():
-    name, key = line.split('=')
-    app.config[name] = key.strip()
+with open(f"{app.root_path}/../buildinfo.txt", encoding="utf-8") as _buildinfo:
+    for line in _buildinfo:
+        name, key = line.split('=')
+        app.config[name] = key.strip()
 
 log_config.dictConfig(app.config['LOGGING'])
 logger = logging.getLogger('debug')
@@ -186,19 +187,19 @@ def _register_all_plugin_admin_views():
     import application.plugins as plugins_package
     import plugins as external_plugins_package
 
-    modules = []
+    plugin_modules = []
 
     for _, module_name, _ in pkgutil.iter_modules(
         external_plugins_package.__path__, external_plugins_package.__name__ + "."
     ):
-        modules.append(module_name)
+        plugin_modules.append(module_name)
 
     for _, module_name, _ in pkgutil.iter_modules(
         plugins_package.__path__, plugins_package.__name__ + "."
     ):
-        modules.append(module_name)
+        plugin_modules.append(module_name)
 
-    for module_name in modules:
+    for module_name in plugin_modules:
         admin_module_name = f"{module_name}.admin_views"
         try:
             admin_module = importlib.import_module(admin_module_name)

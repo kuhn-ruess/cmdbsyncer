@@ -7,7 +7,6 @@ import importlib
 from datetime import datetime
 
 from mongoengine.errors import NotUniqueError, ValidationError
-from application import app
 from .rule_definitions import rules as enabled_rules
 
 

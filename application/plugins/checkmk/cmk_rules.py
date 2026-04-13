@@ -30,7 +30,7 @@ def clean_postproccessed(input):
 
 def deep_compare(a, b):
     """
-    Compare Checkmk rules which are nested with key: [list] 
+    Compare Checkmk rules which are nested with key: [list]
     Without the function, they may not match if the order in the list is diffrent.
     """
     if isinstance(a, dict) and isinstance(b, dict):
@@ -40,7 +40,7 @@ def deep_compare(a, b):
             return False
         return all(deep_compare(a[k], b[k]) for k in a)
     elif isinstance(a, list) and isinstance(b, list):
-        return sorted(a, key=lambda x: str(x)) == sorted(b, key=lambda x: str(x))
+        return sorted(a, key=str) == sorted(b, key=str)
     else:
         return a == b
 
@@ -54,31 +54,31 @@ def analyze_value_differences(expected, actual):
         # Check for different keys
         expected_keys = set(expected.keys())
         actual_keys = set(actual.keys())
-        
+
         missing_keys = expected_keys - actual_keys
         extra_keys = actual_keys - expected_keys
         common_keys = expected_keys & actual_keys
-        
+
         if missing_keys:
             differences.append(f"Missing keys: {', '.join(missing_keys)}")
         if extra_keys:
             differences.append(f"Extra keys: {', '.join(extra_keys)}")
-            
+
         for key in common_keys:
             if expected[key] != actual[key]:
                 differences.append(f"Key '{key}': expected {repr(expected[key])}, got {repr(actual[key])}")
-                
+
         return '; '.join(differences) if differences else "No specific differences found"
-        
+
     elif isinstance(expected, list) and isinstance(actual, list):
         if len(expected) != len(actual):
             return f"List length differs: expected {len(expected)}, got {len(actual)}"
-        
+
         differences = []
         for i, (exp_item, act_item) in enumerate(zip(expected, actual)):
             if exp_item != act_item:
                 differences.append(f"Index {i}: expected {repr(exp_item)}, got {repr(act_item)}")
-        
+
         return '; '.join(differences) if differences else "List order differs"
     else:
         return f"Expected: {repr(expected)}, Got: {repr(actual)}"
@@ -198,7 +198,6 @@ class CheckmkRuleSync(CMK2):
         """
         optimize rules to prevent to many duplicates
         """
-        host_on_rule = 2
         for rule_type, rules in list(self.rulsets_by_type.items()):
             final_rules = []
             host_for_hash = {}
@@ -358,7 +357,7 @@ class CheckmkRuleSync(CMK2):
                     cmk_condition = cmk_rule['extensions']['conditions']
                     rule_found = False
                     condition_matches = []  # Collect all rules with matching conditions
-                    
+
                     for rule in rules:
                         try:
                             cmk_value = ast.literal_eval(rule['value'])
@@ -392,7 +391,7 @@ class CheckmkRuleSync(CMK2):
                         logger.warning(f"🔄 POTENTIAL FLAPPING RULES detected in {ruleset_name}:")
                         logger.warning(f"Condition: {pformat(cmk_condition)}")
                         logger.warning(f"Found {len(condition_matches)} rules with same condition but different values:")
-                        
+
                         deletion_details_list = []
                         for i, match in enumerate(condition_matches, 1):
                             if not match['value_match']:
@@ -401,20 +400,20 @@ class CheckmkRuleSync(CMK2):
                                 logger.warning(f"  Option {i} - Expected: {pformat(match['expected_value'])}")
                                 logger.warning(f"  Option {i} - Actual: {pformat(match['actual_value'])}")
                                 logger.warning(f"  Option {i} - Difference: {value_diff}")
-                        
+
                         deletion_details = f"🔄 FLAPPING RULE - {len(condition_matches)} possible values: " + "; ".join(deletion_details_list)
 
                     if not rule_found: # Not existing any more
                         rule_id = cmk_rule['id']
                         print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in {ruleset_name} {rule_id}")
-                        
+
                         # Show details only for potentially problematic cases
                         if deletion_details:
                             print(f"{CC.WARNING}   {deletion_details}{CC.ENDC}")
-                        
+
                         url = f'/objects/rule/{rule_id}'
                         self.request(url, method="DELETE")
-                        
+
                         # Log with details if it's a potential flapping rule
                         log_entry = f"Deleted Rule in {ruleset_name} {rule_id}"
                         if deletion_details:

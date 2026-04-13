@@ -3,9 +3,9 @@ API
 """
 from functools import wraps
 from flask import abort, request, current_app
+from mongoengine.errors import DoesNotExist
 from application.models.account import Account
 from application.models.user import User
-from mongoengine.errors import DoesNotExist
 from application import log
 
 
