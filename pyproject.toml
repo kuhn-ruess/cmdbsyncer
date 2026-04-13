@@ -14,7 +14,12 @@ include = ["application*"]
 [tool.pylint.main]
 init-hook = 'import sys; sys.path.append("./application")'
 
+[tool.pylint.typecheck]
+# mongoengine's Document.objects is a QuerySetManager descriptor that pylint
+# cannot resolve statically. Tell pylint to trust the attribute.
+generated-members = ["objects"]
+
 [tool.pyright]
 include = ["application"]
 extraPaths = ["./application"]
-pythonVersion = "3.14.2"
+pythonVersion = "3.14"
