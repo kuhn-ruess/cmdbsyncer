@@ -31,12 +31,15 @@ def cli_import_rules(rulefile_path):
 
 @cli_rules.command('export_all_rules')
 @click.argument("target_path", default="")
-def cli_export_all_rules(target_path):
+@click.option("--include-hosts", is_flag=True, default=False,
+              help="Also export hosts/objects from the Host collection "
+                   "(skipped by default).")
+def cli_export_all_rules(target_path, include_hosts):
     """
     Export all Rules of every type into a single file.
     If no path is given, a timestamped filename is generated.
     """
-    export_all_rules(target_path or None)
+    export_all_rules(target_path or None, include_hosts=include_hosts)
 
 @cli_rules.command('create_rules')
 @click.option("--debug", default=False, is_flag=True)
