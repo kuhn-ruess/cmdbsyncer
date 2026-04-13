@@ -51,16 +51,17 @@ def export_rules(rule_type):
 
 
 HOST_COLLECTION_RULE_TYPE = 'host_objects'
+ACCOUNTS_RULE_TYPE = 'accounts'
 
 
-def export_all_rules(target_path=None, include_hosts=False):
+def export_all_rules(target_path=None, include_hosts=False, include_accounts=False):
     """
     Export all Rules of every known type into a single file.
 
     Hosts and objects (both stored in the Host collection under the
-    `host_objects` rule type) are skipped by default because they are usually
-    not what you want in a rule backup. Pass `include_hosts=True` to include
-    them.
+    `host_objects` rule type) and accounts are skipped by default because
+    they are usually not what you want in a rule backup. Pass
+    `include_hosts=True` / `include_accounts=True` to include them.
     """
     if not target_path:
         target_path = f"syncer_rules_export_{datetime.now():%Y%m%d_%H%M%S}.jsonl"
@@ -69,6 +70,9 @@ def export_all_rules(target_path=None, include_hosts=False):
         for rule_type in sorted(enabled_rules):
             if rule_type == HOST_COLLECTION_RULE_TYPE and not include_hosts:
                 print(f"* Skipped {rule_type} (use --include-hosts to export)")
+                continue
+            if rule_type == ACCOUNTS_RULE_TYPE and not include_accounts:
+                print(f"* Skipped {rule_type} (use --include-accounts to export)")
                 continue
             header_written = False
             for rule in export_rules_from_model(rule_type):
