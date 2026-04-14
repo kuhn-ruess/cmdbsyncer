@@ -96,6 +96,18 @@ class Host(db.Document):
     def __str__(self):
         return f"{self.object_type}: {self.hostname} ({self.source_account_name})"
 
+    def clean(self):
+        """
+        Normalize legacy/invalid object_type values before validation.
+
+        Older records may carry values like 'undefined' or None that are not
+        part of the current `object_types` choice list. Coerce anything not
+        recognized to 'auto' so saves don't blow up with ValidationError.
+        """
+        valid = {choice[0] for choice in object_types}
+        if self.object_type not in valid:
+            self.object_type = 'auto'
+
 
 
     @staticmethod
