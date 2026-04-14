@@ -1,13 +1,11 @@
 """
 Models Config
 """
-from application import app
-from application.models.host import Host
-from application.views.default import DefaultModelView
-from application.helpers.sates import remove_changes
-from flask import flash, redirect
 from flask_admin import expose
 from flask_login import current_user
+from application.views.default import DefaultModelView
+from application.helpers.sates import remove_changes
+from application.plugins.maintenance import clear_host_caches
 
 
 class ConfigModelView(DefaultModelView):
@@ -24,7 +22,7 @@ class ConfigModelView(DefaultModelView):
         Delete all Caches
         """
         remove_changes()
-        Host.objects(cache__ne={}).update(set__cache={})
+        clear_host_caches()
         return "Activation Done"
 
     def is_accessible(self):
