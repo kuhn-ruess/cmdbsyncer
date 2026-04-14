@@ -69,9 +69,13 @@ def maintenance(account):
     timedelta = now - delta
     if account_filter:
         objects = Host.objects(last_import_seen__lte=timedelta,
-                               source_account_id=str(account_filter['id']), no_autodelete__ne=True, object_type__ne = 'template')
+                               source_account_id=str(account_filter['id']),
+                               no_autodelete__ne=True,
+                               object_type__ne='template')
     else:
-        objects = Host.objects(last_import_seen__lte=timedelta, no_autodelete__ne=True, object_type__ne = 'template')
+        objects = Host.objects(last_import_seen__lte=timedelta,
+                               no_autodelete__ne=True,
+                               object_type__ne='template')
 
     if dont_delete_if_more:
         if len(objects) >= int(dont_delete_if_more):
@@ -111,6 +115,25 @@ def cli_maintenance(days):
 #.
 #   .-- Command: Delete Caches
 
+def clear_host_caches(cache_name=""):
+    """
+    Clear the cache dict on all Host objects.
+
+    If cache_name is given, only cache keys starting with that prefix
+    (case-insensitive) are removed. Otherwise the full cache is reset.
+    Uses atomic updates to bypass full-document validation.
+    """
+    if not cache_name:
+        Host.objects(cache__ne={}).update(set__cache={})
+        return
+    prefix = cache_name.lower()
+    for host in Host.objects(cache__ne={}):
+        new_cache = {k: v for k, v in host.cache.items()
+                     if not k.lower().startswith(prefix)}
+        if new_cache != host.cache:
+            host.update(set__cache=new_cache)
+
+
 @_cli_sys.command('delete_cache')
 @click.argument("cache_name", default="")
 def delete_cache(cache_name):
@@ -118,15 +141,7 @@ def delete_cache(cache_name):
     Delete object Cache
     """
     print(f"{CC.HEADER} ***** Delete Cache ***** {CC.ENDC}")
-    for host in Host.objects():
-        logger.debug(f"Handling Host {host.hostname}")
-        if cache_name:
-            for key in list(host.cache.keys()):
-                if key.lower().startswith(cache_name):
-                    del host.cache[key]
-        else:
-            host.cache = {}
-        host.save()
+    clear_host_caches(cache_name)
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
 #.
@@ -142,15 +157,14 @@ def delete_inventory(prefix_only):
     """
     print(f"{CC.HEADER} ***** Delete Inventory ***** {CC.ENDC}")
     for host in Host.objects():
-        logger.debug(f"Handling Host {host.hostname}")
+        logger.debug("Handling Host %s", host.hostname)
         if prefix_only:
-            prefix_only = prefix_only.lower()
-            for entry in list(host.inventory.keys()):
-                if entry.lower().startswith(prefix_only):
-                    del host.inventory[entry]
+            prefix = prefix_only.lower()
+            new_inventory = {k: v for k, v in host.inventory.items()
+                             if not k.lower().startswith(prefix)}
         else:
-            host.inventory = {}
-        host.save()
+            new_inventory = {}
+        host.update(set__inventory=new_inventory)
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
 #.
@@ -163,7 +177,7 @@ def update_cmdb():
     """
     print(f"{CC.HEADER} ***** Update Templates ***** {CC.ENDC}")
     for host in Host.get_export_hosts():
-        logger.debug(f"Handling Host {host.hostname}")
+        logger.debug("Handling Host %s", host.hostname)
         host.get_cmdb_template()
         host.save()
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
@@ -331,7 +345,7 @@ def self_configure():
         'CRYPTOGRAPHY_KEY' : Fernet.generate_key(),
         'SESSION_COOKIE_NAME': "cmdb-syncer",
     }
-    from local_config import config
+    from local_config import config  # pylint: disable=import-outside-toplevel
     for key, value in values.items():
         if key not in config:
             config[key] = value

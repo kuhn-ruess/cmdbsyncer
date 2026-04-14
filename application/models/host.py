@@ -522,7 +522,7 @@ class Host(db.Document):
             account_id = account_dict['id']
             account_name = account_dict['name']
             is_object = account_dict.get('is_object', False)
-            self.object_type = account_dict.get('object_type', 'undefined')
+            self.object_type = account_dict.get('object_type', 'auto')
 
         if self.object_type == 'host' and app.config['CHECK_FOR_VALID_HOSTNAME']:
             if not self.is_valid_hostname():
