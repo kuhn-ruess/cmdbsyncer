@@ -6,6 +6,8 @@ of the CMDB Syncer, with history and tab-completion — similar in spirit to
 modern interactive coding shells, but scoped to `flask ...` subcommands.
 """
 import os
+import re
+import json
 import shlex
 import atexit
 
@@ -13,40 +15,126 @@ import click
 
 from application import app
 from application.modules.debug import ColorCodes as CC
+from application.models.account import Account
 
 
 HISTORY_FILE = os.path.expanduser("~/.cmdbsyncer_shell_history")
 BUILTINS = {"help", "?", "exit", "quit", ":q"}
 
+_GROUP_RE = re.compile(r"app\.cli\.group\(\s*name\s*=\s*['\"]([^'\"]+)['\"]")
 
-def _iter_command_paths(cmd, prefix=()):
+
+def _scan_plugin_groups():
     """
-    Yield tuples of command-path tokens for every leaf command and every
-    intermediate group reachable from `cmd`.
+    Walk plugin directories, locate plugin.json files (with `ident`), and grep
+    sibling .py files for ``app.cli.group(name=...)`` to map a top-level CLI
+    group name (e.g. ``checkmk``) to its account type ident (e.g. ``cmkv2``).
     """
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    plugin_dirs = [
+        os.path.join(base_dir, 'plugins'),
+        os.path.join(base_dir, 'application', 'plugins'),
+    ]
+    mapping = {}
+    for plugin_dir in plugin_dirs:
+        if not os.path.isdir(plugin_dir):
+            continue
+        for root, _dirs, files in os.walk(plugin_dir):
+            if 'plugin.json' not in files:
+                continue
+            try:
+                with open(os.path.join(root, 'plugin.json'), encoding='utf-8') as f:
+                    data = json.load(f)
+                ident = data.get('ident')
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not ident:
+                continue
+            for fname in files:
+                if not fname.endswith('.py'):
+                    continue
+                try:
+                    with open(os.path.join(root, fname), encoding='utf-8') as f:
+                        for line in f:
+                            match = _GROUP_RE.search(line)
+                            if match:
+                                mapping.setdefault(match.group(1), ident)
+                except OSError:
+                    continue
+    return mapping
+
+
+def _resolve_click_command(tokens):
+    """
+    Walk ``app.cli`` according to ``tokens``. Return ``(cmd, depth_used)``
+    where ``depth_used`` is how many tokens were consumed to reach ``cmd``.
+    """
+    cmd = app.cli
+    depth = 0
+    for tok in tokens:
+        if isinstance(cmd, click.Group) and tok in cmd.commands:
+            cmd = cmd.commands[tok]
+            depth += 1
+        else:
+            break
+    return cmd, depth
+
+
+def _account_names(wanted_type):
+    try:
+        if wanted_type:
+            qs = Account.objects(enabled=True, type=wanted_type)
+        else:
+            qs = Account.objects(enabled=True)
+        return sorted(a.name for a in qs)
+    except Exception:  # pylint: disable=broad-exception-caught
+        return []
+
+
+def _completions_for(line, text, group_to_type):  # pylint: disable=too-many-locals
+    """
+    Position-aware completion. Returns a list of full token candidates that
+    start with ``text``.
+    """
+    try:
+        tokens = shlex.split(line, posix=True)
+    except ValueError:
+        tokens = line.split()
+
+    starting_new = line == '' or line[-1].isspace()
+    if starting_new:
+        current_idx = len(tokens)
+        current_text = ''
+    else:
+        current_idx = max(0, len(tokens) - 1)
+        current_text = tokens[-1] if tokens else ''
+
+    if text and not current_text.endswith(text):
+        current_text = text
+
+    preceding = tokens[:current_idx]
+    cmd, depth = _resolve_click_command(preceding)
+
     if isinstance(cmd, click.Group):
-        for name in sorted(cmd.commands):
-            sub = cmd.commands[name]
-            path = prefix + (name,)
-            yield path
-            yield from _iter_command_paths(sub, path)
+        options = list(cmd.commands.keys())
+        if depth == 0:
+            options += list(BUILTINS)
+        return sorted(o for o in options if o.startswith(current_text))
+
+    arg_index = current_idx - depth
+    arg_params = [p for p in cmd.params if isinstance(p, click.Argument)]
+    if arg_index < 0 or arg_index >= len(arg_params):
+        return []
+
+    param = arg_params[arg_index]
+    if param.name and 'account' in param.name.lower():
+        top_group = preceding[0] if preceding else None
+        wanted_type = group_to_type.get(top_group)
+        return [n for n in _account_names(wanted_type) if n.startswith(current_text)]
+    return []
 
 
-def _collect_completions():
-    """
-    Build a flat list of command invocations like
-    ``["cron list_jobs", "rules export_rules", ...]`` used for tab-completion.
-    """
-    paths = []
-    for name, sub in sorted(app.cli.commands.items()):
-        paths.append((name,))
-        if isinstance(sub, click.Group):
-            for p in _iter_command_paths(sub, (name,)):
-                paths.append(p)
-    return [" ".join(p) for p in paths] + sorted(BUILTINS)
-
-
-def _setup_readline(completions):
+def _setup_readline(group_to_type):
     try:
         import readline  # pylint: disable=import-outside-toplevel
     except ImportError:
@@ -62,13 +150,9 @@ def _setup_readline(completions):
 
     def completer(text, state):
         line = readline.get_line_buffer()
-        matches = [c for c in completions if c.startswith(line)]
-        remainders = []
-        for m in matches:
-            tail = m[len(line) - len(text):]
-            remainders.append(tail)
+        matches = _completions_for(line, text, group_to_type)
         try:
-            return remainders[state]
+            return matches[state]
         except IndexError:
             return None
 
@@ -89,6 +173,8 @@ def _print_help():
     click.echo("Type a syncer command without the leading 'flask', e.g.:")
     click.echo("  rules export_all_rules")
     click.echo("  cron list_jobs")
+    click.echo("Tab completes commands and account-name arguments "
+               "(filtered by the plugin's account type).")
     click.echo("Built-ins: help, exit (Ctrl-D also exits)")
     click.echo("Available top-level groups/commands:")
     for name in sorted(app.cli.commands):
@@ -128,8 +214,8 @@ def cli_syncer_shell():
     """
     Open an interactive REPL for syncer commands (history + tab-completion).
     """
-    completions = _collect_completions()
-    _setup_readline(completions)
+    group_to_type = _scan_plugin_groups()
+    _setup_readline(group_to_type)
 
     click.echo(f"{CC.OKGREEN}CMDB Syncer interactive shell{CC.ENDC} "
                f"— type 'help' or 'exit'.")
