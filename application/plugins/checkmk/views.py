@@ -834,7 +834,7 @@ class CheckmkSettingsView(DefaultModelView):
         """
         Custom form for CMK Version selection
         """
-        ids = request.args.get('ids', '').split(',')
+        ids = [str(escape(i)) for i in request.args.get('ids', '').split(',')]
 
         version_html = """
         <div class="container mt-4">

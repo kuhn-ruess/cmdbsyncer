@@ -1437,7 +1437,7 @@ class HostModelView(DefaultModelView):
         """
         Custom form for template selection
         """
-        ids = request.args.get('ids', '').split(',')
+        ids = [str(escape(i)) for i in request.args.get('ids', '').split(',')]
         templates = self.get_template_list()
 
         template_html = """
