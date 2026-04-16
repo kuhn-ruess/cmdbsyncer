@@ -53,7 +53,7 @@ def login():
                 existing_user.save()
                 return redirect(url_for("admin.index"))
         except Exception as exp:
-            flash('Remote User Error {exp}')
+            flash(f'Remote User Error: {exp}')
 
 
     login_form = LoginForm(request.form)
