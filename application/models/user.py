@@ -84,7 +84,7 @@ class User(db.Document, UserMixin):
         key = current_app.config['SECRET_KEY']
         data = {
             'userid': str(self.id),
-            'exp' : dt
+            'exp' : int(dt.timestamp())
         }
 
         return jwt.encode(header=header, payload=data, key=key)
