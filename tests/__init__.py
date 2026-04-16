@@ -137,6 +137,7 @@ class _ColorCodes:  # pylint: disable=too-few-public-methods
 
 _debug.ColorCodes = _ColorCodes
 _debug.cc = _ColorCodes
+_debug.debug = MagicMock(name="stub.debug")
 
 
 # --- application.models.host ------------------------------------------------
@@ -167,6 +168,7 @@ _syncerapi_v1 = _stub_package("syncerapi.v1")
 _syncerapi_v1.get_account = MagicMock(name="stub.get_account")
 _syncerapi_v1.Host = _Host
 _syncerapi_v1.cc = _ColorCodes
+_syncerapi_v1.render_jinja = MagicMock(name="stub.render_jinja")
 
 
 # --- Real modules under test -------------------------------------------------
@@ -200,3 +202,82 @@ _load_real_module(
     "application.plugins.checkmk.syncer",
     os.path.join("plugins", "checkmk", "syncer.py"),
 )
+
+
+# --- Checkmk plugin modules --------------------------------------------------
+# Additional stubs and module loads needed by checkmk plugin tests.
+# These live here (not in the plugin test directory) because the test bootstrap
+# must run before any import statement, and unittest discover does not reliably
+# execute package __init__.py files.
+
+# application.helpers.syncer_jinja
+_syncer_jinja = _stub_package("application.helpers.syncer_jinja")
+_syncer_jinja.render_jinja = MagicMock(name="stub.render_jinja")
+_syncer_jinja.get_list = MagicMock(name="stub.get_list")
+
+# application.helpers.get_account
+_get_account = _stub_package("application.helpers.get_account")
+_get_account.get_account_by_name = MagicMock(name="stub.get_account_by_name")
+
+# application.plugins.checkmk.models
+_cmk_models = _stub_package("application.plugins.checkmk.models")
+for _name in (
+    "CheckmkFolderPool", "CheckmkObjectCache", "CheckmkGroupRule",
+    "CheckmkTagMngmt", "CheckmkUserMngmt", "CheckmkPassword",
+    "CheckmkInventorizeAttributes", "CheckmkRuleMngmt",
+    "CheckmkSite", "CheckmkSettings",
+):
+    setattr(_cmk_models, _name, MagicMock(name=f"stub.{_name}"))
+
+# application.models.host extras
+_models_host.app = _StubApp()
+_models_host.HostError = type("HostError", (Exception,), {})
+
+# application.init_db
+_application.init_db = MagicMock(name="stub.init_db")
+
+# Load real plugin modules
+_load_real_module(
+    "application.modules.rule.rule",
+    os.path.join("modules", "rule", "rule.py"),
+)
+for _mod_name, _mod_path in [
+    ("helpers", "helpers.py"),
+    ("poolfolder", "poolfolder.py"),
+    ("rules", "rules.py"),
+    ("bi", "bi.py"),
+    ("cmk_rules", "cmk_rules.py"),
+    ("dcd", "dcd.py"),
+    ("downtimes", "downtimes.py"),
+    ("groups", "groups.py"),
+    ("passwords", "passwords.py"),
+    ("sites", "sites.py"),
+    ("tags", "tags.py"),
+    ("users", "users.py"),
+    ("inventorize", "inventorize.py"),
+    ("import_v1", "import_v1.py"),
+    ("import_v2", "import_v2.py"),
+]:
+    _load_real_module(
+        f"application.plugins.checkmk.{_mod_name}",
+        os.path.join("plugins", "checkmk", _mod_path),
+    )
+
+
+# --- Shared test helper ------------------------------------------------------
+# Avoids duplicate setUp code across checkmk test files (pylint R0801).
+
+def base_mock_init(self_param, **overrides):
+    """Common mock __init__ for CMK2 subclasses in tests."""
+    defaults = {
+        'account_id': 'test_account',
+        'account_name': 'Test',
+        'config': {'settings': {}},
+        'log_details': [],
+        'checkmk_version': '2.3.0',
+        'actions': MagicMock(),
+        'name': 'test',
+    }
+    defaults.update(overrides)
+    for key, value in defaults.items():
+        setattr(self_param, key, value)
