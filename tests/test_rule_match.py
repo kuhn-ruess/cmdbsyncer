@@ -6,25 +6,15 @@ Covers:
   - application.modules.rule.match.match (negation, type coercion, errors)
   - application.modules.rule.match.make_bool
 """
-import importlib.util
-import os
+# pylint: disable=missing-function-docstring
 import unittest
 
-# Load application/modules/rule/match.py directly to avoid triggering
-# application/__init__.py, which connects to MongoDB at import time.
-_MATCH_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "application", "modules", "rule", "match.py",
+from application.modules.rule.match import (
+    check_condition,
+    match,
+    make_bool,
+    MatchException,
 )
-_spec = importlib.util.spec_from_file_location("rule_match", _MATCH_PATH)
-assert _spec and _spec.loader, f"Could not load {_MATCH_PATH}"
-_match_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_match_mod)
-
-check_condition = _match_mod.check_condition
-match = _match_mod.match
-make_bool = _match_mod.make_bool
-MatchException = _match_mod.MatchException
 
 
 class TestMakeBool(unittest.TestCase):

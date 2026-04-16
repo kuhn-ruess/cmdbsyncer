@@ -36,7 +36,7 @@ def _stub_package(name, path=None):
     return mod
 
 
-class _StubApp:
+class _StubApp:  # pylint: disable=too-few-public-methods
     """Minimal replacement for the Flask `app` object used at import time."""
 
     # `@app.cli.group(...)` is evaluated at import time in cmk2.py. A MagicMock
@@ -78,6 +78,7 @@ _application.db = MagicMock(name="stub.db")
 # Subpackages that the real modules import from. We mark __path__ so that any
 # later "from application.X import Y" resolves against sys.modules first.
 _stub_package("application.modules", path=[])
+_stub_package("application.modules.rule", path=[])
 _stub_package("application.models", path=[])
 _stub_package("application.plugins", path=[])
 _stub_package("application.plugins.checkmk", path=[])
@@ -183,6 +184,10 @@ def _load_real_module(module_name, relative_path):
     return mod
 
 
+_load_real_module(
+    "application.modules.rule.match",
+    os.path.join("modules", "rule", "match.py"),
+)
 _load_real_module(
     "application.modules.plugin",
     os.path.join("modules", "plugin.py"),
