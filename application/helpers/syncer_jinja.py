@@ -13,7 +13,7 @@ from application import logger
 from application.helpers.get_account import get_account_variable
 
 
-JINJA_ENV = SandboxedEnvironment(autoescape=False)
+JINJA_ENV = SandboxedEnvironment(autoescape=True)
 def _cmk_cleanup_tag_id(value):
     """
     Lazily import the Checkmk helper to avoid circular imports while still
