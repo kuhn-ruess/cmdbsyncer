@@ -41,7 +41,8 @@ class ImportCheckmk1():
         else: # payload is empty
             formated = ascii(payload)
 
-        response = requests.post(url, {"request": formated}, verify=False, timeout=180)
+        verify = self.config.get('verify_ssl', True)
+        response = requests.post(url, {"request": formated}, verify=verify, timeout=180)
         return ast.literal_eval(response.text)
 
 
