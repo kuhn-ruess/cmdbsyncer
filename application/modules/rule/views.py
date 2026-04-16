@@ -13,7 +13,7 @@ from flask import flash
 from wtforms import HiddenField, StringField
 from flask_login import current_user
 from flask_admin.form import rules
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from application.views.default import DefaultModelView
 from application.modules.rule.models import filter_actions, rule_types, condition_types
 from application.docu_links import docu_links
@@ -198,7 +198,7 @@ def _render_condition_typ(_view, _context, model, _name):
 
     rule_names = dict(rule_types)
     translation = rule_names[model.condition_typ]
-    return Markup(f'<span class="badge badge-{badge}">{translation}<span>')
+    return Markup(f'<span class="badge badge-{escape(badge)}">{escape(translation)}</span>')
 
 def _render_filter_outcomes(_view, _context, model, _name):
     """
