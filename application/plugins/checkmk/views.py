@@ -14,7 +14,7 @@ from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
 from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
-from flask import redirect, url_for, request, render_template_string, flash
+from flask import redirect, url_for, request, render_template, flash
 
 from flask_login import current_user
 from application.views.default import DefaultModelView
@@ -836,23 +836,7 @@ class CheckmkSettingsView(DefaultModelView):
         """
         ids = [str(escape(i)) for i in request.args.get('ids', '').split(',')]
 
-        version_html = """
-        <div class="container mt-4">
-            <h3>Set CMK Version</h3>
-            <form method="POST" action="{{ url_for('.process_cmk_version_assignment') }}">
-                <input type="hidden" name="rule_ids" value="{{ ids|join(',') }}">
-                <div class="form-group">
-                    <label for="cmk_version">CMK Version:</label>
-                    <input type="text" class="form-control" id="cmk_version" name="cmk_version" required>
-                </div>
-                <div class="form-group">
-                    <button type="submit" class="btn btn-primary">Apply Version</button>
-                    <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
-                </div>
-            </form>
-        </div>
-        """
-        return render_template_string(version_html, ids=ids)
+        return render_template('admin/set_cmk_version_form.html', ids=ids)
 
     @expose('/process_cmk_version_assignment', methods=['POST'])
     def process_cmk_version_assignment(self):
