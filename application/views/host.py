@@ -410,7 +410,12 @@ class FilterHostnameRegex(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        regex = re.compile(value)
+        if len(value) > 1000:
+            return query.filter(hostname=None)
+        try:
+            regex = re.compile(value)
+        except re.error:
+            return query.filter(hostname=None)
         return query.filter(hostname=regex)
 
     def operation(self):
