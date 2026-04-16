@@ -79,9 +79,9 @@ def require_token(fn):
                     if not allowed:
                         _abort_unauthorized(f"User '{username}' not allowed for path '{current_path}'")
             except DoesNotExist:
-                _abort_unauthorized(f"User '{username}' not found")
+                _abort_unauthorized("Invalid credentials")
             if not user_result.check_password(user_password):
-                _abort_unauthorized(f"Wrong password for user '{username}'")
+                _abort_unauthorized("Invalid credentials")
         elif request.headers.get('x-login-token'):
             _abort_unauthorized("Invalid or removed login token")
         else:
