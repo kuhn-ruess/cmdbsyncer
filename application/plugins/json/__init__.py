@@ -1,12 +1,12 @@
+"""JSON import plugin."""
 import click
-from application.helpers.cron import register_cronjob
 from application import app
+from application.helpers.cron import register_cronjob
+from application.helpers.plugins import register_cli_group
 
 from .json import import_hosts_json
 
-@app.cli.group(name='json')
-def _cli_json():
-    """JSON File Import/ Inventorize"""
+_cli_json = register_cli_group(app, 'json', 'json', "JSON File Import/ Inventorize")
 
 @_cli_json.command('import_hosts')
 @click.argument("account")

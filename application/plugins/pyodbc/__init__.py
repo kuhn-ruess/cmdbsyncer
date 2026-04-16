@@ -1,15 +1,16 @@
+"""ODBC plugin."""
 import click
+
+from application import app
+from application.helpers.plugins import register_cli_group
 
 from syncerapi.v1 import (
     register_cronjob,
 )
-from syncerapi.v1.core import cli
 
 from .pyodbc import ODBC
 
-@cli.group(name='odbc')
-def cli_odbc():
-    """ODBC commands"""
+cli_odbc = register_cli_group(app, 'odbc', 'pyodbc', "ODBC commands")
 
 def odbc_import(account, debug=False):
     """

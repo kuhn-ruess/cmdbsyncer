@@ -1,18 +1,15 @@
+"""Microsoft SQL Server plugin."""
 import click
+from application import app
+from application.helpers.plugins import register_cli_group
+from application.plugins.pyodbc import ODBC
+
 from syncerapi.v1 import (
     register_cronjob,
 )
 
-from syncerapi.v1.core import (
-    cli,
-)
-
-from application import app
-from application.plugins.pyodbc import ODBC
-
-@cli.group(name='mssql')
-def cli_mssql():
-    """Microsoft SQL Server Import/ Inventorize"""
+cli_mssql = register_cli_group(app, 'mssql', 'mssql',
+                               "Microsoft SQL Server Import/ Inventorize")
 
 #   . CLI and Cron
 def mssql_import(account, debug=False):

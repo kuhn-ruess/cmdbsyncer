@@ -29,7 +29,7 @@ def attribute_table(title, data):
     print()
 
 
-class ColorCodes():
+class ColorCodes():  # pylint: disable=too-few-public-methods
     """
     Color Definitions
 
@@ -54,6 +54,39 @@ class ColorCodes():
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+def apply_debug_rules(syncer, rules):
+    """Enable debug mode on syncer and all its rule objects."""
+    syncer.debug = True
+    if rules.get('filter'):
+        rules['filter'].debug = True
+    syncer.filter = rules.get('filter', False)
+    rules['rewrite'].debug = True
+    syncer.rewrite = rules['rewrite']
+    rules['actions'].debug = True
+    syncer.actions = rules['actions']
+
+
+def clear_host_debug_cache(hostname, prefix):
+    """Load a host, clear its debug-relevant cache entries, and return it.
+
+    Returns the Host object or None if not found.
+    """
+    from mongoengine.errors import DoesNotExist  # pylint: disable=import-outside-toplevel
+    from application.models.host import Host  # pylint: disable=import-outside-toplevel
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
+        return None
+    for key in list(db_host.cache.keys()):
+        if key.lower().startswith(prefix):
+            del db_host.cache[key]
+    if 'CustomAttributeRule' in db_host.cache:
+        del db_host.cache['CustomAttributeRule']
+    db_host.save()
+    return db_host
+
 
 def debug(debug_mode, text):
     """

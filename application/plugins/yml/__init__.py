@@ -1,7 +1,8 @@
+"""YML import plugin."""
 import click
 from application import app
+from application.helpers.plugins import register_cli_group
 from syncerapi.v1 import register_cronjob
-
 
 from .yml import (
     import_hosts_yml,
@@ -10,9 +11,7 @@ from .yml import (
     inventorize_hosts_rest
 )
 
-@app.cli.group(name='yml')
-def _cli_yml():
-    """YML Import"""
+_cli_yml = register_cli_group(app, 'yml', 'yml', "YML Import")
 
 @_cli_yml.command('import_objects')
 @click.argument("account")

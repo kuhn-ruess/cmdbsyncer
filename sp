@@ -12,6 +12,29 @@ CMDB Syncer Plugin Interface
 """
 
 
+DISABLED_PLUGINS_FILE = 'disabled_plugins.json'
+
+
+def get_disabled_plugins():
+    """Return the set of disabled plugin idents."""
+    if not os.path.exists(DISABLED_PLUGINS_FILE):
+        return set()
+    try:
+        with open(DISABLED_PLUGINS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return set(data)
+    except (json.JSONDecodeError, IOError):
+        pass
+    return set()
+
+
+def save_disabled_plugins(disabled):
+    """Write the set of disabled plugin idents to disk."""
+    with open(DISABLED_PLUGINS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(sorted(disabled), f, indent=2)
+
+
 def get_plugins():
     """
     Read Config of all Plugins
@@ -50,7 +73,41 @@ def get_plugin_by_name(ident, local_only=False):
                     continue
                 return plugin
 
+def disable(ident):
+    """Disable a plugin so it will not be loaded."""
+    plugin = get_plugin_by_name(ident)
+    if not plugin:
+        print(f"Plugin '{ident}' not found")
+        return
+    disabled = get_disabled_plugins()
+    if ident in disabled:
+        print(f"Plugin '{ident}' is already disabled")
+        return
+    disabled.add(ident)
+    save_disabled_plugins(disabled)
+    print(f"Plugin '{ident}' disabled")
+
+
+def enable(ident):
+    """Enable a previously disabled plugin."""
+    plugin = get_plugin_by_name(ident)
+    if not plugin:
+        print(f"Plugin '{ident}' not found")
+        return
+    if not plugin['data'].get('enabled', False):
+        print(f"Plugin '{ident}' is not available")
+        return
+    disabled = get_disabled_plugins()
+    if ident not in disabled:
+        print(f"Plugin '{ident}' is already enabled")
+        return
+    disabled.discard(ident)
+    save_disabled_plugins(disabled)
+    print(f"Plugin '{ident}' enabled")
+
+
 def uninstall(ident):
+    """Uninstall a local plugin."""
     plugin = get_plugin_by_name(ident, local_only=True)
     if plugin:
         plugin_path = plugin['path'].replace('plugin.json', '')
@@ -96,57 +153,74 @@ def pack(ident):
             tar.add(plugin_path, arcname=plugin['data']['ident'])
         print(f"Plugin packed to {tar_filename}")
 
-def list():
+def list_plugins():
     """
     Print all Available Plugins
     """
-    table = Table(title="Installed Plugins", box=box.ASCII_DOUBLE_HEAD,\
-                header_style="bold blue", title_style="yellow", \
-                title_justify="left", width=90)
+    disabled = get_disabled_plugins()
+    table = Table(title="Installed Plugins", box=box.ASCII_DOUBLE_HEAD,
+                  header_style="bold blue", title_style="yellow",
+                  title_justify="left", width=100)
     table.add_column("Local")
-    table.add_column("ident")
+    table.add_column("Enabled")
+    table.add_column("Ident")
     table.add_column("Name")
     table.add_column("Version")
     table.add_column("Description")
-
 
     for plugin in get_plugins():
         if 'data' in plugin:
             is_local = "Yes" if plugin['path'].startswith('plugins/') else "No"
             data = plugin['data']
-            table.add_row(is_local, data['ident'], data['name'], data['version'], data.get('description', ""))
+            ident = data['ident']
+            if ident in disabled or not data.get('enabled', False):
+                enabled = "No"
+            else:
+                enabled = "Yes"
+            table.add_row(
+                is_local, enabled, ident,
+                data['name'], data['version'],
+                data.get('description', ""),
+            )
     console = Console()
     console.print(table)
 
 def main():
+    """CLI entry point."""
     parser = argparse.ArgumentParser(description='CMDB Syncer Plugin Interface')
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
-    
-    # list command
-    list_parser = subparsers.add_parser('list', help='List available plugins')
-    
-    # pack command
+
+    subparsers.add_parser('list', help='List available plugins')
+
     pack_parser = subparsers.add_parser('pack', help='Pack a plugin')
     pack_parser.add_argument('ident', help='Plugin identifier to pack')
-    
-    # install command
+
     install_parser = subparsers.add_parser('install', help='Install a plugin')
     install_parser.add_argument('path', help='Path to Plugin')
-    
-    # uninstall command
+
     uninstall_parser = subparsers.add_parser('uninstall', help='Uninstall a plugin')
     uninstall_parser.add_argument('ident', help='Plugin identifier to uninstall')
-    
+
+    disable_parser = subparsers.add_parser('disable', help='Disable a plugin')
+    disable_parser.add_argument('ident', help='Plugin identifier to disable')
+
+    enable_parser = subparsers.add_parser('enable', help='Enable a plugin')
+    enable_parser.add_argument('ident', help='Plugin identifier to enable')
+
     args = parser.parse_args()
-    
+
     if args.command == 'list':
-        list()
+        list_plugins()
     elif args.command == 'pack':
         pack(args.ident)
     elif args.command == 'install':
         install(args.path)
     elif args.command == 'uninstall':
         uninstall(args.ident)
+    elif args.command == 'disable':
+        disable(args.ident)
+    elif args.command == 'enable':
+        enable(args.ident)
     else:
         parser.print_help()
 

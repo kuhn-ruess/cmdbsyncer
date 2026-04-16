@@ -160,6 +160,15 @@ _cron = _stub_package("application.helpers.cron")
 _cron.register_cronjob = MagicMock(name="stub.register_cronjob")
 
 
+# --- application.helpers.plugins --------------------------------------------
+
+_plugins_helper = _stub_package("application.helpers.plugins")
+_plugins_helper.is_plugin_disabled = MagicMock(
+    name="stub.is_plugin_disabled", return_value=False
+)
+_plugins_helper.register_cli_group = MagicMock(name="stub.register_cli_group")
+
+
 # --- syncerapi.v1 -----------------------------------------------------------
 # plugin.py imports get_account/Host/cc from here. The real module re-exports
 # from application, which causes a circular import during stand-alone loads.

@@ -11,9 +11,12 @@ from rich.table import Table
 
 from application import app
 from application.models.host import Host
-from application.modules.debug import ColorCodes, attribute_table
+from application.modules.debug import ColorCodes, attribute_table, \
+                                    apply_debug_rules, clear_host_debug_cache
 from application.modules.rule.filter import Filter
 from application.modules.rule.rewrite import Rewrite
+from application.helpers.cron import register_cronjob
+from application.helpers.plugins import register_cli_group
 
 from .models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
                     AnsibleCustomVariablesRule
@@ -21,11 +24,8 @@ from .rules import AnsibleVariableRule
 from .inventory import AnsibleInventory
 from .site_syncer import SyncSites
 
-from application.helpers.cron import register_cronjob
-
-@app.cli.group(name='ansible')
-def cli_ansible():
-    """Ansible Datasource and Debug"""
+cli_ansible = register_cli_group(app, 'ansible', 'ansible',
+                                 "Ansible Datasource and Debug")
 
 #   .-- Load Rules
 def load_rules():
@@ -60,26 +60,10 @@ def debug_ansible_rules(hostname):
     rules = load_rules()
 
     syncer = AnsibleInventory()
-    syncer.debug = True
-    rules['filter'].debug = True
-    syncer.filter = rules['filter']
+    apply_debug_rules(syncer, rules)
 
-    rules['rewrite'].debug = True
-    syncer.rewrite = rules['rewrite']
-
-    rules['actions'].debug=True
-    syncer.actions = rules['actions']
-
-    try:
-        db_host = Host.objects.get(hostname=hostname)
-        for key in list(db_host.cache.keys()):
-            if key.lower().startswith('ansible'):
-                del db_host.cache[key]
-        if 'CustomAttributeRule' in db_host.cache:
-            del db_host.cache['CustomAttributeRule']
-        db_host.save()
-    except DoesNotExist:
-        print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
+    db_host = clear_host_debug_cache(hostname, 'ansible')
+    if not db_host:
         return
 
     attributes = syncer.get_attributes(db_host, 'ansible')
@@ -106,8 +90,8 @@ def _inner_update_cache(account=False):
     """
     Update Cache of Ansible
     """
-    # pyint: disable=unused-argument
-    # Account Variable needed because of cronjobs 
+    # pylint: disable=unused-argument
+    # Account Variable needed because of cronjobs
     print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
     Host.objects.filter(cache__ansible__exists=True).update(unset__cache__ansible=1)
     print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
@@ -130,9 +114,9 @@ def update_cache():
 #.
 #   .-- Ansible Source
 @cli_ansible.command('source')
-@click.option("--list", is_flag=True)
+@click.option("--list", "show_list", is_flag=True)
 @click.option("--host")
-def source(list, host):
+def source(show_list, host):
     """Inventory Source for Ansible"""
     rules = load_rules()
     syncer = AnsibleInventory()
@@ -140,10 +124,10 @@ def source(list, host):
     syncer.rewrite = rules['rewrite']
     syncer.actions = rules['actions']
 
-    if list:
+    if show_list:
         print(json.dumps(syncer.get_full_inventory()))
         return True
-    elif host:
+    if host:
         print(json.dumps(syncer.get_host_inventory(host)))
         return True
     print("Params missing")
@@ -151,15 +135,15 @@ def source(list, host):
 #.
 #   .-- Checkmk Server Source
 @cli_ansible.command('cmk-server-source')
-@click.option("--list", is_flag=True)
+@click.option("--list", "show_list", is_flag=True)
 @click.option("--host")
-def server_source(list, host):
+def server_source(show_list, host):
     """Inventory Source for Checkmk Server Data"""
     cmksitemngmt = SyncSites()
-    if list:
+    if show_list:
         print(json.dumps(cmksitemngmt.get_full_inventory()))
         return True
-    elif host:
+    if host:
         print(json.dumps(cmksitemngmt.get_host_inventory(host)))
         return True
     print("Params missing")
@@ -170,9 +154,11 @@ def server_source(list, host):
 @cli_ansible.command('debug_filter')
 @click.option('--list-rules', '-l', is_flag=True, help='List all available filter rules')
 @click.option('--filter-name', '-f', default=None, help='Name of specific filter rule to test')
-@click.option('--show-matched', '-m', is_flag=True, help='Show hosts matched by filter (will be processed)')
-@click.option('--show-ignored', '-i', is_flag=True, help='Show hosts NOT matched (ignored by filter)')
-def debug_filter(list_rules, filter_name, show_matched, show_ignored):
+@click.option('--show-matched', '-m', is_flag=True,
+              help='Show hosts matched by filter (will be processed)')
+@click.option('--show-ignored', '-i', is_flag=True,
+              help='Show hosts NOT matched (ignored by filter)')
+def debug_filter(list_rules, filter_name, show_matched, show_ignored):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     """
     Debug filter rules against all hosts.
 
@@ -268,7 +254,7 @@ def debug_filter(list_rules, filter_name, show_matched, show_ignored):
 register_cronjob('Ansible: Build Cache', _inner_update_cache)
 
 # Iniate API
-from syncerapi.v1.rest import API
+from syncerapi.v1.rest import API  # pylint: disable=wrong-import-position,wrong-import-order
 
-from .rest_api.ansible import API as ansible
+from .rest_api.ansible import API as ansible  # pylint: disable=wrong-import-position
 API.add_namespace(ansible, path='/ansible')

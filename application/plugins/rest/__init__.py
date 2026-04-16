@@ -1,14 +1,12 @@
+"""REST API plugin."""
 import click
-from application.helpers.cron import register_cronjob
 from application import app
-
+from application.helpers.cron import register_cronjob
+from application.helpers.plugins import register_cli_group
 
 from .rest import import_hosts_rest, inventorize_hosts_rest
 
-
-@app.cli.group(name='rest')
-def _cli_rest():
-    """REST API related Commands"""
+_cli_rest = register_cli_group(app, 'rest', 'rest', "REST API related Commands")
 
 
 @_cli_rest.command('import_hosts')
