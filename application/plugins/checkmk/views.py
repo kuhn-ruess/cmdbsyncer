@@ -1,11 +1,12 @@
 """
 Checkmk Rule Views
 """
+# pylint: disable=too-many-lines
 from markupsafe import Markup, escape
 
 from pygments import highlight
-from pygments.formatters import HtmlFormatter
-from pygments.lexers import DjangoLexer
+from pygments.formatters import HtmlFormatter  # pylint: disable=no-name-in-module
+from pygments.lexers import DjangoLexer  # pylint: disable=no-name-in-module
 
 from wtforms import HiddenField, StringField, PasswordField
 from wtforms.validators import ValidationError
@@ -112,7 +113,7 @@ def _render_bi_rule(_view, _context, model, _name):
     """
     Render BI Rule
     """
-    html = f'''
+    html = '''
         <div class="card">
             <div class="card-body">
             <p class="card-text">
@@ -120,7 +121,7 @@ def _render_bi_rule(_view, _context, model, _name):
     '''
     for idx, entry in enumerate(model.outcomes):
         html += f"<li class='list-group-item'>{idx}: {escape(entry['description'])}</li>"
-    html += f'''
+    html += '''
             </ul>
             </p>
             </div>
@@ -229,16 +230,10 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
     Render Group Outcome
     """
     html = ""
-    for idx, rule in enumerate(model.outcomes):
+    for _idx, rule in enumerate(model.outcomes):
         value_template = \
                 highlight(rule.value_template, DjangoLexer(),
                           HtmlFormatter(sytle='colorfull'))
-        condition_service = ""
-        if rule.condition_service:
-            condition_service = highlight(
-                rule.condition_service, DjangoLexer(),
-                HtmlFormatter(sytle='colorfull')
-            )
         html += f'''
            <div class="card">
              <div class="card-body">
@@ -282,6 +277,10 @@ class CheckmkGroupRuleView(RuleModelView):
     Custom Group Model View
     """
     column_default_sort = "name"
+
+    column_exclude_list = [
+        'conditions', 'outcomes', 'outcome',
+    ]
 
     form_subdocuments = {
         'outcome': {
@@ -515,17 +514,23 @@ class CheckmkMngmtRuleView(RuleModelView):
                             },
                             'condition_host': {
                                 'placeholder': (
-                                    'Hostname for Condition, Supports Comma Seperated Lists (or). Use {{HOSTNAME}} for actual Host'
+                                    'Hostname for Condition, Supports'
+                                    ' Comma Seperated Lists (or).'
+                                    ' Use {{HOSTNAME}} for actual Host'
                                 )
                             },
                             'condition_service': {
                                 'placeholder': (
-                                    'Service Name for Condition, Supports Comma Seperated Lists (or)'
+                                    'Service Name for Condition,'
+                                    ' Supports Comma Seperated'
+                                    ' Lists (or)'
                                 )
                             },
                             'condition_service_label': {
                                 'placeholder': (
-                                    'Service Labels for Condition, Supports Comma Seperated Lists (and)'
+                                    'Service Labels for Condition,'
+                                    ' Supports Comma Seperated'
+                                    ' Lists (and)'
                                 )
                             },
                         }
@@ -741,13 +746,24 @@ class CheckmkSettingsView(DefaultModelView):
             ),
         },
         'cmk_user': {
-            'placeholder': "API user for CheckMK automation (for downtime management). You can use {{ACCOUNT:x:username}} as Placeholder",
+            'placeholder': (
+                "API user for CheckMK automation"
+                " (for downtime management)."
+                " You can use {{ACCOUNT:x:username}}"
+                " as Placeholder"
+            ),
         },
         'cmk_secret': {
-            'placeholder': "API secret/password for CheckMK automation ({{ACCOUNT:x:password}}",
+            'placeholder': (
+                "API secret/password for CheckMK"
+                " automation ({{ACCOUNT:x:password}}"
+            ),
         },
         'cmk_server_address': {
-            'placeholder': "CheckMK server address for API calls (with site, or {{ACCOUTN:x:address}})",
+            'placeholder': (
+                "CheckMK server address for API calls"
+                " (with site, or {{ACCOUNT:x:address}})"
+            ),
         },
         'webserver_certificate': {
             'placeholder': (
@@ -774,8 +790,10 @@ class CheckmkSettingsView(DefaultModelView):
        rules.FieldSet(
            ( 'subscription_username', 'subscription_password',
            ), "Automatic Download Settings (optional: For automated Version Download)"),
-       rules.FieldSet(
-           ( 'webserver_certificate', 'webserver_certificate_private_key', 'webserver_certificate_intermediate',
+       rules.FieldSet((
+           'webserver_certificate',
+           'webserver_certificate_private_key',
+           'webserver_certificate_intermediate',
            ), "Server Managment (optional: For automated Certificate Updates)"),
     ]
 
@@ -859,7 +877,7 @@ class CheckmkSettingsView(DefaultModelView):
                     entry.save()
                     updated_count += 1
             flash(f'CMK Version "{cmk_version}" applied to {updated_count} entries', 'success')
-        except Exception as e:
+        except (ValueError, ValidationError) as e:
             flash(f'Error applying CMK Version: {str(e)}', 'error')
 
         return redirect(url_for('.index_view'))
