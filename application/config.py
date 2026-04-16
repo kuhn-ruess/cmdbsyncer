@@ -21,6 +21,9 @@ class BaseConfig():
     ADMIN_SESSION_HOURS = 2
     BASE_PREFIX = '/'
     SESSION_COOKIE_NAME = "syncer"
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
 
     LOGGING = {
         "version": 1,
