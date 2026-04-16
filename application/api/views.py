@@ -21,9 +21,8 @@ def apply_headers(response):
     if app.config.get('APPLY_HEADERS'):
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-
-    response.headers["Access-Control-Allow-Headers"] =\
-                        "Origin, x-login-user, Content-Type, Accept"
+        response.headers["Access-Control-Allow-Headers"] =\
+                            "Origin, x-login-user, Content-Type, Accept"
     return response
 
 
