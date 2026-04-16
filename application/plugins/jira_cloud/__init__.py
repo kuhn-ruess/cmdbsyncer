@@ -1,10 +1,12 @@
+"""Jira Cloud plugin."""
 import click
-from .jira_cloud import import_jira_cloud
+from application.plugins.jira import jira_cli
+
 from syncerapi.v1 import (
     register_cronjob,
 )
 
-from application.plugins.jira import jira_cli
+from .jira_cloud import import_jira_cloud
 
 @jira_cli.command('import_cloud')
 @click.argument("account")
@@ -15,7 +17,7 @@ def cmd_import_jira(account, debug):
     """
     try:
         import_jira_cloud(account, debug)
-    except Exception as error:
+    except Exception as error:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f"Error: {error}")

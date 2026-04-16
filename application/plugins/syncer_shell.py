@@ -21,7 +21,10 @@ from application.models.account import Account
 HISTORY_FILE = os.path.expanduser("~/.cmdbsyncer_shell_history")
 BUILTINS = {"help", "?", "exit", "quit", ":q"}
 
-_GROUP_RE = re.compile(r"app\.cli\.group\(\s*name\s*=\s*['\"]([^'\"]+)['\"]")
+_GROUP_RE = re.compile(
+    r"app\.cli\.group\(\s*name\s*=\s*['\"]([^'\"]+)['\"]"
+    r"|register_cli_group\(\s*app\s*,\s*['\"]([^'\"]+)['\"]"
+)
 
 
 def _scan_plugin_groups():
@@ -58,7 +61,8 @@ def _scan_plugin_groups():
                         for line in f:
                             match = _GROUP_RE.search(line)
                             if match:
-                                mapping.setdefault(match.group(1), ident)
+                                group_name = match.group(1) or match.group(2)
+                                mapping.setdefault(group_name, ident)
                 except OSError:
                     continue
     return mapping

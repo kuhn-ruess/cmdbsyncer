@@ -6,14 +6,16 @@ import click
 from mongoengine.errors import DoesNotExist
 
 from application import app
-from .models import IdoitCustomAttributes, IdoitRewriteAttributeRule
-from .rules import IdoitVariableRule
 from application.modules.rule.rewrite import Rewrite
 from application.modules.debug import ColorCodes, attribute_table
-from .syncer import SyncIdoit
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.helpers.cron import register_cronjob
+from application.helpers.plugins import register_cli_group
+
+from .models import IdoitCustomAttributes, IdoitRewriteAttributeRule
+from .rules import IdoitVariableRule
+from .syncer import SyncIdoit
 
 def load_rules():
     """
@@ -33,11 +35,7 @@ def load_rules():
     }
 
 
-@app.cli.group(name='i-doit')
-def _cli_idoit():
-    """
-    i-doit Import/ Export
-    """
+_cli_idoit = register_cli_group(app, 'i-doit', 'idoit', "i-doit Import/ Export")
 
 
 #   .-- Command: import hosts

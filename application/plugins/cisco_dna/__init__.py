@@ -6,13 +6,14 @@ Cisco DNA Inventory
 import click
 from application import app
 from application.helpers.get_account import get_account_by_name
-from application.modules.debug import ColorCodes
-from .syncer import CiscoDNA
 from application.helpers.cron import register_cronjob
+from application.helpers.plugins import register_cli_group
+from application.modules.debug import ColorCodes
 
-@app.cli.group(name='cisco-dna')
-def _cli_cisco_dna():
-    """Cisco DNA Interface and Devices"""
+from .syncer import CiscoDNA
+
+_cli_cisco_dna = register_cli_group(app, 'cisco-dna', 'cisco_dna',
+                                    "Cisco DNA Interface and Devices")
 
 if app.config.get("DISABLE_SSL_ERRORS"):
     from urllib3.exceptions import InsecureRequestWarning
@@ -50,7 +51,7 @@ def get_interfaces(account):
             job.get_interfaces()
         else:
             print(f"{ColorCodes.FAIL} Target not found {ColorCodes.ENDC}")
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         print(f'C{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
 
 

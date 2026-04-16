@@ -6,8 +6,16 @@ from mongoengine.errors import DoesNotExist
 
 from application import app
 from application import log
-
+from application.helpers.plugins import register_cli_group
 from application.modules.rule.rewrite import Rewrite
+from application.modules.debug import attribute_table, apply_debug_rules, \
+                                    clear_host_debug_cache
+
+from syncerapi.v1 import (
+    register_cronjob,
+    cc,
+    Host,
+)
 
 from .models import *
 from .rules import *
@@ -20,47 +28,21 @@ from .dataflow import SyncDataFlow
 from .cluster import SyncCluster
 from .virtualmachines import SyncVirtualMachines
 from .prefixes import SyncPrefixes
-from application.modules.debug import attribute_table
-
-from syncerapi.v1 import (
-    register_cronjob,
-    cc,
-    Host,
-)
 
 def get_device_debug_data(hostname):
-
+    """Return debug data (attributes, extra_attributes, rule_logs) for a host."""
     rules = load_device_rules()
     rule_logs = {}
 
     syncer = SyncDevices(False)
-    syncer.debug = True
     syncer.config = {
         '_id': "debugmode",
     }
+    apply_debug_rules(syncer, rules)
 
-    if rules['filter']:
-        rules['filter'].debug = True
-    syncer.filter = rules['filter']
-
-    rules['rewrite'].debug = True
-    syncer.rewrite = rules['rewrite']
-
-    rules['actions'].debug=True
-    syncer.actions = rules['actions']
-
-    try:
-        db_host = Host.objects.get(hostname=hostname)
-        for key in list(db_host.cache.keys()):
-            if key.lower().startswith('netbox'):
-                del db_host.cache[key]
-        if "CustomAttributeRule" in db_host.cache:
-            del db_host.cache['CustomAttributeRule']
-        db_host.save()
-    except DoesNotExist:
-        print(f"{cc.FAIL}Host not Found{cc.ENDC}")
-        return
-
+    db_host = clear_host_debug_cache(hostname, 'netbox')
+    if not db_host:
+        return None, None, None
 
     attributes = syncer.get_attributes(db_host, 'netbox')
 
@@ -96,9 +78,7 @@ def load_device_rules():
         'actions': netbox_rules,
     }
 
-@app.cli.group(name='netbox')
-def cli_netbox():
-    """Netbox Import and Syncronisation"""
+cli_netbox = register_cli_group(app, 'netbox', 'netbox', "Netbox Import and Syncronisation")
 
 #   .-- Command: Export Devices
 def netbox_device_export(account, debug=False, debug_rules=False):
@@ -116,7 +96,7 @@ def netbox_device_export(account, debug=False, debug_rules=False):
         syncer.name = "Netbox: Update Devices"
         syncer.source = "netbox_device_sync"
         syncer.export_hosts()
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         log.log(f"Export Devices to Account: {account} Failed",
@@ -164,7 +144,7 @@ def netbox_virtual_machines_sync(account, debug=False, debug_rules=False):
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -211,7 +191,7 @@ def netbox_cluster_sync(account, debug=False, debug_rules=False):
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -233,7 +213,7 @@ def netbox_device_import(account, debug=False):
         syncer = SyncDevices(account)
         syncer.debug = debug
         syncer.import_hosts()
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -253,7 +233,7 @@ def netbox_vm_import(account, debug=False):
         syncer = SyncVirtualMachines(account)
         syncer.debug = debug
         syncer.import_hosts()
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
         if debug:
             raise
@@ -293,7 +273,7 @@ def netbox_ip_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -334,7 +314,7 @@ def netbox_prefix_sync(account, debug=False, debug_rules=False):
             syncer.rewrite = attribute_rewrite
             syncer.actions = netbox_rules
             syncer.debug_rules(debug_rules, 'Netbox')
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -379,7 +359,7 @@ def netbox_interface_sync(account, debug=False, debug_rules=False):
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -425,7 +405,7 @@ def netbox_virt_interface_sync(account, debug=False, debug_rules=False):
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -471,7 +451,7 @@ def netbox_contacts_sync(account, debug=False, debug_rules=False):
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -515,7 +495,7 @@ def netbox_dataflow_sync(account, debug=False, debug_rules=False):
         if debug:
             raise
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
-    except Exception as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')

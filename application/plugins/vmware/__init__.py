@@ -2,8 +2,13 @@
 """VMware Support"""
 import click
 
+from application import app
 from application.modules.rule.rewrite import Rewrite
+from application.helpers.plugins import register_cli_group
 
+from syncerapi.v1 import (
+    register_cronjob,
+)
 
 from .models import (
         VMwareRewriteAttributes,
@@ -17,18 +22,7 @@ from .custom_attributes import (
 
 from .rules import VmwareCustomAttributesRule
 
-from syncerapi.v1 import (
-    register_cronjob,
-)
-
-from syncerapi.v1.core import (
-    cli,
-)
-
-
-@cli.group(name='vmware')
-def cli_vmware():
-    """VMware commands"""
+cli_vmware = register_cli_group(app, 'vmware', 'vmware', "VMware commands")
 
 #   .-- Custom Attributes
 def custom_attributes_export(account, debug=False):
@@ -52,7 +46,7 @@ def custom_attributes_export(account, debug=False):
         vm.name = f"Export Attributes for {account}"
         vm.source = "vmware_attribute_export"
         vm.export_attributes()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         if debug:
             raise
 
@@ -65,7 +59,7 @@ def custom_attributes_inventorize(account, debug=False):
         vm.name = f"Inventorize data from {account}"
         vm.source = "vmware_attribute_inventorize"
         vm.inventorize_attributes()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         if debug:
             raise
 

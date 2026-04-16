@@ -1,17 +1,15 @@
 """
 Rule Manger
 """
+import click
 from application import app
 from application.helpers.cron import register_cronjob
-import click
+from application.helpers.plugins import register_cli_group
 
 from .rule_import_export import import_rules, export_rules, export_all_rules
 from .autorules import create_rules
 
-
-@app.cli.group(name='rules')
-def cli_rules():
-    """Syner Rules import and Export"""
+cli_rules = register_cli_group(app, 'rules', 'rules', "Syner Rules import and Export")
 
 @cli_rules.command('export_rules')
 @click.argument("rule_type", default="")

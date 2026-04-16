@@ -20,15 +20,10 @@ from application.plugins.checkmk.models import CheckmkFolderPool
 from application.models.config import Config
 from application.helpers.cron import register_cronjob
 from application.helpers.get_account import get_account_by_name
+from application.helpers.plugins import register_cli_group
 
 
-
-@app.cli.group(name='sys', short_help="Syncer commands")
-def _cli_sys():
-    """Syncer Commands
-
-    This Group contains all syncer related commands
-    """
+_cli_sys = register_cli_group(app, 'sys', 'maintenance', "Syncer Commands")
 
 
 #   .-- Command: Maintenance

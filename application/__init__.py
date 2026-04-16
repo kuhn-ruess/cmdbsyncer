@@ -185,6 +185,7 @@ def page_redirect():
     return redirect(url_for("admin.index"))
 
 def _register_all_plugin_admin_views():
+    from application.helpers.plugins import is_plugin_disabled
     import application.plugins as plugins_package
     import plugins as external_plugins_package
 
@@ -193,11 +194,20 @@ def _register_all_plugin_admin_views():
     for _, module_name, _ in pkgutil.iter_modules(
         external_plugins_package.__path__, external_plugins_package.__name__ + "."
     ):
+        # module_name is e.g. "plugins.netbox" — extract the short ident
+        short_name = module_name.rsplit(".", 1)[-1]
+        if is_plugin_disabled(short_name):
+            logger.info("Plugin '%s' is disabled, skipping", short_name)
+            continue
         plugin_modules.append(module_name)
 
     for _, module_name, _ in pkgutil.iter_modules(
         plugins_package.__path__, plugins_package.__name__ + "."
     ):
+        short_name = module_name.rsplit(".", 1)[-1]
+        if is_plugin_disabled(short_name):
+            logger.info("Plugin '%s' is disabled, skipping", short_name)
+            continue
         plugin_modules.append(module_name)
 
     for module_name in plugin_modules:

@@ -2,22 +2,18 @@
 """Import JDISC Data"""
 import click
 
-from .devices import JdiscDevices
-from .applications import JdiscApplications
-from .executables import JdiscExecutables
+from application import app
+from application.helpers.plugins import register_cli_group
 
 from syncerapi.v1 import (
     register_cronjob,
 )
 
-from syncerapi.v1.core import (
-    cli,
-)
+from .devices import JdiscDevices
+from .applications import JdiscApplications
+from .executables import JdiscExecutables
 
-
-@cli.group(name='jdisc')
-def cli_jdisc():
-    """JDisc commands"""
+cli_jdisc = register_cli_group(app, 'jdisc', 'jdisc', "JDisc commands")
 
 #   .-- Devices
 def jdisc_device_import(account, debug=False):
@@ -29,7 +25,7 @@ def jdisc_device_import(account, debug=False):
         jdisc.name = f"Import data from {account}"
         jdisc.source = "jdisc_device_import"
         jdisc.import_devices()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         if debug:
             raise
 
@@ -42,7 +38,7 @@ def jdisc_device_inventorize(account, debug=False):
         jdisc.name = f"Inventorize data from {account}"
         jdisc.source = "jdisc_device_inventorize"
         jdisc.inventorize()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         if debug:
             raise
 
@@ -75,7 +71,7 @@ def jdisc_applications_import(account, debug=False):
         jdisc.name = f"Import data from {account}"
         jdisc.source = "jdisc_applications_import"
         jdisc.import_applications()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         if debug:
             raise
 
@@ -88,7 +84,7 @@ def jdisc_application_inventorize(account, debug=False):
         jdisc.name = f"Inventorize data from {account}"
         jdisc.source = "jdisc_application_inventorize"
         jdisc.inventorize()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         if debug:
             raise
 
@@ -120,7 +116,7 @@ def jdisc_executables_import(account, debug=False):
         jdisc.name = f"Import data from {account}"
         jdisc.source = "jdisc_executables_import"
         jdisc.import_executables()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         if debug:
             raise
 
@@ -133,7 +129,7 @@ def jdisc_executables_inventorize(account, debug=False):
         jdisc.name = f"Inventorize data from {account}"
         jdisc.source = "jdisc_executables_inventorize"
         jdisc.inventorize()
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         if debug:
             raise
 

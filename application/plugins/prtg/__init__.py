@@ -1,13 +1,13 @@
+"""PRTG plugin."""
 import click
 from application import app
+from application.helpers.plugins import register_cli_group
 
 from syncerapi.v1 import register_cronjob
 
 from .prtg import inventorize_prtg, import_prtg
 
-@app.cli.group(name='prtg')
-def prtg_cli():
-    """PRTG Commands"""
+prtg_cli = register_cli_group(app, 'prtg', 'prtg', "PRTG Commands")
 
 @prtg_cli.command('inventorize_devices')
 @click.argument("account")
@@ -18,7 +18,7 @@ def cmd_inventorize_prtg(account, debug):
     """
     try:
         inventorize_prtg(account, debug)
-    except Exception as error:
+    except Exception as error:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f"Error: {error}")
@@ -34,7 +34,7 @@ def cmd_import_prtg(account, debug):
     """
     try:
         import_prtg(account, debug)
-    except Exception as error:
+    except Exception as error:  # pylint: disable=broad-exception-caught
         if debug:
             raise
         print(f"Error: {error}")

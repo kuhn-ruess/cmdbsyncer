@@ -1,19 +1,22 @@
+"""CSV plugin."""
 import click
 from application import app
 from application.helpers.cron import register_cronjob
+from application.helpers.plugins import register_cli_group
 
 from .csv import CSV
 
-@app.cli.group(name='csv')
-def _cli_csv():
-    """CSV Import/ Inventorize"""
+_cli_csv = register_cli_group(app, 'csv', 'csv', "CSV Import/ Inventorize")
 
 @_cli_csv.command('inventorize_hosts')
 @click.argument("account", required=False)
 @click.option("--debug", default=False, is_flag=True)
-@click.option("--legacy", default=None, help="Path to CSV file for legacy mode (bypasses account config)")
-@click.option("--key", default=None, help="Inventory key for legacy mode (required when using --legacy)")
-@click.option("--hostname_field", default="host", help="Name of the hostname column in CSV (default: host)")
+@click.option("--legacy", default=None,
+              help="Path to CSV file for legacy mode (bypasses account config)")
+@click.option("--key", default=None,
+              help="Inventory key for legacy mode (required when using --legacy)")
+@click.option("--hostname_field", default="host",
+              help="Name of the hostname column in CSV (default: host)")
 def cli_inventorize_hosts(account, debug, legacy, key, hostname_field):
     """
     Add Inventory Information to hosts
@@ -43,6 +46,7 @@ def cli_inventorize_hosts(account, debug, legacy, key, hostname_field):
 
 
 def inventorize_hosts(account=None, debug=False, legacy=None, key=None, hostname_field="host"):
+    """Run CSV host inventorization from account config or legacy file."""
     if legacy:
         csv = CSV()
         csv.config = _create_legacy_config(legacy, key, hostname_field)
@@ -58,8 +62,10 @@ register_cronjob('CSV: Inventorize Hosts', inventorize_hosts)
 @_cli_csv.command('import_hosts')
 @click.argument("account", required=False)
 @click.option("--debug", default=False, is_flag=True)
-@click.option("--legacy", default=None, help="Path to CSV file for legacy mode (bypasses account config)")
-@click.option("--hostname_field", default="host", help="Name of the hostname column in CSV (default: host)")
+@click.option("--legacy", default=None,
+              help="Path to CSV file for legacy mode (bypasses account config)")
+@click.option("--hostname_field", default="host",
+              help="Name of the hostname column in CSV (default: host)")
 def cli_import_hosts(account, debug, legacy, hostname_field):
     """
     Import Objects from CSV and make File the Master
@@ -86,6 +92,7 @@ def cli_import_hosts(account, debug, legacy, hostname_field):
     import_hosts(account, debug, legacy, hostname_field)
 
 def import_hosts(account=None, debug=False, legacy=None, hostname_field="host"):
+    """Run CSV host import from account config or legacy file."""
     if legacy:
         csv = CSV()
         csv.config = _create_legacy_config(legacy, None, hostname_field)
@@ -119,10 +126,10 @@ def _create_legacy_config(csv_path, inventorize_key=None, hostname_field="host")
         'rewrite_hostname': None,
         'delete_host_if_not_found_on_import': None,
     }
-    
+
     if inventorize_key:
         config['inventorize_key'] = inventorize_key
-    
+
     return config
 
 register_cronjob('CSV: Import Hosts', import_hosts)

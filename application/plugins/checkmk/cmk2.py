@@ -7,10 +7,9 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 #from requests.exceptions import ConnectionError
 from application import app
 from application.modules.plugin import Plugin
+from application.helpers.plugins import register_cli_group
 
-@app.cli.group(name='checkmk')
-def cli_cmk():
-    """Checkmk commands"""
+cli_cmk = register_cli_group(app, 'checkmk', 'checkmk', "Checkmk commands")
 
 if app.config.get("DISABLE_SSL_ERRORS"):
     from urllib3.exceptions import InsecureRequestWarning
@@ -45,7 +44,8 @@ class CMK2(Plugin):
             self.checkmk_version = data['versions']['checkmk']
 
 
-    def request(self, url, method='GET', data=None, params=None, additional_header=None, api_version="api/1.0/"):
+    def request(self, url, method='GET', data=None,  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+                params=None, additional_header=None, api_version="api/1.0/"):
         """
         Handle Request to CMK
         """
@@ -84,7 +84,8 @@ class CMK2(Plugin):
                 'Not Found',
                 'The operation has failed.',
                 'Mismatch between endpoint and internal data format. ',
-                'Precondition required If-Match header required for this operation. See documentation.',
+                'Precondition required If-Match header required '
+                'for this operation. See documentation.',
             ]
             if response.status_code == 204: # No Content
                 return {}, {'status_code': response.status_code}
@@ -103,8 +104,8 @@ class CMK2(Plugin):
             if response:
                 return {}, {'status_code': response.status_code}
             return {}, {"error": "Checkmk Connections broken"}
-        except ConnectionError:
-            raise CmkException("Can't connect to Checkmk")
+        except ConnectionError as exc:
+            raise CmkException("Can't connect to Checkmk") from exc
 
     def fetch_checkmk_folders(self):
         """

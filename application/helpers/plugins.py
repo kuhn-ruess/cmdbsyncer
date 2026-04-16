@@ -1,32 +1,132 @@
+"""Plugin discovery and enable/disable helpers."""
 import os
 import json
 
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+_DISABLED_PLUGINS_PATH = os.path.join(_BASE_DIR, 'disabled_plugins.json')
+
+# Cache: computed once at first call, maps dirname -> bool (True = disabled)
+_disabled_cache = None  # pylint: disable=invalid-name
+
+
+def _read_plugin_json(plugin_dir_path):
+    """Read and return plugin.json data from a plugin directory, or None."""
+    plugin_json_path = os.path.join(plugin_dir_path, 'plugin.json')
+    if not os.path.exists(plugin_json_path):
+        return None
+    try:
+        with open(plugin_json_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+def get_disabled_plugins():
+    """Return the set of disabled plugin idents from disabled_plugins.json."""
+    if not os.path.exists(_DISABLED_PLUGINS_PATH):
+        return set()
+    try:
+        with open(_DISABLED_PLUGINS_PATH, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return set(data)
+    except (json.JSONDecodeError, IOError):
+        pass
+    return set()
+
+
+def set_disabled_plugins(disabled):
+    """Write the set of disabled plugin idents to disk and clear cache."""
+    global _disabled_cache  # pylint: disable=global-statement
+    with open(_DISABLED_PLUGINS_PATH, 'w', encoding='utf-8') as f:
+        json.dump(sorted(disabled), f, indent=2)
+    _disabled_cache = None
+
+
+def _build_disabled_cache():
+    """Scan all plugin dirs once and build a dirname -> disabled mapping."""
+    disabled_idents = get_disabled_plugins()
+    cache = {}
+    for sub in ('plugins', os.path.join('application', 'plugins')):
+        plugin_root = os.path.join(_BASE_DIR, sub)
+        if not os.path.isdir(plugin_root):
+            continue
+        for entry in os.listdir(plugin_root):
+            entry_path = os.path.join(plugin_root, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            data = _read_plugin_json(entry_path)
+            if not data:
+                continue
+            ident = data.get('ident', entry)
+            if entry in disabled_idents or ident in disabled_idents:
+                cache[entry] = True
+            elif not data.get('enabled', False):
+                cache[entry] = True
+            else:
+                cache[entry] = False
+    return cache
+
+
+def is_plugin_disabled(dirname):
+    """Check whether a plugin is disabled (cached after first call)."""
+    global _disabled_cache  # pylint: disable=global-statement
+    if _disabled_cache is None:
+        _disabled_cache = _build_disabled_cache()
+    return _disabled_cache.get(dirname, False)
+
+
+class _DisabledCliGroup:
+    """Dummy CLI group that absorbs command/group registrations silently."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def command(self, *_args, **_kwargs):
+        """Accept and discard command decorator."""
+        def decorator(func):
+            return func
+        return decorator
+
+    def group(self, *_args, **_kwargs):
+        """Accept and discard sub-group decorator."""
+        def decorator(func):
+            return func
+        return decorator
+
+
+def register_cli_group(flask_app, name, plugin_dirname, help_text=""):
+    """Register a CLI group for a plugin.
+
+    Returns a real click group if the plugin is enabled,
+    or a silent dummy group if it is disabled.
+    """
+    if is_plugin_disabled(plugin_dirname):
+        return _DisabledCliGroup(name)
+
+    @flask_app.cli.group(name=name, help=help_text)
+    def cli_group():
+        pass
+    return cli_group
+
+
 def discover_plugins():
     """
-    Discover account types from plugin.json files in plugin directories
+    Discover account types from plugin.json files in plugin directories.
+    Skips plugins that are disabled (via disabled_plugins.json or enabled flag).
     """
     plugins = {}
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    plugin_dirs = [
-        os.path.join(base_dir, 'plugins'),
-        os.path.join(base_dir, 'application', 'plugins')
-    ]
-    for plugin_dir in plugin_dirs:
-        if not os.path.exists(plugin_dir):
+    for sub in ('plugins', os.path.join('application', 'plugins')):
+        plugin_root = os.path.join(_BASE_DIR, sub)
+        if not os.path.isdir(plugin_root):
             continue
-        # Walk through all subdirectories
-        for root, dirs, files in os.walk(plugin_dir):
-            if 'plugin.json' in files:
-                plugin_json_path = os.path.join(root, 'plugin.json')
-                try:
-                    with open(plugin_json_path, 'r', encoding='utf-8') as f:
-                        plugin_data = json.load(f)
-                        
-                    if 'ident' in plugin_data and 'name' in plugin_data:
-                        ident = plugin_data['ident']
-                        plugins[ident] = plugin_data
-                        
-                except (json.JSONDecodeError, FileNotFoundError, KeyError):
-                    # Skip invalid or incomplete plugin.json files
-                    continue
+        for entry in os.listdir(plugin_root):
+            entry_path = os.path.join(plugin_root, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            if is_plugin_disabled(entry):
+                continue
+            data = _read_plugin_json(entry_path)
+            if data and 'ident' in data and 'name' in data:
+                plugins[data['ident']] = data
     return plugins

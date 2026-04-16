@@ -1,14 +1,15 @@
+"""LDAP plugin."""
 import click
 
 from application import app
 from application.helpers.inventory import run_inventory
 from application.helpers.cron import register_cronjob
+from application.helpers.get_account import get_account_by_name
+from application.helpers.plugins import register_cli_group
 
 from .ldap import ldap_import, _inner_import
 
-@app.cli.group(name='ldap')
-def cli_ldap():
-    """LDAP Import/ Inventorize"""
+cli_ldap = register_cli_group(app, 'ldap', 'ldap', "LDAP Import/ Inventorize")
 
 @cli_ldap.command('import_objects')
 @click.option("--debug", default=False, is_flag=True)

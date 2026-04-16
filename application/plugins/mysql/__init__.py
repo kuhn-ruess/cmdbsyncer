@@ -1,13 +1,13 @@
+"""MySQL plugin."""
 import click
 
 from application import app
 from application.helpers.cron import register_cronjob
+from application.helpers.plugins import register_cli_group
 
 from .mysql import mysql_import, mysql_inventorize
 
-@app.cli.group(name='mysql')
-def cli_mysql():
-    """MYSQL Import/ Inventorize"""
+cli_mysql = register_cli_group(app, 'mysql', 'mysql', "MYSQL Import/ Inventorize")
 
 @cli_mysql.command('import_hosts')
 @click.argument('account')
