@@ -73,7 +73,7 @@ class User(db.Document, UserMixin):
         """
         return check_password_hash(self.pwdhash, password)
 
-    def generate_token(self, expiration=3600):
+    def generate_token(self, expiration=60):
         """
         Token generator
         """
