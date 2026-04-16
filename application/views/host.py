@@ -1,6 +1,7 @@
 """
 Host Model View
 """
+# pylint: disable=too-many-lines
 from datetime import datetime
 import re
 import csv
@@ -17,16 +18,16 @@ from wtforms.validators import Optional
 from markupsafe import Markup, escape
 from mongoengine.errors import DoesNotExist
 
-from application.plugins.checkmk.models import CheckmkFolderPool #@TODO pre_deletion method for Host so no import needed
+# pylint: disable=import-error
+from application.plugins.checkmk.models import CheckmkFolderPool
 from application.plugins.checkmk import get_host_debug_data as cmk_host_debug
 from application.plugins.netbox import get_device_debug_data as netbox_host_debug
-
-
 from application import app
 from application.views.default import DefaultModelView
 from application.models.host import Host, CmdbField
 from application.models.config import Config
 from application.modules.log.models import LogEntry
+# pylint: enable=import-error
 
 div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
@@ -70,13 +71,13 @@ def get_debug(hostname, mode):
     """
     Get Output for Host Debug Page
     """
-    
+
     # Check permissions based on debug mode
     mode_role_mapping = {
         'checkmk_host': 'checkmk',
         'netbox_device': 'netbox',
     }
-    
+
     required_role = mode_role_mapping.get(mode)
     if required_role and not current_user.has_right(required_role):
         return {'Error': f"You need the '{required_role}' role to access {mode} debug mode"}, {}
@@ -122,13 +123,13 @@ def _render_object_type_icon(_view, _context, model, _name):
     """
     if not model.object_type:
         return Markup('<span class="text-muted">N/A</span>')
-    
+
     icon_class = OBJECT_TYPE_ICONS.get(model.object_type, 'fa fa-question-circle')
     object_type_display = model.object_type.replace('_', ' ').title()
-    
+
     return Markup(f'<i class="{icon_class}" style="margin-right: 5px;"></i>{object_type_display}')
 
-def _render_datetime(view, context, model, name):
+def _render_datetime(_view, _context, model, name):
     """
     Render datetime fields in a human-readable format.
     """
@@ -169,7 +170,10 @@ def _render_labels(_view, _context, model, _name):
     if not model.labels:
         return Markup("")
     #If the Cache is set, we also show the attributes which we Send to Checkmk
-    checkmk_labels = model.cache.get('checkmk_hostattribute', {}).get('attributes', {}).get('all', {})
+    checkmk_labels = (
+        model.cache.get('checkmk_hostattribute', {})
+        .get('attributes', {}).get('all', {})
+    )
     html = ""
     for key, value in model.labels.items():
         if not value:
@@ -183,7 +187,11 @@ def _render_labels(_view, _context, model, _name):
             continue
         if model.inventory.get(key) == value:
             continue
-        html += f'<span class="badge mr-1" style="margin: 2px; background-color: rgb(43, 181, 120);">{key}:{value}</span>'
+        html += (
+            f'<span class="badge mr-1" style="margin: 2px;'
+            f' background-color: rgb(43, 181, 120);">'
+            f'{key}:{value}</span>'
+        )
 
 
     return Markup(html)
@@ -213,7 +221,7 @@ def _render_cmdb_match_label(_view, _context, model, _name):
         return Markup('<span class="text-muted">N/A</span>')
     return Markup(f'<span class="badge badge-primary">{model.cmdb_match}</span>')
 
-class StaticLabelWidget:
+class StaticLabelWidget:  # pylint: disable=too-few-public-methods
     """
     Design for Lablels in Views
     """
@@ -238,21 +246,25 @@ class StaticLabelField(Field):
     def _value(self):
         return str(self.data) if self.data else ''
 
-class StaticTemplateLabelWidget:
+class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
     """
     Design for Template Labels in Views
     """
     def __call__(self, field, **kwargs):
         model = field.object_data
         if not model or not hasattr(model, 'cmdb_templates') or not model.cmdb_templates:
-            return Markup('<div class="alert alert-info">No Templates selected</div>')
+            return Markup(
+                '<div class="alert alert-info">'
+                'No Templates selected</div>'
+            )
 
         html = ''
         for template in model.cmdb_templates:
             if not hasattr(template, 'labels') or not template.labels:
                 continue
             entries = [
-                f'<span class="badge badge-primary">{key}</span>:<span class="badge badge-info">{value}</span>'
+                f'<span class="badge badge-primary">{key}</span>'
+                f':<span class="badge badge-info">{value}</span>'
                 for key, value in template.labels.items()
             ]
             html += (
@@ -260,7 +272,12 @@ class StaticTemplateLabelWidget:
                 f'<div class="card-header p-1"><strong>{template.hostname}</strong></div>'
                 f'<div class="card-body p-2">{" ".join(entries)}</div></div>'
             )
-        return Markup(html) if html else Markup('<div class="alert alert-warning">No Labels in Templates</div>')
+        if html:
+            return Markup(html)
+        return Markup(
+            '<div class="alert alert-warning">'
+            'No Labels in Templates</div>'
+        )
 
 class StaticTemplateLabelField(Field):
     """
@@ -271,7 +288,7 @@ class StaticTemplateLabelField(Field):
     def _value(self):
         return str(self.data) if self.data else ''
 
-class CmdbMatchWidget:
+class CmdbMatchWidget:  # pylint: disable=too-few-public-methods
     """
     Widget for CMDB Match key:value input with styling
     """
@@ -281,18 +298,18 @@ class CmdbMatchWidget:
         value = ""
         if field.data and ':' in field.data:
             key, value = field.data.split(':', 1)
-        
+
         html = f'''
         <div class="cmdb-match-container" style="margin-bottom: 15px;">
             <div class="form-row align-items-center">
                 <div class="col-auto">
-                    <input type="text" id="cmdb_match_key" value="{key}" placeholder="Key" 
-                           style="background-color: #2EFE9A; border-radius: 5px; padding: 8px 12px; 
+                    <input type="text" id="cmdb_match_key" value="{key}" placeholder="Key"
+                           style="background-color: #2EFE9A; border-radius: 5px; padding: 8px 12px;
                                   font-weight: bold; border: 1px solid #1abc9c; margin-right: 10px; width: 150px;">
                 </div>
                 <div class="col-auto">
                     <input type="text" id="cmdb_match_value" value="{value}" placeholder="Value"
-                           style="background-color: #81DAF5; border-radius: 5px; padding: 8px 12px; 
+                           style="background-color: #81DAF5; border-radius: 5px; padding: 8px 12px;
                                   font-family: monospace; border: 1px solid #3498db; width: 200px;">
                 </div>
             </div>
@@ -304,14 +321,14 @@ class CmdbMatchWidget:
             var key = document.getElementById('cmdb_match_key').value;
             var value = document.getElementById('cmdb_match_value').value;
             var hiddenField = document.getElementById('{field.id}');
-            
+
             if (key && value) {{
                 hiddenField.value = key + ':' + value;
             }} else {{
                 hiddenField.value = '';
             }}
         }}
-        
+
         document.getElementById('cmdb_match_key').addEventListener('input', updateCmdbMatch);
         document.getElementById('cmdb_match_value').addEventListener('input', updateCmdbMatch);
         </script>
@@ -327,7 +344,7 @@ class CmdbMatchField(Field):
     def _value(self):
         return str(self.data) if self.data else ''
 
-class StaticLogWidget:
+class StaticLogWidget:  # pylint: disable=too-few-public-methods
     """
     Design for Lists in Views
     """
@@ -443,7 +460,7 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
                         f'labels.{key}': {"$regex": safe_regex, "$options": "i"},
                 }
             return query.filter(__raw__=pipeline)
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-exception-caught
             flash('danger', error)
         return False
 
@@ -492,130 +509,165 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
                         f'inventory.{key}': {"$regex": safe_regex, "$options": "i"},
                 }
             return query.filter(__raw__=pipeline)
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-exception-caught
             flash('danger', error)
         return False
 
     def operation(self):
         return "regex search"
 
-def format_log(v, c, m, p):
+def format_log(_v, _c, m, _p):
     """ Format Log view"""
     html = "<ul>"
     for entry in m.log:
-        html+=f"<li>{entry[:200]}{'...' if len(entry) > 200 else ''}</li>"
+        suffix = '...' if len(entry) > 200 else ''
+        html += f"<li>{entry[:200]}{suffix}</li>"
     html += "</ul>"
-    
+
     if m.log:
         modal_id = f"logModal_{m.id}"
-        
+
         # Find LogEntry records where hostname is in affected_hosts (StringField)
-        related_log_entries = LogEntry.objects(affected_hosts__in=m.hostname).order_by('-datetime')
-        
-        html += f'''
-        <button type="button" class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#{modal_id}">
-            View Full Logs
-        </button>
-        
-        <!-- Modal -->
-        <div class="modal fade" id="{modal_id}" tabindex="-1" role="dialog" aria-labelledby="{modal_id}Label" aria-hidden="true">
-            <div class="modal-dialog modal-xl" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="{modal_id}Label">Full Logs for: {m.hostname}</h5>
-                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- Host-specific logs -->
-                        <h6 class="mb-3"><i class="fa fa-server"></i> Host-specific Logs</h6>
-                        <div class="log-container" style="max-height: 40vh; overflow-y: auto; font-family: monospace; font-size: 0.9em; margin-bottom: 20px;">
-        '''
+        related_log_entries = LogEntry.objects(
+            affected_hosts__in=m.hostname
+        ).order_by('-datetime')
+
+        html += (
+            f'<button type="button" '
+            f'class="btn btn-sm btn-outline-primary" '
+            f'data-toggle="modal" '
+            f'data-target="#{modal_id}">'
+            f'View Full Logs</button>'
+            f'<div class="modal fade" id="{modal_id}" '
+            f'tabindex="-1" role="dialog" '
+            f'aria-labelledby="{modal_id}Label" '
+            f'aria-hidden="true">'
+            f'<div class="modal-dialog modal-xl" '
+            f'role="document"><div class="modal-content">'
+            f'<div class="modal-header">'
+            f'<h5 class="modal-title" '
+            f'id="{modal_id}Label">'
+            f'Full Logs for: {m.hostname}</h5>'
+            f'<button type="button" class="close" '
+            f'data-dismiss="modal" aria-label="Close">'
+            f'<span aria-hidden="true">&times;</span>'
+            f'</button></div>'
+            f'<div class="modal-body">'
+            f'<h6 class="mb-3">'
+            f'<i class="fa fa-server"></i> '
+            f'Host-specific Logs</h6>'
+            f'<div class="log-container" '
+            f'style="max-height: 40vh; overflow-y: auto; '
+            f'font-family: monospace; font-size: 0.9em; '
+            f'margin-bottom: 20px;">'
+        )
         for log_entry in m.log:
             # HTML escape the log entry content
-            escaped_entry = str(log_entry).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
-            html += f'''
-                            <div class="log-entry mb-2 p-2" style="background-color: #f8f9fa; border-left: 3px solid #007bff; white-space: pre-wrap; word-wrap: break-word;">
-                                {escaped_entry}
-                            </div>
-            '''
-        
-        html += f'''
-                        </div>
-                        <div class="mb-3">
-                            <small class="text-muted">Host-specific log entries: {len(m.log)}</small>
-                        </div>
-        '''
-        
+            escaped_entry = escape(str(log_entry))
+            html += (
+                f'<div class="log-entry mb-2 p-2" '
+                f'style="background-color: #f8f9fa; '
+                f'border-left: 3px solid #007bff; '
+                f'white-space: pre-wrap; '
+                f'word-wrap: break-word;">'
+                f'{escaped_entry}</div>'
+            )
+
+        html += (
+            f'</div><div class="mb-3">'
+            f'<small class="text-muted">'
+            f'Host-specific log entries: {len(m.log)}'
+            f'</small></div>'
+        )
+
         # Add related LogEntry records
         if related_log_entries:
-            html += '''
-                        <!-- Related system logs -->
-                        <h6 class="mb-3"><i class="fa fa-list"></i> Related System Logs</h6>
-                        <div class="log-container" style="max-height: 40vh; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
-            '''
-            for log_entry in related_log_entries[:50]:  # Limit to 50 most recent entries
-                escaped_message = str(log_entry.message).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#x27;')
-                timestamp = log_entry.datetime.strftime('%Y-%m-%d %H:%M:%S') if log_entry.datetime else 'N/A'
-                
-                # Determine color based on error status or source
+            html += (
+                '<h6 class="mb-3">'
+                '<i class="fa fa-list"></i> '
+                'Related System Logs</h6>'
+                '<div class="log-container" '
+                'style="max-height: 40vh; '
+                'overflow-y: auto; '
+                'font-family: monospace; '
+                'font-size: 0.9em;">'
+            )
+            for log_entry in related_log_entries[:50]:
+                escaped_message = escape(str(log_entry.message))
+                timestamp = (
+                    log_entry.datetime.strftime(
+                        '%Y-%m-%d %H:%M:%S'
+                    )
+                    if log_entry.datetime else 'N/A'
+                )
+
+                # Determine color based on error status
                 if log_entry.has_error:
-                    level_color = '#dc3545'  # Red for errors
+                    level_color = '#dc3545'
                     level_text = 'ERROR'
                 else:
-                    level_color = '#007bff'  # Default blue
+                    level_color = '#007bff'
                     level_text = 'INFO'
-                
-                html += f'''
-                            <div class="log-entry mb-2 p-2" style="background-color: #f8f9fa; border-left: 3px solid {level_color}; white-space: pre-wrap; word-wrap: break-word;">
-                                <small class="text-muted">[{timestamp}] <span style="color: {level_color}; font-weight: bold;">{level_text}</span></small><br>
-                                {escaped_message}
-                            </div>
-                '''
-            
-            html += f'''
-                        </div>
-                        <div class="mt-3">
-                            <small class="text-muted">Related system log entries: {len(related_log_entries)} (showing most recent 50)</small>
-                        </div>
-            '''
-        
-        html += f'''
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        '''
-    
+
+                html += (
+                    f'<div class="log-entry mb-2 p-2" '
+                    f'style="background-color: #f8f9fa; '
+                    f'border-left: 3px solid '
+                    f'{level_color}; '
+                    f'white-space: pre-wrap; '
+                    f'word-wrap: break-word;">'
+                    f'<small class="text-muted">'
+                    f'[{timestamp}] '
+                    f'<span style="color: {level_color};'
+                    f' font-weight: bold;">'
+                    f'{level_text}</span></small>'
+                    f'<br>{escaped_message}</div>'
+                )
+
+            num = len(related_log_entries)
+            html += (
+                f'</div><div class="mt-3">'
+                f'<small class="text-muted">'
+                f'Related system log entries: {num}'
+                f' (showing most recent 50)'
+                f'</small></div>'
+            )
+
+        html += (
+            '</div><div class="modal-footer">'
+            '<button type="button" '
+            'class="btn btn-secondary" '
+            'data-dismiss="modal">Close</button>'
+            '</div></div></div></div>'
+        )
+
     return Markup(html)
 
-def format_cache(v, c, m, p):
+def format_cache(_v, _c, m, _p):
     """ Format cache"""
     if not m.cache:
         return Markup('<span class="text-muted">No cache data</span>')
-    
+
     # Show summary (number of cache entries)
     cache_count = len(m.cache)
     html = f'<span class="text-muted">{cache_count} cache entrie(s)</span>'
-    
+
     if m.cache:
         cache_id = f"cache_{m.id}"
-        
-        html += f'''
-        <br>
-        <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleCache('{cache_id}')">
-            <i class="fa fa-database"></i> View Cache Details
-        </button>
-        
-        <div id="{cache_id}" style="display: none; margin-top: 10px;">
-            <div class="border rounded p-3" style="background-color: #f8f9fa;">
-                <table class="table table-sm table-striped">
-        '''
-        
+
+        html += (
+            f'<br><button type="button" '
+            f'class="btn btn-sm btn-outline-primary" '
+            f'onclick="toggleCache(\'{cache_id}\')">'
+            f'<i class="fa fa-database"></i> '
+            f'View Cache Details</button>'
+            f'<div id="{cache_id}" '
+            f'style="display: none; margin-top: 10px;">'
+            f'<div class="border rounded p-3" '
+            f'style="background-color: #f8f9fa;">'
+            f'<table class="table table-sm table-striped">'
+        )
+
         for key, value in m.cache.items():
             html += f'<tr><th colspan="2" class="bg-light">{key}</th></tr>'
             if isinstance(value, dict):
@@ -625,20 +677,29 @@ def format_cache(v, c, m, p):
                         display_value = sub_value[:100] + '...'
                     else:
                         display_value = str(sub_value)
-                    html += f'<tr><td class="pl-4" style="width: 30%;">{sub_key}</td><td>{display_value}</td></tr>'
+                    html += (
+                        f'<tr><td class="pl-4" '
+                        f'style="width: 30%;">'
+                        f'{sub_key}</td>'
+                        f'<td>{display_value}</td></tr>'
+                    )
             else:
                 # If value is not a dict, show it directly
                 if isinstance(value, str) and len(value) > 100:
                     display_value = value[:100] + '...'
                 else:
                     display_value = str(value)
-                html += f'<tr><td class="pl-4" style="width: 30%;">Value</td><td>{display_value}</td></tr>'
-        
+                html += (
+                    f'<tr><td class="pl-4" '
+                    f'style="width: 30%;">Value</td>'
+                    f'<td>{display_value}</td></tr>'
+                )
+
         html += '''
                 </table>
             </div>
         </div>
-        
+
         <script>
         function toggleCache(cacheId) {
             var cacheDiv = document.getElementById(cacheId);
@@ -646,7 +707,7 @@ def format_cache(v, c, m, p):
             if (!button.classList.contains('btn')) {
                 button = button.closest('.btn');
             }
-            
+
             if (cacheDiv.style.display === 'none') {
                 cacheDiv.style.display = 'block';
                 button.innerHTML = '<i class="fa fa-database"></i> Hide Cache Details';
@@ -657,10 +718,10 @@ def format_cache(v, c, m, p):
         }
         </script>
         '''
-    
+
     return Markup(html)
 
-def format_labels(v, c, m, p):
+def format_labels(_v, _c, m, _p):
     """ Format Labels view"""
     html = "<table>"
     for key, value in m.labels.items():
@@ -668,7 +729,7 @@ def format_labels(v, c, m, p):
     html += "</table>"
     return Markup(html)
 
-def format_inventory(v, c, m, p):
+def format_inventory(_v, _c, m, _p):
     """ Format Inventory view"""
     html = "<table>"
     for key, value in m.inventory.items():
@@ -676,14 +737,14 @@ def format_inventory(v, c, m, p):
     html += "</table>"
     return Markup(html)
 
-def format_labels_export(v, c, m, p):
+def format_labels_export(_v, _c, m, _p):
     """ Format Labels view"""
     labels = []
     for entry in m.labels:
         labels.append(f"{entry.key}:{entry.value}")
     return Markup(", ".join(labels))
 
-def format_inventory_export(v, c, m, p):
+def format_inventory_export(_v, _c, m, _p):
     """ Format Inventory view"""
     inventory = []
     for key, value in m.inventory.items():
@@ -770,9 +831,9 @@ class ObjectModelView(DefaultModelView):
         [id^="cmdb_fields-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
         [id^="cmdb_fields-"] legend small { font-size: 0 !important; }
         [id^="cmdb_fields-"] legend small .pull-right { font-size: 1rem !important; }
-        [id^="cmdb_fields-"] .card { 
-            margin-bottom: 8px !important; 
-            padding: 10px !important; 
+        [id^="cmdb_fields-"] .card {
+            margin-bottom: 8px !important;
+            padding: 10px !important;
             background-color: #f8f9fa !important;
             border-radius: 8px !important;
         }
@@ -831,11 +892,21 @@ class ObjectModelView(DefaultModelView):
                         },
                     },
                     'form_rules': [
-                        rules.HTML('<div class="form-row align-items-center" style="margin-bottom: 5px; margin-top: 0;">'),
+                        rules.HTML(
+                            '<div class="form-row '
+                            'align-items-center" '
+                            'style="margin-bottom: 5px; '
+                            'margin-top: 0;">'
+                        ),
                         rules.HTML('<div class="col-auto">'),
                         rules.Field('field_name'),
                         rules.HTML('</div>'),
-                        rules.HTML('<div class="col-auto"><span style="font-size: 16px; margin: 0 3px;">:</span></div>'),
+                        rules.HTML(
+                            '<div class="col-auto">'
+                            '<span style="font-size: 16px;'
+                            ' margin: 0 3px;">:</span>'
+                            '</div>'
+                        ),
                         rules.HTML('<div class="col-auto">'),
                         rules.Field('field_value'),
                         rules.HTML('</div>'),
@@ -860,7 +931,7 @@ class ObjectModelView(DefaultModelView):
 
         super().__init__(model, **kwargs)
 
-    def get_export_name(self, export_type):
+    def get_export_name(self, _export_type):
         """
         Generates a filename for exporting data based on the model name and current timestamp.
 
@@ -882,7 +953,7 @@ class ObjectModelView(DefaultModelView):
         """
         return Host.objects(is_object=True, object_type__ne='template')
 
-    def on_model_change(self, form, model, is_created):
+    def on_model_change(self, form, model, _is_created):
         """
         Model Changes when saved in GUI -> CMDB Mode
         """
@@ -905,6 +976,7 @@ class ObjectModelView(DefaultModelView):
         return current_user.is_authenticated and current_user.has_right('objects')
 
 class TemplateModelView(ObjectModelView):
+    """Template Model View for CMDB templates."""
 
     form_rules = [
         rules.HTML('''
@@ -954,7 +1026,7 @@ class TemplateModelView(ObjectModelView):
         """
         return Host.objects(is_object=True, object_type="template")
 
-    def on_model_change(self, form, model, is_created):
+    def on_model_change(self, form, model, _is_created):
         """
         Model Changes when saved in GUI -> CMDB Mode
         """
@@ -986,7 +1058,8 @@ class HostModelView(DefaultModelView):
     page_size = app.config['HOST_PAGESIZE']
 
     column_details_list = [
-        'hostname', 'folder', 'no_autodelete', 'available','labels', 'inventory', 'cmdb_templates', 'log',
+        'hostname', 'folder', 'no_autodelete', 'available',
+        'labels', 'inventory', 'cmdb_templates', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
@@ -1060,7 +1133,7 @@ class HostModelView(DefaultModelView):
     }
 
     column_sortable_list = ('hostname',
-                            'last_import_seen', 
+                            'last_import_seen',
                             'last_import_sync')
 
     export_types = ['syncer_rules',]
@@ -1091,7 +1164,10 @@ class HostModelView(DefaultModelView):
     form_rules = [
         rules.FieldSet((
             rules.Field('hostname'),
-            rules.NestedRule(('object_type', 'available', 'cmdb_templates', 'labels_from_template')),
+            rules.NestedRule((
+                'object_type', 'available',
+                'cmdb_templates', 'labels_from_template',
+            )),
             ), "CMDB Options"),
         rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
         #rules.FieldSet(('inventory', 'log'), "Data"),
@@ -1126,7 +1202,11 @@ class HostModelView(DefaultModelView):
                         },
                     },
                     'form_rules': [
-                        rules.HTML('<div class="form-row align-items-center" style="margin-bottom: 8px;">'),
+                        rules.HTML(
+                            '<div class="form-row '
+                            'align-items-center" '
+                            'style="margin-bottom: 8px;">'
+                        ),
                         rules.NestedRule(('field_name', 'field_value')),
                         rules.HTML('</div>'),
                     ]
@@ -1218,16 +1298,18 @@ class HostModelView(DefaultModelView):
 
 
     def scaffold_form(self):
+        """Scaffold form with extra CMDB fields."""
         form_class = super().scaffold_form()
         form_class.labels_from_template = StaticTemplateLabelField()
-        
+
         # Filter cmdb_templates to show only template objects
         if hasattr(form_class, 'cmdb_templates'):
             form_class.cmdb_templates.kwargs['queryset'] = Host.objects(object_type='template')
-        
+
         return form_class
 
     def edit_form(self, obj=None):
+        """Build edit form with template labels and CMDB fields."""
         form = super().edit_form(obj)
         if obj and hasattr(form, 'labels_from_template'):
             form.labels_from_template.object_data = obj
@@ -1249,16 +1331,6 @@ class HostModelView(DefaultModelView):
                     })
                     existing_field_names.add(label_key)
 
-        # Sort cmdb_fields alphabetically and set correct field types
-        cmdb_entries = getattr(getattr(form, 'cmdb_fields', None), 'entries', None)
-        if not cmdb_entries:
-            return form
-
-        # Sort entries alphabetically by field_name
-        cmdb_entries.sort(
-            key=lambda x: str(getattr(x, 'field_name', None).data).lower()
-        )
-
         return form
 
     def get_form_field_type(self, field_name):
@@ -1274,6 +1346,7 @@ class HostModelView(DefaultModelView):
         return StringField
 
     def create_form(self, obj=None):
+        """Build create form with template labels and CMDB fields."""
         form = super().create_form(obj)
         if hasattr(form, 'labels_from_template'):
             form.labels_from_template.object_data = obj
@@ -1296,7 +1369,7 @@ class HostModelView(DefaultModelView):
                 folder.save()
 
 
-    def on_model_change(self, form, model, is_created):
+    def on_model_change(self, form, model, _is_created):
         """
         Model Changes when saved in GUI -> CMDB Mode
         """
@@ -1349,7 +1422,7 @@ class HostModelView(DefaultModelView):
         # Bugfix, ohne we loose the availibilty to edit after save
         self.can_edit = True
 
-    @action('set_template', 'Set Template', 
+    @action('set_template', 'Set Template',
             'Are you sure you want to update the selected hosts?')
     def action_set_template(self, ids):
         """
@@ -1372,7 +1445,7 @@ class HostModelView(DefaultModelView):
             <h3>Set CMDB Template</h3>
             <form method="POST" action="{{ url_for('.process_template_assignment') }}">
                 <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
-                
+
                 <div class="form-group">
                     <label for="template_id">Select Template:</label>
                     <select class="form-control" id="template_id" name="template_id" required>
@@ -1382,7 +1455,7 @@ class HostModelView(DefaultModelView):
                         {% endfor %}
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <button type="submit" class="btn btn-primary">Apply Template</button>
                     <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
@@ -1429,14 +1502,18 @@ class HostModelView(DefaultModelView):
                     host.last_import_seen = datetime.now()
                     host.cache = {}
                     host.source_account_name = "cmdb"
-                    
+
                     # Set Extra Fields from CMDB config
                     cmdb_fields = app.config['CMDB_MODELS'].get(host.object_type, {})
                     cmdb_fields.update(app.config['CMDB_MODELS']['all'])
-                    
+
                     # Create labels from existing cmdb_fields
-                    new_labels = {x.field_name: x.field_value for x in host.cmdb_fields if x.field_value}
-                    
+                    new_labels = {
+                        x.field_name: x.field_value
+                        for x in host.cmdb_fields
+                        if x.field_value
+                    }
+
                     host.update_host(new_labels)
                     host.set_inventory_attributes('cmdb')
 
@@ -1453,7 +1530,7 @@ class HostModelView(DefaultModelView):
 
             flash(f'Template applied to {updated_count} hosts', 'success')
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             flash(f'Error applying template: {str(e)}', 'error')
 
         return redirect(url_for('.index_view'))
@@ -1463,11 +1540,11 @@ class HostModelView(DefaultModelView):
         try:
             templates = Host.objects(is_object=True, object_type='template')
             return list(templates)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return []
 
     @expose('/csv')
-    def export_csv(self):
+    def export_csv(self):  # pylint: disable=too-many-locals
         """
         Export all hosts as CSV
         """
@@ -1477,9 +1554,17 @@ class HostModelView(DefaultModelView):
 
         try:
             config = Config.objects().first()
-            export_labels = config.export_labels_list if config and config.export_labels_list else []
-            export_inventory = config.export_inventory_list if config and config.export_inventory_list else []
-        except Exception:
+            export_labels = (
+                config.export_labels_list
+                if config and config.export_labels_list
+                else []
+            )
+            export_inventory = (
+                config.export_inventory_list
+                if config and config.export_inventory_list
+                else []
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
             export_labels = []
             export_inventory = []
 
@@ -1520,8 +1605,12 @@ class HostModelView(DefaultModelView):
                 host.available if host.available is not None else '',
                 host.source_account_name or '',
                 host.folder or '',
-                host.last_import_seen.strftime('%Y-%m-%d %H:%M:%S') if host.last_import_seen else '',
-                host.last_import_sync.strftime('%Y-%m-%d %H:%M:%S') if host.last_import_sync else '',
+                host.last_import_seen.strftime(
+                    '%Y-%m-%d %H:%M:%S'
+                ) if host.last_import_seen else '',
+                host.last_import_sync.strftime(
+                    '%Y-%m-%d %H:%M:%S'
+                ) if host.last_import_sync else '',
                 host.no_autodelete if host.no_autodelete is not None else ''
             ]
 

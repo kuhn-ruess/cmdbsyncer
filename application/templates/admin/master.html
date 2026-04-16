@@ -1,6 +1,7 @@
 {% extends admin_base_template %}
 {% block head_css %}
     {{ super() }}
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
     <style>
         body {
             padding-top: 0px;
@@ -161,6 +162,25 @@
 
       .hidden {
           display: none;
+      }
+
+      .inline-field-list > .inline-field {
+          cursor: grab;
+      }
+      .inline-field-list > .inline-field:active {
+          cursor: grabbing;
+      }
+      .inline-field-list > .inline-field.sortable-ghost {
+          opacity: 0.4;
+          background-color: #d4edda !important;
+      }
+      .inline-field-list > .inline-field legend small::before {
+          content: '\f0dc';
+          font-family: 'Font Awesome 5 Free', 'FontAwesome';
+          font-weight: 900;
+          font-size: 1rem !important;
+          margin-right: 6px;
+          color: #999;
       }
 
     .loader {
@@ -367,6 +387,79 @@
             });
         }
 
+    });
+
+    // Make all embedded document lists sortable via drag-and-drop
+    $(document).ready(function() {
+        if (typeof Sortable === 'undefined') return;
+
+        function renumberInlineFields(listEl) {
+            var container = $(listEl).closest('.inline-field');
+            var prefix = container.attr('id');
+            if (!prefix) return;
+
+            var items = $(listEl).children('.inline-field');
+
+            // Pass 1: rename to temporary prefix to avoid collisions
+            items.each(function() {
+                var item = $(this);
+                var oldId = item.attr('id');
+                if (!oldId) return;
+                var tmpId = oldId.replace(prefix + '-', prefix + '-tmp-');
+                item.attr('id', tmpId);
+                var oldPrefix = oldId;
+                var tmpPrefix = tmpId;
+                item.find('[name]').each(function() {
+                    $(this).attr('name', $(this).attr('name').replace(oldPrefix, tmpPrefix));
+                });
+                item.find('[id]').each(function() {
+                    $(this).attr('id', $(this).attr('id').replace(oldPrefix, tmpPrefix));
+                });
+                item.find('[for]').each(function() {
+                    $(this).attr('for', $(this).attr('for').replace(oldPrefix, tmpPrefix));
+                });
+            });
+
+            // Pass 2: assign final sequential indices
+            items.each(function(newIndex) {
+                var item = $(this);
+                var oldId = item.attr('id');
+                if (!oldId) return;
+                var match = oldId.match(/^(.+)-tmp-(\d+)$/);
+                if (!match) return;
+                var tmpPrefix = prefix + '-tmp-' + match[2];
+                var newPrefix = prefix + '-' + newIndex;
+
+                item.attr('id', newPrefix);
+                item.find('[name]').each(function() {
+                    $(this).attr('name', $(this).attr('name').replace(tmpPrefix, newPrefix));
+                });
+                item.find('[id]').each(function() {
+                    $(this).attr('id', $(this).attr('id').replace(tmpPrefix, newPrefix));
+                });
+                item.find('[for]').each(function() {
+                    $(this).attr('for', $(this).attr('for').replace(tmpPrefix, newPrefix));
+                });
+                // Update the "#N" display in legend
+                item.find('legend small').contents().filter(function() {
+                    return this.nodeType === 3;
+                }).each(function() {
+                    this.textContent = this.textContent.replace(/#\d+/, '#' + (newIndex + 1));
+                });
+            });
+        }
+
+        $('.inline-field-list').each(function() {
+            var listEl = this;
+            Sortable.create(listEl, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                handle: 'legend',
+                onEnd: function() {
+                    renumberInlineFields(listEl);
+                }
+            });
+        });
     });
 
     </script>
