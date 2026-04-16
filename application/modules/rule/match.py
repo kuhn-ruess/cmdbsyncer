@@ -64,9 +64,14 @@ def check_condition(attr_value, needle, condition):
         if attr_value.endswith(needle):
             return True
     elif condition == 'regex':
-        pattern = re.compile(needle)
-        if pattern.match(str(attr_value)):
-            return True
+        if len(needle) > 1000:
+            return False
+        try:
+            pattern = re.compile(needle)
+            if pattern.match(str(attr_value)):
+                return True
+        except re.error:
+            return False
     elif condition == 'bool':
         if needle == attr_value:
             return True
