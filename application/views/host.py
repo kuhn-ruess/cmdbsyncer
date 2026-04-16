@@ -7,7 +7,7 @@ import re
 import csv
 import io
 from flask_login import current_user
-from flask import flash, request, redirect, url_for, render_template_string, Response
+from flask import flash, request, redirect, url_for, render_template, Response
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 from flask_admin.model.template import LinkRowAction
 from flask_admin.form import rules
@@ -1466,30 +1466,7 @@ class HostModelView(DefaultModelView):
         ids = [str(escape(i)) for i in request.args.get('ids', '').split(',')]
         templates = self.get_template_list()
 
-        template_html = """
-        <div class="container mt-4">
-            <h3>Set CMDB Template</h3>
-            <form method="POST" action="{{ url_for('.process_template_assignment') }}">
-                <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
-
-                <div class="form-group">
-                    <label for="template_id">Select Template:</label>
-                    <select class="form-control" id="template_id" name="template_id" required>
-                        <option value="">Choose a template...</option>
-                        {% for template in templates %}
-                        <option value="{{ template.id }}">{{ template.hostname }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <button type="submit" class="btn btn-primary">Apply Template</button>
-                    <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
-                </div>
-            </form>
-        </div>
-        """
-        return render_template_string(template_html, ids=ids, templates=templates)
+        return render_template('admin/set_template_form.html', ids=ids, templates=templates)
 
     @expose('/process_template_assignment', methods=['POST'])
     def process_template_assignment(self):
