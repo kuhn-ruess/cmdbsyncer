@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Run the unit-test suite without triggering unittest's full-repo auto-discovery
-# (which would walk into venv/, .claude/worktrees/ and application/ and fail).
+# Run the unit-test suite, discovering tests in plugin and module directories.
+# The bootstrap in tests/__init__.py must run first to stub out MongoDB.
 set -euo pipefail
 
 cd "$(dirname "$0")"
-exec python -m unittest discover -s tests -t . "$@"
+exec python run_tests.py "$@"
