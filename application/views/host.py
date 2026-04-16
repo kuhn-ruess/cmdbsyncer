@@ -127,7 +127,10 @@ def _render_object_type_icon(_view, _context, model, _name):
     icon_class = OBJECT_TYPE_ICONS.get(model.object_type, 'fa fa-question-circle')
     object_type_display = model.object_type.replace('_', ' ').title()
 
-    return Markup(f'<i class="{icon_class}" style="margin-right: 5px;"></i>{object_type_display}')
+    return Markup(
+        f'<i class="{escape(icon_class)}" style="margin-right: 5px;">'
+        f'</i>{escape(object_type_display)}'
+    )
 
 def _render_datetime(_view, _context, model, name):
     """
@@ -153,10 +156,10 @@ def _render_cmdb_fields(_view, _context, model, _name):
         html += f'''
             <tr>
                 <th scope="row" style="width: 30%;">
-                    {entry.field_name}
+                    {escape(entry.field_name)}
                 </th>
                 <td>
-                    <span class="badge badge-info">{entry.field_value}</span>
+                    <span class="badge badge-info">{escape(entry.field_value)}</span>
                 </td>
             </tr>
         '''
@@ -180,7 +183,11 @@ def _render_labels(_view, _context, model, _name):
             continue
         if checkmk_labels.get(key) == value:
             del checkmk_labels[key]
-        html += f'<span class="badge badge-primary mr-1" style="margin: 2px;">{key}:{value}</span>'
+        html += (
+            f'<span class="badge badge-primary mr-1" '
+            f'style="margin: 2px;">'
+            f'{escape(key)}:{escape(value)}</span>'
+        )
 
     for key, value in checkmk_labels.items():
         if not value:
@@ -190,7 +197,7 @@ def _render_labels(_view, _context, model, _name):
         html += (
             f'<span class="badge mr-1" style="margin: 2px;'
             f' background-color: rgb(43, 181, 120);">'
-            f'{key}:{value}</span>'
+            f'{escape(key)}:{escape(value)}</span>'
         )
 
 
@@ -204,10 +211,13 @@ def _render_cmdb_template(_view, _context, model, _name):
         return Markup("")
     parts = []
     for tmpl in model.cmdb_templates:
-        header = f'<caption style="caption-side:top;font-weight:bold">{tmpl.hostname}</caption>'
+        header = (
+            f'<caption style="caption-side:top;font-weight:bold">'
+            f'{escape(tmpl.hostname)}</caption>'
+        )
         rows = ''.join(
-            f'<tr><th scope="row" style="width:30%;">{k}</th>'
-            f'<td><span class="badge badge-info">{v}</span></td></tr>'
+            f'<tr><th scope="row" style="width:30%;">{escape(k)}</th>'
+            f'<td><span class="badge badge-info">{escape(v)}</span></td></tr>'
             for k, v in tmpl.labels.items()
         )
         parts.append(f'<table class="table table-bordered">{header}{rows}</table>')
@@ -263,13 +273,13 @@ class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
             if not hasattr(template, 'labels') or not template.labels:
                 continue
             entries = [
-                f'<span class="badge badge-primary">{key}</span>'
-                f':<span class="badge badge-info">{value}</span>'
+                f'<span class="badge badge-primary">{escape(key)}</span>'
+                f':<span class="badge badge-info">{escape(value)}</span>'
                 for key, value in template.labels.items()
             ]
             html += (
                 f'<div class="card" style="margin-bottom:4px">'
-                f'<div class="card-header p-1"><strong>{template.hostname}</strong></div>'
+                f'<div class="card-header p-1"><strong>{escape(template.hostname)}</strong></div>'
                 f'<div class="card-body p-2">{" ".join(entries)}</div></div>'
             )
         if html:
@@ -303,24 +313,35 @@ class CmdbMatchWidget:  # pylint: disable=too-few-public-methods
         <div class="cmdb-match-container" style="margin-bottom: 15px;">
             <div class="form-row align-items-center">
                 <div class="col-auto">
-                    <input type="text" id="cmdb_match_key" value="{key}" placeholder="Key"
-                           style="background-color: #2EFE9A; border-radius: 5px; padding: 8px 12px;
-                                  font-weight: bold; border: 1px solid #1abc9c; margin-right: 10px; width: 150px;">
+                    <input type="text" id="cmdb_match_key"
+                           value="{escape(key)}" placeholder="Key"
+                           style="background-color: #2EFE9A;
+                                  border-radius: 5px; padding: 8px 12px;
+                                  font-weight: bold;
+                                  border: 1px solid #1abc9c;
+                                  margin-right: 10px; width: 150px;">
                 </div>
                 <div class="col-auto">
-                    <input type="text" id="cmdb_match_value" value="{value}" placeholder="Value"
-                           style="background-color: #81DAF5; border-radius: 5px; padding: 8px 12px;
-                                  font-family: monospace; border: 1px solid #3498db; width: 200px;">
+                    <input type="text" id="cmdb_match_value"
+                           value="{escape(value)}" placeholder="Value"
+                           style="background-color: #81DAF5;
+                                  border-radius: 5px; padding: 8px 12px;
+                                  font-family: monospace;
+                                  border: 1px solid #3498db;
+                                  width: 200px;">
                 </div>
             </div>
-            <input type="hidden" name="{field.name}" id="{field.id}" value="{field.data or ''}" />
+            <input type="hidden"
+                   name="{escape(field.name)}"
+                   id="{escape(field.id)}"
+                   value="{escape(field.data or '')}" />
             <small class="form-text text-muted">Enter Attribute which should lead to automatic match</small>
         </div>
         <script>
         function updateCmdbMatch() {{
             var key = document.getElementById('cmdb_match_key').value;
             var value = document.getElementById('cmdb_match_value').value;
-            var hiddenField = document.getElementById('{field.id}');
+            var hiddenField = document.getElementById('{escape(field.id)}');
 
             if (key && value) {{
                 hiddenField.value = key + ':' + value;
