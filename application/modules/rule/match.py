@@ -65,13 +65,10 @@ def check_condition(attr_value, needle, condition):
             return True
     elif condition == 'regex':
         if len(needle) > 1000:
-            return False
-        try:
-            pattern = re.compile(needle)
-            if pattern.match(str(attr_value)):
-                return True
-        except re.error:
-            return False
+            raise re.error("Regex pattern exceeds maximum length of 1000 characters")
+        pattern = re.compile(needle)
+        if pattern.match(str(attr_value)):
+            return True
     elif condition == 'bool':
         if needle == attr_value:
             return True
