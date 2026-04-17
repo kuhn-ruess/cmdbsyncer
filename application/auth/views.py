@@ -73,8 +73,20 @@ def login():
         else:
             existing_user = False
 
+        ldap_authenticated = False
+        if app.config['LDAP_LOGIN']:
+            try:
+                ldap_user = run_hook('ldap_login', email, password)
+                if ldap_user:
+                    existing_user = ldap_user
+                    ldap_authenticated = True
+            except Exception as exp:  # pylint: disable=broad-exception-caught
+                flash(f'LDAP Error: {exp}', 'danger')
+                return render_template('login.html', **context)
+
         # Always wrong Password, even when user not exists
-        if not (existing_user and existing_user.check_password(password)):
+        local_ok = existing_user and existing_user.check_password(password)
+        if not ldap_authenticated and not local_ok:
             flash("Wrong Password", 'danger')
             return render_template('login.html', **context)
 

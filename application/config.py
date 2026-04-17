@@ -140,6 +140,37 @@ class BaseConfig():
 
     REMOTE_USER_LOGIN = False
 
+    # LDAP login (enterprise feature)
+    # If LDAP_LOGIN is enabled and the enterprise 'ldap_login' hook is registered,
+    # the login view will attempt an LDAP bind before falling back to local passwords.
+    LDAP_LOGIN = False
+    LDAP_SERVER = ''
+    # Direct-bind mode: format string with {username} placeholder, e.g.
+    #   'uid={username},ou=people,dc=example,dc=com'
+    # Leave empty to use search-based mode (requires LDAP_BIND_USER).
+    LDAP_USER_DN_TEMPLATE = ''
+    # Search-based mode: bind with a service account, locate the user via filter,
+    # then re-bind as that user to verify the password.
+    LDAP_BIND_USER = ''
+    LDAP_BIND_PASSWORD = ''
+    LDAP_SEARCH_BASE = ''
+    LDAP_SEARCH_FILTER = '(mail={email})'
+    # If set, the bound user must have this group DN in their `memberOf`
+    # attribute. Leave empty to allow any successfully bound user.
+    LDAP_REQUIRED_GROUP = ''
+    # LDAP attribute used for User.name on auto-create.
+    LDAP_NAME_ATTR = 'cn'
+    # Create a local User record on first successful LDAP login.
+    LDAP_AUTO_CREATE = True
+    # Map LDAP group DNs to roles. When non-empty, roles/global_admin are
+    # recomputed from group memberships on every login (LDAP is the source
+    # of truth). When empty, user roles are left untouched.
+    #   {
+    #     'cn=admins,ou=groups,dc=example,dc=com': {'global_admin': True},
+    #     'cn=ops,ou=groups,dc=example,dc=com':    {'roles': ['host', 'log']},
+    #   }
+    LDAP_ROLE_MAPPING = {}
+
 
     FILEADMIN_PATH = os.environ.get('CMDBSYNCER_FILEADMIN_PATH', '/var/cmdbsyncer/files')
 
