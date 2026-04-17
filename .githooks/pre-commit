@@ -9,9 +9,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-echo "BUILD_DATE=$DATE" > buildinfo.txt
-git add buildinfo.txt
-echo "Updated buildinfo.txt -> $DATE"
+echo "BUILD_DATE=$DATE" > application/buildinfo.txt
+git add application/buildinfo.txt
+echo "Updated application/buildinfo.txt -> $DATE"
 
 PYLINT_BIN=""
 if [ -x "$REPO_ROOT/.venv/bin/pylint" ]; then

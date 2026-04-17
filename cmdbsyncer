@@ -1,31 +1,10 @@
 #!/usr/bin/env python3
+"""CMDB Syncer CLI wrapper for source checkouts.
+
+Pip-installed users get the same entry point as ``cmdbsyncer`` on PATH via
+``[project.scripts]``. This thin wrapper keeps the repo-root workflow alive.
 """
-CMDB Syncer CLI Interface
-"""
-import os
-import sys
-import warnings
-if 'config' not in os.environ:
-    os.environ['config'] = 'prod'
+from application.cli import main
 
-with warnings.catch_warnings():
-    warnings.filterwarnings('ignore', 'Fields missing from ruleset', UserWarning)
-
-    try:
-        from application import app
-        from application import VERSION
-        if len(sys.argv) == 1:
-            print(f"CMDB Syncer Version: {VERSION}")
-    except Exception as exp: #pylint: disable=broad-except
-        print("Cannot Load Application. Is the Virtual Environment loaded?")
-        print(exp)
-        raise
-        sys.exit(1)
-
-    if __name__ == '__main__':
-        try:
-            app.cli()
-        except Exception as exp: #pylint: disable=broad-except
-            raise
-            print(f"ERROR: {exp}")
-            sys.exit(1)
+if __name__ == "__main__":
+    main()
