@@ -160,6 +160,75 @@ _cron = _stub_package("application.helpers.cron")
 _cron.register_cronjob = MagicMock(name="stub.register_cronjob")
 
 
+# --- Extra stubs for application.api tests ----------------------------------
+# application.api imports User, Account, and the `log` object from application
+# at import time. We register minimal stand-ins so test_api can load the real
+# api source files without pulling in Flask-Admin / MongoDB.
+
+_application.log = MagicMock(name="stub.log_object")
+
+_models_user = _stub_package("application.models.user")
+
+
+class _User:  # pylint: disable=too-few-public-methods
+    """Stub User model; tests patch .objects per-test."""
+    objects = MagicMock()
+
+
+_models_user.User = _User
+
+_models_account = _stub_package("application.models.account")
+
+
+class _Account:  # pylint: disable=too-few-public-methods
+    """Stub Account model."""
+    objects = MagicMock()
+
+
+_models_account.Account = _Account
+_models_account.object_types = []
+
+_models_cron = _stub_package("application.models.cron")
+
+
+class _CronStats:  # pylint: disable=too-few-public-methods
+    """Stub CronStats model."""
+    objects = MagicMock()
+
+
+class _CronGroup:  # pylint: disable=too-few-public-methods
+    """Stub CronGroup model."""
+    objects = MagicMock()
+
+
+_models_cron.CronStats = _CronStats
+_models_cron.CronGroup = _CronGroup
+
+_log_models = _stub_package("application.modules.log.models")
+
+
+class _LogEntry:  # pylint: disable=too-few-public-methods
+    """Stub LogEntry model."""
+    objects = MagicMock()
+
+
+_log_models.LogEntry = _LogEntry
+
+
+# get_account helper
+_get_account_mod = sys.modules.get("application.helpers.get_account")
+if _get_account_mod is None:
+    _get_account_mod = _stub_package("application.helpers.get_account")
+_get_account_mod.get_account_by_name = MagicMock(name="stub.get_account_by_name")
+
+
+class _AccountNotFoundError(Exception):
+    """Stub exception matching the real one."""
+
+
+_get_account_mod.AccountNotFoundError = _AccountNotFoundError
+
+
 # --- application.helpers.plugins --------------------------------------------
 
 _plugins_helper = _stub_package("application.helpers.plugins")
@@ -227,6 +296,7 @@ _syncer_jinja.get_list = MagicMock(name="stub.get_list")
 # application.helpers.get_account
 _get_account = _stub_package("application.helpers.get_account")
 _get_account.get_account_by_name = MagicMock(name="stub.get_account_by_name")
+_get_account.AccountNotFoundError = _AccountNotFoundError
 
 # application.plugins.checkmk.models
 _cmk_models = _stub_package("application.plugins.checkmk.models")
@@ -271,6 +341,25 @@ for _mod_name, _mod_path in [
         f"application.plugins.checkmk.{_mod_name}",
         os.path.join("plugins", "checkmk", _mod_path),
     )
+
+
+# --- API modules under test -------------------------------------------------
+# Load the real api/__init__, api/syncer, api/objects files under their
+# canonical module names. They import User/Account/LogEntry/Host etc. from
+# the stubs above — no live MongoDB needed.
+_stub_package("application.api", path=[os.path.join(_APP_ROOT, "api")])
+_load_real_module(
+    "application.api",
+    os.path.join("api", "__init__.py"),
+)
+_load_real_module(
+    "application.api.syncer",
+    os.path.join("api", "syncer.py"),
+)
+_load_real_module(
+    "application.api.objects",
+    os.path.join("api", "objects.py"),
+)
 
 
 # --- Shared test helper ------------------------------------------------------
