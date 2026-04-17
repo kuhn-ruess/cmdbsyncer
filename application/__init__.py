@@ -30,8 +30,8 @@ tablib_registry.register('syncer_rules', ExportObjects())
 def _read_version_from_changelog():
     """
     Resolve the current version from the newest changelog/v*.md file by
-    reading its first `## Version x.y.z` header. This keeps VERSION in sync
-    with the changelog without requiring a manual bump on every release.
+    reading its first `## Version x.y.z` header. Used as the dev-mode source
+    so VERSION tracks the changelog without waiting for `make sync-version`.
     """
     import glob as _glob
     import re as _re
@@ -48,10 +48,24 @@ def _read_version_from_changelog():
                 m = _re.match(r"^## Version (\d+\.\d+\.\d+)\s*$", changelog_line)
                 if m:
                     return m.group(1)
-    return "0.0.0"
+    return None
 
 
-VERSION = _read_version_from_changelog()
+def _resolve_version():
+    # In a source checkout the changelog directory is present and authoritative
+    # so edits become visible without running `make sync-version`. In an
+    # installed wheel the changelog is gone and `_version.py` is the single
+    # source of truth (written at build time and matched by pyproject.toml).
+    changelog_dir = os.path.join(os.path.dirname(__file__), "..", "changelog")
+    if os.path.isdir(changelog_dir):
+        from_changelog = _read_version_from_changelog()
+        if from_changelog:
+            return from_changelog
+    from application._version import __version__
+    return __version__
+
+
+VERSION = _resolve_version()
 
 CONFIG_MAP = {
     'prod': 'application.config.ProductionConfig',
@@ -69,10 +83,18 @@ csrf = CSRFProtect(app)
 
 ## Read Build Data
 
-with open(f"{app.root_path}/../buildinfo.txt", encoding="utf-8") as _buildinfo:
-    for line in _buildinfo:
-        name, key = line.split('=')
-        app.config[name] = key.strip()
+# buildinfo.txt lives inside the package so it ships with the wheel; the
+# pre-commit hook rewrites it on every commit so dev runs also see a fresh
+# timestamp. Missing file (e.g. running from a raw checkout without the
+# hook installed) is not fatal — we just expose an 'unknown' build date.
+_buildinfo_path = os.path.join(app.root_path, "buildinfo.txt")
+if os.path.isfile(_buildinfo_path):
+    with open(_buildinfo_path, encoding="utf-8") as _buildinfo:
+        for line in _buildinfo:
+            name, key = line.split('=')
+            app.config[name] = key.strip()
+else:
+    app.config.setdefault("BUILD_DATE", "unknown")
 
 log_config.dictConfig(app.config['LOGGING'])
 logger = logging.getLogger('debug')
