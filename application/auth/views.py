@@ -42,6 +42,7 @@ def login():
         try:
             if user_result := User.objects(name=request.remote_user, disabled__ne=True):
                 existing_user = user_result[0]
+                session.clear()
                 login_user(
                     existing_user,
                     remember=False,
@@ -90,6 +91,7 @@ def login():
 
 
 
+        session.clear()
         login_user(
             existing_user,
             remember=False,
@@ -221,6 +223,7 @@ def reset_password(token):
         existing_user.set_password(password)
         existing_user.lastLogin = datetime.now()
         existing_user.save()
+        session.clear()
         login_user(
             existing_user,
             duration=timedelta(
