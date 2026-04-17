@@ -1,0 +1,81 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="jumbotron text-center p-4">
+      <h2>License Information</h2>
+    </div>
+
+    {% if license is not none %}
+      <table class="table table-striped">
+        <tbody>
+          <tr>
+            <th style="width: 30%;">Edition</th>
+            <td>Enterprise</td>
+          </tr>
+          {% if license.license_id %}
+          <tr>
+            <th>License ID</th>
+            <td>{{ license.license_id }}</td>
+          </tr>
+          {% endif %}
+          {% if license.customer %}
+          <tr>
+            <th>Customer</th>
+            <td>{{ license.customer }}</td>
+          </tr>
+          {% endif %}
+          {% if exp_human %}
+          <tr>
+            <th>Expires</th>
+            <td>{{ exp_human }}</td>
+          </tr>
+          {% endif %}
+          <tr>
+            <th>Features</th>
+            <td>
+              {% if license.features %}
+                <ul class="mb-0">
+                  {% for feature in license.features %}
+                    <li>{{ feature }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <em>none</em>
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    {% elif package_installed %}
+      <div class="alert alert-warning" role="alert">
+        <h4 class="alert-heading">Enterprise package installed, but license not active</h4>
+        <p class="mb-0">
+          Default license path: <code>/etc/cmdbsyncer/license.jwt</code>
+          (override via <code>CMDBSYNCER_LICENSE</code>).
+        </p>
+        {% if load_status %}
+        <hr>
+        <p class="mb-0"><strong>Load status:</strong> <code>{{ load_status }}</code></p>
+        {% endif %}
+        <hr>
+        <p class="mb-0">
+          <strong>Registered features:</strong>
+          <code>{{ registry_features or '(none)' }}</code><br>
+          <strong>Registered hooks:</strong>
+          <code>{{ registry_hooks or '(none)' }}</code>
+        </p>
+      </div>
+    {% else %}
+      <div class="alert alert-info" role="alert">
+        <h4 class="alert-heading">Community Edition</h4>
+        <p class="mb-0">No enterprise license is active on this installation.</p>
+        {% if load_status %}
+        <hr>
+        <p class="mb-0"><strong>Load status:</strong> <code>{{ load_status }}</code></p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
