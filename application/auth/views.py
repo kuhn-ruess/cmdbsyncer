@@ -10,6 +10,7 @@ from flask_login import current_user, login_user, logout_user, login_required
 from authlib.jose import jwt, JoseError
 
 from application import login_manager, app
+from application.enterprise import run_hook
 
 from application.models.user import User
 from application.models.forms import LoginForm, RequestPasswordForm, ResetPasswordForm
@@ -40,8 +41,8 @@ def login():
 
     if app.config['REMOTE_USER_LOGIN'] and request.remote_user:
         try:
-            if user_result := User.objects(name=request.remote_user, disabled__ne=True):
-                existing_user = user_result[0]
+            existing_user = run_hook('remote_user', request)
+            if existing_user:
                 session.clear()
                 login_user(
                     existing_user,
