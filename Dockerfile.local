@@ -3,7 +3,6 @@ WORKDIR /srv
 
 
 RUN apk add --no-cache python3 \
-    uwsgi \
     ca-certificates \
     gcc \
     git \
@@ -12,7 +11,6 @@ RUN apk add --no-cache python3 \
     libxml2-dev \
     libxslt-dev \
     python3-dev \
-    uwsgi-python3 \
     jpeg-dev \
     tzdata \
     libffi-dev \

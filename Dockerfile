@@ -1,10 +1,9 @@
 FROM python:3.12-alpine3.20
 WORKDIR /srv
 
-RUN addgroup -S uwsgi && adduser -S uwsgi -G uwsgi
+RUN addgroup -S app && adduser -S app -G app
 
 RUN apk add --no-cache python3 \
-    uwsgi \
     ca-certificates \
     gcc \
     git \
@@ -13,7 +12,6 @@ RUN apk add --no-cache python3 \
     libxml2-dev \
     libxslt-dev \
     python3-dev \
-    uwsgi-python3 \
     tzdata \
     libffi-dev \
     openssl-dev \
@@ -35,6 +33,7 @@ RUN pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir -r requirements.txt
 RUN pip3 install --no-cache-dir -r requirements-extras.txt
 RUN pip3 install --no-cache-dir -r requirements-ansible.txt
+RUN pip3 install --no-cache-dir gunicorn
 
 COPY ./deploy_configs/run_cron.sh /etc/periodic/15min/
 
@@ -46,8 +45,8 @@ COPY . /srv/
 
 
 ENTRYPOINT ["/srv/entrypoint.sh"]
-USER uwsgi
+USER app
 
-CMD [ "uwsgi", "--master", "/srv/deploy_configs/uwsgi_docker.ini" ]
+CMD ["gunicorn", "--config", "/srv/deploy_configs/gunicorn.conf.py", "app:app"]
 
 EXPOSE 9090

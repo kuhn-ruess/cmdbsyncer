@@ -27,45 +27,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-def _read_version_from_changelog():
-    """
-    Resolve the current version from the newest changelog/v*.md file by
-    reading its first `## Version x.y.z` header. Used as the dev-mode source
-    so VERSION tracks the changelog without waiting for `make sync-version`.
-    """
-    import glob as _glob
-    import re as _re
-    changelog_dir = os.path.join(os.path.dirname(__file__), "..", "changelog")
-    files = _glob.glob(os.path.join(changelog_dir, "v*.md"))
-
-    def _key(path):
-        m = _re.search(r"v(\d+)\.(\d+)\.md$", path)
-        return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
-
-    for path in sorted(files, key=_key, reverse=True):
-        with open(path, encoding="utf-8") as fh:
-            for changelog_line in fh:
-                m = _re.match(r"^## Version (\d+\.\d+\.\d+)\s*$", changelog_line)
-                if m:
-                    return m.group(1)
-    return None
-
-
-def _resolve_version():
-    # In a source checkout the changelog directory is present and authoritative
-    # so edits become visible without running `make sync-version`. In an
-    # installed wheel the changelog is gone and `_version.py` is the single
-    # source of truth (written at build time and matched by pyproject.toml).
-    changelog_dir = os.path.join(os.path.dirname(__file__), "..", "changelog")
-    if os.path.isdir(changelog_dir):
-        from_changelog = _read_version_from_changelog()
-        if from_changelog:
-            return from_changelog
-    from application._version import __version__
-    return __version__
-
-
-VERSION = _resolve_version()
+from application._version import __version__ as VERSION
 
 CONFIG_MAP = {
     'prod': 'application.config.ProductionConfig',
@@ -140,20 +102,7 @@ if app.config['SENTRY_ENABLED']:
         release=VERSION
     )
 
-try:
-    db = MongoEngine()
-    from uwsgidecorators import postfork
-
-    @postfork
-    def setup_db():
-        """db init in uwsgi"""
-        db.init_app(app)
-
-except ImportError:
-    #print("   \033[91mWARNING: STANDALONE MODE - NOT FOR PROD\033[0m")
-    #print(" * HINT: uwsgi modul not loaded")
-    # Output makes problems for commands
-    db = MongoEngine(app)
+db = MongoEngine(app)
 
 def init_db():
     """DB Init for Multiprocessing Pool"""
