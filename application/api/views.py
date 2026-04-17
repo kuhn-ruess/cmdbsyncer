@@ -15,16 +15,6 @@ def custom401(error):
     """ Custom 401 API Response """
     return {'status' : 401, 'message' : error}, 401
 
-@API_BP.after_request
-def apply_headers(response):
-    """ Additional Headers """
-    if app.config.get('APPLY_HEADERS'):
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] =\
-                            "Origin, x-login-user, Content-Type, Accept"
-    return response
-
 
 AUTHORIZATIONS = {
     'x-login-user': {
