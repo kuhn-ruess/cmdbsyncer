@@ -8,6 +8,7 @@ from flask import request, render_template, current_app, \
      flash, redirect, session, Blueprint, url_for
 from flask_login import current_user, login_user, logout_user, login_required
 from authlib.jose import jwt, JoseError
+from mongoengine.errors import DoesNotExist
 
 from application import login_manager, app
 from application.enterprise import run_hook
@@ -15,7 +16,6 @@ from application.enterprise import run_hook
 from application.models.user import User
 from application.models.forms import LoginForm, RequestPasswordForm, ResetPasswordForm
 from application.modules.email import send_email
-from mongoengine.errors import DoesNotExist
 
 
 AUTH = Blueprint('auth', __name__)
@@ -31,7 +31,7 @@ def load_user(user_id):
         return None
 
 @AUTH.route('/login', methods=['GET', 'POST'])
-def login():
+def login():  # pylint: disable=too-many-return-statements,too-many-branches
     """
     Login Route
     """
@@ -54,7 +54,7 @@ def login():
                 existing_user.last_login = datetime.now()
                 existing_user.save()
                 return redirect(url_for("admin.index"))
-        except Exception as exp:
+        except Exception as exp:  # pylint: disable=broad-exception-caught
             flash(f'Remote User Error: {exp}')
 
 
@@ -190,7 +190,7 @@ def request_password():
         user_result = User.objects(email=email)
         if user_result:
             existing_user = user_result[0]
-            token = existing_user.generate_token()
+            token = existing_user.generate_token(purpose='pw_reset')
             send_email(existing_user.email, "New Password", 'email/resetpassword',
                        user=existing_user, token=token)
         flash("New Password will be sent", 'info')
@@ -198,9 +198,11 @@ def request_password():
 
     return render_template('formular.html', form=form)
 
-def get_userid(token):
+def get_userid(token, purpose):
     """
-    Helper to read Userid from token
+    Helper to read Userid from token. Verifies expiry, purpose claim, and
+    that the token's pwd_iat still matches the user's current date_password
+    (so a token becomes invalid as soon as the password is changed).
     """
     key = current_app.config['SECRET_KEY']
     try:
@@ -209,17 +211,40 @@ def get_userid(token):
             now = datetime.utcnow().timestamp()
             if now > data['exp']:
                 raise ValueError("Token Expired")
-
     except JoseError as error:
-        raise ValueError(error)
-    if data:
-        return data.get('userid')
+        raise ValueError(error) from error
+
+    if not data:
+        return None
+    if data.get('purpose') != purpose:
+        return None
+
+    user_id = data.get('userid')
+    if not user_id:
+        return None
+
+    try:
+        existing_user = User.objects.get(id=user_id)
+    except DoesNotExist:
+        return None
+
+    current_pwd_iat = (
+        int(existing_user.date_password.timestamp())
+        if existing_user.date_password else 0
+    )
+    if data.get('pwd_iat') != current_pwd_iat:
+        return None
+
+    return user_id
 
 @AUTH.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     """ Reset Password Route"""
     form = ResetPasswordForm(request.form)
-    user_id = get_userid(token)
+    try:
+        user_id = get_userid(token, purpose='pw_reset')
+    except ValueError:
+        user_id = None
     if not user_id:
         flash("Invalid Link", "danger")
         return redirect(url_for("admin.index"))
