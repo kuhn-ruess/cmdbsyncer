@@ -1,6 +1,8 @@
 """
 Internal User Accounts
 """
+# pylint: disable=no-member  # mongoengine document fields (id, objects, ...) are dynamic
+import uuid
 from datetime import datetime, timedelta
 from flask import current_app
 from flask_login import UserMixin
@@ -73,18 +75,25 @@ class User(db.Document, UserMixin):
         """
         return check_password_hash(self.pwdhash, password)
 
-    def generate_token(self, expiration=60):
+    def generate_token(self, purpose, expiration=60):
         """
-        Token generator
+        Token generator. `purpose` binds the token to a specific action
+        (e.g. "pw_reset") so it cannot be replayed in a different context.
         """
-        dt = datetime.now()+timedelta(minutes=expiration)
+        now = datetime.now()
+        exp = now + timedelta(minutes=expiration)
+        pwd_iat = int(self.date_password.timestamp()) if self.date_password else 0
         header = {
               'alg': 'HS256'
         }
         key = current_app.config['SECRET_KEY']
         data = {
             'userid': str(self.id),
-            'exp' : int(dt.timestamp())
+            'purpose': purpose,
+            'pwd_iat': pwd_iat,
+            'jti': uuid.uuid4().hex,
+            'iat': int(now.timestamp()),
+            'exp': int(exp.timestamp()),
         }
 
         return jwt.encode(header=header, payload=data, key=key)
@@ -126,7 +135,7 @@ class User(db.Document, UserMixin):
         # Set missing names
         try:
             User._get_collection().drop_index('name_1')
-        except:
+        except Exception:  # pylint: disable=broad-exception-caught
             pass
         users = User.objects()
         found_names = []
