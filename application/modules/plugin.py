@@ -1,6 +1,7 @@
 """
 Alle Stuff shared by the plugins
 """
+# pylint: disable=logging-fstring-interpolation,no-member,too-many-instance-attributes,too-many-arguments,too-many-positional-arguments,too-many-locals,unnecessary-lambda-assignment
 from datetime import datetime
 import time
 import json as mod_json
@@ -26,6 +27,55 @@ from syncerapi.v1 import (
     Host,
     cc,
 )
+
+_REDACTION = '***REDACTED***'
+_SENSITIVE_HEADER_KEYS = frozenset({
+    'authorization', 'x-api-key', 'x-auth-token', 'cookie',
+    'proxy-authorization', 'api-token', 'x-token',
+})
+_SENSITIVE_BODY_KEYS = frozenset({
+    'password', 'passwd', 'secret', 'token', 'api_key', 'apikey',
+    'access_token', 'refresh_token', 'credential', 'credentials',
+    'private_key', 'client_secret',
+})
+
+
+def _redact_body(obj):
+    """Recursively mask sensitive keys in dict/list bodies."""
+    if isinstance(obj, dict):
+        return {
+            k: (_REDACTION if isinstance(k, str) and k.lower() in _SENSITIVE_BODY_KEYS
+                else _redact_body(v))
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [_redact_body(i) for i in obj]
+    return obj
+
+
+def _redact_payload(payload):
+    """Return a copy of a requests-style payload with sensitive values masked."""
+    redacted = payload.copy()
+    if 'headers' in redacted and isinstance(redacted['headers'], dict):
+        redacted['headers'] = {
+            k: (_REDACTION if isinstance(k, str) and k.lower() in _SENSITIVE_HEADER_KEYS
+                else v)
+            for k, v in redacted['headers'].items()
+        }
+    if 'auth' in redacted:
+        redacted['auth'] = _REDACTION
+    if 'cert' in redacted:
+        redacted['cert'] = _REDACTION
+    if 'json' in redacted:
+        redacted['json'] = _redact_body(redacted['json'])
+    if 'data' in redacted:
+        redacted['data'] = (_redact_body(redacted['data'])
+                            if isinstance(redacted['data'], (dict, list))
+                            else _REDACTION)
+    if 'params' in redacted:
+        redacted['params'] = _redact_body(redacted['params'])
+    return redacted
+
 
 class ResponseDataException(Exception):
     """
@@ -153,7 +203,7 @@ class Plugin():
 
 
 
-    def inner_request(self, method, url, data=None, json=None,
+    def inner_request(self, method, url, data=None, json=None,  # pylint: disable=too-many-branches,too-many-statements
                       headers=None, auth=None, params=None, cert=None):
         """
         Execute HTTP requests with built-in retry logic and logging.
@@ -202,14 +252,18 @@ class Plugin():
         if cert:
             payload['cert'] = cert
 
-        log_dict = payload.copy()
-        if 'json' in payload:
-            log_dict['json'] = mod_json.dumps(payload['json'])
+        log_dict = _redact_payload(payload)
+        if 'json' in log_dict:
+            log_dict['json'] = mod_json.dumps(log_dict['json'])
 
         logger.debug(f"Payload: {log_dict}")
 
         if path := self.save_requests:
-            open(path, "a", encoding="utf-8").write(f"{method}||{url}||{payload}\n")
+            # save_requests is a debug dump for offline replay — keep the
+            # full, unredacted payload here. Access must be protected on
+            # the file-system level.
+            with open(path, "a", encoding="utf-8") as save_fh:
+                save_fh.write(f"{method}||{url}||{payload}\n")
 
         if self.dry_run:
             logger.info(f"Body: {pformat(data)}")

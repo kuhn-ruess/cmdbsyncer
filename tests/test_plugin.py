@@ -3,7 +3,7 @@ Unit tests for the Plugin base class
 """
 # pylint: disable=missing-function-docstring,unused-argument
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 import time
 
 import requests
@@ -333,8 +333,8 @@ class TestPlugin(unittest.TestCase):
         plugin.save_requests = '/tmp/test_requests.log'
 
         with patch('builtins.open', create=True) as mock_open:
-            mock_file = Mock()
-            mock_open.return_value = mock_file
+            mock_file = MagicMock()
+            mock_open.return_value.__enter__.return_value = mock_file
 
             with patch('application.modules.plugin.requests.get') as mock_get:
                 mock_response = Mock()
