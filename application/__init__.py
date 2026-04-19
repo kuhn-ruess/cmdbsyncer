@@ -265,7 +265,6 @@ from application.views.fileadmin import FileAdminView
 if os.path.exists(app.config['FILEADMIN_PATH']):
     file_admin_view = FileAdminView(app.config['FILEADMIN_PATH'], name="Filemanager", menu_icon_type='fa', menu_icon_value='fa-folder-open')
     admin.add_view(file_admin_view)
-    csrf.exempt(file_admin_view.blueprint)
 
 from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
