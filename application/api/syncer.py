@@ -30,7 +30,6 @@ class SyncerLogsApi(Resource):
                 'message': entry.message,
                 'source': entry.source,
                 'details': [ {'name': x.level, 'message': x.message} for x in entry.details],
-                'traceback': str(entry.traceback.strip()),
                 'has_error': entry.has_error,
             })
         return {
@@ -54,7 +53,6 @@ class SyncerServiceApi(Resource):
                 'message': entry.message,
                 'source': entry.source,
                 'details': [ {'name': x.level, 'message': x.message} for x in entry.details],
-                'traceback': str(entry.traceback.strip()),
                 'has_error': entry.has_error,
             }
             return {
