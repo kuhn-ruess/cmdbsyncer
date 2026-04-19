@@ -10,7 +10,7 @@ from flask_login import current_user, login_user, logout_user, login_required
 from authlib.jose import jwt, JoseError
 from mongoengine.errors import DoesNotExist
 
-from application import login_manager, app
+from application import login_manager, app, log
 from application.enterprise import run_hook
 
 from application.models.user import User
@@ -54,8 +54,9 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches
                 existing_user.last_login = datetime.now()
                 existing_user.save()
                 return redirect(url_for("admin.index"))
-        except Exception as exp:  # pylint: disable=broad-exception-caught
-            flash(f'Remote User Error: {exp}')
+        except Exception:  # pylint: disable=broad-exception-caught
+            log.log("Remote User login failed", source="AUTH")
+            flash('Remote User Error', 'danger')
 
 
     login_form = LoginForm(request.form)
@@ -80,8 +81,9 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches
                 if ldap_user:
                     existing_user = ldap_user
                     ldap_authenticated = True
-            except Exception as exp:  # pylint: disable=broad-exception-caught
-                flash(f'LDAP Error: {exp}', 'danger')
+            except Exception:  # pylint: disable=broad-exception-caught
+                log.log("LDAP login failed", source="AUTH")
+                flash('LDAP Error', 'danger')
                 return render_template('login.html', **context)
 
         # Always wrong Password, even when user not exists
