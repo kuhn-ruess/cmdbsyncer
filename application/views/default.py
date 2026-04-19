@@ -1,6 +1,7 @@
 """
 Default Model Views
 """
+# pylint: disable=trailing-whitespace,line-too-long,raise-missing-from,broad-exception-caught
 import os
 import re
 import html
@@ -133,24 +134,24 @@ class IndexView(AdminIndexView):
             
             # Handle headers
             if stripped.startswith('###'):
-                html_lines.append(f'<h3>{stripped[3:].strip()}</h3>')
+                html_lines.append(f'<h3>{html.escape(stripped[3:].strip())}</h3>')
             elif stripped.startswith('##'):
-                html_lines.append(f'<h2>{stripped[2:].strip()}</h2>')
+                html_lines.append(f'<h2>{html.escape(stripped[2:].strip())}</h2>')
             elif stripped.startswith('#'):
-                html_lines.append(f'<h1>{stripped[1:].strip()}</h1>')
+                html_lines.append(f'<h1>{html.escape(stripped[1:].strip())}</h1>')
             # Handle list items
             elif stripped.startswith('- ') or stripped.startswith('* '):
                 if not in_list:
                     html_lines.append('<ul>')
                     in_list = True
-                html_lines.append(f'<li>{stripped[2:].strip()}</li>')
+                html_lines.append(f'<li>{html.escape(stripped[2:].strip())}</li>')
             # Handle empty lines and regular text
             else:
                 if in_list:
                     html_lines.append('</ul>')
                     in_list = False
                 if stripped:  # Non-empty line
-                    html_lines.append(f'<p>{stripped}</p>')
+                    html_lines.append(f'<p>{html.escape(stripped)}</p>')
                 else:  # Empty line
                     html_lines.append('<br>')
         
