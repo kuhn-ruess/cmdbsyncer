@@ -87,7 +87,7 @@ application = [
 ]
 
 [tool.pylint.main]
-init-hook = 'import sys; sys.path.append("./application")'
+init-hook = 'import sys; sys.path.extend([".", "./application"])'
 
 [tool.pylint.typecheck]
 # mongoengine's Document.objects is a QuerySetManager descriptor that pylint
