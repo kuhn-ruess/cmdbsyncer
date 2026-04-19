@@ -7,7 +7,9 @@ import pyotp
 from flask import request, render_template, current_app, \
      flash, redirect, session, Blueprint, url_for
 from flask_login import current_user, login_user, logout_user, login_required
-from authlib.jose import jwt, JoseError
+from joserfc import jwt
+from joserfc.jwk import OctKey
+from joserfc.errors import JoseError
 from mongoengine.errors import DoesNotExist
 
 from application import login_manager, app, log, limiter
@@ -215,9 +217,10 @@ def get_userid(token, purpose):
     that the token's pwd_iat still matches the user's current date_password
     (so a token becomes invalid as soon as the password is changed).
     """
-    key = current_app.config['SECRET_KEY']
+    key = OctKey.import_key(current_app.config['SECRET_KEY'])
     try:
-        data = jwt.decode(token, key)
+        decoded = jwt.decode(token, key)
+        data = decoded.claims
         if 'exp' in data:
             now = datetime.utcnow().timestamp()
             if now > data['exp']:
