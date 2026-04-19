@@ -150,6 +150,18 @@ class BaseConfig():
     # e.g. 'redis://localhost:6379' or 'mongodb://localhost:27017/cmdb-api'.
     RATELIMIT_STORAGE_URI = 'memory://'
 
+    # Number of trusted reverse-proxy hops between the client and the app.
+    # 0 (default) = no proxy, do NOT trust X-Forwarded-* headers.
+    #     Correct for mod_wsgi and direct deployments.
+    # 1 = one proxy hop (e.g. Apache/nginx in front of a Docker container).
+    #     Apache/nginx must set X-Forwarded-Proto correctly and the app
+    #     must only be reachable via the proxy.
+    # 2 = two hops (e.g. Cloudflare → nginx → app).
+    # When > 0, werkzeug.middleware.proxy_fix.ProxyFix rewrites
+    # request.scheme / request.remote_addr / request.host from the
+    # X-Forwarded-* headers of that depth.
+    TRUSTED_PROXIES = 0
+
     # LDAP login (enterprise feature)
     # If LDAP_LOGIN is enabled and the enterprise 'ldap_login' hook is registered,
     # the login view will attempt an LDAP bind before falling back to local passwords.

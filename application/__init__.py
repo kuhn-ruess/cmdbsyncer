@@ -21,6 +21,7 @@ from flask_mongoengine import MongoEngine
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from application.helpers.tablib_formater import ExportObjects
 
@@ -42,6 +43,21 @@ config_name = os.environ.get('config', 'base').lower()
 app.config.from_object(CONFIG_MAP.get(config_name, CONFIG_MAP['base']))
 if config_name == "base":
     app.jinja_env.auto_reload = True
+_trusted_proxies = int(app.config.get('TRUSTED_PROXIES', 0))
+if _trusted_proxies > 0:
+    # Apache/nginx reverse-proxy in front of the app. ProxyFix rewrites
+    # request.scheme / request.remote_addr / request.host from the
+    # X-Forwarded-* headers so request.is_secure reflects the real client
+    # connection. Only enable when the app sits behind a trusted proxy —
+    # leave at 0 for mod_wsgi or direct deployments, otherwise a client
+    # can spoof X-Forwarded-Proto and bypass the HTTPS API-auth gate.
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=_trusted_proxies,
+        x_proto=_trusted_proxies,
+        x_host=_trusted_proxies,
+    )
+
 csrf = CSRFProtect(app)
 limiter = Limiter(
     key_func=get_remote_address,
