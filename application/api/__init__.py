@@ -1,6 +1,7 @@
 """
 API
 """
+# pylint: disable=line-too-long
 from functools import wraps
 from flask import abort, request, current_app
 from mongoengine.errors import DoesNotExist
@@ -10,11 +11,13 @@ from application import log
 
 
 def _is_secure_api_request():
+    # request.is_secure reflects either a direct TLS connection or the
+    # proxy-rewritten scheme when TRUSTED_PROXIES is configured. The raw
+    # X-Forwarded-Proto header is intentionally NOT trusted here — a
+    # client could set it on an insecure connection and bypass the gate.
     if current_app.config.get("ALLOW_INSECURE_API_AUTH"):
         return True
     if request.is_secure:
-        return True
-    if request.headers.get("X-Forwarded-Proto", "").lower() == "https":
         return True
     if request.host.split(":", 1)[0].lower() == "localhost":
         return True
