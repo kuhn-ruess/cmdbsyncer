@@ -39,12 +39,9 @@ def run_hook(name, *args, **kwargs):
     return fn(*args, **kwargs) if fn else None
 
 
-if importlib.util.find_spec('cmdbsyncer_enterprise') is None:
-    load_status = 'not_installed'
-    _report("package not installed — running Community Edition")
-else:
+if importlib.util.find_spec('cmdbsyncer_enterprise'):
     try:
-        import cmdbsyncer_enterprise  # noqa: F401  pylint: disable=unused-import
+        import cmdbsyncer_enterprise  # noqa: F401  pylint: disable=unused-import, import-error
         load_status = 'active'
         _report("package loaded successfully")
     except Exception as exp:  # pylint: disable=broad-exception-caught
