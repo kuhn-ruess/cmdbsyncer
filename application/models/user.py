@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from flask import current_app
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from authlib.jose import jwt
+from joserfc import jwt
+from joserfc.jwk import OctKey
 from application import db
 
 roles = [
@@ -86,7 +87,7 @@ class User(db.Document, UserMixin):
         header = {
               'alg': 'HS256'
         }
-        key = current_app.config['SECRET_KEY']
+        key = OctKey.import_key(current_app.config['SECRET_KEY'])
         data = {
             'userid': str(self.id),
             'purpose': purpose,
@@ -96,7 +97,7 @@ class User(db.Document, UserMixin):
             'exp': int(exp.timestamp()),
         }
 
-        return jwt.encode(header=header, payload=data, key=key)
+        return jwt.encode(header, data, key)
 
 
     def is_admin(self):
