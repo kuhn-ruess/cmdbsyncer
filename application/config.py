@@ -1,4 +1,5 @@
 """ Config File """
+# pylint: disable=too-few-public-methods  # plain Flask config classes
 import os
 
 def _get_mongo_settings(default_host):
@@ -139,6 +140,15 @@ class BaseConfig():
     LABEL_PREVIEW_DISABLED = False
 
     REMOTE_USER_LOGIN = False
+
+    # Rate limit for login and password-reset request (Flask-Limiter syntax).
+    # Applied per client IP to the POST handler; GET (rendering the form) is
+    # not rate-limited.
+    AUTH_RATE_LIMIT = '3 per minute; 10 per hour'
+    # Flask-Limiter storage backend. Default is in-process memory, which is
+    # fine for single-worker deployments. For multiple workers, set to
+    # e.g. 'redis://localhost:6379' or 'mongodb://localhost:27017/cmdb-api'.
+    RATELIMIT_STORAGE_URI = 'memory://'
 
     # LDAP login (enterprise feature)
     # If LDAP_LOGIN is enabled and the enterprise 'ldap_login' hook is registered,
