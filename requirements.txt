@@ -17,3 +17,4 @@ sortedcontainers==2.4.0
 pyyml==0.0.2
 Flask-Admin==2.0.2
 pylint==4.0.5
+Flask-Limiter==4.1.1

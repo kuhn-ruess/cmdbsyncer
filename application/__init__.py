@@ -19,6 +19,8 @@ from flask_mail import Mail
 from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
 from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from application.helpers.tablib_formater import ExportObjects
 
@@ -41,6 +43,12 @@ app.config.from_object(CONFIG_MAP.get(config_name, CONFIG_MAP['base']))
 if config_name == "base":
     app.jinja_env.auto_reload = True
 csrf = CSRFProtect(app)
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    storage_uri=app.config.get('RATELIMIT_STORAGE_URI', 'memory://'),
+    headers_enabled=True,
+)
 
 
 ## Read Build Data

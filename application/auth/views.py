@@ -10,15 +10,22 @@ from flask_login import current_user, login_user, logout_user, login_required
 from authlib.jose import jwt, JoseError
 from mongoengine.errors import DoesNotExist
 
-from application import login_manager, app, log
+from application import login_manager, app, log, limiter
 from application.enterprise import run_hook
-
 from application.models.user import User
 from application.models.forms import LoginForm, RequestPasswordForm, ResetPasswordForm
 from application.modules.email import send_email
 
 
+AUTH_RATE_LIMIT = app.config.get('AUTH_RATE_LIMIT', '3 per minute; 10 per hour')
 AUTH = Blueprint('auth', __name__)
+
+
+@AUTH.errorhandler(429)
+def ratelimit_handler(_error):
+    """Generic message on rate-limit hit; details intentionally omitted."""
+    flash('Too many attempts. Please wait a moment and try again.', 'danger')
+    return redirect(request.path)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -31,6 +38,7 @@ def load_user(user_id):
         return None
 
 @AUTH.route('/login', methods=['GET', 'POST'])
+@limiter.limit(AUTH_RATE_LIMIT, methods=['POST'])
 def login():  # pylint: disable=too-many-return-statements,too-many-branches
     """
     Login Route
@@ -182,6 +190,7 @@ def change_password():
     return render_template('formular.html', form=form)
 
 @AUTH.route('/request-password', methods=['GET', 'POST'])
+@limiter.limit(AUTH_RATE_LIMIT, methods=['POST'])
 def request_password():
     """
     Password Request Page
