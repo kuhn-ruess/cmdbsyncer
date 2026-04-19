@@ -162,7 +162,6 @@ class SyncerAPITest(unittest.TestCase):
         entry.message = 'a message'
         entry.source = 'testsrc'
         entry.details = [detail]
-        entry.traceback = '  trace  '
         entry.has_error = False
         # Support LogEntry.objects().order_by('-id')[:limit]
         chain = MagicMock()
@@ -178,7 +177,7 @@ class SyncerAPITest(unittest.TestCase):
         self.assertEqual(item['entry_id'], 'abc123')
         self.assertEqual(item['source'], 'testsrc')
         self.assertEqual(item['details'], [{'name': 'info', 'message': 'hi'}])
-        self.assertEqual(item['traceback'], 'trace')
+        self.assertNotIn('traceback', item)
         self.assertFalse(item['has_error'])
 
     @_auth_patches
@@ -191,7 +190,6 @@ class SyncerAPITest(unittest.TestCase):
         entry.message = 'oops'
         entry.source = 'svc'
         entry.details = [detail]
-        entry.traceback = ''
         entry.has_error = True
         chain = MagicMock()
         chain.order_by.return_value.first.return_value = entry
@@ -202,6 +200,7 @@ class SyncerAPITest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.get_json()
         self.assertEqual(body['result']['entry_id'], 'xyz')
+        self.assertNotIn('traceback', body['result'])
         self.assertTrue(body['result']['has_error'])
         log_cls.objects.assert_called_once_with(source='svc')
 
