@@ -868,6 +868,28 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
     @_auth_patches
     @patch('application.api.objects.Host')
+    def test_inventory_bulk_rejects_without_partial_writes(self, host_cls):
+        # Pentest finding 2026-04-20: the endpoint iterated sequentially and
+        # persisted earlier items before aborting on a later invalid key.
+        first = MagicMock()
+        host_cls.get_host.return_value = first
+        payload = {
+            'inventories': [
+                {'hostname': 'a', 'key': 'facts', 'inventory': {'cpu': 1}},
+                {'hostname': 'b', 'key': '$bad', 'inventory': {'cpu': 2}},
+            ],
+        }
+        resp = self.client.post(
+            '/api/v1/objects/bulk/inventory',
+            headers=self.headers,
+            json=payload,
+        )
+        self.assertEqual(resp.status_code, 400)
+        first.save.assert_not_called()
+        first.update_inventory.assert_not_called()
+
+    @_auth_patches
+    @patch('application.api.objects.Host')
     def test_inventory_bulk_rejects_unsafe_key(self, host_cls):
         host = MagicMock()
         host.update_inventory.side_effect = ValueError("inventory key must be a non-empty string")

@@ -347,6 +347,10 @@ for _mod_name, _mod_path in [
 # Load the real api/__init__, api/syncer, api/objects files under their
 # canonical module names. They import User/Account/LogEntry/Host etc. from
 # the stubs above — no live MongoDB needed.
+_load_real_module(
+    "application.helpers.mongo_keys",
+    os.path.join("helpers", "mongo_keys.py"),
+)
 _stub_package("application.api", path=[os.path.join(_APP_ROOT, "api")])
 _load_real_module(
     "application.api",

@@ -12,6 +12,7 @@ from application.models.host import Host
 from application.plugins.checkmk.models import CheckmkFolderPool
 
 from application.helpers.get_account import get_account_by_name, AccountNotFoundError
+from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 
 API = Namespace('objects')
 
@@ -245,6 +246,16 @@ class HostDetailInventoryBulkApi(Resource):
     def post(self):
         """ Update Inventories of Hosts in BULK """
         req_json = request.json
+        # Pre-validate every item so a bad key later in the payload cannot
+        # leave earlier items already persisted. Model-level validation
+        # still runs per update; this pre-pass just moves the failure
+        # upstream of any save().
+        for inv in req_json['inventories']:
+            try:
+                validate_mongo_key(inv['key'], "inventory")
+                validate_mongo_keys(inv['inventory'], "inventory")
+            except ValueError as exc:
+                abort(400, str(exc))
         count = 0
         not_found = []
         for inv in req_json['inventories']:
@@ -256,10 +267,7 @@ class HostDetailInventoryBulkApi(Resource):
             if not host_obj:
                 not_found.append(hostname)
                 continue
-            try:
-                host_obj.update_inventory(key, inventory)
-            except ValueError as exc:
-                abort(400, str(exc))
+            host_obj.update_inventory(key, inventory)
             host_obj.save()
             count += 1
         status = f'saved {count}'
