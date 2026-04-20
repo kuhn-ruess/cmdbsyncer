@@ -2,7 +2,6 @@
 """
 Ansible Checkmk Modul
 """
-import jinja2
 from mongoengine.errors import DoesNotExist
 from application.plugins.checkmk.models import CheckmkSite
 from application.modules.plugin import Plugin
@@ -22,10 +21,14 @@ class SyncSites(Plugin):
         if site.settings_master.server_user:
             inventory['ansible_user'] =  site.settings_master.server_user
 
-        # Render Jinja Templates for various settings
-        file_template = jinja2.Template(site.settings_master.cmk_version_filename,)
-        filename = file_template.render(CMK_VERSION=site.settings_master.cmk_version,
-                                        CMK_EDITION=site.settings_master.cmk_edition)
+        # Render Jinja Templates for various settings through the sandboxed
+        # helper so admin-editable settings cannot execute arbitrary code.
+        filename = render_jinja(
+            site.settings_master.cmk_version_filename,
+            replace_newlines=False,
+            CMK_VERSION=site.settings_master.cmk_version,
+            CMK_EDITION=site.settings_master.cmk_edition,
+        )
 
         # Render user, secret, and server with syncer_jinja
         cmk_user = render_jinja(site.settings_master.cmk_user or "")
@@ -46,7 +49,8 @@ class SyncSites(Plugin):
             'cmk_downtime_range': 1,
             'webserver_certificate': site.settings_master.webserver_certificate,
             'webserver_private_certificate': site.settings_master.webserver_certificate_private_key,
-            'webserver_intermediate_certificate': site.settings_master.webserver_certificate_intermediate,
+            'webserver_intermediate_certificate':
+                site.settings_master.webserver_certificate_intermediate,
         })
         for custom_var in site.custom_ansible_variables:
             inventory[custom_var.variable_name] = custom_var.variable_value

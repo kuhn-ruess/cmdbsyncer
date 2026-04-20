@@ -95,5 +95,51 @@ class IdoitRulesSandboxTest(unittest.TestCase):
         self.assertEqual(outcomes['description'], 'host-web01')
 
 
+class CheckmkSiteSyncerSandboxTest(unittest.TestCase):
+    """application/plugins/ansible/site_syncer.py must sandbox filename rendering."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Ensure the real syncer_jinja is loaded (IdoitRulesSandboxTest also
+        # loads it, but don't rely on class ordering).
+        get_acc = sys.modules['application.helpers.get_account']
+        if not hasattr(get_acc, 'get_account_variable'):
+            get_acc.get_account_variable = MagicMock(name='stub.get_account_variable')
+        if not hasattr(sys.modules.get('application.helpers.syncer_jinja'), 'JINJA_ENV'):
+            _load_source(
+                'application.helpers.syncer_jinja',
+                os.path.join('application', 'helpers', 'syncer_jinja.py'),
+            )
+        cls.module = _load_source(
+            'application.plugins.ansible.site_syncer',
+            os.path.join('application', 'plugins', 'ansible', 'site_syncer.py'),
+        )
+
+    @staticmethod
+    def _make_site(filename_template):
+        site = MagicMock()
+        site.settings_master.cmk_version_filename = filename_template
+        site.settings_master.cmk_version = '2.3.0'
+        site.settings_master.cmk_edition = 'cre'
+        site.settings_master.server_user = None
+        site.custom_ansible_variables = []
+        return site
+
+    def test_version_filename_rejects_rce_payload(self):
+        syncer = self.module.SyncSites.__new__(self.module.SyncSites)
+        site = self._make_site(_RCE_PAYLOAD)
+        with self.assertRaises(SecurityError):
+            syncer.get_site_data(site)
+
+    def test_version_filename_benign_template_renders(self):
+        syncer = self.module.SyncSites.__new__(self.module.SyncSites)
+        site = self._make_site('check-mk-{{ CMK_EDITION }}-{{ CMK_VERSION }}.deb')
+        inventory = syncer.get_site_data(site)
+        self.assertEqual(
+            inventory['cmk_version_filename'],
+            'check-mk-cre-2.3.0.deb',
+        )
+
+
 if __name__ == '__main__':
     unittest.main()
