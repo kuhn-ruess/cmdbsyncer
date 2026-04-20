@@ -333,6 +333,19 @@ def self_configure():
     else:
         print(" -> Existed")
 
+    print("Check for plugins/ directory")
+    if not os.path.isdir('plugins'):
+        os.makedirs('plugins')
+        with open('plugins/__init__.py', 'w', encoding="utf-8") as pf:
+            pf.write('"""Local plugins package."""\n')
+        print(" -> Created new plugins/ directory")
+    elif not os.path.isfile('plugins/__init__.py'):
+        with open('plugins/__init__.py', 'w', encoding="utf-8") as pf:
+            pf.write('"""Local plugins package."""\n')
+        print(" -> Added missing plugins/__init__.py")
+    else:
+        print(" -> Existed")
+
     print("Seed missing Default Values to the local_config.py")
     alphabet = string.ascii_letters + string.digits + string.punctuation
     values = {
