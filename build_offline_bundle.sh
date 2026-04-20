@@ -6,24 +6,25 @@
 #
 # Usage:
 #   ./build_offline_bundle.sh [--extras] [--ansible] [--all]
-#                             [--include-syncer]
+#                             [--include-syncer] [--include-enterprise]
 #                             [--python-version 3.11]
 #                             [--platform manylinux2014_x86_64]
 #                             [--output-dir offline_bundle]
 #                             [--no-archive]
 #
 # Options:
-#   --extras           Include requirements-extras.txt (LDAP, ODBC, vmware, ...)
-#   --ansible          Include requirements-ansible.txt (Kerberos, WinRM, ...)
-#   --all              Shortcut for --extras --ansible
-#   --include-syncer   Also download cmdbsyncer from PyPI into the bundle
-#   --python-version   Target Python version, e.g. 3.11
-#   --platform         Target platform tag, e.g. manylinux2014_x86_64
-#   --output-dir DIR   Output directory (default: offline_bundle)
-#   --no-archive       Do not create a tar.gz, only the directory
+#   --extras              Include requirements-extras.txt (LDAP, ODBC, vmware)
+#   --ansible             Include requirements-ansible.txt (Kerberos, WinRM)
+#   --all                 Shortcut for --extras --ansible
+#   --include-syncer      Also download cmdbsyncer from PyPI into the bundle
+#   --include-enterprise  Also download cmdbsyncer-enterprise from PyPI
+#   --python-version      Target Python version, e.g. 3.11
+#   --platform            Target platform tag, e.g. manylinux2014_x86_64
+#   --output-dir DIR      Output directory (default: offline_bundle)
+#   --no-archive          Do not create a tar.gz, only the directory
 #
 # Example (typical Linux target server, Python 3.11):
-#   ./build_offline_bundle.sh --all --include-syncer \
+#   ./build_offline_bundle.sh --all --include-syncer --include-enterprise \
 #       --python-version 3.11 \
 #       --platform manylinux2014_x86_64
 #
@@ -36,6 +37,7 @@ cd "$SCRIPT_DIR"
 INCLUDE_EXTRAS=0
 INCLUDE_ANSIBLE=0
 INCLUDE_SYNCER=0
+INCLUDE_ENTERPRISE=0
 PYTHON_VERSION=""
 PLATFORM=""
 OUTPUT_DIR="offline_bundle"
@@ -44,16 +46,17 @@ CREATE_ARCHIVE=1
 # --- Argumente --------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --extras)          INCLUDE_EXTRAS=1; shift ;;
-        --ansible)         INCLUDE_ANSIBLE=1; shift ;;
-        --all)             INCLUDE_EXTRAS=1; INCLUDE_ANSIBLE=1; shift ;;
-        --include-syncer)  INCLUDE_SYNCER=1; shift ;;
-        --python-version)  PYTHON_VERSION="$2"; shift 2 ;;
-        --platform)        PLATFORM="$2"; shift 2 ;;
-        --output-dir)      OUTPUT_DIR="$2"; shift 2 ;;
-        --no-archive)      CREATE_ARCHIVE=0; shift ;;
+        --extras)              INCLUDE_EXTRAS=1; shift ;;
+        --ansible)             INCLUDE_ANSIBLE=1; shift ;;
+        --all)                 INCLUDE_EXTRAS=1; INCLUDE_ANSIBLE=1; shift ;;
+        --include-syncer)      INCLUDE_SYNCER=1; shift ;;
+        --include-enterprise)  INCLUDE_ENTERPRISE=1; shift ;;
+        --python-version)      PYTHON_VERSION="$2"; shift 2 ;;
+        --platform)            PLATFORM="$2"; shift 2 ;;
+        --output-dir)          OUTPUT_DIR="$2"; shift 2 ;;
+        --no-archive)          CREATE_ARCHIVE=0; shift ;;
         -h|--help)
-            sed -n '2,29p' "$0"; exit 0 ;;
+            sed -n '2,30p' "$0"; exit 0 ;;
         *)
             echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -95,20 +98,27 @@ done
 echo "Lade Pakete herunter nach $OUTPUT_DIR/packages ..."
 python3 -m pip "${PIP_ARGS[@]}"
 
-# --- Optional: cmdbsyncer selbst von PyPI beilegen --------------------------
-if [[ $INCLUDE_SYNCER -eq 1 ]]; then
-    echo "Lade cmdbsyncer von PyPI ..."
-    SYNCER_PIP_ARGS=(download --no-deps --dest "$OUTPUT_DIR/packages")
-    [[ -n "$PLATFORM" ]]       && SYNCER_PIP_ARGS+=(--platform "$PLATFORM" --only-binary=:all:)
-    [[ -n "$PYTHON_VERSION" ]] && SYNCER_PIP_ARGS+=(--python-version "$PYTHON_VERSION")
-    SYNCER_PIP_ARGS+=(cmdbsyncer)
-    python3 -m pip "${SYNCER_PIP_ARGS[@]}"
-fi
+# --- Optional: cmdbsyncer und cmdbsyncer-enterprise von PyPI beilegen -------
+download_from_pypi() {
+    local pkg="$1"
+    echo "Lade $pkg von PyPI ..."
+    local args=(download --no-deps --dest "$OUTPUT_DIR/packages")
+    [[ -n "$PLATFORM" ]]       && args+=(--platform "$PLATFORM" --only-binary=:all:)
+    [[ -n "$PYTHON_VERSION" ]] && args+=(--python-version "$PYTHON_VERSION")
+    args+=("$pkg")
+    python3 -m pip "${args[@]}"
+}
+
+[[ $INCLUDE_SYNCER     -eq 1 ]] && download_from_pypi "cmdbsyncer"
+[[ $INCLUDE_ENTERPRISE -eq 1 ]] && download_from_pypi "cmdbsyncer-enterprise"
 
 # --- Install-Script fuer den Kunden beilegen --------------------------------
-INSTALL_SYNCER_LINE=""
-if [[ $INCLUDE_SYNCER -eq 1 ]]; then
-    INSTALL_SYNCER_LINE='PIP_ARGS+=(cmdbsyncer)'
+EXTRA_PACKAGES=""
+[[ $INCLUDE_SYNCER     -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer"
+[[ $INCLUDE_ENTERPRISE -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer-enterprise"
+INSTALL_EXTRA_LINE=""
+if [[ -n "$EXTRA_PACKAGES" ]]; then
+    INSTALL_EXTRA_LINE="PIP_ARGS+=($EXTRA_PACKAGES)"
 fi
 
 cat > "$OUTPUT_DIR/install.sh" <<EOS
@@ -123,7 +133,7 @@ REQ_FILES=(requirements.txt)
 
 PIP_ARGS=(install --no-index --find-links "\$HERE/packages" --upgrade)
 for f in "\${REQ_FILES[@]}"; do PIP_ARGS+=(-r "\$HERE/\$f"); done
-${INSTALL_SYNCER_LINE}
+${INSTALL_EXTRA_LINE}
 
 python3 -m pip "\${PIP_ARGS[@]}"
 echo "Installation abgeschlossen."
