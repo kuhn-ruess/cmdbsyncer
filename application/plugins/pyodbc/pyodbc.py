@@ -38,7 +38,10 @@ class ODBC(Plugin):
                   f"{cc.UNDERLINE}{self.config['name']}{cc.ENDC}")
 
             found_hosts = 0
-            logger.debug(self.config)
+            logger.debug(
+                "ODBC config: %s",
+                {k: ('***' if k == 'password' else v) for k, v in self.config.items()},
+            )
             serverport = self.config.get('serverport')
             if not serverport:
                 serverport = sqlserverport.lookup(self.config['address'], self.config['instance'])
@@ -53,7 +56,10 @@ class ODBC(Plugin):
             trust_cert = str(self.config.get('trust_server_certificate', '')).strip().lower()
             if trust_cert in ('yes', 'true', '1'):
                 connect_str += ';TrustServerCertificate=YES'
-            logger.debug(connect_str)
+            logger.debug(
+                "ODBC connect string: %s",
+                connect_str.replace(f'PWD={self.config["password"]}', 'PWD=***'),
+            )
             cnxn = pyodbc.connect(connect_str)
             cursor = cnxn.cursor()
 
