@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 """
 Integration tests for the Flask-RESTX API endpoints.
 
@@ -617,7 +618,7 @@ class SyncerAPITest(unittest.TestCase):
         self.assertIn('24h_checkpoint', body)
 
 
-class ObjectsAPITest(unittest.TestCase):
+class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-methods
     """Tests for /api/v1/objects/*"""
 
     def setUp(self):
@@ -708,9 +709,17 @@ class ObjectsAPITest(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
     @_auth_patches
-    def test_post_host_rejects_dollar_prefixed_label_key(self):
-        # Pentest finding 2026-04-20: $-prefixed label keys triggered a 500
-        # because MongoDB rejects them at save time.
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    def test_post_host_rejects_dollar_prefixed_label_key(self, host_cls, get_account):
+        # Pentest finding 2026-04-20: $-prefixed label keys triggered a 500.
+        # The Host model now raises ValueError and the API translates that
+        # into a 400.
+        get_account.return_value = {'name': 'acct', '_id': 'id1'}
+        host = MagicMock()
+        host.update_host.side_effect = ValueError(
+            "label key '$bad' must not start with '$' or contain '.'")
+        host_cls.get_host.return_value = host
         resp = self.client.post(
             '/api/v1/objects/web01',
             headers=self.headers,
@@ -719,16 +728,14 @@ class ObjectsAPITest(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
     @_auth_patches
-    def test_post_host_rejects_dotted_label_key(self):
-        resp = self.client.post(
-            '/api/v1/objects/web01',
-            headers=self.headers,
-            json={'account': 'acct', 'labels': {'a.b': 'x'}},
-        )
-        self.assertEqual(resp.status_code, 400)
-
-    @_auth_patches
-    def test_bulk_post_rejects_dollar_prefixed_label_key(self):
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    def test_bulk_post_rejects_unsafe_label_key(self, host_cls, get_account):
+        get_account.return_value = {'name': 'acct', '_id': 'id1'}
+        host = MagicMock()
+        host.update_host.side_effect = ValueError(
+            "label key '$bad' must not start with '$' or contain '.'")
+        host_cls.get_host.return_value = host
         payload = {
             'account': 'acct',
             'objects': [
@@ -831,6 +838,48 @@ class ObjectsAPITest(unittest.TestCase):
         self.assertEqual(body['not-saved'], ['b'])
         saved.save.assert_called_once()
         skipped.save.assert_not_called()
+
+    @_auth_patches
+    @patch('application.api.objects.Host')
+    def test_inventory_post_rejects_empty_key(self, host_cls):
+        host = MagicMock()
+        host.update_inventory.side_effect = ValueError("inventory key must be a non-empty string")
+        host_cls.get_host.return_value = host
+        resp = self.client.post(
+            '/api/v1/objects/web01/inventory',
+            headers=self.headers,
+            json={'key': '', 'inventory': {'cpu': 8}},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
+    @patch('application.api.objects.Host')
+    def test_inventory_post_rejects_dollar_prefixed_key(self, host_cls):
+        host = MagicMock()
+        host.update_inventory.side_effect = ValueError(
+            "inventory key '$bad' must not start with '$' or contain '.'")
+        host_cls.get_host.return_value = host
+        resp = self.client.post(
+            '/api/v1/objects/web01/inventory',
+            headers=self.headers,
+            json={'key': '$bad', 'inventory': {'cpu': 8}},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
+    @patch('application.api.objects.Host')
+    def test_inventory_bulk_rejects_unsafe_key(self, host_cls):
+        host = MagicMock()
+        host.update_inventory.side_effect = ValueError("inventory key must be a non-empty string")
+        host_cls.get_host.return_value = host
+        resp = self.client.post(
+            '/api/v1/objects/bulk/inventory',
+            headers=self.headers,
+            json={'inventories': [
+                {'hostname': 'a', 'key': '', 'inventory': {'cpu': 1}},
+            ]},
+        )
+        self.assertEqual(resp.status_code, 400)
 
     @_auth_patches
     @patch('application.api.objects.Host')

@@ -8,6 +8,7 @@ from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
+from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.models.account import object_types
 
 class HostError(Exception):
@@ -292,6 +293,7 @@ class Host(db.Document):
         but checks first if needed and also sets
         set_import_sync and import_seen as needed
         """
+        validate_mongo_keys(labels, "label")
         if app.config['LABELS_ITERATE_FIRST_LEVEL']:
             for key, value in list(labels.items()):
                 if isinstance(value, dict):
@@ -346,6 +348,7 @@ class Host(db.Document):
         """
         Set a Singe Attribute to the Inventory and Save it
         """
+        validate_mongo_key(key, "inventory")
         if key in self.inventory:
             if self.inventory[key] != value:
                 self.inventory[key] = value
@@ -393,8 +396,8 @@ class Host(db.Document):
            key (string): Identifier for Inventory Attributes
            new_data (dict): Key:Value of Attributes.
         """
-        if not key:
-            raise ValueError("Inventory Key not set")
+        validate_mongo_key(key, "inventory")
+        validate_mongo_keys(new_data, "inventory")
         if config and not self._inventory_match_passes(new_data, config):
             return
 
