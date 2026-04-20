@@ -238,6 +238,19 @@ class BaseConfig():
 
     PROCESS_TIMEOUT = 15
 
+    # Email / SMTP (used for password-reset mails and other notifications).
+    # Flask-Mail picks up MAIL_SERVER/MAIL_PORT/MAIL_USE_TLS/MAIL_USE_SSL/
+    # MAIL_USERNAME/MAIL_PASSWORD directly; MAIL_SENDER and
+    # MAIL_SUBJECT_PREFIX are read by application/modules/email.py.
+    MAIL_SERVER = 'localhost'
+    MAIL_PORT = 25
+    MAIL_USE_TLS = False
+    MAIL_USE_SSL = False
+    MAIL_USERNAME = None
+    MAIL_PASSWORD = None
+    MAIL_SENDER = 'cmdbsyncer@localhost'
+    MAIL_SUBJECT_PREFIX = '[CMDBsyncer]'
+
 class ProductionConfig(BaseConfig):
     """
     Production Configuration.
