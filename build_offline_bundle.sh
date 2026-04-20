@@ -43,7 +43,7 @@ PLATFORM=""
 OUTPUT_DIR="offline_bundle"
 CREATE_ARCHIVE=1
 
-# --- Argumente --------------------------------------------------------------
+# --- Arguments --------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --extras)              INCLUDE_EXTRAS=1; shift ;;
@@ -62,27 +62,27 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# --- Requirements sammeln ---------------------------------------------------
+# --- Collect requirements ---------------------------------------------------
 REQ_FILES=("requirements.txt")
 [[ $INCLUDE_EXTRAS  -eq 1 ]] && REQ_FILES+=("requirements-extras.txt")
 [[ $INCLUDE_ANSIBLE -eq 1 ]] && REQ_FILES+=("requirements-ansible.txt")
 
 for f in "${REQ_FILES[@]}"; do
-    [[ -f "$f" ]] || { echo "Fehlende Datei: $f" >&2; exit 1; }
+    [[ -f "$f" ]] || { echo "Missing file: $f" >&2; exit 1; }
 done
 
-# --- Zielordner aufraeumen --------------------------------------------------
+# --- Clean output directory -------------------------------------------------
 if [[ -d "$OUTPUT_DIR" ]]; then
-    echo "Raeume alten Zielordner auf: $OUTPUT_DIR"
+    echo "Removing previous output directory: $OUTPUT_DIR"
     rm -rf "$OUTPUT_DIR"
 fi
 mkdir -p "$OUTPUT_DIR/packages"
 
-# --- pip download Argumente -------------------------------------------------
+# --- pip download arguments -------------------------------------------------
 PIP_ARGS=(download --dest "$OUTPUT_DIR/packages")
 
-# Wenn eine Ziel-Plattform angegeben ist, duerfen keine Quell-Distributionen
-# gebaut werden. --only-binary :all: erzwingt wheels fuer ALLE Pakete.
+# When a target platform is specified, source distributions cannot be
+# resolved locally. --only-binary :all: forces wheels for every package.
 if [[ -n "$PLATFORM" ]]; then
     PIP_ARGS+=(--platform "$PLATFORM" --only-binary=:all:)
 fi
@@ -95,13 +95,13 @@ for f in "${REQ_FILES[@]}"; do
     cp "$f" "$OUTPUT_DIR/"
 done
 
-echo "Lade Pakete herunter nach $OUTPUT_DIR/packages ..."
+echo "Downloading packages into $OUTPUT_DIR/packages ..."
 python3 -m pip "${PIP_ARGS[@]}"
 
-# --- Optional: cmdbsyncer und cmdbsyncer-enterprise von PyPI beilegen -------
+# --- Optional: ship cmdbsyncer and cmdbsyncer-enterprise from PyPI ----------
 download_from_pypi() {
     local pkg="$1"
-    echo "Lade $pkg von PyPI ..."
+    echo "Downloading $pkg from PyPI ..."
     local args=(download --no-deps --dest "$OUTPUT_DIR/packages")
     [[ -n "$PLATFORM" ]]       && args+=(--platform "$PLATFORM" --only-binary=:all:)
     [[ -n "$PYTHON_VERSION" ]] && args+=(--python-version "$PYTHON_VERSION")
@@ -112,7 +112,7 @@ download_from_pypi() {
 [[ $INCLUDE_SYNCER     -eq 1 ]] && download_from_pypi "cmdbsyncer"
 [[ $INCLUDE_ENTERPRISE -eq 1 ]] && download_from_pypi "cmdbsyncer-enterprise"
 
-# --- Install-Script fuer den Kunden beilegen --------------------------------
+# --- Customer-facing install script -----------------------------------------
 EXTRA_PACKAGES=""
 [[ $INCLUDE_SYNCER     -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer"
 [[ $INCLUDE_ENTERPRISE -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer-enterprise"
@@ -123,7 +123,7 @@ fi
 
 cat > "$OUTPUT_DIR/install.sh" <<EOS
 #!/usr/bin/env bash
-# Offline-Installer: installiert alle mitgelieferten Python-Pakete.
+# Offline installer: installs every bundled Python package.
 set -euo pipefail
 HERE="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 
@@ -136,7 +136,7 @@ for f in "\${REQ_FILES[@]}"; do PIP_ARGS+=(-r "\$HERE/\$f"); done
 ${INSTALL_EXTRA_LINE}
 
 python3 -m pip "\${PIP_ARGS[@]}"
-echo "Installation abgeschlossen."
+echo "Installation complete."
 EOS
 chmod +x "$OUTPUT_DIR/install.sh"
 
@@ -174,12 +174,12 @@ Notes
   distribution was shipped instead of a wheel.
 EOS
 
-# --- Archiv bauen -----------------------------------------------------------
+# --- Build the archive ------------------------------------------------------
 if [[ $CREATE_ARCHIVE -eq 1 ]]; then
     ARCHIVE="${OUTPUT_DIR}.tar.gz"
-    echo "Erzeuge Archiv: $ARCHIVE"
+    echo "Creating archive: $ARCHIVE"
     tar -czf "$ARCHIVE" "$OUTPUT_DIR"
-    echo "Fertig: $ARCHIVE ($(du -h "$ARCHIVE" | cut -f1))"
+    echo "Done: $ARCHIVE ($(du -h "$ARCHIVE" | cut -f1))"
 else
-    echo "Fertig: $OUTPUT_DIR ($(du -sh "$OUTPUT_DIR" | cut -f1))"
+    echo "Done: $OUTPUT_DIR ($(du -sh "$OUTPUT_DIR" | cut -f1))"
 fi
