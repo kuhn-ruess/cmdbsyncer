@@ -1,48 +1,75 @@
-#!/bin/bash
-# Simple Helper
-# .local.
-CONTAINER=cmdb_syncer
+#!/usr/bin/env bash
+# Simple Helper for CMDB Syncer dev jobs.
+#
+# Auto-detects the container runtime (docker preferred, podman fallback).
+# Override with CONTAINER_RUNTIME=docker or CONTAINER_RUNTIME=podman.
+set -euo pipefail
+
+PROJECT=cmdb_syncer
 APPLICATION=cmdb_syncer-api-1
 
-case "$1" in
+RUNTIME="${CONTAINER_RUNTIME:-}"
+if [ -z "$RUNTIME" ]; then
+    if command -v docker >/dev/null 2>&1; then
+        RUNTIME=docker
+    elif command -v podman >/dev/null 2>&1; then
+        RUNTIME=podman
+    else
+        echo "Neither docker nor podman found on PATH." >&2
+        exit 1
+    fi
+fi
+
+case "$RUNTIME" in
+    docker) COMPOSE=(docker compose) ;;
+    podman) COMPOSE=(podman-compose) ;;
+    *) echo "Unsupported CONTAINER_RUNTIME: $RUNTIME" >&2; exit 1 ;;
+esac
+
+compose() {
+    "${COMPOSE[@]}" -f docker-compose.yml -f docker-compose.local.yml -p "$PROJECT" "$@"
+}
+
+case "${1:-}" in
 "up")
-    docker compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER rm
-    docker compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER up --build --force-recreate
+    compose rm
+    compose up --build --force-recreate
     ;;
 "start")
-    docker compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER start
+    compose start
     ;;
 "stop")
-    docker compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER stop
+    compose stop
     ;;
 "restart")
-    docker compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER stop
-    docker compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER start
+    compose stop
+    compose start
     ;;
 "down")
-    docker compose -f docker-compose.yml -f docker-compose.local.yml -p $CONTAINER down --rmi local --remove-orphans
+    compose down --rmi local --remove-orphans
     ;;
 "cmdbsyncer")
-    docker exec -it $APPLICATION ./"$@"
+    shift
+    "$RUNTIME" exec -it "$APPLICATION" ./cmdbsyncer "$@"
     ;;
 "logs")
     echo "Start Container Logs"
-    docker logs -f $APPLICATION
+    "$RUNTIME" logs -f "$APPLICATION"
     ;;
 "shell")
     echo "Start Container Shell"
-    docker exec -it $APPLICATION sh
+    "$RUNTIME" exec -it "$APPLICATION" sh
     ;;
 "create_user")
     echo "Create User"
-    docker exec -it $APPLICATION ./cmdbsyncer sys create_user "$2"
+    "$RUNTIME" exec -it "$APPLICATION" ./cmdbsyncer sys create_user "${2:-}"
     ;;
 "bve")
     python3 -m venv ENV
     ;;
 *)
     echo "Simple Helper for CMDB Syncer Jobs."
-    echo "For Docker Compose: up, down, start, stop, logs and shell are the options"
-    echo "Create a venv with bve"
+    echo "Runtime: $RUNTIME (override with CONTAINER_RUNTIME=docker|podman)"
+    echo "Commands: up, down, start, stop, restart, logs, shell, cmdbsyncer, create_user EMAIL, bve"
     ;;
 esac

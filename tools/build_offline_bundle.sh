@@ -5,7 +5,7 @@
 # can install with pip on a server without internet access.
 #
 # Usage:
-#   ./build_offline_bundle.sh [--extras] [--ansible] [--all]
+#   ./tools/build_offline_bundle.sh [--extras] [--ansible] [--all]
 #                             [--include-syncer] [--include-enterprise]
 #                             [--python-version 3.11]
 #                             [--platform manylinux2014_x86_64]
@@ -24,14 +24,15 @@
 #   --no-archive          Do not create a tar.gz, only the directory
 #
 # Example (typical Linux target server, Python 3.11):
-#   ./build_offline_bundle.sh --all --include-syncer --include-enterprise \
+#   ./tools/build_offline_bundle.sh --all --include-syncer --include-enterprise \
 #       --python-version 3.11 \
 #       --platform manylinux2014_x86_64
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
 
 # --- Defaults ---------------------------------------------------------------
 INCLUDE_EXTRAS=0

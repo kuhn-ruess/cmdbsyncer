@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test runner that discovers tests in tests/ and all plugin test directories.
 
@@ -7,10 +8,23 @@ dependencies, then auto-discovers test files in:
   - application/plugins/*/tests/
 """
 import glob
+import os
 import sys
 import unittest
 
-import tests  # pylint: disable=unused-import  # noqa: F401 — bootstrap stubs
+# Discovery paths below are relative — anchor to the script's directory so
+# the runner works regardless of the caller's cwd.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.getcwd())
+
+# Re-exec under the project virtualenv if one exists and we're not already
+# inside it, so `./run_tests.py` works without `source venv/bin/activate`.
+for _venv_python in (".venv/bin/python", "venv/bin/python"):
+    _venv_python = os.path.abspath(_venv_python)
+    if os.path.isfile(_venv_python) and os.path.abspath(sys.executable) != _venv_python:
+        os.execv(_venv_python, [_venv_python, __file__, *sys.argv[1:]])
+
+import tests  # pylint: disable=unused-import,wrong-import-position  # noqa: F401,E402 — bootstrap stubs
 
 loader = unittest.TestLoader()
 suite = unittest.TestSuite()
