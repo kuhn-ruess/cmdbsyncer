@@ -26,6 +26,13 @@ class CustomAttributeRule(Rule):
                 attribute_value = True
             elif attribute_value == 'False':
                 attribute_value = False
+            elif (isinstance(attribute_value, str)
+                    and '{{' not in attribute_value
+                    and '{%' not in attribute_value):
+                # Literal string — no Jinja syntax, skip the render
+                # pipeline. At sync scale (N hosts × M matched rules)
+                # this avoids one Jinja parse/render per outcome.
+                attribute_value = attribute_value.strip()
             else:
                 attribute_value = render_jinja(attribute_value, mode="nullify",
                                              FIRST_MATCHING_TAG=self.first_matching_tag,

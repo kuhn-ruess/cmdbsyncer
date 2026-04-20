@@ -173,19 +173,28 @@ class Rule():
     def _iter_rule_docs(self):
         """
         Materialise `rule.to_mongo()` once per rules QuerySet and cache
-        the result. `self.rules` is typically a mongoengine QuerySet that
-        is evaluated repeatedly — one `.to_mongo()` per rule per host —
-        even though the rules themselves don't change across the run.
-        Cache is invalidated when the identity of `self.rules` changes.
+        the result together with per-rule outcome dicts. `self.rules` is
+        typically a mongoengine QuerySet that is evaluated repeatedly —
+        one `.to_mongo()` per rule per host — even though the rules
+        themselves don't change across the run. Cache is invalidated
+        when the identity of `self.rules` changes.
+
+        Returns a tuple of three parallel lists:
+        - rule objects (for .name access during debug)
+        - rule docs    (SON mapping from to_mongo())
+        - outcome lists (each a list of plain dicts, pre-converted once)
         """
         current_key = id(self.rules)
         cache = self._rule_docs_cache
         if cache is not None and cache[0] == current_key:
-            return cache[1], cache[2]
+            return cache[1], cache[2], cache[3]
         objs = list(self.rules)
         docs = [rule.to_mongo() for rule in objs]
-        self._rule_docs_cache = (current_key, objs, docs)
-        return objs, docs
+        outcomes_per_rule = [
+            [dict(x) for x in doc.get('outcomes', [])] for doc in docs
+        ]
+        self._rule_docs_cache = (current_key, objs, docs, outcomes_per_rule)
+        return objs, docs, outcomes_per_rule
 
     # pylint: disable=too-many-branches
     def check_rules(self, hostname):
@@ -212,8 +221,9 @@ class Rule():
             table.add_column("Last Match")
 
         outcomes = {}
-        rule_objs, rule_docs = self._iter_rule_docs()
-        for rule_obj, rule in zip(rule_objs, rule_docs):
+        rule_objs, rule_docs, rule_outcomes_list = self._iter_rule_docs()
+        for rule_obj, rule, rule_outcomes_dicts in zip(
+                rule_objs, rule_docs, rule_outcomes_list):
             if debug_advanced:
                 logger.debug('##########################')
                 logger.debug('Check Rule: %s', rule_obj.name)
@@ -257,7 +267,9 @@ class Rule():
                 table.add_row(str(rule_hit), rule_descriptions[rule['condition_typ']],\
                               rule['name'][:30], str(rule['_id']), str(rule['last_match']))
             if rule_hit:
-                outcomes = self.add_outcomes(rule, [dict(x) for x in rule['outcomes']], outcomes)
+                # outcomes were pre-converted to plain dicts in
+                # _iter_rule_docs so we don't rebuild them per host.
+                outcomes = self.add_outcomes(rule, rule_outcomes_dicts, outcomes)
                 # If rule has matched, and option is set, we are done
                 if rule['last_match']:
                     break
