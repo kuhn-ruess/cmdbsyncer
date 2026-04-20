@@ -1,12 +1,11 @@
 """
 Checkmk Inventorize
 """
-import base64
-import ast
+# pylint: disable=too-many-locals,too-many-branches,too-many-nested-blocks
 import json
+import multiprocessing
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-import multiprocessing
 
 from application.models.host import Host, app
 from application.plugins.checkmk.models import (
@@ -29,7 +28,7 @@ class InventorizeHosts(CMK2):
     fields = {}
     config = {}
 
-    found_hosts = []
+    found_hosts = set()
 
     status_inventory = {}
     hw_sw_inventory = {}
@@ -40,10 +39,11 @@ class InventorizeHosts(CMK2):
 
     def add_host(self, host):
         """
-        Just add if not in
+        Register a host name once. `found_hosts` is a set so repeated calls
+        across the service / label / attribute collectors are O(1) instead
+        of a linear scan per hit (matters at 10k+ services).
         """
-        if host not in self.found_hosts:
-            self.found_hosts.append(host)
+        self.found_hosts.add(host)
 
     def __init__(self, account):
         """Init"""
@@ -56,12 +56,18 @@ class InventorizeHosts(CMK2):
             self.fields[rule.attribute_source] += field_list
 
 
-    def get_hw_sw_inventory_data(self, hostname, host_data):
+    def get_hw_sw_inventory_data(self, hostname):
+        """
+        Fetch and flatten HW/SW inventory for a single host.
 
+        Returns (hostname, data_or_None). Plain-tuple return avoids the
+        multiprocessing Manager().dict() proxy that the old signature
+        required — the parent collects results directly from task.get().
+        """
         url = f"host_inv_api.py?host={hostname}&output_format=json"
         dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
         if not dict_inventory:
-            return False
+            return hostname, None
 
         def flatten_inventory(data, path=""):
             result = {}
@@ -95,8 +101,7 @@ class InventorizeHosts(CMK2):
                 if key.startswith(needed_field):
                     return_data[friendly_name] = data
 
-        host_data[hostname] = return_data
-        return True
+        return hostname, return_data
 
 
     def get_hw_sw_inventory(self):
@@ -118,30 +123,29 @@ class InventorizeHosts(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Requesting HW/SW Inventory Data from Checkmk", total=total)
-            manager = multiprocessing.Manager()
-            host_data = manager.dict()
             with multiprocessing.Pool() as pool:
                 tasks = []
                 for host_resp in response:
                     hostname = host_resp['extensions']['host_name']
                     self.add_host(hostname)
-                    task = pool.apply_async(self.get_hw_sw_inventory_data,
-                                     args=(hostname, host_data),
-                                     callback=lambda x: progress.advance(task1))
+                    task = pool.apply_async(self.get_hw_sw_inventory_data, args=(hostname,))
                     tasks.append(task)
 
                 for task in tasks:
                     try:
-                        task.get(timeout=app.config['PROCESS_TIMEOUT'])
+                        hostname, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
                         progress.console.print("- ERROR: Timeout for a object")
-                    except Exception as error:
+                    except Exception as error:  # pylint: disable=broad-exception-caught
                         if self.debug:
                             raise
                         progress.console.print(f"- ERROR: Timeout error for object ({error})")
+                    else:
+                        progress.advance(task1)
+                        if data is not None:
+                            self.hw_sw_inventory[hostname] = data
                 pool.close()
                 pool.join()
-            self.hw_sw_inventory.update(dict(host_data))
 
     def get_cmk_services(self):
         """ Get CMK Services"""
@@ -206,13 +210,10 @@ class InventorizeHosts(CMK2):
             values = service['extensions']['label_values']
             if not names:
                 continue
-            names = service['extensions']['label_names']
-            values = service['extensions']['label_values']
-            service_labels = zip(names, values)
             hostname = service['extensions']['host_name']
             self.add_host(hostname)
             self.service_label_inventory.setdefault(hostname, {})
-            for name, value in service_labels:
+            for name, value in zip(names, values):
                 self.service_label_inventory[hostname][name] = value
 
 
@@ -303,8 +304,16 @@ class InventorizeHosts(CMK2):
 
         print(f"{ColorCodes.UNDERLINE}Write to DB{ColorCodes.ENDC}")
 
+        # Resolve all syncer hosts in one query instead of one get_host per
+        # name — a 10k-host inventorize shrinks from thousands of round
+        # trips to a single collection scan.
+        db_hosts = {}
+        if self.found_hosts:
+            for db_host in Host.objects(hostname__in=list(self.found_hosts)):
+                db_hosts[db_host.hostname] = db_host
+
         for hostname in self.found_hosts:
-            db_host = Host.get_host(hostname, False)
+            db_host = db_hosts.get(hostname)
             if db_host:
                 db_host.update_inventory('cmk', self.config_inventory.get(hostname, {}))
                 db_host.update_inventory('cmk_svc', self.status_inventory.get(hostname, {}))
