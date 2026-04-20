@@ -132,6 +132,13 @@ class APIAuthTest(unittest.TestCase):
         resp = self.client.get('/api/v1/objects/some-host', headers=_basic_auth())
         self.assertEqual(resp.status_code, 401)
 
+    @patch('application.api.User')
+    def test_empty_api_roles_denies_access(self, user_cls):
+        # Empty api_roles must NOT grant allow-all. Pentest finding 2026-04-20.
+        user_cls.objects.get.return_value = _FakeUser(api_roles=[])
+        resp = self.client.get('/api/v1/syncer/logs', headers=_basic_auth())
+        self.assertEqual(resp.status_code, 401)
+
     @patch('application.api.syncer.Host')
     @patch('application.api.User')
     def test_role_matching_path_prefix_allowed(self, user_cls, host_cls):

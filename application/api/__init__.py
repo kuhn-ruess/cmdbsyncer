@@ -67,20 +67,20 @@ def require_token(fn):
                     disabled__ne=True,
                     __raw__={'$or': [{'name': username}, {'email': username}]}
                 )
-                roles = user_result.api_roles
-                current_path = request.path.replace('/api/v1/','')
-                if roles:
-                    allowed = False
-                    for role in roles:
-                        if role == 'all':
-                            allowed = True
-                            break
-                        if current_path.startswith(role):
-                            allowed = True
-                    if not allowed:
-                        _abort_unauthorized(f"User '{username}' not allowed for path '{current_path}'")
             except DoesNotExist:
                 _abort_unauthorized("Invalid credentials")
+            roles = user_result.api_roles or []
+            current_path = request.path.replace('/api/v1/', '')
+            allowed = False
+            for role in roles:
+                if role == 'all':
+                    allowed = True
+                    break
+                if current_path.startswith(role):
+                    allowed = True
+                    break
+            if not allowed:
+                _abort_unauthorized(f"User '{username}' not allowed for path '{current_path}'")
             if not user_result.check_password(user_password):
                 _abort_unauthorized("Invalid credentials")
         elif request.headers.get('x-login-token'):
