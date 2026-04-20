@@ -1,0 +1,17 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Clone Entry</h3>
+    <p>Are you sure you want to clone this entry?</p>
+    <form method="POST" action="{{ url_for('.clone_view') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="id" value="{{ entry_id }}"/>
+        <input type="hidden" name="url" value="{{ return_url }}"/>
+        <button type="submit" class="btn btn-primary">
+            <i class="fa fa-clone"></i> Clone
+        </button>
+        <a href="{{ return_url }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

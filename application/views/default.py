@@ -70,16 +70,25 @@ class DefaultModelView(ModelView):
             flash("Duplicate Fields in entry", "error")
             return False
 
-    @expose("/clone", methods=("GET",))
+    @expose("/clone", methods=("GET", "POST"))
     def clone_view(self):
         """
-        Clone given model
+        Clone given model. GET renders a CSRF-protected confirmation form,
+        POST performs the actual clone.
         """
+        if request.method == "GET":
+            entry_id = get_mdict_item_or_list(request.args, 'id')
+            return_url = get_redirect_target() or self.get_url('.index_view')
+            return self.render(
+                'admin/model/clone_confirm.html',
+                entry_id=entry_id,
+                return_url=return_url,
+            )
 
-        entry_id = get_mdict_item_or_list(request.args, 'id')
+        entry_id = get_mdict_item_or_list(request.form, 'id')
 
         # Duplicate current record
-        return_url = get_redirect_target() or self.get_url('.index_view')
+        return_url = request.form.get('url') or self.get_url('.index_view')
 
         if not self.can_create:
             return redirect(return_url)

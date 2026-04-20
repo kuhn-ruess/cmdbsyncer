@@ -16,7 +16,7 @@ class ConfigModelView(DefaultModelView):
     can_delete = False
     can_create = False
 
-    @expose('/commit_changes')
+    @expose('/commit_changes', methods=('POST',))
     def commit_changes(self):
         """
         Delete all Caches

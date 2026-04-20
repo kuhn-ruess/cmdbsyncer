@@ -363,14 +363,18 @@
             
             $("#activate_result").html("<div class=loader></div>");
             $('#activate_changes').modal();
-            $.get("{{config['BASE_PREFIX']}}admin/config/commit_changes", function(data) {
-                $("#activate_result").html(data);
-                setTimeout(function() {
-                    $('#activate_changes').modal('hide');
-                    $('#changes').hide();
-                }, 1000);
-
-            })
+            $.ajax({
+                url: "{{config['BASE_PREFIX']}}admin/config/commit_changes",
+                type: "POST",
+                headers: {"X-CSRFToken": "{{ csrf_token() }}"},
+                success: function(data) {
+                    $("#activate_result").html(data);
+                    setTimeout(function() {
+                        $('#activate_changes').modal('hide');
+                        $('#changes').hide();
+                    }, 1000);
+                }
+            });
         });
 
         var password_field = $("#password").get(0);
