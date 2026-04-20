@@ -1,9 +1,9 @@
 """Gunicorn config for the Docker image.
 
-Binds and worker counts match the previous ``uwsgi_docker.ini``. The
-``post_fork`` hook resets every MongoEngine/pymongo connection inherited
-from the master process so each worker opens its own sockets after
-``fork()``. This keeps us safe even if someone later enables ``preload_app``.
+Binds and worker counts match the previous ``uwsgi_docker.ini``. Workers
+import the application after ``fork()`` (``preload_app`` is left at its
+default of False), so each worker opens its own Mongo connections on
+first use — no parent-inherited sockets to clean up.
 """
 # Gunicorn reads these module-level names as setting names — they are not
 # Python constants and must stay lower-case.
@@ -14,11 +14,3 @@ workers = 2
 threads = 2
 accesslog = "-"
 errorlog = "-"
-
-
-def post_fork(server, worker):  # pylint: disable=unused-argument
-    """Drop parent-inherited Mongo sockets and reconnect inside the worker."""
-    import mongoengine  # pylint: disable=import-outside-toplevel
-    from application import app, db  # pylint: disable=import-outside-toplevel
-    mongoengine.disconnect()
-    db.init_app(app)

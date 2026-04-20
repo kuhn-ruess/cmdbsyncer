@@ -1,7 +1,8 @@
 FROM python:3.12-alpine3.20
 WORKDIR /srv
 
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app \
+ && chown app:app /srv
 
 RUN apk add --no-cache python3 \
     ca-certificates \
@@ -20,7 +21,8 @@ RUN apk add --no-cache python3 \
     krb5 \
     openldap-dev \
     unixodbc-dev \
-    dcron
+    dcron \
+    su-exec
 
 ENV TZ=Etc/Universal
 RUN ln -sf /usr/share/zoneinfo/Ect/Universal /etc/localtime
@@ -41,11 +43,14 @@ COPY ./deploy_configs/run_cron.sh /etc/periodic/15min/
 ARG config
 ENV config=$config
 
-COPY . /srv/
+COPY --chown=app:app . /srv/
 
 
+# Container starts as root so the entrypoint can start crond (which needs
+# root) and so self_configure can create /srv/local_config.py on first boot.
+# The entrypoint drops privileges to 'app' via su-exec before running the
+# CMD, so gunicorn itself never runs as root.
 ENTRYPOINT ["/srv/entrypoint.sh"]
-USER app
 
 CMD ["gunicorn", "--config", "/srv/deploy_configs/gunicorn.conf.py", "app:app"]
 
