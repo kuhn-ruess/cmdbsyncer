@@ -1,8 +1,8 @@
 """Entry point for the ``cmdbsyncer-plugin`` console script.
 
 Handles packaging, installing, enabling/disabling of cmdbsyncer plugins.
-Registered via ``[project.scripts]`` in ``pyproject.toml``; the root-level
-``./sp`` wrapper still works in a source checkout.
+Registered via ``[project.scripts]`` in ``pyproject.toml``; the same
+command is also available as ``./cmdbsyncer-plugin`` in a source checkout.
 """
 import argparse
 import json
