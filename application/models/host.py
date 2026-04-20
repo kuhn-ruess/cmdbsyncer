@@ -301,6 +301,10 @@ class Host(db.Document):
                         labels[f'{key}_{sub_key}'] = sub_value
                     del labels[key]
         label_dict = dict(map(lambda kv: (self._fix_key(kv[0]), kv[1]), labels.items()))
+        # Re-validate after _fix_key so a LOWERCASE/REPLACER config that
+        # strips a key down to an empty / MongoDB-reserved form cannot slip
+        # past the input check.
+        validate_mongo_keys(label_dict, "label")
         if self.get_labels() != label_dict:
             self.set_import_sync()
             self._set_labels(label_dict)

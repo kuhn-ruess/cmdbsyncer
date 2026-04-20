@@ -38,6 +38,11 @@ class ValidateMongoKeyTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_mongo_key('', 'inventory')
 
+    def test_rejects_whitespace_only(self):
+        for blank in ('   ', '\t', '\n', ' \t\n '):
+            with self.assertRaises(ValueError):
+                validate_mongo_key(blank, 'inventory')
+
     def test_rejects_non_string(self):
         with self.assertRaises(ValueError):
             validate_mongo_key(42, 'inventory')

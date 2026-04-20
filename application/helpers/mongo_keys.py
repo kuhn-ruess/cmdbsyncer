@@ -10,7 +10,7 @@ leaking a driver-level 500 mid-save.
 
 def validate_mongo_key(key, what):
     """Raise ValueError if `key` cannot be stored as a MongoDB field name."""
-    if not isinstance(key, str) or not key:
+    if not isinstance(key, str) or not key or not key.strip():
         raise ValueError(f"{what} key must be a non-empty string")
     if key.startswith('$') or '.' in key:
         raise ValueError(

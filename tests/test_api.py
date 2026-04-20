@@ -711,6 +711,37 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
     @_auth_patches
     @patch('application.api.objects.get_account_by_name')
     @patch('application.api.objects.Host')
+    def test_post_host_rejects_empty_label_key(self, host_cls, get_account):
+        # Pentest finding 2026-04-20: empty label keys persisted silently.
+        get_account.return_value = {'name': 'acct', '_id': 'id1'}
+        host = MagicMock()
+        host.update_host.side_effect = ValueError("label key must be a non-empty string")
+        host_cls.get_host.return_value = host
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct', 'labels': {'': 'x'}},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    def test_post_host_rejects_whitespace_label_key(self, host_cls, get_account):
+        get_account.return_value = {'name': 'acct', '_id': 'id1'}
+        host = MagicMock()
+        host.update_host.side_effect = ValueError("label key must be a non-empty string")
+        host_cls.get_host.return_value = host
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct', 'labels': {'   ': 'x'}},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
     def test_post_host_rejects_dollar_prefixed_label_key(self, host_cls, get_account):
         # Pentest finding 2026-04-20: $-prefixed label keys triggered a 500.
         # The Host model now raises ValueError and the API translates that
