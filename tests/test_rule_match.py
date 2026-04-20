@@ -9,11 +9,14 @@ Covers:
 # pylint: disable=missing-function-docstring
 import unittest
 
+import re
+
 from application.modules.rule.match import (
     check_condition,
     match,
     make_bool,
     MatchException,
+    _compiled_regex,
 )
 
 
@@ -214,6 +217,22 @@ class TestMatchRealWorldScenarios(unittest.TestCase):
         # At the match() level it unconditionally returns False — the
         # "does not exist" decision is made one layer up (see rule.py).
         self.assertFalse(match("whatever", "", "ignore", negate=True))
+
+
+class TestRegexCache(unittest.TestCase):
+    """_compiled_regex memoizes re.compile across calls with the same needle."""
+
+    def test_same_needle_returns_same_pattern(self):
+        pattern1 = _compiled_regex(r"web-\d+")
+        pattern2 = _compiled_regex(r"web-\d+")
+
+        # Same cached object — no recompile on the second call.
+        self.assertIs(pattern1, pattern2)
+
+    def test_cache_enforces_length_limit(self):
+        overlong = "a" * 1001
+        with self.assertRaises(re.error):
+            _compiled_regex(overlong)
 
 
 if __name__ == "__main__":

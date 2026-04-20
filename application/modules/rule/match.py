@@ -2,7 +2,25 @@
 """
 Helper To match condtions
 """
+# pylint: disable=too-many-branches,too-many-return-statements
 import re
+
+
+# Compiled regex cache. Rule conditions use the same needles across every
+# host in a sync run, so re-compiling per call is pure overhead.
+_REGEX_CACHE = {}
+
+
+def _compiled_regex(needle):
+    """Return a compiled regex for `needle`, caching the result."""
+    cached = _REGEX_CACHE.get(needle)
+    if cached is not None:
+        return cached
+    if len(needle) > 1000:
+        raise re.error("Regex pattern exceeds maximum length of 1000 characters")
+    compiled = re.compile(needle)
+    _REGEX_CACHE[needle] = compiled
+    return compiled
 
 
 class MatchException(Exception):
@@ -15,7 +33,7 @@ def make_bool(value):
     """
     Make Bool from given object
     """
-    if value == None:
+    if value is None:
         return False
     if isinstance(value, bool):
         return value
@@ -27,6 +45,7 @@ def make_bool(value):
         return False
     if not value:
         return False
+    return False
 
 
 
@@ -64,9 +83,7 @@ def check_condition(attr_value, needle, condition):
         if attr_value.endswith(needle):
             return True
     elif condition == 'regex':
-        if len(needle) > 1000:
-            raise re.error("Regex pattern exceeds maximum length of 1000 characters")
-        pattern = re.compile(needle)
+        pattern = _compiled_regex(needle)
         if pattern.match(str(attr_value)):
             return True
     elif condition == 'bool':

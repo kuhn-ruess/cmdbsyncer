@@ -3,6 +3,7 @@ Add Hosts into CMK Version 2 Installations
 """
 # pylint: disable=too-many-lines
 import ast
+import math
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import app, logger, log
@@ -80,7 +81,7 @@ class SyncCMK2(CMK2):
             yield lst[i:i + n]
 
 #   .-- Get Host Actions
-    def get_host_actions(self, db_host, attributes):
+    def get_host_actions(self, db_host, attributes, persist_cache=True):
         """
         Get CheckMK-specific actions for a database host.
 
@@ -94,7 +95,11 @@ class SyncCMK2(CMK2):
         Returns:
             dict: Dictionary of actions to be performed for this host
         """
-        return self.actions.get_outcomes(db_host, attributes)
+        return self.actions.get_outcomes(
+            db_host,
+            attributes,
+            persist_cache=persist_cache,
+        )
 
 #.
 
@@ -239,10 +244,13 @@ class SyncCMK2(CMK2):
         Uses either folder-based or global host fetching depending on
         configuration settings to populate the checkmk_hosts dictionary.
         """
+        extra_params = "?effective_attributes=false"
+        if not self.checkmk_version.startswith('2.2'):
+            extra_params += "&include_links=false"
         if app.config['CMK_GET_HOST_BY_FOLDER']:
-            self._fetch_checkmk_host_by_folder()
+            self._fetch_checkmk_host_by_folder(extra_params=extra_params)
         else:
-            self.fetch_all_checkmk_hosts()
+            self.fetch_all_checkmk_hosts(extra_params=extra_params)
 
 
     def use_host(self, hostname, source_account_name):
@@ -312,10 +320,11 @@ class SyncCMK2(CMK2):
             print(f"{CC.WARNING} *{CC.ENDC} Deletion of Hosts is disabled by setting")
             return
         delete_list = []
+        synced_hosts = set(self.synced_hosts)
         for host, host_data in self.checkmk_hosts.items():
             host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
-                if host not in self.synced_hosts:
+                if host not in synced_hosts:
                     # Delete host
                     delete_list.append(host)
                     print(f"{CC.WARNING} *{CC.ENDC} Going to Delete host {host}")
@@ -330,10 +339,9 @@ class SyncCMK2(CMK2):
 
         if app.config['CMK_BULK_DELETE_HOSTS']:
             url = "/domain-types/host_config/actions/bulk-delete/invoke"
-            chunks = list(self.chunks(delete_list, app.config['CMK_BULK_DELETE_OPERATIONS']))
-            total = len(chunks)
-            count = 1
-            for chunk in chunks:
+            chunk_size = app.config['CMK_BULK_DELETE_OPERATIONS']
+            total = math.ceil(len(delete_list) / chunk_size) if delete_list else 0
+            for count, chunk in enumerate(self.chunks(delete_list, chunk_size), start=1):
                 self.num_deleted += len(chunk)
                 print(f" * Send Bulk Request {count}/{total}")
                 try:
@@ -342,7 +350,7 @@ class SyncCMK2(CMK2):
                     self.log_details.append(("error", f"Host Bulk deletion failed: {exp}"))
                     print(f"{CC.WARNING} *{CC.ENDC} Bulk Host deletion failed failed {exp}")
                 else:
-                    count += 1
+                    pass
                 self.num_deleted += len(chunk)
         else:
             for host in delete_list:
@@ -380,6 +388,29 @@ class SyncCMK2(CMK2):
         next_actions = self.get_host_actions(db_host, attributes['all'])
         host_actions[db_host.hostname] = (next_actions, attributes)
         return True
+
+    def calculate_host_actions(self, db_host):
+        """
+        Calculate all sync data for one host and return it to the parent process.
+
+        Returning plain data avoids the multiprocessing Manager overhead from
+        shared dict/list proxies during large sync runs.
+        """
+        attributes = self.get_attributes(db_host, 'checkmk', persist_cache=False)
+        if not attributes:
+            if getattr(db_host, '_cache_dirty', False):
+                db_host.save()
+                setattr(db_host, '_cache_dirty', False)
+            return db_host.hostname, False, None
+        next_actions = self.get_host_actions(
+            db_host,
+            attributes['all'],
+            persist_cache=False,
+        )
+        if getattr(db_host, '_cache_dirty', False):
+            db_host.save()
+            setattr(db_host, '_cache_dirty', False)
+        return db_host.hostname, True, (next_actions, attributes)
 
 
     def handle_cmk_folder(self, next_actions):
@@ -577,48 +608,44 @@ class SyncCMK2(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Calculating Hostrules and Attributes", total=total)
-            manager = multiprocessing.Manager()
-            host_actions = manager.dict()
-            disabled_hosts = manager.list()
+            host_actions = {}
+            disabled_hosts = []
             with multiprocessing.Pool() as pool:
                 tasks = []
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
                         progress.advance(task1)
                         continue
-                    task = pool.apply_async(self.handle_host,
-                                     args=(db_host, host_actions, disabled_hosts),
-                                     callback=lambda x: progress.advance(task1))
+                    task = pool.apply_async(self.calculate_host_actions, args=(db_host,))
                     tasks.append(task)
-                    #@TODO
-                    # .get() slows the process, console print is not up to date
-                    # New concept will be needed for outputs
-                    progress.console.print(f"- Started on {db_host.hostname}")
-                    #result = x.get()
-                    #if not result:
-                    #    progress.console.print("--> !! Host Disabled")
 
                 progress.console.print("Waiting for Calculation to finish")
                 for task in tasks:
                     try:
-                        task.get(timeout=app.config['PROCESS_TIMEOUT'])
+                        hostname, enabled, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
                         progress.console.print("- ERROR: Timeout for a object")
                     except Exception as error:  # pylint: disable=broad-exception-caught
                         if self.debug:
                             raise
                         progress.console.print(f"- ERROR: Timeout error for object ({error})")
+                    else:
+                        progress.advance(task1)
+                        if enabled:
+                            host_actions[hostname] = data
+                        else:
+                            disabled_hosts.append(hostname)
                 pool.close()
                 pool.join()
 
 
                 if self.config.get('list_disabled_hosts'):
-                    task2 = progress.add_task("List Disabled Hosts", total=total)
+                    task2 = progress.add_task("List Disabled Hosts", total=len(disabled_hosts))
                     self.disabled_hosts = disabled_hosts
                     for host in disabled_hosts:
                         progress.advance(task2)
                         progress.console.print(f"- Disabled-> {host} disabled")
-        return dict(host_actions)
+        return host_actions
 
     def set_status_attribute(self, hostname, is_existing=True):
         """
@@ -849,12 +876,10 @@ class SyncCMK2(CMK2):
         Args:
             entries (list): List of host creation payloads
         """
-        chunks = list(self.chunks(entries, app.config['CMK_BULK_CREATE_OPERATIONS']))
-        total = len(chunks)
-        count = 1
-        for chunk in chunks:
+        chunk_size = app.config['CMK_BULK_CREATE_OPERATIONS']
+        total = math.ceil(len(entries) / chunk_size) if entries else 0
+        for count, chunk in enumerate(self.chunks(entries, chunk_size), start=1):
             self.console(f" * Send Bulk Create Request {count}/{total}")
-            count += 1
             url = "/domain-types/host_config/actions/bulk-create/invoke"
             try:
                 self.request(url, method="POST", data={'entries': chunk})
@@ -1028,14 +1053,12 @@ class SyncCMK2(CMK2):
         Args:
             entries (list): List of host update payloads
         """
-        chunks = list(self.chunks(entries, app.config['CMK_BULK_UPDATE_OPERATIONS']))
-        total = len(chunks)
-        count = 1
-        for chunk in chunks:
+        chunk_size = app.config['CMK_BULK_UPDATE_OPERATIONS']
+        total = math.ceil(len(entries) / chunk_size) if entries else 0
+        for count, chunk in enumerate(self.chunks(entries, chunk_size), start=1):
             self.console(f" * Send Bulk Update Request {count}/{total}")
             url = "/domain-types/host_config/actions/bulk-update/invoke"
             try:
-                count += 1
                 self.request(url, method="PUT",
                              data={'entries': chunk},
                             )

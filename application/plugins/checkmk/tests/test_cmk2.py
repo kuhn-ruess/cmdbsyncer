@@ -245,17 +245,159 @@ class TestCMK2GetHostsOfFolder(unittest.TestCase):
     def test_replaces_slashes_with_tilde(self):
         api_response = ({
             'value': [
-                {'id': 'host1', 'data': 'x'},
+                {
+                    'id': 'host1',
+                    'data': 'x',
+                    'extensions': {
+                        'attributes': {'labels': {'a': 'b'}},
+                        'folder': '/servers',
+                        'is_cluster': True,
+                        'cluster_nodes': ['n1'],
+                        'unused': 'drop-me',
+                    }
+                },
             ]
         }, {})
 
-        return_dict = {}
         with patch.object(self.cmk, 'request', return_value=api_response) as mock_req:
-            self.cmk.get_hosts_of_folder('/a/b', return_dict, '')
+            result = self.cmk.get_hosts_of_folder('/a/b', '')
 
         call_url = mock_req.call_args[0][0]
         self.assertIn('~a~b', call_url)
-        self.assertEqual(return_dict['host1'], {'id': 'host1', 'data': 'x'})
+        self.assertEqual(
+            result['host1'],
+            {
+                'extensions': {
+                    'attributes': {'labels': {'a': 'b'}},
+                    'folder': '/servers',
+                    'is_cluster': True,
+                    'cluster_nodes': ['n1'],
+                }
+            }
+        )
+
+
+class TestCMK2FetchHosts(unittest.TestCase):
+    """Tests for compact host fetching."""
+
+    def setUp(self):
+        def mock_init(self_param, account=False):
+            self_param.config = {
+                'address': 'https://cmk.example.com',
+                'username': 'automation',
+                'password': 'secret',
+            }
+            self_param.checkmk_version = '2.3.0'
+            self_param.checkmk_hosts = {}
+            self_param.existing_folders = ['/a', '/b']
+
+        self.init_patcher = patch.object(CMK2, '__init__', mock_init)
+        self.init_patcher.start()
+        self.cmk = CMK2()
+
+    def tearDown(self):
+        self.init_patcher.stop()
+
+    @patch('application.plugins.checkmk.cmk2.Progress')
+    def test_fetch_all_checkmk_hosts_compacts_host_payload(self, mock_progress_cls):
+        mock_progress = MagicMock()
+        mock_progress_cls.return_value.__enter__ = Mock(return_value=mock_progress)
+        mock_progress_cls.return_value.__exit__ = Mock(return_value=False)
+
+        api_response = ({
+            'value': [
+                {
+                    'id': 'host1',
+                    'extensions': {
+                        'attributes': {'labels': {'a': 'b'}},
+                        'folder': '/servers',
+                        'is_cluster': False,
+                        'cluster_nodes': [],
+                        'unused': {'large': 'payload'},
+                    }
+                }
+            ]
+        }, {})
+
+        with patch.object(self.cmk, 'request', return_value=api_response):
+            self.cmk.fetch_all_checkmk_hosts()
+
+        self.assertEqual(
+            self.cmk.checkmk_hosts['host1'],
+            {
+                'extensions': {
+                    'attributes': {'labels': {'a': 'b'}},
+                    'folder': '/servers',
+                    'is_cluster': False,
+                    'cluster_nodes': [],
+                }
+            }
+        )
+
+    @patch('application.plugins.checkmk.cmk2.Progress')
+    def test_fetch_all_checkmk_hosts_preserves_effective_attributes(self, mock_progress_cls):
+        # Inventorize requests ?effective_attributes=true and reads
+        # host['extensions']['effective_attributes']. The compaction must
+        # carry it through when present, otherwise inventorize KeyErrors.
+        mock_progress = MagicMock()
+        mock_progress_cls.return_value.__enter__ = Mock(return_value=mock_progress)
+        mock_progress_cls.return_value.__exit__ = Mock(return_value=False)
+
+        api_response = ({
+            'value': [
+                {
+                    'id': 'host1',
+                    'extensions': {
+                        'attributes': {'labels': {'a': 'b'}},
+                        'effective_attributes': {
+                            'tag_agent': 'cmk-agent',
+                            'labels': {'a': 'b', 'inherited': 'yes'},
+                        },
+                        'folder': '/servers',
+                        'is_cluster': False,
+                        'cluster_nodes': [],
+                    }
+                }
+            ]
+        }, {})
+
+        with patch.object(self.cmk, 'request', return_value=api_response):
+            self.cmk.fetch_all_checkmk_hosts()
+
+        host_ext = self.cmk.checkmk_hosts['host1']['extensions']
+        self.assertEqual(
+            host_ext['effective_attributes'],
+            {'tag_agent': 'cmk-agent', 'labels': {'a': 'b', 'inherited': 'yes'}},
+        )
+
+    @patch('application.plugins.checkmk.cmk2.multiprocessing')
+    @patch('application.plugins.checkmk.cmk2.Progress')
+    def test_fetch_checkmk_host_by_folder_collects_plain_results(self, mock_progress_cls, mock_mp):
+        mock_progress = MagicMock()
+        mock_progress_cls.return_value.__enter__ = Mock(return_value=mock_progress)
+        mock_progress_cls.return_value.__exit__ = Mock(return_value=False)
+        mock_pool = Mock()
+        mock_mp.Pool.return_value.__enter__.return_value = mock_pool
+
+        task1 = Mock()
+        task1.get.return_value = {
+            'host1': {'extensions': {
+                'attributes': {}, 'folder': '/a', 'is_cluster': False, 'cluster_nodes': [],
+            }}
+        }
+        task2 = Mock()
+        task2.get.return_value = {
+            'host2': {'extensions': {
+                'attributes': {}, 'folder': '/b', 'is_cluster': False, 'cluster_nodes': [],
+            }}
+        }
+        mock_pool.apply_async.side_effect = [task1, task2]
+
+        self.cmk._fetch_checkmk_host_by_folder()
+
+        self.assertIn('host1', self.cmk.checkmk_hosts)
+        self.assertIn('host2', self.cmk.checkmk_hosts)
+        self.assertEqual(mock_pool.apply_async.call_count, 2)
 
 
 if __name__ == '__main__':

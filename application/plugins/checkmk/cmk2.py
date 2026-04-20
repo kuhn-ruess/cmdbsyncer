@@ -32,6 +32,29 @@ class CMK2(Plugin):
     existing_folders_attributes = {}
     custom_folder_attributes = {}
 
+    @staticmethod
+    def _compact_host_data(host):
+        """
+        Keep only the host fields consumers of `checkmk_hosts` actually
+        read later.
+
+        The CheckMK API returns large host documents. Retaining only the
+        required fields reduces memory usage noticeably during big sync
+        runs. `effective_attributes` is carried through when the caller
+        requested `?effective_attributes=true` (the Inventorize flow
+        depends on it).
+        """
+        extensions = host.get('extensions', {})
+        compacted = {
+            'attributes': extensions.get('attributes', {}),
+            'folder': extensions.get('folder', '/'),
+            'is_cluster': extensions.get('is_cluster', False),
+            'cluster_nodes': extensions.get('cluster_nodes', []),
+        }
+        if 'effective_attributes' in extensions:
+            compacted['effective_attributes'] = extensions['effective_attributes']
+        return {'extensions': compacted}
+
 
     def __init__(self, account=False):
         """
@@ -144,17 +167,19 @@ class CMK2(Plugin):
             api_hosts = self.request(url, method="GET")
             progress.update(task1, total=len(api_hosts[0]['value']), start=True)
             for host in api_hosts[0]['value']:
-                self.checkmk_hosts[host['id']] = host
+                self.checkmk_hosts[host['id']] = self._compact_host_data(host)
                 progress.update(task1, advance=1)
 
 
-    def get_hosts_of_folder(self, folder, return_dict, extra_params):
-        """ Get Hosts of given folder """
-        folder = folder.replace('/','~')
-        url = f"objects/folder_config/{folder}/collections/hosts{extra_params}"
+    def get_hosts_of_folder(self, folder, extra_params):
+        """Get hosts of the given folder as a plain dict."""
+        folder_url = folder.replace('/','~')
+        url = f"objects/folder_config/{folder_url}/collections/hosts{extra_params}"
         api_hosts = self.request(url, method="GET")
+        return_dict = {}
         for host in api_hosts[0]['value']:
-            return_dict[host['id']] = host
+            return_dict[host['id']] = self._compact_host_data(host)
+        return return_dict
 
     def _fetch_checkmk_host_by_folder(self, extra_params=""):
         """
@@ -168,14 +193,14 @@ class CMK2(Plugin):
             num_folders = len(self.existing_folders)
 
             task1 = progress.add_task("Fetching Hosts folder by folder", total=num_folders)
-            manager = multiprocessing.Manager()
-            return_dict = manager.dict()
             with multiprocessing.Pool() as pool:
+                tasks = []
                 for folder in self.existing_folders:
-                    pool.apply_async(self.get_hosts_of_folder,
-                                     args=(folder, return_dict, extra_params,),
-                                     callback=lambda x: progress.advance(task1))
+                    task = pool.apply_async(self.get_hosts_of_folder, args=(folder, extra_params,))
+                    tasks.append(task)
 
+                for task in tasks:
+                    self.checkmk_hosts.update(task.get())
+                    progress.advance(task1)
                 pool.close()
                 pool.join()
-                self.checkmk_hosts.update(return_dict)
