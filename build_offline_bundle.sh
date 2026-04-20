@@ -112,6 +112,21 @@ download_from_pypi() {
 [[ $INCLUDE_SYNCER     -eq 1 ]] && download_from_pypi "cmdbsyncer"
 [[ $INCLUDE_ENTERPRISE -eq 1 ]] && download_from_pypi "cmdbsyncer-enterprise"
 
+# --- Convert any remaining source distributions to wheels -------------------
+# pip install --no-index refuses to build sdists on the target because the
+# isolated build environment cannot fetch setuptools/wheel. Build every
+# sdist into a wheel here instead, so only .whl files ship in the bundle.
+shopt -s nullglob
+SDISTS=("$OUTPUT_DIR"/packages/*.tar.gz "$OUTPUT_DIR"/packages/*.zip)
+shopt -u nullglob
+if (( ${#SDISTS[@]} > 0 )); then
+    echo "Converting ${#SDISTS[@]} source distribution(s) to wheels ..."
+    for f in "${SDISTS[@]}"; do
+        python3 -m pip wheel --no-deps --wheel-dir "$OUTPUT_DIR/packages" "$f"
+        rm -f "$f"
+    done
+fi
+
 # --- Customer-facing install script -----------------------------------------
 EXTRA_PACKAGES=""
 [[ $INCLUDE_SYNCER     -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer"
