@@ -154,6 +154,47 @@ class _Host:  # pylint: disable=too-few-public-methods
 _models_host.Host = _Host
 
 
+# --- mongoengine / flask_admin.contrib.mongoengine --------------------------
+# Stubs mongoengine so modules under test can do `from mongoengine.errors
+# import ...` without a live MongoDB. flask_admin.contrib.mongoengine is also
+# stubbed because importing the real package eagerly pulls in Document /
+# QuerySet / connection helpers that do not work against our empty stub.
+
+_mongoengine = _stub_package("mongoengine", path=[])
+_mongoengine.Document = type("Document", (), {})
+_mongoengine.ValidationError = type("ValidationError", (Exception,), {})
+
+_mongoengine_errors = _stub_package("mongoengine.errors")
+_mongoengine_errors.DoesNotExist = type("DoesNotExist", (Exception,), {})
+_mongoengine_errors.MultipleObjectsReturned = type(
+    "MultipleObjectsReturned",
+    (Exception,),
+    {},
+)
+_mongoengine_errors.NotUniqueError = type("NotUniqueError", (Exception,), {})
+
+# Replace the real flask_admin.contrib.mongoengine integration with a minimal
+# stub that only exposes BaseMongoEngineFilter / ModelView so admin views load.
+_fa_me = _stub_package("flask_admin.contrib.mongoengine", path=[])
+_fa_me_filters = _stub_package("flask_admin.contrib.mongoengine.filters")
+
+
+class _BaseMongoEngineFilter:  # pylint: disable=too-few-public-methods
+    """Stub replacement for flask_admin's mongoengine filter base."""
+
+    def __init__(self, *_args, **_kwargs):
+        pass
+
+
+_fa_me_filters.BaseMongoEngineFilter = _BaseMongoEngineFilter
+_fa_me_filters.BooleanEqualFilter = type(
+    "BooleanEqualFilter", (_BaseMongoEngineFilter,), {},
+)
+_fa_me_filters.FilterLike = type("FilterLike", (_BaseMongoEngineFilter,), {})
+_fa_me.BaseMongoEngineFilter = _BaseMongoEngineFilter
+_fa_me.ModelView = type("ModelView", (), {})
+
+
 # --- application.helpers.cron -----------------------------------------------
 
 _cron = _stub_package("application.helpers.cron")
@@ -264,19 +305,28 @@ def _load_real_module(module_name, relative_path):
     return mod
 
 
+def _try_load_real_module(module_name, relative_path):
+    """Best-effort loader for tests that don't need every heavy dependency."""
+    try:
+        return _load_real_module(module_name, relative_path)
+    except ModuleNotFoundError:
+        sys.modules.pop(module_name, None)
+        return None
+
+
 _load_real_module(
     "application.modules.rule.match",
     os.path.join("modules", "rule", "match.py"),
 )
-_load_real_module(
+_try_load_real_module(
     "application.modules.plugin",
     os.path.join("modules", "plugin.py"),
 )
-_load_real_module(
+_try_load_real_module(
     "application.plugins.checkmk.cmk2",
     os.path.join("plugins", "checkmk", "cmk2.py"),
 )
-_load_real_module(
+_try_load_real_module(
     "application.plugins.checkmk.syncer",
     os.path.join("plugins", "checkmk", "syncer.py"),
 )
@@ -316,7 +366,7 @@ _models_host.HostError = type("HostError", (Exception,), {})
 _application.init_db = MagicMock(name="stub.init_db")
 
 # Load real plugin modules
-_load_real_module(
+_try_load_real_module(
     "application.modules.rule.rule",
     os.path.join("modules", "rule", "rule.py"),
 )
@@ -337,7 +387,7 @@ for _mod_name, _mod_path in [
     ("import_v1", "import_v1.py"),
     ("import_v2", "import_v2.py"),
 ]:
-    _load_real_module(
+    _try_load_real_module(
         f"application.plugins.checkmk.{_mod_name}",
         os.path.join("plugins", "checkmk", _mod_path),
     )
@@ -347,20 +397,20 @@ for _mod_name, _mod_path in [
 # Load the real api/__init__, api/syncer, api/objects files under their
 # canonical module names. They import User/Account/LogEntry/Host etc. from
 # the stubs above — no live MongoDB needed.
-_load_real_module(
+_try_load_real_module(
     "application.helpers.mongo_keys",
     os.path.join("helpers", "mongo_keys.py"),
 )
 _stub_package("application.api", path=[os.path.join(_APP_ROOT, "api")])
-_load_real_module(
+_try_load_real_module(
     "application.api",
     os.path.join("api", "__init__.py"),
 )
-_load_real_module(
+_try_load_real_module(
     "application.api.syncer",
     os.path.join("api", "syncer.py"),
 )
-_load_real_module(
+_try_load_real_module(
     "application.api.objects",
     os.path.join("api", "objects.py"),
 )

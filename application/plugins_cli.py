@@ -18,6 +18,19 @@ from rich.table import Table
 DISABLED_PLUGINS_FILE = "disabled_plugins.json"
 
 
+def _has_invalid_plugin_root(plugin_dir):
+    """Return whether the archive root is unsafe as a plugin directory."""
+    if not plugin_dir or plugin_dir in {".", ".."}:
+        return True
+    if os.path.isabs(plugin_dir):
+        return True
+    if os.path.sep in plugin_dir:
+        return True
+    if os.path.altsep and os.path.altsep in plugin_dir:
+        return True
+    return False
+
+
 def get_disabled_plugins():
     """Return the set of disabled plugin idents."""
     if not os.path.exists(DISABLED_PLUGINS_FILE):
@@ -129,7 +142,15 @@ def install(package_path):
             members = tar.getmembers()
             if members:
                 plugin_dir = members[0].name.split("/")[0]
+                if _has_invalid_plugin_root(plugin_dir):
+                    print("Error installing plugin: invalid plugin archive layout")
+                    return
                 plugin_path = os.path.join("plugins", plugin_dir)
+                real_plugin_root = os.path.realpath("plugins")
+                real_plugin_path = os.path.realpath(plugin_path)
+                if os.path.commonpath([real_plugin_root, real_plugin_path]) != real_plugin_root:
+                    print("Error installing plugin: invalid plugin target path")
+                    return
                 if os.path.exists(plugin_path):
                     shutil.rmtree(plugin_path)
             tar.extractall(path="plugins", filter="data")

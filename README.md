@@ -249,6 +249,16 @@ We welcome contributions! Please follow these steps:
 - Update documentation as needed
 - Test with multiple target systems
 
+### Git Hooks
+
+The repository ships a `pre-commit` hook in `.githooks/` that refreshes
+`application/buildinfo.txt`, runs pylint on staged Python files, and executes
+the unit-test suite before each commit. Activate it once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE) - see the LICENSE file for details.

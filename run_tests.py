@@ -19,10 +19,13 @@ sys.path.insert(0, os.getcwd())
 
 # Re-exec under the project virtualenv if one exists and we're not already
 # inside it, so `./run_tests.py` works without `source venv/bin/activate`.
+_current_python = os.path.realpath(sys.executable)
 for _venv_python in (".venv/bin/python", "venv/bin/python"):
-    _venv_python = os.path.abspath(_venv_python)
-    if os.path.isfile(_venv_python) and os.path.abspath(sys.executable) != _venv_python:
+    _venv_python = os.path.realpath(_venv_python)
+    if os.path.isfile(_venv_python) and _current_python != _venv_python:
         os.execv(_venv_python, [_venv_python, __file__, *sys.argv[1:]])
+    if os.path.isfile(_venv_python):
+        break
 
 import tests  # pylint: disable=unused-import,wrong-import-position  # noqa: F401,E402 — bootstrap stubs
 

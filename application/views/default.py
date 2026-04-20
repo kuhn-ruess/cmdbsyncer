@@ -132,8 +132,7 @@ class DefaultModelView(ModelView):
                 current = getattr(model, attr)
                 if isinstance(current, str):
                     setattr(model, attr, current.strip())
-
-                return super().on_model_change(form, model, is_created)
+            return super().on_model_change(form, model, is_created)
         except Exception as e:
             raise ValidationError(f"Error saving entry: {e}")
 
