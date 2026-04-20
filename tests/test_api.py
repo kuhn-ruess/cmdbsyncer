@@ -859,6 +859,21 @@ class ObjectsAPITest(unittest.TestCase):
         self.assertIn('next', body['_links'])
 
     @_auth_patches
+    def test_list_all_rejects_non_integer_params(self):
+        # Pentest finding 2026-04-20: bare int(...) cast raised 500.
+        resp = self.client.get('/api/v1/objects/all?start=x', headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.get('/api/v1/objects/all?limit=x', headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
+    def test_list_all_rejects_negative_params(self):
+        resp = self.client.get('/api/v1/objects/all?limit=-1', headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.get('/api/v1/objects/all?start=-5', headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
     @patch('application.api.objects.Host')
     def test_list_all_final_page_has_no_next_link(self, host_cls):
         hosts = [MagicMock(

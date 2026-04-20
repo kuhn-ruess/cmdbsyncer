@@ -8,7 +8,8 @@ from flask import request, abort
 from flask_restx import Namespace, Resource, reqparse, fields
 from application.api import require_token
 from application.models.host import Host
-from application.plugins.checkmk.models import CheckmkFolderPool #@TODO pre_deletion method for Host so no import needed
+# @TODO pre_deletion method for Host so no import needed
+from application.plugins.checkmk.models import CheckmkFolderPool
 
 from application.helpers.get_account import get_account_by_name, AccountNotFoundError
 
@@ -22,9 +23,9 @@ def serialize_for_json(data):
     """
     if isinstance(data, dict):
         return {key: serialize_for_json(value) for key, value in data.items()}
-    elif isinstance(data, list):
+    if isinstance(data, list):
         return [serialize_for_json(item) for item in data]
-    elif isinstance(data, datetime):
+    if isinstance(data, datetime):
         return data.strftime('%Y-%m-%dT%H:%M:%SZ')
     return data
 
@@ -257,8 +258,13 @@ class HostDetailListApi(Resource):
     def get(self):
         """ Get all Objects """
         results = []
-        start = int(request.args.get('start', 1))
-        limit = int(request.args.get('limit', 100))
+        try:
+            start = int(request.args.get('start', 1))
+            limit = int(request.args.get('limit', 100))
+        except (TypeError, ValueError):
+            abort(400, "start and limit must be integers")
+        if start < 0 or limit < 0:
+            abort(400, "start and limit must be non-negative")
         end = start+limit
 
         db_objecs = Host.objects(is_object__ne=True)
