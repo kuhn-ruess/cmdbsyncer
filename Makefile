@@ -46,4 +46,5 @@ tag:
 	git push origin v$$v
 
 release: build check upload tag
-	@echo "Released $(VERSION) to PyPI"
+	@v=$$($(PYTHON) -c "import runpy; print(runpy.run_path('$(VERSION_FILE)')['__version__'])"); \
+	echo "Released $$v to PyPI"

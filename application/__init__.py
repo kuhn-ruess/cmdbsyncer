@@ -182,19 +182,25 @@ def page_redirect():
 def _register_all_plugin_admin_views():
     from application.helpers.plugins import is_plugin_disabled
     import application.plugins as plugins_package
-    import plugins as external_plugins_package
+    try:
+        import plugins as external_plugins_package
+    except ModuleNotFoundError:
+        # No custom plugins directory in the working directory — typical
+        # for a fresh PyPI install before self_configure has run.
+        external_plugins_package = None
 
     plugin_modules = []
 
-    for _, module_name, _ in pkgutil.iter_modules(
-        external_plugins_package.__path__, external_plugins_package.__name__ + "."
-    ):
-        # module_name is e.g. "plugins.netbox" — extract the short ident
-        short_name = module_name.rsplit(".", 1)[-1]
-        if is_plugin_disabled(short_name):
-            logger.info("Plugin '%s' is disabled, skipping", short_name)
-            continue
-        plugin_modules.append(module_name)
+    if external_plugins_package is not None:
+        for _, module_name, _ in pkgutil.iter_modules(
+            external_plugins_package.__path__, external_plugins_package.__name__ + "."
+        ):
+            # module_name is e.g. "plugins.netbox" — extract the short ident
+            short_name = module_name.rsplit(".", 1)[-1]
+            if is_plugin_disabled(short_name):
+                logger.info("Plugin '%s' is disabled, skipping", short_name)
+                continue
+            plugin_modules.append(module_name)
 
     for _, module_name, _ in pkgutil.iter_modules(
         plugins_package.__path__, plugins_package.__name__ + "."
@@ -322,5 +328,9 @@ admin.add_link(MenuLink(name='Commit Changes',
 
 
 
-from plugins import *
+try:
+    from plugins import *
+except ModuleNotFoundError:
+    # Optional: no custom plugins package in the working directory.
+    pass
 from application.plugins import *
