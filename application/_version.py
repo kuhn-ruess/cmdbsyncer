@@ -5,4 +5,4 @@ Kept as a standalone module so ``pyproject.toml`` can resolve the version via
 ``[tool.setuptools.dynamic]`` without importing the Flask application.
 """
 
-__version__ = "3.12.11"
+__version__ = "3.12.12"
