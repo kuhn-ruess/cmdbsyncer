@@ -220,7 +220,12 @@ class HostDetailInventoryApi(Resource):
         req_json = request.json
         key = req_json['key']
         inventory = req_json['inventory']
-        host_obj = Host.get_host(hostname)
+        # Inventory writes must not create hosts — that path has no account
+        # binding or hostname validation. Host creation goes through the
+        # primary /<hostname> endpoint which requires an account.
+        host_obj = Host.get_host(hostname, create=False)
+        if not host_obj:
+            return {'status': 'not found'}, 404
         try:
             host_obj.update_inventory(key, inventory)
         except ValueError as exc:
@@ -241,11 +246,16 @@ class HostDetailInventoryBulkApi(Resource):
         """ Update Inventories of Hosts in BULK """
         req_json = request.json
         count = 0
+        not_found = []
         for inv in req_json['inventories']:
             hostname = inv['hostname']
             key = inv['key']
             inventory = inv['inventory']
-            host_obj = Host.get_host(hostname)
+            # See single-host variant: no implicit host creation here.
+            host_obj = Host.get_host(hostname, create=False)
+            if not host_obj:
+                not_found.append(hostname)
+                continue
             try:
                 host_obj.update_inventory(key, inventory)
             except ValueError as exc:
@@ -255,7 +265,7 @@ class HostDetailInventoryBulkApi(Resource):
         status = f'saved {count}'
         status_code = 200
 
-        return {'status': status}, status_code
+        return {'status': status, 'not-found': not_found}, status_code
 
 
 

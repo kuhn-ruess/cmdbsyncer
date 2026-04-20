@@ -917,9 +917,63 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         )
 
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.get_json(), {'status': 'saved 2'})
+        self.assertEqual(resp.get_json(), {'status': 'saved 2', 'not-found': []})
         for host in hosts:
             host.save.assert_called_once()
+
+    @_auth_patches
+    @patch('application.api.objects.Host')
+    def test_inventory_post_404_when_host_missing(self, host_cls):
+        # Pentest finding 2026-04-20: inventory POST created hosts without
+        # account binding or hostname validation. Missing hosts must 404.
+        host_cls.get_host.return_value = None
+        resp = self.client.post(
+            '/api/v1/objects/new-host/inventory',
+            headers=self.headers,
+            json={'key': 'facts', 'inventory': {'cpu': 8}},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    @_auth_patches
+    @patch('application.api.objects.Host')
+    def test_inventory_bulk_reports_not_found(self, host_cls):
+        existing = MagicMock()
+        host_cls.get_host.side_effect = [existing, None]
+        payload = {
+            'inventories': [
+                {'hostname': 'exists', 'key': 'facts', 'inventory': {'cpu': 1}},
+                {'hostname': 'missing', 'key': 'facts', 'inventory': {'cpu': 2}},
+            ],
+        }
+        resp = self.client.post(
+            '/api/v1/objects/bulk/inventory',
+            headers=self.headers,
+            json=payload,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            resp.get_json(),
+            {'status': 'saved 1', 'not-found': ['missing']},
+        )
+        existing.save.assert_called_once()
+
+    @_auth_patches
+    @patch('application.api.objects.Host')
+    def test_inventory_post_does_not_create_hosts(self, host_cls):
+        host_cls.get_host.return_value = None
+        self.client.post(
+            '/api/v1/objects/bad%20host/inventory',
+            headers=self.headers,
+            json={'key': 'facts', 'inventory': {'cpu': 8}},
+        )
+        # Verify we never asked the Host layer to create the host.
+        for call in host_cls.get_host.call_args_list:
+            _args, kwargs = call
+            # Accept positional create=False or keyword.
+            if len(_args) > 1:
+                self.assertFalse(_args[1])
+            else:
+                self.assertFalse(kwargs.get('create', True))
 
     @_auth_patches
     @patch('application.api.objects.Host')
