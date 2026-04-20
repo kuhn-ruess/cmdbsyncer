@@ -15,8 +15,8 @@ from syncerapi.v1.inventory import run_inventory
 from application.helpers.sql import build_select_query, validate_custom_query
 
 try:
-    import pypyodbc as pyodbc
-except:
+    import pypyodbc as pyodbc  # pylint: disable=import-error
+except ImportError:
     logger.info("Info: ODBC Plugin was not able to load required modules")
 
 try:
@@ -43,9 +43,16 @@ class ODBC(Plugin):
             if not serverport:
                 serverport = sqlserverport.lookup(self.config['address'], self.config['instance'])
             server = f'{self.config["address"]},{serverport}'
-            connect_str = f'DRIVER={{{self.config["driver"]}}};SERVER={server};'\
-                          f'DATABASE={self.config["database"]};UID={self.config["username"]};'\
-                          f'PWD={self.config["password"]};TrustServerCertificate=YES'
+            connect_str = (
+                f'DRIVER={{{self.config["driver"]}}};'
+                f'SERVER={server};'
+                f'DATABASE={self.config["database"]};'
+                f'UID={self.config["username"]};'
+                f'PWD={self.config["password"]}'
+            )
+            trust_cert = str(self.config.get('trust_server_certificate', '')).strip().lower()
+            if trust_cert in ('yes', 'true', '1'):
+                connect_str += ';TrustServerCertificate=YES'
             logger.debug(connect_str)
             cnxn = pyodbc.connect(connect_str)
             cursor = cnxn.cursor()
@@ -58,10 +65,10 @@ class ODBC(Plugin):
             cursor.execute(query)
             logger.debug("Cursor Executed")
             rows = cursor.fetchall()
-            logger.debug(f"Fetch Executed: {cursor.description}")
+            logger.debug("Fetch Executed: %s", cursor.description)
             columns = [column[0] for column in cursor.description]
             for row in rows:
-                logger.debug(f"Found row: {row}")
+                logger.debug("Found row: %s", row)
                 labels=dict(zip(columns,row))
                 hostname = labels[self.config['hostname_field']].strip()
                 if app_config['LOWERCASE_HOSTNAMES']:

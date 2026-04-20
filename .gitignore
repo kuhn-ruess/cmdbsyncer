@@ -10,6 +10,7 @@ local_*
 .obsidian*
 .claude*
 */artifacts
+offline*
 
 .pypirc
 *.swp

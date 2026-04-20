@@ -16,6 +16,7 @@
                 "hostname_field": "host",
                 "rewrite_hostname": "",
                 "driver": "FreeTDS",
+                "trust_server_certificate": "",
                 "inventorize_key": "",
                 "inventorize_match_by_domain": "",
                 "inventorize_match_attribute": "",
