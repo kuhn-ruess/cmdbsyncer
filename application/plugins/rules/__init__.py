@@ -34,7 +34,10 @@ def cli_import_rules(rulefile_path):
                    "(skipped by default).")
 @click.option("--include-accounts", is_flag=True, default=False,
               help="Also export accounts (skipped by default).")
-def cli_export_all_rules(target_path, include_hosts, include_accounts):
+@click.option("--include-users", is_flag=True, default=False,
+              help="Also export user accounts including hashed passwords "
+                   "and roles (skipped by default — treat the output as secret).")
+def cli_export_all_rules(target_path, include_hosts, include_accounts, include_users):
     """
     Export all Rules of every type into a single file.
     If no path is given, a timestamped filename is generated.
@@ -43,6 +46,7 @@ def cli_export_all_rules(target_path, include_hosts, include_accounts):
         target_path or None,
         include_hosts=include_hosts,
         include_accounts=include_accounts,
+        include_users=include_users,
     )
 
 @cli_rules.command('create_rules')

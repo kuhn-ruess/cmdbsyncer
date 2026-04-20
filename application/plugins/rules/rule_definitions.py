@@ -1,3 +1,7 @@
+"""
+Registry of rule types that can be imported/exported — maps a short
+rule-type ident to its (module_path, model_class_name).
+"""
 rules = {
     'ansible_customvars': ('application.plugins.ansible.models', 'AnsibleCustomVariablesRule'),
     'ansible_filter': ('application.plugins.ansible.models', 'AnsibleFilterRule'),
@@ -20,6 +24,7 @@ rules = {
     'cmk_folder_pool': ('application.plugins.checkmk.models', 'CheckmkFolderPool'),
     'host_objects': ('application.models.host', 'Host'),
     'accounts': ('application.models.account', 'Account'),
+    'users': ('application.models.user', 'User'),
     'idoit_rules': ('application.plugins.idoit.models', 'IdoitCustomAttributes'),
     'idoit_rewrite': ('application.plugins.idoit.models', 'IdoitRewriteAttributeRule'),
     'netbox_dcim_interfaces': ('application.plugins.netbox.models',
