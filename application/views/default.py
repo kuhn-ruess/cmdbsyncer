@@ -19,6 +19,38 @@ from wtforms.validators import ValidationError
 
 from mongoengine.errors import NotUniqueError
 
+from application._version import __version__
+
+
+def _load_changelog():
+    """Return the current release's changelog markdown.
+
+    In source checkouts the symlink ``<repo>/changelog.md`` points at the
+    active ``changelog/v{MAJOR}.{MINOR}.md`` file. PyPI installs ship that
+    same file as ``application/changelog.md`` via package-data, generated
+    by ``tools/sync_changelog.py`` at build time.
+    """
+    packaged = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'changelog.md')
+    if os.path.isfile(packaged):
+        with open(packaged, 'r', encoding='utf-8') as fh:
+            return fh.read()
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    for candidate in (
+        os.path.join(repo_root, 'changelog.md'),
+        os.path.join(repo_root, 'changelog', _major_minor_filename()),
+    ):
+        if os.path.isfile(candidate):
+            with open(candidate, 'r', encoding='utf-8') as fh:
+                return fh.read()
+    raise FileNotFoundError('changelog')
+
+
+def _major_minor_filename():
+    """Return ``v{MAJOR}.{MINOR}.md`` for the running version."""
+    parts = __version__.split('.')
+    return f"v{parts[0]}.{parts[1]}.md"
+
+
 class DefaultModelView(ModelView):
     """
     Default Model View Overwrite
@@ -193,14 +225,9 @@ class IndexView(AdminIndexView):
         """
         Index view with changelog
         """
-        changelog_content = None
         changelog_html = None
         try:
-            # Get the absolute path to the changelog file
-            changelog_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'changelog.md')
-            with open(changelog_path, 'r', encoding='utf-8') as file:
-                changelog_content = file.read()
-                changelog_html = self._markdown_to_html(changelog_content)
+            changelog_html = self._markdown_to_html(_load_changelog())
         except FileNotFoundError:
             changelog_html = "<p>Changelog not found.</p>"
         except Exception:

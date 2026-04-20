@@ -2,7 +2,7 @@ PYTHON ?= venv/bin/python
 VERSION_FILE := application/_version.py
 VERSION := $(shell $(PYTHON) -c "import runpy; print(runpy.run_path('$(VERSION_FILE)')['__version__'])")
 
-.PHONY: help sync sync-version sync-deps version clean build check upload tag release
+.PHONY: help sync sync-version sync-deps sync-changelog version clean build check upload tag release
 
 help:
 	@echo "Available targets:"
@@ -26,7 +26,10 @@ sync-version:
 sync-deps:
 	@$(PYTHON) tools/sync_deps.py
 
-sync: sync-version sync-deps
+sync-changelog:
+	@$(PYTHON) tools/sync_changelog.py
+
+sync: sync-version sync-deps sync-changelog
 
 clean:
 	rm -rf build/ dist/ *.egg-info
