@@ -85,13 +85,19 @@ class TestSyncCMK2(unittest.TestCase):
         }
         self.assertEqual(self.syncer.custom_folder_attributes, expected)
 
-    def test_handle_extra_folder_options_invalid_syntax(self):
-        """Test handle_extra_folder_options with invalid syntax"""
-        full_path = "/folder1|invalid_dict_syntax"
+    def test_handle_extra_folder_options_invalid_syntax_skips(self):
+        """Pentest finding 2026-04-20: a malformed folder option suffix used
+        to bubble a ValueError out of the host export. The method now logs
+        and skips the bad segment so the export continues."""
+        full_path = "/prod|{broken}/web|{'site': 'w'}"
 
-        # Should raise ValueError due to ast.literal_eval
-        with self.assertRaises(ValueError):
-            self.syncer.handle_extra_folder_options(full_path)
+        self.syncer.handle_extra_folder_options(full_path)
+
+        # Good segment recorded, malformed segment dropped.
+        self.assertEqual(
+            self.syncer.custom_folder_attributes,
+            {'/prod/web': {'site': 'w'}},
+        )
 
     @patch('application.plugins.checkmk.syncer.app')
     def test_fetch_checkmk_hosts_by_folder(self, mock_app):

@@ -117,7 +117,27 @@ class SyncCMK2(CMK2):
                 config_path += "/" + folder
                 if len(splitted) == 2:
                     if config_path not in self.custom_folder_attributes:
-                        self.custom_folder_attributes[config_path] = ast.literal_eval(splitted[1])
+                        # Admin-editable move_folder / create_folder values —
+                        # a malformed suffix would otherwise abort the host
+                        # export for every host that touches this rule.
+                        try:
+                            parsed = ast.literal_eval(splitted[1])
+                        except (ValueError, SyntaxError) as exc:
+                            logger.error(
+                                "Skipping malformed folder option at %r: %r (%s)",
+                                config_path, splitted[1], exc,
+                            )
+                            log.log(
+                                "Skipping malformed folder option",
+                                details=[
+                                    ('path', config_path),
+                                    ('value', splitted[1]),
+                                    ('error', str(exc)),
+                                ],
+                                source="Checkmk Export",
+                            )
+                            continue
+                        self.custom_folder_attributes[config_path] = parsed
 
 
     # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements
