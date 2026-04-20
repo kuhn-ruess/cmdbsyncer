@@ -84,6 +84,7 @@ include = ["application*", "syncerapi*"]
 application = [
     "buildinfo.txt",
     "changelog.md",
+    "notices/*.txt",
     "templates/**/*",
     "static/**/*",
 ]

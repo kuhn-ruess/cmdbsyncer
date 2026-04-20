@@ -4,6 +4,7 @@ plugins/*
 !plugins/__init__.py
 application/config.local.py
 application/changelog.md
+application/notices/
 cmdbsyncer-files
 nogit_*
 local_*

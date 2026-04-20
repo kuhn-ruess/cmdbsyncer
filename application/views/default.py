@@ -206,9 +206,15 @@ class IndexView(AdminIndexView):
         """
         Load all notice files from the notices/ directory.
         Returns list of dicts with 'id' and 'content'.
+
+        PyPI installs ship the files as ``application/notices/*.txt`` via
+        package-data (synced by ``tools/sync_notices.py`` at build time);
+        source checkouts fall back to the repo-root ``notices/`` directory.
         """
         notices = []
-        notices_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'notices')
+        packaged_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'notices')
+        repo_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'notices')
+        notices_dir = packaged_dir if os.path.isdir(packaged_dir) else repo_dir
         if not os.path.isdir(notices_dir):
             return notices
         for filename in sorted(os.listdir(notices_dir)):
