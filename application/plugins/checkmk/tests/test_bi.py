@@ -107,6 +107,51 @@ class TestBI(unittest.TestCase):
         self.bi.export_bi_aggregations()
 
     @patch('application.plugins.checkmk.bi.Host')
+    @patch('application.plugins.checkmk.bi.render_jinja')
+    @patch('builtins.print')
+    def test_export_bi_rules_skips_malformed_template(self, mock_print, mock_render, mock_host):
+        # Pentest finding 2026-04-20: a malformed rule_template from an
+        # admin-configured BI rule aborted the whole export. It must now be
+        # skipped so other rules keep exporting.
+        mock_db_host = Mock()
+        mock_db_host.hostname = 'host1'
+        mock_host.objects.return_value = [mock_db_host]
+
+        with patch.object(self.bi, 'get_attributes') as mock_attrs:
+            mock_attrs.return_value = {'all': {'HOSTNAME': 'host1'}}
+            self.bi.actions.get_outcomes.return_value = {
+                'bi_rules': [{'rule_template': 'broken'}]
+            }
+            mock_render.return_value = "{'id': 'rule1', pack_id}"  # invalid syntax
+
+            with patch.object(self.bi, 'request') as mock_req:
+                self.bi.export_bi_rules()
+
+            # No packs collected -> no pack requests issued.
+            mock_req.assert_not_called()
+
+    @patch('application.plugins.checkmk.bi.Host')
+    @patch('application.plugins.checkmk.bi.render_jinja')
+    @patch('builtins.print')
+    def test_export_bi_aggregations_skips_malformed_template(
+            self, mock_print, mock_render, mock_host):
+        mock_db_host = Mock()
+        mock_db_host.hostname = 'host1'
+        mock_host.objects.return_value = [mock_db_host]
+
+        with patch.object(self.bi, 'get_attributes') as mock_attrs:
+            mock_attrs.return_value = {'all': {'HOSTNAME': 'host1'}}
+            self.bi.actions.get_outcomes.return_value = {
+                'aggregations': [{'rule_template': 'broken'}]
+            }
+            mock_render.return_value = "not-a-dict"  # literal_eval -> string
+
+            with patch.object(self.bi, 'request') as mock_req:
+                self.bi.export_bi_aggregations()
+
+            mock_req.assert_not_called()
+
+    @patch('application.plugins.checkmk.bi.Host')
     @patch('builtins.print')
     def test_export_bi_rules_skips_no_attributes(self, mock_print, mock_host):
         mock_db_host = Mock()

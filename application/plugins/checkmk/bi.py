@@ -1,8 +1,10 @@
 """
 Checkmk BI Rules
 """
+# pylint: disable=logging-fstring-interpolation,too-many-locals
+# pylint: disable=too-many-branches,too-many-statements,no-member
 import ast
-from application import logger
+from application import logger, log
 from application.plugins.checkmk.cmk2 import CMK2
 from application.modules.rule.rule import Rule
 
@@ -39,14 +41,36 @@ class BI(CMK2):
             if host_actions:
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
-                        # Render Template Value
+                        # Render Template Value. Admin-editable templates can be
+                        # malformed — skip and log so one broken rule cannot
+                        # abort the whole export.
                         rule_body = \
                             render_jinja(rule_params['rule_template'], **attributes['all'])
-                        rule_dict = ast.literal_eval(rule_body.replace('null', 'None'))
-                        unique_rules[rule_dict['id']] = rule_dict
-                        pack_id = rule_dict['pack_id']
+                        try:
+                            rule_dict = ast.literal_eval(rule_body.replace('null', 'None'))
+                            rule_id = rule_dict['id']
+                            pack_id = rule_dict['pack_id']
+                        except (ValueError, SyntaxError, TypeError, KeyError) as exc:
+                            logger.error(
+                                f"Skipping BI rule for host {db_host.hostname}:"
+                                f" malformed rule_template ({exc})"
+                            )
+                            log.log(
+                                "Skipping malformed BI rule template",
+                                details=[
+                                    ('host', db_host.hostname),
+                                    ('error', str(exc)),
+                                ],
+                                source="CMK BI",
+                            )
+                            print(
+                                f"{CC.FAIL} *{CC.ENDC} Skipping BI rule for"
+                                f" {db_host.hostname}: malformed rule_template"
+                            )
+                            continue
+                        unique_rules[rule_id] = rule_dict
                         if pack_id not in related_packs:
-                            related_packs.append(rule_dict['pack_id'])
+                            related_packs.append(pack_id)
                             logger.debug(f"Rule for Checkmk {rule_dict}")
 
 
@@ -113,15 +137,40 @@ class BI(CMK2):
             if host_actions:
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
-                        # Render Template Value
+                        # Render Template Value. Admin-editable templates can be
+                        # malformed — skip and log so one broken rule cannot
+                        # abort the whole export.
                         rule_body = \
                             render_jinja(rule_params['rule_template'], **attributes['all'])
-                        aggregation_dict = ast.literal_eval(rule_body.replace('null', 'None'))
-                        unique_aggregations[aggregation_dict['id']] = aggregation_dict
-                        pack_id = aggregation_dict['pack_id']
+                        try:
+                            aggregation_dict = ast.literal_eval(
+                                rule_body.replace('null', 'None'))
+                            aggregation_id = aggregation_dict['id']
+                            pack_id = aggregation_dict['pack_id']
+                        except (ValueError, SyntaxError, TypeError, KeyError) as exc:
+                            logger.error(
+                                f"Skipping BI aggregation for host"
+                                f" {db_host.hostname}: malformed"
+                                f" rule_template ({exc})"
+                            )
+                            log.log(
+                                "Skipping malformed BI aggregation template",
+                                details=[
+                                    ('host', db_host.hostname),
+                                    ('error', str(exc)),
+                                ],
+                                source="CMK BI",
+                            )
+                            print(
+                                f"{CC.FAIL} *{CC.ENDC} Skipping BI aggregation"
+                                f" for {db_host.hostname}: malformed rule_template"
+                            )
+                            continue
+                        unique_aggregations[aggregation_id] = aggregation_dict
                         if pack_id not in related_packs:
                             related_packs.append(pack_id)
-                            logger.debug(f"Aggregation for Checkmk {aggregation_dict}")
+                            logger.debug(
+                                f"Aggregation for Checkmk {aggregation_dict}")
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Load Rule Packs from Checkmk")
