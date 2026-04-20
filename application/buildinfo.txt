@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 BUILD_DATE=2026-04-20T11:31:29Z
+=======
+BUILD_DATE=2026-04-20T12:01:18Z
+>>>>>>> 16ae3cf (FIX: run_tests.sh discovers plugin tests again)
