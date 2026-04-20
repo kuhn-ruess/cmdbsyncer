@@ -334,6 +334,42 @@ class TestCMK2FetchHosts(unittest.TestCase):
             }
         )
 
+    @patch('application.plugins.checkmk.cmk2.Progress')
+    def test_fetch_all_checkmk_hosts_preserves_effective_attributes(self, mock_progress_cls):
+        # Inventorize requests ?effective_attributes=true and reads
+        # host['extensions']['effective_attributes']. The compaction must
+        # carry it through when present, otherwise inventorize KeyErrors.
+        mock_progress = MagicMock()
+        mock_progress_cls.return_value.__enter__ = Mock(return_value=mock_progress)
+        mock_progress_cls.return_value.__exit__ = Mock(return_value=False)
+
+        api_response = ({
+            'value': [
+                {
+                    'id': 'host1',
+                    'extensions': {
+                        'attributes': {'labels': {'a': 'b'}},
+                        'effective_attributes': {
+                            'tag_agent': 'cmk-agent',
+                            'labels': {'a': 'b', 'inherited': 'yes'},
+                        },
+                        'folder': '/servers',
+                        'is_cluster': False,
+                        'cluster_nodes': [],
+                    }
+                }
+            ]
+        }, {})
+
+        with patch.object(self.cmk, 'request', return_value=api_response):
+            self.cmk.fetch_all_checkmk_hosts()
+
+        host_ext = self.cmk.checkmk_hosts['host1']['extensions']
+        self.assertEqual(
+            host_ext['effective_attributes'],
+            {'tag_agent': 'cmk-agent', 'labels': {'a': 'b', 'inherited': 'yes'}},
+        )
+
     @patch('application.plugins.checkmk.cmk2.multiprocessing')
     @patch('application.plugins.checkmk.cmk2.Progress')
     def test_fetch_checkmk_host_by_folder_collects_plain_results(self, mock_progress_cls, mock_mp):

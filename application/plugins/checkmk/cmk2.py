@@ -35,20 +35,25 @@ class CMK2(Plugin):
     @staticmethod
     def _compact_host_data(host):
         """
-        Keep only the host fields the syncer actually reads later.
+        Keep only the host fields consumers of `checkmk_hosts` actually
+        read later.
 
         The CheckMK API returns large host documents. Retaining only the
-        required fields reduces memory usage noticeably during big sync runs.
+        required fields reduces memory usage noticeably during big sync
+        runs. `effective_attributes` is carried through when the caller
+        requested `?effective_attributes=true` (the Inventorize flow
+        depends on it).
         """
         extensions = host.get('extensions', {})
-        return {
-            'extensions': {
-                'attributes': extensions.get('attributes', {}),
-                'folder': extensions.get('folder', '/'),
-                'is_cluster': extensions.get('is_cluster', False),
-                'cluster_nodes': extensions.get('cluster_nodes', []),
-            }
+        compacted = {
+            'attributes': extensions.get('attributes', {}),
+            'folder': extensions.get('folder', '/'),
+            'is_cluster': extensions.get('is_cluster', False),
+            'cluster_nodes': extensions.get('cluster_nodes', []),
         }
+        if 'effective_attributes' in extensions:
+            compacted['effective_attributes'] = extensions['effective_attributes']
+        return {'extensions': compacted}
 
 
     def __init__(self, account=False):
