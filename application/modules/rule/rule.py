@@ -3,6 +3,7 @@
 Handle Rule Matching
 """
 # pylint: disable=too-many-return-statements,too-many-locals,too-many-branches
+# pylint: disable=too-many-instance-attributes
 import ast
 import re
 from rich.console import Console
@@ -12,6 +13,15 @@ from rich import box
 from application import logger, app
 from application.modules.rule.match import match
 from application.helpers.syncer_jinja import render_jinja
+
+
+# Module-level constants to avoid per-call dict/string allocation in the
+# rule-engine hot path.
+_RULE_DESCRIPTIONS = {
+    'any': "ANY can match",
+    'all': "ALL must match",
+    'anyway': "ALWAYS match",
+}
 
 class Rule():
     """
@@ -39,6 +49,9 @@ class Rule():
         # Cached (id(self.rules), [rule objs], [rule.to_mongo() docs]).
         # Invalidated automatically when self.rules is reassigned.
         self._rule_docs_cache = None
+        # Default cache key derived from the concrete rule-engine class.
+        # Computed once — get_outcomes is otherwise on the hot path.
+        self._default_cache_key = self.__class__.__qualname__.replace('.', '')
 
 
     @staticmethod
@@ -173,40 +186,41 @@ class Rule():
     def _iter_rule_docs(self):
         """
         Materialise `rule.to_mongo()` once per rules QuerySet and cache
-        the result together with per-rule outcome dicts. `self.rules` is
-        typically a mongoengine QuerySet that is evaluated repeatedly —
-        one `.to_mongo()` per rule per host — even though the rules
-        themselves don't change across the run. Cache is invalidated
-        when the identity of `self.rules` changes.
+        the result in hot-path-friendly shapes. `self.rules` is typically
+        a mongoengine QuerySet that is evaluated repeatedly — one
+        `.to_mongo()` per rule per host — even though the rules themselves
+        don't change across the run. Cache is invalidated when the
+        identity of `self.rules` changes.
 
-        Returns a tuple of three parallel lists:
-        - rule objects (for .name access during debug)
-        - rule docs    (SON mapping from to_mongo())
-        - outcome lists (each a list of plain dicts, pre-converted once)
+        Returns two parallel lists:
+        - rule objects (kept for .name access during debug)
+        - prepared rule dicts with plain-dict conditions and outcomes so
+          the hot loop does cheap dict access instead of SON lookups.
         """
         current_key = id(self.rules)
         cache = self._rule_docs_cache
         if cache is not None and cache[0] == current_key:
-            return cache[1], cache[2], cache[3]
+            return cache[1], cache[2]
         objs = list(self.rules)
-        docs = [rule.to_mongo() for rule in objs]
-        outcomes_per_rule = [
-            [dict(x) for x in doc.get('outcomes', [])] for doc in docs
-        ]
-        self._rule_docs_cache = (current_key, objs, docs, outcomes_per_rule)
-        return objs, docs, outcomes_per_rule
+        prepared = []
+        for rule_obj in objs:
+            doc = rule_obj.to_mongo()
+            prepared.append({
+                'condition_typ': doc.get('condition_typ'),
+                'conditions': [dict(c) for c in doc.get('conditions', [])],
+                'outcomes': [dict(o) for o in doc.get('outcomes', [])],
+                'last_match': doc.get('last_match', False),
+                'name': doc.get('name', ''),
+                '_id': doc.get('_id'),
+            })
+        self._rule_docs_cache = (current_key, objs, prepared)
+        return objs, prepared
 
     # pylint: disable=too-many-branches
     def check_rules(self, hostname):
         """
         Handle Rule Match logic
         """
-
-        rule_descriptions = {
-            'any' : "ANY can match",
-            'all' : "ALL must match",
-            'anyway': "ALWAYS match"
-        }
         debug_advanced = app.config['ADVANCED_RULE_DEBUG']
         if self.debug:
             title = f"Debug '{self.name}' Rules for {hostname}"
@@ -221,18 +235,19 @@ class Rule():
             table.add_column("Last Match")
 
         outcomes = {}
-        rule_objs, rule_docs, rule_outcomes_list = self._iter_rule_docs()
-        for rule_obj, rule, rule_outcomes_dicts in zip(
-                rule_objs, rule_docs, rule_outcomes_list):
+        rule_objs, prepared_rules = self._iter_rule_docs()
+        for rule_obj, rule in zip(rule_objs, prepared_rules):
             if debug_advanced:
                 logger.debug('##########################')
                 logger.debug('Check Rule: %s', rule_obj.name)
                 logger.debug('##########################')
             rule_hit = False
+            condition_typ = rule['condition_typ']
+            conditions = rule['conditions']
 
             no_match_reason = None
-            if rule['condition_typ'] == 'any':
-                for condition in rule['conditions']:
+            if condition_typ == 'any':
+                for condition in conditions:
                     if self.handle_match(condition, hostname):
                         rule_hit = True
                         no_match_reason = None
@@ -240,16 +255,16 @@ class Rule():
                     if self.debug:
                         no_match_reason = dict(condition)
 
-            elif rule['condition_typ'] == 'all':
+            elif condition_typ == 'all':
                 rule_hit = True
-                for condition in rule['conditions']:
+                for condition in conditions:
                     if not self.handle_match(condition, hostname):
                         rule_hit = False
                         if self.debug:
                             no_match_reason = dict(condition)
                         break # One was no hit, no need for loop
 
-            elif rule['condition_typ'] == 'anyway':
+            elif condition_typ == 'anyway':
                 rule_hit = True
 
 
@@ -258,18 +273,18 @@ class Rule():
                     "group": self.name,
                     "hit": rule_hit,
                     'no_match_reason': no_match_reason,
-                    "condition_type": rule_descriptions[rule['condition_typ']],
+                    "condition_type": _RULE_DESCRIPTIONS[condition_typ],
                     "name": rule['name'],
                     "id": str(rule['_id']),
                     "last_match": str(rule['last_match']),
                 }
                 self.debug_lines.append(debug_data)
-                table.add_row(str(rule_hit), rule_descriptions[rule['condition_typ']],\
+                table.add_row(str(rule_hit), _RULE_DESCRIPTIONS[condition_typ],\
                               rule['name'][:30], str(rule['_id']), str(rule['last_match']))
             if rule_hit:
                 # outcomes were pre-converted to plain dicts in
                 # _iter_rule_docs so we don't rebuild them per host.
-                outcomes = self.add_outcomes(rule, rule_outcomes_dicts, outcomes)
+                outcomes = self.add_outcomes(rule, rule['outcomes'], outcomes)
                 # If rule has matched, and option is set, we are done
                 if rule['last_match']:
                     break
@@ -383,9 +398,7 @@ class Rule():
         """
         Handle Return of outcomes.
         """
-        cache = self.__class__.__qualname__.replace('.','')
-        if self.cache_name:
-            cache = self.cache_name
+        cache = self.cache_name or self._default_cache_key
         if cache in db_host.cache:
             logger.debug("Using Rule Cache for %s", db_host.hostname)
             return db_host.cache[cache]
