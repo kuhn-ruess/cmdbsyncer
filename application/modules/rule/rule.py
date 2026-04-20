@@ -221,6 +221,12 @@ class Rule():
         """
         Handle Rule Match logic
         """
+        # Reset per-host match state so a prior host's hit cannot leak
+        # into this host's FIRST_MATCHING_TAG/VALUE when the engine
+        # instance is reused across hosts (e.g. persisted CustomAttribute
+        # engine, or anyway-condition rules that never call handle_match).
+        self.first_matching_tag = None
+        self.first_matching_value = None
         debug_advanced = app.config['ADVANCED_RULE_DEBUG']
         if self.debug:
             title = f"Debug '{self.name}' Rules for {hostname}"
