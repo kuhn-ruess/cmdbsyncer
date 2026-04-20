@@ -708,6 +708,42 @@ class ObjectsAPITest(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
 
     @_auth_patches
+    def test_post_host_rejects_dollar_prefixed_label_key(self):
+        # Pentest finding 2026-04-20: $-prefixed label keys triggered a 500
+        # because MongoDB rejects them at save time.
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct', 'labels': {'$bad': 'x'}},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
+    def test_post_host_rejects_dotted_label_key(self):
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct', 'labels': {'a.b': 'x'}},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
+    def test_bulk_post_rejects_dollar_prefixed_label_key(self):
+        payload = {
+            'account': 'acct',
+            'objects': [
+                {'hostname': 'a', 'labels': {'$bad': 'x'}},
+            ],
+        }
+        resp = self.client.post(
+            '/api/v1/objects/bulk',
+            headers=self.headers,
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
     def test_post_host_validation_rejects_missing_fields(self):
         resp = self.client.post(
             '/api/v1/objects/web01',

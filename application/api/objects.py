@@ -30,6 +30,21 @@ def serialize_for_json(data):
     return data
 
 
+def _validate_mongo_keys(mapping, what):
+    """
+    Reject keys that MongoDB rejects at persistence time ($-prefix, '.') and
+    non-string / empty keys, so we 400 cleanly instead of bubbling up a 500
+    from the driver mid-save.
+    """
+    if not isinstance(mapping, dict):
+        return
+    for key in mapping:
+        if not isinstance(key, str) or not key:
+            abort(400, f"{what} keys must be non-empty strings")
+        if key.startswith('$') or '.' in key:
+            abort(400, f"{what} keys must not start with '$' or contain '.'")
+
+
 def build_host_dict(host_obj):
     """
     Build dict of an object which will be returned
@@ -135,6 +150,7 @@ class HostDetailApi(Resource):
         except AccountNotFoundError:
             abort(400, "Account not found")
         labels = req_json['labels']
+        _validate_mongo_keys(labels, "label")
         host_obj = Host.get_host(hostname)
         host_obj.update_host(labels)
         do_save = host_obj.set_account(account_dict=account_dict)
@@ -188,6 +204,7 @@ class HostDetailBulkApi(Resource):
         for api_host in req_json['objects']:
             hostname = api_host['hostname']
             labels = api_host['labels']
+            _validate_mongo_keys(labels, "label")
             host_obj = Host.get_host(hostname)
             host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=account_dict)
