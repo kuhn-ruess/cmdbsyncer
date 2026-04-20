@@ -156,10 +156,13 @@ class HostDetailApi(Resource):
         status_code = 404
         if host_obj:
             if folder := host_obj.folder:
-                folder = CheckmkFolderPool.objects.get(folder_name__iexact=folder)
-                if folder.folder_seats_taken > 0:
-                    folder.folder_seats_taken -= 1
-                    folder.save()
+                try:
+                    pool = CheckmkFolderPool.objects.get(folder_name__iexact=folder)
+                except DoesNotExist:
+                    pool = None
+                if pool and pool.folder_seats_taken > 0:
+                    pool.folder_seats_taken -= 1
+                    pool.save()
             status = "deleted"
             status_code = 200
             host_obj.delete()
