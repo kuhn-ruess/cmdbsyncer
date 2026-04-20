@@ -118,6 +118,7 @@ class Plugin():
 
     config = {}
     log_details = None
+    _http_session = None
 
 
     debug_lines = None # Used for GUI Debuging
@@ -142,6 +143,7 @@ class Plugin():
         self.log_details = []
         self.debug_lines = []
         self._ca_cert_tempfile = None
+        self._http_session = None
         self.log_details.append(('started', datetime.now()))
         if account:
             self.config = get_account(account)
@@ -199,6 +201,9 @@ class Plugin():
                 os.unlink(self._ca_cert_tempfile)
             except OSError:
                 pass
+        if self._http_session:
+            self._http_session.close()
+            self._http_session = None
 
 
 
@@ -292,22 +297,11 @@ class Plugin():
         max_retries = app.config['HTTP_MAX_RETRIES']
         retry_wait = app.config['HTTP_REPEAT_TIMEOUT']
         resp = None
+        if self._http_session is None:
+            self._http_session = requests.Session()
         for attempt in range(1, max_retries+1):
             try:
-                if method == "get":
-                    resp = requests.get(url, **payload)
-                elif method == 'post':
-                    resp = requests.post(url, **payload)
-                elif method == 'patch':
-                    resp = requests.patch(url, **payload)
-                elif method == 'put':
-                    resp = requests.put(url, **payload)
-                elif method == 'delete':
-                    resp = requests.delete(url, **payload)
-                elif method ==  'head':
-                    resp = requests.head(url, **payload)
-                elif method ==  'options':
-                    resp = requests.options(url, **payload)
+                resp = self._http_session.request(method, url, **payload)
                 break
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
                 print(f"Try {attempt} of {max_retries} failed: {e}")
@@ -342,7 +336,8 @@ class Plugin():
                         CustomAttributeRuleModel.objects(enabled=True).order_by('sort_field')
 
 
-    def get_attributes(self, db_host, cache):
+    # pylint: disable=too-many-branches
+    def get_attributes(self, db_host, cache, persist_cache=True):
         """
         Retrieve and process host attributes with caching support.
         
@@ -377,11 +372,21 @@ class Plugin():
             attributes.update(tmpl.labels.items())
 
         self.init_custom_attributes()
-        attributes.update(self.custom_attributes.get_outcomes(db_host, attributes))
+        attributes.update(
+            self.custom_attributes.get_outcomes(
+                db_host,
+                attributes,
+                persist_cache=persist_cache,
+            )
+        )
 
         attributes_filtered = {}
         if self.rewrite:
-            for rewrite, value in self.rewrite.get_outcomes(db_host, attributes).items():
+            for rewrite, value in self.rewrite.get_outcomes(
+                db_host,
+                attributes,
+                persist_cache=persist_cache,
+            ).items():
                 realname = rewrite[4:]
                 if rewrite.startswith('add_'):
                     attributes[realname] = value
@@ -398,16 +403,26 @@ class Plugin():
         }
 
         if self.filter:
-            attributes_filtered = self.filter.get_outcomes(db_host, attributes)
+            attributes_filtered = self.filter.get_outcomes(
+                db_host,
+                attributes,
+                persist_cache=persist_cache,
+            )
             data['filtered'] = attributes_filtered
             if attributes_filtered.get('ignore_host') and cache:
                 db_host.cache[cache]['attributes'] = data
-                db_host.save()
+                if persist_cache:
+                    db_host.save()
+                else:
+                    setattr(db_host, '_cache_dirty', True)
                 return False
 
         if cache:
             db_host.cache[cache]['attributes'] = data
-            db_host.save()
+            if persist_cache:
+                db_host.save()
+            else:
+                setattr(db_host, '_cache_dirty', True)
         return data
 
 #   .-- Get Host Data

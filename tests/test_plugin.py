@@ -1,7 +1,7 @@
 """
 Unit tests for the Plugin base class
 """
-# pylint: disable=missing-function-docstring,unused-argument
+# pylint: disable=missing-function-docstring,unused-argument,too-many-public-methods
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 import time
@@ -101,13 +101,20 @@ class TestPlugin(unittest.TestCase):
         mock_app.config = self.mock_app_config
         mock_response = Mock()
         mock_response.json.return_value = {'status': 'success'}
-        mock_requests.get.return_value = mock_response
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
 
         plugin = Plugin()
         result = plugin.inner_request('GET', 'http://example.com')
 
         self.assertEqual(result, mock_response)
-        mock_requests.get.assert_called_once()
+        mock_session.request.assert_called_once_with(
+            'get',
+            'http://example.com',
+            verify=True,
+            timeout=30,
+        )
 
     @patch('application.modules.plugin.app')
     @patch('application.modules.plugin.requests')
@@ -116,7 +123,9 @@ class TestPlugin(unittest.TestCase):
         mock_app.config = self.mock_app_config
         mock_response = Mock()
         mock_response.json.return_value = {'created': True}
-        mock_requests.post.return_value = mock_response
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
 
         plugin = Plugin()
         json_data = {'key': 'value'}
@@ -125,8 +134,8 @@ class TestPlugin(unittest.TestCase):
         )
 
         self.assertEqual(result, mock_response)
-        mock_requests.post.assert_called_once()
-        call_args = mock_requests.post.call_args[1]
+        mock_session.request.assert_called_once()
+        call_args = mock_session.request.call_args[1]
         self.assertEqual(call_args['json'], json_data)
 
     @patch('application.modules.plugin.app')
@@ -141,12 +150,14 @@ class TestPlugin(unittest.TestCase):
         with patch('application.modules.plugin.requests') as mock_requests:
             # Set up the actual exception classes
             mock_requests.exceptions = requests.exceptions
+            mock_session = Mock()
+            mock_requests.Session.return_value = mock_session
 
             mock_response = Mock()
             mock_response.json.return_value = {'status': 'success'}
             mock_response.text = 'Success response'
 
-            mock_requests.get.side_effect = [
+            mock_session.request.side_effect = [
                 requests.exceptions.Timeout("Timeout occurred"),
                 requests.exceptions.ConnectionError("Connection failed"),
                 mock_response  # Success on third try
@@ -155,7 +166,7 @@ class TestPlugin(unittest.TestCase):
             plugin = Plugin()
             plugin.inner_request('GET', 'http://example.com')
 
-            self.assertEqual(mock_requests.get.call_count, 3)
+            self.assertEqual(mock_session.request.call_count, 3)
             self.assertEqual(mock_time.sleep.call_count, 2)
             self.assertEqual(mock_print.call_count, 4)
 
@@ -167,12 +178,33 @@ class TestPlugin(unittest.TestCase):
 
         with patch('application.modules.plugin.requests') as mock_requests:
             mock_requests.exceptions = requests.exceptions
-            mock_requests.get.side_effect = \
+            mock_session = Mock()
+            mock_session.request.side_effect = \
                 requests.exceptions.Timeout("Max retries exceeded")
+            mock_requests.Session.return_value = mock_session
 
             plugin = Plugin()
             with self.assertRaises(requests.exceptions.Timeout):
                 plugin.inner_request('GET', 'http://example.com')
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.requests')
+    @patch('application.modules.plugin.log')
+    @patch('application.modules.plugin.logger')
+    def test_save_log_closes_http_session(self, _logger, _log, mock_requests, mock_app):
+        mock_app.config = self.mock_app_config
+        mock_session = Mock()
+        mock_requests.exceptions = requests.exceptions
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'ok'}
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
+
+        plugin = Plugin()
+        plugin.inner_request('GET', 'http://example.com')
+        plugin.save_log()
+
+        mock_session.close.assert_called_once()
 
     @patch('application.modules.plugin.app')
     @patch('application.modules.plugin.logger')
@@ -253,6 +285,43 @@ class TestPlugin(unittest.TestCase):
         result = plugin.get_attributes(mock_host, 'test_cache')
 
         self.assertFalse(result)
+
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_deferred_cache_save(self, mock_app):
+        mock_app.config = self.mock_app_config
+
+        mock_host = Mock()
+        mock_host.hostname = 'test-host'
+        mock_host.cache = {}
+        mock_host.labels = {'label1': 'value1'}
+        mock_host.inventory = {'inv1': 'value2'}
+        mock_host.cmdb_templates = []
+
+        plugin = Plugin()
+        plugin.custom_attributes = Mock()
+        plugin.custom_attributes.get_outcomes.return_value = {'custom': 'x'}
+        plugin.init_custom_attributes = Mock()
+        plugin.rewrite = Mock()
+        plugin.rewrite.get_outcomes.return_value = {'add_extra': 'y'}
+        plugin.filter = Mock()
+        plugin.filter.get_outcomes.return_value = {'filtered': 'z'}
+
+        result = plugin.get_attributes(mock_host, 'test_cache', persist_cache=False)
+
+        self.assertEqual(result['all']['custom'], 'x')
+        self.assertEqual(result['all']['extra'], 'y')
+        self.assertEqual(result['filtered'], {'filtered': 'z'})
+        self.assertTrue(mock_host.cache['test_cache_hostattribute']['attributes'])
+        mock_host.save.assert_not_called()
+        self.assertTrue(getattr(mock_host, '_cache_dirty', False))
+        plugin.custom_attributes.get_outcomes.assert_called_once()
+        self.assertEqual(
+            plugin.custom_attributes.get_outcomes.call_args.kwargs['persist_cache'], False,
+        )
+        self.assertEqual(
+            plugin.rewrite.get_outcomes.call_args.kwargs['persist_cache'], False,
+        )
+        self.assertEqual(plugin.filter.get_outcomes.call_args.kwargs['persist_cache'], False)
 
     @patch('application.modules.plugin.app')
     def test_get_host_data(self, mock_app):
@@ -336,10 +405,12 @@ class TestPlugin(unittest.TestCase):
             mock_file = MagicMock()
             mock_open.return_value.__enter__.return_value = mock_file
 
-            with patch('application.modules.plugin.requests.get') as mock_get:
+            with patch('application.modules.plugin.requests.Session') as mock_session_cls:
+                mock_session = Mock()
                 mock_response = Mock()
                 mock_response.json.return_value = {'test': 'response'}
-                mock_get.return_value = mock_response
+                mock_session.request.return_value = mock_response
+                mock_session_cls.return_value = mock_session
 
                 plugin.inner_request('GET', 'http://example.com')
 

@@ -71,7 +71,7 @@ class TestSyncCMK2(unittest.TestCase):
 
         self.assertEqual(result, mock_actions_result)
         self.syncer.actions.get_outcomes.assert_called_once_with(  # pylint: disable=no-member
-            mock_host, mock_attributes)
+            mock_host, mock_attributes, persist_cache=True)
 
     def test_handle_extra_folder_options(self):
         """Test handle_extra_folder_options method"""
@@ -100,7 +100,8 @@ class TestSyncCMK2(unittest.TestCase):
 
         with patch.object(self.syncer, '_fetch_checkmk_host_by_folder') as mock_fetch_folder:
             self.syncer.fetch_checkmk_hosts()
-            mock_fetch_folder.assert_called_once()
+            mock_fetch_folder.assert_called_once_with(
+                extra_params='?effective_attributes=false&include_links=false')
 
     @patch('application.plugins.checkmk.syncer.app')
     def test_fetch_checkmk_hosts_all(self, mock_app):
@@ -109,7 +110,8 @@ class TestSyncCMK2(unittest.TestCase):
 
         with patch.object(self.syncer, 'fetch_all_checkmk_hosts') as mock_fetch_all:
             self.syncer.fetch_checkmk_hosts()
-            mock_fetch_all.assert_called_once()
+            mock_fetch_all.assert_called_once_with(
+                extra_params='?effective_attributes=false&include_links=false')
 
     def test_use_host_limit_by_hostnames(self):
         """Test use_host with hostname limits"""
@@ -240,6 +242,71 @@ class TestSyncCMK2(unittest.TestCase):
             self.assertFalse(result)
             self.assertNotIn('disabled-host', host_actions)
             self.assertIn('disabled-host', disabled_hosts)
+
+    def test_calculate_host_actions_success(self):
+        """Test calculate_host_actions returns plain worker data"""
+        mock_host = Mock()
+        mock_host.hostname = 'test-host'
+        mock_attributes = {'all': {'attr1': 'value1'}, 'filtered': {}}
+        mock_actions = {'action1': 'result1'}
+
+        with patch.object(self.syncer, 'get_attributes', return_value=mock_attributes), \
+             patch.object(self.syncer, 'get_host_actions', return_value=mock_actions):
+            result = self.syncer.calculate_host_actions(mock_host)
+
+        self.assertEqual(
+            result,
+            ('test-host', True, (mock_actions, mock_attributes)),
+        )
+
+    def test_calculate_host_actions_flushes_cache_once(self):
+        """Test calculate_host_actions defers rule cache saves and flushes once"""
+        mock_host = Mock()
+        mock_host.hostname = 'test-host'
+        mock_host._cache_dirty = True
+        mock_attributes = {'all': {'attr1': 'value1'}, 'filtered': {}}
+        mock_actions = {'action1': 'result1'}
+
+        with patch.object(
+            self.syncer, 'get_attributes', return_value=mock_attributes,
+        ) as mock_get_attr, \
+             patch.object(
+                 self.syncer, 'get_host_actions', return_value=mock_actions,
+             ) as mock_get_actions:
+            result = self.syncer.calculate_host_actions(mock_host)
+
+        self.assertEqual(
+            result,
+            ('test-host', True, (mock_actions, mock_attributes)),
+        )
+        self.assertEqual(mock_get_attr.call_args.kwargs['persist_cache'], False)
+        self.assertEqual(mock_get_actions.call_args.kwargs['persist_cache'], False)
+        mock_host.save.assert_called_once()
+        self.assertFalse(mock_host._cache_dirty)
+
+    def test_calculate_host_actions_disabled(self):
+        """Test calculate_host_actions reports disabled hosts"""
+        mock_host = Mock()
+        mock_host.hostname = 'disabled-host'
+
+        with patch.object(self.syncer, 'get_attributes', return_value=False):
+            result = self.syncer.calculate_host_actions(mock_host)
+
+        self.assertEqual(result, ('disabled-host', False, None))
+
+    def test_calculate_host_actions_disabled_flushes_deferred_cache(self):
+        """Test calculate_host_actions flushes deferred cache for ignored hosts"""
+        mock_host = Mock()
+        mock_host.hostname = 'disabled-host'
+        mock_host._cache_dirty = True
+
+        with patch.object(self.syncer, 'get_attributes', return_value=False) as mock_get_attr:
+            result = self.syncer.calculate_host_actions(mock_host)
+
+        self.assertEqual(result, ('disabled-host', False, None))
+        self.assertEqual(mock_get_attr.call_args.kwargs['persist_cache'], False)
+        mock_host.save.assert_called_once()
+        self.assertFalse(mock_host._cache_dirty)
 
     def test_handle_cmk_folder_basic(self):
         """Test handle_cmk_folder basic functionality"""
@@ -556,24 +623,33 @@ class TestSyncCMK2(unittest.TestCase):
             return_value=iter([Mock(hostname='host1'), Mock(hostname='host2')]))
         mock_host.objects_by_filter.return_value = mock_db_objects
 
-        # Mock multiprocessing components
-        mock_manager = Mock()
-        mock_dict = {}
-        mock_list = []
-        mock_manager.dict.return_value = mock_dict
-        mock_manager.list.return_value = mock_list
-        mock_mp.Manager.return_value = mock_manager
-
         mock_pool = Mock()
         mock_mp.Pool.return_value.__enter__.return_value = mock_pool
+        mock_progress_ctx = mock_progress.return_value.__enter__.return_value
+        mock_progress_ctx.add_task.side_effect = ['task1', 'task2']
+
+        task_host1 = Mock()
+        task_host1.get.return_value = (
+            'host1',
+            True,
+            ({'action1': 'value1'}, {'all': {}, 'filtered': {}}),
+        )
+        task_host2 = Mock()
+        task_host2.get.return_value = ('host2', False, None)
+        mock_pool.apply_async.side_effect = [task_host1, task_host2]
 
         # Mock use_host to return True
         with patch.object(self.syncer, 'use_host', return_value=True):
-            self.syncer.config = {'settings': {}}
+            self.syncer.config = {'settings': {}, 'list_disabled_hosts': True}
 
             result = self.syncer.calculate_attributes_and_rules()
 
-            self.assertEqual(result, mock_dict)
+            self.assertEqual(
+                result,
+                {'host1': ({'action1': 'value1'}, {'all': {}, 'filtered': {}})},
+            )
+            self.assertEqual(self.syncer.disabled_hosts, ['host2'])
+            self.assertEqual(mock_pool.apply_async.call_count, 2)
 
     @patch('application.plugins.checkmk.syncer.Progress')
     @patch('application.plugins.checkmk.syncer.print')

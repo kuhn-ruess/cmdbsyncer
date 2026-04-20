@@ -92,15 +92,24 @@ class Rule():
 
             # Check if Tag matchs
             if app.config['ADVANCED_RULE_DEBUG']:
-                logger.debug(f"Check Tag: {tag} vs needed: {needed_tag} "\
-                             f"for {tag_match}, Negate: {tag_match_negate}")
+                logger.debug(
+                    "Check Tag: %s vs needed: %s for %s, Negate: %s",
+                    tag,
+                    needed_tag,
+                    tag_match,
+                    tag_match_negate,
+                )
             # If the Tag with the Name matches, we cann check if the value is allright
             if match(tag, needed_tag, tag_match, tag_match_negate):
                 if app.config['ADVANCED_RULE_DEBUG']:
                     logger.debug('--> HIT')
-                    logger.debug(f"Check Attr Value: {repr(value)} "\
-                                 " vs needed: {repr(needed_value)} "\
-                                 f"for {value_match}, Negate: {value_match_negate}")
+                    logger.debug(
+                        "Check Attr Value: %r vs needed: %r for %s, Negate: %s",
+                        value,
+                        needed_value,
+                        value_match,
+                        value_match_negate,
+                    )
                 # Tag had Match, now see if Value Matches too
                 if match(value, needed_value, value_match, value_match_negate):
                     if app.config['ADVANCED_RULE_DEBUG']:
@@ -132,6 +141,7 @@ class Rule():
             return self._check_attribute_match(condition)
         return self._check_hostname_match(condition, hostname)
 
+    # pylint: disable=too-many-branches
     def check_rules(self, hostname):
         """
         Handle Rule Match logic
@@ -158,7 +168,7 @@ class Rule():
         for rule in self.rules:
             if app.config['ADVANCED_RULE_DEBUG']:
                 logger.debug('##########################')
-                logger.debug(f'Check Rule: {rule.name}')
+                logger.debug('Check Rule: %s', rule.name)
                 logger.debug('##########################')
             rule = rule.to_mongo()
             rule_hit = False
@@ -170,8 +180,7 @@ class Rule():
                         rule_hit = True
                         no_match_reason = None
                         break # We have a hit, no need to check more
-                    else:
-                        no_match_reason = dict(condition)
+                    no_match_reason = dict(condition)
 
             elif rule['condition_typ'] == 'all':
                 rule_hit = True
@@ -209,13 +218,14 @@ class Rule():
             print()
         return outcomes
 
-    def handle_fields(self, field_name, field_value):
+    def handle_fields(self, _field_name, field_value):
         """
         Default, overwrite if needed
         Rewrites Attributes if needed in get_multilist_outcomes mode
         """
         return field_value
 
+    # pylint: disable=too-many-locals,too-many-nested-blocks,too-many-branches
     def get_multilist_outcomes(self, rule_outcomes, ignore_field):
         """
         Central Function which helps 
@@ -248,7 +258,7 @@ class Rule():
                                                          LIST_VAR=data,
                                                          **self.attributes)
                                 if new_value:
-                                    new_list.appende(new_value)
+                                    new_list.append(new_value)
                             new_value = new_list
                         else:
                             new_value  = render_jinja(action_param, mode="nullify",
@@ -308,7 +318,7 @@ class Rule():
         return self.check_rules(db_host.hostname)
 
 
-    def get_outcomes(self, db_host, attributes):
+    def get_outcomes(self, db_host, attributes, persist_cache=True):
         """
         Handle Return of outcomes.
         """
@@ -316,7 +326,7 @@ class Rule():
         if self.cache_name:
             cache = self.cache_name
         if cache in db_host.cache:
-            logger.debug(f"Using Rule Cache for {db_host.hostname}")
+            logger.debug("Using Rule Cache for %s", db_host.hostname)
             return db_host.cache[cache]
 
         self.attributes = attributes
@@ -324,5 +334,8 @@ class Rule():
         self.db_host = db_host
         rules = self.check_rule_match(db_host)
         db_host.cache[cache] = rules
-        db_host.save()
+        if persist_cache:
+            db_host.save()
+        else:
+            setattr(db_host, '_cache_dirty', True)
         return rules
