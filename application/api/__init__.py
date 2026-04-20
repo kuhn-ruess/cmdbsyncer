@@ -4,7 +4,7 @@ API
 # pylint: disable=line-too-long
 from functools import wraps
 from flask import abort, request, current_app
-from mongoengine.errors import DoesNotExist
+from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 from application.models.account import Account
 from application.models.user import User
 from application import log
@@ -69,6 +69,19 @@ def require_token(fn):
                 )
             except DoesNotExist:
                 _abort_unauthorized("Invalid credentials")
+            except MultipleObjectsReturned:
+                # Historically `name` was unique but that was relaxed, so existing
+                # installs can carry duplicates. Fall back to the candidate whose
+                # password matches instead of crashing with a 500.
+                user_result = next(
+                    (candidate for candidate in User.objects(
+                        disabled__ne=True,
+                        __raw__={'$or': [{'name': username}, {'email': username}]}
+                    ) if candidate.check_password(user_password)),
+                    None,
+                )
+                if user_result is None:
+                    _abort_unauthorized("Invalid credentials")
             roles = user_result.api_roles or []
             current_path = request.path.replace('/api/v1/', '')
             allowed = False

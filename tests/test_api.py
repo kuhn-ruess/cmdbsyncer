@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, patch
 
 from flask import Blueprint, Flask
 from flask_restx import Api
-from mongoengine.errors import DoesNotExist
+from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 
 from application.api.objects import API as OBJECTS_API
 from application.api.syncer import API as SYNCER_API
@@ -137,6 +137,28 @@ class APIAuthTest(unittest.TestCase):
         # Empty api_roles must NOT grant allow-all. Pentest finding 2026-04-20.
         user_cls.objects.get.return_value = _FakeUser(api_roles=[])
         resp = self.client.get('/api/v1/syncer/logs', headers=_basic_auth())
+        self.assertEqual(resp.status_code, 401)
+
+    @patch('application.api.syncer.Host')
+    @patch('application.api.User')
+    def test_duplicate_names_auth_matches_password(self, user_cls, host_cls):
+        # Pentest finding 2026-04-20: duplicate names crashed with 500.
+        # Auth must still succeed when one candidate's password matches.
+        wrong = _FakeUser(api_roles=['all'], password_ok=False)
+        right = _FakeUser(api_roles=['all'], password_ok=True)
+        user_cls.objects.get.side_effect = MultipleObjectsReturned
+        user_cls.objects.return_value = [wrong, right]
+        host_cls.objects.return_value.count.return_value = 0
+        resp = self.client.get('/api/v1/syncer/hosts', headers=_basic_auth())
+        self.assertEqual(resp.status_code, 200)
+
+    @patch('application.api.User')
+    def test_duplicate_names_auth_fails_when_no_password_matches(self, user_cls):
+        a = _FakeUser(api_roles=['all'], password_ok=False)
+        b = _FakeUser(api_roles=['all'], password_ok=False)
+        user_cls.objects.get.side_effect = MultipleObjectsReturned
+        user_cls.objects.return_value = [a, b]
+        resp = self.client.get('/api/v1/syncer/hosts', headers=_basic_auth())
         self.assertEqual(resp.status_code, 401)
 
     @patch('application.api.syncer.Host')
