@@ -19,8 +19,6 @@ def _is_secure_api_request():
         return True
     if request.is_secure:
         return True
-    if request.host.split(":", 1)[0].lower() == "localhost":
-        return True
     return request.remote_addr in {"127.0.0.1", "::1"}
 
 

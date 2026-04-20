@@ -1,6 +1,8 @@
 """
 Netbox Rule Views
 """
+# pylint: disable=no-name-in-module
+# pylint: disable=duplicate-code
 from datetime import datetime
 from flask_login import current_user
 from pygments import highlight
@@ -8,7 +10,7 @@ from pygments.formatters import HtmlFormatter
 from pygments.lexers import DjangoLexer
 
 from markupsafe import Markup, escape
-from wtforms import HiddenField, StringField
+from wtforms import HiddenField
 
 from application.views.default import DefaultModelView
 from application.modules.rule.views import RuleModelView, get_rule_json
@@ -34,7 +36,7 @@ def _render_netbox_outcome(_view, _context, model, _name):
     outcome_names += netbox_prefix_outcome_types
 
     for entry in model.outcomes:
-        name = dict(outcome_names).get(entry.action, "Field deprecated")
+        name = escape(dict(outcome_names).get(entry.action, "Field deprecated"))
         highlighted_param = ""
         if entry.param:
             highlighted_param = \
@@ -53,10 +55,10 @@ def _render_netbox_outcome(_view, _context, model, _name):
             if entry.list_variable_name:
                 html += f'''
                         <p>
-                        <b>List Mode:</b> {entry.list_variable_name}<br>
+                        <b>List Mode:</b> {escape(entry.list_variable_name)}<br>
                         </p>
                 '''
-        html += f'''
+        html += '''
               </div>
             </div>
             '''
@@ -103,13 +105,6 @@ class NetboxCustomAttributesView(RuleModelView):
         self.form_subdocuments = base_config
 
         super().__init__(model, **kwargs)
-
-    def on_model_change(self, form, model, is_created):
-        """
-        Sort Fields        
-        """
-
-        return super().on_model_change(form, model, is_created)
 
     def is_accessible(self):
         """ Overwrite """
@@ -188,7 +183,7 @@ class NetboxDataFlowModelView(DefaultModelView):
         'name': get_rule_json
     }
 
-    def get_export_name(self, export_type):
+    def get_export_name(self, export_type):  # pylint: disable=signature-differs
         """
         Overwrite Filename
         """

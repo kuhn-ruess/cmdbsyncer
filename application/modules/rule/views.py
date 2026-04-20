@@ -1,6 +1,9 @@
 """
 Rule Model View
 """
+# pylint: disable=line-too-long,trailing-whitespace,no-name-in-module
+# pylint: disable=duplicate-code
+# pylint: disable=wrong-import-order,ungrouped-imports,signature-differs
 from datetime import datetime
 from mongoengine.errors import NotUniqueError
 
@@ -206,7 +209,7 @@ def _render_filter_outcomes(_view, _context, model, _name):
     """
     html = ""
     for entry in model.outcomes:
-        action = dict(filter_actions)[entry.action]
+        action = escape(dict(filter_actions)[entry.action])
         value = ""
         if entry.attribute_name:
             value = \
@@ -236,8 +239,8 @@ def _render_attribute_outcomes(_view, _context, model, _name):
               <div class="card-body">
                 <p class="card-text">
                  <span class="badge badge-primary">
-                 {entry.attribute_name}</span><b>:</b><span class="badge badge-info">
-                {entry.attribute_value}
+                 {escape(entry.attribute_name)}</span><b>:</b><span class="badge badge-info">
+                {escape(entry.attribute_value)}
                 </span>
                 </p>
               </div>
@@ -263,9 +266,9 @@ def _render_full_conditions(_view, _context, model, _name):
                     <h6 class="card-subtitle mb-2 text-muted">Hostname</h6>
                     <p class="card-text">
                      <span class="badge badge-primary">
-                     {negate[entry.hostname_match_negate]}
-                     {condition_types[entry.hostname_match]}</span>
-                    <span class="badge badge-info">{entry.hostname}</span>
+                     {escape(negate[entry.hostname_match_negate])}
+                     {escape(condition_types[entry.hostname_match])}</span>
+                    <span class="badge badge-info">{escape(entry.hostname)}</span>
                     </p>
                   </div>
                 </div>
@@ -277,16 +280,16 @@ def _render_full_conditions(_view, _context, model, _name):
                     <h6 class="card-subtitle mb-2 text-muted">Key</h6>
                     <p class="card-text">
                      <span class="badge badge-primary">
-                        {negate[entry.tag_match_negate]}{condition_types[entry.tag_match]}
+                        {escape(negate[entry.tag_match_negate])}{escape(condition_types[entry.tag_match])}
                      </span>
-                     <span class="badge badge-info">{entry.tag}</span>
+                     <span class="badge badge-info">{escape(entry.tag)}</span>
                     </p>
                     <h6 class="card-subtitle mb-2 text-muted">Value</h6>
                     <p class="card-text">
                     <span class="badge badge-primary">
-                        {negate[entry.value_match_negate]} {condition_types[entry.value_match]}
+                        {escape(negate[entry.value_match_negate])} {escape(condition_types[entry.value_match])}
                     </span>
-                    <span class="badge badge-info">{entry.value}</span>
+                    <span class="badge badge-info">{escape(entry.value)}</span>
                     </p>
                   </div>
                 </div>
@@ -653,7 +656,7 @@ def _render_attribute_rewrite(_view, _context, model, _name):
               <div class="card-body">
                 <h6 class="card-subtitle mb-2 text-muted">New Attribute</h6>
                 <p class="card-text">
-                {attribute_name}
+                {escape(attribute_name)}
                 </p>
                 <h6 class="card-subtitle mb-2 text-muted">To new Value</h6>
                 {value}

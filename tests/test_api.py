@@ -11,10 +11,18 @@ MagicMock-based doubles, so no live database is required. A minimal Flask
 app is built per-test-class and the real API namespaces are mounted on it.
 """
 # pylint: disable=missing-function-docstring,missing-class-docstring
+# pylint: disable=protected-access,duplicate-code
 import base64
+import importlib
+import importlib.util
 import json
+import os
+import sys
 import unittest
+from collections import defaultdict
 from datetime import datetime
+from types import SimpleNamespace
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 from flask import Blueprint, Flask
@@ -24,6 +32,17 @@ from mongoengine.errors import DoesNotExist
 from application.api.objects import API as OBJECTS_API
 from application.api.syncer import API as SYNCER_API
 from application.helpers.get_account import AccountNotFoundError
+
+
+def _load_source_module(module_name, relative_path):
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    file_path = os.path.join(repo_root, relative_path)
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    assert spec and spec.loader, f"Cannot load spec for {module_name}"
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _build_app():
@@ -132,6 +151,271 @@ class APIAuthTest(unittest.TestCase):
             environ_overrides={'REMOTE_ADDR': '10.0.0.5'},
         )
         self.assertEqual(resp.status_code, 401)
+
+    @patch('application.api.User')
+    def test_spoofed_localhost_host_header_does_not_bypass_https_requirement(self, user_cls):
+        user_cls.objects.get.return_value = _FakeUser()
+        self.app.config['ALLOW_INSECURE_API_AUTH'] = False
+        resp = self.client.get(
+            '/api/v1/syncer/hosts',
+            headers={**_basic_auth(), 'Host': 'localhost:5000'},
+            environ_overrides={'REMOTE_ADDR': '10.0.0.5'},
+        )
+        self.assertEqual(resp.status_code, 401)
+
+
+class HostViewFormattingTest(unittest.TestCase):
+    """Escaping behavior in host admin renderers."""
+
+    @staticmethod
+    def _import_host_module():
+        app_module = sys.modules['application']
+        app_module.app.config.setdefault('HOST_PAGESIZE', 100)
+        app_module.app.config.setdefault('BASE_PREFIX', '/')
+
+        checkmk_mod = sys.modules.setdefault(
+            'application.plugins.checkmk',
+            ModuleType('application.plugins.checkmk'),
+        )
+        checkmk_mod.get_host_debug_data = MagicMock()
+        checkmk_models_mod = sys.modules.setdefault(
+            'application.plugins.checkmk.models',
+            ModuleType('application.plugins.checkmk.models'),
+        )
+        checkmk_models_mod.CheckmkFolderPool = MagicMock()
+        netbox_mod = sys.modules.setdefault(
+            'application.plugins.netbox',
+            ModuleType('application.plugins.netbox'),
+        )
+        netbox_mod.get_device_debug_data = MagicMock()
+        host_models_mod = sys.modules['application.models.host']
+        host_models_mod.CmdbField = MagicMock()
+        config_mod = sys.modules.setdefault(
+            'application.models.config',
+            ModuleType('application.models.config'),
+        )
+        config_mod.Config = MagicMock()
+        default_view_mod = sys.modules.setdefault(
+            'application.views.default',
+            ModuleType('application.views.default'),
+        )
+        default_view_mod.DefaultModelView = object
+        return _load_source_module(
+            'application.views.host',
+            os.path.join('application', 'views', 'host.py'),
+        )
+
+    def test_format_log_escapes_preview_entries(self):
+        host_module = self._import_host_module()
+
+        log_cls = MagicMock()
+        chain = MagicMock()
+        chain.order_by.return_value = []
+        log_cls.objects.return_value = chain
+        model = SimpleNamespace(
+            id='host1',
+            hostname='pentest-xss',
+            log=['Inventory Change: key to <img src=x onerror=alert(1)>'],
+        )
+
+        with patch.object(host_module, 'LogEntry', log_cls):
+            rendered = str(host_module.format_log(None, None, model, None))
+
+        self.assertIn('&lt;img src=x onerror=alert(1)&gt;', rendered)
+        self.assertNotIn('<li>Inventory Change: key to <img src=x onerror=alert(1)></li>', rendered)
+
+    def test_format_cache_escapes_cache_keys_and_values(self):
+        host_module = self._import_host_module()
+        model = SimpleNamespace(
+            id='host1',
+            cache={
+                '<svg onload=alert(1)>': {
+                    '<img>': '<script>alert(2)</script>',
+                }
+            },
+        )
+
+        rendered = str(host_module.format_cache(None, None, model, None))
+
+        self.assertIn('&lt;svg onload=alert(1)&gt;', rendered)
+        self.assertIn('&lt;img&gt;', rendered)
+        self.assertIn('&lt;script&gt;alert(2)&lt;/script&gt;', rendered)
+        self.assertNotIn('<script>alert(2)</script>', rendered)
+
+    def test_render_datetime_escapes_non_datetime_values(self):
+        host_module = self._import_host_module()
+        model = SimpleNamespace(last_import_seen='<img src=x onerror=alert(1)>')
+
+        rendered = str(host_module._render_datetime(None, None, model, 'last_import_seen'))
+
+        self.assertIn('&lt;img src=x onerror=alert(1)&gt;', rendered)
+        self.assertNotIn('<img src=x onerror=alert(1)>', rendered)
+
+
+class RuleViewFormattingTest(unittest.TestCase):
+    """Escaping behavior in shared rule renderers."""
+
+    @staticmethod
+    def _import_rule_module():
+        default_view_mod = sys.modules.setdefault(
+            'application.views.default',
+            ModuleType('application.views.default'),
+        )
+        default_view_mod.DefaultModelView = object
+
+        rule_models_mod = sys.modules.setdefault(
+            'application.modules.rule.models',
+            ModuleType('application.modules.rule.models'),
+        )
+        rule_models_mod.filter_actions = [('set', 'Set <script>alert(1)</script>')]
+        rule_models_mod.rule_types = [('all', 'All')]
+        rule_models_mod.condition_types = {
+            'equal': 'exact match',
+            'regex': 'regex match',
+        }
+
+        docu_links_mod = sys.modules.setdefault(
+            'application.docu_links',
+            ModuleType('application.docu_links'),
+        )
+        docu_links_mod.docu_links = defaultdict(str)
+
+        sates_mod = sys.modules.setdefault(
+            'application.helpers.sates',
+            ModuleType('application.helpers.sates'),
+        )
+        sates_mod.add_changes = MagicMock()
+
+        return _load_source_module(
+            'application.modules.rule.views',
+            os.path.join('application', 'modules', 'rule', 'views.py'),
+        )
+
+    def test_rule_renderers_escape_attribute_and_condition_values(self):
+        rule_module = self._import_rule_module()
+        attribute_model = SimpleNamespace(
+            outcomes=[
+                SimpleNamespace(
+                    attribute_name='<img src=x onerror=alert(1)>',
+                    attribute_value='<script>alert(2)</script>',
+                )
+            ]
+        )
+        condition_model = SimpleNamespace(
+            conditions=[
+                SimpleNamespace(
+                    match_type='tag',
+                    tag_match_negate=False,
+                    tag_match='equal',
+                    tag='<svg onload=alert(3)>',
+                    value_match_negate=True,
+                    value_match='regex',
+                    value='<b>boom</b>',
+                )
+            ]
+        )
+
+        attr_rendered = str(
+            rule_module._render_attribute_outcomes(
+                None, None, attribute_model, None
+            )
+        )
+        cond_rendered = str(
+            rule_module._render_full_conditions(
+                None, None, condition_model, None
+            )
+        )
+
+        self.assertIn('&lt;img src=x onerror=alert(1)&gt;', attr_rendered)
+        self.assertIn('&lt;script&gt;alert(2)&lt;/script&gt;', attr_rendered)
+        self.assertNotIn('<script>alert(2)</script>', attr_rendered)
+        self.assertIn('&lt;svg onload=alert(3)&gt;', cond_rendered)
+        self.assertIn('&lt;b&gt;boom&lt;/b&gt;', cond_rendered)
+        self.assertNotIn('<b>boom</b>', cond_rendered)
+
+
+class PluginViewFormattingTest(unittest.TestCase):
+    """Escaping behavior in plugin-specific renderers."""
+
+    @staticmethod
+    def _ensure_default_view_stub():
+        default_view_mod = sys.modules.setdefault(
+            'application.views.default',
+            ModuleType('application.views.default'),
+        )
+        default_view_mod.DefaultModelView = object
+
+    def test_checkmk_group_outcomes_escape_user_values(self):
+        self._ensure_default_view_stub()
+        if 'application.modules.rule.views' not in sys.modules:
+            RuleViewFormattingTest._import_rule_module()
+        checkmk_models_mod = sys.modules.setdefault(
+            'application.plugins.checkmk.models',
+            ModuleType('application.plugins.checkmk.models'),
+        )
+        checkmk_models_mod.action_outcome_types = [('create_rule', 'create_rule')]
+        checkmk_models_mod.CheckmkSite = MagicMock()
+        checkmk_models_mod.CheckmkSettings = MagicMock()
+
+        checkmk_module = _load_source_module(
+            'application.plugins.checkmk.views',
+            os.path.join('application', 'plugins', 'checkmk', 'views.py'),
+        )
+        model = SimpleNamespace(
+            outcome=SimpleNamespace(
+                group_name='<img src=x onerror=alert(1)>',
+                foreach_type='<b>host</b>',
+                foreach='<script>alert(2)</script>',
+                rewrite='{{ bad|safe }}',
+                rewrite_title='<svg onload=alert(3)>',
+            )
+        )
+
+        rendered = str(checkmk_module._render_group_outcome(None, None, model, None))
+
+        self.assertIn('&lt;img src=x onerror=alert(1)&gt;', rendered)
+        self.assertIn('&lt;b&gt;host&lt;/b&gt;', rendered)
+        self.assertIn('&lt;script&gt;alert(2)&lt;/script&gt;', rendered)
+        self.assertIn('&lt;svg onload=alert(3)&gt;', rendered)
+        self.assertNotIn('<script>alert(2)</script>', rendered)
+
+    def test_netbox_outcomes_escape_list_variable_name(self):
+        self._ensure_default_view_stub()
+        if 'application.modules.rule.views' not in sys.modules:
+            RuleViewFormattingTest._import_rule_module()
+        netbox_models_mod = sys.modules.setdefault(
+            'application.plugins.netbox.models',
+            ModuleType('application.plugins.netbox.models'),
+        )
+        for attr in [
+            'netbox_outcome_types',
+            'netbox_ipam_ipaddress_outcome_types',
+            'netbox_device_interface_outcome_types',
+            'netbox_contact_outcome_types',
+            'netbox_cluster_outcomes',
+            'netbox_virtualmachines_types',
+            'netbox_prefix_outcome_types',
+        ]:
+            setattr(netbox_models_mod, attr, [('field', 'Field')])
+
+        netbox_module = _load_source_module(
+            'application.plugins.netbox.views',
+            os.path.join('application', 'plugins', 'netbox', 'views.py'),
+        )
+        model = SimpleNamespace(
+            outcomes=[
+                SimpleNamespace(
+                    action='field',
+                    param='{{ value }}',
+                    list_variable_name='<img src=x onerror=alert(1)>',
+                )
+            ]
+        )
+
+        rendered = str(netbox_module._render_netbox_outcome(None, None, model, None))
+
+        self.assertIn('&lt;img src=x onerror=alert(1)&gt;', rendered)
+        self.assertNotIn('<img src=x onerror=alert(1)>', rendered)
 
 
 def _auth_patches(test_fn):
