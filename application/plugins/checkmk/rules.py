@@ -2,6 +2,8 @@
 """
 Checkmk Rules
 """
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
+# pylint: disable=too-many-nested-blocks,logging-fstring-interpolation
 import ast
 from application import app
 from application.helpers.syncer_jinja import render_jinja
@@ -10,6 +12,19 @@ from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
 from . import poolfolder
+
+
+def _maybe_render(value, **context):
+    """
+    Render through Jinja only when the value actually contains template
+    syntax (`{{` or `{%`). For the common literal-string case this skips
+    a parse+render round-trip per host per matched rule.
+    """
+    if (isinstance(value, str)
+            and '{{' not in value
+            and '{%' not in value):
+        return value
+    return render_jinja(value, mode="nullify", **context)
 
 class CheckmkRulesetRule(Rule):
     """
@@ -140,7 +155,7 @@ class CheckmkRule(Rule):
             action_param = outcome['action_param']
             if outcome['action'] == 'move_folder':
                 new_value = action_param
-                new_value = render_jinja(new_value, mode="nullify", **self.attributes)
+                new_value = _maybe_render(new_value, **self.attributes)
 
                 outcomes['extra_folder_options'] += self.format_foldername(new_value)
                 outcomes['move_folder'] += self.fix_and_format_foldername(new_value)
@@ -167,7 +182,7 @@ class CheckmkRule(Rule):
 
             if outcome['action'] == 'create_folder':
                 new_value = action_param
-                new_value = render_jinja(new_value, mode="nullify", **self.attributes)
+                new_value = _maybe_render(new_value, **self.attributes)
 
                 outcomes['create_folder_extra_folder_options'] += self.format_foldername(new_value)
                 outcomes['create_folder'] += self.fix_and_format_foldername(new_value)
@@ -183,7 +198,7 @@ class CheckmkRule(Rule):
                     # Assign an new, free folder to Host
                     only_pools = None
                     if action_param:
-                        action_param = render_jinja(action_param, mode="nullify", **self.attributes)
+                        action_param = _maybe_render(action_param, **self.attributes)
                         only_pools = [x.strip() for x in action_param.split(',')]
                     folder = poolfolder.get_folder(only_pools)
                     if not folder:
@@ -211,14 +226,14 @@ class CheckmkRule(Rule):
                 outcomes['attributes'].append(action_param)
 
             if outcome['action'] == "remove_attr_if_not_set":
-                action_render = render_jinja(action_param, mode="nullify", **self.attributes)
+                action_render = _maybe_render(action_param, **self.attributes)
 
                 for attribute in action_render.split(','):
                     attribute = attribute.strip()
                     outcomes['remove_if_attributes'].append(attribute)
 
             if outcome['action'] == 'custom_attribute':
-                action_render = render_jinja(action_param, mode="nullify", **self.attributes)
+                action_render = _maybe_render(action_param, **self.attributes)
 
                 action_render = self.replace(action_render, exceptions=[
                                                         " ", '/', ',','|'
@@ -250,7 +265,7 @@ class CheckmkRule(Rule):
 
             if outcome['action'] == "set_parent":
                 value = action_param
-                new_value = render_jinja(value, **self.attributes)
+                new_value = _maybe_render(value, **self.attributes)
                 for parent in new_value.split(','):
                     parent = parent.strip()
                     if parent and parent not in outcomes['parents']:

@@ -1,6 +1,8 @@
 """
 Syncers Jinja Functions
 """
+# pylint: disable=import-outside-toplevel,logging-fstring-interpolation
+# pylint: disable=missing-function-docstring
 import ast
 import datetime
 import ipaddress
@@ -14,6 +16,12 @@ from application.helpers.get_account import get_account_variable
 
 
 JINJA_ENV = SandboxedEnvironment(autoescape=True)
+
+# Template objects are expensive to build (parse + compile) and
+# immutable afterwards, so we memoize by (mode, source). Two separate
+# envs so StrictUndefined and the default undefined don't collide.
+_STRICT_ENV = JINJA_ENV.overlay()
+_TEMPLATE_CACHE = {}
 def _cmk_cleanup_tag_id(value):
     """
     Lazily import the Checkmk helper to avoid circular imports while still
@@ -120,6 +128,42 @@ def replace_account_variable(match):
         return account_var
 
 
+_GLOBALS = {
+    'get_list': get_list,
+    'merge_list_of_dicts': merge_list_of_dicts,
+    'cmk_cleanup_tag_id': _cmk_cleanup_tag_id,
+    'cmk_cleanup_hostname': _cmk_cleanup_hostname,
+    'get_ip_network': get_ip_network,
+    'get_ip4_interface': get_ip_interface,
+    'get_ip_interface': get_ip_interface,
+    'eval': syncer_eval,
+    'defined': syncer_defined,
+    'datetime': datetime,
+}
+
+
+def _compile_template(source, strict):
+    """
+    Compile and cache a template. Sync runs reuse the same handful of
+    rule templates across every host, so caching keeps the expensive
+    parse+compile step off the hot path.
+    """
+    key = (strict, source)
+    cached = _TEMPLATE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    env = _STRICT_ENV if strict else JINJA_ENV
+    tpl = env.from_string(source)
+    tpl.globals.update(_GLOBALS)
+    _TEMPLATE_CACHE[key] = tpl
+    return tpl
+
+
+# Use StrictUndefined on the strict env so undefined variables surface
+# as `UndefinedError` the same way the old overlay did.
+_STRICT_ENV.undefined = StrictUndefined
+
+
 def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     """
     Render given string
@@ -129,46 +173,20 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     - raise: Raise Error if missing Variables
     - nullify: Nullify string in nase of missing Variables
     """
-    #logger.debug(f"JINJA: Rewrite String: {value}")
-
     # Process ACCOUNT variables anywhere in the string
     if isinstance(value, str) and '{{ACCOUNT:' in value:
         value = re.sub(r'\{\{ACCOUNT:[^}]+\}\}', replace_account_variable, value)
 
-    payload = {}
+    if replace_newlines and isinstance(value, str):
+        value = value.replace('\n', '')
 
-    if replace_newlines:
-        value = value.replace('\n','')
-        #logger.debug(f"JINJA: Replaced Newlines: {value}")
-
-    if mode in ["raise", "nullify"]:
-        #value_tpl.undefined = StrictUndefined
-        payload['undefined'] = StrictUndefined
-        #logger.debug("JINJA: Strict Undefined defined")
-
-
-    env = JINJA_ENV.overlay(**payload)
-    value_tpl = env.from_string(str(value))
-    value_tpl.globals.update({
-        'get_list': get_list,
-        'merge_list_of_dicts': merge_list_of_dicts,
-        'cmk_cleanup_tag_id': _cmk_cleanup_tag_id,
-        'cmk_cleanup_hostname': _cmk_cleanup_hostname,
-        'get_ip_network': get_ip_network,
-        'get_ip4_interface': get_ip_interface,
-        'get_ip_interface': get_ip_interface,
-        'eval': syncer_eval,
-        'defined': syncer_defined,
-        'datetime': datetime,
-
-    })
-
-
-
+    source = str(value)
+    strict = mode in ("raise", "nullify")
+    value_tpl = _compile_template(source, strict)
 
     if mode == 'nullify':
         try:
-            final =  value_tpl.render(**kwargs)
+            final = value_tpl.render(**kwargs)
         except (jinja2.exceptions.UndefinedError, TypeError):
             logger.debug(f"JINJA Exception: String {value} full nullifyed")
             return ""
@@ -177,5 +195,4 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
             return ""
     else:
         final = value_tpl.render(**kwargs)
-    #logger.debug(f"JINJA: String After Rewrite: {final}")
     return final.strip()

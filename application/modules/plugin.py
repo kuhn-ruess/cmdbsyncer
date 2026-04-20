@@ -325,15 +325,18 @@ class Plugin():
     def init_custom_attributes(self):
         """
         Initialize custom attribute processing rules.
-        
+
         Loads all enabled custom attribute rules from the database and
         prepares the CustomAttributeRule processor with debug settings.
-        Sets up the custom_attributes instance variable with sorted rules.
+        Idempotent: keeps the same engine instance across calls so the
+        rule-engine's `_rule_docs_cache` is not discarded between hosts
+        during a big sync run.
         """
-        self.custom_attributes = CustomAttributeRule()
+        if not self.custom_attributes:
+            self.custom_attributes = CustomAttributeRule()
+            self.custom_attributes.rules = \
+                            CustomAttributeRuleModel.objects(enabled=True).order_by('sort_field')
         self.custom_attributes.debug = self.debug
-        self.custom_attributes.rules = \
-                        CustomAttributeRuleModel.objects(enabled=True).order_by('sort_field')
 
 
     # pylint: disable=too-many-branches
