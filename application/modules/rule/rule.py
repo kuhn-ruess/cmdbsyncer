@@ -2,6 +2,7 @@
 """
 Handle Rule Matching
 """
+# pylint: disable=too-many-return-statements,too-many-locals,too-many-branches
 import ast
 import re
 from rich.console import Console
@@ -35,6 +36,9 @@ class Rule():
         # Reset Debug Lines in Order for each child
         # of this class having a new log
         self.debug_lines = []
+        # Cached (id(self.rules), [rule objs], [rule.to_mongo() docs]).
+        # Invalidated automatically when self.rules is reassigned.
+        self._rule_docs_cache = None
 
 
     @staticmethod
@@ -67,13 +71,38 @@ class Rule():
         value_match_negate = condition['value_match_negate']
 
 
-        needed_value = render_jinja(needed_value, **self.attributes)
+        # Skip the Jinja render pipeline when the value is plainly literal —
+        # that is the common case (concrete strings / numbers from the rule
+        # form) and render_jinja is non-trivially hot when called for every
+        # condition * every host.
+        if (not isinstance(needed_value, str)
+                or '{{' in needed_value
+                or '{%' in needed_value):
+            needed_value = render_jinja(needed_value, **self.attributes)
 
         if tag_match == 'ignore' and tag_match_negate:
             # This Case Checks that Tag NOT Exists
             if needed_tag not in self.attributes.keys():
                 return True
             return False
+
+        # Fast path: `equal` tag match with a concrete target is a dict
+        # lookup, not a linear scan of every attribute. Skipped when the
+        # target is a custom_fields expression because that branch rewrites
+        # tag/value mid-iteration below.
+        if (tag_match == 'equal' and not tag_match_negate
+                and 'custom_fields' not in needed_tag):
+            if needed_tag not in self.attributes:
+                return False
+            value = self.attributes[needed_tag]
+            if match(value, needed_value, value_match, value_match_negate):
+                if app.config['ADVANCED_RULE_DEBUG']:
+                    logger.debug('--> HIT (fast tag lookup)')
+                    self.first_matching_tag = needed_tag
+                    self.first_matching_value = value
+                return True
+            return False
+
         # Wee need to find out if tag AND tag value match
         for tag, value in self.attributes.items():
             # Handle special dict key custom_fields
@@ -141,6 +170,23 @@ class Rule():
             return self._check_attribute_match(condition)
         return self._check_hostname_match(condition, hostname)
 
+    def _iter_rule_docs(self):
+        """
+        Materialise `rule.to_mongo()` once per rules QuerySet and cache
+        the result. `self.rules` is typically a mongoengine QuerySet that
+        is evaluated repeatedly — one `.to_mongo()` per rule per host —
+        even though the rules themselves don't change across the run.
+        Cache is invalidated when the identity of `self.rules` changes.
+        """
+        current_key = id(self.rules)
+        cache = self._rule_docs_cache
+        if cache is not None and cache[0] == current_key:
+            return cache[1], cache[2]
+        objs = list(self.rules)
+        docs = [rule.to_mongo() for rule in objs]
+        self._rule_docs_cache = (current_key, objs, docs)
+        return objs, docs
+
     # pylint: disable=too-many-branches
     def check_rules(self, hostname):
         """
@@ -152,6 +198,7 @@ class Rule():
             'all' : "ALL must match",
             'anyway': "ALWAYS match"
         }
+        debug_advanced = app.config['ADVANCED_RULE_DEBUG']
         if self.debug:
             title = f"Debug '{self.name}' Rules for {hostname}"
 
@@ -165,12 +212,12 @@ class Rule():
             table.add_column("Last Match")
 
         outcomes = {}
-        for rule in self.rules:
-            if app.config['ADVANCED_RULE_DEBUG']:
+        rule_objs, rule_docs = self._iter_rule_docs()
+        for rule_obj, rule in zip(rule_objs, rule_docs):
+            if debug_advanced:
                 logger.debug('##########################')
-                logger.debug('Check Rule: %s', rule.name)
+                logger.debug('Check Rule: %s', rule_obj.name)
                 logger.debug('##########################')
-            rule = rule.to_mongo()
             rule_hit = False
 
             no_match_reason = None
@@ -180,14 +227,16 @@ class Rule():
                         rule_hit = True
                         no_match_reason = None
                         break # We have a hit, no need to check more
-                    no_match_reason = dict(condition)
+                    if self.debug:
+                        no_match_reason = dict(condition)
 
             elif rule['condition_typ'] == 'all':
                 rule_hit = True
                 for condition in rule['conditions']:
                     if not self.handle_match(condition, hostname):
                         rule_hit = False
-                        no_match_reason = dict(condition)
+                        if self.debug:
+                            no_match_reason = dict(condition)
                         break # One was no hit, no need for loop
 
             elif rule['condition_typ'] == 'anyway':
