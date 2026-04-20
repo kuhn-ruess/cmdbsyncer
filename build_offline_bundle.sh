@@ -99,10 +99,13 @@ echo "Downloading packages into $OUTPUT_DIR/packages ..."
 python3 -m pip "${PIP_ARGS[@]}"
 
 # --- Optional: ship cmdbsyncer and cmdbsyncer-enterprise from PyPI ----------
+# These packages may pull in transitive dependencies that are not listed
+# in requirements.txt (e.g. cmdbsyncer-enterprise depends on authlib), so
+# we intentionally resolve the full dependency tree here.
 download_from_pypi() {
     local pkg="$1"
-    echo "Downloading $pkg from PyPI ..."
-    local args=(download --no-deps --dest "$OUTPUT_DIR/packages")
+    echo "Downloading $pkg and its dependencies from PyPI ..."
+    local args=(download --dest "$OUTPUT_DIR/packages")
     [[ -n "$PLATFORM" ]]       && args+=(--platform "$PLATFORM" --only-binary=:all:)
     [[ -n "$PYTHON_VERSION" ]] && args+=(--python-version "$PYTHON_VERSION")
     args+=("$pkg")
