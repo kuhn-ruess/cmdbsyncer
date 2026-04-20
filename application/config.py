@@ -149,6 +149,10 @@ class BaseConfig():
     # fine for single-worker deployments. For multiple workers, set to
     # e.g. 'redis://localhost:6379' or 'mongodb://localhost:27017/cmdb-api'.
     RATELIMIT_STORAGE_URI = 'memory://'
+    # Development-only escape hatch for local API testing over plain HTTP.
+    # Keep disabled in normal deployments because password-based API auth
+    # should require TLS or a trusted reverse proxy.
+    ALLOW_INSECURE_API_AUTH = False
 
     # Number of trusted reverse-proxy hops between the client and the app.
     # 0 (default) = no proxy, do NOT trust X-Forwarded-* headers.

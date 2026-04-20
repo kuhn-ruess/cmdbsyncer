@@ -3,7 +3,7 @@ i-doit rule views
 """
 from flask_login import current_user
 from markupsafe import Markup, escape
-from wtforms import HiddenField, StringField
+from wtforms import HiddenField
 
 from application.modules.rule.views import RuleModelView
 from .models import idoit_outcome_types
@@ -15,7 +15,7 @@ def _render_idoit_outcome(_view, _context, model, _name):
 
     html = "<table width=100%>"
     for idx, entry in enumerate(model.outcomes):
-        html += f"<tr><td>{idx}</td><td>{dict(idoit_outcome_types)[entry.action]}</td>"
+        html += f"<tr><td>{idx}</td><td>{escape(dict(idoit_outcome_types)[entry.action])}</td>"
         if entry.param:
             html += f"<td><b>{escape(entry.param)}</b></td></tr>"
     html += "</table>"

@@ -2,6 +2,7 @@
 Checkmk Rule Views
 """
 # pylint: disable=too-many-lines
+# pylint: disable=duplicate-code
 from markupsafe import Markup, escape
 
 from pygments import highlight
@@ -135,7 +136,7 @@ def _render_checkmk_outcome(_view, _context, model, _name):
     """
     html = ""
     for entry in model.outcomes:
-        name = dict(action_outcome_types)[entry.action].split('_',1)[0]
+        name = escape(dict(action_outcome_types)[entry.action].split('_',1)[0])
         highlighted_param = ""
         if entry.action_param:
             highlighted_param = highlight(
@@ -167,14 +168,14 @@ def _render_group_outcome(_view, _context, model, _name):
         <div class="card">
             <div class="card-body">
             <p class="card-text">
-                <h6 class="card-subtitle mb-2 text-muted">{entry.group_name}</h6>
+                <h6 class="card-subtitle mb-2 text-muted">{escape(entry.group_name)}</h6>
             </p>
             <p class="card-text">
             <ul>
-            <li>Foreach: {entry.foreach_type}</li>
-            <li>Value: {entry.foreach}</li>
-            <li>Jinja Name Rewrite: {entry.rewrite}</li>
-            <li>Jinja Title Rewrite: {entry.rewrite_title}</li>
+            <li>Foreach: {escape(entry.foreach_type)}</li>
+            <li>Value: {escape(entry.foreach)}</li>
+            <li>Jinja Name Rewrite: {escape(entry.rewrite)}</li>
+            <li>Jinja Title Rewrite: {escape(entry.rewrite_title)}</li>
             </ul>
             </p>
             </div>
@@ -238,7 +239,7 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
            <div class="card">
              <div class="card-body">
                <p class="card-text">
-                <h5 class="card-title mb-2">{rule.ruleset}</h5>
+                <h5 class="card-title mb-2">{escape(rule.ruleset)}</h5>
                </p>
                <p class="card-text">
                <ul>
@@ -246,7 +247,7 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
         '''
         if rule.loop_over_list:
             html += f'''
-                   <li><b>Loop over</b>: {rule.list_to_loop}</li>
+                   <li><b>Loop over</b>: {escape(rule.list_to_loop)}</li>
             '''
         html += "</ul></p>"
         html += '''
@@ -257,13 +258,13 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
                <ul>
         '''
         if rule.condition_host:
-            html += f'<li><b>Host</b>: {rule.condition_host}</li>'
+            html += f'<li><b>Host</b>: {escape(rule.condition_host)}</li>'
         if rule.condition_label_template:
-            html += f'<li><b>Host Label</b>: {rule.condition_label_template}</li>'
+            html += f'<li><b>Host Label</b>: {escape(rule.condition_label_template)}</li>'
         if rule.condition_service:
-            html += f'<li><b>Service</b>: {rule.condition_service}</li>'
+            html += f'<li><b>Service</b>: {escape(rule.condition_service)}</li>'
         if rule.condition_service_label:
-            html += f'<li><b>Service Label</b>: {rule.condition_service_label}</li>'
+            html += f'<li><b>Service Label</b>: {escape(rule.condition_service_label)}</li>'
         html += '''
                    </ul>
                    </p>

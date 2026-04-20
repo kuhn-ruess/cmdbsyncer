@@ -141,7 +141,7 @@ def _render_datetime(_view, _context, model, name):
         return Markup('<span class="text-muted">N/A</span>')
     if isinstance(value, datetime):
         return Markup(value.strftime('%Y-%m-%d %H:%M:%S'))
-    return Markup(str(value))
+    return Markup(escape(str(value)))
 
 def _render_cmdb_fields(_view, _context, model, _name):
     """
@@ -229,7 +229,7 @@ def _render_cmdb_match_label(_view, _context, model, _name):
     """
     if not model.cmdb_match:
         return Markup('<span class="text-muted">N/A</span>')
-    return Markup(f'<span class="badge badge-primary">{model.cmdb_match}</span>')
+    return Markup(f'<span class="badge badge-primary">{escape(model.cmdb_match)}</span>')
 
 class StaticLabelWidget:  # pylint: disable=too-few-public-methods
     """
@@ -240,8 +240,8 @@ class StaticLabelWidget:  # pylint: disable=too-few-public-methods
         entries = []
         for key, value in field.data.items():
             html_entry = ""
-            html_entry += f'<span class="badge badge-primary">{key}</span>:'
-            html_entry += f'<span class="badge badge-info">{value}</span>'
+            html_entry += f'<span class="badge badge-primary">{escape(key)}</span>:'
+            html_entry += f'<span class="badge badge-info">{escape(value)}</span>'
             entries.append(html_entry)
         html += ", ".join(entries)
         html += "</div></div>"
@@ -547,7 +547,7 @@ def format_log(_v, _c, m, _p):
     html = "<ul>"
     for entry in m.log:
         suffix = '...' if len(entry) > 200 else ''
-        html += f"<li>{entry[:200]}{suffix}</li>"
+        html += f"<li>{escape(entry[:200])}{escape(suffix)}</li>"
     html += "</ul>"
 
     if m.log:
@@ -695,7 +695,7 @@ def format_cache(_v, _c, m, _p):
         )
 
         for key, value in m.cache.items():
-            html += f'<tr><th colspan="2" class="bg-light">{key}</th></tr>'
+            html += f'<tr><th colspan="2" class="bg-light">{escape(key)}</th></tr>'
             if isinstance(value, dict):
                 for sub_key, sub_value in value.items():
                     # Truncate very long values
@@ -706,8 +706,8 @@ def format_cache(_v, _c, m, _p):
                     html += (
                         f'<tr><td class="pl-4" '
                         f'style="width: 30%;">'
-                        f'{sub_key}</td>'
-                        f'<td>{display_value}</td></tr>'
+                        f'{escape(sub_key)}</td>'
+                        f'<td>{escape(display_value)}</td></tr>'
                     )
             else:
                 # If value is not a dict, show it directly
@@ -718,7 +718,7 @@ def format_cache(_v, _c, m, _p):
                 html += (
                     f'<tr><td class="pl-4" '
                     f'style="width: 30%;">Value</td>'
-                    f'<td>{display_value}</td></tr>'
+                    f'<td>{escape(display_value)}</td></tr>'
                 )
 
         html += '''
@@ -957,7 +957,7 @@ class ObjectModelView(DefaultModelView):
 
         super().__init__(model, **kwargs)
 
-    def get_export_name(self, _export_type):
+    def get_export_name(self, _export_type):  # pylint: disable=signature-differs
         """
         Generates a filename for exporting data based on the model name and current timestamp.
 
@@ -1300,7 +1300,7 @@ class HostModelView(DefaultModelView):
 
         super().__init__(model, **kwargs)
 
-    def get_export_name(self, _export_type):
+    def get_export_name(self, _export_type):  # pylint: disable=signature-differs
         """
         Generates a filename for exporting data based on the model name and current timestamp.
 
