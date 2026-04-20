@@ -12,6 +12,7 @@
         "attributes": "memberOf",
         "hostname_field": "host",
         "encoding": "ascii",
+        "allow_unencrypted": "",
         "rewrite_hostname": "",
         "inventorize_key": "",
         "inventorize_match_by_domain": "",

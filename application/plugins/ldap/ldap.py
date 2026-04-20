@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Import LDAP Data"""
-from application import app
+from application import log
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
@@ -33,6 +33,48 @@ def get_objects(results, config):
 
         yield hostname, labels
 
+def _connect(config):
+    """
+    Initialize an LDAP connection, upgrade plain ldap:// via StartTLS
+    unless explicitly allowed to stay unencrypted, and bind.
+    Returns the connection or None on failure.
+    """
+    connect = ldap.initialize(config['address'])
+    connect.set_option(ldap.OPT_REFERRALS, 0)
+
+    if config['address'].lower().startswith('ldap://'):
+        try:
+            connect.start_tls_s()
+        except ldap.LDAPError as tls_error:
+            if str(config.get('allow_unencrypted', '')).strip().lower() \
+                    not in ('yes', 'true', '1'):
+                print("Error: LDAP StartTLS failed and unencrypted bind is "
+                      "not allowed for this account")
+                log.log(
+                    "LDAP import aborted: StartTLS failed and unencrypted "
+                    "bind is not allowed for this account",
+                    source="LDAP",
+                    details=[
+                        ("account", config.get('name', '')),
+                        ("address", config.get('address', '')),
+                        ("error", str(tls_error)),
+                    ],
+                )
+                if config['debug']:
+                    raise
+                return None
+            print(f"Warning: Continuing without TLS ({tls_error})")
+
+    try:
+        connect.simple_bind_s(config['username'], config['password'])
+    except ldap.SERVER_DOWN:
+        print("Error: Ldap Server not reachable")
+        if config['debug']:
+            raise
+        return None
+    return connect
+
+
 def _inner_import(config):
     """
     Base LDAP Connect and Query
@@ -41,23 +83,14 @@ def _inner_import(config):
         print("Error: Address needs to start with ldap:// or ldaps://")
         if config['debug']:
             raise ValueError("Address needs to start with ldap:// or ldaps://")
-        return []
+        return
 
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
           f"{ColorCodes.UNDERLINE}{config['name']}{ColorCodes.ENDC}")
 
-
-    connect = ldap.initialize(config['address'])
-    connect.set_option(ldap.OPT_REFERRALS, 0)
-
-
-    try:
-        connect.simple_bind_s(config['username'], config['password'])
-    except ldap.SERVER_DOWN:
-        print("Error: Ldap Server not reachable")
-        if config['debug']:
-            raise
-        return []
+    connect = _connect(config)
+    if connect is None:
+        return
 
 
 
@@ -65,14 +98,14 @@ def _inner_import(config):
     base_dn = config['base_dn']
     search_filter = config['search_filter']
     if config['debug']:
-        print(f"INFO: Use Filter: {search_filter}") 
+        print(f"INFO: Use Filter: {search_filter}")
 
     attributes = []
     if config['attributes']:
-        attributes = list([x.strip() for x in config['attributes'].split(',')])
+        attributes = [x.strip() for x in config['attributes'].split(',')]
 
     if config['debug']:
-        print(f"INFO: Search the following Attributes: {attributes}") 
+        print(f"INFO: Search the following Attributes: {attributes}")
 
     page_control = SimplePagedResultsControl(True, size=1000, cookie='')
 
