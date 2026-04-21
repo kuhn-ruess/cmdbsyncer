@@ -408,9 +408,54 @@ class CheckmkRuleSync(CMK2):
                             rules.remove(rule)
                             break
 
-                    # Show details for all condition matches if no exact match was found
+                    # If exactly one of our rules has the same condition but a
+                    # different value, this is not a stale rule — it's a value
+                    # drift we should push to Checkmk in place. Updating via
+                    # PUT preserves the rule id and audit history and avoids a
+                    # destructive delete+recreate (which briefly removes the
+                    # rule from the active policy and churns ids).
+                    if not rule_found and len(condition_matches) == 1 and \
+                            not condition_matches[0]['value_match']:
+                        our_rule = condition_matches[0]['rule']
+                        rule_id = cmk_rule['id']
+                        rule_url = f'/objects/rule/{rule_id}'
+                        _, get_headers = self.request(rule_url, method="GET")
+                        etag = get_headers.get('etag') or get_headers.get('ETag')
+                        update_payload = {
+                            "properties": {
+                                "disabled": False,
+                                "description": f"cmdbsyncer_{self.account_id}",
+                                "comment": our_rule['comment'],
+                            },
+                            "conditions": our_rule['condition'],
+                            "value_raw": our_rule['value'],
+                        }
+                        additional = {'If-Match': etag} if etag else None
+                        try:
+                            self.request(rule_url, data=update_payload, method="PUT",
+                                         additional_header=additional)
+                            print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE Rule in "
+                                  f"{ruleset_name} {rule_id}")
+                            rules.remove(our_rule)
+                            rule_found = True
+                            self.log_details.append((
+                                "INFO",
+                                f"Updated Rule in {ruleset_name} {rule_id}: "
+                                f"{our_rule['value']}",
+                            ))
+                        except CmkException as error:
+                            self.log_details.append((
+                                "ERROR",
+                                f"Could not update Rule {rule_id} in "
+                                f"{ruleset_name}: {error}",
+                            ))
+                            print(f"{CC.FAIL} Update failed: {error} {CC.ENDC}")
+
+                    # Only warn about flapping when there really are multiple
+                    # conflicting matches — a single value drift is handled
+                    # above via in-place update.
                     deletion_details = ""
-                    if not rule_found and condition_matches:
+                    if not rule_found and len(condition_matches) > 1:
                         logger.warning(
                             "🔄 POTENTIAL FLAPPING RULES detected in %s:", ruleset_name)
                         logger.warning("Condition: %s", pformat(cmk_condition))
