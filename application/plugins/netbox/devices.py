@@ -1,12 +1,13 @@
 """
 Create Devices in Netbox
 """
+# pylint: disable=duplicate-code
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-
-from .netbox import SyncNetbox
 
 from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
+
+from .netbox import SyncNetbox
 
 
 class SyncDevices(SyncNetbox):
@@ -81,6 +82,7 @@ class SyncDevices(SyncNetbox):
         return custom_rules
 
 #   .--- Export Devices
+    # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements
     def export_hosts(self):
         """
         Update Devices Table in Netbox
@@ -118,7 +120,6 @@ class SyncDevices(SyncNetbox):
                     custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
 
 
-                    found_hosts.append(hostname)
                     if device := current_netbox_devices.get(name=hostname):
                         # Update
                         if update_keys := self.get_update_keys(device, custom_rules,
@@ -133,8 +134,12 @@ class SyncDevices(SyncNetbox):
                         payload = self.get_update_keys(False, custom_rules)
                         payload['name'] = hostname
                         device = self.nb.dcim.devices.create(payload)
+                    # Mark as successfully synced only after create/update
+                    # returned without raising, so cleanup decommissions
+                    # devices whose API call failed.
+                    found_hosts.append(hostname)
 
-                except Exception as error:
+                except Exception as error:  # pylint: disable=broad-exception-caught
                     if self.debug:
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
@@ -183,7 +188,7 @@ class SyncDevices(SyncNetbox):
                 do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
                 if do_save:
                     host_obj.save()
-            except Exception as error:
+            except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
                 self.log_details.append((f'import_error {hostname}', str(error)))

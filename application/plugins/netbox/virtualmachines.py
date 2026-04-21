@@ -1,15 +1,18 @@
 """
 Create Devices in Netbox
 """
+# pylint: disable=duplicate-code
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from .netbox import SyncNetbox
+
 from application import logger
 
 from syncerapi.v1 import (
     cc,
     Host,
 )
+
+from .netbox import SyncNetbox
 
 
 class SyncVirtualMachines(SyncNetbox):
@@ -82,6 +85,7 @@ class SyncVirtualMachines(SyncNetbox):
         return custom_rules
 
 #   .--- Sync Virtual Machines
+    # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements
     def sync_virtualmachines(self):
         """
         Update Devices Table in Netbox
@@ -100,6 +104,9 @@ class SyncVirtualMachines(SyncNetbox):
             found_hosts = []
             for db_object in db_objects:
                 hostname = db_object.hostname
+                # Initialize here so the error branch / post-try checks
+                # do not raise UnboundLocalError on an early failure.
+                current_obj = None
                 try:
                     all_attributes = self.get_attributes(db_object, 'netbox')
                     if not all_attributes:
@@ -117,7 +124,6 @@ class SyncVirtualMachines(SyncNetbox):
                         'name': object_name,
                     }
                     logger.debug("Object Filter Query: %r", query)
-                    found_hosts.append(hostname)
                     if current_obj := current_nb_objects.get(**query):
                         if payload := self.get_update_keys(current_obj, cfg,
                                                            ['primary_ip4', 'primary_ip6']):
@@ -132,7 +138,11 @@ class SyncVirtualMachines(SyncNetbox):
                         payload['name'] = object_name
                         logger.debug("Create Payload: %r", payload)
                         current_obj = self.nb.virtualization.virtual_machines.create(payload)
-                except Exception as error:
+                    # Mark as successfully synced only after create/update
+                    # returned without raising, so cleanup decommissions
+                    # objects whose API call failed.
+                    found_hosts.append(hostname)
+                except Exception as error:  # pylint: disable=broad-exception-caught
                     if self.debug:
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
@@ -181,7 +191,7 @@ class SyncVirtualMachines(SyncNetbox):
                 do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
                 if do_save:
                     host_obj.save()
-            except Exception as error:
+            except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
                 self.log_details.append((f'import_error {hostname}', str(error)))

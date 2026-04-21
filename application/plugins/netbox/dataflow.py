@@ -5,13 +5,15 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 from rich.console import Console
 
 from application import logger
-from .netbox import SyncNetbox
 from application.models.host import Host
 
+from .netbox import SyncNetbox
 from .models import NetboxDataflowModels
 
-class DictObj:
-    def __init__(self, in_dict:dict):
+
+class DictObj:  # pylint: disable=too-few-public-methods
+    """Lightweight attribute-style wrapper around a nested dict."""
+    def __init__(self, in_dict: dict):
         assert isinstance(in_dict, dict)
         for key, val in in_dict.items():
             if isinstance(val, (list, tuple)):
@@ -68,12 +70,16 @@ class SyncDataFlow(SyncNetbox):
         current_object = self.model_data_by_model[model_name][identify_field_value]
         if payload := self.get_update_keys(current_object, rule):
             self.console(f" * Prepare UPDATE {identify_field_value}")
-            current_object['custom_fields'].update(payload['custom_fields'])
+            # get_update_keys() strips 'custom_fields' when there are no
+            # custom-field changes, so only merge when the key is present.
+            if 'custom_fields' in payload:
+                current_object.setdefault('custom_fields', {}).update(payload['custom_fields'])
             current_object.update(payload)
             return current_object, 'update'
         return {}, False
 
 
+    # pylint: disable-next=too-many-locals,too-many-branches
     def process_syncer_objects(self, model_name, model_data, rules):
         """
         Handle the Data and connect it to the Objects
@@ -110,7 +116,7 @@ class SyncDataFlow(SyncNetbox):
                     if rule['rule'] not in allowed_rules:
                         continue
 
-                    logger.debug(f"Working with {rule}")
+                    logger.debug("Working with %s", rule)
                     try:
                         identify_field_name = [x for x,y in
                                         rule['fields'].items() if y['use_to_identify']][0]
