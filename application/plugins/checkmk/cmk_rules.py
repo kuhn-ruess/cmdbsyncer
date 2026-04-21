@@ -37,20 +37,28 @@ def clean_postproccessed(data):
         output[key] = value
     return output
 
-def deep_compare(a, b):
+def deep_compare(ours, stored):
     """
-    Compare Checkmk rules which are nested with key: [list]
-    Without the function, they may not match if the order in the list is diffrent.
+    Check whether our configured rule value is equivalent to the value
+    Checkmk has stored. Asymmetric on dict keys: Checkmk normalises rule
+    values on save, often enriching them with schema defaults we did not
+    explicitly set. Treating every extra stored key as drift produces an
+    endless UPDATE/DELETE churn — so we only require that every key we
+    set matches; stored extras are accepted as defaults.
+
+    List items are compared order-insensitive to tolerate reorderings.
+    Nested dicts inside lists are still compared structurally via each
+    element's ``==``.
     """
-    if isinstance(a, dict) and isinstance(b, dict):
-        a = clean_postproccessed(a)
-        b = clean_postproccessed(b)
-        if set(a.keys()) != set(b.keys()):
+    if isinstance(ours, dict) and isinstance(stored, dict):
+        ours = clean_postproccessed(ours)
+        stored = clean_postproccessed(stored)
+        if not set(ours.keys()).issubset(set(stored.keys())):
             return False
-        return all(deep_compare(v, b[k]) for k, v in a.items())
-    if isinstance(a, list) and isinstance(b, list):
-        return sorted(a, key=str) == sorted(b, key=str)
-    return a == b
+        return all(deep_compare(v, stored[k]) for k, v in ours.items())
+    if isinstance(ours, list) and isinstance(stored, list):
+        return sorted(ours, key=str) == sorted(stored, key=str)
+    return ours == stored
 
 
 def analyze_value_differences(expected, actual):

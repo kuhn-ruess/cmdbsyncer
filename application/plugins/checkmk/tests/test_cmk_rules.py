@@ -51,6 +51,18 @@ class TestDeepCompare(unittest.TestCase):
     def test_unequal_dicts_different_keys(self):
         self.assertFalse(deep_compare({'a': 1}, {'b': 1}))
 
+    def test_stored_superset_is_equivalent(self):
+        # Checkmk normalises saved values by adding schema defaults.
+        # When our value is a subset of the stored one with all shared
+        # keys matching, we must treat the rule as up-to-date to avoid
+        # endless UPDATE churn.
+        self.assertTrue(deep_compare({'a': 1}, {'a': 1, 'b': 'default'}))
+
+    def test_our_superset_is_drift(self):
+        # The reverse asymmetry still counts: if WE set a key Checkmk
+        # doesn't have, the rule needs a sync.
+        self.assertFalse(deep_compare({'a': 1, 'b': 2}, {'a': 1}))
+
     def test_unequal_dicts_different_values(self):
         self.assertFalse(deep_compare({'a': 1}, {'a': 2}))
 
