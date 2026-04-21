@@ -17,10 +17,15 @@ from application.modules.debug import ColorCodes as CC
 
 def clean_postproccessed(data):
     """
-    Replace explicit_password tuples with a sentinel so rule comparisons
-    don't mismatch just because the stored password tuple differs.
+    Normalize Checkmk's explicit_password tuples before rule comparison.
     """
-    # @TODO Problem this way a Passwort Change wont be detected
+    # Intentional: Checkmk re-encrypts the stored explicit_password tuple
+    # (id, password) on every GET, so the ciphertext differs across reads
+    # even when the password has not changed. Normalizing that tuple to
+    # (None, None) before comparing rules prevents endless "update" churn
+    # on every sync. The trade-off — that a real password change is not
+    # detected here — is accepted; password rotation is managed by the
+    # Checkmk password store, not by rule diffs.
     output = {}
     for key, value in data.items():
         if isinstance(value, tuple):

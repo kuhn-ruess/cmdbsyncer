@@ -25,18 +25,6 @@ class InventorizeHosts(CMK2):
     name = "Checkmk Inventory run"
     source = "cmk_inventorize"
 
-    fields = {}
-    config = {}
-
-    found_hosts = set()
-
-    status_inventory = {}
-    hw_sw_inventory = {}
-    service_label_inventory = {}
-    config_inventory = {}
-    label_inventory = {}
-
-
     def add_host(self, host):
         """
         Register a host name once. `found_hosts` is a set so repeated calls
@@ -49,6 +37,17 @@ class InventorizeHosts(CMK2):
         """Init"""
 
         super().__init__(account)
+
+        # Per-instance run state. Previously these were class-level and
+        # retained data across accounts / repeated runs, so later runs
+        # wrote back stale hosts and inventory blocks to the DB.
+        self.fields = {}
+        self.found_hosts = set()
+        self.status_inventory = {}
+        self.hw_sw_inventory = {}
+        self.service_label_inventory = {}
+        self.config_inventory = {}
+        self.label_inventory = {}
 
         for rule in CheckmkInventorizeAttributes.objects():
             self.fields.setdefault(rule.attribute_source, [])

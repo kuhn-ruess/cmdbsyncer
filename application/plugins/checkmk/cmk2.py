@@ -24,14 +24,6 @@ class CMK2(Plugin):
     Get Data from CMK
     """
 
-    checkmk_version = False
-
-    checkmk_hosts = {}
-
-    existing_folders = []
-    existing_folders_attributes = {}
-    custom_folder_attributes = {}
-
     @staticmethod
     def _compact_host_data(host):
         """
@@ -61,6 +53,16 @@ class CMK2(Plugin):
         Check for Version
         """
         super().__init__(account)
+
+        # Per-instance runtime caches. Keeping these on the instance (not the
+        # class) ensures each Checkmk account / repeated run starts with a
+        # clean slate and does not inherit stale version info, hosts or
+        # folder attributes from a previous instance in the same process.
+        self.checkmk_version = False
+        self.checkmk_hosts = {}
+        self.existing_folders = []
+        self.existing_folders_attributes = {}
+        self.custom_folder_attributes = {}
 
         if self.config and not self.checkmk_version:
             data = self.request('/version')[0]

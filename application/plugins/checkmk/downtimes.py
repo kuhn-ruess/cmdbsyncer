@@ -41,13 +41,16 @@ class CheckmkDowntimeSync(CMK2):
             return [ day for day in ahead_days if _weekdays[day.weekday()] == start_day]
         return []
 
+    # pylint: disable-next=too-many-locals
     def calculate_downtime_dates(self, start_day, every, offset):
         """
         Calculate configured day for a datime,
         like first of month
         """
         if offset:
-            start_day = _weekdays[_weekdays.index(start_day)+offset]
+            # Wrap around the week so e.g. fri+3 rolls into mon instead
+            # of raising IndexError (configured offsets go up to 7 days).
+            start_day = _weekdays[(_weekdays.index(start_day) + offset) % 7]
 
         every = int(every.replace('.', ''))
 
@@ -84,6 +87,7 @@ class CheckmkDowntimeSync(CMK2):
 
 
 
+    # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements
     def calculate_configured_downtimes(self, rule, attributes):
         """
         Calculate the Downtime payload
@@ -236,7 +240,7 @@ class CheckmkDowntimeSync(CMK2):
             for downtime in configured_downtimes:
                 if downtime not in current_downtimes:
                     self.set_downtime(hostname, downtime)
-        except Exception as exp:
+        except Exception as exp:  # pylint: disable=broad-exception-caught
             self.log_details.append(('error', f'Exception {exp}'))
             print(f"Exception: {exp}")
 
@@ -261,6 +265,7 @@ class CheckmkDowntimeSync(CMK2):
                     progress.advance(task1)
                     continue
 
+                # pylint: disable-next=no-member
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if not host_actions:
                     progress.advance(task1)

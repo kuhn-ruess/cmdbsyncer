@@ -30,7 +30,7 @@ class TestSyncCMK2(unittest.TestCase):
         }
 
         # Mock the parent class initialization by patching it to do nothing
-        def mock_init(self_param):
+        def mock_init(self_param, account=False):
             # Initialize minimal required attributes from parent class
             self_param.account_id = 'test_account_123'
             self_param.account_name = 'Test Account'
@@ -684,7 +684,7 @@ class TestSyncCMK2UpdateHost(unittest.TestCase):
     """Tests for the refactored update_host and its helpers."""
 
     def setUp(self):
-        def mock_init(self_param):
+        def mock_init(self_param, account=False):
             self_param.account_id = 'test_account'
             self_param.account_name = 'Test'
             self_param.config = {}
@@ -945,7 +945,7 @@ class TestSyncCMK2Misc(unittest.TestCase):
     """Tests for methods missing from the primary coverage class."""
 
     def setUp(self):
-        def mock_init(self_param):
+        def mock_init(self_param, account=False):
             self_param.account_id = 'test'
             self_param.account_name = 'Test'
             self_param.config = {}

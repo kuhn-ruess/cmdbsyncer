@@ -23,6 +23,9 @@ class CheckmkSites(CMK2):
 
 
     def import_sites(self):
+        """
+        Fetch Checkmk sites and import them as objects in the Syncer.
+        """
         print(f"\n{cc.HEADER}Import Sites{cc.ENDC}")
         for site in self.get_sites():
             site_data = site['extensions']
@@ -30,10 +33,19 @@ class CheckmkSites(CMK2):
             labels.update(site_data['basic_settings'])
             object_name = labels['site_id']
             syncer_object = Host.get_host(object_name)
+            syncer_object.update_host(labels)
+            # Attach source-account metadata the same way every other
+            # importer does — otherwise these objects miss conflict
+            # protection, inventory sync attribution and cannot be
+            # cleaned up via the normal account lifecycle.
+            do_save = syncer_object.set_account(account_dict=self.config)
+            if not do_save:
+                print(f"{cc.OKBLUE} *{cc.ENDC} Site {object_name} "
+                      "owned by different source, ignored")
+                continue
+            # set_account may overwrite object_type from the account
+            # dict; force the site-specific markers after it.
             syncer_object.is_object = True
             syncer_object.object_type = 'cmk_site'
-            syncer_object.update_host(labels)
             syncer_object.save()
             print(f"{cc.OKGREEN} *{cc.ENDC} Site {object_name} updated.")
-
-

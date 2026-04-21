@@ -1,7 +1,7 @@
 """
 Add Hosts into CMK Version 2 Installations
 """
-# pylint: disable=too-many-lines
+# pylint: disable=too-many-lines,duplicate-code
 import ast
 import math
 import multiprocessing
@@ -42,28 +42,29 @@ class SyncCMK2(CMK2):
         CMK2: Base class providing CheckMK API functionality
     """
 
-    bulk_creates = []
-    bulk_updates = []
-
-    disabled_hosts = []
-
-    synced_hosts = []
-
-    clusters = []
-    cluster_updates = []
-
-
     label_prefix = False
     only_update_prefixed_labels = False
     dont_update_prefixed_labels = False
 
-    num_created = 0
-    num_updated  = 0
-    num_deleted  = 0
-
     console = print
 
     limit = False
+
+    def __init__(self, account=False):
+        super().__init__(account)
+        # Per-instance run state. Keeping these on the class caused queues
+        # and counters to leak between accounts / repeated runs in one
+        # process, which in turn triggered wrong cleanup and duplicate
+        # create/update actions.
+        self.bulk_creates = []
+        self.bulk_updates = []
+        self.disabled_hosts = []
+        self.synced_hosts = []
+        self.clusters = []
+        self.cluster_updates = []
+        self.num_created = 0
+        self.num_updated = 0
+        self.num_deleted = 0
 
     @staticmethod
     def chunks(lst, n):
@@ -687,6 +688,18 @@ class SyncCMK2(CMK2):
         """
         # In Order to delete Hosts from Checkmk, we collect the ones we sync
 
+        # Reset per-run queues defensively in case run() is invoked more
+        # than once on the same instance.
+        self.bulk_creates = []
+        self.bulk_updates = []
+        self.disabled_hosts = []
+        self.synced_hosts = []
+        self.clusters = []
+        self.cluster_updates = []
+        self.num_created = 0
+        self.num_updated = 0
+        self.num_deleted = 0
+
         self.name=f"Sync Hosts to Account: {self.account_name}"
         self.source="checkmk_host_export"
 
@@ -766,8 +779,10 @@ class SyncCMK2(CMK2):
         # Final Call to create missing hosts via bulk
         if self.bulk_creates:
             self.send_bulk_create_host(self.bulk_creates)
+            self.bulk_creates = []
         if self.bulk_updates:
             self.send_bulk_update_host(self.bulk_updates)
+            self.bulk_updates = []
 
         if self.limit:
             log.log(f"Finished Sync to Checkmk Account: {self.account_name} because LIMIT",

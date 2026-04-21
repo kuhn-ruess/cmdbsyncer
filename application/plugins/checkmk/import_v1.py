@@ -3,12 +3,10 @@
 Get Hosts from a CMKv1 Instance
 """
 import ast
-import click
 import requests
 from mongoengine.errors import DoesNotExist
 from application import log
 from application.models.host import Host, HostError
-from application.helpers.get_account import get_account_by_name
 
 
 class ImportCheckmk1():
@@ -31,9 +29,12 @@ class ImportCheckmk1():
         config = self.config
         config["action"] = what
 
-        url = "{address}/check_mk/webapi.py" \
-              "?action={action}&_username={username}" \
-              "&_secret={password}&output_format=python&request_format=python".format(**config)
+        url = (
+            f"{config['address']}/check_mk/webapi.py"
+            f"?action={config['action']}&_username={config['username']}"
+            f"&_secret={config['password']}"
+            "&output_format=python&request_format=python"
+        )
 
         if payload: # payload is not empty
             formated = ascii(payload).replace(" '", " u'")
@@ -59,11 +60,10 @@ class ImportCheckmk1():
                 host = Host()
                 host.hostname = hostname
                 host.add_log("Inital Add")
-                host.set_source_update()
+                host.set_import_sync()
             except HostError as error_obj:
                 host.add_log(f"Update Error {error_obj}")
 
             do_save = host.set_account(account_dict=self.config)
             if do_save:
                 host.save()
-

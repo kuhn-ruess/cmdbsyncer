@@ -1,6 +1,7 @@
 """
 Checkmk DCD Manager
 """
+# pylint: disable=duplicate-code
 from jinja2.exceptions import UndefinedError
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application.plugins.checkmk.cmk2 import CMK2
@@ -15,7 +16,13 @@ class CheckmkDCDRuleSync(CMK2):
     Sync Checkmk Downtimes
     """
     console = None
-    all_rules = []
+
+    def __init__(self, account=False):
+        super().__init__(account)
+        # Per-instance run state. Class-level defaults would accumulate
+        # across accounts/runs in the same process and leak stale rules
+        # into later exports.
+        self.all_rules = []
 
     def does_rule_exist(self, rule_id):
         """
@@ -134,7 +141,7 @@ class CheckmkDCDRuleSync(CMK2):
         for _, rules in outcomes.items():
             for rule  in rules:
                 rule_payload = self.build_rule_payload(rule, attributes)
-                logger.debug(f'\nGot Payload: {rule_payload}')
+                logger.debug('\nGot Payload: %s', rule_payload)
 
                 if rule_payload and rule_payload not in self.all_rules:
                     self.all_rules.append(rule_payload)
@@ -155,12 +162,13 @@ class CheckmkDCDRuleSync(CMK2):
             object_filter = self.config['settings'].get(self.name, {}).get('filter')
             db_objects = Host.objects_by_filter(object_filter)
             for db_host in db_objects:
-                logger.debug(f'Started with {db_host.hostname}')
+                logger.debug('Started with %s', db_host.hostname)
                 attributes = self.get_attributes(db_host, 'checkmk')
                 if not attributes:
                     logger.debug(' -- Skiped no attributes')
                     progress.advance(task1)
                     continue
+                # pylint: disable-next=no-member
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:
                     logger.debug(' -- Got Actions')

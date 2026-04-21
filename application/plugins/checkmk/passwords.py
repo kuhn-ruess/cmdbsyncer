@@ -1,6 +1,7 @@
 """
 Checkmk DCD Manager
 """
+# pylint: disable=duplicate-code
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
@@ -13,10 +14,16 @@ class CheckmkPasswordSync(CMK2):
     Sync Checkmk Passwords
     """
     console = None
-    current_password_ids = []
 
     name = "Sync Passwords to Checkmk"
     source = "cmk_password_sync"
+
+    def __init__(self, account=False):
+        super().__init__(account)
+        # Per-instance run state. A class-level list would accumulate
+        # password IDs across repeated runs and let stale entries flip
+        # create/update decisions.
+        self.current_password_ids = []
 
     def get_current_passwords(self):
         """
