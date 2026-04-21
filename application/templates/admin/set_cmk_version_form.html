@@ -1,6 +1,7 @@
 <div class="container mt-4">
     <h3>Set CMK Version</h3>
     <form method="POST" action="{{ url_for('.process_cmk_version_assignment') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="rule_ids" value="{{ ids|join(',') }}">
         <div class="form-group">
             <label for="cmk_version">CMK Version:</label>

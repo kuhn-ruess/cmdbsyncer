@@ -16,7 +16,7 @@ class LicenseView(BaseView):
     """
 
     def is_accessible(self):
-        return current_user.is_authenticated
+        return current_user.is_authenticated and current_user.global_admin
 
     @expose('/')
     def index(self):
@@ -28,8 +28,8 @@ class LicenseView(BaseView):
         exp_human = datetime.fromtimestamp(exp_ts).strftime('%Y-%m-%d %H:%M:%S') \
             if isinstance(exp_ts, (int, float)) else None
         package_installed = importlib.util.find_spec('cmdbsyncer_enterprise') is not None
-        registry_features = sorted(enterprise._features)
-        registry_hooks = sorted(enterprise._hooks.keys())
+        registry_features = sorted(enterprise._features)  # pylint: disable=protected-access
+        registry_hooks = sorted(enterprise._hooks.keys())  # pylint: disable=protected-access
         return self.render('license_info.html',
                            license=info,
                            exp_human=exp_human,

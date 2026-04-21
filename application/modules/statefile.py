@@ -8,10 +8,9 @@ Handle State File
     }
 }
 """
-import ast
 import datetime
 import json
-from filelock import FileLock
+from filelock import FileLock  # pylint: disable=import-error
 
 
 def _serialize_state_value(value):
@@ -36,11 +35,15 @@ def _normalize_state_entry(entry):
     }
 
 class StateFile():
+    """
+    File-backed per-host state cache used by importers to decide
+    whether a host needs another update pass.
+    """
 
     def __init__(self, filename):
         """ Prepare Statefile """
-        self.path = '/tmp/{}.json'.format(filename)
-        self.lock = FileLock('/tmp/{}.lock'.format(filename))
+        self.path = f'/tmp/{filename}.json'
+        self.lock = FileLock(f'/tmp/{filename}.lock')
         self.states = {}
         self.lock.acquire()
         try:
@@ -60,10 +63,11 @@ class StateFile():
         return [x for x,y in self.states.items() if y.get('disabled', False) == disabled]
 
     def need_update(self, hostname, hours):
+        """Return whether the host's cached state is older than `hours`."""
         if hostname not in self.states:
             return True
         host = self.states[hostname]
-        if not 'last_udpate' in host:
+        if 'last_update' not in host:
             return True
         if host.get('disabled'):
             return False
@@ -73,18 +77,21 @@ class StateFile():
         return False
 
     def set_disabled(self, hostname, state):
+        """Persist the disabled flag for a host and refresh its timestamp."""
         self.states.setdefault(hostname, {})
         self.states[hostname]['disabled'] = state
         self.states[hostname]['last_update'] = datetime.datetime.now()
         self._write_file()
 
     def set_source(self, hostname, source):
+        """Persist the source identifier for a host and refresh its timestamp."""
         self.states.setdefault(hostname, {})
         self.states[hostname]['source'] = source
         self.states[hostname]['last_update'] = datetime.datetime.now()
         self._write_file()
 
     def _write_file(self):
+        """Persist the in-memory state back to disk."""
         serializable_state = {
             key: {
                 entry_key: _serialize_state_value(entry_value)
@@ -96,4 +103,5 @@ class StateFile():
             json.dump(serializable_state, state_file)
 
     def final(self):
+        """Release the state file lock."""
         self.lock.release()

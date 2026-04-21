@@ -281,7 +281,7 @@ def seed_user(email):
     user.set_password(passwd)
     user.global_admin = True
     user.tfa_secret = None
-    user.disable = False
+    user.disabled = False
     try:
         user.save()
     except ValidationError:

@@ -23,10 +23,14 @@ class JDisc(Plugin):
         """
         username = self.config['username']
         password = self.config['password']
+        # Use GraphQL variables instead of string interpolation so the
+        # password is passed as a structured field the debug-log
+        # redactor can recognise instead of being baked into the query
+        # text (where it would slip past key-based masking).
         graphql_query = '''
-        mutation login {
+        mutation login($login: String!, $password: String!) {
             authentication {
-                login(login: "'''+username+'''", password: "'''+password+'''", ) {
+                login(login: $login, password: $password) {
                     accessToken
                     refreshToken
                     status
@@ -34,8 +38,11 @@ class JDisc(Plugin):
             }
         }
         '''
-        data = {'query': graphql_query,
-                'operationName': "login", "variables": None}
+        data = {
+            'query': graphql_query,
+            'operationName': 'login',
+            'variables': {'login': username, 'password': password},
+        }
 
         response = self.inner_request(
             'POST',
@@ -66,7 +73,7 @@ class JDisc(Plugin):
                     host_obj.update_host(found_obj)
                     host_obj.save()
                 print(f" {cc.OKGREEN}* {cc.ENDC} Created object {name}")
-            except Exception as error:
+            except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
                 self.log_details.append((f'export_error {name}', str(error)))
@@ -93,7 +100,7 @@ class JDisc(Plugin):
         """
         access_token = self._obtain_access_token()
 
-        graphql_query = self.get_query()
+        graphql_query = self.get_query()  # pylint: disable=no-member
 
         data = {'query': graphql_query}
         auth_header = f'Bearer {access_token}'

@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import tarfile
+import tempfile
 
 from rich import box
 from rich.console import Console
@@ -132,31 +133,67 @@ def uninstall(ident):
     print(f"Cannot uninstall plugin {ident}: Internal plugins cannot be removed")
 
 
-def install(package_path):
-    """Install a plugin from a ``.syncerplugin`` tarfile."""
+def install(package_path):  # pylint: disable=too-many-branches
+    """Install a plugin from a ``.syncerplugin`` tarfile.
+
+    Extracts into a temporary staging directory first so a broken or
+    partial archive cannot leave the existing plugin deleted: the
+    current install is only removed once the new one is fully on disk.
+    """
     if not os.path.exists(package_path):
         print(f"Error: Package file {package_path} not found")
         return
+
+    os.makedirs("plugins", exist_ok=True)
+    staging_dir = None
     try:
         with tarfile.open(package_path, "r") as tar:
             members = tar.getmembers()
-            if members:
-                plugin_dir = members[0].name.split("/")[0]
-                if _has_invalid_plugin_root(plugin_dir):
-                    print("Error installing plugin: invalid plugin archive layout")
-                    return
-                plugin_path = os.path.join("plugins", plugin_dir)
-                real_plugin_root = os.path.realpath("plugins")
-                real_plugin_path = os.path.realpath(plugin_path)
-                if os.path.commonpath([real_plugin_root, real_plugin_path]) != real_plugin_root:
-                    print("Error installing plugin: invalid plugin target path")
-                    return
-                if os.path.exists(plugin_path):
-                    shutil.rmtree(plugin_path)
-            tar.extractall(path="plugins", filter="data")
+            if not members:
+                print("Error installing plugin: archive is empty")
+                return
+
+            plugin_dir = members[0].name.split("/")[0]
+            if _has_invalid_plugin_root(plugin_dir):
+                print("Error installing plugin: invalid plugin archive layout")
+                return
+
+            plugin_path = os.path.join("plugins", plugin_dir)
+            real_plugin_root = os.path.realpath("plugins")
+            real_plugin_path = os.path.realpath(plugin_path)
+            if os.path.commonpath([real_plugin_root, real_plugin_path]) != real_plugin_root:
+                print("Error installing plugin: invalid plugin target path")
+                return
+
+            staging_dir = tempfile.mkdtemp(prefix=".install-", dir="plugins")
+            tar.extractall(path=staging_dir, filter="data")
+
+        staged_plugin = os.path.join(staging_dir, plugin_dir)
+        if not os.path.isdir(staged_plugin):
+            print("Error installing plugin: archive did not produce expected plugin directory")
+            return
+
+        backup_path = None
+        if os.path.exists(plugin_path):
+            backup_path = plugin_path + ".old"
+            if os.path.exists(backup_path):
+                shutil.rmtree(backup_path)
+            os.rename(plugin_path, backup_path)
+        try:
+            os.rename(staged_plugin, plugin_path)
+        except OSError:
+            # Roll back to the previous install if the move fails.
+            if backup_path and os.path.exists(backup_path) and not os.path.exists(plugin_path):
+                os.rename(backup_path, plugin_path)
+            raise
+        if backup_path and os.path.exists(backup_path):
+            shutil.rmtree(backup_path)
         print("Plugin installed successfully")
-    except (tarfile.TarError, IOError) as exp:
+    except (tarfile.TarError, IOError, OSError) as exp:
         print(f"Error installing plugin: {str(exp)}")
+    finally:
+        if staging_dir and os.path.exists(staging_dir):
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def pack(ident):

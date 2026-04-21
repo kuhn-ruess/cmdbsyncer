@@ -1,6 +1,7 @@
 <div class="container mt-4">
     <h3>Set CMDB Template</h3>
     <form method="POST" action="{{ url_for('.process_template_assignment') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
 
         <div class="form-group">

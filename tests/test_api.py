@@ -679,7 +679,10 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
     @patch('application.api.objects.Host')
     def test_post_host_creates_or_updates(self, host_cls, get_account):
         host = MagicMock()
-        host.set_account.return_value = False  # no account conflict
+        # set_account returns True when the host may be saved under this
+        # account (no conflict). A False return represents an account
+        # conflict and triggers a 403 response on the API.
+        host.set_account.return_value = True
         host_cls.get_host.return_value = host
         get_account.return_value = {'name': 'acct', '_id': 'id1'}
 

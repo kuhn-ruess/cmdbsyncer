@@ -313,10 +313,15 @@ class Plugin():
 
         try:
             if resp:
-                logger.debug(f"Response Json: {mod_json.dumps(resp.json())}")
+                # Redact so that response bodies that echo access/refresh
+                # tokens, passwords or secrets (e.g. auth login flows)
+                # do not leak into debug logs.
+                logger.debug(
+                    f"Response Json: {mod_json.dumps(_redact_body(resp.json()))}"
+                )
         except requests.exceptions.JSONDecodeError:
             if resp:
-                logger.debug(f"Response Text: {pformat(resp.text)}")
+                logger.debug("Response Text: [non-JSON body omitted from debug log]")
         except AttributeError:
             logger.debug(f"Response Raw: {pformat(resp)}")
         return resp

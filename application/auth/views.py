@@ -160,15 +160,20 @@ def set_2fa():
 
     return render_template("set_2fa.html", form=form)
 
-@AUTH.route('/logout')
+@AUTH.route('/logout', methods=['GET', 'POST'])
 @login_required
 def logout():
     """
-    Session cleanup and logout
+    Session cleanup and logout. GET shows a confirm page with a CSRF
+    protected POST form; POST performs the actual logout. This prevents
+    a cross-site GET from silently logging users out and restores the
+    expectation that GET requests are side-effect free.
     """
-    session.clear()
-    logout_user()
-    return redirect(url_for("admin.index"))
+    if request.method == 'POST':
+        session.clear()
+        logout_user()
+        return redirect(url_for("admin.index"))
+    return render_template('logout_confirm.html')
 
 
 @AUTH.route('/change-password', methods=['GET', 'POST'])
@@ -181,7 +186,7 @@ def change_password():
     if form.validate_on_submit():
         password = request.form.get('password')
         current_user.set_password(password)
-        current_user.lastLogin = datetime.now()
+        current_user.last_login = datetime.now()
         current_user.force_password_change = False
         current_user.save()
         return redirect(url_for("admin.index"))
@@ -273,7 +278,7 @@ def reset_password(token):
     if form.validate_on_submit():
         password = request.form.get('password')
         existing_user.set_password(password)
-        existing_user.lastLogin = datetime.now()
+        existing_user.last_login = datetime.now()
         existing_user.save()
         session.clear()
         login_user(

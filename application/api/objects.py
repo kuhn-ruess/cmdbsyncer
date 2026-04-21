@@ -143,14 +143,11 @@ class HostDetailApi(Resource):
             abort(400, str(exc))
         do_save = host_obj.set_account(account_dict=account_dict)
 
-        if do_save:
-            status = 'account_conflict'
-            status_code = 403
-            host_obj.save()
-        status = 'saved'
-        status_code = 200
+        if not do_save:
+            return {'status': 'account_conflict'}, 403
 
-        return {'status': status}, status_code
+        host_obj.save()
+        return {'status': 'saved'}, 200
 
     @require_token
     def delete(self, hostname):
