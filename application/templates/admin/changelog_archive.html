@@ -1,0 +1,10 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<div style="margin-bottom: 1rem;">
+  <a href="{{ url_for('admin.index') }}">&larr; Back to index</a>
+</div>
+<h1>Changelog {{ title }}</h1>
+<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem;">
+  {{ changelog_html|safe }}
+</div>
+{% endblock %}
