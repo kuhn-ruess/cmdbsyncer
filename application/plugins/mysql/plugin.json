@@ -13,6 +13,7 @@
         "fields": "",
         "database": "",
         "custom_query": "",
+        "allow_ddl": "",
         "inventorize_key": "",
         "inventorize_match_by_domain": "",
         "inventorize_match_attribute": "",

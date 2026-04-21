@@ -13,7 +13,11 @@ from syncerapi.v1.core import (
     Plugin,
 )
 from syncerapi.v1.inventory import run_inventory
-from application.helpers.sql import build_select_query, validate_custom_query
+from application.helpers.sql import (
+    build_select_query,
+    custom_query_allow_ddl,
+    validate_custom_query,
+)
 
 try:
     import pypyodbc as pyodbc  # pylint: disable=import-error
@@ -65,11 +69,19 @@ class ODBC(Plugin):
             cursor = cnxn.cursor()
 
             if "custom_query" in self.config and self.config['custom_query']:
-                query = validate_custom_query(self.config['custom_query'])
+                query = validate_custom_query(
+                    self.config['custom_query'],
+                    allow_ddl=custom_query_allow_ddl(self.config),
+                )
             else:
                 query = build_select_query(self.config['fields'], self.config['table'])
             logger.debug(query)
             cursor.execute(query)
+            # When the admin opted into DDL the query may include a
+            # CREATE before the SELECT — commit so the CREATE persists
+            # even if the outer transaction would otherwise roll back.
+            if custom_query_allow_ddl(self.config):
+                cnxn.commit()
             logger.debug("Cursor Executed")
             rows = cursor.fetchall()
             logger.debug("Fetch Executed: %s", cursor.description)
