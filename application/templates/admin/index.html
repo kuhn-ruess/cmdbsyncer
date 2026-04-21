@@ -24,7 +24,9 @@ label {
 }
 
 /* Collapsible version sections: tighter layout so the page does not
-   scroll forever when older versions are present. */
+   scroll forever when older versions are present. The inner body is
+   wrapped in .changelog-body so paragraphs and bullets render with
+   proper spacing even when the surrounding admin theme resets them. */
 #changelog-content details {
   margin: 0.25rem 0 0.5rem;
   border-left: 3px solid #dee2e6;
@@ -34,30 +36,46 @@ label {
   border-left-color: #0d6efd;
   margin-bottom: 1rem;
 }
-#changelog-content summary {
+#changelog-content summary.changelog-version {
   cursor: pointer;
   list-style: none;
   padding: 0.15rem 0;
+  display: block;
 }
-#changelog-content summary::-webkit-details-marker {
+#changelog-content summary.changelog-version::-webkit-details-marker {
   display: none;
 }
-#changelog-content summary h2 {
-  font-size: 1.1rem;
-  margin: 0;
-  color: #495057;
-}
-#changelog-content details[open] > summary h2 {
-  color: #212529;
-}
-#changelog-content summary::before {
-  content: "▸ ";
+#changelog-content summary.changelog-version::before {
+  content: "\25B8  ";
   color: #6c757d;
   font-weight: bold;
 }
-#changelog-content details[open] > summary::before {
-  content: "▾ ";
+#changelog-content details[open] > summary.changelog-version::before {
+  content: "\25BE  ";
   color: #0d6efd;
+}
+#changelog-content .changelog-version-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #495057;
+}
+#changelog-content details[open] > summary .changelog-version-title {
+  color: #212529;
+}
+#changelog-content .changelog-body {
+  display: block;
+  padding: 0.25rem 0 0.25rem 1rem;
+}
+#changelog-content .changelog-body p {
+  margin: 0.25rem 0;
+}
+#changelog-content .changelog-body ul {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+#changelog-content .changelog-body li {
+  margin: 0.1rem 0;
 }
 </style>
 

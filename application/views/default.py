@@ -215,14 +215,18 @@ class IndexView(AdminIndexView):
     def inaccessible_callback(self, name, **kwargs):
         return redirect(url_for('auth.login', next=url_for('admin.index')))
 
+    # pylint: disable-next=too-many-statements,too-many-locals
     def _markdown_to_html(self, text, collapse_sections=False):
         """
         Simple Markdown to HTML converter for basic formatting.
 
         If ``collapse_sections`` is True, every ``## ...`` heading starts
         a ``<details>`` block — the first one is ``open`` by default, the
-        rest are collapsed. That keeps the changelog discoverable but
-        stops the admin index from turning into a wall of history.
+        rest are collapsed. The inner body goes into a dedicated
+        ``<div class="changelog-body">`` sibling of ``<summary>`` so the
+        rendering does not rely on the quirky "heading inside summary"
+        pattern (which some browsers / admin themes hid, making the
+        expanded sections look empty).
         """
         if not text:
             return text
@@ -230,6 +234,7 @@ class IndexView(AdminIndexView):
         lines = text.split('\n')
         html_lines = []
         in_list = False
+        in_body = False
         open_details = False
         seen_h2 = False
 
@@ -239,8 +244,16 @@ class IndexView(AdminIndexView):
                 html_lines.append('</ul>')
                 in_list = False
 
+        def _close_body():
+            nonlocal in_body
+            if in_body:
+                _close_list()
+                html_lines.append('</div>')
+                in_body = False
+
         def _close_details():
             nonlocal open_details
+            _close_body()
             if open_details:
                 html_lines.append('</details>')
                 open_details = False
@@ -253,16 +266,22 @@ class IndexView(AdminIndexView):
                 _close_list()
                 html_lines.append(f'<h3>{html.escape(stripped[3:].strip())}</h3>')
             elif stripped.startswith('##'):
-                _close_list()
                 title = stripped[2:].strip()
                 if collapse_sections:
                     _close_details()
                     open_attr = '' if seen_h2 else ' open'
                     html_lines.append(f'<details{open_attr}>')
-                    html_lines.append(f'<summary><h2 style="display:inline">{html.escape(title)}</h2></summary>')
+                    html_lines.append(
+                        '<summary class="changelog-version">'
+                        f'<span class="changelog-version-title">{html.escape(title)}</span>'
+                        '</summary>'
+                    )
+                    html_lines.append('<div class="changelog-body">')
                     open_details = True
+                    in_body = True
                     seen_h2 = True
                 else:
+                    _close_list()
                     html_lines.append(f'<h2>{html.escape(title)}</h2>')
             elif stripped.startswith('#'):
                 _close_list()
@@ -278,10 +297,12 @@ class IndexView(AdminIndexView):
                 _close_list()
                 if stripped:  # Non-empty line
                     html_lines.append(f'<p>{html.escape(stripped)}</p>')
-                else:  # Empty line
-                    html_lines.append('<br>')
+                # Intentional: blank lines no longer emit <br>. With the
+                # new body wrapper the <ul>/<p> block model provides the
+                # vertical rhythm; stray <br> inside <details> pushed the
+                # first list item far enough down that some themes clipped
+                # it out of view.
 
-        _close_list()
         _close_details()
 
         return '\n'.join(html_lines)
