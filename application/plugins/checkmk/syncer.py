@@ -66,6 +66,34 @@ class SyncCMK2(CMK2):
         self.num_updated = 0
         self.num_deleted = 0
 
+    def __getstate__(self):
+        # multiprocessing pickles ``self`` for every task dispatched via
+        # pool.apply_async(self.calculate_host_actions, ...). The caches
+        # prefetched in run() before the pool (checkmk_hosts, existing
+        # folders and the bulk queues) can hold one entry per host; with
+        # them on the pickled state the pipe into each worker grew
+        # O(hosts²) and made "Calculating Hostrules and Attributes"
+        # balloon on large installations. The worker only needs the rule
+        # engines and config, so strip the bulk caches here and re-init
+        # them empty on the worker side so any incidental attribute
+        # access keeps working.
+        state = self.__dict__.copy()
+        for key, empty in (
+            ('checkmk_hosts', {}),
+            ('existing_folders', []),
+            ('existing_folders_attributes', {}),
+            ('custom_folder_attributes', {}),
+            ('bulk_creates', []),
+            ('bulk_updates', []),
+            ('synced_hosts', []),
+            ('clusters', []),
+            ('cluster_updates', []),
+            ('disabled_hosts', []),
+        ):
+            if key in state:
+                state[key] = empty
+        return state
+
     @staticmethod
     def chunks(lst, n):
         """
