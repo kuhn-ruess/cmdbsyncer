@@ -79,8 +79,10 @@ class SyncSites(Plugin):
         """
         Get Inventory for single host
         """
+        # CheckmkSite has no `available` field; filter by `enabled` to
+        # stay consistent with the full-inventory path above.
         try:
-            site = CheckmkSite.objects.get(server_address=hostname, available=True)
+            site = CheckmkSite.objects.get(server_address=hostname, enabled=True)
         except DoesNotExist:
             return False
         return self.get_site_data(site)

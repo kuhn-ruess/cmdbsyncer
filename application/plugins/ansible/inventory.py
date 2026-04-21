@@ -2,6 +2,7 @@
 """
 Ansible Inventory Modul
 """
+# pylint: disable=duplicate-code
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from mongoengine.errors import DoesNotExist
 from application.models.host import Host
@@ -47,7 +48,7 @@ class AnsibleInventory(Plugin):
         """
         if db_host.cache.get('ansible',{}).get('outcomes'):
             return db_host.cache['ansible']['outcomes']
-        outcomes = self.actions.get_outcomes(db_host, attributes)
+        outcomes = self.actions.get_outcomes(db_host, attributes)  # pylint: disable=no-member
         db_host.cache.setdefault('ansible', {})
         db_host.cache['ansible']['outcomes'] = outcomes
         db_host.save()
@@ -59,12 +60,11 @@ class AnsibleInventory(Plugin):
         """
         if isinstance(data, dict):
             return {k: self._convert_string_booleans(v) for k, v in data.items()}
-        elif isinstance(data, list):
+        if isinstance(data, list):
             return [self._convert_string_booleans(item) for item in data]
-        elif isinstance(data, str) and data.lower() in ['true', 'false']:
+        if isinstance(data, str) and data.lower() in ['true', 'false']:
             return data.lower() == 'true'
-        else:
-            return data
+        return data
 
     def get_full_inventory(self, show_status=False):
         """
@@ -82,7 +82,10 @@ class AnsibleInventory(Plugin):
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
-            query = Host.objects()
+            # Match the single-host lookup below: only return hosts that
+            # are currently marked available, so --list and --host agree
+            # on which hostnames exist in this source.
+            query = Host.objects(available=True)
             if show_status:
                 task1 = progress.add_task("Calculating Variables", total=query.count())
             for db_host in query:

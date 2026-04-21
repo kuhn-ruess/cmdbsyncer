@@ -1,9 +1,10 @@
 """
 JDISC Executables
 """
-from .jdisc import JDisc
-
+# pylint: disable=duplicate-code
 from syncerapi.v1.inventory import run_inventory
+
+from .jdisc import JDisc
 
 
 class JdiscExecutables(JDisc):
@@ -19,6 +20,7 @@ class JdiscExecutables(JDisc):
             query test {
                 devices {
                   findAll {
+                    id
                     name
                     operatingSystem {
                      installedExecutableFiles {
@@ -36,17 +38,42 @@ class JdiscExecutables(JDisc):
             }
     """
 
+    def _iter_device_executables(self):
+        """Yield (device, executable_list) tuples, skipping devices
+        without operatingSystem data instead of crashing."""
+        for device in self.run_query()['devices']['findAll']:
+            os_data = device.get('operatingSystem') or {}
+            executables = os_data.get('installedExecutableFiles') or []
+            yield device, executables
+
     def import_executables(self):
         """
         JDisc Executables Import
         """
-        for labels in self.run_query()['devices']['findAll']:
-            self.handle_object(labels, 'application')
+        import_unnamed = self.config.get('import_unnamed_devices')
+        for device, executables in self._iter_device_executables():
+            device_key = device.get('name')
+            if not device_key and import_unnamed and device.get('id') is not None:
+                device_key = f"unnamed-{device['id']}"
+            if not device_key:
+                continue
+            # Pass the list of executable wrappers to handle_object and
+            # key each one by its owning device so identically named
+            # binaries on different hosts stay distinct.
+            self.handle_object(executables, 'executableFile', parent=('device', device_key))
 
 
     def inventorize(self):
         """
         JDisc Executables Inventorize
         """
-        run_inventory(self.config, [(x['name'], x['operatingSystem']['installedExecutableFiles'])
-                                      for x in self.run_query()['devices']['findAll'] if x['name']], 'executables')
+        import_unnamed = self.config.get('import_unnamed_devices')
+        entries = []
+        for device, executables in self._iter_device_executables():
+            hostname = device.get('name')
+            if not hostname and import_unnamed and device.get('id') is not None:
+                hostname = f"unnamed-{device['id']}"
+            if not hostname:
+                continue
+            entries.append((hostname, executables))
+        run_inventory(self.config, entries, 'executables')

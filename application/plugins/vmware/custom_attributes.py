@@ -17,7 +17,6 @@ from syncerapi.v1.inventory import (
 )
 
 from application import logger
-from application import app
 from .vmware import VMWareVcenterPlugin
 
 
@@ -105,6 +104,7 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
         return data
 
 
+    # pylint: disable-next=too-many-locals
     def export_attributes(self):
         """
         Export Custom Attributes
@@ -137,24 +137,28 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
                         continue
 
                     self.console(f" * Work on {hostname}")
-                    logger.debug(f"{hostname}: {custom_rules}")
+                    logger.debug("%s: %s", hostname, custom_rules)
                     changes = []
                     if vm_host_data := current_attributes.get(hostname):
                         for new_attr_name, new_attr_value in custom_rules['attributes'].items():
-                            old_value = False
-                            if old_attr := vm_host_data.get(new_attr_name):
-                                old_value = old_attr
+                            old_value = vm_host_data.get(new_attr_name) or False
                             if old_value != new_attr_value:
-                                changes.append(f"{new_attr_name}: {old_attr} to {new_attr_value}")
+                                # Reference old_value here — old_attr only
+                                # existed on the truthy branch of the walrus
+                                # and triggered UnboundLocalError when a
+                                # previous value was missing or falsy.
+                                changes.append(
+                                    f"{new_attr_name}: {old_value} to {new_attr_value}"
+                                )
                                 current_vms[hostname].SetCustomValue(key=new_attr_name,
                                                                      value=new_attr_value)
-                        logger.debug(f" Updated: {changes}")
+                        logger.debug(" Updated: %s", changes)
                     else:
-                        logger.debug(f" Not found in VMware Data")
+                        logger.debug(" Not found in VMware Data")
                         progress.advance(task1)
                         continue
 
-                except Exception as error:
+                except Exception as error:  # pylint: disable=broad-exception-caught
                     if self.debug:
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))

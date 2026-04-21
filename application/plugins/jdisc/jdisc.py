@@ -55,28 +55,47 @@ class JDisc(Plugin):
         )
         return response.json()['data']['authentication']['login']['accessToken']
 
-    def handle_object(self, objects, obj_type):
+    def handle_object(self, objects, obj_type, parent=None):
         """
-        Handle host actions """
-        for found_obj in objects:
+        Persist a list of nested software objects (applications or
+        executables) as Syncer objects.
+
+        ``parent``: optional (field_name, value) pair that is folded into
+        the Syncer object key, e.g. ``("device", "srv01")``. Identically
+        named software from different devices therefore stays distinct
+        instead of collapsing onto a single object that overwrites every
+        previous import.
+        """
+        for entry in objects:
+            name = None
             try:
-                found_obj = found_obj[obj_type]
-                if not 'name' in found_obj:
+                # Entries look like {"application": {"name": ...}, ...}
+                # for applications and {"executableFile": {...}, ...}
+                # for executables.
+                nested = entry.get(obj_type) if isinstance(entry, dict) else None
+                if not isinstance(nested, dict):
                     continue
-                name = found_obj['name']
-                del found_obj['name']
-                host_obj = Host.get_host(name)
+                if 'name' not in nested:
+                    continue
+                name = nested['name']
+                data = {k: v for k, v in nested.items() if k != 'name'}
+                if parent:
+                    key = f"{parent[0]}={parent[1]}/{obj_type}/{name}"
+                else:
+                    key = f"{obj_type}/{name}"
+                host_obj = Host.get_host(key)
                 do_save = host_obj.set_account(account_dict=self.config)
                 if do_save:
                     host_obj.is_object = True
                     host_obj.object_type = obj_type
-                    host_obj.update_host(found_obj)
+                    host_obj.update_host(data)
                     host_obj.save()
-                print(f" {cc.OKGREEN}* {cc.ENDC} Created object {name}")
+                print(f" {cc.OKGREEN}* {cc.ENDC} Processed {obj_type} {key}")
             except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
-                self.log_details.append((f'export_error {name}', str(error)))
+                ref = name or '<unknown>'
+                self.log_details.append((f'export_error {obj_type} {ref}', str(error)))
                 print(f" Error in process: {error}")
 
     #def get_custom_fields_query(self, mode):
