@@ -8,6 +8,15 @@ from application import app
 from application.models.host import Host
 from application.modules.debug import ColorCodes
 
+# Default HTTP timeout for Cisco DNA calls; without it the importer
+# can hang forever on an unresponsive DNA Center.
+_HTTP_TIMEOUT = 60
+
+
+class CiscoDNAError(Exception):
+    """Raised on Cisco DNA sync failures."""
+
+
 class CiscoDNA():
     """
     Cisco DNA
@@ -42,8 +51,11 @@ class CiscoDNA():
         if response.status_code < 400:
             response_json = response.json()
             return response_json['Token']
-        print(response.text)
-        raise Exception("Connection Problem")
+        # Do not dump the raw error body — it can expose remote
+        # error payloads in log output.
+        raise CiscoDNAError(
+            f"Authentication failed with status {response.status_code}"
+        )
 
 
 #.
@@ -120,7 +132,9 @@ class CiscoDNA():
         for db_host in Host.objects(available=True, source_account_id=self.account_id):
             print(f"{ColorCodes.HEADER}{db_host.hostname}{ColorCodes.ENDC}")
             url = base_url + db_host.sync_id
-            response = requests.request("GET", url, headers=headers, verify=self.verify)
+            response = requests.request(
+                "GET", url, headers=headers, verify=self.verify, timeout=_HTTP_TIMEOUT
+            )
             response_json = response.json()['response']
             inventory = {}
             for interface in response_json:
@@ -133,6 +147,7 @@ class CiscoDNA():
 
 #.
 #   .-- Command: get_hosts
+    # pylint: disable-next=too-many-locals
     def get_hosts(self):
         """
         Get Host list
@@ -204,7 +219,9 @@ class CiscoDNA():
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
         url = f"{self.address}/dna/intent/api/v1/network-device?hostname=.*"
         headers = {"x-auth-token": token}
-        response = requests.request("GET", url, headers=headers, verify=self.verify)
+        response = requests.request(
+            "GET", url, headers=headers, verify=self.verify, timeout=_HTTP_TIMEOUT
+        )
         response_json = response.json()['response']
         total = len(response_json)
         counter = 0

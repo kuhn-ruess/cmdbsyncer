@@ -2,13 +2,13 @@
 Jdisc Device Import
 """
 
-from .jdisc import JDisc
-
 from syncerapi.v1.inventory import run_inventory
 from syncerapi.v1 import (
     Host,
     cc,
 )
+
+from .jdisc import JDisc
 
 class JdiscDevices(JDisc):
     """
@@ -154,7 +154,7 @@ class JdiscDevices(JDisc):
                     host_obj.save()
                 else:
                     print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
-            except Exception as error:
+            except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
                 self.log_details.append((f'export_error {hostname}', str(error)))
@@ -165,5 +165,18 @@ class JdiscDevices(JDisc):
         """
         JDisc Application Inventorize
         """
-        run_inventory(self.config, [(x['name'], x) for x in \
-                            self.run_query()['devices']['findAll'] if x['name']])
+        rewrite = self.config.get('rewrite_hostname')
+        import_unnamed = self.config.get('import_unnamed_devices')
+        entries = []
+        for dev in self.run_query()['devices']['findAll']:
+            hostname = dev.get('name')
+            if not hostname and import_unnamed and dev.get('serialNumber'):
+                # Mirror import_devices so nameless devices that get
+                # imported as unnamed-<serial> also receive inventory.
+                hostname = f"unnamed-{dev['serialNumber']}"
+            if not hostname:
+                continue
+            if rewrite:
+                hostname = Host.rewrite_hostname(hostname, rewrite, dev)
+            entries.append((hostname, dev))
+        run_inventory(self.config, entries)

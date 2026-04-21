@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Import ODBC Data"""
+# pylint: disable=duplicate-code
 
 from syncerapi.v1 import (
     cc,
@@ -107,4 +108,12 @@ class ODBC(Plugin):
         """
         ODBC Inventorize
         """
-        run_inventory(self.config, self._innter_sql())
+        rewrite = self.config.get('rewrite_hostname')
+        entries = []
+        for hostname, labels in self._innter_sql():
+            # Mirror the import path so inventory writes land on the
+            # same host key as the matching importer.
+            if rewrite:
+                hostname = Host.rewrite_hostname(hostname, rewrite, labels)
+            entries.append((hostname, labels))
+        run_inventory(self.config, entries)

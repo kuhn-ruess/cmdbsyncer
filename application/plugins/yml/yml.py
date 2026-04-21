@@ -1,6 +1,7 @@
 """
 YML Plugin
 """
+# pylint: disable=duplicate-code
 import ast
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 from application import logger
@@ -51,7 +52,9 @@ class YMLSyncer(Plugin):
         headers = {}
         if self.config.get('request_headers'):
             headers = ast.literal_eval(self.config['request_headers'])
-            logger.debug("Request Headers: %s", headers)
+            # Do not log raw headers — shared HTTP path redacts them.
+            logger.debug("Request Headers: %d custom header(s) passed to shared HTTP path",
+                         len(headers))
 
 
         auth = None
@@ -118,8 +121,18 @@ class YMLSyncer(Plugin):
         """
         Inventorize Hosts
         """
-        run_inventory(self.config, [(x['hostname'], x) for x in \
-                                    data if x['hostname']])
+        rewrite = self.config.get('rewrite_hostname')
+        entries = []
+        for entry in data:
+            hostname = entry.get('hostname')
+            if not hostname:
+                continue
+            # Mirror the import path so inventory writes land on the
+            # same host key as the matching importer.
+            if rewrite:
+                hostname = Host.rewrite_hostname(hostname, rewrite, entry)
+            entries.append((hostname, entry))
+        run_inventory(self.config, entries)
 
 
 def import_hosts_yml(account, debug=False):

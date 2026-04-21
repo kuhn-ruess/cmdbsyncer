@@ -87,7 +87,9 @@ class Prtg(Plugin):
 
     def get_devices(self):
         """
-        Return List of Devices with Attributes
+        Return List of Devices with Attributes, paging through the PRTG
+        API so installations with more than one page of devices are
+        imported completely instead of being truncated at 5000 items.
         """
         url = f"{self.config['address']}/api/table.json"
         print(f"{cc.OKGREEN} -- {cc.ENDC}Request: Read all Hosts")
@@ -98,23 +100,33 @@ class Prtg(Plugin):
            "tags"
         ]
 
-        params = {
-            "content": "devices",
-            "output": "json",
-            "columns": ",".join(prtg_attributes),
-            "count": "5000",
-            "username": self.config['username'],
-            "password": self.config['password']
-        }
+        page_size = 5000
+        start = 0
+        while True:
+            params = {
+                "content": "devices",
+                "output": "json",
+                "columns": ",".join(prtg_attributes),
+                "count": str(page_size),
+                "start": str(start),
+                "username": self.config['username'],
+                "password": self.config['password'],
+            }
 
-        response = self.inner_request(method="GET", url=url, params=params)
+            response = self.inner_request(method="GET", url=url, params=params)
+            prtg_devices = response.json()
+            if 'devices' not in prtg_devices:
+                raise ValueError("No Data from PRTG, check your Account Settings")
 
-        prtg_devices = response.json()
-        if 'devices' not in prtg_devices:
-            raise ValueError("No Data from PRTG, check your Account Settings")
+            devices = prtg_devices['devices']
+            if not devices:
+                return
+            for device in devices:
+                yield device['device'], device
 
-        for device in prtg_devices['devices']:
-            yield device['device'], device
+            if len(devices) < page_size:
+                return
+            start += len(devices)
 
 
     def import_objects(self):
@@ -139,7 +151,6 @@ class Prtg(Plugin):
         """
         Inventorize PRT Objects
         """
-        self.connect()
         run_inventory(self.config, self.get_devices())
 
 def import_prtg(account, debug=False):
@@ -165,4 +176,3 @@ def inventorize_prtg(account, debug=False):
     prtg.source = "prtg_inventorzie"
 
     prtg.inventorize_objects()
-

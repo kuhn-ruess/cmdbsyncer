@@ -15,23 +15,28 @@ if app.config.get("DISABLE_SSL_ERRORS"):
     disable_warnings(InsecureRequestWarning)
 
 
+class IdoitAuthError(Exception):
+    """Raised on i-doit authentication failures."""
+
+
 class SyncIdoit(Plugin):
     """
     i-doit sync options
     """
 
-    category_cache = {}
-    config = {}
-
 #.
 #   .-- Init
-    def __init__(self):
+    def __init__(self, account=False):
         """
         Inital
         """
 
+        super().__init__(account)
         self.log = log
-        self.verify = not app.config.get("DISABLE_SSL_ERRORS")
+        # Per-instance cache so repeated runs or different accounts in
+        # one process do not reuse category payloads from an earlier
+        # target.
+        self.category_cache = {}
 
 #.
 #.  .-- Get host data
@@ -40,46 +45,40 @@ class SyncIdoit(Plugin):
         Return commands for fullfilling of the i-doit params
         """
 
-        return self.actions.get_outcomes(db_host, attributes)
+        return self.actions.get_outcomes(db_host, attributes)  # pylint: disable=no-member
 
 #.
 #   . -- Request
     def request(self, data, method="POST"):
         """
-        Handle request to i-doit
+        Handle request to i-doit through the shared Plugin HTTP path so
+        verify_cert, CA chain, timeout and retry settings are honored.
         """
 
         address = self.config["address"]
         url = f"{address}/src/jsonrpc.php"
 
         auth = HTTPBasicAuth(self.config["username"], self.config["password"])
+        logger.debug("Request (%s) to %s", method.upper(), url)
+
         try:
-            method = method.lower()
-
-            logger.debug(f"Request ({method.upper()}) to {url}")
-            logger.debug(f"Request JSON Body: {data}")
-
-            if method == "post":
-                response = requests.post(url, auth=auth, json=data)
-
-            logger.debug(f"Response Text: {response.text}")
-
-            if response.status_code == 403:
-                raise Exception("Invalid login, you may need to create a login token")
-
-            try:
-                response_json = response.json()
-
-            except:
-                raise
-
+            response = self.inner_request(
+                method=method.upper(), url=url, json=data, auth=auth,
+            )
         except (ConnectionResetError, requests.exceptions.ProxyError):
             return {}
 
-        return response_json
+        if response.status_code == 403:
+            raise IdoitAuthError("Invalid login, you may need to create a login token")
+
+        try:
+            return response.json()
+        except requests.exceptions.JSONDecodeError:
+            return {}
 
 #.
 #   .-- Get object categories
+    # pylint: disable-next=too-many-locals,too-many-branches,too-many-nested-blocks
     def get_object_categories(self, obj_id):
         """
         Get all needed categories for an object in i-doit
@@ -88,7 +87,7 @@ class SyncIdoit(Plugin):
         object_categories = self.config.get("object_categories", "")
         object_categories = [x.strip() for x in object_categories.split(",")]
 
-        for category in object_categories:
+        for category in object_categories:  # pylint: disable=too-many-nested-blocks
             json_data = {
                 "id": 1,
                 "version": "2.0",
@@ -103,10 +102,10 @@ class SyncIdoit(Plugin):
 
             response = self.request(json_data)
 
-            if "result" not in response.keys():
+            if "result" not in response:
                 continue
 
-            elif not response["result"]:
+            if not response["result"]:
                 continue
 
             response = response["result"]
@@ -150,7 +149,7 @@ class SyncIdoit(Plugin):
                 if counter:
                     counter = f"_{int(counter[-1]) + 1}"
 
-                if cache_name not in self.category_cache.keys():
+                if cache_name not in self.category_cache:
                     self.category_cache[cache_name] = data
 
                 else:
@@ -196,7 +195,7 @@ class SyncIdoit(Plugin):
             if get_categories:
                 for result in self.get_object_categories(server["id"]):
 
-                    for cat, values in result.items():
+                    for values in result.values():
                         for name, value in values.items():
                             server[name] = value
 
