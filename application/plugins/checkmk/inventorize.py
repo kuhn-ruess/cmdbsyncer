@@ -251,9 +251,12 @@ class InventorizeHosts(CMK2):
             if self.fields.get('cmk_labels'):
                 labels = self.label_inventory.get(hostname, {})
                 labels.update(attributes.get('labels', {}))
+                # Checkmk labels such as `piggyback_source_<hostname>` embed a
+                # FQDN in the label name; MongoDB rejects dots in field names,
+                # so flatten them the same way as in the HW/SW inventory path.
                 for label_key, label_value in labels.items():
                     if label_key in self.fields['cmk_labels']:
-                        label_key = label_key.replace('cmk/','')
+                        label_key = label_key.replace('cmk/', '').replace('.', '_')
                         host_inventory['label_'+label_key] = label_value
 
                 for search in self.fields['cmk_labels']:
@@ -261,7 +264,7 @@ class InventorizeHosts(CMK2):
                         needle = search[:-1]
                         for label in labels.keys():
                             if label.startswith(needle):
-                                label_name = label.replace('cmk/','')
+                                label_name = label.replace('cmk/', '').replace('.', '_')
                                 host_inventory['label_'+label_name] = labels[label]
 
             self.config_inventory[hostname] = host_inventory
