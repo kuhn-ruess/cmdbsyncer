@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Import LDAP Data"""
+# pylint: disable=no-member
 from application import log
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
@@ -23,13 +24,20 @@ def get_objects(results, config):
             continue
 
         for key, content in entry.items():
-            content = content[0].decode(config['encoding'])
-            labels[key] = content
+            # LDAP returns each attribute as a list; skip attributes
+            # with no values instead of raising IndexError and aborting
+            # the whole import.
+            if not content:
+                continue
+            labels[key] = content[0].decode(config['encoding'])
 
         try:
             hostname = labels[config['hostname_field']]
         except KeyError:
             continue
+
+        if config.get('rewrite_hostname'):
+            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
 
         yield hostname, labels
 
