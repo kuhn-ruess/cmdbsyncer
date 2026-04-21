@@ -99,12 +99,58 @@ class CheckmkRuleSync(CMK2):
     """
     rulsets_by_type = {}
 
+    def __init__(self, account=False):
+        super().__init__(account)
+        # Tri-state etag probe:
+        #   None  = not yet probed
+        #   False = wildcard If-Match works → skip the pre-GET
+        #   True  = wildcard rejected, fall back to GET+PUT for the rest
+        #           of this run so we don't retry on every rule
+        self._rule_etag_wildcard_rejected = None
 
     def build_rule_hash(self, rule_template, conditions):
         """
         Create a hash which can identify the rule
         """
         return hash(str(rule_template)+str(conditions))
+
+    def update_rule(self, rule_id, update_payload):
+        """
+        Update an existing Checkmk rule in place.
+
+        Checkmk requires an ``If-Match`` header on rule updates.
+        Instead of always doing a GET to fetch the current ETag
+        (one extra round-trip per rule), we first try a wildcard
+        ``If-Match: *``. If the endpoint accepts it, we save one
+        request per updated rule — roughly halving the traffic in
+        the cleanup phase. On the first rejection we cache that
+        this run has to fall back to GET+PUT so we don't retry the
+        wildcard on every rule.
+        """
+        rule_url = f'/objects/rule/{rule_id}'
+
+        if self._rule_etag_wildcard_rejected is not True:
+            try:
+                _, headers = self.request(
+                    rule_url, data=update_payload, method="PUT",
+                    additional_header={'If-Match': '*'},
+                )
+            except CmkException:
+                self._rule_etag_wildcard_rejected = True
+            else:
+                if headers.get('status_code') == 200:
+                    return
+                # Server accepted the request path but rejected the
+                # wildcard precondition — remember and fall back.
+                self._rule_etag_wildcard_rejected = True
+
+        _, get_headers = self.request(rule_url, method="GET")
+        etag = get_headers.get('etag') or get_headers.get('ETag')
+        additional = {'If-Match': etag} if etag else None
+        self.request(
+            rule_url, data=update_payload, method="PUT",
+            additional_header=additional,
+        )
 
 
     # pylint: disable=too-many-locals,too-many-branches
@@ -418,9 +464,6 @@ class CheckmkRuleSync(CMK2):
                             not condition_matches[0]['value_match']:
                         our_rule = condition_matches[0]['rule']
                         rule_id = cmk_rule['id']
-                        rule_url = f'/objects/rule/{rule_id}'
-                        _, get_headers = self.request(rule_url, method="GET")
-                        etag = get_headers.get('etag') or get_headers.get('ETag')
                         update_payload = {
                             "properties": {
                                 "disabled": False,
@@ -430,10 +473,8 @@ class CheckmkRuleSync(CMK2):
                             "conditions": our_rule['condition'],
                             "value_raw": our_rule['value'],
                         }
-                        additional = {'If-Match': etag} if etag else None
                         try:
-                            self.request(rule_url, data=update_payload, method="PUT",
-                                         additional_header=additional)
+                            self.update_rule(rule_id, update_payload)
                             print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE Rule in "
                                   f"{ruleset_name} {rule_id}")
                             rules.remove(our_rule)
