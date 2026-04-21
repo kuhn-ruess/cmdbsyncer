@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 from application.plugins.checkmk.inventorize import InventorizeHosts
 from application.plugins.checkmk.cmk2 import CmkException
+from application.helpers.mongo_keys import validate_mongo_keys
 from tests import base_mock_init
 
 
@@ -115,6 +116,65 @@ class TestInventorizeHosts(unittest.TestCase):
         self.assertEqual(hostname, 'host1')
         self.assertIsNotNone(data)
         self.assertIn('model', data)
+
+    @patch('application.plugins.checkmk.inventorize.app')
+    def test_get_attr_labels_flattens_dots_in_label_names(self, mock_app):
+        # Checkmk piggyback source labels embed a FQDN in the label NAME.
+        # Those dots would break the MongoDB key validation on write, so
+        # get_attr_labels has to flatten them.
+        mock_app.config = {'CMK_GET_HOST_BY_FOLDER': False}
+        self.inv.checkmk_hosts = {
+            'host1': {
+                'extensions': {
+                    'effective_attributes': None,
+                    'labels': {
+                        'piggyback_source_vc-prd-w-mgmt.services.p.rz.drv': 'yes',
+                        'plain_label': 'value',
+                    },
+                },
+            },
+        }
+        self.inv.fields = {'cmk_labels': ['piggyback_source_*', 'plain_label']}
+
+        with patch.object(self.inv, 'fetch_all_checkmk_hosts'):
+            self.inv.get_attr_labels()
+
+        inv = self.inv.config_inventory['host1']
+        self.assertIn('label_piggyback_source_vc-prd-w-mgmt_services_p_rz_drv', inv)
+        self.assertNotIn(
+            'label_piggyback_source_vc-prd-w-mgmt.services.p.rz.drv', inv,
+        )
+        self.assertIn('label_plain_label', inv)
+
+    @patch('application.plugins.checkmk.inventorize.app')
+    def test_get_attr_labels_keys_pass_mongo_validation(self, mock_app):
+        # Regression guard: whatever get_attr_labels writes into
+        # config_inventory has to round-trip through the same validator
+        # that host.update_inventory() runs at save time. If a future
+        # change reintroduces a MongoDB-hostile key (dots, `$`, empty),
+        # this test fails before the syncer crashes in production.
+        mock_app.config = {'CMK_GET_HOST_BY_FOLDER': False}
+        self.inv.checkmk_hosts = {
+            'host1': {
+                'extensions': {
+                    'effective_attributes': None,
+                    'labels': {
+                        'piggyback_source_host.with.dots.example': 'yes',
+                        'cmk/site.name.with.dots': 'prd',
+                        'normal_label': 'ok',
+                    },
+                },
+            },
+        }
+        self.inv.fields = {
+            'cmk_labels': ['piggyback_source_*', 'cmk/*', 'normal_label'],
+        }
+
+        with patch.object(self.inv, 'fetch_all_checkmk_hosts'):
+            self.inv.get_attr_labels()
+
+        # Raises ValueError on any dotted / $-prefixed / empty key.
+        validate_mongo_keys(self.inv.config_inventory['host1'], 'inventory')
 
     def test_get_hw_sw_inventory_data_empty(self):
         api_response = ({
