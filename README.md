@@ -6,6 +6,7 @@ A rule-based and modular system to synchronize hosts between Checkmk, Netbox, an
 
 * [🌐 Homepage](https://cmdbsyncer.de)
 * [📖 Documentation](https://docs.cmdbsyncer.de)
+* [🚀 Releases & Versioning](RELEASE.md) — how to pick a stable version for production
 
 ## 📋 Table of Contents
 
@@ -38,6 +39,10 @@ Get started quickly using Docker Compose:
 # Clone the repository
 git clone https://github.com/your-username/cmdbsyncer.git
 cd cmdbsyncer
+
+# For production: check out the last released version.
+# For testing the bleeding edge: stay on main.
+git checkout stable
 
 # Start the application
 ./helper up
@@ -179,11 +184,17 @@ This runs a development version that you can use to test everything.
 
 ### Production Installation
 
-1. **Clone the repository**
+1. **Clone the repository and pick a version**
    ```bash
    git clone https://github.com/your-username/cmdbsyncer.git
    cd cmdbsyncer
+
+   # Use the stable branch (last released version) for production:
+   git checkout stable
+   # …or pin to a specific release tag for reproducible deployments:
+   # git checkout v3.12.12
    ```
+   See [RELEASE.md](RELEASE.md) for the full branching/versioning policy.
 
 2. **Configure environment**
    ```bash
