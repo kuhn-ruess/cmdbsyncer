@@ -28,16 +28,16 @@ def _load_changelog():
     In source checkouts the symlink ``<repo>/changelog.md`` points at the
     active ``changelog/v{MAJOR}.{MINOR}.md`` file. PyPI installs ship that
     same file as ``application/changelog.md`` via package-data, generated
-    by ``tools/sync_changelog.py`` at build time.
+    by ``tools/sync_changelog.py`` at build time. The repo-root sources
+    win when present so a stale packaged copy in a source checkout cannot
+    shadow the live file.
     """
-    packaged = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'changelog.md')
-    if os.path.isfile(packaged):
-        with open(packaged, 'r', encoding='utf-8') as fh:
-            return fh.read()
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    packaged = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'changelog.md')
     for candidate in (
         os.path.join(repo_root, 'changelog.md'),
         os.path.join(repo_root, 'changelog', _major_minor_filename()),
+        packaged,
     ):
         if os.path.isfile(candidate):
             with open(candidate, 'r', encoding='utf-8') as fh:
