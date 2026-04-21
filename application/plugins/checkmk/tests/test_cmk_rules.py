@@ -233,6 +233,32 @@ class TestCheckmkRuleSync(unittest.TestCase):
 
         self.assertIn('ruleset1', self.sync.rulsets_by_type)
 
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_rule_params_not_mutated_across_hosts(self, mock_render):
+        # Regression: the rule-engine caches prepared outcome dicts and
+        # hands the same reference to every host. build_condition_...
+        # used to `del rule_params['value_template']`, which broke the
+        # second host that hit the same rule.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        shared_rule_params = {
+            'value_template': "{'k': 'v'}",
+            'folder': '/',
+            'comment': 'test',
+            'condition_host': 'host1',
+        }
+        attributes = {'all': {'HOSTNAME': 'host1'}}
+
+        self.sync.build_condition_and_update_rule_params(
+            shared_rule_params, attributes)
+
+        self.assertIn('value_template', shared_rule_params)
+        self.assertIn('condition_host', shared_rule_params)
+
+        # Second call with the same dict must still succeed.
+        result = self.sync.build_condition_and_update_rule_params(
+            shared_rule_params, attributes)
+        self.assertIn('condition', result)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -15,10 +15,14 @@ from application.helpers.syncer_jinja import render_jinja, get_list
 from application.modules.debug import ColorCodes as CC
 
 
-def clean_postproccessed(input):
+def clean_postproccessed(data):
+    """
+    Replace explicit_password tuples with a sentinel so rule comparisons
+    don't mismatch just because the stored password tuple differs.
+    """
     # @TODO Problem this way a Passwort Change wont be detected
     output = {}
-    for key, value in input.items():
+    for key, value in data.items():
         if isinstance(value, tuple):
             if value[0] == 'cmk_postprocessed' and \
                     value[1] == 'explicit_password':
@@ -38,11 +42,10 @@ def deep_compare(a, b):
         b = clean_postproccessed(b)
         if set(a.keys()) != set(b.keys()):
             return False
-        return all(deep_compare(a[k], b[k]) for k in a)
-    elif isinstance(a, list) and isinstance(b, list):
+        return all(deep_compare(v, b[k]) for k, v in a.items())
+    if isinstance(a, list) and isinstance(b, list):
         return sorted(a, key=str) == sorted(b, key=str)
-    else:
-        return a == b
+    return a == b
 
 
 def analyze_value_differences(expected, actual):
@@ -66,11 +69,14 @@ def analyze_value_differences(expected, actual):
 
         for key in common_keys:
             if expected[key] != actual[key]:
-                differences.append(f"Key '{key}': expected {repr(expected[key])}, got {repr(actual[key])}")
+                differences.append(
+                    f"Key '{key}': expected {repr(expected[key])}, "
+                    f"got {repr(actual[key])}"
+                )
 
         return '; '.join(differences) if differences else "No specific differences found"
 
-    elif isinstance(expected, list) and isinstance(actual, list):
+    if isinstance(expected, list) and isinstance(actual, list):
         if len(expected) != len(actual):
             return f"List length differs: expected {len(expected)}, got {len(actual)}"
 
@@ -80,8 +86,7 @@ def analyze_value_differences(expected, actual):
                 differences.append(f"Index {i}: expected {repr(exp_item)}, got {repr(act_item)}")
 
         return '; '.join(differences) if differences else "List order differs"
-    else:
-        return f"Expected: {repr(expected)}, Got: {repr(actual)}"
+    return f"Expected: {repr(expected)}, Got: {repr(actual)}"
 
 class CheckmkRuleSync(CMK2):
     """
@@ -97,6 +102,7 @@ class CheckmkRuleSync(CMK2):
         return hash(str(rule_template)+str(conditions))
 
 
+    # pylint: disable=too-many-locals,too-many-branches
     def build_condition_and_update_rule_params(
         self, rule_params, attributes, loop_value=None, loop_idx=None
     ):
@@ -105,6 +111,12 @@ class CheckmkRuleSync(CMK2):
         Uses self.checkmk_version.
         Optionally injects loop_value as 'loop' into the template context.
         """
+        # Work on a local copy — the outcome dicts are shared across hosts
+        # via the rule-engine's prepared-outcomes cache, so mutating them
+        # here (del value_template/condition_* etc.) would break the next
+        # host that hits the same rule.
+        rule_params = dict(rule_params)
+
         # Setup condition template based on Checkmk version
         if self.checkmk_version.startswith('2.2'):
             condition_tpl = {"host_tags": [], "service_labels": []}
@@ -173,15 +185,17 @@ class CheckmkRuleSync(CMK2):
                 }]
             del rule_params['condition_service_label']
 
-        # Handle condition_host. It's always at the end to calculate correct identification hash of entry
+        # Handle condition_host. It's always at the end to calculate correct
+        # identification hash of entry
         if rule_params.get('condition_host'):
             host_condition = render_jinja(rule_params['condition_host'], **context)
             owner_hostname = context['HOSTNAME']
 
             if host_condition:
                 if not has_hostlabel_condition and owner_hostname == host_condition:
-                    # This rule is for the current Object and there are no other conditions
-                    # hash is build with the Condition Template which not includes the hostname conditoin
+                    # This rule is for the current Object and there are no other
+                    # conditions; hash is built with the condition template which
+                    # does not include the hostname condition
                     rule_hash = self.build_rule_hash(rule_params, condition_tpl)
                     rule_params['optimize_rule_hash'] = rule_hash
                     rule_params['optimize'] = True
@@ -211,7 +225,8 @@ class CheckmkRuleSync(CMK2):
                     if rule_hash not in rule_by_hash:
                         rule['condition']['host_name']['match_on'] = []
                         rule_by_hash[rule_hash] = rule
-                    rule_by_hash[rule_hash]['condition']['host_name']['match_on'].append(condition_host)
+                    rule_by_hash[rule_hash]['condition']['host_name']['match_on'].append(
+                        condition_host)
                 else:
                     # nothing to optimize, so just add
                     final_rules.append(rule)
@@ -245,10 +260,12 @@ class CheckmkRuleSync(CMK2):
             for db_host in db_objects:
                 attributes = self.get_attributes(db_host, 'checkmk')
                 if not attributes:
-                    logger.debug(f"Skipped: {db_host.hostname}")
+                    logger.debug("Skipped: %s", db_host.hostname)
                     progress.advance(task1)
                     continue
-                host_actions = self.actions.get_outcomes(db_host, attributes['all'])
+                # self.actions is injected by the inits.export_rules wiring
+                host_actions = self.actions.get_outcomes(  # pylint: disable=no-member
+                    db_host, attributes['all'])
                 if host_actions:
                     self.calculate_rules_of_host(host_actions, attributes)
                 progress.advance(task1)
@@ -332,6 +349,7 @@ class CheckmkRuleSync(CMK2):
                 progress.advance(task1)
 
 
+    # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def clean_rules(self):
         """
         Clean not longer needed Rules from Checkmk
@@ -358,12 +376,12 @@ class CheckmkRuleSync(CMK2):
                     rule_found = False
                     condition_matches = []  # Collect all rules with matching conditions
 
-                    for rule in rules:
+                    for rule in list(rules):
                         try:
                             cmk_value = ast.literal_eval(rule['value'])
                             check_value = ast.literal_eval(value)
                         except (SyntaxError, KeyError):
-                            logger.debug(f"Invalid Value: '{rule['value']}' or '{value}'")
+                            logger.debug("Invalid Value: '%s' or '%s'", rule['value'], value)
                             continue
 
                         condition_match = rule['condition'] == cmk_condition
@@ -382,26 +400,38 @@ class CheckmkRuleSync(CMK2):
                             logger.debug("FULL MATCH")
                             rule_found = True
                             # Remove from list, so that it not will be created in the next step
-                            self.rulsets_by_type[ruleset_name].remove(rule)
+                            rules.remove(rule)
                             break
 
                     # Show details for all condition matches if no exact match was found
                     deletion_details = ""
                     if not rule_found and condition_matches:
-                        logger.warning(f"🔄 POTENTIAL FLAPPING RULES detected in {ruleset_name}:")
-                        logger.warning(f"Condition: {pformat(cmk_condition)}")
-                        logger.warning(f"Found {len(condition_matches)} rules with same condition but different values:")
+                        logger.warning(
+                            "🔄 POTENTIAL FLAPPING RULES detected in %s:", ruleset_name)
+                        logger.warning("Condition: %s", pformat(cmk_condition))
+                        logger.warning(
+                            "Found %d rules with same condition but different values:",
+                            len(condition_matches))
 
                         deletion_details_list = []
                         for i, match in enumerate(condition_matches, 1):
                             if not match['value_match']:
-                                value_diff = analyze_value_differences(match['expected_value'], match['actual_value'])
+                                value_diff = analyze_value_differences(
+                                    match['expected_value'], match['actual_value'])
                                 deletion_details_list.append(f"Option {i}: {value_diff}")
-                                logger.warning(f"  Option {i} - Expected: {pformat(match['expected_value'])}")
-                                logger.warning(f"  Option {i} - Actual: {pformat(match['actual_value'])}")
-                                logger.warning(f"  Option {i} - Difference: {value_diff}")
+                                logger.warning(
+                                    "  Option %d - Expected: %s",
+                                    i, pformat(match['expected_value']))
+                                logger.warning(
+                                    "  Option %d - Actual: %s",
+                                    i, pformat(match['actual_value']))
+                                logger.warning(
+                                    "  Option %d - Difference: %s", i, value_diff)
 
-                        deletion_details = f"🔄 FLAPPING RULE - {len(condition_matches)} possible values: " + "; ".join(deletion_details_list)
+                        deletion_details = (
+                            f"🔄 FLAPPING RULE - {len(condition_matches)} possible values: "
+                            + "; ".join(deletion_details_list)
+                        )
 
                     if not rule_found: # Not existing any more
                         rule_id = cmk_rule['id']
