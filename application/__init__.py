@@ -30,7 +30,9 @@ warnings.filterwarnings('ignore', category=UserWarning)
 tablib_registry.register('syncer_rules', ExportObjects())
 
 
-from application._version import __version__ as VERSION
+from application._version import __version__ as VERSION, get_display_version
+
+DISPLAY_VERSION = get_display_version()
 
 CONFIG_MAP = {
     'prod': 'application.config.ProductionConfig',
@@ -236,7 +238,7 @@ from application.api.views import API_BP as api
 app.register_blueprint(api, url_prefix="/api/v1")
 csrf.exempt(api)
 
-admin = Admin(app, name=f"cmdbsyncer {VERSION}",
+admin = Admin(app, name=f"cmdbsyncer {DISPLAY_VERSION}",
                    index_view=IndexView(),
                    category_icon_classes={
                        'Accounts': 'fa fa-users',

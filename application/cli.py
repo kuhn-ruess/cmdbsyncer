@@ -22,7 +22,7 @@ def main():
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", "Fields missing from ruleset", UserWarning)
         try:
-            from application import app, VERSION  # pylint: disable=import-outside-toplevel
+            from application import app, DISPLAY_VERSION  # pylint: disable=import-outside-toplevel
             from flask.cli import ScriptInfo  # pylint: disable=import-outside-toplevel
         except Exception as exp:  # pylint: disable=broad-except
             print("Cannot load application. Is MongoDB reachable and local_config.py present?")
@@ -30,7 +30,7 @@ def main():
             sys.exit(1)
 
         if len(sys.argv) == 1:
-            print(f"CMDB Syncer Version: {VERSION}")
+            print(f"CMDB Syncer Version: {DISPLAY_VERSION}")
             return
         # AppGroup commands re-resolve the app via ScriptInfo.load_app(), which
         # otherwise scans for FLASK_APP / app.py / wsgi.py. PyPI installs have
