@@ -136,6 +136,14 @@ document.addEventListener('DOMContentLoaded', function() {
     saveFilterSettings();
     filterChangelog();
   });
+  // Without this listener the SEC checkbox toggled the state but never
+  // re-ran the filter — so SEC items only re-appeared after toggling
+  // another checkbox (INCOMPATIBLE in practice), which made it look
+  // like INCOMPATIBLE controlled SEC visibility.
+  document.getElementById('filter-sec').addEventListener('change', function() {
+    saveFilterSettings();
+    filterChangelog();
+  });
   document.getElementById('filter-other').addEventListener('change', function() {
     saveFilterSettings();
     filterChangelog();
