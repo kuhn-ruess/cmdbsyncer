@@ -15,7 +15,13 @@ from application import logger
 from application.helpers.get_account import get_account_variable
 
 
-JINJA_ENV = SandboxedEnvironment(autoescape=True)
+# render_jinja renders data values (rule conditions, regex patterns,
+# config payloads, passwords) that are sent to external APIs — never
+# inserted into HTML. Autoescaping here turns regex/config characters
+# (`&`, `<`, `>`, `'`, `"`) into HTML entities and breaks rule
+# conditions sent to Checkmk. HTML contexts do their own escaping via
+# Flask/Jinja at template render time.
+JINJA_ENV = SandboxedEnvironment(autoescape=False)
 
 # Template objects are expensive to build (parse + compile) and
 # immutable afterwards, so we memoize by (mode, source). Two separate
