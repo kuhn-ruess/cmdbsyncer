@@ -55,11 +55,13 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 echo "Running unit tests before commit..."
-if ! "$PYTHON_BIN" run_tests.py > /tmp/cmdbsyncer_pretest.log 2>&1; then
+PRETEST_LOG="$(mktemp -t cmdbsyncer_pretest.XXXXXX)"
+trap 'rm -f "$PRETEST_LOG"' EXIT
+if ! "$PYTHON_BIN" run_tests.py > "$PRETEST_LOG" 2>&1; then
     echo
     echo "Unit tests failed — commit aborted."
     echo "Full output:"
-    cat /tmp/cmdbsyncer_pretest.log
+    cat "$PRETEST_LOG"
     exit 1
 fi
 echo "All tests passed."
