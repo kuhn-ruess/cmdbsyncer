@@ -1,6 +1,7 @@
 """
 Default Rule Models
 """
+# pylint: disable=too-few-public-methods
 from application import db
 
 
@@ -8,10 +9,14 @@ from application import db
 # IMPORTANT: Always also add in Views if new condition types
 condition_types = [
     ('equal', "Exact Match - Attribute exactly equals the given value"),
-    ('in', "Contains - Is the given string contained in the attribute? (works with strings, JSON/Python lists)"),
-    ('not_in', "Not Contains - Is the given string NOT contained in the attribute? (works with strings, JSON/Python lists)"),
-    ('in_list', "Value in List - Is the attribute value found in your comma-separated list? (e.g., 'server1,server2,server3')"),
-    ('string_in_list', "String in Python List - Is your string found in the attribute's Python list? (auto-converts comma-separated strings to lists)"),
+    ('in', "Contains - Is the given string contained in the attribute?"
+           " (works with strings, JSON/Python lists)"),
+    ('not_in', "Not Contains - Is the given string NOT contained in the attribute?"
+               " (works with strings, JSON/Python lists)"),
+    ('in_list', "Value in List - Is the attribute value found in your comma-separated list?"
+                " (e.g., 'server1,server2,server3')"),
+    ('string_in_list', "String in Python List - Is your string found in the attribute's"
+                       " Python list? (auto-converts comma-separated strings to lists)"),
     ('ewith', "Ends With - Does the attribute end with your string?"),
     ('swith', "Starts With - Does the attribute start with your string?"),
     ('regex', "Regular Expression - Does the attribute match your regex pattern?"),
@@ -19,8 +24,9 @@ condition_types = [
     ('ignore', "Always Match - Matches everything (use negate to check 'does not exist')"),
 ]
 
+
 class FullCondition(db.EmbeddedDocument):
-    """
+    r"""
     Condition
 
     Match Type
@@ -105,7 +111,10 @@ class FullCondition(db.EmbeddedDocument):
     Always matches (useful for catch-all rules).
     When negated: Only matches if the attribute does NOT exist.
     """
-    match_type = db.StringField(choices=[('host', "Match for Hostname"),('tag', "Match for Attribute")])
+    match_type = db.StringField(choices=[
+        ('host', "Match for Hostname"),
+        ('tag', "Match for Attribute"),
+    ])
 
     hostname_match = db.StringField(choices=condition_types)
     hostname = db.StringField()
@@ -134,8 +143,10 @@ rule_types = [
 #.
 #   .-- Filter
 filter_actions = [
-    ('whitelist_attribute', "Whitelist Attribute (Use e.g. NAME* for everyhing starting with NAME)"),
-    ('whitelist_attribute_value', "Whitelist Attribute with Value (Use of Wildcard like in Attribute with *)"),
+    ('whitelist_attribute',
+        "Whitelist Attribute (Use e.g. NAME* for everyhing starting with NAME)"),
+    ('whitelist_attribute_value',
+        "Whitelist Attribute with Value (Use of Wildcard like in Attribute with *)"),
     ('ignore_hosts', "Ignore Matching Hosts"),
 ]
 class FilterAction(db.EmbeddedDocument):
