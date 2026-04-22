@@ -17,6 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHANGELOG_GLOB = os.path.join(ROOT, "changelog", "v*.md")
 VERSION_FILE = os.path.join(ROOT, "application", "_version.py")
 PYPROJECT = os.path.join(ROOT, "pyproject.toml")
+LTS_MARKER = os.path.join(ROOT, ".lts-release")
 
 TEMPLATE = '''\
 """Single source of truth for the cmdbsyncer version.
@@ -116,15 +117,24 @@ def main():
     version = find_latest_version()
     if not version:
         sys.exit("no '## Version x.y.z' header found in changelog/v*.md")
+    display_version = version
+    pep440_version = version
+    if os.path.isfile(LTS_MARKER):
+        display_version = f"{version}-LTS"
+        pep440_version = f"{version}+lts"
     changes = []
-    if write_version_file(version):
+    if write_version_file(display_version):
         changes.append(os.path.relpath(VERSION_FILE, ROOT))
-    if write_pyproject_version(version):
+    if write_pyproject_version(pep440_version):
         changes.append(os.path.relpath(PYPROJECT, ROOT))
-    if changes:
-        print(f"Synced version {version} → " + ", ".join(changes))
+    if display_version == pep440_version:
+        label = display_version
     else:
-        print(f"Version {version} already in sync")
+        label = f"{display_version} / {pep440_version}"
+    if changes:
+        print(f"Synced version {label} → " + ", ".join(changes))
+    else:
+        print(f"Version {label} already in sync")
 
 
 if __name__ == "__main__":

@@ -92,6 +92,16 @@ The **`lts/3.12`** branch is the long-term-support line based on `v3.12.13`. It 
 
 New features (`FEAT:`) never land on `lts/3.12` — they go exclusively to `main`.
 
+### LTS version-number scheme
+
+The LTS branch carries a marker file `.lts-release` at the repo root. When `make sync-version` runs with the marker present, it automatically suffixes the version:
+
+- `application/_version.py` → `__version__ = "3.12.13-LTS"` (shown in the UI)
+- `pyproject.toml` → `version = "3.12.13+lts"` (PEP 440-compliant local version identifier, so setuptools/pip still accept it)
+- Git tags are `vX.Y.Z-LTS` (e.g. `v3.12.14-LTS`)
+
+The `+lts` local version identifier means LTS wheels are **not uploadable to PyPI** (PyPI rejects local versions). Distribute LTS releases via git tag / `pip install git+https://…@v3.12.14-LTS` or a private index.
+
 ### Backport workflow
 
 When a fix on `main` should also ship on the LTS line:
@@ -117,15 +127,19 @@ When enough fixes have accumulated on `lts/3.12`, cut a patch release:
 git checkout lts/3.12
 
 # 1. Rename "## Unreleased" → "## Version 3.12.14" in changelog/v3.12.md
-# 2. Sync version files
+#    (use the plain version here — sync_version appends -LTS / +lts automatically)
+
+# 2. Sync version files (picks up .lts-release marker → writes 3.12.14-LTS / 3.12.14+lts)
 make sync-version
+
 # 3. Commit + tag
 git add changelog/v3.12.md application/_version.py pyproject.toml
-git commit -m "Version 3.12.14"
-git tag -a v3.12.14 -m "Version 3.12.14"
+git commit -m "Version 3.12.14-LTS"
+git tag -a v3.12.14-LTS -m "Version 3.12.14-LTS"
+
 # 4. Push branch + tag
 git push origin lts/3.12
-git push origin v3.12.14
+git push origin v3.12.14-LTS
 ```
 
 ## Version scheme
