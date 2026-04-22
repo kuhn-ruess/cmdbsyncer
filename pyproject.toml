@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cmdbsyncer"
-version = "3.12.13+lts"
+version = "3.12+lts1"
 description = "Rule-based modular synchronizer for Checkmk, Netbox, Ansible, I-DOIT, Jira CMDB and 15+ other CMDB/monitoring systems"
 readme = "README.md"
 license = { text = "MIT" }
