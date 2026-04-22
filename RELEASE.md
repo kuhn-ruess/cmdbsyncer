@@ -94,13 +94,17 @@ New features (`FEAT:`) never land on `lts/3.12` — they go exclusively to `main
 
 ### LTS version-number scheme
 
-The LTS branch carries a marker file `.lts-release` at the repo root. When `make sync-version` runs with the marker present, it automatically suffixes the version:
+The LTS branch carries a marker file `.lts-release` at the repo root whose content is the `MAJOR.MINOR` LTS base line (e.g. `3.12`). When `make sync-version` runs with the marker present it picks up the newest `## Version {base}-LTS{n}` header from `changelog/v{base}.md` and writes:
 
-- `application/_version.py` → `__version__ = "3.12.13-LTS"` (shown in the UI)
-- `pyproject.toml` → `version = "3.12.13+lts"` (PEP 440-compliant local version identifier, so setuptools/pip still accept it)
-- Git tags are `vX.Y.Z-LTS` (e.g. `v3.12.14-LTS`)
+- `application/_version.py` → `__version__ = "3.12-LTS1"` (shown in the UI)
+- `pyproject.toml` → `version = "3.12+lts1"` (PEP 440-compliant local version identifier, so setuptools/pip still accept it)
+- Git tags are `v{base}-LTS{n}` (e.g. `v3.12-LTS1`, `v3.12-LTS2`)
 
-The `+lts` local version identifier means LTS wheels are **not uploadable to PyPI** (PyPI rejects local versions). Distribute LTS releases via git tag / `pip install git+https://…@v3.12.14-LTS` or a private index.
+The LTS counter is independent from the upstream patch stream — once `main` moves past `3.12.13` with new features, sharing a patch number would be misleading. LTS releases are numbered `3.12-LTS1`, `3.12-LTS2`, … and count up with every cut.
+
+The LTS branch **must never contain an `## Unreleased` section** — `sync_version` aborts if one is found. This is what guarantees the UI never shows `-dev` on LTS.
+
+The `+lts` local version identifier means LTS wheels are **not uploadable to PyPI** (PyPI rejects local versions). Distribute LTS releases via git tag / `pip install git+https://…@v3.12-LTS1` or a private index.
 
 ### Backport workflow
 
@@ -112,8 +116,9 @@ git checkout lts/3.12
 git pull
 git cherry-pick <commit-sha-from-main>
 
-# 2. Resolve conflicts if needed, then verify the changelog entry
-#    (add a bullet under "## Unreleased" in changelog/v3.12.md if not carried over)
+# 2. Resolve conflicts if needed, then verify the changelog entry. Add the
+#    bullet under the current open "## Version 3.12-LTS<n>" header in
+#    changelog/v3.12.md — never under "## Unreleased".
 
 # 3. Push
 git push origin lts/3.12
@@ -121,25 +126,33 @@ git push origin lts/3.12
 
 ### Cutting an LTS release
 
-When enough fixes have accumulated on `lts/3.12`, cut a patch release:
+On LTS, the changelog always carries an open `## Version 3.12-LTS<n>` header at the top while fixes accumulate — there is no intermediate `## Unreleased` phase. Cutting a release just means tagging the current state:
 
 ```bash
 git checkout lts/3.12
 
-# 1. Rename "## Unreleased" → "## Version 3.12.14" in changelog/v3.12.md
-#    (use the plain version here — sync_version appends -LTS / +lts automatically)
+# 1. Verify the current "## Version 3.12-LTS<n>" header in changelog/v3.12.md
+#    is the one you want to ship (no renaming needed — the counter was already
+#    opened right after the previous tag).
 
-# 2. Sync version files (picks up .lts-release marker → writes 3.12.14-LTS / 3.12.14+lts)
+# 2. Sync version files (reads .lts-release + newest "-LTS<n>" header →
+#    writes 3.12-LTS<n> / 3.12+lts<n>)
 make sync-version
 
 # 3. Commit + tag
-git add changelog/v3.12.md application/_version.py pyproject.toml
-git commit -m "Version 3.12.14-LTS"
-git tag -a v3.12.14-LTS -m "Version 3.12.14-LTS"
+git add application/_version.py pyproject.toml
+git commit -m "Version 3.12-LTS<n>"
+git tag -a v3.12-LTS<n> -m "Version 3.12-LTS<n>"
 
 # 4. Push branch + tag
 git push origin lts/3.12
-git push origin v3.12.14-LTS
+git push origin v3.12-LTS<n>
+
+# 5. Immediately open the next section at the top of changelog/v3.12.md:
+#    ## Version 3.12-LTS<n+1>
+#    (leave it empty until the next backport lands — never use ## Unreleased)
+git commit -am "Open 3.12-LTS<n+1>"
+git push origin lts/3.12
 ```
 
 ## Version scheme
