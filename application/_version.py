@@ -12,8 +12,9 @@ __version__ = "3.12.13"
 
 def _has_unreleased_entries():
     """True when the active changelog still carries an ``## Unreleased``
-    section with entries above the first ``## Version x.y.z`` block."""
-    parts = __version__.split('.')
+    section with entries above the first ``## Version …`` block."""
+    base = __version__.split('-', 1)[0]
+    parts = base.split('.')
     fname = f"v{parts[0]}.{parts[1]}.md"
     here = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(here)
@@ -41,5 +42,9 @@ def _has_unreleased_entries():
 
 def get_display_version():
     """Return the version, suffixed with ``-dev`` while unreleased changelog
-    entries are pending."""
+    entries are pending. LTS builds carry an ``-LTSn`` counter in
+    ``__version__`` and never show ``-dev`` because the LTS changelog is not
+    allowed to contain an ``## Unreleased`` section."""
+    if '-LTS' in __version__:
+        return __version__
     return f"{__version__}-dev" if _has_unreleased_entries() else __version__
