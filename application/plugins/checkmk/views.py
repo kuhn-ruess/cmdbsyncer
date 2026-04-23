@@ -821,8 +821,13 @@ class CheckmkSettingsView(DefaultModelView):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
 
-    @action('set_cmk_version', 'Set CMK Version',
-            'Are you sure you want to set the CMK Version for the selected Entries?')
+    list_template = 'admin/checkmk_settings_list.html'
+
+    # Modernized list template intercepts the action client-side and
+    # opens a modal instead of navigating to /set_cmk_version_form.
+    # The redirect path below remains as a graceful fallback for
+    # JS-disabled clients.
+    @action('set_cmk_version', 'Set CMK Version', None)
     def action_set_cmk_version(self, ids):
         """
         Action to set CMK Version for selected Entries
