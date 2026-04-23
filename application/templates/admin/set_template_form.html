@@ -1,22 +1,29 @@
-<div class="container mt-4">
-    <h3>Set CMDB Template</h3>
-    <form method="POST" action="{{ url_for('.process_template_assignment') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+        <div class="app-card" style="margin-top: 1.5rem;">
+            <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
+                <h2>Set CMDB Template</h2>
+                <p>Assign a template to {{ ids|length }} host(s).</p>
+            </div>
+            <form method="POST" action="{{ url_for('.process_template_assignment') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
 
-        <div class="form-group">
-            <label for="template_id">Select Template:</label>
-            <select class="form-control" id="template_id" name="template_id" required>
-                <option value="">Choose a template...</option>
-                {% for template in templates %}
-                <option value="{{ template.id }}">{{ template.hostname }}</option>
-                {% endfor %}
-            </select>
-        </div>
+                <div class="form-group">
+                    <label for="template_id">Select template</label>
+                    <select class="form-control" id="template_id" name="template_id" required>
+                        <option value="">Choose a template…</option>
+                        {% for template in templates %}
+                        <option value="{{ template.id }}">{{ template.hostname }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-        <div class="form-group">
-            <button type="submit" class="btn btn-primary">Apply Template</button>
-            <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
+                <div class="form-group mb-0">
+                    <button type="submit" class="btn btn-primary">Apply Template</button>
+                    <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
         </div>
-    </form>
+    </div>
 </div>

@@ -1,13 +1,15 @@
 {% extends 'base.html' %}
 {% block page_content %}
 <div class="row justify-content-center">
-  <div class="col-md-6">
-    <div class="jumbotron text-center p-4">
-      <h3>Logout</h3>
-      <p>Please confirm that you want to end your session.</p>
+  <div class="col-md-6 col-lg-5">
+    <div class="app-card text-center" style="margin-top: 2rem;">
+      <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
+        <h2>Log out</h2>
+        <p>Please confirm that you want to end your session.</p>
+      </div>
       <form method="POST" action="{{ url_for('auth.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-primary">Logout</button>
+        <button type="submit" class="btn btn-primary">Log out</button>
         <a href="{{ url_for('admin.index') }}" class="btn btn-secondary">Cancel</a>
       </form>
     </div>

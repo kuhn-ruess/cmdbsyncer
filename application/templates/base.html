@@ -133,6 +133,68 @@
            padding-top: 3rem;
        }
        
+       /* Shared card / hero pattern used by modernized views
+          (start page, license info, changelog archive, 2FA setup,
+          bulk-action forms, etc.). Consistent look without every
+          template defining its own CSS. */
+       .app-hero {
+           background: linear-gradient(135deg, #2c3e50 0%, #4c6586 100%);
+           color: #fff;
+           border-radius: 14px;
+           padding: 1.75rem 2rem;
+           margin: 0.5rem 0 1.5rem;
+           box-shadow: 0 8px 24px rgba(44, 62, 80, 0.18);
+       }
+       .app-hero h1,
+       .app-hero h2 {
+           margin: 0;
+           font-weight: 700;
+           letter-spacing: 0.3px;
+       }
+       .app-hero h1 { font-size: 1.9rem; }
+       .app-hero h2 { font-size: 1.5rem; }
+       .app-hero p {
+           margin: 0.4rem 0 0;
+           font-size: 0.95rem;
+           opacity: 0.9;
+       }
+       .app-pill {
+           display: inline-block;
+           margin-top: 0.75rem;
+           padding: 0.2rem 0.7rem;
+           font-size: 0.75rem;
+           background: rgba(255, 255, 255, 0.18);
+           border-radius: 999px;
+           letter-spacing: 0.5px;
+       }
+       .app-card {
+           background: #fff;
+           border: 1px solid #e6e9ec;
+           border-radius: 12px;
+           padding: 1.5rem 1.5rem 1.25rem;
+           margin-bottom: 1.25rem;
+           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+       }
+       .app-card h2,
+       .app-card h3,
+       .app-card h4 { margin-top: 0; font-weight: 600; }
+       .app-card h2 {
+           font-size: 1.2rem;
+           margin-bottom: 0.75rem;
+           border-bottom: 1px solid #eef0f3;
+           padding-bottom: 0.5rem;
+       }
+       .app-card h3 { font-size: 1.05rem; margin-bottom: 0.5rem; }
+       .app-card h4 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+       .app-backlink {
+           display: inline-block;
+           color: #6c757d;
+           text-decoration: none;
+           font-size: 0.85rem;
+           margin-bottom: 0.75rem;
+       }
+       .app-backlink:hover { color: #2c3e50; text-decoration: underline; }
+
        /* Responsive Design */
        @media (max-width: 576px) {
            .navbar-logo {
