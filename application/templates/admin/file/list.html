@@ -198,4 +198,36 @@
                          actions,
                          actions_confirmation) }}
   <script {{ admin_csp_nonce_attribute }} src="{{ admin_static.url(filename='admin/js/bs4_modal.js', v='1.0.0') }}"></script>
+  <script>
+  // Flask-Admin serves the upload / rename / mkdir / edit modal form as
+  // a bare partial (`admin/file/modals/form.html` has no `extends`),
+  // so submitting it through a normal browser navigation drops the
+  // user on a page that is literally just the modal contents. Keep
+  // the submit inside the modal: POST via fetch, follow a success
+  // redirect, and put a re-rendered form (validation errors etc.)
+  // back into the modal on non-redirect responses.
+  $(document).on('submit', '#fa_modal_window form', function(e) {
+      e.preventDefault();
+      var $form = $(this);
+      var formData = new FormData($form[0]);
+      fetch($form.attr('action'), {
+          method: ($form.attr('method') || 'POST').toUpperCase(),
+          body: formData,
+          credentials: 'same-origin',
+      }).then(function(resp) {
+          if (resp.redirected && resp.url.indexOf('modal=') === -1) {
+              window.location.href = resp.url;
+              return null;
+          }
+          return resp.text();
+      }).then(function(html) {
+          if (html !== null && html !== undefined) {
+              $('#fa_modal_window .modal-content').html(html);
+          }
+      }).catch(function() {
+          // Fall back to the native submit so the user is not stuck.
+          $form.off('submit').trigger('submit');
+      });
+  });
+  </script>
 {% endblock %}
