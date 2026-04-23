@@ -1,7 +1,12 @@
 """
 Cron Jobs
 """
+import secrets
 from application import db, cron_register
+
+
+def _generate_webhook_token():
+    return secrets.token_urlsafe(32)
 
 intervals = [
     ("10min", "Every 15 minute"), # Crond runs 15min, but the 10 min makes sure it runs everytime
@@ -37,7 +42,7 @@ hours = [
     ('24', '24:00'),
 ]
 
-class GroupEntry(db.EmbeddedDocument):
+class GroupEntry(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     Cron Entry
     """
@@ -63,11 +68,26 @@ class CronGroup(db.Document):
 
     enabled = db.BooleanField()
     run_once_next = db.BooleanField(default=False)
+    continue_on_error = db.BooleanField(default=False)
+    webhook_enabled = db.BooleanField(default=False)
+    webhook_token = db.StringField()
     sort_field = db.IntField(default=0)
 
     meta = {
         'strict': False,
     }
+
+    def ensure_webhook_token(self):
+        """
+        Allocate a webhook token on first enable. Kept out of the field's
+        `default=` so groups that never use webhooks stay tokenless.
+        """
+        if self.webhook_enabled and not self.webhook_token:
+            self.webhook_token = _generate_webhook_token()
+
+    def regenerate_webhook_token(self):
+        """Rotate the token so old URLs stop working immediately."""
+        self.webhook_token = _generate_webhook_token()
 
 
 commands = [
@@ -89,7 +109,10 @@ class CronStats(db.Document):
     last_start = db.DateTimeField()
     is_running = db.BooleanField(default=False)
     last_ended = db.DateTimeField()
+    last_success_at = db.DateTimeField()
     failure = db.BooleanField(default=False)
+
+    pid = db.IntField()
 
     last_message = db.StringField()
 

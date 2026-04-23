@@ -14,6 +14,7 @@ from mongoengine.errors import DoesNotExist
 
 from application import login_manager, app, log, limiter
 from application.enterprise import run_hook
+from application.helpers.audit import audit
 from application.models.user import User
 from application.models.forms import LoginForm, RequestPasswordForm, ResetPasswordForm
 from application.modules.email import send_email
@@ -41,7 +42,7 @@ def load_user(user_id):
 
 @AUTH.route('/login', methods=['GET', 'POST'])
 @limiter.limit(AUTH_RATE_LIMIT, methods=['POST'])
-def login():  # pylint: disable=too-many-return-statements,too-many-branches
+def login():  # pylint: disable=too-many-return-statements,too-many-branches,too-many-statements
     """
     Login Route
     """
@@ -63,9 +64,18 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches
                 )
                 existing_user.last_login = datetime.now()
                 existing_user.save()
+                audit('user.login.success',
+                      actor_type='user',
+                      actor_id=str(existing_user.id),
+                      actor_name=existing_user.email,
+                      metadata={'method': 'remote_user'})
                 return redirect(url_for("admin.index"))
         except Exception:  # pylint: disable=broad-exception-caught
             log.log("Remote User login failed", source="AUTH")
+            audit('user.login.failure', outcome='failure',
+                  actor_name=request.remote_user,
+                  metadata={'method': 'remote_user',
+                            'reason': 'hook_exception'})
             flash('Remote User Error', 'danger')
 
 
@@ -99,18 +109,33 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches
         # Always wrong Password, even when user not exists
         local_ok = existing_user and existing_user.check_password(password)
         if not ldap_authenticated and not local_ok:
+            audit('user.login.failure', outcome='failure',
+                  actor_name=email,
+                  metadata={'reason': 'wrong_password'})
             flash("Wrong Password", 'danger')
             return render_template('login.html', **context)
 
         if existing_user.disabled:
+            audit('user.login.failure', outcome='failure',
+                  actor_id=str(existing_user.id),
+                  actor_name=existing_user.email,
+                  metadata={'reason': 'user_disabled'})
             flash("User Disabled", 'danger')
             return render_template('login.html', **context)
 
         if existing_user.tfa_secret:
             if not otp:
+                audit('user.login.failure', outcome='failure',
+                      actor_id=str(existing_user.id),
+                      actor_name=existing_user.email,
+                      metadata={'reason': 'otp_missing'})
                 flash("2FA Secret missing", 'danger')
                 return render_template('login.html', **context)
             if not pyotp.TOTP(existing_user.tfa_secret).verify(otp):
+                audit('user.login.failure', outcome='failure',
+                      actor_id=str(existing_user.id),
+                      actor_name=existing_user.email,
+                      metadata={'reason': 'otp_invalid'})
                 flash("Invalid 2FA Token", 'danger')
                 return render_template('login.html', **context)
 
@@ -126,6 +151,12 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches
         )
         existing_user.last_login = datetime.now()
         existing_user.save()
+        audit('user.login.success',
+              actor_type='user',
+              actor_id=str(existing_user.id),
+              actor_name=existing_user.email,
+              metadata={'method': 'ldap' if ldap_authenticated else 'local',
+                        'mfa': bool(existing_user.tfa_secret)})
         if existing_user.force_password_change:
             return redirect(url_for("auth.change_password"))
         return redirect(url_for("admin.index"))
@@ -170,8 +201,12 @@ def logout():
     expectation that GET requests are side-effect free.
     """
     if request.method == 'POST':
+        actor_id = str(current_user.id) if current_user.is_authenticated else None
+        actor_name = current_user.email if current_user.is_authenticated else None
         session.clear()
         logout_user()
+        audit('user.logout',
+              actor_type='user', actor_id=actor_id, actor_name=actor_name)
         return redirect(url_for("admin.index"))
     return render_template('logout_confirm.html')
 

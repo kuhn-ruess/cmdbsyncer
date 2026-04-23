@@ -1,12 +1,16 @@
 """
 Ansible Api
 """
+import hmac
 from datetime import datetime, timedelta
 from mongoengine.errors import DoesNotExist
 from flask import request
 from flask_restx import Namespace, Resource, fields
 
+from application import log
 from application.api import require_token
+from application.enterprise import run_hook as _ent_run_hook
+from application.helpers.audit import audit
 from application.modules.log.models import LogEntry
 from application.models.host import Host
 from application.models.cron import CronStats, CronGroup
@@ -124,6 +128,102 @@ class SyncerCronApi(Resource):
             }, 404
 
 
+
+
+@API.route('/cron/trigger/<string:group_name>')
+class SyncerCronTriggerApi(Resource):
+    """
+    Webhook trigger: marks a CronGroup as run-once-next so the next cron
+    pass runs it outside its normal schedule. Accepts either standard user
+    auth (matching the existing API role rules) or a per-group
+    `X-Webhook-Token` header, so external systems (GitHub, Jenkins,
+    Netbox hooks, …) can fire a sync without carrying a user credential.
+    """
+
+    def post(self, group_name):
+        """Trigger a cron group run"""
+        try:
+            group = CronGroup.objects.get(name=group_name)
+        except DoesNotExist:
+            return {'error': "Cron not Found"}, 404
+
+        # Enterprise webhook_signatures: when a signature policy is attached
+        # to this group, the enterprise verifier runs first. It returns:
+        #   'ok'   → validation passed, skip the OSS auth below
+        #   dict   → validation failed, propagate status/error verbatim
+        #   None   → no policy / not licensed, fall through to OSS auth
+        enterprise_result = _ent_run_hook('webhook_auth', group, request)
+        auth_method = None
+        if enterprise_result == 'ok':
+            auth_method = 'signature'
+        elif isinstance(enterprise_result, dict):
+            reason = enterprise_result.get('error', 'Unauthorized')
+            status = enterprise_result.get('status', 401)
+            log.log("Webhook trigger rejected", source="API",
+                    details=[('group', group_name),
+                             ('reason', reason),
+                             ('ip', request.remote_addr)])
+            audit('webhook.rejected', outcome='failure',
+                  actor_type='webhook',
+                  target_type='CronGroup', target_id=str(group.id),
+                  target_name=group_name,
+                  metadata={'reason': reason})
+            return {'error': reason}, status
+
+        token = request.headers.get('X-Webhook-Token')
+        if auth_method is None and token:
+            if not group.webhook_enabled or not group.webhook_token:
+                log.log("Webhook trigger rejected", source="API",
+                        details=[('group', group_name),
+                                 ('reason', 'webhook disabled or no token set'),
+                                 ('ip', request.remote_addr)])
+                audit('webhook.rejected', outcome='failure',
+                      actor_type='webhook',
+                      target_type='CronGroup', target_id=str(group.id),
+                      target_name=group_name,
+                      metadata={'reason': 'webhook disabled or no token set'})
+                return {'error': "Webhook not enabled for this group"}, 403
+            # hmac.compare_digest prevents timing-based token discovery.
+            if not hmac.compare_digest(token, group.webhook_token):
+                log.log("Webhook trigger rejected", source="API",
+                        details=[('group', group_name),
+                                 ('reason', 'token mismatch'),
+                                 ('ip', request.remote_addr)])
+                audit('webhook.rejected', outcome='failure',
+                      actor_type='webhook',
+                      target_type='CronGroup', target_id=str(group.id),
+                      target_name=group_name,
+                      metadata={'reason': 'token mismatch'})
+                return {'error': "Invalid webhook token"}, 401
+            auth_method = 'token'
+        elif auth_method is None:
+            # No enterprise signature and no webhook token → fall back to
+            # normal user auth. Calling the decorator with a no-op lets
+            # us reuse the existing credential, HTTPS and role-path checks,
+            # which abort(401) on failure so control only returns here
+            # when the caller is valid.
+            require_token(lambda: None)()
+            auth_method = 'user'
+
+        if not group.enabled:
+            return {'error': "Group disabled"}, 409
+
+        group.run_once_next = True
+        group.save()
+        log.log("Cron group triggered via webhook", source="API",
+                details=[('group', group_name),
+                         ('auth', auth_method),
+                         ('ip', request.remote_addr)])
+        audit('webhook.triggered',
+              actor_type='user' if auth_method == 'user' else 'webhook',
+              target_type='CronGroup', target_id=str(group.id),
+              target_name=group_name,
+              metadata={'auth': auth_method})
+        return {
+            'status': 'triggered',
+            'group': group_name,
+            'note': 'Group will run on the next cron pass.',
+        }, 202
 
 
 @API.route('/hosts')

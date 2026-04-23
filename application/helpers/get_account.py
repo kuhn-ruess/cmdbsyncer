@@ -2,6 +2,7 @@
 Helper to get Account
 """
 from mongoengine.errors import DoesNotExist
+from application.enterprise import has_feature, run_hook
 from application.models.account import Account
 
 
@@ -11,7 +12,21 @@ class AccountNotFoundError(Exception):
     """
 
 
-def get_account_by_name(name, is_id=False):
+def _resolve_password(account):
+    """
+    Fetch the account password, optionally via the enterprise secrets
+    manager. The hook returns `None` for unbound accounts, which lets us
+    fall back to the local encrypted password transparently. Community
+    installs never see the feature because the hook is not registered.
+    """
+    if has_feature('secrets_manager'):
+        resolved = run_hook('resolve_secret', account)
+        if resolved is not None:
+            return resolved
+    return account.get_password()
+
+
+def get_account_by_name(name, is_id=False):  # pylint: disable=too-many-branches
     """
     Get Account by Name or Return False
     """
@@ -37,7 +52,7 @@ def get_account_by_name(name, is_id=False):
                     del account_data[what]
 
         else:
-            account_data['password'] = account.get_password()
+            account_data['password'] = _resolve_password(account)
 
         for field, value  in [(x['name'], x.get('value')) for x in account_data['custom_fields']]:
             if not value:

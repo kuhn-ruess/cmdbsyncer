@@ -201,6 +201,16 @@ _cron = _stub_package("application.helpers.cron")
 _cron.register_cronjob = MagicMock(name="stub.register_cronjob")
 
 
+# --- application.helpers.audit / .notify -------------------------------------
+# Thin enterprise-hook wrappers; tests only care that the call site compiles.
+
+_audit = _stub_package("application.helpers.audit")
+_audit.audit = MagicMock(name="stub.audit")
+
+_notify_mod = _stub_package("application.helpers.notify")
+_notify_mod.notify = MagicMock(name="stub.notify")
+
+
 # --- Extra stubs for application.api tests ----------------------------------
 # application.api imports User, Account, and the `log` object from application
 # at import time. We register minimal stand-ins so test_api can load the real

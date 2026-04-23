@@ -2,14 +2,16 @@
 Cron Model View
 """
 from datetime import datetime
+from flask import flash
+from flask_admin.actions import action
+from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from flask_login import current_user
 from markupsafe import Markup, escape
 from wtforms import HiddenField
-from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 
 from application.views.default import DefaultModelView
 
-def format_error_flag(v, c, m, p):
+def format_error_flag(_v, _c, m, _p):
     """
     Format Has error flag"
     """
@@ -18,10 +20,11 @@ def format_error_flag(v, c, m, p):
     return Markup('<span style="color:green;" class="fa fa-circle"></span>')
 
 
-def format_date(v, c, m, p):
+def format_date(_v, _c, m, p):
     """ Format Date Field"""
-    if value := getattr(m,p):
+    if value := getattr(m, p):
         return datetime.strftime(value, "%d.%m.%Y %H:%M")
+    return ""
 
 def _render_interval(_view, _context, model, _name):
     """
@@ -85,6 +88,8 @@ class CronGroupView(DefaultModelView):
     column_editable_list = [
         'enabled',
         'run_once_next',
+        'continue_on_error',
+        'webhook_enabled',
     ]
 
     column_formatters = {
@@ -95,6 +100,34 @@ class CronGroupView(DefaultModelView):
     form_overrides = {
         'render_jobs': HiddenField,
     }
+
+    form_widget_args = {
+        'webhook_token': {
+            'readonly': True,
+            'placeholder': 'Generated automatically when Webhook is enabled.',
+        },
+    }
+
+    def on_model_change(self, form, model, is_created):
+        """Allocate a webhook token on first enable."""
+        model.ensure_webhook_token()
+        return super().on_model_change(form, model, is_created)
+
+    @action('regenerate_webhook_token',
+            'Regenerate Webhook Token',
+            'Rotate the webhook token? Existing URLs using the old token '
+            'will stop working immediately.')
+    def action_regenerate_webhook_token(self, ids):
+        """Rotate per-group webhook tokens for the selected groups."""
+        from application.models.cron import CronGroup  # pylint: disable=import-outside-toplevel
+        count = 0
+        for group in CronGroup.objects(id__in=ids):
+            group.regenerate_webhook_token()
+            group.webhook_enabled = True
+            group.save()
+            count += 1
+        flash(f'Webhook token regenerated for {count} group(s)', 'success')
+
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('cron')
@@ -120,6 +153,7 @@ class CronStatsView(DefaultModelView):
         'next_run',
         'last_start',
         'last_ended',
+        'last_success_at',
         'failure',
     )
 
@@ -130,6 +164,7 @@ class CronStatsView(DefaultModelView):
         'last_run': format_date,
         'last_start': format_date,
         'last_ended': format_date,
+        'last_success_at': format_date,
         'failure': format_error_flag,
     }
     def is_accessible(self):

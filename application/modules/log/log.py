@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """ LOGGING Module"""
+import logging
 import traceback
 from datetime import datetime
 from application import logger
@@ -20,7 +21,6 @@ class Log():
         """
         Write entries do db
         """
-        logger.info(message['message'])
         log_entry = LogEntry()
         log_entry.datetime = datetime.now()
         log_entry.message = message['message']
@@ -30,15 +30,15 @@ class Log():
             affected_hosts += message['affected_hosts']
 
         details = []
+        details_struct = {}
+        has_error = False
         if message['details']:
             for detail in message['details']:
                 new = DetailEntry()
                 level = detail[0].lower()
                 if 'error' in level.lower() or 'exception' in level.lower():
-                    logger.critical(f"{detail[0]}: {detail[1]}")
+                    has_error = True
                     log_entry.has_error = True
-                else:
-                    logger.info(f"{detail[0]}: {detail[1]}")
                 if 'affected' in detail[0]:
                     if isinstance(detail[1], list):
                         affected_hosts.extend(detail[1])
@@ -47,10 +47,29 @@ class Log():
                 new.level = level
                 new.message = str(detail[1])
                 details.append(new)
+                # Preserve the original (key, value) for structured
+                # sinks (the enterprise JSON/ECS formatter reads this
+                # from the `extra` kwarg); text sinks still see the
+                # rendered summary below.
+                details_struct[level] = str(detail[1])
         log_entry.affected_hosts = affected_hosts
         log_entry.details = details
         log_entry.traceback = message['traceback']
         log_entry.save()
+
+        # Emit a single structured record instead of one line per detail.
+        # The JSON formatter picks up `extra` and maps it to ECS fields;
+        # the default text formatter drops these cleanly.
+        logger.log(
+            logging.ERROR if has_error else logging.INFO,
+            message['message'],
+            extra={
+                'event_source': message['source'],
+                'event_details': details_struct,
+                'event_affected_hosts': affected_hosts,
+                'event_has_error': has_error,
+            },
+        )
 
     def log(self, message, affected_hosts=None, source="SYSTEM", details=None):
         """ LOG Messages"""

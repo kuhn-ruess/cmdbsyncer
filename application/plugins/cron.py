@@ -7,8 +7,46 @@ import click
 from mongoengine.errors import DoesNotExist
 
 from application import app, cron_register, log
+from application.helpers.notify import notify
 from application.modules.debug import ColorCodes as CC
 from application.models.cron import CronStats, CronGroup
+
+
+def _pid_alive(pid):
+    """
+    Signal 0 does not send a signal but performs the existence / permission
+    check. Anything raising means the process is gone.
+    """
+    if not pid:
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _reset_stale_lock(stats):
+    """
+    A previous run crashed (OOM, kill -9, container restart) before it could
+    release `is_running`. Reset the lock when the recorded PID no longer
+    exists on this host (the runner is always local).
+    """
+    if not stats.is_running:
+        return
+    if _pid_alive(stats.pid):
+        return
+    stats.is_running = False
+    stats.failure = True
+    message = (f"{datetime.now()}: Stale lock cleared "
+               f"(pid {stats.pid} no longer running)")
+    stats.last_message = message
+    stats.all_messages = f"{stats.all_messages or ''}{message}\n"
+    stats.last_ended = datetime.now()
+    stats.pid = None
+    stats.save()
+    log.log("Cron stale lock cleared", source="cron",
+            details=[('Group', stats.group), ('Message', message)])
 
 @app.cli.group(name='cron')
 def _cli_cron():
@@ -110,89 +148,108 @@ def run_job(group_name):
         print("Group does not exist")
 
 @_cli_cron.command('run_jobs')
-def jobs():
+def jobs():  # pylint: disable=too-many-branches,too-many-statements
     """
     Run all configured Jobs
     """
-    stats = False
-    try:
-        for job in CronGroup.objects(enabled=True).order_by('sort_field'):
-            stats = get_stats(job.name)
-            now = datetime.now()
+    for job in CronGroup.objects(enabled=True).order_by('sort_field'):
+        stats = get_stats(job.name)
+        _reset_stale_lock(stats)
+        now = datetime.now()
 
+        force_run = False
+        if not stats.next_run:
+            stats.next_run = calc_next_run(job, stats.last_start)
+            stats.save()
 
-            force_run = False
-            if not stats.next_run:
-                stats.next_run = calc_next_run(job, stats.last_start)
-                next_run = stats
+        next_run = stats.next_run
+
+        if job.run_once_next:
+            # Manualy trigger job just one time
+            next_run = now
+            force_run = True
+            job.run_once_next = False
+            job.save()
+
+        if stats.is_running or next_run > now + timedelta(minutes=1):
+            continue
+        if not force_run and not in_timerange(job):
+            stats.next_run = calc_next_run(job, stats.last_start, was_outdated=True)
+            stats.save()
+            continue
+
+        print('-------------------------------------------------------------')
+        print(f"{CC.HEADER} Running Group {job.name} {CC.ENDC}")
+        stats.is_running = True
+        stats.last_start = now
+        stats.failure = False
+        stats.pid = os.getpid()
+        stats.last_message = f"{now}: Started Job: {job.name} (PID: {os.getpid()})"
+        stats.all_messages = f"{now}: Started Job: {job.name} (PID: {os.getpid()})\n"
+        stats.save()
+
+        group_failure = False
+        try:
+            for task in job.jobs:
+                now = datetime.now()
+                print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
+                stats.last_message = \
+                    f"{now}: Started Task: {task.name} (PID: {os.getpid()})"
+                stats.all_messages += \
+                    f"{now}: Started Task: {task.name} (PID: {os.getpid()})\n"
                 stats.save()
-
-            next_run = stats.next_run
-
-            if job.run_once_next:
-                # Manualy trigger job just one time
-                next_run = now
-                force_run = True
-                job.run_once_next = False
-                job.save()
-
-            if not stats.is_running and next_run <= now + timedelta(minutes=1):
-                # This Job is in the past
-                if not force_run and not in_timerange(job):
-                    stats.next_run = calc_next_run(job, stats.last_start, was_outdated=True)
+                try:
+                    if task.account:
+                        cron_register[task.command](account=task.account.name)
+                    else:
+                        cron_register[task.command]()
+                except Exception as exp:  # pylint: disable=broad-except
+                    group_failure = True
+                    stats.failure = True
+                    stats.last_message = str(exp)
+                    stats.all_messages += f"{exp}\n"
                     stats.save()
-                    continue
-                print('-------------------------------------------------------------')
-                print(f"{CC.HEADER} Running Group {job.name} {CC.ENDC}")
-                stats.is_running = True
-                stats.last_start = now
-                stats.failure = False
-                stats.save()
-                stats.last_message = f"{now}: Started Job: {job.name} (PID: {os.getpid()})"
-                stats.all_messages = f"{now}: Started Job: {job.name} (PID: {os.getpid()})\n"
-                for task in job.jobs:
-                    now = datetime.now()
-                    print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
-                    stats.last_message = f"{now}: Started Task: {task.name} (PID: {os.getpid()})"
-                    stats.all_messages += f"{now}: Started Task:  {task.name} (PID: {os.getpid()})\n"
-                    stats.save()
-                    try:
-                        if task.account:
-                            account_name = task.account.name
-                            cron_register[task.command](account=account_name)
-                        else:
-                            cron_register[task.command]()
-                    except Exception as exp:
-                        stats.is_running = False
-                        stats.failure = True
-                        stats.last_ended = None
-                        stats.last_message = str(exp)
-                        stats.all_messages += f"{exp}\n"
-                        stats.save()
-                        name = "Failed Cron Group"
-                        source = "cron"
-                        details = [
-                          ('Exception', exp)
-                        ]
-                        log.log(name, source=source, details=details)
-
-                stats.last_ended = datetime.now()
-                if not force_run:
-                    # Do not touch next runtime if job was triggered Manualy
-                    stats.next_run = calc_next_run(job, stats.last_start)
-                stats.is_running = False
-                stats.save()
-    except (Exception, KeyboardInterrupt) as exp:
-        if stats:
-            stats.is_running = False
+                    log.log("Failed Cron Group", source="cron",
+                            details=[('Group', job.name),
+                                     ('Task', task.name),
+                                     ('Exception', exp)])
+                    if not job.continue_on_error:
+                        # Preserve original behaviour: first failure stops
+                        # the remaining tasks in this group.
+                        break
+        except KeyboardInterrupt as exp:
+            group_failure = True
             stats.failure = True
-            stats.last_ended = None
             stats.last_message = str(exp)
             stats.all_messages += f"{exp}\n"
+            log.log("Failed Cron Group", source="cron",
+                    details=[('Group', job.name), ('Exception', exp)])
+            raise
+        finally:
+            stats.last_ended = datetime.now()
+            previously_failing = stats.failure and not group_failure
+            if not group_failure:
+                stats.last_success_at = stats.last_ended
+            if not force_run:
+                # Do not touch next runtime if job was triggered Manualy
+                stats.next_run = calc_next_run(job, stats.last_start)
+            stats.is_running = False
+            stats.pid = None
             stats.save()
-        name = "Failed Cron Group"
-        source = "cron"
-        details = [
-          ('Exception', exp)
-        ]
-        log.log(name, source=source, details=details)
+
+            # Notify dispatcher. Separate event types so rules can route
+            # failures to PagerDuty while recoveries go to a quieter
+            # channel (or vice versa).
+            if group_failure:
+                notify('cron.group.failed', severity='error',
+                       title=f"Cron group '{job.name}' failed",
+                       message=stats.last_message or 'See Audit / Log view',
+                       source='cron', dedup_key=f'cron:{job.name}',
+                       details={'group': job.name,
+                                'last_message': stats.last_message})
+            elif previously_failing:
+                notify('cron.group.recovered', severity='info',
+                       title=f"Cron group '{job.name}' recovered",
+                       message='Back to green after previous failure',
+                       source='cron', dedup_key=f'cron:{job.name}',
+                       details={'group': job.name})

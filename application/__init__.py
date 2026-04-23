@@ -90,6 +90,13 @@ else:
 log_config.dictConfig(app.config['LOGGING'])
 logger = logging.getLogger('debug')
 
+# Give the enterprise package a chance to swap in a structured / JSON
+# logging pipeline for cloud log aggregators (Loki, OpenSearch,
+# CloudWatch, Datadog, …). No-op in community / without license.
+# The same hook is reused later for blueprint- and admin-view-registration.
+from application.enterprise import run_hook as enterprise_hook  # noqa: E402
+enterprise_hook('configure_logging', app, logger)
+
 
 try:
     from local_config import config
@@ -174,6 +181,10 @@ from application.views.default import IndexView, DefaultModelView
 
 from application.auth.views import AUTH
 app.register_blueprint(AUTH)
+
+# Give the enterprise package a chance to register its own auth-related
+# blueprints (e.g. the native OIDC client). No-op without the feature.
+enterprise_hook('register_blueprints', app)
 
 from application.modules.rule.views import FiltereModelView, RewriteAttributeView
 
@@ -312,6 +323,11 @@ admin.add_view(ConfigModelView(Config, name="System Config", category="Profile",
 from application.views.license import LicenseView
 admin.add_view(LicenseView(name="License", endpoint="license", category="Profile",
                            menu_icon_type='fa', menu_icon_value='fa-id-card'))
+
+# Give the enterprise package one chance to inject its own admin views
+# (Secrets Manager, JSON logs UI, …). No-op when no valid license is
+# installed, so community builds never expose enterprise menu entries.
+enterprise_hook('register_admin_views', admin)
 #.
 
 #   .-- Rest
