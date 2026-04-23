@@ -371,6 +371,45 @@
         .k { color: #008000; font-weight: bold } /* Schlüsselwörter */
         .nv { color: #32CD32; font-weight: bold; }
     </style>
+    <style type="text/css">
+        /* Nested dropdown (Flask-Admin sub-categories). Bootstrap
+           dropped submenus after BS3, so we re-add the hover-open
+           pattern explicitly. Applied whenever a <li> inside a
+           .dropdown-menu has its own .dropdown-menu child — flask
+           admin marks these with class="submenu" on the wrapping li. */
+        .navbar .dropdown-menu .dropdown-submenu,
+        .navbar .dropdown-menu li.submenu {
+            position: relative;
+        }
+        .navbar .dropdown-menu .dropdown-submenu > a::after,
+        .navbar .dropdown-menu li.submenu > a::after {
+            content: "▸";
+            float: right;
+            margin-left: 0.5rem;
+            color: #888;
+        }
+        .navbar .dropdown-menu .dropdown-submenu > .dropdown-menu,
+        .navbar .dropdown-menu li.submenu > .dropdown-menu {
+            top: 0;
+            left: 100%;
+            margin-top: -1px;
+            margin-left: 0;
+            display: none;
+        }
+        .navbar .dropdown-menu .dropdown-submenu:hover > .dropdown-menu,
+        .navbar .dropdown-menu li.submenu:hover > .dropdown-menu {
+            display: block;
+        }
+        /* On narrow viewports the submenu would be cut off; flip it to
+           open on the left side of the parent item instead. */
+        @media (max-width: 992px) {
+            .navbar .dropdown-menu .dropdown-submenu > .dropdown-menu,
+            .navbar .dropdown-menu li.submenu > .dropdown-menu {
+                left: auto;
+                right: 100%;
+            }
+        }
+    </style>
 {% endblock %}
 
 {% block page_body %}
@@ -403,6 +442,18 @@
                 {% block menu_links %}
                 <ul class="nav navbar-nav navbar-right">
                     {{ layout.menu_links() }}
+                    {% if pending_approval_count and pending_approval_count > 0 %}
+                    <li id='pending-approvals' class="nav-item">
+                      <a href="{{ pending_approval_url }}" class="nav-link"
+                         title="Pending approvals waiting for a second admin">
+                        <i class="fa fa-hourglass-half"></i>
+                        <span class="badge badge-warning"
+                              style="background:#f39c12;color:#000;">
+                          {{ pending_approval_count }} waiting
+                        </span>
+                      </a>
+                    </li>
+                    {% endif %}
                     {% if config['CHANGES'] %} <li id='changes'><span class="badge badge-warning">{{config['CHANGES']}}</span></li>{% endif %}
                 </ul>
                 {% endblock %}

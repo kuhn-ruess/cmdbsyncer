@@ -1,0 +1,158 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="row">
+  <div class="col-12">
+
+    <div class="app-hero" style="margin-bottom: 1.5rem;">
+      <h2 style="margin:0;">
+        local_config.py editor
+        {% if writable %}
+          <span class="badge" style="background:#27ae60;color:#fff;font-size:12px;vertical-align:middle;">writable</span>
+        {% else %}
+          <span class="badge" style="background:#c0392b;color:#fff;font-size:12px;vertical-align:middle;">read-only</span>
+        {% endif %}
+      </h2>
+      <p style="margin: 0.5rem 0 0; opacity:0.85;">
+        Edit runtime configuration stored in <code>{{ path }}</code>. Changes are
+        written to disk atomically and applied to the running app where
+        possible. Restart-only keys are marked with a badge.
+      </p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }}">
+          {{ message }}
+        </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="app-card">
+      <h3 style="margin-top:0;">Current entries</h3>
+      {% if not rows %}
+        <p><em>No editable entries in local_config.py yet.</em></p>
+      {% else %}
+      <table class="table table-striped" style="vertical-align: middle;">
+        <thead>
+          <tr>
+            <th style="width: 28%;">Key</th>
+            <th style="width: 14%;">Type</th>
+            <th style="width: 42%;">Value</th>
+            <th style="width: 16%; text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>
+              <code>{{ row.key }}</code>
+              {% if row.restart_only %}
+              <span class="badge badge-warning" style="background:#f39c12;color:#fff;margin-left:6px;">restart</span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="POST" action="{{ url_for('.local_config_editor') }}" style="display:flex; gap:4px; margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="_action" value="update">
+                <input type="hidden" name="key" value="{{ row.key }}">
+                <select name="type" class="form-control form-control-sm" form="form-{{ row.key }}">
+                  {% for opt in ['str', 'int', 'float', 'bool', 'none'] %}
+                  <option value="{{ opt }}" {% if opt == row.type %}selected{% endif %}>{{ opt }}</option>
+                  {% endfor %}
+                </select>
+              </form>
+            </td>
+            <td>
+              <form id="form-{{ row.key }}" method="POST" action="{{ url_for('.local_config_editor') }}" style="display:flex; gap:6px; margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="_action" value="update">
+                <input type="hidden" name="key" value="{{ row.key }}">
+                {% if row.type == 'bool' %}
+                <select name="value" class="form-control form-control-sm">
+                  <option value="true" {% if row.value %}selected{% endif %}>true</option>
+                  <option value="false" {% if not row.value %}selected{% endif %}>false</option>
+                </select>
+                {% elif row.type == 'none' %}
+                <input type="text" name="value" class="form-control form-control-sm" value="" placeholder="(null)" disabled>
+                {% else %}
+                <input type="text" name="value" class="form-control form-control-sm" value="{{ row.value }}">
+                {% endif %}
+                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+              </form>
+            </td>
+            <td style="text-align:right;">
+              <form method="POST" action="{{ url_for('.local_config_editor') }}" style="display:inline;"
+                    onsubmit="return confirm('Remove {{ row.key }} from local_config.py? The BaseConfig default will apply on next restart.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="_action" value="delete">
+                <input type="hidden" name="key" value="{{ row.key }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+
+    <div class="app-card" style="margin-top: 1.5rem;">
+      <h3 style="margin-top:0;">Add new entry</h3>
+      <form method="POST" action="{{ url_for('.local_config_editor') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="_action" value="add">
+        <div style="display:grid; grid-template-columns: 1fr 140px 1fr 120px; gap: 8px; align-items: end;">
+          <div>
+            <label>Key (UPPER_CASE)</label>
+            <input type="text" name="key" class="form-control" placeholder="MY_NEW_FLAG" required
+                   pattern="[A-Za-z0-9_\-\.]+"
+                   title="Letters, digits, underscore, hyphen, dot">
+          </div>
+          <div>
+            <label>Type</label>
+            <select name="type" class="form-control">
+              <option value="str">str</option>
+              <option value="int">int</option>
+              <option value="float">float</option>
+              <option value="bool">bool</option>
+              <option value="none">none</option>
+            </select>
+          </div>
+          <div>
+            <label>Value</label>
+            <input type="text" name="value" class="form-control" placeholder="value">
+          </div>
+          <div>
+            <button type="submit" class="btn btn-primary" style="width:100%;">Add</button>
+          </div>
+        </div>
+        <p style="margin-top: 0.75rem; color: #888; font-size: 13px;">
+          Only primitive values are accepted here (str / int / float / bool / null).
+          For lists or nested dicts, edit <code>local_config.py</code> manually.
+        </p>
+      </form>
+    </div>
+
+    {% if protected_rows %}
+    <div class="app-card" style="margin-top: 1.5rem; border-left: 4px solid #c0392b;">
+      <h3 style="margin-top:0;">Protected keys (read-only)</h3>
+      <p>These keys are present in <code>local_config.py</code> but cannot be edited
+         from this view. Editing them online would invalidate existing sessions or
+         silently weaken a security default.</p>
+      <ul>
+        {% for key in protected_rows %}
+        <li><code>{{ key }}</code></li>
+        {% endfor %}
+      </ul>
+      <p style="margin:0; color:#888; font-size: 13px;">
+        To change any of these, edit <code>local_config.py</code> on disk and
+        restart the service.
+      </p>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

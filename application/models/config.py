@@ -2,7 +2,7 @@
 Config for the Syncer
 """
 from application import db
-class Config(db.Document):
+class Config(db.Document):  # pylint: disable=too-few-public-methods
     """
     Config Values
     """

@@ -1,9 +1,14 @@
 """
 Enterprise feature registry.
 
-Populated at import time by the optional `cmdbsyncer_enterprise` package.
+Populated by `load_package()` from the optional `cmdbsyncer_enterprise` package.
 If the package is not installed (or its license check fails), the registry
 stays empty and all hooks become no-ops — OSS code continues to work.
+
+`load_package()` must be called explicitly from the app factory *after* the
+MongoEngine `db` handle has been created, because the enterprise package
+transitively imports `application.models.*`, which depend on
+`from application import db`.
 """
 import sys
 import importlib.util
@@ -11,9 +16,7 @@ import importlib.util
 _features = set()
 _hooks = {}
 
-# Plain stderr to bypass any app logging config — these messages need to be
-# visible during container startup regardless of logger setup.
-load_status = None
+load_status = None  # pylint: disable=invalid-name
 
 
 def _report(message):
@@ -39,9 +42,15 @@ def run_hook(name, *args, **kwargs):
     return fn(*args, **kwargs) if fn else None
 
 
-if importlib.util.find_spec('cmdbsyncer_enterprise'):
+def load_package():
+    """Import the enterprise package if present. Safe to call multiple times."""
+    global load_status  # pylint: disable=global-statement
+    if load_status is not None:
+        return
+    if not importlib.util.find_spec('cmdbsyncer_enterprise'):
+        return
     try:
-        import cmdbsyncer_enterprise  # noqa: F401  pylint: disable=unused-import, import-error
+        import cmdbsyncer_enterprise  # noqa: F401  pylint: disable=unused-import, import-error, import-outside-toplevel
         load_status = 'active'
         _report("package loaded successfully")
     except Exception as exp:  # pylint: disable=broad-exception-caught

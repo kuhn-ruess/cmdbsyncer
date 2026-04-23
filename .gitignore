@@ -8,10 +8,13 @@ application/notices/
 cmdbsyncer-files
 nogit_*
 local_*
+!application/helpers/local_config_file.py
+!application/templates/admin/local_config_editor.html
 .obsidian*
 .claude*
 */artifacts
 offline_bundle*
+license.jwt
 
 .pypirc
 *.swp

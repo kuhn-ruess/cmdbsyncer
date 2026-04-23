@@ -90,12 +90,12 @@ else:
 log_config.dictConfig(app.config['LOGGING'])
 logger = logging.getLogger('debug')
 
-# Give the enterprise package a chance to swap in a structured / JSON
-# logging pipeline for cloud log aggregators (Loki, OpenSearch,
-# CloudWatch, Datadog, …). No-op in community / without license.
-# The same hook is reused later for blueprint- and admin-view-registration.
+# Hook registry is always safe to import — the enterprise package itself
+# is loaded later via enterprise.load_package(), after `db` exists, to
+# avoid a circular import (enterprise models → application.models.* →
+# `from application import db`).
+from application import enterprise  # noqa: E402
 from application.enterprise import run_hook as enterprise_hook  # noqa: E402
-enterprise_hook('configure_logging', app, logger)
 
 
 try:
@@ -176,6 +176,14 @@ login_manager.login_message = False
 cron_register = SortedDict()
 plugin_register = []
 
+# All module-level names the enterprise package might transitively reach
+# into (db, cron_register, plugin_register, …) exist at this point, so it
+# is finally safe to import the package. configure_logging still runs
+# before the bulk of the factory so an enterprise build can swap in a
+# structured / JSON log pipeline before blueprint/admin registration.
+enterprise.load_package()
+enterprise_hook('configure_logging', app, logger)
+
 
 from application.views.default import IndexView, DefaultModelView
 
@@ -255,6 +263,7 @@ csrf.exempt(api)
 admin = Admin(app, name=f"cmdbsyncer {DISPLAY_VERSION}",
                    index_view=IndexView(),
                    category_icon_classes={
+                       'Account': 'fa fa-user-circle',
                        'Accounts': 'fa fa-users',
                        'Ansible': 'fa fa-cogs',
                        'Checkmk': 'fa fa-heartbeat',
@@ -265,7 +274,7 @@ admin = Admin(app, name=f"cmdbsyncer {DISPLAY_VERSION}",
                        'Modules': 'fa fa-puzzle-piece',
                        'Netbox': 'fa fa-database',
                        'Plugin: Dataflow': 'fa fa-arrows',
-                       'Profile': 'fa fa-user-cog',
+                       'Settings': 'fa fa-cog',
                        'Syncer Rules': 'fa fa-bolt',
                        'VMware': 'fa fa-server'
                        })
@@ -304,24 +313,40 @@ if os.path.exists(app.config['FILEADMIN_PATH']):
     file_admin_view = FileAdminView(app.config['FILEADMIN_PATH'], name="Filemanager", menu_icon_type='fa', menu_icon_value='fa-folder-open')
     admin.add_view(file_admin_view)
 
+#.
+#   .-- Settings (admin-facing tools, distinct from per-user actions)
+admin.add_category(name="Settings", icon_type='fa', icon_value='fa-cog')
+# Pre-declare enterprise sub-categories so their views land in the
+# right place when register_admin_views runs. Flask-Admin creates
+# them lazily on first reference otherwise, but referenced as sub-
+# categories here gives the menu structure a predictable order.
+admin.add_sub_category(name="Security", parent_name="Settings")
+admin.add_sub_category(name="Compliance", parent_name="Settings")
+admin.add_sub_category(name="Notifications", parent_name="Settings")
+admin.add_sub_category(name="Backups", parent_name="Settings")
+
 from application.modules.log.models import LogEntry
 from application.modules.log.views import LogView
-admin.add_view(LogView(LogEntry, name="Log", menu_icon_type='fa', menu_icon_value='fa-file-text-o'))
+admin.add_view(LogView(LogEntry, name="Log", category="Settings",
+                       menu_icon_type='fa', menu_icon_value='fa-file-text-o'))
 
-#.
-#   .-- Config
-admin.add_category(name="Profile", icon_type='fa', icon_value='fa-user-cog')
 from application.models.user import User
 from application.views.user import UserView
-admin.add_view(UserView(User, category='Profile', menu_icon_type='fa', menu_icon_value='fa-user'))
+admin.add_view(UserView(User, category='Settings',
+                        menu_icon_type='fa', menu_icon_value='fa-user'))
 
 from application.models.config import Config
 from application.views.config import ConfigModelView
 
-admin.add_view(ConfigModelView(Config, name="System Config", category="Profile", menu_icon_type='fa', menu_icon_value='fa-cogs'))
+admin.add_view(ConfigModelView(Config, name="System Config",
+                               endpoint='config', category="Settings",
+                               menu_icon_type='fa', menu_icon_value='fa-cogs'))
+admin.add_link(MenuLink(name='Edit local_config.py', category='Settings',
+                        endpoint='config.local_config_editor',
+                        icon_type='fa', icon_value='fa-file-code-o'))
 
 from application.views.license import LicenseView
-admin.add_view(LicenseView(name="License", endpoint="license", category="Profile",
+admin.add_view(LicenseView(name="License", endpoint="license", category="Settings",
                            menu_icon_type='fa', menu_icon_value='fa-id-card'))
 
 # Give the enterprise package one chance to inject its own admin views
@@ -330,14 +355,17 @@ admin.add_view(LicenseView(name="License", endpoint="license", category="Profile
 enterprise_hook('register_admin_views', admin)
 #.
 
-#   .-- Rest
-admin.add_link(MenuLink(name='Change Password', category='Profile',
+# Per-user actions as their own Flask-Admin category. Using the native
+# category + MenuLink mechanism means Flask-Admin's own dropdown JS
+# and CSS applies — no custom widget, no click-handling quirks.
+admin.add_category(name='Account', icon_type='fa', icon_value='fa-user-circle')
+admin.add_link(MenuLink(name='Change Password', category='Account',
                         url=f"{app.config['BASE_PREFIX']}change-password",
                         icon_type='fa', icon_value='fa-key'))
-admin.add_link(MenuLink(name='Set 2FA Code', category='Profile',
+admin.add_link(MenuLink(name='Set 2FA Code', category='Account',
                         url=f"{app.config['BASE_PREFIX']}set-2fa",
                         icon_type='fa', icon_value='fa-shield'))
-admin.add_link(MenuLink(name='Logout', category='Profile',
+admin.add_link(MenuLink(name='Logout', category='Account',
                         url=f"{app.config['BASE_PREFIX']}logout",
                         icon_type='fa', icon_value='fa-sign-out'))
 
