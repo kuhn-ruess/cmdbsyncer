@@ -3,12 +3,14 @@
 {% block body %}
 <style>
 .home-hero {
-  background: linear-gradient(135deg, #2c3e50 0%, #4c6586 100%);
-  color: #fff;
-  border-radius: 14px;
-  padding: 2rem 2.25rem;
+  /* Minimalist hero — matches base.html's .app-hero treatment:
+     title on a transparent background with a thin black hairline
+     below; teal only on the build pill against black text. */
+  background: transparent;
+  color: #000;
+  padding: 0.25rem 0 1rem;
   margin: 0.5rem 0 1.5rem;
-  box-shadow: 0 8px 24px rgba(44, 62, 80, 0.18);
+  border-bottom: 2px solid #000;
 }
 .home-hero h1 {
   margin: 0;
@@ -19,16 +21,18 @@
 .home-hero p {
   margin: 0.4rem 0 0;
   font-size: 0.95rem;
-  opacity: 0.9;
+  color: #4a4f57;
 }
 .home-hero .build-pill {
   display: inline-block;
   margin-top: 0.75rem;
   padding: 0.2rem 0.7rem;
   font-size: 0.75rem;
-  background: rgba(255, 255, 255, 0.18);
+  color: #000;
+  background: #1acdb6;
   border-radius: 999px;
   letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .home-card {
