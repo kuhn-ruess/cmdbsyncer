@@ -19,6 +19,14 @@
 
        .navbar {
            background-color: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }} !important;
+           /* Subtle diagonal shade + soft shadow give the flat
+              config color some depth without losing the admin's
+              chosen base hue. */
+           background-image: linear-gradient(135deg,
+               rgba(255, 255, 255, 0.04) 0%,
+               rgba(0, 0, 0, 0.22) 100%);
+           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+           border-bottom: 1px solid rgba(255, 255, 255, 0.08);
            width: 100vw;
            position: relative;
            left: 50%;
@@ -29,7 +37,7 @@
            padding-right: 0;
            border-radius: 0;
        }
-       
+
        .navbar .container {
            max-width: 100% !important;
            padding-left: 15px;
@@ -38,12 +46,46 @@
 
        .navbar .nav-link {
            color: {{ config['STYLE_NAV_LINK_COLOR'] }} !important;
-           padding: 0.35rem 0.7rem !important;
+           padding: 0.4rem 0.8rem !important;
            margin: 0 0.175rem;
+           border-radius: 6px;
+           transition: background-color 0.15s ease, color 0.15s ease;
        }
-       
+       .navbar .nav-link:hover,
+       .navbar .nav-link:focus {
+           background-color: rgba(255, 255, 255, 0.14);
+           color: #fff !important;
+       }
+       .navbar .nav-item.active > .nav-link,
+       .navbar .nav-link.active {
+           background-color: rgba(255, 255, 255, 0.20);
+           color: #fff !important;
+       }
+
        .navbar-nav .nav-item {
            margin: 0 0.14rem;
+       }
+
+       /* Modernized dropdown menus hanging off the navbar:
+          rounded corners, soft shadow, hover pill. */
+       .navbar .dropdown-menu {
+           border: 1px solid rgba(0, 0, 0, 0.06);
+           border-radius: 10px;
+           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+           padding: 0.4rem 0.35rem;
+           margin-top: 0.35rem;
+       }
+       .navbar .dropdown-item {
+           padding: 0.45rem 0.8rem;
+           border-radius: 6px;
+       }
+       .navbar .dropdown-item:hover,
+       .navbar .dropdown-item:focus {
+           background-color: #eef2f6;
+           color: #2c3e50;
+       }
+       .navbar .dropdown-divider {
+           margin: 0.35rem 0.25rem;
        }
 
        /* Navbar Brand Styling */
@@ -116,6 +158,13 @@
            max-width: 60px;
            overflow: hidden;
            text-overflow: ellipsis;
+           box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.5);
+           animation: cmdb-nav-pulse 2.2s infinite;
+       }
+       @keyframes cmdb-nav-pulse {
+           0%   { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.5); }
+           70%  { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+           100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
        }
        
        .navbar-nav.navbar-right {
