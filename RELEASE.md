@@ -1,6 +1,6 @@
 # Releases & Versioning
 
-CMDBsyncer uses a **Release-Train** model on `main`: changes land continuously, and a new version (tag + PyPI release) is cut 1–2× per week — not per commit. In parallel, a **long-term-support branch `lts/3.12`** receives only security fixes and general bugfixes backported from `main` — no new features.
+CMDBsyncer uses a **Release-Train** model on `main`: changes land continuously, and a new version (tag + PyPI release) is cut 1–2× per week — not per commit. In parallel, exactly **one active long-term-support branch** (currently `lts/3.12`) receives only security fixes and general bugfixes backported from `main` — no new features. Older LTS branches may continue to live as **extended / paid-only** maintenance lines (see "LTS lifecycle" below).
 
 ## For users — which version should I run?
 
@@ -91,6 +91,36 @@ The **`lts/3.12`** branch is the long-term-support line based on `v3.12.13`. It 
 - **General bugfixes** (`FIX:` prefix)
 
 New features (`FEAT:`) never land on `lts/3.12` — they go exclusively to `main`.
+
+### LTS lifecycle
+
+Only **one LTS branch is "active & free" at a time** — currently `lts/3.12`. The next LTS base is **not** picked by an automatic rule (no "every even minor is LTS"); the maintainer declares a new base when one is needed — typically when `main` has diverged far enough from the current LTS that backports stop being cheap, or when the current LTS approaches EOL. At that point:
+
+1. A new branch `lts/<x.y>` is cut from the chosen `main` release tag.
+2. The `.lts-release` marker file on the new branch is set to `<x.y>`.
+3. The previous LTS branch is moved to **extended** status (see below) or directly to **EOL**.
+
+Every LTS branch is in exactly one of three states:
+
+- **active & free** — publicly maintained, SEC + FIX backports from `main`, no new features. Exactly one branch is in this state at any time.
+- **extended / paid-only** — no longer publicly maintained. Fixes (typically CVE / severe bug backports) are cut **only** when a customer with an active support contract requests them. Pace is ticket-driven, not calendar-driven; no regular release cadence. The branch stays alive as long as at least one contract covers it.
+- **EOL** — no further commits. The branch is kept in the repo for reproducibility of old tags but is marked as archived; the last commit adds an `EOL: <date>` line at the top of `changelog/v<x.y>.md`.
+
+When promoting the current active LTS to extended status, add a short header at the top of `changelog/v<x.y>.md`:
+
+```
+> Status: **extended / paid-only** as of YYYY-MM-DD.
+> Fixes on this branch are backported on request for customers with an
+> active support contract. No public release cadence.
+```
+
+When retiring an extended LTS to EOL, replace that block with:
+
+```
+> Status: **EOL** since YYYY-MM-DD. No further commits.
+```
+
+The "one active, others paid-or-archived" rule is the bound that keeps LTS maintenance from unbounded growth — the maintainer never carries more than one free LTS line, and every extended line is funded.
 
 ### LTS version-number scheme
 
