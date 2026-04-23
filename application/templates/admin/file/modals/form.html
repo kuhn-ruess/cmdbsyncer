@@ -1,0 +1,32 @@
+{% import 'admin/static.html' as admin_static with context %}
+{% import 'admin/lib.html' as lib with context %}
+
+{# Override of flask-admin's fileadmin modal partial:
+   the upstream version does not render flashed messages inside the
+   modal, so save errors (e.g. "Permission denied" on the filesystem,
+   quota hits, …) were only visible after a subsequent page load.
+   Rendering flashes here — inside the modal body — makes the error
+   appear exactly where the user just clicked Save. #}
+
+{% block body %}
+  <div class="modal-header">
+    {% block header %}<h3>{{ header_text }}</h3>{% endblock %}
+    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+  </div>
+  <div class="modal-body">
+    {% with flashes = get_flashed_messages(with_categories=true) %}
+      {% for category, message in flashes %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }}" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+    {% block fa_form %}
+      {{ lib.render_form(form, dir_url, action=request.url, is_modal=True) }}
+    {% endblock %}
+  </div>
+{% endblock %}
+
+{% block tail %}
+  <script {{ admin_csp_nonce_attribute }} src="{{ admin_static.url(filename='admin/js/bs4_modal.js', v='1.0.0') }}"></script>
+{% endblock %}
