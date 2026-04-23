@@ -169,6 +169,7 @@ def _render_cmdb_fields(_view, _context, model, _name):
         if not entry.field_value:
             continue
         value = escape(entry.field_value)
+        type_name = escape(_value_type_name(entry.field_value))
         html += f'''
             <tr>
                 <th scope="row" style="width: 30%;">
@@ -178,6 +179,9 @@ def _render_cmdb_fields(_view, _context, model, _name):
                     <span class="badge badge-info"
                           style="{_CMDB_VALUE_BADGE_STYLE}"
                           title="{value}">{value}</span>
+                </td>
+                <td style="width: 110px;">
+                    <span class="badge badge-secondary">{type_name}</span>
                 </td>
             </tr>
         '''
@@ -251,11 +255,15 @@ def _render_cmdb_template(_view, _context, model, _name):
         rows = ''
         for k, v in tmpl.labels.items():
             value = escape(v)
+            type_name = escape(_value_type_name(v))
             rows += (
                 f'<tr><th scope="row" style="width:30%;">{escape(k)}</th>'
                 f'<td><span class="badge badge-info" '
                 f'style="{_CMDB_VALUE_BADGE_STYLE}" '
-                f'title="{value}">{value}</span></td></tr>'
+                f'title="{value}">{value}</span></td>'
+                f'<td style="width: 110px;">'
+                f'<span class="badge badge-secondary">{type_name}</span>'
+                f'</td></tr>'
             )
         parts.append(
             f'<table class="table table-bordered" '
@@ -776,21 +784,45 @@ def format_cache(_v, _c, m, _p):
 
     return Markup(html)
 
+def _value_type_name(value):
+    """
+    Human-friendly Python type name, treating `bool` as its own type
+    (rather than the `int` subclass it technically is) — that is the
+    distinction users care about when they wonder why
+    `input_monitoring:True` does or doesn't match a filter.
+    """
+    if isinstance(value, bool):
+        return 'bool'
+    return type(value).__name__
+
+
+def _format_keyvalue_with_type(items):
+    """Shared Key / Value / Type table for the detail view."""
+    html = (
+        '<table class="table table-sm table-bordered" '
+        'style="max-width: 800px;">'
+        '<thead><tr><th>Key</th><th>Value</th>'
+        '<th style="width: 110px;">Type</th></tr></thead><tbody>'
+    )
+    for key, value in (items or {}).items():
+        display = '' if value is None else str(value)
+        html += (
+            f'<tr><th scope="row">{escape(key)}</th>'
+            f'<td>{escape(display)}</td>'
+            f'<td><span class="badge badge-secondary">'
+            f'{escape(_value_type_name(value))}</span></td></tr>'
+        )
+    html += '</tbody></table>'
+    return Markup(html)
+
+
 def format_labels(_v, _c, m, _p):
     """ Format Labels view"""
-    html = "<table>"
-    for key, value in m.labels.items():
-        html += f"<tr><th>{escape(key)}</th><td>{escape(value)}</td></tr>"
-    html += "</table>"
-    return Markup(html)
+    return _format_keyvalue_with_type(m.labels)
 
 def format_inventory(_v, _c, m, _p):
     """ Format Inventory view"""
-    html = "<table>"
-    for key, value in m.inventory.items():
-        html += f"<tr><th>{escape(key)}</th><td>{escape(value)}</td></tr>"
-    html += "</table>"
-    return Markup(html)
+    return _format_keyvalue_with_type(m.inventory)
 
 def format_labels_export(_v, _c, m, _p):
     """ Format Labels view"""
@@ -1168,6 +1200,20 @@ class HostModelView(DefaultModelView):
     column_formatters = {
         'log': format_log,
         'labels': _render_labels,
+        'inventory': format_inventory,
+        'cache': format_cache,
+        'cmdb_templates': _render_cmdb_template,
+        'last_import_seen': _render_datetime,
+        'last_import_sync': _render_datetime,
+        'create_time': _render_datetime,
+        'object_type': _render_object_type_icon,
+    }
+
+    # Detail view shows Key / Value / Type so admins can tell a string
+    # "True" apart from the BSON bool True (different filter matching).
+    column_formatters_detail = {
+        'log': format_log,
+        'labels': format_labels,
         'inventory': format_inventory,
         'cache': format_cache,
         'cmdb_templates': _render_cmdb_template,
