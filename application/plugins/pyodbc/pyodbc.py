@@ -34,7 +34,7 @@ class ODBC(Plugin):
     ODBC Plugin
     """
 
-    def _innter_sql(self):
+    def _innter_sql(self): # pylint: disable=too-many-locals
         """
         Mssql Functions
         """
@@ -76,16 +76,24 @@ class ODBC(Plugin):
             else:
                 query = build_select_query(self.config['fields'], self.config['table'])
             logger.debug(query)
+            allow_ddl = custom_query_allow_ddl(self.config)
             cursor.execute(query)
-            # When the admin opted into DDL the query may include a
-            # CREATE before the SELECT — commit so the CREATE persists
-            # even if the outer transaction would otherwise roll back.
-            if custom_query_allow_ddl(self.config):
-                cnxn.commit()
             logger.debug("Cursor Executed")
+            if allow_ddl:
+                # Multi-statement (CREATE …; SELECT …) leaves the cursor
+                # on the DDL result set first — walk nextset() until we
+                # reach the one that actually has columns.
+                while cursor.description is None and cursor.nextset():
+                    pass
             rows = cursor.fetchall()
             logger.debug("Fetch Executed: %s", cursor.description)
             columns = [column[0] for column in cursor.description]
+            # Commit *after* fetch — on unixODBC a commit between
+            # execute() and fetchall() invalidates the open cursor and
+            # the next fetch raises HY010 Function sequence error.
+            if allow_ddl:
+                cursor.close()
+                cnxn.commit()
             for row in rows:
                 logger.debug("Found row: %s", row)
                 labels=dict(zip(columns,row))
