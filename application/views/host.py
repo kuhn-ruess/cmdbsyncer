@@ -256,22 +256,44 @@ def _render_cmdb_template(_view, _context, model, _name):
     return Markup(html)
 
 
+def _template_edit_url(tmpl):
+    """
+    Build the admin edit URL for a CMDB template. TemplateModelView
+    is registered with `endpoint="Objects Templates"` — use `url_for`
+    so the URL stays correct if the endpoint is renamed later; fall
+    back to an empty string and render without a link on failure.
+    """
+    try:
+        return url_for('Objects Templates.edit_view', id=str(tmpl.id))
+    except Exception:  # pylint: disable=broad-exception-caught
+        return ''
+
+
 def _render_cmdb_template_preview(_view, _context, model, _name):
     """
     Compact badge preview of assigned CMDB templates for the list
     view — just the template hostnames, same badge style as the
-    label preview.
+    label preview. Each badge links to the template's edit page.
     """
     if not model.cmdb_templates:
         return Markup("")
     html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
     for tmpl in model.cmdb_templates:
-        html += (
+        name = escape(tmpl.hostname)
+        badge = (
             f'<span class="badge badge-dark mr-1" '
             f'style="{_LABEL_BADGE_STYLE}" '
-            f'title="{escape(tmpl.hostname)}">'
-            f'<i class="fa fa-file"></i> {escape(tmpl.hostname)}</span>'
+            f'title="{name}">'
+            f'<i class="fa fa-file"></i> {name}</span>'
         )
+        href = _template_edit_url(tmpl)
+        if href:
+            html += (
+                f'<a href="{escape(href)}" '
+                f'style="text-decoration: none;">{badge}</a>'
+            )
+        else:
+            html += badge
     html += '</div>'
     return Markup(html)
 
