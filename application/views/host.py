@@ -62,10 +62,17 @@ def _validate_filter_key(key):
     return clean_key
 
 
-def _build_safe_regex(value):
-    if value == '*':
-        return '.*'
-    return re.escape(value).replace(r'\*', '.*')
+def _compile_filter_regex(value):
+    """
+    Validate a user-supplied regex for a Key:Value label/inventory
+    filter. The filter operation is advertised as "regex search", so
+    the raw value is used verbatim — we only size-limit it and confirm
+    it compiles, matching the hostname-filter precedent.
+    """
+    if len(value) > 500:
+        raise ValueError("Filter value too long")
+    re.compile(value)
+    return value
 
 def get_debug(hostname, mode):
     """
@@ -166,27 +173,39 @@ def _render_cmdb_fields(_view, _context, model, _name):
     html += '</table>'
     return Markup(html)
 
+_LABEL_BADGE_STYLE = (
+    'display: inline-block; max-width: 280px; '
+    'overflow: hidden; text-overflow: ellipsis; '
+    'white-space: nowrap; vertical-align: middle; '
+    'margin: 2px;'
+)
+_LABEL_WRAPPER_STYLE = 'max-width: 600px;'
+
+
 def _render_labels(_view, _context, model, _name):
     """
     Render Labels
     """
     if not model.labels:
         return Markup("")
-    #If the Cache is set, we also show the attributes which we Send to Checkmk
+    # Truncation + `title` tooltip keeps customer hosts with very long
+    # label values from stretching the row off-screen; the full value
+    # is still available on hover.
     checkmk_labels = (
         model.cache.get('checkmk_hostattribute', {})
         .get('attributes', {}).get('all', {})
     )
-    html = ""
+    html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
     for key, value in model.labels.items():
         if not value:
             continue
         if checkmk_labels.get(key) == value:
             del checkmk_labels[key]
+        text = f"{key}:{value}"
         html += (
             f'<span class="badge badge-primary mr-1" '
-            f'style="margin: 2px;">'
-            f'{escape(key)}:{escape(value)}</span>'
+            f'style="{_LABEL_BADGE_STYLE}" title="{escape(text)}">'
+            f'{escape(text)}</span>'
         )
 
     for key, value in checkmk_labels.items():
@@ -194,13 +213,16 @@ def _render_labels(_view, _context, model, _name):
             continue
         if model.inventory.get(key) == value:
             continue
+        text = f"{key}:{value}"
         html += (
-            f'<span class="badge mr-1" style="margin: 2px;'
-            f' background-color: rgb(43, 181, 120);">'
-            f'{escape(key)}:{escape(value)}</span>'
+            f'<span class="badge mr-1" '
+            f'style="{_LABEL_BADGE_STYLE} '
+            f'background-color: rgb(43, 181, 120);" '
+            f'title="{escape(text)}">'
+            f'{escape(text)}</span>'
         )
 
-
+    html += '</div>'
     return Markup(html)
 
 def _render_cmdb_template(_view, _context, model, _name):
@@ -443,6 +465,34 @@ class FilterPoolFolder(BaseMongoEngineFilter):
     def operation(self):
         return "contains"
 
+def _build_keyvalue_pipeline(field, value):
+    """
+    Build a MongoDB `$or` pipeline for a "key:value" label/inventory
+    filter. The string branch uses `$regex` so users can actually pass
+    regex syntax (the filter is advertised as "regex search"); the
+    numeric and boolean branches use exact equality, because BSON
+    numbers and booleans are **not** string-matchable with `$regex` —
+    which is why `input_monitoring:True` used to find nothing.
+    """
+    regex_value = _compile_filter_regex(value)
+    or_clauses = [{field: {"$regex": regex_value, "$options": "i"}}]
+
+    try:
+        or_clauses.append({field: int(value)})
+    except ValueError:
+        pass
+
+    lower = value.lower()
+    if lower in ('true', 'yes'):
+        or_clauses.append({field: True})
+    elif lower in ('false', 'no'):
+        or_clauses.append({field: False})
+
+    if len(or_clauses) == 1:
+        return or_clauses[0]
+    return {"$or": or_clauses}
+
+
 class FilterLabelKeyAndValue(BaseMongoEngineFilter):
     """
     Filter Key:Value Pair for Label
@@ -464,27 +514,7 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
                 }
                 return query.filter(__raw__=pipeline)
 
-            org_value = None
-
-            try:
-                org_value = int(value)
-            except ValueError:
-                pass
-
-            safe_regex = _build_safe_regex(value)
-
-            if org_value is not None:
-                pipeline = {
-                        "$or": [
-                        {f'labels.{key}': {"$regex": safe_regex, "$options": "i"}},
-                        {f'labels.{key}': org_value}
-                    ]
-                }
-
-            else:
-                pipeline = {
-                        f'labels.{key}': {"$regex": safe_regex, "$options": "i"},
-                }
+            pipeline = _build_keyvalue_pipeline(f'labels.{key}', value)
             return query.filter(__raw__=pipeline)
         except Exception as error:  # pylint: disable=broad-exception-caught
             flash('danger', error)
@@ -514,26 +544,7 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
                 }
                 return query.filter(__raw__=pipeline)
 
-            org_value = None
-
-            try:
-                org_value = int(value)
-            except ValueError:
-                pass
-
-            safe_regex = _build_safe_regex(value)
-
-            if org_value is not None:
-                pipeline = {
-                        "$or": [
-                        {f'inventory.{key}': {"$regex": safe_regex, "$options": "i"}},
-                        {f'inventory.{key}': org_value}
-                    ]
-                }
-            else:
-                pipeline = {
-                        f'inventory.{key}': {"$regex": safe_regex, "$options": "i"},
-                }
+            pipeline = _build_keyvalue_pipeline(f'inventory.{key}', value)
             return query.filter(__raw__=pipeline)
         except Exception as error:  # pylint: disable=broad-exception-caught
             flash('danger', error)
