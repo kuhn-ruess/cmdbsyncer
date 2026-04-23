@@ -1539,8 +1539,23 @@ class HostModelView(DefaultModelView):
         # Bugfix, ohne we loose the availibilty to edit after save
         self.can_edit = True
 
-    @action('set_template', 'Set Template',
-            'Are you sure you want to update the selected hosts?')
+    list_template = 'admin/host_list.html'
+
+    def render(self, template, **kwargs):
+        """
+        Supply the template choice list to the list view so the
+        "Set Template" modal can render its <select> inline.
+        """
+        if template.endswith('host_list.html') or template.endswith('list.html'):
+            kwargs.setdefault('set_template_choices', self.get_template_list())
+        return super().render(template, **kwargs)
+
+    # `action_set_template` stays as a server-side fallback. The
+    # modernized list view intercepts the action client-side and opens
+    # a modal instead of redirecting to a separate page — see
+    # admin/host_list.html. If JS is disabled the redirect path still
+    # works.
+    @action('set_template', 'Set Template', None)
     def action_set_template(self, ids):
         """
         Action to set CMDB template
