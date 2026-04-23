@@ -209,6 +209,105 @@
           font-size: 1.2rem !important;
       }
 
+      /* Modernized list tables (flask-admin's `.model-list` class).
+         Softer borders, polished header, better hover feedback;
+         detail-view tables are styled separately below so they keep
+         readable Key/Value separators. */
+      .table-responsive {
+          border-radius: 10px;
+          overflow: hidden;
+          border: 1px solid #e6e9ec;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+      }
+      .table {
+          margin-bottom: 0;
+          background: #fff;
+      }
+      .model-list thead th {
+          background: #f5f7fa;
+          border-bottom: 2px solid #e6e9ec !important;
+          border-top: 0;
+          font-weight: 600;
+          font-size: 0.85rem;
+          color: #2c3e50;
+          padding: 0.55rem 0.75rem;
+          vertical-align: middle;
+      }
+      .model-list td,
+      .model-list th {
+          border-top: 1px solid #eef0f3;
+          border-left: 0;
+          border-right: 0;
+          padding: 0.55rem 0.75rem;
+          vertical-align: middle;
+      }
+      .table-striped tbody tr:nth-of-type(odd) {
+          background-color: #fafbfc;
+      }
+      .table-hover tbody tr:hover {
+          background-color: #eef5fb !important;
+      }
+      .table .list-checkbox-column {
+          width: 38px;
+          text-align: center;
+      }
+
+      /* Detail view (flask-admin `.searchable`) and any explicit
+         `.table-bordered` key/value layout: discreet full borders
+         so the two-column grid actually reads as a grid. */
+      .table.searchable,
+      .table.table-bordered {
+          border: 1px solid #e6e9ec;
+          border-radius: 8px;
+          overflow: hidden;
+          background: #fff;
+      }
+      .table.searchable td,
+      .table.searchable th,
+      .table.table-bordered td,
+      .table.table-bordered th {
+          border: 1px solid #eef0f3;
+          padding: 0.55rem 0.75rem;
+          vertical-align: top;
+      }
+      .table.searchable td:first-child {
+          background: #fafbfc;
+          font-weight: 600;
+          color: #2c3e50;
+          width: 20%;
+          white-space: nowrap;
+      }
+      .table.searchable tbody tr:hover {
+          background-color: #f8fbff;
+      }
+      /* Row-action icons: clearly visible by default (details eye,
+         edit pencil, debug rocket), brand blue on hover. */
+      .table td a.icon {
+          color: #2c3e50;
+          margin: 0 2px;
+          transition: color 0.12s;
+      }
+      .table td a.icon:hover {
+          color: #3498db;
+      }
+      /* Pagination styling */
+      .pagination {
+          margin-top: 1rem;
+      }
+      .pagination .page-link {
+          color: #2c3e50;
+          border-radius: 6px;
+          margin: 0 2px;
+          border: 1px solid #e6e9ec;
+      }
+      .pagination .page-item.active .page-link {
+          background-color: #3498db;
+          border-color: #3498db;
+      }
+      .pagination .page-link:hover {
+          background-color: #eef5fb;
+      }
+
       .hidden {
           display: none;
       }
