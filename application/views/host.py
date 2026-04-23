@@ -150,23 +150,34 @@ def _render_datetime(_view, _context, model, name):
         return Markup(value.strftime('%Y-%m-%d %H:%M:%S'))
     return Markup(escape(str(value)))
 
+_CMDB_TABLE_STYLE = 'max-width: 600px; table-layout: fixed;'
+_CMDB_VALUE_BADGE_STYLE = (
+    'display: inline-block; max-width: 100%; '
+    'overflow: hidden; text-overflow: ellipsis; '
+    'white-space: nowrap; vertical-align: middle;'
+)
+
+
 def _render_cmdb_fields(_view, _context, model, _name):
     """
     Render CMD Fields
     """
     if not model.cmdb_fields:
         return Markup("")
-    html = '<table class="table table-bordered">'
+    html = f'<table class="table table-bordered" style="{_CMDB_TABLE_STYLE}">'
     for entry in model.cmdb_fields:
         if not entry.field_value:
             continue
+        value = escape(entry.field_value)
         html += f'''
             <tr>
                 <th scope="row" style="width: 30%;">
                     {escape(entry.field_name)}
                 </th>
                 <td>
-                    <span class="badge badge-info">{escape(entry.field_value)}</span>
+                    <span class="badge badge-info"
+                          style="{_CMDB_VALUE_BADGE_STYLE}"
+                          title="{value}">{value}</span>
                 </td>
             </tr>
         '''
@@ -237,12 +248,19 @@ def _render_cmdb_template(_view, _context, model, _name):
             f'<caption style="caption-side:top;font-weight:bold">'
             f'{escape(tmpl.hostname)}</caption>'
         )
-        rows = ''.join(
-            f'<tr><th scope="row" style="width:30%;">{escape(k)}</th>'
-            f'<td><span class="badge badge-info">{escape(v)}</span></td></tr>'
-            for k, v in tmpl.labels.items()
+        rows = ''
+        for k, v in tmpl.labels.items():
+            value = escape(v)
+            rows += (
+                f'<tr><th scope="row" style="width:30%;">{escape(k)}</th>'
+                f'<td><span class="badge badge-info" '
+                f'style="{_CMDB_VALUE_BADGE_STYLE}" '
+                f'title="{value}">{value}</span></td></tr>'
+            )
+        parts.append(
+            f'<table class="table table-bordered" '
+            f'style="{_CMDB_TABLE_STYLE}">{header}{rows}</table>'
         )
-        parts.append(f'<table class="table table-bordered">{header}{rows}</table>')
     return Markup(''.join(parts))
 
 def _render_cmdb_match_label(_view, _context, model, _name):
