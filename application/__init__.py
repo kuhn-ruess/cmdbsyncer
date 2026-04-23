@@ -79,8 +79,11 @@ _buildinfo_path = os.path.join(app.root_path, "buildinfo.txt")
 if os.path.isfile(_buildinfo_path):
     with open(_buildinfo_path, encoding="utf-8") as _buildinfo:
         for line in _buildinfo:
-            name, key = line.split('=')
-            app.config[name] = key.strip()
+            stripped = line.strip()
+            if not stripped or stripped.startswith('#') or '=' not in stripped:
+                continue
+            name, key = stripped.split('=', 1)
+            app.config[name.strip()] = key.strip()
 else:
     app.config.setdefault("BUILD_DATE", "unknown")
 

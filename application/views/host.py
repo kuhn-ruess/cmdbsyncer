@@ -150,44 +150,6 @@ def _render_datetime(_view, _context, model, name):
         return Markup(value.strftime('%Y-%m-%d %H:%M:%S'))
     return Markup(escape(str(value)))
 
-_CMDB_TABLE_STYLE = 'max-width: 600px; table-layout: fixed;'
-_CMDB_VALUE_BADGE_STYLE = (
-    'display: inline-block; max-width: 100%; '
-    'overflow: hidden; text-overflow: ellipsis; '
-    'white-space: nowrap; vertical-align: middle;'
-)
-
-
-def _render_cmdb_fields(_view, _context, model, _name):
-    """
-    Render CMD Fields
-    """
-    if not model.cmdb_fields:
-        return Markup("")
-    html = f'<table class="table table-bordered" style="{_CMDB_TABLE_STYLE}">'
-    for entry in model.cmdb_fields:
-        if not entry.field_value:
-            continue
-        value = escape(entry.field_value)
-        type_name = escape(_value_type_name(entry.field_value))
-        html += f'''
-            <tr>
-                <th scope="row" style="width: 30%;">
-                    {escape(entry.field_name)}
-                </th>
-                <td>
-                    <span class="badge badge-info"
-                          style="{_CMDB_VALUE_BADGE_STYLE}"
-                          title="{value}">{value}</span>
-                </td>
-                <td style="width: 110px;">
-                    <span class="badge badge-secondary">{type_name}</span>
-                </td>
-            </tr>
-        '''
-    html += '</table>'
-    return Markup(html)
-
 _LABEL_BADGE_STYLE = (
     'display: inline-block; max-width: 280px; '
     'overflow: hidden; text-overflow: ellipsis; '
@@ -195,6 +157,42 @@ _LABEL_BADGE_STYLE = (
     'margin: 2px;'
 )
 _LABEL_WRAPPER_STYLE = 'max-width: 600px;'
+
+
+def _render_cmdb_fields_preview(_view, _context, model, _name):
+    """
+    Compact badge preview of CMDB fields for the list view. Mirrors
+    the label-preview rendering so the host list stays uniform.
+    """
+    if not model.cmdb_fields:
+        return Markup("")
+    html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
+    for entry in model.cmdb_fields:
+        if not entry.field_value:
+            continue
+        text = f"{entry.field_name}:{entry.field_value}"
+        html += (
+            f'<span class="badge badge-info mr-1" '
+            f'style="{_LABEL_BADGE_STYLE}" title="{escape(text)}">'
+            f'{escape(text)}</span>'
+        )
+    html += '</div>'
+    return Markup(html)
+
+
+def _render_cmdb_fields(_view, _context, model, _name):
+    """
+    Detail-view rendering of CMDB fields — same Key / Value / Type
+    table as Labels and Inventory.
+    """
+    if not model.cmdb_fields:
+        return Markup("")
+    items = {
+        entry.field_name: entry.field_value
+        for entry in model.cmdb_fields
+        if entry.field_value
+    }
+    return _format_keyvalue_with_type(items)
 
 
 def _render_labels(_view, _context, model, _name):
@@ -242,34 +240,40 @@ def _render_labels(_view, _context, model, _name):
 
 def _render_cmdb_template(_view, _context, model, _name):
     """
-    Render all assigned CMDB templates
+    Detail-view rendering of assigned CMDB templates — one
+    Key / Value / Type table per template, headed by the template
+    hostname. Same visual style as Labels and Inventory.
     """
     if not model.cmdb_templates:
         return Markup("")
-    parts = []
+    html = ""
     for tmpl in model.cmdb_templates:
-        header = (
-            f'<caption style="caption-side:top;font-weight:bold">'
-            f'{escape(tmpl.hostname)}</caption>'
+        html += (
+            f'<h6 style="margin-top: 8px; font-weight: bold;">'
+            f'{escape(tmpl.hostname)}</h6>'
         )
-        rows = ''
-        for k, v in tmpl.labels.items():
-            value = escape(v)
-            type_name = escape(_value_type_name(v))
-            rows += (
-                f'<tr><th scope="row" style="width:30%;">{escape(k)}</th>'
-                f'<td><span class="badge badge-info" '
-                f'style="{_CMDB_VALUE_BADGE_STYLE}" '
-                f'title="{value}">{value}</span></td>'
-                f'<td style="width: 110px;">'
-                f'<span class="badge badge-secondary">{type_name}</span>'
-                f'</td></tr>'
-            )
-        parts.append(
-            f'<table class="table table-bordered" '
-            f'style="{_CMDB_TABLE_STYLE}">{header}{rows}</table>'
+        html += str(_format_keyvalue_with_type(tmpl.labels or {}))
+    return Markup(html)
+
+
+def _render_cmdb_template_preview(_view, _context, model, _name):
+    """
+    Compact badge preview of assigned CMDB templates for the list
+    view — just the template hostnames, same badge style as the
+    label preview.
+    """
+    if not model.cmdb_templates:
+        return Markup("")
+    html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
+    for tmpl in model.cmdb_templates:
+        html += (
+            f'<span class="badge badge-dark mr-1" '
+            f'style="{_LABEL_BADGE_STYLE}" '
+            f'title="{escape(tmpl.hostname)}">'
+            f'<i class="fa fa-file"></i> {escape(tmpl.hostname)}</span>'
         )
-    return Markup(''.join(parts))
+    html += '</div>'
+    return Markup(html)
 
 def _render_cmdb_match_label(_view, _context, model, _name):
     """
@@ -888,6 +892,18 @@ class ObjectModelView(DefaultModelView):
         'labels': format_labels,
         'inventory': format_inventory,
         'cache': format_cache,
+        'cmdb_fields': _render_cmdb_fields_preview,
+        'cmdb_match': _render_cmdb_match_label,
+        'object_type': _render_object_type_icon,
+    }
+
+    # Detail view uses the rich Key / Value / Type table; the list
+    # view stays compact with the badge preview above.
+    column_formatters_detail = {
+        'log': format_log,
+        'labels': format_labels,
+        'inventory': format_inventory,
+        'cache': format_cache,
         'cmdb_fields': _render_cmdb_fields,
         'cmdb_match': _render_cmdb_match_label,
         'object_type': _render_object_type_icon,
@@ -1202,7 +1218,7 @@ class HostModelView(DefaultModelView):
         'labels': _render_labels,
         'inventory': format_inventory,
         'cache': format_cache,
-        'cmdb_templates': _render_cmdb_template,
+        'cmdb_templates': _render_cmdb_template_preview,
         'last_import_seen': _render_datetime,
         'last_import_sync': _render_datetime,
         'create_time': _render_datetime,
