@@ -2,31 +2,128 @@
 
 {% block body %}
 <style>
+.home-hero {
+  background: linear-gradient(135deg, #2c3e50 0%, #4c6586 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 2rem 2.25rem;
+  margin: 0.5rem 0 1.5rem;
+  box-shadow: 0 8px 24px rgba(44, 62, 80, 0.18);
+}
+.home-hero h1 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  font-size: 1.9rem;
+}
+.home-hero p {
+  margin: 0.4rem 0 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+.home-hero .build-pill {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+}
+
+.home-card {
+  background: #fff;
+  border: 1px solid #e6e9ec;
+  border-radius: 12px;
+  padding: 1.25rem 1.25rem 1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+.home-card h2,
+.home-card h4 {
+  margin-top: 0;
+  font-weight: 600;
+}
+.home-card h2 {
+  font-size: 1.15rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #eef0f3;
+  padding-bottom: 0.5rem;
+}
+.home-card h4 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.links-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.links-list li {
+  padding: 0.35rem 0;
+}
+.links-list a {
+  color: #2c3e50;
+  text-decoration: none;
+  font-weight: 500;
+}
+.links-list a:hover {
+  color: #3498db;
+}
+
+/* Filter chip row */
+.filter-chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid #d7dbe0;
+  background: #f8f9fa;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  user-select: none;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.filter-chip input {
+  margin: 0;
+  accent-color: currentColor;
+}
+.filter-chip.active-feat { color: #007bff; border-color: #bcd7f6; background: #eaf3fd; }
+.filter-chip.active-fix  { color: #28a745; border-color: #bfe2c7; background: #ecf8ef; }
+.filter-chip.active-inc  { color: #dc3545; border-color: #f0c2c7; background: #fcecee; }
+.filter-chip.active-sec  { color: #fd7e14; border-color: #ffd6b3; background: #fff3e8; }
+.filter-chip.active-oth  { color: #6c757d; border-color: #d7dbe0; background: #f8f9fa; }
+.filter-chip.is-off { opacity: 0.45; }
+
+.filter-toggle-all {
+  background: #2c3e50;
+  color: #fff;
+  border: none;
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.filter-toggle-all:hover { background: #1e2b38; }
+
 /* Ensure changelog list items are properly spaced */
 #changelog-content li {
   margin-bottom: 5px;
-  line-height: 1.4;
-}
-
-/* Filter section styling */
-#changelog-filter {
-  margin-bottom: 15px;
-}
-
-/* Checkbox styling */
-input[type="checkbox"] {
-  margin-right: 5px;
-}
-
-/* Ensure proper spacing for filter labels */
-label {
-  font-size: 14px;
+  line-height: 1.45;
 }
 
 /* Collapsible version sections: tighter layout so the page does not
-   scroll forever when older versions are present. The inner body is
-   wrapped in .changelog-body so paragraphs and bullets render with
-   proper spacing even when the surrounding admin theme resets them. */
+   scroll forever when older versions are present. */
 #changelog-content details {
   margin: 0.25rem 0 0.5rem;
   border-left: 3px solid #dee2e6;
@@ -66,17 +163,44 @@ label {
   display: block;
   padding: 0.25rem 0 0.25rem 1rem;
 }
-#changelog-content .changelog-body p {
-  margin: 0.25rem 0;
-}
+#changelog-content .changelog-body p { margin: 0.25rem 0; }
 #changelog-content .changelog-body ul {
   margin: 0.25rem 0 0.5rem;
   padding-left: 1.25rem;
   list-style: disc;
 }
-#changelog-content .changelog-body li {
-  margin: 0.1rem 0;
+#changelog-content .changelog-body li { margin: 0.1rem 0; }
+
+.notice-box {
+  background-color: #fff8e1;
+  border: 1px solid #ffd54f;
+  border-left: 4px solid #f9a825;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 10px;
 }
+.notice-box .notice-confirm {
+  background: #f9a825;
+  color: #212529;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.notice-box .notice-confirm:hover { background: #e69100; }
+
+.previous-releases a {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #2c3e50;
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+.previous-releases a:hover { background: #dce3eb; }
 </style>
 
 <script>
@@ -90,7 +214,6 @@ function confirmNotice(noticeId) {
   const el = document.getElementById('notice-' + noticeId);
   if (el) el.style.display = 'none';
 
-  // Hide section header if all notices are gone
   const remaining = document.querySelectorAll('.notice-box');
   const anyVisible = Array.from(remaining).some(n => n.style.display !== 'none');
   if (!anyVisible) {
@@ -117,67 +240,55 @@ function applyConfirmedNotices() {
 document.addEventListener('DOMContentLoaded', function() {
   applyConfirmedNotices();
 
-  // Style changelog entries and add filter functionality
   styleAndInitializeFilter();
-  
-  // Restore filter settings from localStorage
   restoreFilterSettings();
-  
-  // Add event listeners to filter checkboxes
-  document.getElementById('filter-feat').addEventListener('change', function() {
-    saveFilterSettings();
-    filterChangelog();
-  });
-  document.getElementById('filter-fix').addEventListener('change', function() {
-    saveFilterSettings();
-    filterChangelog();
-  });
-  document.getElementById('filter-incompatible').addEventListener('change', function() {
-    saveFilterSettings();
-    filterChangelog();
-  });
-  // Without this listener the SEC checkbox toggled the state but never
-  // re-ran the filter — so SEC items only re-appeared after toggling
-  // another checkbox (INCOMPATIBLE in practice), which made it look
-  // like INCOMPATIBLE controlled SEC visibility.
-  document.getElementById('filter-sec').addEventListener('change', function() {
-    saveFilterSettings();
-    filterChangelog();
-  });
-  document.getElementById('filter-other').addEventListener('change', function() {
-    saveFilterSettings();
-    filterChangelog();
-  });
-  
-  // Apply initial filter after restoring settings
+
+  ['filter-feat', 'filter-fix', 'filter-incompatible', 'filter-sec', 'filter-other']
+    .forEach(function(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', function() {
+        saveFilterSettings();
+        syncChipStates();
+        filterChangelog();
+      });
+    });
+
+  syncChipStates();
   filterChangelog();
 });
+
+function syncChipStates() {
+  document.querySelectorAll('.filter-chip').forEach(function(chip) {
+    const cb = chip.querySelector('input[type="checkbox"]');
+    if (!cb) return;
+    chip.classList.toggle('is-off', !cb.checked);
+  });
+}
 
 function styleAndInitializeFilter() {
   const listItems = document.querySelectorAll('#changelog-content li');
   listItems.forEach(function(item) {
     const text = item.textContent.trim();
-    
-    // Add data attributes for filtering
     if (text.includes('INCOMPATIBLE')) {
       item.setAttribute('data-type', 'incompatible');
-      item.style.color = '#dc3545'; // Red
+      item.style.color = '#dc3545';
       item.style.fontWeight = 'bold';
     } else if (text.match(/^[^:]*FIX:/)) {
       item.setAttribute('data-type', 'fix');
-      item.style.color = '#28a745'; // Green
+      item.style.color = '#28a745';
       item.style.fontWeight = 'bold';
     } else if (text.match(/^[^:]*Feat:/i)) {
       item.setAttribute('data-type', 'feat');
-      item.style.color = '#007bff'; // Blue
+      item.style.color = '#007bff';
       item.style.fontWeight = 'bold';
     } else if (text.match(/^[^:]*SEC:/i)) {
       item.setAttribute('data-type', 'sec');
-      item.style.color = '#fd7e14'; // Orange
+      item.style.color = '#fd7e14';
       item.style.fontWeight = 'bold';
     } else {
       item.setAttribute('data-type', 'other');
-      item.style.color = '#6c757d'; // Gray
+      item.style.color = '#6c757d';
     }
   });
 }
@@ -204,7 +315,6 @@ function restoreFilterSettings() {
       document.getElementById('filter-sec').checked = settings.sec !== undefined ? settings.sec : true;
       document.getElementById('filter-other').checked = settings.other !== undefined ? settings.other : true;
     } catch (e) {
-      // If parsing fails, use defaults
       console.log('Failed to restore filter settings');
     }
   }
@@ -221,13 +331,11 @@ function filterChangelog() {
   listItems.forEach(function(item) {
     const type = item.getAttribute('data-type');
     let show = false;
-
     if (type === 'feat' && showFeat) show = true;
     if (type === 'fix' && showFix) show = true;
     if (type === 'incompatible' && showIncompatible) show = true;
     if (type === 'sec' && showSec) show = true;
     if (type === 'other' && showOther) show = true;
-    
     item.style.display = show ? 'block' : 'none';
   });
 }
@@ -235,48 +343,41 @@ function filterChangelog() {
 function toggleAllFilters() {
   const checkboxes = ['filter-feat', 'filter-fix', 'filter-incompatible', 'filter-sec', 'filter-other'];
   const anyUnchecked = checkboxes.some(id => !document.getElementById(id).checked);
-  
-  // If any is unchecked, check all. If all are checked, uncheck all.
   checkboxes.forEach(id => {
     document.getElementById(id).checked = anyUnchecked;
   });
-  
   saveFilterSettings();
+  syncChipStates();
   filterChangelog();
 }
 </script>
-<h1>Welcome to cmdbsyncer</h1>
-<p>
-  This tool is <b>Open Source</b> and developed by <b>Kuhn &amp; Rue&szlig; GmbH</b> in Germany.
-</p>
 
-<div class="row mt-4">
-  <!-- Left Column: Links -->
+<div class="home-hero">
+  <h1>Welcome to cmdbsyncer</h1>
+  <p>Open Source — built by <strong>Kuhn &amp; Rue&szlig; GmbH</strong> in Germany.</p>
+  <span class="build-pill">Build {{ config.BUILD_DATE }}</span>
+</div>
+
+<div class="row">
+  <!-- Left Column: Links + Notices -->
   <div class="col-md-4">
-    <h2>Links</h2>
-    <ul>
-      <li><a href="https://cmdbsyncer.de">🏠 Homepage</a></li>
-      <li><a href="https://docs.cmdbsyncer.de">📚 Documentation</a></li>
-      <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">⚙️ Source Code</a></li>
-      <li><a href="https://kuhn-ruess.de">🏢 Kuhn & Rueß GmbH</a></li>
-    </ul>
-    
-    <p>
-      Build: {{config.BUILD_DATE}}
-    </p>
+    <div class="home-card">
+      <h2>Links</h2>
+      <ul class="links-list">
+        <li><a href="https://cmdbsyncer.de">🏠 Homepage</a></li>
+        <li><a href="https://docs.cmdbsyncer.de">📚 Documentation</a></li>
+        <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">⚙️ Source Code</a></li>
+        <li><a href="https://kuhn-ruess.de">🏢 Kuhn &amp; Rue&szlig; GmbH</a></li>
+      </ul>
+    </div>
 
     {% if notices %}
-    <div id="notices-section" style="margin-top: 20px;">
+    <div id="notices-section" class="home-card">
       <h4>Messages</h4>
       {% for notice in notices %}
-      <div id="notice-{{ notice.id }}"
-           class="notice-box"
-           style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 0.375rem; padding: 0.75rem 1rem; margin-bottom: 10px;">
+      <div id="notice-{{ notice.id }}" class="notice-box">
         <div style="white-space: pre-wrap; margin-bottom: 8px;">{{ notice.content|safe }}</div>
-        <button onclick="confirmNotice('{{ notice.id }}')"
-                style="background: #ffc107; color: #212529; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-weight: bold;">
-          Confirm
-        </button>
+        <button class="notice-confirm" onclick="confirmNotice('{{ notice.id }}')">Confirm</button>
       </div>
       {% endfor %}
     </div>
@@ -286,51 +387,47 @@ function toggleAllFilters() {
   <!-- Right Column: Changelog -->
   <div class="col-md-8">
     {% if changelog_html %}
-    <h2>Changelog</h2>
+    <div class="home-card">
+      <h2>Changelog</h2>
 
-    <!-- Changelog Filter -->
-    <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
-      <h5>Filter Changelog:</h5>
-      <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-        <label style="display: flex; align-items: center; cursor: pointer;">
-          <input type="checkbox" id="filter-feat" checked style="margin-right: 5px;">
-          <span style="color: #007bff; font-weight: bold;">FEAT</span>
+      <h4 style="font-size: 0.9rem; color: #6c757d; font-weight: 600;">Filter</h4>
+      <div class="filter-chip-row" style="margin-bottom: 1rem;">
+        <label class="filter-chip active-feat">
+          <input type="checkbox" id="filter-feat" checked>
+          <span>FEAT</span>
         </label>
-        <label style="display: flex; align-items: center; cursor: pointer;">
-          <input type="checkbox" id="filter-fix" checked style="margin-right: 5px;">
-          <span style="color: #28a745; font-weight: bold;">FIX</span>
+        <label class="filter-chip active-fix">
+          <input type="checkbox" id="filter-fix" checked>
+          <span>FIX</span>
         </label>
-        <label style="display: flex; align-items: center; cursor: pointer;">
-          <input type="checkbox" id="filter-incompatible" checked style="margin-right: 5px;">
-          <span style="color: #dc3545; font-weight: bold;">INCOMPATIBLE</span>
+        <label class="filter-chip active-inc">
+          <input type="checkbox" id="filter-incompatible" checked>
+          <span>INCOMPATIBLE</span>
         </label>
-        <label style="display: flex; align-items: center; cursor: pointer;">
-          <input type="checkbox" id="filter-sec" checked style="margin-right: 5px;">
-          <span style="color: #fd7e14; font-weight: bold;">SEC</span>
+        <label class="filter-chip active-sec">
+          <input type="checkbox" id="filter-sec" checked>
+          <span>SEC</span>
         </label>
-        <label style="display: flex; align-items: center; cursor: pointer;">
-          <input type="checkbox" id="filter-other" checked style="margin-right: 5px;">
-          <span style="color: #6c757d; font-weight: bold;">OTHER</span>
+        <label class="filter-chip active-oth">
+          <input type="checkbox" id="filter-other" checked>
+          <span>OTHER</span>
         </label>
-        <button onclick="toggleAllFilters()" style="background: #6c757d; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer;">
-          Alle umschalten
-        </button>
+        <button class="filter-toggle-all" onclick="toggleAllFilters()">Toggle all</button>
       </div>
-    </div>
 
-    <div id="changelog-content" style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 1rem; margin: 1rem 0;">
-      {{ changelog_html|safe }}
-    </div>
+      <div id="changelog-content" style="background: #f8f9fa; border: 1px solid #eef0f3; border-radius: 8px; padding: 1rem;">
+        {{ changelog_html|safe }}
+      </div>
 
-    {% if older_changelogs %}
-    <div style="margin: 0.5rem 0 1rem;">
-      <strong>Previous releases:</strong>
-      {% for entry in older_changelogs %}
-        <a href="{{ url_for('admin.changelog_archive', filename=entry) }}"
-           style="margin-right: 0.5rem;">{{ entry[:-3] }}</a>
-      {% endfor %}
+      {% if older_changelogs %}
+      <div class="previous-releases" style="margin-top: 0.75rem;">
+        <strong style="margin-right: 0.25rem;">Previous releases:</strong>
+        {% for entry in older_changelogs %}
+          <a href="{{ url_for('admin.changelog_archive', filename=entry) }}">{{ entry[:-3] }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
     {% endif %}
   </div>
 </div>
