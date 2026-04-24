@@ -349,6 +349,13 @@ from application.views.license import LicenseView
 admin.add_view(LicenseView(name="License", endpoint="license", category="Settings",
                            menu_icon_type='fa', menu_icon_value='fa-id-card'))
 
+from application.models.notification_channel import NotificationChannel
+from application.views.notification_channel import NotificationChannelView
+admin.add_view(NotificationChannelView(
+    NotificationChannel, name="Channels",
+    category="Notifications",
+    menu_icon_type='fa', menu_icon_value='fa-paper-plane'))
+
 # Give the enterprise package one chance to inject its own admin views
 # (Secrets Manager, JSON logs UI, …). No-op when no valid license is
 # installed, so community builds never expose enterprise menu entries.
