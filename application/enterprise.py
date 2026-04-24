@@ -21,6 +21,11 @@ load_status = None  # pylint: disable=invalid-name
 
 def _report(message):
     """Write enterprise load status to stderr so Docker/container logs see it."""
+    # ``./cmdbsyncer <command>`` sets CMDBSYNCER_CLI so command output isn't
+    # preceded by a banner line — the web/worker processes keep the banner.
+    import os  # pylint: disable=import-outside-toplevel
+    if os.environ.get("CMDBSYNCER_CLI") == "1":
+        return
     print(f"[cmdbsyncer-enterprise] {message}", file=sys.stderr, flush=True)
 
 

@@ -4,6 +4,14 @@
 import os
 import sys
 import logging
+
+# ``application.cli`` cannot set CMDBSYNCER_CLI before this module loads —
+# importing ``application.cli`` triggers ``application/__init__.py`` first.
+# Detect the CLI entry point here from ``sys.argv[0]`` so enterprise startup
+# can stay quiet (no banner, no ECS JSON) when the user runs
+# ``./cmdbsyncer <command>`` or the installed ``cmdbsyncer`` console script.
+if os.path.basename(sys.argv[0] or '').removesuffix('.py') == 'cmdbsyncer':
+    os.environ.setdefault('CMDBSYNCER_CLI', '1')
 import importlib
 import pkgutil
 import warnings
@@ -182,7 +190,14 @@ plugin_register = []
 # before the bulk of the factory so an enterprise build can swap in a
 # structured / JSON log pipeline before blueprint/admin registration.
 enterprise.load_package()
-enterprise_hook('configure_logging', app, logger)
+# CLI invocations (``./cmdbsyncer <command>``) set CMDBSYNCER_CLI so the
+# ECS JSON pipeline stays off — otherwise every command would print pages
+# of blueprint/audit INFO lines before its own output. Web/worker startup
+# leaves the env var unset and keeps structured logging.
+if os.environ.get('CMDBSYNCER_CLI') == '1':
+    logging.getLogger().setLevel(logging.WARNING)
+else:
+    enterprise_hook('configure_logging', app, logger)
 
 
 from application.views.default import IndexView, DefaultModelView

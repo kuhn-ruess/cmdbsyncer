@@ -12,6 +12,11 @@ import warnings
 def main():
     """Run the cmdbsyncer Flask Click CLI."""
     os.environ.setdefault("config", "prod")
+    # Mark the process as a CLI invocation before importing the app factory.
+    # ``application/__init__.py`` and ``application/enterprise.py`` check this
+    # to suppress their startup banner / ECS JSON log pipeline — none of that
+    # noise belongs in front of command output like ``checkmk export_hosts``.
+    os.environ["CMDBSYNCER_CLI"] = "1"
     # cmdbsyncer expects to be run from a working directory that contains
     # ``local_config.py``; in source checkouts that file is next to
     # ``./cmdbsyncer``, so cwd is already on sys.path. PyPI console scripts do
@@ -31,7 +36,7 @@ def main():
 
         if len(sys.argv) == 1:
             print(f"CMDB Syncer Version: {DISPLAY_VERSION}")
-            return
+            sys.argv.append("--help")
         # AppGroup commands re-resolve the app via ScriptInfo.load_app(), which
         # otherwise scans for FLASK_APP / app.py / wsgi.py. PyPI installs have
         # none of those in the cwd, so hand Click a ScriptInfo that returns the
