@@ -4,13 +4,17 @@ Maintenance Module
 """
 import os
 import datetime
+import shutil
 import string
 import secrets
+import subprocess
+from pathlib import Path
 from pprint import pformat
 from cryptography.fernet import Fernet
 import click
 from mongoengine.errors import DoesNotExist, ValidationError
 from application import app, logger, log
+from application._version import __version__ as _SYNCER_VERSION
 from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
 from application.plugins.checkmk.poolfolder import remove_seat
@@ -373,6 +377,74 @@ def self_configure():
     # Migrate Users
     print("Migrate users")
     User.migrate_missing_names()
+
+#.
+#   .-- Command: Install default Ansible playbooks
+@_cli_sys.command('install_playbooks')
+@click.argument('target', type=click.Path(file_okay=False, resolve_path=True))
+@click.option('--version', default=None,
+              help="Git ref to fetch. Defaults to tag v<installed-version>.")
+@click.option('--repo', default='https://github.com/kuhn-ruess/cmdbsyncer',
+              show_default=True,
+              help="Source repository for the playbooks.")
+@click.option('--force', is_flag=True,
+              help="Overwrite TARGET if it already exists.")
+def install_playbooks(target, version, repo, force):
+    """
+    Copy the default Ansible playbooks, roles and inventory helpers
+    into TARGET. Intended for pip installs of cmdbsyncer, where the
+    Python package does not ship the playbook sources.
+
+    Example: cmdbsyncer sys install_playbooks /opt/cmdbsyncer/ansible
+    """
+    print(f"{CC.HEADER} ***** Install Ansible playbooks ***** {CC.ENDC}")
+    dest = Path(target)
+    if dest.exists():
+        if not force:
+            print(f"{CC.FAIL}Refusing to overwrite existing {dest} "
+                  f"(use --force).{CC.ENDC}")
+            raise SystemExit(1)
+        shutil.rmtree(dest)
+
+    # Strip any LTS suffix (e.g. "3.12.13-LTS4") — the upstream tag is
+    # always the plain v<major>.<minor>.<patch>.
+    if not version:
+        version = f"v{_SYNCER_VERSION.split('-', 1)[0]}"
+
+    tmp = dest.with_suffix('.clone.tmp')
+    if tmp.exists():
+        shutil.rmtree(tmp)
+
+    print(f"{CC.OKBLUE}  * {CC.ENDC}Cloning {repo} @ {version} …")
+    try:
+        subprocess.check_call(
+            ['git', 'clone', '--depth', '1', '--filter=blob:none',
+             '--no-checkout', '--branch', version, repo, str(tmp)],
+        )
+        subprocess.check_call(
+            ['git', '-C', str(tmp), 'sparse-checkout', 'init', '--cone'],
+        )
+        subprocess.check_call(
+            ['git', '-C', str(tmp), 'sparse-checkout', 'set', 'ansible'],
+        )
+        subprocess.check_call(['git', '-C', str(tmp), 'checkout'])
+    except subprocess.CalledProcessError as exp:
+        shutil.rmtree(tmp, ignore_errors=True)
+        print(f"{CC.FAIL}Clone failed: {exp}{CC.ENDC}")
+        raise SystemExit(1) from exp
+
+    ansible_src = tmp / 'ansible'
+    if not ansible_src.is_dir():
+        shutil.rmtree(tmp, ignore_errors=True)
+        print(f"{CC.FAIL}Source {repo}@{version} has no ansible/ folder "
+              f"— wrong branch?{CC.ENDC}")
+        raise SystemExit(1)
+
+    shutil.move(str(ansible_src), str(dest))
+    shutil.rmtree(tmp, ignore_errors=True)
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}Installed to {dest}")
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}Install Ansible deps from the repo root: "
+          f"pip install -r requirements-ansible.txt")
 
 #.
 register_cronjob("Syncer: Maintenence", maintenance)
