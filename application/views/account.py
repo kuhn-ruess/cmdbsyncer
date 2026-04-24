@@ -1,20 +1,29 @@
 """
 Account Model View
 """
+# pylint: disable=fixme
+from flask import request, url_for
 from markupsafe import Markup, escape
 from mongoengine.errors import OperationError
 from flask_login import current_user
+from flask_admin.base import expose
 from flask_admin.form import rules
 from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from wtforms import StringField
 from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
 from application.views.default import DefaultModelView
+from application.views._form_sections import modern_form, section
 from application.models.account import CustomEntry, Account
 from application.helpers.plugins import discover_plugins
-from application.plugins.checkmk.models import CheckmkObjectCache # TODO: Make Plugin Compatible
+from application.plugins.checkmk.models import CheckmkObjectCache  # TODO: Make Plugin Compatible
 from application.docu_links import docu_links
-from mongoengine.queryset.visitor import Q
+
+_DOCS_BADGE = rules.HTML(
+    f'<a href="{docu_links["accounts"]}" target="_blank" '
+    f'class="badge badge-light" style="margin-bottom: 8px;">'
+    f'<i class="fa fa-info-circle"></i> Documentation</a>'
+)
 
 def _render_custom_data(_view, _context, model, _name):
     """
@@ -71,14 +80,22 @@ class ChildAccountModelView(DefaultModelView):
     )
 
     form_rules = [
-        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["accounts"]}"'\
-                        'target="_blank" class="badge badge-light">Documentation</a>'),
-        rules.FieldSet(('name', 'parent'),'Settings'),
-        rules.FieldSet(('is_object', 'object_type'), "Object Settings"),
-        rules.Header("Addional configuration"),
-        rules.Field('custom_fields'),
-        rules.Field('plugin_settings'),
-        rules.Field('enabled'),
+        _DOCS_BADGE,
+        *modern_form(
+            section('1', 'main', 'Basics',
+                    'Name, parent account and activation.',
+                    [rules.Field('name'),
+                     rules.Field('parent'),
+                     rules.Field('enabled')]),
+            section('2', 'cond', 'Object Settings',
+                    'Which object types this child account covers.',
+                    [rules.Field('is_object'),
+                     rules.Field('object_type')]),
+            section('3', 'out', 'Additional Configuration',
+                    'Freeform custom fields and per-plugin settings.',
+                    [rules.Field('custom_fields'),
+                     rules.Field('plugin_settings')]),
+        ),
     ]
 
 
@@ -146,16 +163,29 @@ class AccountModelView(DefaultModelView):
 
 
     form_rules = [
-        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["accounts"]}"'\
-                        'target="_blank" class="badge badge-light">Documentation</a>'),
-        rules.FieldSet(('name', 'type'),'Basics'),
-        rules.FieldSet(('is_master',), "Account Settings"),
-        rules.FieldSet(('is_object', 'cmdb_object', 'object_type'), "Object Settings"),
-        rules.FieldSet(('address', 'username', 'password'), "Access Config"),
-        rules.Header("Addional configuration"),
-        rules.Field('custom_fields'),
-        rules.Field('plugin_settings'),
-        rules.Field('enabled'),
+        _DOCS_BADGE,
+        *modern_form(
+            section('1', 'main', 'Basics',
+                    'Name, plugin type and activation.',
+                    [rules.Field('name'),
+                     rules.Field('type'),
+                     rules.Field('is_master'),
+                     rules.Field('enabled')]),
+            section('2', 'cond', 'Access',
+                    'How the syncer connects to this system.',
+                    [rules.Field('address'),
+                     rules.Field('username'),
+                     rules.Field('password')]),
+            section('3', 'out', 'Object Settings',
+                    'Which object types this account produces or targets.',
+                    [rules.Field('is_object'),
+                     rules.Field('cmdb_object'),
+                     rules.Field('object_type')]),
+            section('4', 'aux', 'Additional Configuration',
+                    'Freeform custom fields and per-plugin overrides.',
+                    [rules.Field('custom_fields'),
+                     rules.Field('plugin_settings')]),
+        ),
     ]
 
 
@@ -180,6 +210,80 @@ class AccountModelView(DefaultModelView):
         'password': {'autocomplete': 'new-password' },
     }
 
+    @expose('/new/', methods=('GET', 'POST'))
+    def create_view(self):
+        """
+        Two-step create flow — pick the plugin type first so the custom
+        fields can be pre-seeded from the plugin's
+        `account_custom_field_presets` before the user starts typing.
+        Skipped on POST (the main create form posts back to this same
+        URL) and when `?type=...` is already in the query string.
+        """
+        if request.method == 'GET' and not request.args.get('type'):
+            # pylint: disable=import-outside-toplevel
+            from application.models.account import get_account_types
+            types = sorted(
+                (t for t in get_account_types() if isinstance(t, tuple)),
+                key=lambda t: (t[1] or t[0]).lower(),
+            )
+            # self.render() wires in Flask-Admin's template context
+            # (admin_base_template, admin_view, admin_static). Plain
+            # render_template() would crash because admin/master.html
+            # extends `admin_base_template`, which is only defined in
+            # the admin context.
+            return self.render(
+                'admin/account_pick_type.html',
+                types=types,
+                next_url=url_for('.create_view'),
+            )
+        return super().create_view()
+
+    def create_form(self, obj=None):
+        """Pre-fill the account form based on the plugin type from the URL.
+
+        `on_model_change` already merges the same preset data at save
+        time, but seeding the form here means the user sees the
+        defaults immediately — they can tweak or delete rows before
+        ever hitting Save.
+        """
+        form = super().create_form(obj)
+
+        account_type = (request.args.get('type') or '').strip()
+        if not account_type:
+            return form
+
+        # Default the `type` field to the picked plugin.
+        if hasattr(form, 'type') and not form.type.data:
+            form.type.data = account_type
+
+        plugins = discover_plugins() or {}
+        plugin_data = plugins.get(account_type) or {}
+
+        # Copy main_presets (address/username/…) onto the form so the
+        # inputs show the defaults.
+        for field, content in (plugin_data.get('account_presets') or {}).items():
+            if hasattr(form, field):
+                field_obj = getattr(form, field)
+                if not field_obj.data:
+                    field_obj.data = content
+
+        # Seed custom_fields from the plugin's preset dict. Skip keys
+        # the user already added manually (e.g. on validation redraw).
+        presets = plugin_data.get('account_custom_field_presets') or {}
+        if presets and hasattr(form, 'custom_fields'):
+            existing = {
+                str(getattr(entry.form, 'name', None).data or '').strip()
+                for entry in form.custom_fields.entries
+                if getattr(entry.form, 'name', None)
+            }
+            for key, value in presets.items():
+                if key in existing:
+                    continue
+                form.custom_fields.append_entry(
+                    {'name': key, 'value': value}
+                )
+
+        return form
 
     def on_model_change(self, form, model, is_created):
         """
