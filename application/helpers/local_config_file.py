@@ -213,46 +213,58 @@ def _read(path):
 
 
 def _atomic_write(path, content):
-    tmp = path + '.tmp'
-    try:
-        with open(tmp, 'w', encoding='utf-8') as fh:
-            fh.write(content)
-        os.replace(tmp, path)
-    except PermissionError as exp:
-        # Best-effort cleanup of the tempfile; don't mask the original
-        # error if removing the tmp also fails.
+    """
+    Replace `path` with `content` as safely as the filesystem permissions allow.
+
+    Preferred path: sibling tempfile + ``os.replace`` — crash-safe, but needs
+    write access on the parent directory. Common deployments only grant write
+    access on ``local_config.py`` itself (not on ``/srv``), so fall back to an
+    in-place truncate+write on the existing file when the directory isn't
+    writable. The in-place path drops atomicity but avoids forcing operators
+    to widen permissions on the app root just so the admin UI can edit one
+    file.
+    """
+    directory = os.path.dirname(path) or '.'
+    if os.access(directory, os.W_OK):
+        tmp = path + '.tmp'
         try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        directory = os.path.dirname(path) or '.'
+            with open(tmp, 'w', encoding='utf-8') as fh:
+                fh.write(content)
+            os.replace(tmp, path)
+            return
+        except OSError as exp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            if not isinstance(exp, PermissionError):
+                raise LocalConfigError(f"Cannot write {path}: {exp}") from exp
+            # Directory looked writable but the rename was refused (e.g. the
+            # file itself is read-only or owned by another user). Fall through
+            # to the in-place attempt so the operator gets the file-level
+            # error message instead of a confusing directory hint.
+
+    try:
+        with open(path, 'w', encoding='utf-8') as fh:
+            fh.write(content)
+    except PermissionError as exp:
         raise LocalConfigError(
             f"Cannot write {path}: {exp.strerror}. "
-            f"Make sure the syncer OS user can write to {directory!r} "
-            f"and to the file itself "
-            f"(e.g. `chown uwsgi:uwsgi {path} {directory}` or "
-            f"`chmod u+w {path}`)."
+            f"Grant the syncer OS user write access on the file itself "
+            f"(e.g. `chown uwsgi:uwsgi {path}` or `chmod u+w {path}`) — "
+            f"{directory!r} does not need to be writable."
         ) from exp
     except OSError as exp:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise LocalConfigError(
-            f"Cannot write {path}: {exp}"
-        ) from exp
+        raise LocalConfigError(f"Cannot write {path}: {exp}") from exp
 
 
 def is_writable(path):
     """
-    True if the current process can atomically update `path` (needs
-    write access on both the file and its parent directory for the
-    tempfile + os.replace dance).
+    True if the current process can update `path` at all — either via the
+    preferred atomic tempfile+rename (needs directory write access) or via
+    an in-place rewrite of an existing file (needs only file write access).
     """
     directory = os.path.dirname(path) or '.'
-    if os.path.isfile(path):
-        if not os.access(path, os.W_OK):
-            return False
-    if not os.access(directory, os.W_OK):
-        return False
-    return True
+    if os.access(directory, os.W_OK):
+        return True
+    return os.path.isfile(path) and os.access(path, os.W_OK)
