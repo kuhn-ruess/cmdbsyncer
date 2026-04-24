@@ -334,33 +334,54 @@ class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
     """
     Design for Template Labels in Views
     """
+    _INTRO = (
+        '<p class="text-muted small" style="margin-bottom:6px;">'
+        '<i class="fa fa-info-circle"></i> '
+        'These labels originate from the templates assigned above. They '
+        'are read-only here and are merged into the host labels at export '
+        'time — manual labels below win on conflicts.'
+        '</p>'
+    )
+
     def __call__(self, field, **kwargs):
         model = field.object_data
         if not model or not hasattr(model, 'cmdb_templates') or not model.cmdb_templates:
             return Markup(
-                '<div class="alert alert-info">'
-                'No Templates selected</div>'
+                self._INTRO
+                + '<div class="alert alert-info">'
+                'No templates assigned — no template labels apply.'
+                '</div>'
             )
 
-        html = ''
+        html = self._INTRO
+        had_entries = False
         for template in model.cmdb_templates:
             if not hasattr(template, 'labels') or not template.labels:
                 continue
+            had_entries = True
             entries = [
                 f'<span class="badge badge-primary">{escape(key)}</span>'
                 f':<span class="badge badge-info">{escape(value)}</span>'
                 for key, value in template.labels.items()
             ]
             html += (
-                f'<div class="card" style="margin-bottom:4px">'
-                f'<div class="card-header p-1"><strong>{escape(template.hostname)}</strong></div>'
-                f'<div class="card-body p-2">{" ".join(entries)}</div></div>'
+                f'<div class="card" style="margin-bottom:4px; '
+                f'border-left: 3px solid #3498db;">'
+                f'<div class="card-header p-1" '
+                f'style="background-color:#eef6fc;">'
+                f'<i class="fa fa-clone"></i> '
+                f'<strong>{escape(template.hostname)}</strong>'
+                f'</div>'
+                f'<div class="card-body p-2">{" ".join(entries)}</div>'
+                f'</div>'
             )
-        if html:
+        if had_entries:
             return Markup(html)
         return Markup(
-            '<div class="alert alert-warning">'
-            'No Labels in Templates</div>'
+            self._INTRO
+            + '<div class="alert alert-warning">'
+            'Assigned templates carry no labels.'
+            '</div>'
         )
 
 class StaticTemplateLabelField(Field):
@@ -1291,25 +1312,149 @@ class HostModelView(DefaultModelView):
         'inventory': StaticLabelField,
         'log': StaticLogField,
         'labels': HiddenField,
-
+        # Hosts created/edited here are always of type 'host'. Keep the
+        # field in the form as hidden so its value round-trips cleanly,
+        # then pin it to 'host' in on_model_change.
+        'object_type': HiddenField,
     }
 
     form_args = {
         'cmdb_templates': {
-            'validators': [Optional()]
-        }
+            'label': 'Assigned Templates',
+            'validators': [Optional()],
+        },
+        'labels_from_template': {
+            'label': 'Labels from Templates',
+        },
+        'cmdb_fields': {
+            'label': 'Manual Labels',
+        },
     }
 
     form_rules = [
-        rules.FieldSet((
-            rules.Field('hostname'),
-            rules.NestedRule((
-                'object_type', 'available',
-                'cmdb_templates', 'labels_from_template',
-            )),
-            ), "CMDB Options"),
-        rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
-        #rules.FieldSet(('inventory', 'log'), "Data"),
+        rules.FieldSet(
+            (
+                rules.Field('hostname'),
+                rules.Field('available'),
+            ),
+            "Object",
+        ),
+        rules.FieldSet(
+            (
+                rules.HTML('''
+<style>
+/* Flask-Admin inline-field-list DOM for cmdb_fields (bootstrap4 template):
+     <label for="cmdb_fields">Manual Labels</label>
+     <div class="inline-field" id="cmdb_fields">
+       <div class="inline-field-list">
+         <div class="inline-field card card-body bg-light mb-3" id="cmdb_fields-N">
+           <legend><small>Manual Labels #N <div class="pull-right">[X]</div></small></legend>
+           <div class="clearfix"></div>
+           <div class="form-row">
+             <div class="form-group"><label>…</label><input class="form-control"></div>
+             <div class="form-group"><label>…</label><input class="form-control"></div>
+           </div>
+         </div>
+         ...
+       </div>
+       <a id="cmdb_fields-button" class="btn btn-primary">Add Manual Labels</a>
+     </div>
+   Scoped so generic Flask-Admin forms are unaffected. */
+
+/* Outer field label "Manual Labels" — the FieldSet already names the
+   section; drop this redundant label. */
+label[for="cmdb_fields"] { display: none !important; }
+
+#cmdb_fields .inline-field { position: relative; }
+
+/* Flatten each row card to a plain padded line. */
+#cmdb_fields .inline-field.card {
+    margin: 0 !important;
+    padding: 2px 24px 2px 6px !important;  /* right padding = delete-X area */
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+    border-radius: 0 !important;
+}
+
+/* Pin the delete-X to the top-right corner and hide the "#N" caption
+   while the X stays interactive. */
+#cmdb_fields .inline-field > legend {
+    position: absolute !important;
+    top: 2px !important;
+    right: 2px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    width: auto !important;
+    line-height: 1 !important;
+    font-size: 0 !important;  /* kills "Manual Labels #N" caption */
+}
+#cmdb_fields .inline-field > legend .pull-right {
+    font-size: 0.95rem !important;
+    float: none !important;
+    position: static !important;
+}
+#cmdb_fields .inline-field > legend small { font-size: 0 !important; }
+#cmdb_fields .inline-field > legend small .pull-right { font-size: 0.95rem !important; }
+#cmdb_fields .inline-field > .clearfix { display: none !important; }
+
+/* Form-row: horizontal, no wrap, no vertical gap. */
+#cmdb_fields .form-row {
+    margin: 0 !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    width: 100%;
+}
+#cmdb_fields .form-group { margin: 0 !important; padding: 0 !important; }
+#cmdb_fields .form-group > label { display: none !important; }
+
+/* Field name shrinks to its content width, field value consumes the
+   remaining space. `:nth-of-type` instead of `:first/last-child` so the
+   selector still binds if Flask-Admin adds a sibling node (error block
+   etc.). */
+#cmdb_fields .form-row > .form-group:nth-of-type(1) { flex: 0 0 auto; }
+#cmdb_fields .form-row > .form-group:nth-of-type(2) {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 0 !important;
+}
+#cmdb_fields .form-row > .form-group:nth-of-type(2) input {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+#cmdb_fields input { padding: 2px 7px !important; height: auto !important; }
+
+/* Two-column grid on wide screens, single column on narrow. */
+#cmdb_fields .inline-field-list {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2px 16px !important;
+}
+@media (max-width: 992px) {
+    #cmdb_fields .inline-field-list { grid-template-columns: 1fr !important; }
+}
+#cmdb_fields > a.btn { margin-top: 8px; }
+</style>
+<p class="text-muted small" style="margin: -6px 0 6px 0;">
+<i class="fa fa-pencil"></i>
+Labels you maintain by hand, plus labels that were seeded from an import
+(e.g. CSV). Edit or remove any entry — this list is the single source of
+truth for this host. Template-derived labels live in their own section
+below and do not appear here.
+</p>
+'''),
+                rules.Field('cmdb_fields'),
+            ),
+            "Manual Labels (editable)",
+        ),
+        rules.FieldSet(
+            (
+                rules.Field('cmdb_templates'),
+                rules.Field('labels_from_template'),
+            ),
+            "Template Labels (read-only)",
+        ),
     ]
 
     form_subdocuments = {
@@ -1320,38 +1465,38 @@ class HostModelView(DefaultModelView):
                         'field_name': {
                             'style': (
                                 'background-color: #2EFE9A; '
-                                'border-radius: 5px; '
-                                'padding: 6px 10px;'
-                                'margin-right: 10px; '
+                                'border-radius: 4px; '
+                                'padding: 2px 7px; '
+                                'margin-right: 4px; '
                                 'font-weight: bold; '
                                 'border: 1px solid #1abc9c;'
                             ),
-                            'size': 15
+                            'size': 15,
                         },
                         'field_value': {
                             'style': (
                                 'background-color: #81DAF5; '
-                                'border-radius: 5px; '
-                                'padding: 6px 10px; '
+                                'border-radius: 4px; '
+                                'padding: 2px 7px; '
                                 'font-family: monospace; '
-                                'margin-left: 10px; '
-                                'border: 1px solid #3498db;'
+                                'margin-left: 4px; '
+                                'border: 1px solid #3498db; '
+                                'width: 100%; '
+                                'box-sizing: border-box;'
                             ),
-                            'size': 40
                         },
                     },
                     'form_rules': [
                         rules.HTML(
-                            '<div class="form-row '
-                            'align-items-center" '
-                            'style="margin-bottom: 8px;">'
+                            '<div class="form-row align-items-center" '
+                            'style="margin: 0; flex-wrap: nowrap;">'
                         ),
                         rules.NestedRule(('field_name', 'field_value')),
                         rules.HTML('</div>'),
-                    ]
-                }
-            }
-        }
+                    ],
+                },
+            },
+        },
     }
 
     @expose('/debug')
@@ -1449,26 +1594,35 @@ class HostModelView(DefaultModelView):
 
     def edit_form(self, obj=None):
         """Build edit form with template labels and CMDB fields."""
+        # Merge existing cmdb_fields with labels not yet in the list, then
+        # sort alphabetically by name so the form renders in a predictable
+        # order. The reorder is in-memory only — on_model_change persists
+        # it along with any user edits.
+        if obj is not None:
+            merged = {
+                entry.field_name: (entry.field_value or '')
+                for entry in (obj.cmdb_fields or [])
+                if getattr(entry, 'field_name', None)
+            }
+            for label_key, label_value in (obj.labels or {}).items():
+                if label_key not in merged:
+                    merged[label_key] = (
+                        str(label_value) if label_value is not None else ''
+                    )
+            sorted_fields = []
+            for key in sorted(merged.keys(), key=str.lower):
+                field = CmdbField()
+                field.field_name = key
+                field.field_value = merged[key]
+                sorted_fields.append(field)
+            obj.cmdb_fields = sorted_fields
+
         form = super().edit_form(obj)
         if obj and hasattr(form, 'labels_from_template'):
             form.labels_from_template.object_data = obj
 
         if hasattr(form, 'cmdb_templates'):
             form.cmdb_templates.queryset = Host.objects(object_type='template')
-
-        if obj and hasattr(form, 'cmdb_fields'):
-            existing_field_names = {
-                str(getattr(entry, 'field_name', None).data)
-                for entry in form.cmdb_fields.entries
-                if getattr(getattr(entry, 'field_name', None), 'data', None)
-            }
-            for label_key, label_value in (obj.labels or {}).items():
-                if label_key not in existing_field_names:
-                    form.cmdb_fields.append_entry({
-                        'field_name': label_key,
-                        'field_value': str(label_value) if label_value is not None else ''
-                    })
-                    existing_field_names.add(label_key)
 
         return form
 
@@ -1518,9 +1672,12 @@ class HostModelView(DefaultModelView):
         model.source_account_id = ""
         model.source_account_name = "cmdb"
         model.no_autodelete = True
+        # Hosts created/edited here are always of type 'host' — the form
+        # field is hidden so the choice can't be accidentally changed.
+        model.object_type = 'host'
         model.cmdb_templates = form.cmdb_templates.data or []
         # Set Extra Fields
-        cmdb_fields = app.config['CMDB_MODELS'].get(form.object_type.data, {})
+        cmdb_fields = app.config['CMDB_MODELS'].get(model.object_type, {})
         cmdb_fields.update(app.config['CMDB_MODELS']['all'])
         new_labels = {
             entry['field_name']: entry['field_value']
@@ -1557,6 +1714,14 @@ class HostModelView(DefaultModelView):
             self.can_create = False
             self.column_exclude_list.append('cmdb_fields')
             self.column_exclude_list.append('cmdb_templates')
+
+        # Keep the persisted order stable: the edit view sorts entries
+        # alphabetically, so on save we preserve that ordering instead of
+        # leaving dropped/newly-appended entries out of place.
+        model.cmdb_fields = sorted(
+            model.cmdb_fields or [],
+            key=lambda f: (getattr(f, 'field_name', '') or '').lower(),
+        )
 
         # Bugfix, ohne we loose the availibilty to edit after save
         self.can_edit = True
