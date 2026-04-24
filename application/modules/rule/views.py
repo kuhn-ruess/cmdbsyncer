@@ -306,6 +306,136 @@ def get_rule_json(_view, _context, model, _name):
     """
     return model.to_json()
 
+
+# --- Modern rule-form styling ---------------------------------------------
+# Every rule form across all systems (Checkmk, Netbox, Ansible, Idoit,
+# VMware, Custom Attributes, etc.) follows the same 3-step layout:
+# Main Options → Conditions → Outcomes. The helpers below produce a
+# consistent card-per-step visual so the forms don't feel like raw
+# Flask-Admin scaffolds.
+
+_MODERN_RULE_CSS = '''
+<style>
+.rule-form-sections { display: flex; flex-direction: column; gap: 14px;
+    margin: 8px 0 16px; }
+.rule-section { border: 1px solid #e2e6ea; border-radius: 10px;
+    background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    overflow: hidden; }
+.rule-section-head { display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-bottom: 1px solid #eef0f3;
+    background: #f8f9fa; }
+.rule-section-head .rule-step { flex: 0 0 auto; display: inline-flex;
+    align-items: center; justify-content: center; width: 28px; height: 28px;
+    border-radius: 50%; font-weight: bold; color: #fff; font-size: 0.9rem;
+    font-family: ui-monospace, monospace; }
+.rule-section-head h4 { margin: 0; font-size: 1.05rem; color: #2c3e50; }
+.rule-section-head p { margin: 0; font-size: 0.82rem; color: #6c757d; }
+.rule-section-body { padding: 12px 14px; }
+.rule-section-body > .form-group:last-child { margin-bottom: 0; }
+
+.rule-section-main   { border-left: 4px solid #3498db; }
+.rule-section-main   .rule-step { background: #3498db; }
+.rule-section-cond   { border-left: 4px solid #e67e22; }
+.rule-section-cond   .rule-step { background: #e67e22; }
+.rule-section-out    { border-left: 4px solid #27ae60; }
+.rule-section-out    .rule-step { background: #27ae60; }
+
+/* Tighten up FieldList cards Flask-Admin renders for conditions /
+   outcomes: hide the "Conditions #N" legend text, keep the delete X,
+   and make each inline card look like a sub-card nested inside the
+   outer step card rather than another card with its own shadow. */
+[id^="conditions-"] > legend,
+[id^="outcomes-"] > legend,
+[id^="rewrite_attributes-"] > legend { display: none !important; }
+[id^="conditions-"] .inline-field > legend > small,
+[id^="outcomes-"] .inline-field > legend > small,
+[id^="rewrite_attributes-"] .inline-field > legend > small {
+    font-size: 0 !important;
+}
+[id^="conditions-"] .inline-field > legend > small .pull-right,
+[id^="outcomes-"] .inline-field > legend > small .pull-right,
+[id^="rewrite_attributes-"] .inline-field > legend > small .pull-right {
+    font-size: 1rem !important;
+}
+[id^="conditions-"] .inline-field.card,
+[id^="outcomes-"] .inline-field.card,
+[id^="rewrite_attributes-"] .inline-field.card {
+    border: 1px solid #e6e9ec !important;
+    background: #fbfcfd !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    padding: 10px 12px !important;
+    margin-bottom: 10px !important;
+    position: relative;
+}
+[id^="conditions-"] .inline-field.card > legend,
+[id^="outcomes-"] .inline-field.card > legend,
+[id^="rewrite_attributes-"] .inline-field.card > legend {
+    position: absolute !important; top: 4px; right: 6px;
+    padding: 0 !important; margin: 0 !important; border: none !important;
+    width: auto !important;
+}
+[id^="conditions-"] .form-group,
+[id^="outcomes-"] .form-group,
+[id^="rewrite_attributes-"] .form-group { margin-bottom: 6px !important; }
+/* The big "Add Conditions" / "Add Outcomes" buttons at the bottom of
+   the field list carry the default flask-admin `btn btn-primary`
+   style — soften them so they don't shout louder than the actual
+   Save button in the page footer. */
+[id^="conditions-"] > a.btn,
+[id^="outcomes-"] > a.btn,
+[id^="rewrite_attributes-"] > a.btn {
+    background: #f8f9fa !important; border: 1px solid #ced4da !important;
+    color: #2c3e50 !important; font-size: 0.88rem !important;
+    padding: 4px 12px !important;
+}
+</style>
+'''
+
+
+def _rule_section_open(step, kind, title, desc):
+    """Emit a `rules.HTML` that opens a rule-form step card."""
+    return rules.HTML(
+        f'<section class="rule-section rule-section-{kind}">'
+        f'  <header class="rule-section-head">'
+        f'    <span class="rule-step">{escape(step)}</span>'
+        f'    <div><h4>{escape(title)}</h4>'
+        f'    <p>{escape(desc)}</p></div>'
+        f'  </header>'
+        f'  <div class="rule-section-body">'
+    )
+
+
+_rule_section_close = rules.HTML('</div></section>')
+_rule_sections_open = rules.HTML('<div class="rule-form-sections">')
+_rule_sections_close = rules.HTML('</div>')
+
+
+def _modern_rule_form(main_fields, condition_fields, outcome_fields,
+                      outcome_title='Outcomes',
+                      outcome_desc='What happens when the conditions match.'):
+    """Return a full `form_rules` list styled as three step-cards."""
+    return [
+        rules.HTML(_MODERN_RULE_CSS),
+        _rule_sections_open,
+        _rule_section_open(
+            '1', 'main', 'Main Options',
+            'Name, description, activation and evaluation order.'),
+        *main_fields,
+        _rule_section_close,
+        _rule_section_open(
+            '2', 'cond', 'Conditions',
+            'When does this rule apply? Match hostname or any host attribute.'),
+        *condition_fields,
+        _rule_section_close,
+        _rule_section_open(
+            '3', 'out', outcome_title, outcome_desc),
+        *outcome_fields,
+        _rule_section_close,
+        _rule_sections_close,
+    ]
+
+
 class RuleModelView(DefaultModelView):
     """
     Rule Model
@@ -321,44 +451,24 @@ class RuleModelView(DefaultModelView):
         'name': get_rule_json
     }
 
-    form_rules = [
-        rules.HTML('''
-        <style>
-        [id^="conditions-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
-        [id^="conditions-"] legend small { font-size: 0 !important; }
-        [id^="conditions-"] legend small .pull-right { font-size: 1rem !important; }
-        [id^="conditions-"] .card {
-            margin-bottom: 8px !important;
-            padding: 10px !important;
-            background-color: #f8f9fa !important;
-            border-radius: 8px !important;
-        }
-        [id^="conditions-"] .form-group { margin-bottom: 5px !important; }
-        [id^="conditions-"] .inline-field { margin-bottom: 8px !important; }
-        [id^="outcomes-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
-        [id^="outcomes-"] legend small { font-size: 0 !important; }
-        [id^="outcomes-"] legend small .pull-right { font-size: 1rem !important; }
-        [id^="outcomes-"] .card {
-            margin-bottom: 8px !important;
-            padding: 10px !important;
-            background-color: #f8f9fa !important;
-            border-radius: 8px !important;
-        }
-        [id^="outcomes-"] .form-group { margin-bottom: 5px !important; }
-        [id^="outcomes-"] .inline-field { margin-bottom: 8px !important; }
-        </style>
-        '''),
-        rules.FieldSet((
+    form_rules = _modern_rule_form(
+        main_fields=[
             rules.Field('name'),
             rules.Field('documentation'),
             div_open,
             rules.NestedRule(('enabled', 'last_match')),
-            ), "1. Main Options"),
             div_close,
             rules.Field('sort_field'),
-        rules.FieldSet(('condition_typ', 'conditions'), "2. Conditions"),
-        rules.FieldSet(('outcomes', ), "3. Rule Outcomes"),
-    ]
+        ],
+        condition_fields=[
+            rules.Field('condition_typ'),
+            rules.Field('conditions'),
+        ],
+        outcome_fields=[rules.Field('outcomes')],
+        outcome_title='Outcomes',
+        outcome_desc='What the rule does to matching hosts — e.g. set '
+                     'folder, add attribute, create group.',
+    )
 
     form_widget_args = {
         #'enabled' : {'class': 'form-check-input'}
@@ -481,49 +591,23 @@ class FiltereModelView(DefaultModelView):
 
     form_subdocuments = form_subdocuments_template
 
-    form_rules = [
-        rules.HTML('''
-        <style>
-        [id^="conditions-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
-        [id^="conditions-"] legend small { font-size: 0 !important; }
-        [id^="conditions-"] legend small .pull-right { font-size: 1rem !important; }
-        [id^="conditions-"] .card {
-            margin-bottom: 8px !important;
-            padding: 10px !important;
-            background-color: #f8f9fa !important;
-            border-radius: 8px !important;
-        }
-        [id^="conditions-"] .form-group { margin-bottom: 5px !important; }
-        [id^="conditions-"] .inline-field { margin-bottom: 8px !important; }
-        [id^="outcomes-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
-        [id^="outcomes-"] legend small { font-size: 0 !important; }
-        [id^="outcomes-"] legend small .pull-right { font-size: 1rem !important; }
-        [id^="outcomes-"] .card {
-            margin-bottom: 8px !important;
-            padding: 10px !important;
-            background-color: #f8f9fa !important;
-            border-radius: 8px !important;
-        }
-        [id^="outcomes-"] .form-group { margin-bottom: 5px !important; }
-        [id^="outcomes-"] .inline-field { margin-bottom: 8px !important; }
-        </style>
-        '''),
-        rules.FieldSet((
+    form_rules = _modern_rule_form(
+        main_fields=[
             rules.Field('name'),
             rules.Field('documentation'),
             div_open,
             rules.NestedRule(('enabled', 'last_match')),
-            ), "1. Main Options"),
             div_close,
             rules.Field('sort_field'),
-
-       rules.FieldSet(
-           ( 'condition_typ', 'conditions',
-           ), "2. Conditions"),
-       rules.FieldSet(
-           ( 'outcomes',
-           ), "3. Filter"),
-    ]
+        ],
+        condition_fields=[
+            rules.Field('condition_typ'),
+            rules.Field('conditions'),
+        ],
+        outcome_fields=[rules.Field('outcomes')],
+        outcome_title='Filter Actions',
+        outcome_desc='Which labels / attributes pass through for matching hosts.',
+    )
 
     column_exclude_list = [
         'conditions', 'outcomes',
