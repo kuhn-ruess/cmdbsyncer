@@ -356,6 +356,13 @@ admin.add_view(NotificationChannelView(
     category="Notifications",
     menu_icon_type='fa', menu_icon_value='fa-paper-plane'))
 
+from application.models.notification_rule import NotificationRule
+from application.views.notification_rule import NotificationRuleView
+admin.add_view(NotificationRuleView(
+    NotificationRule, name="Rules",
+    category="Notifications",
+    menu_icon_type='fa', menu_icon_value='fa-filter'))
+
 # Give the enterprise package one chance to inject its own admin views
 # (Secrets Manager, JSON logs UI, …). No-op when no valid license is
 # installed, so community builds never expose enterprise menu entries.
