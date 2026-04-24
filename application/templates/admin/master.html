@@ -215,7 +215,11 @@
          readable Key/Value separators. */
       .table-responsive {
           border-radius: 10px;
-          overflow: hidden;
+          /* `overflow: hidden` or any non-visible overflow on a parent
+             kills `position: sticky` on thead. Keep the visual border +
+             shadow but let content flow; list tables are width-capped
+             by `column_list` anyway. */
+          overflow: visible;
           border: 1px solid #e6e9ec;
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
       }
@@ -279,6 +283,25 @@
       }
       .table.searchable tbody tr:hover {
           background-color: #f8fbff;
+      }
+      /* Sticky table headers — keep the column labels visible while the
+         user scrolls long lists. The header sticks just below the fixed
+         top navbar (~60 px). `background` + `box-shadow` keep tbody
+         cells with their own background (searchable key column, hover
+         row) from bleeding through while the header glides over them.
+         `z-index` sits above row backgrounds but below the navbar. */
+      .table thead th {
+          position: sticky;
+          top: 60px;
+          z-index: 5;
+          background: #f8f9fa;
+          box-shadow: inset 0 -1px 0 #dee2e6;
+      }
+      /* Tables nested in a modal or in their own scroll container
+         should stick to the LOCAL top (0), not to the page navbar. */
+      .modal-body .table thead th,
+      .table-responsive .table thead th {
+          top: 0;
       }
       /* Row-action icons: clearly visible by default (details eye,
          edit pencil, debug rocket), brand blue on hover. */
