@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""
+Checkmk Notification → cmdbsyncer Notification Hub.
+
+Drop-in script for Checkmk's notification pipeline. Install as
+
+    ~/local/share/check_mk/notifications/cmdbsyncer
+    chmod +x cmdbsyncer
+
+Configure in the Checkmk Setup under
+    Notifications → Add notification rule → Notification method → cmdbsyncer
+
+Environment variables required (set as Notification parameters):
+
+    CMDBSYNCER_URL    https://syncer.example.com
+    CMDBSYNCER_USER   notify-bot
+    CMDBSYNCER_PASS   <API secret>
+
+Everything else is pulled from the Checkmk `NOTIFY_*` env vars the
+notification framework sets automatically.
+"""
+import json
+import os
+import sys
+import urllib.request
+import urllib.error
+import base64
+
+
+def _env(name, default=''):
+    return os.environ.get(name, default)
+
+
+def build_event():
+    notify_host = _env('NOTIFY_HOSTNAME')
+    notify_svc = _env('NOTIFY_SERVICEDESC')
+    is_service = bool(notify_svc)
+
+    state = _env(
+        'NOTIFY_SERVICESTATE' if is_service else 'NOTIFY_HOSTSTATE'
+    )
+    event_type = (
+        f'service.{state.lower()}' if is_service
+        else f'host.{state.lower()}'
+    )
+
+    return {
+        'source': 'checkmk',
+        'event_type': event_type,
+        'host': notify_host,
+        'service': notify_svc,
+        'state': state,
+        'title': (
+            f'{state}: {notify_host} · {notify_svc}'
+            if is_service else f'{state}: {notify_host}'
+        ),
+        'message': _env('NOTIFY_HOSTOUTPUT') if not is_service
+                   else _env('NOTIFY_SERVICEOUTPUT'),
+        'outcome': 'failure' if state in ('CRIT', 'DOWN', 'UNREACH') else 'info',
+        'context': {
+            'contact_groups': _env('NOTIFY_CONTACTGROUPS'),
+            'contact_name':   _env('NOTIFY_CONTACTNAME'),
+            'site':           _env('OMD_SITE'),
+            'notification_type': _env('NOTIFY_NOTIFICATIONTYPE'),
+            'monitoring_host': _env('NOTIFY_MONITORING_HOST'),
+            'url':            _env('NOTIFY_HOSTURL') or _env('NOTIFY_SERVICEURL'),
+        },
+    }
+
+
+def post(url, user, password, payload):
+    data = json.dumps(payload).encode('utf-8')
+    token = base64.b64encode(f'{user}:{password}'.encode()).decode()
+    req = urllib.request.Request(
+        url.rstrip('/') + '/api/v1/notify/dispatch',
+        data=data,
+        method='POST',
+        headers={
+            'Content-Type': 'application/json',
+            'x-login-user': f'{user}:{password}',
+            'Authorization': f'Basic {token}',
+        },
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return resp.status, resp.read().decode('utf-8', 'replace')
+
+
+def main():
+    url = _env('CMDBSYNCER_URL')
+    user = _env('CMDBSYNCER_USER')
+    password = _env('CMDBSYNCER_PASS')
+    if not url or not user or not password:
+        print("CMDBSYNCER_URL / CMDBSYNCER_USER / CMDBSYNCER_PASS must be set",
+              file=sys.stderr)
+        sys.exit(2)
+
+    event = build_event()
+    try:
+        status, body = post(url, user, password, event)
+    except urllib.error.HTTPError as exp:
+        print(f"HTTP {exp.code}: {exp.read().decode('utf-8', 'replace')}",
+              file=sys.stderr)
+        sys.exit(1)
+    except Exception as exp:  # pylint: disable=broad-exception-caught
+        print(f"Dispatch failed: {exp}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Dispatched to cmdbsyncer: HTTP {status}")
+    if status != 200:
+        print(body, file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

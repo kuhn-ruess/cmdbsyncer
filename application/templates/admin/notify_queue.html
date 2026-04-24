@@ -1,0 +1,169 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<style>
+.nq-stats { display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin: 1rem 0; }
+.nq-stat { border: 1px solid #e2e6ea; border-radius: 8px;
+    padding: 12px 14px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+.nq-stat .n { font-size: 1.6rem; font-weight: 700; color: #2c3e50; }
+.nq-stat .l { font-size: 0.8rem; color: #6c757d; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 4px; }
+.nq-stat.accent-pending  { border-left: 4px solid #f39c12; }
+.nq-stat.accent-inflight { border-left: 4px solid #3498db; }
+.nq-stat.accent-done     { border-left: 4px solid #27ae60; }
+.nq-stat.accent-failed   { border-left: 4px solid #e74c3c; }
+
+.nq-section { margin-top: 1.5rem; }
+.nq-section h4 { margin: 0 0 8px; color: #2c3e50; font-size: 1.05rem; }
+.nq-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.nq-table th { background: #f8f9fa; text-align: left; padding: 6px 8px;
+    border-bottom: 1px solid #dee2e6; font-weight: 600; color: #2c3e50; }
+.nq-table td { padding: 5px 8px; border-bottom: 1px solid #f1f3f5;
+    vertical-align: top; }
+.nq-table tr:hover { background: #fafcfe; }
+.nq-table .ts { font-family: ui-monospace, monospace; color: #6c757d; white-space: nowrap; }
+.nq-table .mono { font-family: ui-monospace, monospace; }
+.nq-status { display: inline-block; padding: 1px 8px; border-radius: 4px;
+    font-size: 0.76rem; font-weight: bold; color: #fff; }
+.nq-status.queued     { background: #6c757d; }
+.nq-status.processing { background: #f39c12; }
+.nq-status.done       { background: #27ae60; }
+.nq-status.failed     { background: #e74c3c; }
+.nq-out-ok     { color: #27ae60; font-family: ui-monospace, monospace; }
+.nq-out-failed { color: #e74c3c; font-family: ui-monospace, monospace; }
+.nq-out-dryrun { color: #2980b9; font-family: ui-monospace, monospace; }
+.nq-empty { color: #6c757d; font-style: italic; padding: 12px; }
+</style>
+
+<div class="container-fluid" style="max-width: 1400px;">
+
+  {% set done_count = snap.recent | selectattr('status', 'equalto', 'done') | list | length %}
+  {% set failed_count = snap.recent | selectattr('status', 'equalto', 'failed') | list | length %}
+
+  <div style="display: flex; align-items: center; gap: 12px; margin-top: 1rem;">
+    <h2 style="margin: 0;"><i class="fa fa-inbox"></i> Notification Dispatch Queue</h2>
+    <form method="POST" action="{{ url_for('.clear') }}"
+          style="margin-left: auto;"
+          onsubmit="return confirm('Clear the dispatch history?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-outline-secondary">
+        Clear History
+      </button>
+    </form>
+  </div>
+  <p class="text-muted small" style="margin: 2px 0 0 30px;">
+    RAM-backed: <strong>{{ snap.maxsize }}</strong> queue slots,
+    <strong>{{ snap.history }}</strong> jobs kept in history. No database
+    hop on the hot path — on a hard process kill any in-flight job is
+    lost, so make sure upstream (Checkmk etc.) retries.
+  </p>
+
+  <div class="nq-stats">
+    <div class="nq-stat accent-pending">
+      <div class="l">Queued</div>
+      <div class="n">{{ snap.pending }}</div>
+    </div>
+    <div class="nq-stat accent-inflight">
+      <div class="l">In flight</div>
+      <div class="n">{{ snap.inflight | length }}</div>
+    </div>
+    <div class="nq-stat accent-done">
+      <div class="l">Done (recent)</div>
+      <div class="n">{{ done_count }}</div>
+    </div>
+    <div class="nq-stat accent-failed">
+      <div class="l">Failed (recent)</div>
+      <div class="n">{{ failed_count }}</div>
+    </div>
+  </div>
+
+  <div class="nq-section">
+    <h4>In-Flight / Pending</h4>
+    {% if not snap.inflight %}
+      <div class="nq-empty">No jobs in flight.</div>
+    {% else %}
+      <table class="nq-table">
+        <thead>
+          <tr>
+            <th style="width: 170px;">Received</th>
+            <th style="width: 110px;">Status</th>
+            <th style="width: 120px;">Source</th>
+            <th>Event Type</th>
+            <th>Host</th>
+            <th>Service</th>
+            <th>State</th>
+            <th style="width: 60px;">Try</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in snap.inflight %}
+          <tr>
+            <td class="ts">{{ job.received_at.strftime('%Y-%m-%d %H:%M:%S') if job.received_at else '-' }}</td>
+            <td><span class="nq-status {{ job.status }}">{{ job.status }}</span></td>
+            <td class="mono">{{ job.source }}</td>
+            <td class="mono">{{ job.event_type }}</td>
+            <td class="mono">{{ job.host }}</td>
+            <td class="mono">{{ job.service }}</td>
+            <td class="mono">{{ job.state }}</td>
+            <td>{{ job.attempts }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+
+  <div class="nq-section">
+    <h4>Recent History ({{ snap.recent | length }})</h4>
+    {% if not snap.recent %}
+      <div class="nq-empty">No completed jobs yet.</div>
+    {% else %}
+      <table class="nq-table">
+        <thead>
+          <tr>
+            <th style="width: 170px;">Finished</th>
+            <th style="width: 110px;">Status</th>
+            <th style="width: 110px;">Source</th>
+            <th>Event Type</th>
+            <th>Host</th>
+            <th>Service</th>
+            <th>Deliveries</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in snap.recent %}
+          <tr>
+            <td class="ts">{{ job.finished_at.strftime('%Y-%m-%d %H:%M:%S') if job.finished_at else '-' }}</td>
+            <td><span class="nq-status {{ job.status }}">{{ job.status }}</span></td>
+            <td class="mono">{{ job.source }}</td>
+            <td class="mono">{{ job.event_type }}</td>
+            <td class="mono">{{ job.host }}</td>
+            <td class="mono">{{ job.service }}</td>
+            <td>
+              {% if job.error %}
+                <span class="nq-out-failed">ERROR</span> {{ job.error }}
+              {% elif not job.outcomes %}
+                <em class="text-muted">no recipients</em>
+              {% else %}
+                {% for o in job.outcomes[:6] %}
+                  <div>
+                    <span class="nq-out-{{ 'ok' if o.outcome == 'ok' else ('dryrun' if o.outcome == 'dry-run' else 'failed') }}">{{ o.outcome }}</span>
+                    {{ o.contact }} · {{ o.channel }}
+                    {% if o.error %} — <span class="text-danger">{{ o.error }}</span>{% endif %}
+                  </div>
+                {% endfor %}
+                {% if job.outcomes | length > 6 %}
+                  <em>+{{ job.outcomes | length - 6 }} more</em>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
