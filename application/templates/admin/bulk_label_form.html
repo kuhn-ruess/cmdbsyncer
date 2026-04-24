@@ -1,0 +1,83 @@
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-7">
+        <div class="app-card" style="margin-top: 1.5rem;">
+            <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
+                <h2>Bulk edit labels</h2>
+                <p>Apply a label change to {{ ids|length }} host(s).</p>
+            </div>
+            <form method="POST" action="{{ url_for('.bulk_label_process') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
+
+                <div class="form-group">
+                    <label>Action</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="mode"
+                               id="mode_add" value="add" checked
+                               onclick="toggleBulkFields()">
+                        <label class="form-check-label" for="mode_add">
+                            <strong>Add / overwrite label</strong>
+                            — write <code>key:value</code> on every selected host.
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="mode"
+                               id="mode_remove" value="remove"
+                               onclick="toggleBulkFields()">
+                        <label class="form-check-label" for="mode_remove">
+                            <strong>Remove label</strong>
+                            — delete the label with this key from every selected host.
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="mode"
+                               id="mode_rename" value="rename"
+                               onclick="toggleBulkFields()">
+                        <label class="form-check-label" for="mode_rename">
+                            <strong>Rename label key</strong>
+                            — move the value from the old key to the new key,
+                            on every selected host that has the old key.
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="label_key" id="lbl_key">Label key</label>
+                    <input type="text" class="form-control" id="label_key"
+                           name="label_key" required
+                           placeholder="e.g. environment">
+                </div>
+
+                <div class="form-group" id="grp_value">
+                    <label for="label_value">Label value</label>
+                    <input type="text" class="form-control" id="label_value"
+                           name="label_value" placeholder="e.g. production">
+                    <small class="form-text text-muted">
+                        Overwrites an existing value on hosts that already have this key.
+                    </small>
+                </div>
+
+                <div class="form-group" id="grp_new_key" style="display:none;">
+                    <label for="new_key">New label key</label>
+                    <input type="text" class="form-control" id="new_key" name="new_key"
+                           placeholder="e.g. env">
+                </div>
+
+                <div class="form-group mb-0">
+                    <button type="submit" class="btn btn-primary">Apply</button>
+                    <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleBulkFields() {
+    var mode = document.querySelector('input[name="mode"]:checked').value;
+    document.getElementById('grp_value').style.display = (mode === 'add') ? '' : 'none';
+    document.getElementById('grp_new_key').style.display = (mode === 'rename') ? '' : 'none';
+    document.getElementById('lbl_key').innerText =
+        (mode === 'rename') ? 'Old label key' : 'Label key';
+}
+</script>

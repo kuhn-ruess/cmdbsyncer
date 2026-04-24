@@ -24,6 +24,64 @@ from .rules import VmwareCustomAttributesRule
 
 cli_vmware = register_cli_group(app, 'vmware', 'vmware', "VMware commands")
 
+
+#   .-- Debug Data — shared backend for the HTML debug page
+# pylint: disable=import-outside-toplevel
+def get_vmware_debug_data(hostname):
+    """Return `(attributes, extra_attributes, rule_logs)` for the HTML
+    debug view. VMware has rewrite + custom-attribute rules but no
+    filter — same shape as Netbox.
+
+    The extra imports are deliberate: keeping them at the top would
+    create an import cycle with `application.modules.plugin`, and we
+    only need them on the debug path.
+    """
+    from mongoengine.errors import DoesNotExist as _DoesNotExist
+    from application.models.host import Host
+    from application.modules.plugin import Plugin
+
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except _DoesNotExist:
+        return None, None, None
+
+    # Drop cached vmware_* entries so rules actually re-evaluate.
+    for key in list(db_host.cache.keys()):
+        if key.lower().startswith('vmware'):
+            del db_host.cache[key]
+    db_host.save()
+
+    attribute_rewrite = Rewrite()
+    attribute_rewrite.cache_name = 'vmware_rewrite'
+    attribute_rewrite.debug = True
+    attribute_rewrite.rules = \
+        VMwareRewriteAttributes.objects(enabled=True).order_by('sort_field')
+
+    actions = VmwareCustomAttributesRule()
+    actions.debug = True
+    actions.rules = \
+        VMwareCustomAttributes.objects(enabled=True).order_by('sort_field')
+
+    # Evaluate rewrite + actions against the host's labels without
+    # needing a real vCenter connection. The Plugin base exposes the
+    # same get_attributes/get_host_data shape every syncer uses.
+    syncer = Plugin()
+    syncer.rewrite = attribute_rewrite
+    syncer.actions = actions
+    syncer.name = 'vmware-debug'
+    syncer.source = 'vmware_debug'
+
+    attributes = syncer.get_attributes(db_host, 'vmware')
+    extra_attributes = {}
+    if attributes:
+        extra_attributes = syncer.get_host_data(db_host, attributes['all']) or {}
+
+    rule_logs = {
+        'rewrite': attribute_rewrite.debug_lines,
+        'actions': actions.debug_lines,
+    }
+    return attributes, extra_attributes, rule_logs
+
 #   .-- Custom Attributes
 def custom_attributes_export(account, debug=False):
     """

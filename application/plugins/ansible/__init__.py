@@ -50,7 +50,43 @@ def load_rules():
         'actions': ansible_rules,
     }
 #.
-#   .-- Debug Host
+#   .-- Debug Host — shared backend for CLI + HTML debug page
+def get_ansible_debug_data(hostname):
+    """Return debug data (attributes, extra_attributes, rule_logs) for `hostname`.
+
+    Mirrors `get_device_debug_data` (Netbox) and `get_host_debug_data`
+    (Checkmk) so the HTML debug view can reuse the shared renderer. The
+    CLI variant (`debug_ansible_rules`) uses the same data but prints
+    to stdout.
+    """
+    rules = load_rules()
+    rule_logs = {}
+
+    syncer = AnsibleInventory()
+    apply_debug_rules(syncer, rules)
+
+    db_host = clear_host_debug_cache(hostname, 'ansible')
+    if not db_host:
+        return None, None, None
+
+    attributes = syncer.get_attributes(db_host, 'ansible')
+    extra_attributes = {}
+    if attributes:
+        hidden_fields = ('ansible_password', 'ansible_ssh_pass')
+        extra_attributes = syncer.get_host_data(db_host, attributes['all']) or {}
+        for key in list(extra_attributes.keys()):
+            if key in hidden_fields:
+                value = extra_attributes[key] or ''
+                extra_attributes[key] = f"HIDDEN...{value[-3:]}" if value else 'HIDDEN'
+
+    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_lines
+    rule_logs['filter'] = rules['filter'].debug_lines
+    rule_logs['rewrite'] = rules['rewrite'].debug_lines
+    rule_logs['actions'] = rules['actions'].debug_lines
+
+    return attributes, extra_attributes, rule_logs
+
+
 @cli_ansible.command('debug_host')
 @click.argument("hostname")
 def debug_ansible_rules(hostname):

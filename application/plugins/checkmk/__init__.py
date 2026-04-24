@@ -1,6 +1,9 @@
 """
 Commands to handle Checkmk Sync
 """
+# pylint: disable=duplicate-code,import-outside-toplevel,broad-exception-caught
+# pylint: disable=unused-argument,wrong-import-position,wrong-import-order
+# pylint: disable=function-redefined
 
 import click
 from mongoengine.errors import DoesNotExist
@@ -16,8 +19,8 @@ from .models import CheckmkFilterRule
 from application.modules.rule.rewrite import Rewrite
 from .models import CheckmkRewriteAttributeRule
 
-from .rules import CheckmkRule
-from .models import CheckmkRule as CheckmkRuleModel
+from .rules import CheckmkRule, CheckmkRulesetRule
+from .models import CheckmkRule as CheckmkRuleModel, CheckmkRuleMngmt
 
 from .inits import (
     export_bi_rules,
@@ -218,6 +221,25 @@ def get_host_debug_data(hostname):
     rule_logs['filter'] = rules['filter'].debug_lines
     rule_logs['rewrite'] = rules['rewrite'].debug_lines
     rule_logs['actions'] = rules['actions'].debug_lines
+
+    # Also exercise the Setup-Rules engine (CheckmkRuleMngmt → creates
+    # Checkmk rules per ruleset) so admins can see *why* a host does or
+    # does not end up with a given ruleset push. Kept inside a try/except
+    # because a single bad rule shouldn't tank the whole debug page.
+    if attributes:
+        try:
+            setup_rules = CheckmkRulesetRule()
+            setup_rules.debug = True
+            setup_rules.rules = CheckmkRuleMngmt.objects(enabled=True).order_by('sort_field')
+            setup_rules.get_outcomes(db_host, attributes['all'])
+            rule_logs['Setup Rules'] = setup_rules.debug_lines
+        except Exception as exp:  # pylint: disable=broad-exception-caught
+            rule_logs['Setup Rules'] = [{
+                'name': 'ERROR evaluating Setup Rules',
+                'hit': False, 'last_match': '',
+                'condition_type': '', 'no_match_reason': None,
+                'error': str(exp),
+            }]
 
     # We need to save the host,
     # Otherwise, if a rule with folder pools is executed at first time here,

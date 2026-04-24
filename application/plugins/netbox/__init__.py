@@ -55,6 +55,37 @@ def get_device_debug_data(hostname):
     rule_logs['rewrite'] = rules['rewrite'].debug_lines
     rule_logs['actions'] = rules['actions'].debug_lines
 
+    # Also run the VM + Cluster attribute rule engines against this host
+    # so admins can see why a VM ends up in a given cluster / with which
+    # extra attributes — without having to spin up a full export run.
+    if attributes:
+        try:
+            vm_rules = NetboxVirutalMachineRule()
+            vm_rules.debug = True
+            vm_rules.rules = NetboxVirtualMachineAttributes.objects(
+                enabled=True).order_by('sort_field')
+            vm_rules.get_outcomes(db_host, attributes['all'])
+            rule_logs['VM Attributes'] = vm_rules.debug_lines
+        except Exception as exp:  # pylint: disable=broad-exception-caught
+            rule_logs['VM Attributes'] = [{
+                'name': 'ERROR evaluating VM attribute rules',
+                'hit': False, 'last_match': '', 'condition_type': '',
+                'no_match_reason': None, 'error': str(exp),
+            }]
+        try:
+            cluster_rules = NetboxCluserRule()
+            cluster_rules.debug = True
+            cluster_rules.rules = NetboxClusterAttributes.objects(
+                enabled=True).order_by('sort_field')
+            cluster_rules.get_outcomes(db_host, attributes['all'])
+            rule_logs['Cluster Attributes'] = cluster_rules.debug_lines
+        except Exception as exp:  # pylint: disable=broad-exception-caught
+            rule_logs['Cluster Attributes'] = [{
+                'name': 'ERROR evaluating Cluster attribute rules',
+                'hit': False, 'last_match': '', 'condition_type': '',
+                'no_match_reason': None, 'error': str(exp),
+            }]
+
     return attributes, extra_attributes, rule_logs
 
 def load_device_rules():

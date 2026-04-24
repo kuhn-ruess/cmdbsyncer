@@ -3,7 +3,7 @@ Host Model
 """
 import re
 import datetime
-from mongoengine import Q, PULL
+from mongoengine import Q, PULL, CASCADE
 from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
@@ -338,8 +338,110 @@ class Host(db.Document):
                 updates.append(f"{key} to {value}")
 
         self.add_log(f"Label Change: {','.join(updates)}")
+        self._record_label_changes(label_dict)
         self.labels = label_dict
         self.cache = {}
+
+    def _diff_labels(self, new_labels):
+        """Return (entries, added, updated, removed) for a label mutation."""
+        existing = dict(self.labels or {})
+        target = dict(new_labels or {})
+        source = getattr(self, '_label_change_source', None) or 'import'
+        user_email = getattr(self, '_label_change_user', None)
+        now = datetime.datetime.utcnow()
+        entries = []
+        added, updated, removed = {}, {}, {}
+
+        def _str(val):
+            return None if val is None else str(val)
+
+        for key, new_value in target.items():
+            if key not in existing:
+                entries.append(HostLabelChange(
+                    host=self, key=key, old_value=None,
+                    new_value=_str(new_value),
+                    change='add', source=source,
+                    user_email=user_email, changed_at=now,
+                ))
+                added[key] = new_value
+            elif existing[key] != new_value:
+                entries.append(HostLabelChange(
+                    host=self, key=key,
+                    old_value=_str(existing[key]),
+                    new_value=_str(new_value),
+                    change='update', source=source,
+                    user_email=user_email, changed_at=now,
+                ))
+                updated[key] = {'from': existing[key], 'to': new_value}
+        for key, old_value in existing.items():
+            if key not in target:
+                entries.append(HostLabelChange(
+                    host=self, key=key,
+                    old_value=_str(old_value),
+                    new_value=None, change='remove', source=source,
+                    user_email=user_email, changed_at=now,
+                ))
+                removed[key] = old_value
+        return entries, added, updated, removed, source
+
+    def _emit_label_audit(self, added, updated, removed, source):
+        """Fan a host.label.changed event into the Enterprise audit log."""
+        # pylint: disable=import-outside-toplevel
+        from application.helpers.audit import audit
+        changes = {}
+        if added:
+            changes['added'] = {k: str(v) for k, v in added.items()}
+        if updated:
+            changes['updated'] = {
+                k: {
+                    'from': (str(v['from']) if v['from'] is not None else None),
+                    'to':   (str(v['to'])   if v['to']   is not None else None),
+                }
+                for k, v in updated.items()
+            }
+        if removed:
+            changes['removed'] = {
+                k: (str(v) if v is not None else None)
+                for k, v in removed.items()
+            }
+        audit(
+            'host.label.changed',
+            target_type='Host',
+            target_id=str(self.pk),
+            target_name=self.hostname,
+            metadata={'source': source},
+            changes=changes,
+        )
+
+    def _record_label_changes(self, new_labels):
+        """
+        Write one `HostLabelChange` row per mutation between the
+        currently-saved `self.labels` and the incoming `new_labels`,
+        and emit a single `host.label.changed` event into the
+        Enterprise audit log.
+
+        Best-effort: errors must never break the enclosing save — an
+        operator losing a single change event is far cheaper than an
+        import run falling over.
+        """
+        if not self.pk:
+            return
+        try:
+            entries, added, updated, removed, source = \
+                self._diff_labels(new_labels)
+            if not entries:
+                return
+            HostLabelChange.objects.insert(entries)
+            try:
+                self._emit_label_audit(added, updated, removed, source)
+            except Exception as exp:  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "audit(host.label.changed) dispatch failed for %s: %s",
+                    getattr(self, 'hostname', '?'), exp,
+                )
+        except Exception as exp:  # pylint: disable=broad-exception-caught
+            logger.warning("Could not record label history for %s: %s",
+                           getattr(self, 'hostname', '?'), exp)
 
     def get_labels(self):
         """
@@ -598,3 +700,38 @@ class Host(db.Document):
         """
         self.available = True
         self.last_import_seen = datetime.datetime.now()
+
+
+class HostLabelChange(db.Document):
+    """
+    Per-label change entry. One row is written every time a host's
+    `labels` dict mutates (key added, value changed, or key removed),
+    so the Detail view can show a "Timeline" tab that answers
+    "since when does this host carry label X, and who set it".
+
+    Defined AFTER Host so the `reverse_delete_rule=CASCADE` reference
+    can resolve the target document at class-registration time.
+    """
+    host = db.ReferenceField(document_type='Host',
+                             required=True, reverse_delete_rule=CASCADE)
+    key = db.StringField(required=True, max_length=255)
+    old_value = db.StringField()
+    new_value = db.StringField()
+    change = db.StringField(
+        choices=[
+            ('add', 'added'), ('update', 'updated'), ('remove', 'removed'),
+        ],
+        required=True,
+    )
+    source = db.StringField(default='import')  # import | manual | template | rule
+    user_email = db.StringField()
+    changed_at = db.DateTimeField(default=datetime.datetime.utcnow, required=True)
+
+    meta = {
+        'collection': 'host_label_change',
+        'indexes': [
+            {'fields': ['host', '-changed_at']},
+            {'fields': ['key']},
+        ],
+        'ordering': ['-changed_at'],
+    }

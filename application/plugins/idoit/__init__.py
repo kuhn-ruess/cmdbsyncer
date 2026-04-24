@@ -90,6 +90,50 @@ def cli_export_hosts(account):
 #.
 
 
+#   .-- Debug Data — shared backend for CLI + HTML debug page
+def get_idoit_debug_data(hostname):
+    """Return debug data for the HTML debug view.
+
+    Mirrors the Checkmk / Netbox / Ansible `get_*_debug_data` shape:
+    returns `(attributes, extra_attributes, rule_logs)`.
+    """
+    rules = load_rules()
+    rule_logs = {}
+
+    syncer = SyncIdoit()
+    syncer.debug = True
+    rules['rewrite'].debug = True
+    syncer.rewrite = rules['rewrite']
+    rules['rules'].debug = True
+    syncer.actions = rules['rules']
+
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        return None, None, None
+
+    # Wipe cached idoit_* entries so the rules actually fire.
+    for key in list(db_host.cache.keys()):
+        if key.lower().startswith('idoit'):
+            del db_host.cache[key]
+    db_host.save()
+
+    attributes = syncer.get_attributes(db_host, 'idoit')
+    extra_attributes = {}
+    if attributes:
+        host_data = syncer.get_host_data(db_host, attributes['all']) or {}
+        # Flatten nested structures for the debug grid renderer.
+        for key, value in host_data.items():
+            extra_attributes[key] = value
+
+    rule_logs['CustomAttributes'] = getattr(
+        syncer, 'custom_attributes', rules['rules']).debug_lines
+    rule_logs['rewrite'] = rules['rewrite'].debug_lines
+    rule_logs['actions'] = rules['rules'].debug_lines
+
+    return attributes, extra_attributes, rule_logs
+
+
 #   .-- Command: debug hosts
 @_cli_idoit.command('debug_host')
 @click.argument("hostname")

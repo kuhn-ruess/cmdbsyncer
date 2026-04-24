@@ -1,7 +1,7 @@
 """
 Host Model View
 """
-# pylint: disable=too-many-lines
+# pylint: disable=too-many-lines,duplicate-code
 from datetime import datetime
 import re
 import csv
@@ -22,9 +22,12 @@ from mongoengine.errors import DoesNotExist
 from application.plugins.checkmk.models import CheckmkFolderPool
 from application.plugins.checkmk import get_host_debug_data as cmk_host_debug
 from application.plugins.netbox import get_device_debug_data as netbox_host_debug
+from application.plugins.ansible import get_ansible_debug_data as ansible_host_debug
+from application.plugins.idoit import get_idoit_debug_data as idoit_host_debug
+from application.plugins.vmware import get_vmware_debug_data as vmware_host_debug
 from application import app
 from application.views.default import DefaultModelView
-from application.models.host import Host, CmdbField
+from application.models.host import Host, CmdbField, HostLabelChange
 from application.models.config import Config
 from application.modules.log.models import LogEntry
 # pylint: enable=import-error
@@ -83,6 +86,9 @@ def get_debug(hostname, mode):
     mode_role_mapping = {
         'checkmk_host': 'checkmk',
         'netbox_device': 'netbox',
+        'ansible_host': 'ansible',
+        'idoit_host': 'idoit',
+        'vmware_host': 'vmware',
     }
 
     required_role = mode_role_mapping.get(mode)
@@ -98,6 +104,9 @@ def get_debug(hostname, mode):
         debug_funcs = {
             'checkmk_host': cmk_host_debug,
             'netbox_device': netbox_host_debug,
+            'ansible_host': ansible_host_debug,
+            'idoit_host': idoit_host_debug,
+            'vmware_host': vmware_host_debug,
         }
 
         attributes, actions, debug_log = debug_funcs[mode](hostname)
@@ -193,6 +202,80 @@ def _render_cmdb_fields(_view, _context, model, _name):
         if entry.field_value
     }
     return _format_keyvalue_with_type(items)
+
+
+_LABEL_GRID_CSS = (
+    '<style>'
+    '.cmdb-label-grid{display:grid;grid-template-columns:1fr 1fr;'
+    'gap:2px 20px;margin:4px 0;}'
+    '@media (max-width:992px){.cmdb-label-grid{grid-template-columns:1fr;}}'
+    '.cmdb-label-row{display:flex;align-items:center;gap:6px;padding:2px 0;'
+    'min-width:0;border-bottom:1px solid #f0f0f0;}'
+    '.cmdb-label-row .lbl-src{flex:0 0 auto;font-size:0.72rem;'
+    'padding:1px 6px;border-radius:3px;white-space:nowrap;}'
+    '.cmdb-label-row .lbl-key{flex:0 0 auto;font-weight:bold;'
+    'color:#1abc9c;}'
+    '.cmdb-label-row .lbl-val{flex:1 1 auto;font-family:monospace;'
+    'color:#2c3e50;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    '.cmdb-label-row .lbl-type{flex:0 0 auto;font-size:0.7rem;'
+    'padding:1px 6px;border-radius:3px;background:#6c757d;color:#fff;'
+    'white-space:nowrap;font-family:monospace;}'
+    '.cmdb-label-row .lbl-src.src-manual{background:#e8f6fd;color:#2980b9;}'
+    '.cmdb-label-row .lbl-src.src-template{background:#eaf7ea;color:#1e8449;}'
+    '</style>'
+)
+
+
+def _render_labels_with_origin(_view, _context, model, _name):
+    """
+    Compact read-only detail rendering of a host's labels grouped by
+    origin. Each row shows a small badge ("manual" or the template
+    hostname), the key, the value, and a BSON-type badge (so admins
+    can tell a string `"True"` from a BSON bool `True` — they match
+    different filters).
+    """
+    manual = model.labels or {}
+    templates = []
+    for tmpl in (model.cmdb_templates or []):
+        if getattr(tmpl, 'labels', None):
+            templates.append((tmpl.hostname, dict(tmpl.labels)))
+
+    if not manual and not templates:
+        return Markup('<em class="text-muted">No labels.</em>')
+
+    rows = []
+    for key in sorted(manual.keys(), key=str.lower):
+        rows.append(('manual', '', key, manual[key]))
+    for tmpl_name, tmpl_labels in templates:
+        for key in sorted(tmpl_labels.keys(), key=str.lower):
+            rows.append(('template', tmpl_name, key, tmpl_labels[key]))
+
+    html = [_LABEL_GRID_CSS, '<div class="cmdb-label-grid">']
+    for origin, src_name, key, value in rows:
+        if origin == 'manual':
+            src_badge = (
+                '<span class="lbl-src src-manual" '
+                'title="Maintained manually on this host">manual</span>'
+            )
+        else:
+            src_badge = (
+                f'<span class="lbl-src src-template" '
+                f'title="From template {escape(src_name)}">'
+                f'{escape(src_name)}</span>'
+            )
+        value_str = '' if value is None else str(value)
+        type_name = _value_type_name(value)
+        html.append(
+            '<div class="cmdb-label-row">'
+            f'{src_badge}'
+            f'<span class="lbl-key">{escape(str(key))}</span>'
+            f'<span class="lbl-val" title="{escape(value_str)}">'
+            f'{escape(value_str)}</span>'
+            f'<span class="lbl-type" title="BSON type">{escape(type_name)}</span>'
+            '</div>'
+        )
+    html.append('</div>')
+    return Markup(''.join(html))
 
 
 def _render_labels(_view, _context, model, _name):
@@ -871,6 +954,108 @@ def format_inventory(_v, _c, m, _p):
     """ Format Inventory view"""
     return _format_keyvalue_with_type(m.inventory)
 
+
+_LOG_LIST_CSS = (
+    '<style>'
+    '.cmdb-log-list{max-height:40vh;overflow-y:auto;border:1px solid #e9ecef;'
+    'border-radius:6px;background:#fbfcfd;padding:4px 6px;}'
+    '.cmdb-log-row{display:flex;gap:8px;align-items:baseline;'
+    'padding:3px 4px;border-bottom:1px solid #eef1f4;'
+    'font-family:ui-monospace,monospace;font-size:0.85rem;}'
+    '.cmdb-log-row:last-child{border-bottom:none;}'
+    '.cmdb-log-row .log-ts{flex:0 0 auto;color:#6c757d;'
+    'font-variant-numeric:tabular-nums;}'
+    '.cmdb-log-row .log-msg{flex:1 1 auto;min-width:0;color:#2c3e50;'
+    'white-space:pre-wrap;word-wrap:break-word;}'
+    '.cmdb-log-meta{margin-top:6px;font-size:0.8rem;color:#6c757d;}'
+    '</style>'
+)
+
+_LOG_TS_RE = re.compile(
+    r'^\s*(?P<ts>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?)\s*[-:]?\s*(?P<rest>.*)$'
+)
+
+
+def _render_log_grid(_view, _context, model, _name):
+    """
+    Detail-view log rendering in a compact scrollable list. Visually
+    matches the label/inventory grid: light card background, monospace
+    rows, timestamp-prefix split out so it doesn't crowd the message.
+    """
+    entries = list(model.log or [])
+    if not entries:
+        return Markup('<em class="text-muted">No log entries.</em>')
+
+    html = [_LOG_LIST_CSS, '<div class="cmdb-log-list">']
+    # Newest first — the underlying log is append-only and users
+    # overwhelmingly look for the latest event.
+    for entry in reversed(entries):
+        text = str(entry)
+        match = _LOG_TS_RE.match(text)
+        if match:
+            ts = match.group('ts')
+            rest = match.group('rest')
+        else:
+            ts = ''
+            rest = text
+        html.append(
+            '<div class="cmdb-log-row">'
+            + (f'<span class="log-ts">{escape(ts)}</span>' if ts else '')
+            + f'<span class="log-msg">{escape(rest)}</span>'
+            '</div>'
+        )
+    html.append('</div>')
+    html.append(
+        f'<div class="cmdb-log-meta">Showing all {len(entries)} entry(ies).</div>'
+    )
+    return Markup(''.join(html))
+
+
+_INVENTORY_GRID_CSS = (
+    '<style>'
+    '.cmdb-inv-grid{display:grid;grid-template-columns:1fr;'
+    'gap:2px 0;margin:4px 0;}'
+    '.cmdb-inv-grid .cmdb-label-row{display:flex;align-items:center;gap:6px;'
+    'padding:2px 0;min-width:0;border-bottom:1px solid #f0f0f0;}'
+    '.cmdb-inv-grid .lbl-src{flex:0 0 auto;font-size:0.72rem;'
+    'padding:1px 6px;border-radius:3px;white-space:nowrap;'
+    'background:#f1f3f5;color:#6c757d;}'
+    '.cmdb-inv-grid .lbl-key{flex:0 0 auto;font-weight:bold;color:#1abc9c;}'
+    '.cmdb-inv-grid .lbl-val{flex:1 1 auto;font-family:monospace;'
+    'color:#2c3e50;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    '.cmdb-inv-grid .lbl-type{flex:0 0 auto;font-size:0.7rem;'
+    'padding:1px 6px;border-radius:3px;background:#6c757d;color:#fff;'
+    'white-space:nowrap;font-family:monospace;}'
+    '</style>'
+)
+
+
+def _render_inventory_grid(_view, _context, model, _name):
+    """
+    Detail-view inventory rendering — same row styling as labels, but
+    a single full-width column so long inventory values (disk serials,
+    firmware strings, UUIDs) stay readable without truncation.
+    """
+    items = model.inventory or {}
+    if not items:
+        return Markup('<em class="text-muted">No inventory.</em>')
+    html = [_INVENTORY_GRID_CSS, '<div class="cmdb-inv-grid">']
+    for key in sorted(items.keys(), key=str.lower):
+        value = items[key]
+        value_str = '' if value is None else str(value)
+        type_name = _value_type_name(value)
+        html.append(
+            '<div class="cmdb-label-row">'
+            '<span class="lbl-src">inv</span>'
+            f'<span class="lbl-key">{escape(str(key))}</span>'
+            f'<span class="lbl-val" title="{escape(value_str)}">'
+            f'{escape(value_str)}</span>'
+            f'<span class="lbl-type" title="BSON type">{escape(type_name)}</span>'
+            '</div>'
+        )
+    html.append('</div>')
+    return Markup(''.join(html))
+
 def format_labels_export(_v, _c, m, _p):
     """ Format Labels view"""
     labels = []
@@ -943,9 +1128,9 @@ class ObjectModelView(DefaultModelView):
     # Detail view uses the rich Key / Value / Type table; the list
     # view stays compact with the badge preview above.
     column_formatters_detail = {
-        'log': format_log,
-        'labels': format_labels,
-        'inventory': format_inventory,
+        'log': _render_log_grid,
+        'labels': _render_labels_with_origin,
+        'inventory': _render_inventory_grid,
         'cache': format_cache,
         'cmdb_fields': _render_cmdb_fields,
         'cmdb_match': _render_cmdb_match_label,
@@ -1121,6 +1306,81 @@ class ObjectModelView(DefaultModelView):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('objects')
 
+    # Copy + Timeline row actions. `ObjectModelView` is registered with
+    # endpoint="Objects" → Flask-Admin mounts its routes under
+    # `admin/objects/`, so we build the row-action URLs to match.
+    column_extra_row_actions = [
+        LinkRowAction("fa fa-history", app.config['BASE_PREFIX'] + \
+                    "admin/objects/timeline?obj_id={row_id}"),
+        LinkRowAction("fa fa-copy", app.config['BASE_PREFIX'] + \
+                    "admin/objects/copy_as_new_form?source_id={row_id}"),
+    ]
+
+    @expose('/timeline')
+    def timeline(self):
+        """Reuse HostModelView's timeline renderer for CMDB objects."""
+        obj_id = request.args.get('obj_id', '').strip()
+        host = Host.objects(id=obj_id).first() if obj_id else None
+        if not host:
+            flash('Object not found.', 'error')
+            return redirect(url_for('.index_view'))
+        changes = list(HostLabelChange.objects(host=host).order_by('-changed_at')[:500])
+        return self.render(
+            'admin/host_timeline.html', host=host, changes=changes,
+        )
+
+    @expose('/copy_as_new_form')
+    def copy_as_new_form(self):
+        """Render the new-hostname modal for the copy-as-new row action."""
+        source_id = request.args.get('source_id', '')
+        source = Host.objects(id=source_id).first() if source_id else None
+        if not source:
+            flash('Source not found.', 'error')
+            return redirect(url_for('.index_view'))
+        return render_template(
+            'admin/copy_as_new_form.html',
+            source=source,
+            default_name=f'{source.hostname}-copy',
+        )
+
+    @expose('/copy_as_new_process', methods=['POST'])
+    def copy_as_new_process(self):
+        """Clone the source object under the new hostname."""
+        source_id = request.form.get('source_id', '')
+        new_name = (request.form.get('new_hostname') or '').strip()
+        if not source_id or not new_name:
+            flash('Missing source or new hostname.', 'error')
+            return redirect(url_for('.index_view'))
+        if Host.objects(hostname=new_name).first():
+            flash(f'Object {new_name!r} already exists.', 'error')
+            return redirect(url_for('.index_view'))
+        source = Host.objects(id=source_id).first()
+        if not source:
+            flash('Source not found.', 'error')
+            return redirect(url_for('.index_view'))
+
+        clone = Host()
+        clone.hostname = new_name
+        clone.object_type = source.object_type
+        clone.is_object = source.is_object
+        clone.no_autodelete = source.no_autodelete
+        clone.source_account_name = source.source_account_name or 'cmdb'
+        clone.source_account_id = ''
+        clone.labels = dict(source.labels or {})
+        clone.cmdb_fields = [
+            CmdbField(field_name=f.field_name, field_value=f.field_value)
+            for f in (source.cmdb_fields or [])
+        ]
+        clone.cmdb_templates = list(source.cmdb_templates or [])
+        clone.cmdb_match = source.cmdb_match
+        clone.available = source.available
+        clone.last_import_sync = datetime.now()
+        clone.last_import_seen = datetime.now()
+        clone.save()
+        flash(f'Copied to new object {new_name!r}.', 'success')
+        return redirect(url_for('.edit_view', id=str(clone.pk)))
+
+
 class TemplateModelView(ObjectModelView):
     """Template Model View for CMDB templates."""
 
@@ -1191,7 +1451,7 @@ class TemplateModelView(ObjectModelView):
         model.set_inventory_attributes('cmdb')
 
 
-class HostModelView(DefaultModelView):
+class HostModelView(DefaultModelView):  # pylint: disable=too-many-public-methods
     """
     Host Model
     """
@@ -1203,9 +1463,14 @@ class HostModelView(DefaultModelView):
 
     page_size = app.config['HOST_PAGESIZE']
 
+    # Labels already carry per-row badges showing the originating
+    # template (see `_render_labels_with_origin`), so the separate
+    # "CMDB" block (cmdb_templates + per-template label dumps) would
+    # duplicate the same information. Keep `cmdb_templates` out of the
+    # detail list.
     column_details_list = [
         'hostname', 'folder', 'no_autodelete', 'available',
-        'labels', 'inventory', 'cmdb_templates', 'log',
+        'labels', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
@@ -1229,9 +1494,20 @@ class HostModelView(DefaultModelView):
     column_export_list = ('hostname', )
 
     column_extra_row_actions = [
-        LinkRowAction("fa fa-rocket", app.config['BASE_PREFIX'] + \
+        LinkRowAction("fa fa-bug", app.config['BASE_PREFIX'] + \
                     "admin/host/debug?obj_id={row_id}"),
+        LinkRowAction("fa fa-history", app.config['BASE_PREFIX'] + \
+                    "admin/host/timeline?obj_id={row_id}"),
+        LinkRowAction("fa fa-copy", app.config['BASE_PREFIX'] + \
+                    "admin/host/copy_as_new_form?source_id={row_id}"),
     ]
+
+    # Adds the top-right search box. Flask-Admin's `init_search` would
+    # reject flask-mongoengine's StringField subclass as a non-text
+    # column, so we bypass that check in `init_search` below. The actual
+    # query is built in `_search()` which searches hostname AND every
+    # label value.
+    column_searchable_list = ['hostname']
 
     column_filters = (
        FilterHostnameRegex(
@@ -1268,12 +1544,16 @@ class HostModelView(DefaultModelView):
         'object_type': _render_object_type_icon,
     }
 
-    # Detail view shows Key / Value / Type so admins can tell a string
-    # "True" apart from the BSON bool True (different filter matching).
+    # Detail view groups labels by origin (manual vs. each assigned
+    # template) so admins can tell at a glance where each value is
+    # coming from, and scans cleanly at 50+ labels via the compact
+    # two-column grid. Inventory reuses the row style but stays
+    # single-column so long values (UUIDs, firmware strings) aren't
+    # truncated. Log rows get their own compact scrollable list.
     column_formatters_detail = {
-        'log': format_log,
-        'labels': format_labels,
-        'inventory': format_inventory,
+        'log': _render_log_grid,
+        'labels': _render_labels_with_origin,
+        'inventory': _render_inventory_grid,
         'cache': format_cache,
         'cmdb_templates': _render_cmdb_template,
         'last_import_seen': _render_datetime,
@@ -1499,8 +1779,26 @@ below and do not appear here.
         },
     }
 
+    @expose('/timeline')
+    def timeline(self):
+        """
+        Render a standalone Timeline page for a single host:
+        every `HostLabelChange` row, newest first, grouped by day.
+        """
+        obj_id = request.args.get('obj_id', '').strip()
+        host = Host.objects(id=obj_id).first() if obj_id else None
+        if not host:
+            flash('Host not found.', 'error')
+            return redirect(url_for('.index_view'))
+        changes = list(HostLabelChange.objects(host=host).order_by('-changed_at')[:500])
+        return self.render(
+            'admin/host_timeline.html',
+            host=host,
+            changes=changes,
+        )
+
     @expose('/debug')
-    def debug(self):
+    def debug(self):  # pylint: disable=too-many-locals
         """
         Checkmk specific Debug Page
         """
@@ -1518,21 +1816,52 @@ below and do not appear here.
         if hostname:
             output, output_rules = get_debug(hostname, mode)
 
-        base_urls = {
-            #'filter': f"{app.config['BASE_PREFIX']}admin/checkmkfilterrule/edit/?id=",
-            #'rewrite': f"{app.config['BASE_PREFIX']}admin/checkmkrewriteattributerule/edit/?id=",
-            #'actions': f"{app.config['BASE_PREFIX']}admin/checkmkrule/edit/?id=",
-            'CustomAttributes': f"{app.config['BASE_PREFIX']}admin/customattributerule/edit/?id=",
-        }
+        # Map each rule-group key (as set by the mode-specific debug
+        # function) to the Flask-Admin model endpoint. Flask-Admin's
+        # default endpoint is `model.__name__.lower()` since none of our
+        # add_view() calls override it. Shared across all modes first,
+        # then the per-mode specifics win.
+        bp = app.config['BASE_PREFIX']
+        base_urls = {'CustomAttributes': f"{bp}admin/customattributerule/edit/?id="}
+        per_mode = {
+            'checkmk_host': {
+                'filter':      'checkmkfilterrule',
+                'rewrite':     'checkmkrewriteattributerule',
+                'actions':     'checkmkrule',
+                'Setup Rules': 'checkmkrulemngmt',
+            },
+            'netbox_device': {
+                'rewrite':            'netboxrewriteattributerule',
+                'actions':            'netboxcustomattributes',
+                'VM Attributes':      'netboxvirtualmachineattributes',
+                'Cluster Attributes': 'netboxclusterattributes',
+            },
+            'ansible_host': {
+                'filter':  'ansiblefilterrule',
+                'rewrite': 'ansiblerewriteattributesrule',
+                'actions': 'ansiblecustomvariablesrule',
+            },
+            'idoit_host': {
+                'rewrite': 'idoitrewriteattributerule',
+                'actions': 'idoitcustomattributes',
+            },
+            'vmware_host': {
+                'rewrite': 'vmwarerewriteattributes',
+                'actions': 'vmwarecustomattributes',
+            },
+        }.get(mode, {})
+        for group, endpoint in per_mode.items():
+            base_urls[group] = f"{bp}admin/{endpoint}/edit/?id="
+
         new_rules = {}
         for rule_group, rule_data in output_rules.items():
             new_rules.setdefault(rule_group, [])
             for rule in rule_data:
-                #if rule_group in base_urls:
-                if rule_group in base_urls:
-                    rule['rule_url'] = f"{base_urls[rule_group]}{rule['id']}"
+                rule_id = rule.get('id')
+                if rule_group in base_urls and rule_id:
+                    rule['rule_url'] = f"{base_urls[rule_group]}{rule_id}"
                 else:
-                    rule['rule_url'] = '#'
+                    rule['rule_url'] = ''
                 new_rules[rule_group].append(rule)
 
         if "Error" in output:
@@ -1541,6 +1870,14 @@ below and do not appear here.
         return self.render('debug_host.html', hostname=hostname, output=output,
                            rules=new_rules, mode=mode)
 
+
+    # Bulk actions that only make sense when the syncer is in CMDB mode
+    # (the host list is the primary place an admin mutates hosts by hand).
+    # Filtered out via is_action_allowed() when CMDB_MODE is off so the
+    # "With selected..." dropdown stays clean for import-only installs.
+    _CMDB_ONLY_ACTIONS = frozenset({
+        'copy_as_new', 'bulk_label_edit', 'set_template',
+    })
 
     def __init__(self, model, **kwargs):
         """
@@ -1552,11 +1889,23 @@ below and do not appear here.
             self.can_create = False
             self.column_exclude_list.append('cmdb_fields')
             self.column_exclude_list.append('cmdb_templates')
+            # The copy-row icon only makes sense when the user is
+            # expected to create hosts by hand.
+            self.column_extra_row_actions = [
+                a for a in (self.column_extra_row_actions or [])
+                if 'copy_as_new_form' not in getattr(a, 'url', '')
+            ]
 
         if app.config['LABEL_PREVIEW_DISABLED']:
             self.column_exclude_list.append('labels')
 
         super().__init__(model, **kwargs)
+
+    def is_action_allowed(self, name):
+        if (name in self._CMDB_ONLY_ACTIONS
+                and not app.config.get('CMDB_MODE')):
+            return False
+        return super().is_action_allowed(name)
 
     def get_export_name(self, _export_type):  # pylint: disable=signature-differs
         """
@@ -1580,6 +1929,69 @@ below and do not appear here.
         """
         return Host.objects(is_object__ne=True)
 
+    def init_search(self):
+        """
+        Bypass Flask-Admin's `type(p) in allowed_search_types` check —
+        flask-mongoengine wraps StringField in its own subclass, which
+        identity-fails that comparison. We only need the search box to
+        appear; `_search()` below drives the actual query.
+        """
+        for name in self.column_searchable_list or []:
+            field = self.model._fields.get(name) if isinstance(name, str) else name
+            if field is None:
+                raise ValueError(f"Invalid search field: {name!r}")
+            self._search_fields.append(field)
+        return bool(self._search_fields)
+
+    def _search(self, query, search_term):
+        """
+        Full-text-ish search across hostname AND any label value.
+
+        Flask-Admin's default search only walks `column_searchable_list`
+        (string fields). For a CMDB the most useful search is "find hosts
+        whose hostname or ANY label value contains this term", which we
+        express as a single Mongo `$or` with `$regex` on hostname and
+        `$expr` / `$regexMatch` over the `labels` subdocument values.
+        """
+        term = (search_term or '').strip()
+        if not term:
+            return query
+        try:
+            re.compile(term)
+        except re.error:
+            # Fall back to a literal match so users typing a stray
+            # '[' don't get a 500.
+            term = re.escape(term)
+        pipeline = {
+            '$or': [
+                {'hostname': {'$regex': term, '$options': 'i'}},
+                {'$expr': {
+                    '$anyElementTrue': {
+                        '$map': {
+                            'input': {'$objectToArray': {
+                                '$ifNull': ['$labels', {}],
+                            }},
+                            'as': 'kv',
+                            'in': {
+                                '$regexMatch': {
+                                    'input': {
+                                        '$convert': {
+                                            'input': '$$kv.v',
+                                            'to': 'string',
+                                            'onError': '',
+                                            'onNull': '',
+                                        },
+                                    },
+                                    'regex': term,
+                                    'options': 'i',
+                                },
+                            },
+                        },
+                    },
+                }},
+            ],
+        }
+        return query.filter(__raw__=pipeline)
 
     def scaffold_form(self):
         """Scaffold form with extra CMDB fields."""
@@ -1672,6 +2084,11 @@ below and do not appear here.
         model.source_account_id = ""
         model.source_account_name = "cmdb"
         model.no_autodelete = True
+        # Tag this label mutation as a manual edit so HostLabelChange
+        # rows carry the right origin + acting user in the Timeline.
+        # pylint: disable=protected-access
+        model._label_change_source = 'manual'
+        model._label_change_user = getattr(current_user, 'email', None)
         # Hosts created/edited here are always of type 'host' — the form
         # field is hidden so the choice can't be accidentally changed.
         model.object_type = 'host'
@@ -1749,6 +2166,141 @@ below and do not appear here.
         """
         url = url_for('.set_template_form', ids=','.join(ids))
         return redirect(url)
+
+    @action('bulk_label_edit', 'Bulk Edit Labels', None)
+    def action_bulk_label_edit(self, ids):
+        """
+        Open the bulk label editor (add/remove/rename) for the
+        selected hosts. The actual change is applied in bulk_label_process.
+        """
+        return redirect(url_for('.bulk_label_form', ids=','.join(ids)))
+
+    @action('copy_as_new', 'Copy as new', None)
+    def action_copy_as_new(self, ids):
+        """
+        Clone one Host/Template into a new row. The user is prompted for
+        the new hostname in a small modal — labels, cmdb_fields and
+        cmdb_templates round-trip, timestamps and sync state are reset
+        so the clone doesn't look like a recently-imported object.
+        """
+        if len(ids) != 1:
+            flash('Copy as new requires exactly one selected row.', 'error')
+            return redirect(url_for('.index_view'))
+        return redirect(url_for('.copy_as_new_form', source_id=ids[0]))
+
+    @expose('/copy_as_new_form')
+    def copy_as_new_form(self):
+        """Render the new-hostname modal for the copy-as-new action."""
+        source_id = request.args.get('source_id', '')
+        source = Host.objects(id=source_id).first() if source_id else None
+        if not source:
+            flash('Source not found.', 'error')
+            return redirect(url_for('.index_view'))
+        return render_template(
+            'admin/copy_as_new_form.html',
+            source=source,
+            default_name=f'{source.hostname}-copy',
+        )
+
+    @expose('/copy_as_new_process', methods=['POST'])
+    def copy_as_new_process(self):
+        """Clone the source Host under the new hostname."""
+        source_id = request.form.get('source_id', '')
+        new_name = (request.form.get('new_hostname') or '').strip()
+        if not source_id or not new_name:
+            flash('Missing source or new hostname.', 'error')
+            return redirect(url_for('.index_view'))
+        if Host.objects(hostname=new_name).first():
+            flash(f'Host {new_name!r} already exists.', 'error')
+            return redirect(url_for('.index_view'))
+        source = Host.objects(id=source_id).first()
+        if not source:
+            flash('Source not found.', 'error')
+            return redirect(url_for('.index_view'))
+
+        clone = Host()
+        clone.hostname = new_name
+        clone.object_type = source.object_type
+        clone.is_object = source.is_object
+        clone.no_autodelete = source.no_autodelete
+        clone.source_account_name = source.source_account_name or 'cmdb'
+        clone.source_account_id = ''
+        clone.labels = dict(source.labels or {})
+        clone.cmdb_fields = [
+            CmdbField(field_name=f.field_name, field_value=f.field_value)
+            for f in (source.cmdb_fields or [])
+        ]
+        clone.cmdb_templates = list(source.cmdb_templates or [])
+        clone.cmdb_match = source.cmdb_match
+        clone.available = source.available
+        clone.last_import_sync = datetime.now()
+        clone.last_import_seen = datetime.now()
+        clone.save()
+
+        flash(f'Copied to new host {new_name!r}.', 'success')
+        return redirect(url_for('.edit_view', id=str(clone.pk)))
+
+    @expose('/bulk_label_form')
+    def bulk_label_form(self):
+        """Render the bulk label editor for the ids passed in the URL."""
+        ids = [str(escape(i)) for i in request.args.get('ids', '').split(',') if i]
+        return render_template('admin/bulk_label_form.html', ids=ids)
+
+    @expose('/bulk_label_process', methods=['POST'])
+    def bulk_label_process(self):
+        """
+        Apply an add / remove / rename label operation to every host in
+        `host_ids`. Uses `update_host` so existing side-effects (log entry,
+        last_import_sync bump, cache invalidation) still fire per host.
+        """
+        host_ids = [x for x in request.form.get('host_ids', '').split(',') if x]
+        mode = request.form.get('mode', '')
+        key = (request.form.get('label_key') or '').strip()
+        value = (request.form.get('label_value') or '').strip()
+        new_key = (request.form.get('new_key') or '').strip()
+
+        if mode not in ('add', 'remove', 'rename') or not key:
+            flash('Invalid bulk label request', 'error')
+            return redirect(url_for('.index_view'))
+        if mode == 'rename' and not new_key:
+            flash('Rename needs a new key', 'error')
+            return redirect(url_for('.index_view'))
+
+        changed = 0
+        skipped = 0
+        user_email = getattr(current_user, 'email', None)
+        for host_id in host_ids:
+            host = Host.objects(id=host_id).first()
+            if not host:
+                continue
+            labels = dict(host.labels or {})
+            before = dict(labels)
+            if mode == 'add':
+                labels[key] = value
+            elif mode == 'remove':
+                labels.pop(key, None)
+            elif mode == 'rename':
+                if key in labels:
+                    labels[new_key] = labels.pop(key)
+                else:
+                    skipped += 1
+                    continue
+            if labels != before:
+                # Tag the change so HostLabelChange rows show "manual"
+                # + the acting user in the Timeline, not "import".
+                # pylint: disable=protected-access
+                host._label_change_source = 'manual'
+                host._label_change_user = user_email
+                host.update_host(labels)
+                host.save()
+                changed += 1
+
+        flash(
+            f'Bulk label {mode}: updated {changed} host(s)'
+            + (f', {skipped} skipped (key not present)' if skipped else ''),
+            'success' if changed else 'warning',
+        )
+        return redirect(url_for('.index_view'))
 
 
     @expose('/set_template_form')

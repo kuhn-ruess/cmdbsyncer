@@ -1,0 +1,91 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<style>
+.tl-wrap { max-width: 960px; margin: 1.25rem auto; }
+.tl-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.tl-header h2 { margin: 0; }
+.tl-day { margin-top: 16px; border-top: 1px solid #e2e6ea;
+          padding-top: 6px; font-size: 0.85rem; color: #6c757d;
+          text-transform: uppercase; letter-spacing: 0.04em; }
+.tl-entry { display: grid; grid-template-columns: 100px 80px 1fr 1fr 150px;
+            gap: 8px; align-items: center;
+            padding: 4px 6px; border-bottom: 1px solid #f1f3f5;
+            font-size: 0.92rem; }
+.tl-time { color: #6c757d; font-family: monospace; }
+.tl-change { padding: 1px 8px; border-radius: 4px; font-size: 0.75rem;
+             font-weight: bold; text-align: center; }
+.tl-change.add { background: #d4edda; color: #155724; }
+.tl-change.update { background: #fff3cd; color: #856404; }
+.tl-change.remove { background: #f8d7da; color: #721c24; }
+.tl-key { font-weight: bold; color: #1abc9c; }
+.tl-val { font-family: monospace; color: #2c3e50; overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; }
+.tl-val .old { color: #dc3545; text-decoration: line-through; }
+.tl-val .new { color: #28a745; }
+.tl-source { padding: 1px 6px; border-radius: 3px; font-size: 0.72rem;
+             text-align: center; }
+.tl-source.manual { background: #e8f6fd; color: #2980b9; }
+.tl-source.import { background: #f1f3f5; color: #6c757d; }
+.tl-source.template { background: #eaf7ea; color: #1e8449; }
+.tl-source.rule { background: #fff2e0; color: #b15300; }
+.tl-user { color: #6c757d; font-size: 0.78rem; }
+.tl-empty { padding: 24px; text-align: center; color: #6c757d; }
+</style>
+
+<div class="tl-wrap">
+    <div class="tl-header">
+        <a href="{{ url_for('.index_view') }}" class="btn btn-sm btn-secondary">
+            <i class="fa fa-arrow-left"></i> Back
+        </a>
+        <h2>Timeline — {{ host.hostname }}</h2>
+    </div>
+
+    {% if not changes %}
+    <div class="app-card tl-empty">
+        No label changes have been recorded for this host yet.
+        The history starts the first time a label is added, updated, or removed
+        after this version of the syncer is running.
+    </div>
+    {% else %}
+
+    {% set ns = namespace(prev_day='') %}
+    {% for c in changes %}
+        {% set day = c.changed_at.strftime('%Y-%m-%d') %}
+        {% if day != ns.prev_day %}
+        <div class="tl-day">{{ day }}</div>
+        {% set ns.prev_day = day %}
+        {% endif %}
+        <div class="tl-entry">
+            <span class="tl-time">{{ c.changed_at.strftime('%H:%M:%S') }}</span>
+            <span class="tl-change {{ c.change }}">{{ c.change }}</span>
+            <span class="tl-key">{{ c.key }}</span>
+            <span class="tl-val">
+                {% if c.change == 'add' %}
+                    <span class="new">{{ c.new_value or '' }}</span>
+                {% elif c.change == 'remove' %}
+                    <span class="old">{{ c.old_value or '' }}</span>
+                {% else %}
+                    <span class="old">{{ c.old_value or '—' }}</span>
+                    →
+                    <span class="new">{{ c.new_value or '—' }}</span>
+                {% endif %}
+            </span>
+            <span>
+                <span class="tl-source {{ c.source or 'import' }}">{{ c.source or 'import' }}</span>
+                {% if c.user_email %}
+                <span class="tl-user">{{ c.user_email }}</span>
+                {% endif %}
+            </span>
+        </div>
+    {% endfor %}
+
+    {% if changes|length >= 500 %}
+    <div class="text-muted small mt-2">
+        Showing the 500 most recent entries.
+    </div>
+    {% endif %}
+
+    {% endif %}
+</div>
+{% endblock %}

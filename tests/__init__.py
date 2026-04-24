@@ -82,6 +82,21 @@ _stub_package("application.modules.rule", path=[])
 _stub_package("application.models", path=[])
 _stub_package("application.plugins", path=[])
 _stub_package("application.plugins.checkmk", path=[])
+# Stubs for the plugin modules the host view imports debug entry points
+# from. Minimal: expose a callable under the same name so `from … import
+# get_X_debug_data` resolves — tests don't exercise the debug path.
+_stub_package("application.plugins.netbox", path=[])
+sys.modules["application.plugins.netbox"].get_device_debug_data = MagicMock(
+    name="stub.get_device_debug_data")
+_stub_package("application.plugins.ansible", path=[])
+sys.modules["application.plugins.ansible"].get_ansible_debug_data = MagicMock(
+    name="stub.get_ansible_debug_data")
+_stub_package("application.plugins.idoit", path=[])
+sys.modules["application.plugins.idoit"].get_idoit_debug_data = MagicMock(
+    name="stub.get_idoit_debug_data")
+_stub_package("application.plugins.vmware", path=[])
+sys.modules["application.plugins.vmware"].get_vmware_debug_data = MagicMock(
+    name="stub.get_vmware_debug_data")
 _stub_package("application.modules.custom_attributes", path=[])
 _stub_package("application.helpers", path=[])
 
@@ -152,6 +167,23 @@ class _Host:  # pylint: disable=too-few-public-methods
 
 
 _models_host.Host = _Host
+
+
+class _CmdbField:  # pylint: disable=too-few-public-methods
+    """Stub CmdbField embedded doc — tests don't exercise persistence."""
+
+    def __init__(self, field_name=None, field_value=None):
+        self.field_name = field_name
+        self.field_value = field_value
+
+
+class _HostLabelChange:  # pylint: disable=too-few-public-methods
+    """Stub HostLabelChange model; tests patch .objects if needed."""
+    objects = MagicMock()
+
+
+_models_host.CmdbField = _CmdbField
+_models_host.HostLabelChange = _HostLabelChange
 
 
 # --- mongoengine / flask_admin.contrib.mongoengine --------------------------
