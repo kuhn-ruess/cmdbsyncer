@@ -46,61 +46,87 @@ def _abort_unauthorized(reason="Unauthorized"):
     abort(401, "unauthorized")
 
 
+def _authenticate_user():
+    """
+    Resolve Basic Auth credentials to an active User, enforcing HTTPS and
+    handling historical duplicate names. Returns the User on success or
+    aborts with 401. Role checks are the caller's responsibility.
+    """
+    username, user_password = _extract_login_credentials()
+    if not username:
+        if request.headers.get('x-login-token'):
+            _abort_unauthorized("Invalid or removed login token")
+        _abort_unauthorized("No credentials provided")
+    if not _is_secure_api_request():
+        details = [
+            ('reason', 'HTTPS required'),
+            ('user', username),
+            ('ip', request.remote_addr),
+        ]
+        log.log("API Login failed", details=details, source="API")
+        abort(401, "HTTPS is required for password-based API authentication")
+    try:
+        user_result = User.objects.get(
+            disabled__ne=True,
+            __raw__={'$or': [{'name': username}, {'email': username}]}
+        )
+    except DoesNotExist:
+        _abort_unauthorized("Invalid credentials")
+    except MultipleObjectsReturned:
+        user_result = next(
+            (candidate for candidate in User.objects(
+                disabled__ne=True,
+                __raw__={'$or': [{'name': username}, {'email': username}]}
+            ) if candidate.check_password(user_password)),
+            None,
+        )
+        if user_result is None:
+            _abort_unauthorized("Invalid credentials")
+    if not user_result.check_password(user_password):
+        _abort_unauthorized("Invalid credentials")
+    return user_result, username
+
+
 def require_token(fn):
     """
-    Decorator for Endpoints with token
+    Decorator for Flask-RESTX endpoints mounted under /api/v1. Authenticates
+    Basic Auth credentials against a User and grants access when one of the
+    user's `api_roles` is ``all`` or a prefix of the request path (so role
+    ``syncer`` grants every ``/api/v1/syncer/*`` endpoint, ``ansible`` grants
+    ``/api/v1/ansible/*``, and so on).
     """
     @wraps(fn)
     def decorated_view(*args, **kwargs):
-        username, user_password = _extract_login_credentials()
-        if username:
-            if not _is_secure_api_request():
-                details = [
-                    ('reason', 'HTTPS required'),
-                    ('user', username),
-                    ('ip', request.remote_addr),
-                ]
-                log.log("API Login failed", details=details, source="API")
-                abort(401, "HTTPS is required for password-based API authentication")
-            try:
-                user_result = User.objects.get(
-                    disabled__ne=True,
-                    __raw__={'$or': [{'name': username}, {'email': username}]}
-                )
-            except DoesNotExist:
-                _abort_unauthorized("Invalid credentials")
-            except MultipleObjectsReturned:
-                # Historically `name` was unique but that was relaxed, so existing
-                # installs can carry duplicates. Fall back to the candidate whose
-                # password matches instead of crashing with a 500.
-                user_result = next(
-                    (candidate for candidate in User.objects(
-                        disabled__ne=True,
-                        __raw__={'$or': [{'name': username}, {'email': username}]}
-                    ) if candidate.check_password(user_password)),
-                    None,
-                )
-                if user_result is None:
-                    _abort_unauthorized("Invalid credentials")
-            roles = user_result.api_roles or []
-            current_path = request.path.replace('/api/v1/', '')
-            allowed = False
-            for role in roles:
-                if role == 'all':
-                    allowed = True
-                    break
-                if current_path.startswith(role):
-                    allowed = True
-                    break
-            if not allowed:
-                _abort_unauthorized(f"User '{username}' not allowed for path '{current_path}'")
-            if not user_result.check_password(user_password):
-                _abort_unauthorized("Invalid credentials")
-        elif request.headers.get('x-login-token'):
-            _abort_unauthorized("Invalid or removed login token")
-        else:
-            _abort_unauthorized("No credentials provided")
-
+        user_result, username = _authenticate_user()
+        roles = user_result.api_roles or []
+        current_path = request.path.replace('/api/v1/', '')
+        allowed = any(
+            role == 'all' or current_path.startswith(role)
+            for role in roles
+        )
+        if not allowed:
+            _abort_unauthorized(f"User '{username}' not allowed for path '{current_path}'")
         return fn(*args, **kwargs)
 
     return decorated_view
+
+
+def require_api_role(role_name):
+    """
+    Decorator factory for endpoints that live outside ``/api/v1`` (for
+    example the Prometheus ``/metrics`` scrape URL). Authenticates Basic
+    Auth credentials against a User and grants access when the user's
+    ``api_roles`` contains ``all`` or the exact role name given.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def decorated_view(*args, **kwargs):
+            user_result, username = _authenticate_user()
+            roles = user_result.api_roles or []
+            if 'all' not in roles and role_name not in roles:
+                _abort_unauthorized(
+                    f"User '{username}' not allowed for role '{role_name}'"
+                )
+            return fn(*args, **kwargs)
+        return decorated_view
+    return decorator

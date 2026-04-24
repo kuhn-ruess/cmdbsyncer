@@ -176,15 +176,15 @@ class AccountModelView(DefaultModelView):
                     [rules.Field('address'),
                      rules.Field('username'),
                      rules.Field('password')]),
-            section('3', 'out', 'Object Settings',
+            section('3', 'out', 'Additional Configuration',
+                    'Freeform custom fields and per-plugin overrides.',
+                    [rules.Field('custom_fields'),
+                     rules.Field('plugin_settings')]),
+            section('4', 'aux', 'Object Settings',
                     'Which object types this account produces or targets.',
                     [rules.Field('is_object'),
                      rules.Field('cmdb_object'),
                      rules.Field('object_type')]),
-            section('4', 'aux', 'Additional Configuration',
-                    'Freeform custom fields and per-plugin overrides.',
-                    [rules.Field('custom_fields'),
-                     rules.Field('plugin_settings')]),
         ),
     ]
 
@@ -238,13 +238,49 @@ class AccountModelView(DefaultModelView):
             )
         return super().create_view()
 
+    @staticmethod
+    def _lock_type_field(form):
+        """Render the `type` dropdown read-only and freeze its value.
+
+        Flask-Admin's Select2 widget respects `disabled` via
+        ``render_kw``, but a disabled ``<select>`` isn't submitted by
+        the browser — so pre-mark the field's ``process_formdata`` to
+        keep the current in-memory value even if the template ignores
+        the attribute. We also set ``readonly`` for Bootstrap plain
+        selects and narrow the choices to the current value so a
+        tampered POST can't slip another type through.
+        """
+        field = form.type
+        current = field.data
+        widget_kw = dict(getattr(field, 'render_kw', None) or {})
+        widget_kw['disabled'] = True
+        widget_kw['readonly'] = True
+        field.render_kw = widget_kw
+        if current:
+            label = dict(field.choices or []).get(current, current)
+            field.choices = [(current, label)]
+
+    def edit_form(self, obj=None):
+        """Lock the plugin type on edit.
+
+        Changing the type after creation would invalidate the preset-based
+        custom fields the user already set (each plugin brings its own
+        schema of `account_custom_field_presets`) and has no safe-to-apply
+        semantics at the plugin layer.
+        """
+        form = super().edit_form(obj)
+        if hasattr(form, 'type'):
+            self._lock_type_field(form)
+        return form
+
     def create_form(self, obj=None):
         """Pre-fill the account form based on the plugin type from the URL.
 
         `on_model_change` already merges the same preset data at save
         time, but seeding the form here means the user sees the
         defaults immediately — they can tweak or delete rows before
-        ever hitting Save.
+        ever hitting Save. The picker in step 1 already captured the
+        plugin type, so the dropdown stays read-only here too.
         """
         form = super().create_form(obj)
 
@@ -255,6 +291,8 @@ class AccountModelView(DefaultModelView):
         # Default the `type` field to the picked plugin.
         if hasattr(form, 'type') and not form.type.data:
             form.type.data = account_type
+        if hasattr(form, 'type'):
+            self._lock_type_field(form)
 
         plugins = discover_plugins() or {}
         plugin_data = plugins.get(account_type) or {}
@@ -289,10 +327,15 @@ class AccountModelView(DefaultModelView):
         """
         Create Defauls for Account on create
         """
+        # The edit form ships `type` as disabled, so the browser doesn't
+        # submit it — form.type.data is empty on edit. Fall back to what
+        # is already on the model so the preset lookup (and every field
+        # below) targets the original plugin type.
+        account_type = form.type.data or model.type
         main_presets = []
         default_fields = []
         plugins = discover_plugins()
-        if plugin_data := plugins.get(form.type.data):
+        if plugin_data := plugins.get(account_type):
             main_presets = plugin_data.get('account_presets', {}).items()
             default_fields = plugin_data.get('account_custom_field_presets', {}).items()
 

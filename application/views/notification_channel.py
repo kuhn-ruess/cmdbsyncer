@@ -10,6 +10,7 @@ from flask_login import current_user
 
 from application.views.default import DefaultModelView
 from application.views._form_sections import modern_form, section
+from application.views._form_fields import AccountSelectField
 
 
 class NotificationChannelView(DefaultModelView):
@@ -20,43 +21,33 @@ class NotificationChannelView(DefaultModelView):
                       BooleanEqualFilter('enabled', 'Enabled'))
     column_editable_list = ['enabled']
 
+    form_overrides = {
+        'account': AccountSelectField,
+    }
+
     form_rules = modern_form(
         section('1', 'main', 'General',
-                'Identity, channel type and activation. Email is '
-                'handled natively via the syncer\'s Flask-Mail config; '
-                'Slack / Teams / webhook delegate to the Enterprise '
-                'notifications module when licensed and fall back to '
-                'email delivery to the contact otherwise.',
+                'Identity, channel type and activation.',
                 [rules.Field('name'),
                  rules.Field('type'),
                  rules.Field('enabled'),
                  rules.Field('description')]),
-        section('2', 'cond', 'Email',
+        section('2', 'cond', 'Delivery target',
+                'Slack / Teams / webhook: pick the Syncer Account '
+                'that carries the endpoint URL (Address), the optional '
+                'signing secret (Password) and any per-integration '
+                'details (Custom Fields). Leave empty for email — '
+                'delivery runs through the Flask-Mail config.',
+                [rules.Field('account')]),
+        section('3', 'out', 'Email',
                 'Only used when type = email. Override recipients '
                 'explicitly (comma-separated) or leave empty to '
                 'deliver to each matching contact\'s own email address.',
                 [rules.Field('email_recipients'),
                  rules.Field('email_subject_prefix')]),
-        section('3', 'out', 'Slack / Teams / Webhook',
-                'Only used for the non-email types. The generic '
-                'webhook signs the body with HMAC-SHA256 using the '
-                'named Account\'s password as the secret.',
-                [rules.Field('webhook_url'),
-                 rules.Field('signing_secret_account'),
-                 rules.Field('slack_channel'),
-                 rules.Field('slack_mention'),
-                 rules.Field('extra_headers')]),
     )
 
     form_widget_args = {
-        'webhook_url': {
-            'placeholder': 'Slack/Teams incoming-webhook URL or your own HTTPS endpoint',
-        },
-        'signing_secret_account': {
-            'placeholder': 'Account whose password is the HMAC secret (generic webhook only)',
-        },
-        'slack_channel': {'placeholder': 'Override #channel (optional, Slack only)'},
-        'slack_mention': {'placeholder': '<!here>, @netops, <!subteam^Sxxx> (optional)'},
         'email_recipients': {'placeholder': 'alice@example.com, ops@example.com'},
         'email_subject_prefix': {'placeholder': '[CMDBsyncer]'},
     }

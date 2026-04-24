@@ -190,6 +190,14 @@ plugin_register = []
 # before the bulk of the factory so an enterprise build can swap in a
 # structured / JSON log pipeline before blueprint/admin registration.
 enterprise.load_package()
+# Plugin types that Enterprise registered via register_plugin_type() are
+# now in the runtime registry. ``Account.type``'s choices were frozen at
+# class-definition time (before Enterprise was importable), so refresh
+# them here so the edit form dropdown and MongoEngine validation both
+# accept the new idents.
+from application.models.account import Account, get_account_types  # noqa: E402
+# pylint: disable-next=no-member,protected-access
+Account._fields['type'].choices = get_account_types()
 # CLI invocations (``./cmdbsyncer <command>``) set CMDBSYNCER_CLI so the
 # ECS JSON pipeline stays off — otherwise every command would print pages
 # of blueprint/audit INFO lines before its own output. Web/worker startup
@@ -312,7 +320,6 @@ admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attr
 _register_all_plugin_admin_views()
 
 
-from application.models.account import Account
 from application.views.account import AccountModelView, ChildAccountModelView
 admin.add_category(name="Accounts", icon_type='fa', icon_value='fa-users')
 admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts", menu_icon_type='fa', menu_icon_value='fa-user-circle'))

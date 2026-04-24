@@ -8,6 +8,13 @@ _DISABLED_PLUGINS_PATH = os.path.join(_BASE_DIR, 'disabled_plugins.json')
 # Cache: computed once at first call, maps dirname -> bool (True = disabled)
 _disabled_cache = None  # pylint: disable=invalid-name
 
+# In-memory registry for plugin types that ship inside a pip-installed
+# Enterprise package rather than as a directory under plugins/. Callers
+# use register_plugin_type(...) at feature activation time; discover_plugins()
+# merges these on top of the filesystem discovery so Account.typ and the
+# create-account preset form pick them up uniformly.
+_RUNTIME_PLUGINS = {}
+
 
 def _read_plugin_json(plugin_dir_path):
     """Read and return plugin.json data from a plugin directory, or None."""
@@ -110,10 +117,30 @@ def register_cli_group(flask_app, name, plugin_dirname, help_text=""):
     return cli_group
 
 
+def register_plugin_type(ident, name, account_presets=None,
+                         account_custom_field_presets=None,
+                         description=''):
+    """Register an Account plugin type from code (used by Enterprise).
+
+    Idempotent: registering the same ident again overwrites the earlier
+    entry, so Enterprise can call this on every process start without
+    guarding against duplicates.
+    """
+    _RUNTIME_PLUGINS[ident] = {
+        'ident': ident,
+        'name': name,
+        'description': description,
+        'enabled': True,
+        'account_presets': dict(account_presets or {}),
+        'account_custom_field_presets': dict(account_custom_field_presets or {}),
+    }
+
+
 def discover_plugins():
     """
-    Discover account types from plugin.json files in plugin directories.
-    Skips plugins that are disabled (via disabled_plugins.json or enabled flag).
+    Discover account types from plugin.json files in plugin directories
+    and from the runtime registry. Skips plugins that are disabled
+    (via disabled_plugins.json or enabled flag).
     """
     plugins = {}
     for sub in ('plugins', os.path.join('application', 'plugins')):
@@ -129,4 +156,7 @@ def discover_plugins():
             data = _read_plugin_json(entry_path)
             if data and 'ident' in data and 'name' in data:
                 plugins[data['ident']] = data
+    # Runtime-registered plugins win over filesystem ones with the same
+    # ident (Enterprise can refresh its presets without an FS write).
+    plugins.update(_RUNTIME_PLUGINS)
     return plugins

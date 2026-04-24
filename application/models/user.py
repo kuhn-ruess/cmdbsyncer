@@ -31,6 +31,7 @@ api_roles = [
   ('ansible', "Ansible"),
   ('objects', "Objects"),
   ('syncer', "Syncer"),
+  ('metrics', "Prometheus metrics scrape"),
 ]
 
 class User(db.Document, UserMixin):
