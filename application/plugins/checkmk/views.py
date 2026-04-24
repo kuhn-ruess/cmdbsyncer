@@ -27,7 +27,9 @@ from application.modules.rule.views import (
     _render_full_conditions,
     get_rule_json,
     _render_jinja,
+    _modern_rule_form,
 )
+from application.views._form_sections import modern_form, section
 from .models import action_outcome_types, CheckmkSite, CheckmkSettings
 
 
@@ -304,14 +306,20 @@ class CheckmkGroupRuleView(RuleModelView):
     }
 
     form_rules = [
-        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_groups"]}"'\
-                        'target="_blank" class="badge badge-light">Documentation</a>'),
-        rules.FieldSet(
-           ('name', 'documentation', 'enabled'),
-            "1. Main Options"),
-        rules.FieldSet(
-           ( 'outcome',
-           ), "2. Rule"),
+        rules.HTML(f'<a href="{docu_links["cmk_groups"]}" target="_blank" '
+                   f'class="badge badge-light" style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-info-circle"></i> Documentation</a>'),
+        *modern_form(
+            section('1', 'main', 'Main Options',
+                    'Name, description and activation.',
+                    [rules.Field('name'),
+                     rules.Field('documentation'),
+                     rules.Field('enabled')]),
+            section('2', 'out', 'Group Outcome',
+                    'Create host/contact/service groups for hosts this '
+                    'rule matches on.',
+                    [rules.Field('outcome')]),
+        ),
     ]
 
 
@@ -371,22 +379,22 @@ class CheckmkBiRuleView(DefaultModelView):
         'name': get_rule_json
     }
 
-    form_rules = [
-        rules.FieldSet((
+    form_rules = _modern_rule_form(
+        main_fields=[
             rules.Field('name'),
             rules.Field('documentation'),
             div_open,
             rules.NestedRule(('enabled', 'last_match')),
-            ), "1. Main Options"),
             div_close,
-
-       rules.FieldSet(
-           ( 'condition_typ', 'conditions',
-           ), "2. Conditions"),
-       rules.FieldSet(
-           ( 'outcomes',
-           ), "3. BI Rule"),
-    ]
+        ],
+        condition_fields=[
+            rules.Field('condition_typ'),
+            rules.Field('conditions'),
+        ],
+        outcome_fields=[rules.Field('outcomes')],
+        outcome_title='BI Rule',
+        outcome_desc='Business Intelligence rule pushed into Checkmk.',
+    )
 
     form_excluded_columns = (
         'render_full_conditions',
@@ -445,22 +453,26 @@ class CheckmkMngmtRuleView(RuleModelView):
     Management of Rules inside Checkmk
     """
     form_rules = [
-        rules.FieldSet((
-            rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_setup_rules"]}"'\
-                            'target="_blank" class="badge badge-light">Documentation</a>'),
-            rules.Field('name'),
-            rules.Field('documentation'),
-            div_open,
-            rules.NestedRule(('enabled', 'last_match')),
-            ), "1. Main Options"),
-            div_close,
-
-       rules.FieldSet(
-           ( 'condition_typ', 'conditions',
-           ), "2. Conditions"),
-       rules.FieldSet(
-           ( 'outcomes',
-           ), "3. Rule"),
+        rules.HTML(f'<a href="{docu_links["cmk_setup_rules"]}" target="_blank" '
+                   f'class="badge badge-light" style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-info-circle"></i> Documentation</a>'),
+        *_modern_rule_form(
+            main_fields=[
+                rules.Field('name'),
+                rules.Field('documentation'),
+                div_open,
+                rules.NestedRule(('enabled', 'last_match')),
+                div_close,
+            ],
+            condition_fields=[
+                rules.Field('condition_typ'),
+                rules.Field('conditions'),
+            ],
+            outcome_fields=[rules.Field('outcomes')],
+            outcome_title='Checkmk Setup Rule',
+            outcome_desc='The actual ruleset entry to create inside '
+                         'Checkmk for matching hosts.',
+        ),
     ]
 
     def __init__(self, model, **kwargs):
@@ -583,6 +595,23 @@ class CheckmkSiteView(DefaultModelView):
         'enabled',
     ]
 
+    form_rules = modern_form(
+        section('1', 'main', 'Basics',
+                'Name of the Checkmk site, description and activation.',
+                [rules.Field('name'),
+                 rules.Field('documentation'),
+                 rules.Field('enabled')]),
+        section('2', 'cond', 'Connection',
+                'Server address and the Site Settings template to '
+                'inherit (edition, version, certs, …).',
+                [rules.Field('server_address'),
+                 rules.Field('settings_master')]),
+        section('3', 'out', 'Ansible Overrides',
+                'Per-site custom Ansible variables applied on top of '
+                'the Site Settings defaults.',
+                [rules.Field('custom_ansible_variables')]),
+    )
+
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
@@ -624,32 +653,29 @@ class CheckmkTagMngmtView(DefaultModelView):
     }
 
     form_rules = [
-        rules.FieldSet((
-            rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_hosttags"]}"'\
-                            'target="_blank" class="badge badge-light">Documentation</a>'),
-            )
-       ),
-       main_open,
-       rules.FieldSet(
-           ('group_topic_name', 'group_title', 'group_id', 'group_help',
-           ), "1. Checkmk Group Data"),
-       rules.FieldSet(
-           ( 'rewrite_id', 'rewrite_title',
-           ), "2. Define which ID and Title the Tag should have in Checkmk"),
-       rules.FieldSet(
-           ( 'enabled',
-           ), "3. Enable"),
-       main_close,
-       addional_open,
-       rules.FieldSet(
-           ( 'group_multiply_list', 'group_multiply_by_list',
-           ), 'Create Multiple Checkmk Groups'),
-       rules.HTML('<br>'),
-       rules.FieldSet(
-           ( 'filter_by_account',
-           ), 'Filter Input Data'),
-        rules.FieldSet(('documentation',), 'Internal Documentation'),
-        addional_close
+        rules.HTML(f'<a href="{docu_links["cmk_hosttags"]}" target="_blank" '
+                   f'class="badge badge-light" style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-info-circle"></i> Documentation</a>'),
+        *modern_form(
+            section('1', 'main', 'Checkmk Group Data',
+                    'Topic, title, id and help text that appear in '
+                    'Checkmk Setup.',
+                    [rules.Field('group_topic_name'),
+                     rules.Field('group_title'),
+                     rules.Field('group_id'),
+                     rules.Field('group_help')]),
+            section('2', 'cond', 'ID & Title Rewrites',
+                    'Define which ID and title the tag should have in Checkmk.',
+                    [rules.Field('rewrite_id'),
+                     rules.Field('rewrite_title'),
+                     rules.Field('enabled')]),
+            section('3', 'aux', 'Additional Options',
+                    'Create multiple groups, filter input, internal notes.',
+                    [rules.Field('group_multiply_list'),
+                     rules.Field('group_multiply_by_list'),
+                     rules.Field('filter_by_account'),
+                     rules.Field('documentation')]),
+        ),
     ]
 
     form_overrides = {
@@ -703,6 +729,33 @@ class CheckmkUserMngmtView(DefaultModelView):
         'remove_if_found',
         'disable_login'
     ]
+
+    form_rules = modern_form(
+        section('1', 'main', 'Identity',
+                'Login ID, name and contact — these are the fields '
+                'Checkmk shows in the user list.',
+                [rules.Field('user_id'),
+                 rules.Field('full_name'),
+                 rules.Field('email'),
+                 rules.Field('pager_address'),
+                 rules.Field('documentation')]),
+        section('2', 'cond', 'Roles & Groups',
+                'Which Checkmk roles and contact groups this user '
+                'belongs to.',
+                [rules.Field('roles'),
+                 rules.Field('contact_groups')]),
+        section('3', 'out', 'Authentication',
+                'Password handling and login state on the Checkmk side.',
+                [rules.Field('password'),
+                 rules.Field('overwrite_password'),
+                 rules.Field('force_password_change'),
+                 rules.Field('disable_login')]),
+        section('4', 'aux', 'Lifecycle',
+                'Sync flags controlling how this user entry reacts to '
+                'the Checkmk state.',
+                [rules.Field('remove_if_found'),
+                 rules.Field('disabled')]),
+    )
 
     def is_accessible(self):
         """ Overwrite """
@@ -774,29 +827,34 @@ class CheckmkSettingsView(DefaultModelView):
         },
     }
 
-    form_rules = [
-        rules.FieldSet((
-            rules.Field('name'),
-            rules.Field('documentation'),
-            ), "Documentation"),
-       rules.FieldSet(
-           ( 'server_user',
-           ), "Ansible Settings"),
-       rules.FieldSet(
-           ( 'cmk_edition', 'cmk_version', 'cmk_version_filename', 'inital_password'
-           ), "Checkmk Site Settings"),
-       rules.FieldSet(
-           ( 'cmk_user', 'cmk_secret', 'cmk_server_address',
-           ), "CheckMK API Settings (optional: for automated Downtimes)"),
-       rules.FieldSet(
-           ( 'subscription_username', 'subscription_password',
-           ), "Automatic Download Settings (optional: For automated Version Download)"),
-       rules.FieldSet((
-           'webserver_certificate',
-           'webserver_certificate_private_key',
-           'webserver_certificate_intermediate',
-           ), "Server Managment (optional: For automated Certificate Updates)"),
-    ]
+    form_rules = modern_form(
+        section('1', 'main', 'Basics',
+                'Name, documentation and the Ansible user for site ops.',
+                [rules.Field('name'),
+                 rules.Field('documentation'),
+                 rules.Field('server_user')]),
+        section('2', 'cond', 'Checkmk Site',
+                'Edition, version, filename and initial password — used '
+                'when rolling out a fresh site.',
+                [rules.Field('cmk_edition'),
+                 rules.Field('cmk_version'),
+                 rules.Field('cmk_version_filename'),
+                 rules.Field('inital_password')]),
+        section('3', 'out', 'Checkmk API',
+                'Optional: credentials + API address for automated '
+                'downtimes / status reads.',
+                [rules.Field('cmk_user'),
+                 rules.Field('cmk_secret'),
+                 rules.Field('cmk_server_address')]),
+        section('4', 'aux', 'Automatic Download & Certificates',
+                'Optional: subscription creds for auto-version-download '
+                'and paths to webserver certs for auto-renewal.',
+                [rules.Field('subscription_username'),
+                 rules.Field('subscription_password'),
+                 rules.Field('webserver_certificate'),
+                 rules.Field('webserver_certificate_private_key'),
+                 rules.Field('webserver_certificate_intermediate')]),
+    )
 
     column_exclude_list = [
         'inital_password',
@@ -927,22 +985,22 @@ class CheckmkDowntimeView(RuleModelView):
     Checkmk Downtimes
     """
     # Custom Form Rules because default needs the sort_field which we not have
-    form_rules = [
-        rules.FieldSet((
+    form_rules = _modern_rule_form(
+        main_fields=[
             rules.Field('name'),
             rules.Field('documentation'),
             div_open,
             rules.NestedRule(('enabled', 'last_match')),
-            ), "1. Main Options"),
             div_close,
-
-       rules.FieldSet(
-           ( 'condition_typ', 'conditions',
-           ), "2. Conditions"),
-       rules.FieldSet(
-           ( 'outcomes',
-           ), "3. Downtime"),
-    ]
+        ],
+        condition_fields=[
+            rules.Field('condition_typ'),
+            rules.Field('conditions'),
+        ],
+        outcome_fields=[rules.Field('outcomes')],
+        outcome_title='Downtime',
+        outcome_desc='Schedule a Checkmk downtime window for matching hosts.',
+    )
 
     column_labels = {
         'render_cmk_downtime_rule': "Downtimes",
@@ -1031,10 +1089,17 @@ class CheckmkInventorizeAttributesView(DefaultModelView):
     }
 
     form_rules = [
-        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_inventory_attributes"]}"'\
-                        'target="_blank" class="badge badge-light">Documentation</a>'),
-        rules.Field('attribute_names'),
-        rules.Field('attribute_source'),
+        rules.HTML(f'<a href="{docu_links["cmk_inventory_attributes"]}" '
+                   f'target="_blank" class="badge badge-light" '
+                   f'style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-info-circle"></i> Documentation</a>'),
+        *modern_form(
+            section('1', 'main', 'Attributes to Inventorize',
+                    'Which host attributes to pull from Checkmk into '
+                    'the syncer inventory.',
+                    [rules.Field('attribute_names'),
+                     rules.Field('attribute_source')]),
+        ),
     ]
 
     def is_accessible(self):
@@ -1047,18 +1112,24 @@ class CheckmkPasswordView(DefaultModelView):
     """
 
     form_rules = [
-        rules.HTML(f'<i class="fa fa-info"></i><a href="{docu_links["cmk_password_store"]}"'\
-                        'target="_blank" class="badge badge-light">Documentation</a>'),
-       main_open,
-       rules.FieldSet(
-           ('name', 'documentation', 'enabled'),
-            "Documentation"),
-       main_close,
-       checkmk_open,
-       rules.FieldSet(
-           ( 'title', 'comment', 'documentation_url', 'owner', 'password', 'shared',
-           ), "Fields for Checkmk's Password Store"),
-        checkmkl_close,
+        rules.HTML(f'<a href="{docu_links["cmk_password_store"]}" target="_blank" '
+                   f'class="badge badge-light" style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-info-circle"></i> Documentation</a>'),
+        *modern_form(
+            section('1', 'main', 'Basics',
+                    'Internal name, notes and activation.',
+                    [rules.Field('name'),
+                     rules.Field('documentation'),
+                     rules.Field('enabled')]),
+            section('2', 'out', "Checkmk Password Store",
+                    'Fields synced into Checkmk\'s built-in password store.',
+                    [rules.Field('title'),
+                     rules.Field('comment'),
+                     rules.Field('documentation_url'),
+                     rules.Field('owner'),
+                     rules.Field('password'),
+                     rules.Field('shared')]),
+        ),
     ]
 
     column_filters = (

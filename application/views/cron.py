@@ -5,11 +5,13 @@ from datetime import datetime
 from flask import flash
 from flask_admin.actions import action
 from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
+from flask_admin.form import rules
 from flask_login import current_user
 from markupsafe import Markup, escape
 from wtforms import HiddenField
 
 from application.views.default import DefaultModelView
+from application.views._form_sections import modern_form, section
 
 def format_error_flag(_v, _c, m, _p):
     """
@@ -105,6 +107,56 @@ class CronGroupView(DefaultModelView):
         'webhook_token': {
             'readonly': True,
             'placeholder': 'Generated automatically when Webhook is enabled.',
+        },
+    }
+
+    form_rules = modern_form(
+        section('1', 'main', 'Basics',
+                'Name, evaluation order and activation.',
+                [rules.Field('name'),
+                 rules.Field('sort_field'),
+                 rules.Field('enabled')]),
+        section('2', 'cond', 'Schedule',
+                'When should this group run? Interval, custom minutes and '
+                'time-of-day window.',
+                [rules.Field('interval'),
+                 rules.Field('custom_interval_in_minutes'),
+                 rules.Field('timerange_from'),
+                 rules.Field('timerange_to'),
+                 rules.Field('run_once_next')]),
+        section('3', 'out', 'Jobs',
+                'Ordered list of tasks that run as part of this group.',
+                [rules.Field('jobs'),
+                 rules.Field('continue_on_error')]),
+        section('4', 'aux', 'Webhook Trigger',
+                'External systems can trigger this group via HTTPS POST. '
+                'The token is auto-generated on first enable; rotate it '
+                'with the "Regenerate Webhook Token" action.',
+                [rules.Field('webhook_enabled'),
+                 rules.Field('webhook_token')]),
+    )
+
+    form_subdocuments = {
+        'jobs': {
+            'form_subdocuments': {
+                '': {
+                    'form_rules': [
+                        rules.HTML('<div class="form-row" '
+                                   'style="gap: 8px; align-items: end; '
+                                   'margin: 0;">'),
+                        rules.HTML('<div class="col">'),
+                        rules.Field('name'),
+                        rules.HTML('</div>'),
+                        rules.HTML('<div class="col">'),
+                        rules.Field('command'),
+                        rules.HTML('</div>'),
+                        rules.HTML('<div class="col">'),
+                        rules.Field('account'),
+                        rules.HTML('</div>'),
+                        rules.HTML('</div>'),
+                    ],
+                },
+            },
         },
     }
 
