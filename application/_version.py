@@ -7,7 +7,7 @@ Kept as a standalone module so ``pyproject.toml`` can resolve the version via
 import os
 import re
 
-__version__ = "3.12.13"
+__version__ = "4.0.0"
 
 
 def _has_unreleased_entries():
