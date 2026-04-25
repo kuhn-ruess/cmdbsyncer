@@ -23,5 +23,5 @@
     - name: Restart httpd
       ansible.builtin.service:
         name: httpd
-        state: restared
-      become: True
+        state: restarted
+      become: true
