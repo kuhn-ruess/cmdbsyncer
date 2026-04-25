@@ -3,7 +3,7 @@ Ansible Rule Views
 """
 from datetime import datetime
 
-from flask import flash, redirect, request, url_for
+from flask import abort, flash, redirect, request, url_for
 from flask_admin import BaseView, expose
 from flask_admin.contrib.mongoengine.filters import FilterEqual, FilterLike
 from flask_admin.form import rules as form_rules
@@ -22,6 +22,13 @@ from application.modules.rule.views import (
 )
 from application.views.default import DefaultModelView
 
+from .models import (
+    AnsibleCustomVariablesRule,
+    AnsibleFilterRule,
+    AnsiblePlaybookFireRule,
+    AnsibleProject,
+    AnsibleRewriteAttributesRule,
+)
 from .runner import _ansible_dir, available_playbooks, run_playbook
 
 
@@ -40,6 +47,17 @@ def _ansible_main_fields():
     ]
 
 
+# Shared list template that injects project-name banner rows whenever
+# the sort key is `project`. Used by all four Ansible rule list views
+# so the table looks like one section per project instead of one giant
+# flat row stream.
+ANSIBLE_RULE_LIST_TEMPLATE = 'admin/ansible_rule_list.html'
+
+# Default sort that keeps rules grouped by project (Default first, since
+# its sort_field=-1) and ordered by sort_field within each project.
+ANSIBLE_RULE_DEFAULT_SORT = 'project'
+
+
 def _format_project(_v, _c, m, _p):
     """Render the project reference as its name, dim if unset."""
     if m.project:
@@ -56,6 +74,17 @@ def _playbook_choices():
     return list(available_playbooks().items())
 
 
+def _format_project_name_link(_view, _context, model, _name):
+    """Render the project name as a link to the project detail page,
+    where the user manages all four rule types for that project in one
+    spot."""
+    href = url_for('ansibleproject.project_detail', project_id=str(model.pk))
+    return Markup(
+        f'<a href="{escape(href)}" style="font-weight:600;">'
+        f'{escape(model.name)}</a>'
+    )
+
+
 class AnsibleProjectView(DefaultModelView):
     """
     CRUD for AnsibleProject. Each enabled project is exposed as its own
@@ -69,6 +98,10 @@ class AnsibleProjectView(DefaultModelView):
     column_filters = (
         FilterLike('name', 'Name'),
     )
+
+    column_formatters = {
+        'name': _format_project_name_link,
+    }
 
     form_columns = ('name', 'description', 'enabled', 'sort_field')
 
@@ -90,16 +123,94 @@ class AnsibleProjectView(DefaultModelView):
         },
     }
 
+    @expose('/details/<project_id>')
+    def project_detail(self, project_id):
+        """
+        Project workspace: lists every Ansible rule (Filter, Rewrite,
+        Custom Variables, Playbook Fire) that belongs to this project,
+        plus '+ New' shortcuts that drop the user into the matching
+        rule editor with the project pre-selected and a return-url back
+        here so save / cancel land on this page.
+        """
+        project = AnsibleProject.objects(id=project_id).first()
+        if project is None:
+            abort(404)
+        return self.render(
+            'admin/ansible_project_detail.html',
+            project=project,
+            sections=[
+                {
+                    'title': 'Filter Rules',
+                    'description': 'Whitelist, blacklist, and ignored hosts.',
+                    'icon': 'fa-filter',
+                    'endpoint': 'ansiblefilterrule',
+                    'rules': AnsibleFilterRule.objects(
+                        project=project,
+                    ).order_by('sort_field', 'name'),
+                },
+                {
+                    'title': 'Rewrite Attributes',
+                    'description': 'Rename or reformat host attributes.',
+                    'icon': 'fa-exchange',
+                    'endpoint': 'ansiblerewriteattributesrule',
+                    'rules': AnsibleRewriteAttributesRule.objects(
+                        project=project,
+                    ).order_by('sort_field', 'name'),
+                },
+                {
+                    'title': 'Ansible Attributes',
+                    'description': 'Custom variables passed to playbooks.',
+                    'icon': 'fa-tags',
+                    'endpoint': 'ansiblecustomvariablesrule',
+                    'rules': AnsibleCustomVariablesRule.objects(
+                        project=project,
+                    ).order_by('sort_field', 'name'),
+                },
+                {
+                    'title': 'Playbook Fire Rules',
+                    'description': 'Auto-dispatch playbooks for matching hosts.',
+                    'icon': 'fa-bolt',
+                    'endpoint': 'ansibleplaybookfirerule',
+                    'rules': AnsiblePlaybookFireRule.objects(
+                        project=project,
+                    ).order_by('sort_field', 'name'),
+                },
+            ],
+        )
+
     def is_accessible(self):
         """Overwrite — same right gates all Ansible config."""
         return current_user.is_authenticated and current_user.has_right('ansible')
 
 
-class AnsibleCustomVariablesView(RuleModelView):
+class _ProjectAwareRuleView:  # pylint: disable=too-few-public-methods
+    """
+    Mixin used by every rule list view. Pre-fills the project field on
+    create forms when `?project=<id>` is in the URL, so the '+ New'
+    links on the project detail page drop the user into the right
+    context. Together with the `?url=...` return-link Flask-Admin
+    already honours, the full flow lands the user back on the project
+    page after save.
+    """
+    def create_form(self, obj=None):
+        """Inject the project from the URL into the empty create form."""
+        form = super().create_form(obj=obj)  # pylint: disable=no-member
+        project_id = request.args.get('project')
+        if project_id and hasattr(form, 'project'):
+            project = AnsibleProject.objects(id=project_id).first()
+            if project:
+                form.project.data = project
+        return form
+
+
+class AnsibleCustomVariablesView(_ProjectAwareRuleView, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Custom Rule Model View
     """
 
+
+    list_template = ANSIBLE_RULE_LIST_TEMPLATE
+    column_default_sort = ANSIBLE_RULE_DEFAULT_SORT
 
     column_exclude_list = [
         'conditions', 'outcomes',
@@ -130,10 +241,13 @@ class AnsibleCustomVariablesView(RuleModelView):
         return current_user.is_authenticated and current_user.has_right('ansible')
 
 
-class AnsibleFilterRuleView(FiltereModelView):
+class AnsibleFilterRuleView(_ProjectAwareRuleView, FiltereModelView):  # pylint: disable=too-many-ancestors
     """
     Filter rule editor with project assignment.
     """
+
+    list_template = ANSIBLE_RULE_LIST_TEMPLATE
+    column_default_sort = ANSIBLE_RULE_DEFAULT_SORT
 
     column_filters = list(FiltereModelView.column_filters) + [
         FilterEqual('project', 'Project'),
@@ -158,10 +272,13 @@ class AnsibleFilterRuleView(FiltereModelView):
         return current_user.is_authenticated and current_user.has_right('ansible')
 
 
-class AnsibleRewriteRuleView(RewriteAttributeView):  # pylint: disable=too-many-ancestors
+class AnsibleRewriteRuleView(_ProjectAwareRuleView, RewriteAttributeView):  # pylint: disable=too-many-ancestors
     """
     Attribute-rewrite rule editor with project assignment.
     """
+
+    list_template = ANSIBLE_RULE_LIST_TEMPLATE
+    column_default_sort = ANSIBLE_RULE_DEFAULT_SORT
 
     column_filters = list(RewriteAttributeView.column_filters) + [
         FilterEqual('project', 'Project'),
@@ -188,7 +305,7 @@ class AnsibleRewriteRuleView(RewriteAttributeView):  # pylint: disable=too-many-
         return current_user.is_authenticated and current_user.has_right('ansible')
 
 
-class AnsiblePlaybookFireRuleView(RuleModelView):
+class AnsiblePlaybookFireRuleView(_ProjectAwareRuleView, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Editor for rules that fire playbooks against matching hosts.
     """

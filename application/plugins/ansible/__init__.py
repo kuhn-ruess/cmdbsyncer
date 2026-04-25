@@ -23,8 +23,15 @@ from application.modules.inventory import (
     register_inventory_provider_resolver,
 )
 
-from .models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
-                    AnsibleCustomVariablesRule, AnsibleProject
+from .models import (
+    DEFAULT_PROJECT_NAME,
+    AnsibleCustomVariablesRule,
+    AnsibleFilterRule,
+    AnsiblePlaybookFireRule,
+    AnsibleProject,
+    AnsibleRewriteAttributesRule,
+    ensure_default_project,
+)
 from .rules import AnsibleVariableRule
 from .inventory import AnsibleInventory
 from .site_syncer import SyncSites
@@ -316,9 +323,15 @@ register_cronjob('Ansible: Build Cache', _inner_update_cache)
 # own providers later without touching the Ansible plugin.
 def _build_ansible_provider(project=None):
     """
-    Fully configured AnsibleInventory rendered through `project`'s rules
-    (or the global / project-less rules when `project` is None).
+    Fully configured AnsibleInventory rendered through `project`'s rules.
+
+    When called without an explicit project (the static `ansible`
+    provider's path) the Default project's rules are loaded — that is
+    what previously project-less rules were migrated to, and what the
+    bundled manifest's `inventory: ansible` entries continue to mean.
     """
+    if project is None:
+        project = ensure_default_project()
     rules = load_rules(project=project)
     syncer = AnsibleInventory()
     syncer.filter = rules['filter']
@@ -352,11 +365,30 @@ class _AnsibleProjectResolver:
         return lambda p=project: _build_ansible_provider(project=p)
 
     def list_names(self):
-        """Project names currently enabled — exposed via the registry's listing API."""
+        """Project names currently enabled — exposed via the registry's listing API.
+
+        Includes the Default project so users discover it in
+        `cmdbsyncer inventory list-providers`. The static `ansible`
+        provider remains an alias for Default (so legacy manifest
+        entries with `inventory: ansible` keep working), but listing
+        both makes the relationship visible instead of hiding Default.
+        """
         return [p.name for p in AnsibleProject.objects(enabled=True).only('name')]
 
 
 register_inventory_provider_resolver(_AnsibleProjectResolver())
+
+
+# Run the one-time migration & default-project bootstrap. Idempotent:
+# subsequent app starts notice the Default project already exists and
+# stop touching it. Safety-netted because admin views register before
+# the full app is up; we don't want a transient connection blip to
+# block startup of the Ansible plugin.
+try:
+    ensure_default_project()
+except Exception as _exc:  # pylint: disable=broad-except
+    logger = __import__('logging').getLogger(__name__)
+    logger.warning("Could not ensure Ansible Default project: %s", _exc)
 # .---
 
 

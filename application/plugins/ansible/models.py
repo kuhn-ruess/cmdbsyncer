@@ -12,6 +12,8 @@ from application.modules.rule.models import rule_types
 
 _PROJECT_NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.\-]*$')
 
+DEFAULT_PROJECT_NAME = 'Default'
+
 
 class AnsibleProject(db.Document):
     """
@@ -53,6 +55,43 @@ class AnsibleProject(db.Document):
         dropdowns on rule editors — without this the dropdown would show
         `AnsibleProject Object` instead of the project name."""
         return self.name or super().__str__()
+
+
+def ensure_default_project():
+    """
+    Create the auto-managed Default project on first run and assign any
+    rule that still has `project=None` (legacy global rules) to it.
+
+    The Default project is what every newly created rule's editor
+    pre-selects, and it is what the static `ansible` provider serves —
+    so existing manifest entries with `inventory: ansible` keep working
+    while the rules themselves now live inside a project, ready to be
+    grouped in the UI.
+
+    Idempotent: re-running has no effect once migration is complete.
+    Returns the Default project document.
+    """
+    default = AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first()
+    if default is None:
+        default = AnsibleProject(
+            name=DEFAULT_PROJECT_NAME,
+            description=(
+                "Auto-managed project for rules that were created before "
+                "the Project feature existed, and the default for newly "
+                "created rules."
+            ),
+            enabled=True,
+            sort_field=-1,
+        )
+        default.save()
+    for cls in (
+        AnsibleCustomVariablesRule,
+        AnsibleFilterRule,
+        AnsibleRewriteAttributesRule,
+        AnsiblePlaybookFireRule,
+    ):
+        cls.objects(project=None).update(project=default)
+    return default
 
 run_sources = [
     ('ui', 'UI'),
@@ -107,7 +146,11 @@ class AnsibleCustomVariablesRule(db.Document):
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
 
-    project = db.ReferenceField(document_type=AnsibleProject, required=False)
+    project = db.ReferenceField(
+        document_type=AnsibleProject,
+        required=False,
+        default=lambda: AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first(),
+    )
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -134,7 +177,11 @@ class AnsibleFilterRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
-    project = db.ReferenceField(document_type=AnsibleProject, required=False)
+    project = db.ReferenceField(
+        document_type=AnsibleProject,
+        required=False,
+        default=lambda: AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first(),
+    )
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
@@ -177,7 +224,11 @@ class AnsiblePlaybookFireRule(db.Document):
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
 
-    project = db.ReferenceField(document_type=AnsibleProject, required=False)
+    project = db.ReferenceField(
+        document_type=AnsibleProject,
+        required=False,
+        default=lambda: AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first(),
+    )
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -202,7 +253,11 @@ class AnsibleRewriteAttributesRule(db.Document):
     name = db.StringField()
     documentation = db.StringField()
 
-    project = db.ReferenceField(document_type=AnsibleProject, required=False)
+    project = db.ReferenceField(
+        document_type=AnsibleProject,
+        required=False,
+        default=lambda: AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first(),
+    )
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
