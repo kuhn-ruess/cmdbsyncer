@@ -673,7 +673,7 @@ class FilterLabelKeyAndValue(BaseMongoEngineFilter):
             pipeline = _build_keyvalue_pipeline(f'labels.{key}', value)
             return query.filter(__raw__=pipeline)
         except Exception as error:  # pylint: disable=broad-exception-caught
-            flash('danger', error)
+            flash(str(error), 'danger')
         return False
 
     def operation(self):
@@ -703,7 +703,7 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
             pipeline = _build_keyvalue_pipeline(f'inventory.{key}', value)
             return query.filter(__raw__=pipeline)
         except Exception as error:  # pylint: disable=broad-exception-caught
-            flash('danger', error)
+            flash(str(error), 'danger')
         return False
 
     def operation(self):
@@ -2127,10 +2127,6 @@ below and do not appear here.
                 new_field = CmdbField()
                 new_field.field_name = key
                 model.cmdb_fields.append(new_field)
-            self.can_edit = False
-            self.can_create = False
-            self.column_exclude_list.append('cmdb_fields')
-            self.column_exclude_list.append('cmdb_templates')
 
         # Keep the persisted order stable: the edit view sorts entries
         # alphabetically, so on save we preserve that ordering instead of
@@ -2139,9 +2135,6 @@ below and do not appear here.
             model.cmdb_fields or [],
             key=lambda f: (getattr(f, 'field_name', '') or '').lower(),
         )
-
-        # Bugfix, ohne we loose the availibilty to edit after save
-        self.can_edit = True
 
     list_template = 'admin/host_list.html'
 
