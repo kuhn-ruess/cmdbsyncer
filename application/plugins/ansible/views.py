@@ -8,11 +8,23 @@ from flask_admin import BaseView, expose
 from flask_admin.contrib.mongoengine.filters import FilterEqual, FilterLike
 from flask_login import current_user
 from markupsafe import Markup, escape
+from wtforms import SelectField
 
 from application.modules.rule.views import RuleModelView
 from application.views.default import DefaultModelView
 
 from .runner import _ansible_dir, available_playbooks, run_playbook
+
+
+def _playbook_choices():
+    """
+    Build the SelectField choices from the same discovery used by the
+    Run Playbook UI so the two stay in sync. Includes any value already
+    saved on a rule even if the playbook file has since been removed —
+    that lets admins see and clean up dangling entries instead of having
+    them silently disappear from the dropdown.
+    """
+    return [(p, p) for p in available_playbooks()]
 
 
 class AnsibleCustomVariablesView(RuleModelView):
@@ -39,6 +51,22 @@ class AnsiblePlaybookFireRuleView(RuleModelView):
         'conditions', 'outcomes', 'render_full_conditions',
         'render_playbook_outcomes',
     ]
+
+    form_subdocuments = dict(RuleModelView.form_subdocuments)
+    form_subdocuments['outcomes'] = {
+        'form_subdocuments': {
+            '': {
+                'form_overrides': {
+                    'playbook': SelectField,
+                },
+                'form_args': {
+                    'playbook': {
+                        'choices': _playbook_choices,
+                    },
+                },
+            },
+        },
+    }
 
     def is_accessible(self):
         """Overwrite — same right gates the rules views."""
