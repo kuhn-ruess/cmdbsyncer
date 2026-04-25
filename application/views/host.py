@@ -9,7 +9,7 @@ import io
 from flask_login import current_user
 from flask import flash, request, redirect, url_for, render_template, Response
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
-from flask_admin.model.template import LinkRowAction
+from flask_admin.model.template import EndpointLinkRowAction, LinkRowAction
 from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
@@ -1372,15 +1372,22 @@ class ObjectModelView(DefaultModelView):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('objects')
 
-    # Copy + Timeline row actions. `ObjectModelView` is registered with
-    # endpoint="Objects" → Flask-Admin mounts its routes under
-    # `admin/objects/`, so we build the row-action URLs to match.
+    # Copy + Timeline row actions. EndpointLinkRowAction resolves the
+    # current view's endpoint at render time, so the URL stays correct
+    # regardless of how the view was registered ("Objects" vs.
+    # "Objects Templates", with or without spaces). The hand-built URL
+    # strings this replaced were case-mismatched against the registered
+    # endpoint and broke whenever the front-end didn't case-fold paths.
     column_extra_row_actions = [
-        LinkRowAction("fa fa-history", app.config['BASE_PREFIX'] + \
-                    "admin/objects/timeline?obj_id={row_id}"),
-        LinkRowAction("fa fa-copy", app.config['BASE_PREFIX'] + \
-                    "admin/objects/copy_as_new_form?source_id={row_id}"),
+        EndpointLinkRowAction("fa fa-history", ".timeline", id_arg="obj_id"),
+        EndpointLinkRowAction("fa fa-copy", ".copy_as_new_form",
+                              id_arg="source_id"),
     ]
+
+    # Custom list template adds the Copy-as-new modal + a small JS
+    # interceptor that hijacks the row icon's click. Without this the
+    # icon would navigate to the bare form partial.
+    list_template = 'admin/object_list.html'
 
     @expose('/timeline')
     def timeline(self):
