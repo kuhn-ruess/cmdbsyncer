@@ -46,10 +46,23 @@ def _render_cronjob(_view, _context, model, _name):
     """
     html = "<table width=100%>"
     for idx, entry in enumerate(model.jobs):
+        account = entry['account'] or ''
         html += f"<tr><td>{idx}</td><td>{escape(entry['name'])}</td>"\
-                f"<td>{escape(entry['command'])}</td><td>{escape(entry['account'])}</td></tr>"
+                f"<td>{escape(entry['command'])}</td><td>{escape(account)}</td></tr>"
     html += "</table>"
     return Markup(html)
+
+
+def _format_protected(_v, _c, m, _p):
+    """Show a lock badge for protected groups."""
+    if m.protected:
+        return Markup(
+            '<span class="badge" style="background:#7f8c8d;color:#fff;" '
+            'title="Auto-managed by another feature; cannot be deleted '
+            'directly.">'
+            '<i class="fa fa-lock"></i> managed</span>'
+        )
+    return ''
 
 class CronGroupView(DefaultModelView):
     """
@@ -74,6 +87,7 @@ class CronGroupView(DefaultModelView):
 
     column_labels = {
         'render_jobs': "Cronjobs",
+        'protected': "Managed",
     }
 
     column_filters = (
@@ -97,10 +111,12 @@ class CronGroupView(DefaultModelView):
     column_formatters = {
         'render_jobs': _render_cronjob,
         'interval': _render_interval,
+        'protected': _format_protected,
     }
 
     form_overrides = {
         'render_jobs': HiddenField,
+        'protected': HiddenField,
     }
 
     form_widget_args = {
@@ -164,6 +180,18 @@ class CronGroupView(DefaultModelView):
         """Allocate a webhook token on first enable."""
         model.ensure_webhook_token()
         return super().on_model_change(form, model, is_created)
+
+    def delete_model(self, model):
+        """Skip protected CronGroups and surface a friendly flash."""
+        if getattr(model, 'protected', False):
+            flash(
+                f"\"{model.name}\" is managed automatically and cannot "
+                f"be deleted here. Disable it instead, or remove the "
+                f"owning record (e.g. the matching Backup Config).",
+                'warning',
+            )
+            return False
+        return super().delete_model(model)
 
     @action('regenerate_webhook_token',
             'Regenerate Webhook Token',

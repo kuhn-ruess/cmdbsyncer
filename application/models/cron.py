@@ -48,7 +48,7 @@ class GroupEntry(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     name = db.StringField(required=True)
     command = db.StringField(choices=cron_register.keys(), required=True)
-    account = db.ReferenceField(document_type='Account', required=True)
+    account = db.ReferenceField(document_type='Account')
 
 
 class CronGroup(db.Document):
@@ -72,6 +72,11 @@ class CronGroup(db.Document):
     webhook_enabled = db.BooleanField(default=False)
     webhook_token = db.StringField()
     sort_field = db.IntField(default=0)
+
+    # Set by features that auto-manage their own CronGroup (e.g. scheduled
+    # backups). Protected groups can be enabled/disabled and edited but
+    # not deleted from the UI — deleting the owning record removes them.
+    protected = db.BooleanField(default=False)
 
     meta = {
         'strict': False,
