@@ -18,6 +18,7 @@ from application.modules.rule.filter import Filter
 from application.modules.rule.rewrite import Rewrite
 from application.helpers.cron import register_cronjob
 from application.helpers.plugins import register_cli_group
+from application.modules.inventory import register_inventory_provider
 
 from .models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
                     AnsibleCustomVariablesRule
@@ -289,6 +290,34 @@ def debug_filter(list_rules, filter_name, show_matched, show_ignored):  # pylint
             console.print(ignored_table)
 
 register_cronjob('Ansible: Build Cache', _inner_update_cache)
+
+
+# .--- Inventory provider registration
+# Both the CLI host inventory and the Checkmk-Sites inventory go through
+# the cross-module registry so the unified
+# `cmdbsyncer inventory ansible <provider>` CLI / `/api/v1/inventory/ansible`
+# HTTP endpoint can serve them — and so other modules can register their
+# own providers later without touching the Ansible plugin.
+def _build_ansible_provider():
+    """Fully configured AnsibleInventory ready to render a fresh inventory."""
+    rules = load_rules()
+    syncer = AnsibleInventory()
+    syncer.filter = rules['filter']
+    syncer.rewrite = rules['rewrite']
+    syncer.actions = rules['actions']
+    return syncer
+
+
+def _build_cmk_sites_provider():
+    """Checkmk-Sites inventory used by the cmk_server_mngmt.yml playbook."""
+    return SyncSites()
+
+
+register_inventory_provider('ansible', _build_ansible_provider)
+register_inventory_provider('cmk_sites', _build_cmk_sites_provider)
+# .---
+
+
 
 from .playbook_rules import fire_playbook_rules  # pylint: disable=wrong-import-position
 

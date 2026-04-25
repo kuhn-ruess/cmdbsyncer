@@ -13,18 +13,29 @@
 #   playbooks:
 #     - file: <filename>.yml      # required, must live in this directory
 #       name: "<friendly name>"   # required, shown in the UI
+#       inventory: <provider>     # optional, default 'ansible'.
+#                                 # Names a provider registered in the
+#                                 # cross-module inventory registry. The
+#                                 # runner sets CMDBSYNCER_INVENTORY_PROVIDER
+#                                 # to this value so the cmdbsyncer-inventory
+#                                 # plugin pulls the right host catalog for
+#                                 # this playbook.
 #       description: "<optional one-liner>"
 
 playbooks:
   - file: cmk_agent_mngmt.yml
     name: "Checkmk: Manage Host Agent"
+    inventory: ansible
     description: "Install/update the Checkmk agent and register TLS / bakery."
   - file: cmk_server_mngmt.yml
     name: "Checkmk: Manage OMD Server"
+    inventory: cmk_sites
     description: "Install/update the Checkmk server package and create the site."
   - file: cmk_omd_cleanup.yml
     name: "Checkmk: OMD Cleanup"
+    inventory: cmk_sites
     description: "Run `omd cleanup` to remove orphaned site versions."
   - file: server_mngmt.yml
     name: "Server: SSL Certificates"
+    inventory: ansible
     description: "Roll out webserver certificates and update httpd ssl.conf."

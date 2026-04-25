@@ -1,0 +1,15 @@
+# Single inventory plugin spec used by every playbook the Syncer
+# dispatches. Mode and provider are picked at parse time:
+#
+#   - From this file's `mode` / `provider` options, if set.
+#   - Or from env vars (CMDBSYNCER_INVENTORY_MODE,
+#     CMDBSYNCER_INVENTORY_PROVIDER), which is what the UI runner sets
+#     per-playbook based on the manifest's `inventory:` field.
+#   - Or the defaults below.
+#
+# In `local` mode the plugin shells `cmdbsyncer inventory ansible
+# <provider> --list` against the local Syncer binary. In `http` mode
+# it talks to /api/v1/inventory/ansible/<provider> on a remote Syncer.
+plugin: cmdbsyncer_inventory
+mode: local
+provider: ansible
