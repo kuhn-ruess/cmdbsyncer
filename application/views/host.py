@@ -1071,6 +1071,69 @@ def format_inventory_export(_v, _c, m, _p):
     return Markup(", ".join(inventory))
 
 
+def _render_copy_as_new_form(view, label):
+    """
+    Render the new-hostname modal for the copy-as-new row action.
+
+    `label` is the user-facing noun ("Host" / "Object") that decides
+    only the wording of the not-found flash. The HTML template is the
+    same for every view.
+    """
+    source_id = request.args.get('source_id', '')
+    source = Host.objects(id=source_id).first() if source_id else None
+    if not source:
+        flash(f'{label} not found.', 'error')
+        return redirect(url_for('.index_view'))
+    return view.render(
+        'admin/copy_as_new_form.html',
+        source=source,
+        default_name=f'{source.hostname}-copy',
+    )
+
+
+def _process_copy_as_new(label):
+    """
+    Clone the source Host under the new hostname.
+
+    Used by both HostModelView and ObjectModelView. `label` only varies
+    the wording of flash messages — the cloning itself is identical
+    because Object/Template/Host all live in the same Host collection.
+    """
+    source_id = request.form.get('source_id', '')
+    new_name = (request.form.get('new_hostname') or '').strip()
+    if not source_id or not new_name:
+        flash('Missing source or new hostname.', 'error')
+        return redirect(url_for('.index_view'))
+    if Host.objects(hostname=new_name).first():
+        flash(f'{label} {new_name!r} already exists.', 'error')
+        return redirect(url_for('.index_view'))
+    source = Host.objects(id=source_id).first()
+    if not source:
+        flash(f'{label} not found.', 'error')
+        return redirect(url_for('.index_view'))
+
+    clone = Host()
+    clone.hostname = new_name
+    clone.object_type = source.object_type
+    clone.is_object = source.is_object
+    clone.no_autodelete = source.no_autodelete
+    clone.source_account_name = source.source_account_name or 'cmdb'
+    clone.source_account_id = ''
+    clone.labels = dict(source.labels or {})
+    clone.cmdb_fields = [
+        CmdbField(field_name=f.field_name, field_value=f.field_value)
+        for f in (source.cmdb_fields or [])
+    ]
+    clone.cmdb_templates = list(source.cmdb_templates or [])
+    clone.cmdb_match = source.cmdb_match
+    clone.available = source.available
+    clone.last_import_sync = datetime.now()
+    clone.last_import_seen = datetime.now()
+    clone.save()
+
+    flash(f'Copied to new {label.lower()} {new_name!r}.', 'success')
+    return redirect(url_for('.edit_view', id=str(clone.pk)))
+
 
 class ObjectModelView(DefaultModelView):
     """
@@ -1284,6 +1347,10 @@ class ObjectModelView(DefaultModelView):
         """
         return Host.objects(is_object=True, object_type__ne='template')
 
+    # Subclasses (e.g. TemplateModelView) set this so on_model_change
+    # stamps the right object_type. None = "leave whatever the form had".
+    _force_object_type = None
+
     def on_model_change(self, form, model, _is_created):
         """
         Model Changes when saved in GUI -> CMDB Mode
@@ -1295,10 +1362,9 @@ class ObjectModelView(DefaultModelView):
         model.source_account_id = ""
         model.source_account_name = "cmdb"
         model.no_autodelete = True
-        # Set Extra Fields
+        if self._force_object_type is not None:
+            model.object_type = self._force_object_type
         new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
-        #model.object_type = 'template'
-
         model.update_host(new_labels)
         model.set_inventory_attributes('cmdb')
 
@@ -1332,53 +1398,12 @@ class ObjectModelView(DefaultModelView):
     @expose('/copy_as_new_form')
     def copy_as_new_form(self):
         """Render the new-hostname modal for the copy-as-new row action."""
-        source_id = request.args.get('source_id', '')
-        source = Host.objects(id=source_id).first() if source_id else None
-        if not source:
-            flash('Source not found.', 'error')
-            return redirect(url_for('.index_view'))
-        return render_template(
-            'admin/copy_as_new_form.html',
-            source=source,
-            default_name=f'{source.hostname}-copy',
-        )
+        return _render_copy_as_new_form(self, 'Object')
 
     @expose('/copy_as_new_process', methods=['POST'])
     def copy_as_new_process(self):
         """Clone the source object under the new hostname."""
-        source_id = request.form.get('source_id', '')
-        new_name = (request.form.get('new_hostname') or '').strip()
-        if not source_id or not new_name:
-            flash('Missing source or new hostname.', 'error')
-            return redirect(url_for('.index_view'))
-        if Host.objects(hostname=new_name).first():
-            flash(f'Object {new_name!r} already exists.', 'error')
-            return redirect(url_for('.index_view'))
-        source = Host.objects(id=source_id).first()
-        if not source:
-            flash('Source not found.', 'error')
-            return redirect(url_for('.index_view'))
-
-        clone = Host()
-        clone.hostname = new_name
-        clone.object_type = source.object_type
-        clone.is_object = source.is_object
-        clone.no_autodelete = source.no_autodelete
-        clone.source_account_name = source.source_account_name or 'cmdb'
-        clone.source_account_id = ''
-        clone.labels = dict(source.labels or {})
-        clone.cmdb_fields = [
-            CmdbField(field_name=f.field_name, field_value=f.field_value)
-            for f in (source.cmdb_fields or [])
-        ]
-        clone.cmdb_templates = list(source.cmdb_templates or [])
-        clone.cmdb_match = source.cmdb_match
-        clone.available = source.available
-        clone.last_import_sync = datetime.now()
-        clone.last_import_seen = datetime.now()
-        clone.save()
-        flash(f'Copied to new object {new_name!r}.', 'success')
-        return redirect(url_for('.edit_view', id=str(clone.pk)))
+        return _process_copy_as_new('Object')
 
 
 class TemplateModelView(ObjectModelView):
@@ -1426,29 +1451,13 @@ class TemplateModelView(ObjectModelView):
         'is_object',
     ]
 
+    _force_object_type = 'template'
+
     def get_query(self):
         """
         Limit Objects
         """
         return Host.objects(is_object=True, object_type="template")
-
-    def on_model_change(self, form, model, _is_created):
-        """
-        Model Changes when saved in GUI -> CMDB Mode
-        """
-        model.last_import_sync = datetime.now()
-        model.last_import_seen = datetime.now()
-        model.cache = {}
-        model.is_object = True
-        model.source_account_id = ""
-        model.source_account_name = "cmdb"
-        model.no_autodelete = True
-        # Set Extra Fields
-        new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
-        model.object_type = 'template'
-
-        model.update_host(new_labels)
-        model.set_inventory_attributes('cmdb')
 
 
 class HostModelView(DefaultModelView):  # pylint: disable=too-many-public-methods
@@ -2184,54 +2193,12 @@ below and do not appear here.
     @expose('/copy_as_new_form')
     def copy_as_new_form(self):
         """Render the new-hostname modal for the copy-as-new action."""
-        source_id = request.args.get('source_id', '')
-        source = Host.objects(id=source_id).first() if source_id else None
-        if not source:
-            flash('Source not found.', 'error')
-            return redirect(url_for('.index_view'))
-        return render_template(
-            'admin/copy_as_new_form.html',
-            source=source,
-            default_name=f'{source.hostname}-copy',
-        )
+        return _render_copy_as_new_form(self, 'Host')
 
     @expose('/copy_as_new_process', methods=['POST'])
     def copy_as_new_process(self):
         """Clone the source Host under the new hostname."""
-        source_id = request.form.get('source_id', '')
-        new_name = (request.form.get('new_hostname') or '').strip()
-        if not source_id or not new_name:
-            flash('Missing source or new hostname.', 'error')
-            return redirect(url_for('.index_view'))
-        if Host.objects(hostname=new_name).first():
-            flash(f'Host {new_name!r} already exists.', 'error')
-            return redirect(url_for('.index_view'))
-        source = Host.objects(id=source_id).first()
-        if not source:
-            flash('Source not found.', 'error')
-            return redirect(url_for('.index_view'))
-
-        clone = Host()
-        clone.hostname = new_name
-        clone.object_type = source.object_type
-        clone.is_object = source.is_object
-        clone.no_autodelete = source.no_autodelete
-        clone.source_account_name = source.source_account_name or 'cmdb'
-        clone.source_account_id = ''
-        clone.labels = dict(source.labels or {})
-        clone.cmdb_fields = [
-            CmdbField(field_name=f.field_name, field_value=f.field_value)
-            for f in (source.cmdb_fields or [])
-        ]
-        clone.cmdb_templates = list(source.cmdb_templates or [])
-        clone.cmdb_match = source.cmdb_match
-        clone.available = source.available
-        clone.last_import_sync = datetime.now()
-        clone.last_import_seen = datetime.now()
-        clone.save()
-
-        flash(f'Copied to new host {new_name!r}.', 'success')
-        return redirect(url_for('.edit_view', id=str(clone.pk)))
+        return _process_copy_as_new('Host')
 
     @expose('/bulk_label_form')
     def bulk_label_form(self):
