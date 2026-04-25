@@ -1,11 +1,22 @@
+"""
+Flask-Admin view registration for the Ansible plugin.
+"""
+# pylint: disable=too-few-public-methods
 from application.modules.rule.views import FiltereModelView, RewriteAttributeView
 
 from .models import (
     AnsibleCustomVariablesRule,
     AnsibleFilterRule,
+    AnsiblePlaybookFireRule,
     AnsibleRewriteAttributesRule,
+    AnsibleRunStats,
 )
-from .views import AnsibleCustomVariablesView
+from .views import (
+    AnsibleCustomVariablesView,
+    AnsiblePlaybookFireRuleView,
+    AnsiblePlaybookRunView,
+    AnsibleRunStatsView,
+)
 
 
 def register_admin_views(admin):
@@ -37,5 +48,33 @@ def register_admin_views(admin):
             category="Ansible",
             menu_icon_type='fa',
             menu_icon_value='fa-tags',
+        )
+    )
+    admin.add_view(
+        AnsiblePlaybookFireRuleView(
+            AnsiblePlaybookFireRule,
+            name="Playbook Fire Rules",
+            category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-bolt',
+        )
+    )
+    admin.add_view(
+        AnsiblePlaybookRunView(
+            name="Run Playbook",
+            endpoint='ansibleplaybookrun',
+            category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-play',
+        )
+    )
+    admin.add_view(
+        AnsibleRunStatsView(
+            AnsibleRunStats,
+            name="Run History",
+            endpoint='ansiblerunstats',
+            category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-history',
         )
     )

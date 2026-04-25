@@ -290,6 +290,22 @@ def debug_filter(list_rules, filter_name, show_matched, show_ignored):  # pylint
 
 register_cronjob('Ansible: Build Cache', _inner_update_cache)
 
+from .playbook_rules import fire_playbook_rules  # pylint: disable=wrong-import-position
+
+
+@cli_ansible.command('fire_playbook_rules')
+def cli_fire_playbook_rules():
+    """
+    Evaluate AnsiblePlaybookFireRule rules and dispatch playbook runs for
+    any (rule, host, playbook) combination that has not yet been fired.
+    """
+    fired = fire_playbook_rules()
+    print(f"{ColorCodes.OKGREEN}Dispatched {fired} playbook run(s){ColorCodes.ENDC}")
+
+
+register_cronjob('Ansible: Fire Playbook Rules', fire_playbook_rules)
+
+
 # Initiate REST API namespace — only when the web layer is being built.
 # In CLI mode ``application.api.views`` is intentionally not loaded, so
 # pulling ``syncerapi.v1.rest`` (which re-exports ``API`` from there)
