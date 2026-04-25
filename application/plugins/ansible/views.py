@@ -19,12 +19,10 @@ from .runner import _ansible_dir, available_playbooks, run_playbook
 def _playbook_choices():
     """
     Build the SelectField choices from the same discovery used by the
-    Run Playbook UI so the two stay in sync. Includes any value already
-    saved on a rule even if the playbook file has since been removed —
-    that lets admins see and clean up dangling entries instead of having
-    them silently disappear from the dropdown.
+    Run Playbook UI so the two stay in sync. Choice value = filename
+    (what the runner needs); choice label = the manifest's friendly name.
     """
-    return [(p, p) for p in available_playbooks()]
+    return list(available_playbooks().items())
 
 
 class AnsibleCustomVariablesView(RuleModelView):

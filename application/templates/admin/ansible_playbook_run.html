@@ -28,9 +28,15 @@
     letter-spacing: 0.04em;
   }
   .ansible-runner-card .playbook-name {
-    font-family: monospace;
     font-size: 14px;
-    padding: 6px 0;
+    font-weight: 600;
+    padding: 6px 0 0 0;
+  }
+  .ansible-runner-card .playbook-file {
+    font-family: monospace;
+    font-size: 11px;
+    color: #888;
+    padding-bottom: 4px;
   }
   .ansible-runner-card input.form-control {
     height: 32px;
@@ -47,21 +53,25 @@
 
 <h2>Ansible Playbook Runner</h2>
 <p class="text-muted">
-  Trigger one of the bundled playbooks. Each run is recorded in the
+  Trigger one of the playbooks declared in
+  <code>{{ ansible_dir }}/playbooks.yml</code>
+  (and <code>playbooks.local.yml</code> for site-local additions).
+  Each run is recorded in the
   <a href="{{ url_for('ansiblerunstats.index_view') }}">Run History</a>
   with full log output.
 </p>
 
 {% if playbooks %}
 <div class="ansible-runner-grid">
-  {% for playbook in playbooks %}
+  {% for file, name in playbooks.items() %}
   <div class="ansible-runner-card">
     <form method="POST" action="{{ url_for('.run') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="playbook" value="{{ playbook }}">
+      <input type="hidden" name="playbook" value="{{ file }}">
       <div>
         <label>Playbook</label>
-        <div class="playbook-name">{{ playbook }}</div>
+        <div class="playbook-name">{{ name }}</div>
+        <div class="playbook-file">{{ file }}</div>
       </div>
       <div>
         <label for="limit-{{ loop.index }}">Limit (host/group, optional)</label>
@@ -86,7 +96,9 @@
 </div>
 {% else %}
 <div class="ansible-empty">
-  No playbooks found in <code>{{ ansible_dir }}</code>.
+  No playbooks declared. Add entries to
+  <code>{{ ansible_dir }}/playbooks.yml</code>
+  or <code>playbooks.local.yml</code>.
 </div>
 {% endif %}
 {% endblock %}

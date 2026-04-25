@@ -1,0 +1,30 @@
+# Catalog of playbooks exposed in the Syncer UI.
+#
+# Each entry binds a playbook file (relative to this directory) to a
+# friendly name shown in the Run Playbook page and in the Playbook Fire
+# Rule dropdown. Entries listed here are the only ones surfaced in the
+# UI — files not in this manifest stay invisible.
+#
+# Add custom entries to `playbooks.local.yml` (gitignored). Local
+# entries are merged on top of this file; an entry with the same `file`
+# in the local manifest overrides the bundled one (e.g. to rename it).
+#
+# Schema:
+#   playbooks:
+#     - file: <filename>.yml      # required, must live in this directory
+#       name: "<friendly name>"   # required, shown in the UI
+#       description: "<optional one-liner>"
+
+playbooks:
+  - file: cmk_agent_mngmt.yml
+    name: "Checkmk: Manage Host Agent"
+    description: "Install/update the Checkmk agent and register TLS / bakery."
+  - file: cmk_server_mngmt.yml
+    name: "Checkmk: Manage OMD Server"
+    description: "Install/update the Checkmk server package and create the site."
+  - file: cmk_omd_cleanup.yml
+    name: "Checkmk: OMD Cleanup"
+    description: "Run `omd cleanup` to remove orphaned site versions."
+  - file: server_mngmt.yml
+    name: "Server: SSL Certificates"
+    description: "Roll out webserver certificates and update httpd ssl.conf."

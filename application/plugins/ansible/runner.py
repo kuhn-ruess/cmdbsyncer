@@ -10,11 +10,17 @@ import os
 import shlex
 import subprocess
 import threading
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
-from application import app
+import yaml
+
+from application import app, logger
 from .models import AnsibleRunStats
+
+MANIFEST_FILENAME = 'playbooks.yml'
+LOCAL_MANIFEST_FILENAME = 'playbooks.local.yml'
 
 
 def _ansible_dir() -> Path:
@@ -35,15 +41,53 @@ def _ansible_binary() -> str:
         or 'ansible-playbook'
 
 
-def available_playbooks() -> list[str]:
+def _load_manifest(path: Path) -> list[dict]:
+    """Read and validate one manifest file. Missing file → empty list."""
+    if not path.is_file():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text(encoding='utf-8')) or {}
+    except yaml.YAMLError as exc:
+        logger.warning("Skipping invalid playbook manifest %s: %s", path, exc)
+        return []
+    entries = data.get('playbooks') or []
+    if not isinstance(entries, list):
+        logger.warning("Manifest %s: 'playbooks' must be a list, ignoring", path)
+        return []
+    return entries
+
+
+def available_playbooks() -> "OrderedDict[str, str]":
     """
-    Return playbook filenames discovered in the ansible directory. Sorted,
-    excluding hidden files. Used to populate the UI playbook list.
+    Return an ordered mapping of playbook filename → friendly display name,
+    sourced from `playbooks.yml` (bundled) merged with `playbooks.local.yml`
+    (user-managed, gitignored). Local entries override bundled entries by
+    `file`; new local entries append to the end.
+
+    Entries that point to a non-existent file are dropped — the UI should
+    not offer to run a playbook that disappeared from disk.
     """
     base = _ansible_dir()
     if not base.is_dir():
-        return []
-    return sorted(p.name for p in base.glob('*.yml') if not p.name.startswith('.'))
+        return OrderedDict()
+
+    catalog: "OrderedDict[str, str]" = OrderedDict()
+    for manifest in (MANIFEST_FILENAME, LOCAL_MANIFEST_FILENAME):
+        for entry in _load_manifest(base / manifest):
+            if not isinstance(entry, dict):
+                continue
+            file_name = (entry.get('file') or '').strip()
+            display = (entry.get('name') or file_name).strip()
+            if not file_name:
+                continue
+            if not (base / file_name).is_file():
+                logger.warning(
+                    "Manifest entry references missing file: %s",
+                    base / file_name,
+                )
+                continue
+            catalog[file_name] = display
+    return catalog
 
 
 def _build_command(playbook: str, target_host: str | None,
