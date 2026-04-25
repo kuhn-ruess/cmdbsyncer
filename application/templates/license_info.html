@@ -9,6 +9,25 @@
   <div class="col-lg-8">
     <div class="app-card">
       {% if license is not none %}
+        {% if license.expiry_state == 'expired' %}
+          <div class="alert alert-warning" role="alert">
+            <strong>License expired.</strong> All features remain
+            active &mdash; renewal recommended to stay supported.
+          </div>
+        {% elif license.expiry_state == 'expiring' %}
+          <div class="alert alert-info" role="alert">
+            <strong>License expires soon.</strong> Renew within the
+            next 30 days to avoid the expiry warning.
+          </div>
+        {% endif %}
+        {% if license.host_count_state == 'over' %}
+          <div class="alert alert-warning" role="alert">
+            <strong>Host limit exceeded.</strong>
+            {{ license.current_hosts }} hosts tracked, license cap is
+            {{ license.max_hosts }}. Features remain active &mdash;
+            this is a soft cap.
+          </div>
+        {% endif %}
         <table class="table table-striped mb-0">
           <tbody>
             <tr>
@@ -30,7 +49,30 @@
             {% if exp_human %}
             <tr>
               <th>Expires</th>
-              <td>{{ exp_human }}</td>
+              <td>
+                {{ exp_human }}
+                {% if license.expiry_state == 'expired' %}
+                  <span class="badge badge-warning ml-1">expired</span>
+                {% elif license.expiry_state == 'expiring' %}
+                  <span class="badge badge-info ml-1">expiring soon</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endif %}
+            {% if license.max_hosts %}
+            <tr>
+              <th>Host limit</th>
+              <td>
+                {{ license.max_hosts }}
+                {% if license.current_hosts is not none %}
+                  <span class="text-muted">
+                    (currently {{ license.current_hosts }})
+                  </span>
+                {% endif %}
+                {% if license.host_count_state == 'over' %}
+                  <span class="badge badge-warning ml-1">over limit</span>
+                {% endif %}
+              </td>
             </tr>
             {% endif %}
             <tr>
