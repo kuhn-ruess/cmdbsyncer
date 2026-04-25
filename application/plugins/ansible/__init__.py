@@ -2,7 +2,8 @@
 Ansible Inventory Modul
 """
 import json
-import os
+import sys
+
 import click
 
 from mongoengine.errors import DoesNotExist
@@ -19,8 +20,10 @@ from application.modules.rule.rewrite import Rewrite
 from application.helpers.cron import register_cronjob
 from application.helpers.plugins import register_cli_group
 from application.modules.inventory import (
+    list_inventory_providers,
     register_inventory_provider,
     register_inventory_provider_resolver,
+    render_ansible_inventory,
 )
 
 from .models import (
@@ -173,44 +176,6 @@ def update_cache():
     _inner_update_cache()
 
 #.
-#   .-- Ansible Source
-@cli_ansible.command('source')
-@click.option("--list", "show_list", is_flag=True)
-@click.option("--host")
-def source(show_list, host):
-    """Inventory Source for Ansible"""
-    rules = load_rules()
-    syncer = AnsibleInventory()
-    syncer.filter = rules['filter']
-    syncer.rewrite = rules['rewrite']
-    syncer.actions = rules['actions']
-
-    if show_list:
-        print(json.dumps(syncer.get_full_inventory()))
-        return True
-    if host:
-        print(json.dumps(syncer.get_host_inventory(host)))
-        return True
-    print("Params missing")
-    return False
-#.
-#   .-- Checkmk Server Source
-@cli_ansible.command('cmk-server-source')
-@click.option("--list", "show_list", is_flag=True)
-@click.option("--host")
-def server_source(show_list, host):
-    """Inventory Source for Checkmk Server Data"""
-    cmksitemngmt = SyncSites()
-    if show_list:
-        print(json.dumps(cmksitemngmt.get_full_inventory()))
-        return True
-    if host:
-        print(json.dumps(cmksitemngmt.get_host_inventory(host)))
-        return True
-    print("Params missing")
-    return False
-
-#.
 #   .-- Debug Filter
 @cli_ansible.command('debug_filter')
 @click.option('--list-rules', '-l', is_flag=True, help='List all available filter rules')
@@ -318,7 +283,7 @@ register_cronjob('Ansible: Build Cache', _inner_update_cache)
 # .--- Inventory provider registration
 # Both the CLI host inventory and the Checkmk-Sites inventory go through
 # the cross-module registry so the unified
-# `cmdbsyncer inventory ansible <provider>` CLI / `/api/v1/inventory/ansible`
+# `cmdbsyncer ansible inventory <provider>` CLI / `/api/v1/inventory/ansible`
 # HTTP endpoint can serve them — and so other modules can register their
 # own providers later without touching the Ansible plugin.
 def _build_ansible_provider(project=None):
@@ -379,6 +344,56 @@ class _AnsibleProjectResolver:
 register_inventory_provider_resolver(_AnsibleProjectResolver())
 
 
+# CLI front-end for the cross-module inventory registry, rendered as
+# Ansible-format JSON. Lives under `cmdbsyncer ansible …` alongside
+# the other Ansible-specific subcommands; the same render function
+# backs `/api/v1/inventory/ansible/<provider>` so HTTP and CLI never
+# drift.
+@cli_ansible.command(name='inventory')
+@click.argument('provider')
+@click.option('--list', 'show_list', is_flag=True,
+              help='Emit the full inventory (Ansible script contract).')
+@click.option('--host', default=None,
+              help="Emit a single host's vars dict (Ansible script contract).")
+@click.option('--debug', is_flag=True, default=False,
+              help='Accepted for consistency; this command does not produce extra output.')
+def cli_ansible_inventory(provider, show_list, host, debug):  # pylint: disable=unused-argument
+    """
+    Render PROVIDER's inventory as Ansible JSON to stdout. Used by the
+    cmdbsyncer-inventory plugin in `mode: local` and by anyone wiring
+    `ansible-playbook -i` against a script that follows Ansible's
+    dynamic-inventory script contract.
+    """
+    if host:
+        result = render_ansible_inventory(provider, host=host)
+        if result is None:
+            click.echo(f"Unknown provider: {provider}", err=True)
+            sys.exit(1)
+        if result is False:
+            click.echo(f"Host not found: {host}", err=True)
+            sys.exit(1)
+        print(json.dumps(result))
+        return
+    if show_list:
+        result = render_ansible_inventory(provider)
+        if result is None:
+            click.echo(f"Unknown provider: {provider}", err=True)
+            sys.exit(1)
+        print(json.dumps(result))
+        return
+    click.echo("Pass --list or --host=NAME (Ansible script contract).", err=True)
+    sys.exit(2)
+
+
+@cli_ansible.command(name='list-inventory-providers')
+@click.option('--debug', is_flag=True, default=False,
+              help='Accepted for consistency; this command does not produce extra output.')
+def cli_ansible_list_providers(debug):  # pylint: disable=unused-argument
+    """Print every registered inventory provider name, one per line."""
+    for name in list_inventory_providers():
+        print(name)
+
+
 # Run the one-time migration & default-project bootstrap. Idempotent:
 # subsequent app starts notice the Default project already exists and
 # stop touching it. Safety-netted because admin views register before
@@ -407,13 +422,3 @@ def cli_fire_playbook_rules():
 
 
 register_cronjob('Ansible: Fire Playbook Rules', fire_playbook_rules)
-
-
-# Initiate REST API namespace — only when the web layer is being built.
-# In CLI mode ``application.api.views`` is intentionally not loaded, so
-# pulling ``syncerapi.v1.rest`` (which re-exports ``API`` from there)
-# would drag the whole flask-restx stack back in for nothing.
-if os.environ.get('CMDBSYNCER_CLI') != '1':
-    from syncerapi.v1.rest import API  # pylint: disable=wrong-import-position,wrong-import-order
-    from .rest_api.ansible import API as ansible  # pylint: disable=wrong-import-position
-    API.add_namespace(ansible, path='/ansible')

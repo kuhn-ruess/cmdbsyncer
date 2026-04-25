@@ -28,37 +28,10 @@ def register_admin_views(admin):
     admin.add_view(
         AnsibleProjectView(
             AnsibleProject,
-            name="Projects",
+            name="Rules by Project",
             category="Ansible",
             menu_icon_type='fa',
             menu_icon_value='fa-folder',
-        )
-    )
-    admin.add_view(
-        AnsibleRewriteRuleView(
-            AnsibleRewriteAttributesRule,
-            name="Rewrite Attributes",
-            category="Ansible",
-            menu_icon_type='fa',
-            menu_icon_value='fa-exchange',
-        )
-    )
-    admin.add_view(
-        AnsibleFilterRuleView(
-            AnsibleFilterRule,
-            name="Filter",
-            category="Ansible",
-            menu_icon_type='fa',
-            menu_icon_value='fa-filter',
-        )
-    )
-    admin.add_view(
-        AnsibleCustomVariablesView(
-            AnsibleCustomVariablesRule,
-            name="Ansible Attributes",
-            category="Ansible",
-            menu_icon_type='fa',
-            menu_icon_value='fa-tags',
         )
     )
     admin.add_view(
@@ -87,5 +60,34 @@ def register_admin_views(admin):
             category="Ansible",
             menu_icon_type='fa',
             menu_icon_value='fa-history',
+        )
+    )
+
+    admin.add_sub_category(name="All Rules", parent_name="Ansible")
+    admin.add_view(
+        AnsibleRewriteRuleView(
+            AnsibleRewriteAttributesRule,
+            name="Rewrite Attributes",
+            category="All Rules",
+            menu_icon_type='fa',
+            menu_icon_value='fa-exchange',
+        )
+    )
+    admin.add_view(
+        AnsibleFilterRuleView(
+            AnsibleFilterRule,
+            name="Filter",
+            category="All Rules",
+            menu_icon_type='fa',
+            menu_icon_value='fa-filter',
+        )
+    )
+    admin.add_view(
+        AnsibleCustomVariablesView(
+            AnsibleCustomVariablesRule,
+            name="Ansible Attributes",
+            category="All Rules",
+            menu_icon_type='fa',
+            menu_icon_value='fa-tags',
         )
     )

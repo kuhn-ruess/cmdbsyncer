@@ -180,13 +180,16 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
                  target_host: str | None = None,
                  extra_vars: str | None = None,
                  check_mode: bool = False,
+                 provider: str | None = None,
                  source: str = 'ui',
                  triggered_by: str | None = None) -> AnsibleRunStats:
     """
     Kick off a playbook run in a background daemon thread and return the
     AnsibleRunStats record so callers can redirect to its detail page.
     With `check_mode=True` the playbook runs as `--check --diff` (no
-    changes applied; diff rendered into the log).
+    changes applied; diff rendered into the log). `provider` overrides
+    the manifest's `inventory:` field for this run; pass None to use the
+    manifest default.
 
     Caller responsibility: validate `playbook` against available_playbooks()
     before invoking — this function does no whitelist check, so passing
@@ -194,7 +197,8 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
     directory.
     """
     base = _ansible_dir()
-    provider = playbook_inventory_provider(playbook)
+    if not provider:
+        provider = playbook_inventory_provider(playbook)
     stats = AnsibleRunStats(
         playbook=playbook,
         target_host=target_host or None,

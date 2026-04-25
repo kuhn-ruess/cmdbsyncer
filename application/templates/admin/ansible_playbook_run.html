@@ -15,7 +15,7 @@
   }
   .ansible-runner-card form {
     display: grid;
-    grid-template-columns: 200px 1fr 1fr auto auto;
+    grid-template-columns: 200px 160px 1fr 1fr auto auto;
     gap: 8px;
     align-items: end;
   }
@@ -63,15 +63,26 @@
 
 {% if playbooks %}
 <div class="ansible-runner-grid">
-  {% for file, name in playbooks.items() %}
+  {% for entry in playbooks %}
   <div class="ansible-runner-card">
     <form method="POST" action="{{ url_for('.run') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="playbook" value="{{ file }}">
+      <input type="hidden" name="playbook" value="{{ entry.file }}">
       <div>
         <label>Playbook</label>
-        <div class="playbook-name">{{ name }}</div>
-        <div class="playbook-file">{{ file }}</div>
+        <div class="playbook-name">{{ entry.name }}</div>
+        <div class="playbook-file">{{ entry.file }}</div>
+      </div>
+      <div>
+        <label for="provider-{{ loop.index }}">Inventory Provider</label>
+        <select class="form-control" id="provider-{{ loop.index }}" name="provider">
+          {% for provider in providers %}
+          <option value="{{ provider }}"
+                  {% if provider == entry.default_provider %}selected{% endif %}>
+            {{ provider }}{% if provider == entry.default_provider %} (default){% endif %}
+          </option>
+          {% endfor %}
+        </select>
       </div>
       <div>
         <label for="limit-{{ loop.index }}">Limit (host/group, optional)</label>

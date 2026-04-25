@@ -83,6 +83,7 @@ def fire_playbook_rules(account=False):  # pylint: disable=unused-argument
                     playbook,
                     target_host=db_host.hostname,
                     extra_vars=outcome.get('extra_vars') or None,
+                    provider=(outcome.get('inventory') or '').strip() or None,
                     source='rule',
                     triggered_by=f'rule:{rule_id}',
                 )

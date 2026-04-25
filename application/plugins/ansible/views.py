@@ -12,6 +12,7 @@ from markupsafe import Markup, escape
 from wtforms import SelectField
 from wtforms.validators import Regexp
 
+from application.modules.inventory import list_inventory_providers
 from application.modules.rule.views import (
     FiltereModelView,
     RewriteAttributeView,
@@ -29,7 +30,12 @@ from .models import (
     AnsibleProject,
     AnsibleRewriteAttributesRule,
 )
-from .runner import _ansible_dir, available_playbooks, run_playbook
+from .runner import (
+    _ansible_dir,
+    available_playbooks,
+    playbook_inventory_provider,
+    run_playbook,
+)
 
 
 def _ansible_main_fields():
@@ -72,6 +78,14 @@ def _playbook_choices():
     (what the runner needs); choice label = the manifest's friendly name.
     """
     return list(available_playbooks().items())
+
+
+def _provider_choices_with_blank():
+    """Inventory provider choices for the fire-rule outcome dropdown.
+    Empty value means 'use the playbook manifest's default'."""
+    return [('', '— manifest default —')] + [
+        (p, p) for p in list_inventory_providers()
+    ]
 
 
 def _format_project_name_link(_view, _context, model, _name):
@@ -341,10 +355,14 @@ class AnsiblePlaybookFireRuleView(_ProjectAwareRuleView, RuleModelView):  # pyli
             '': {
                 'form_overrides': {
                     'playbook': SelectField,
+                    'inventory': SelectField,
                 },
                 'form_args': {
                     'playbook': {
                         'choices': _playbook_choices,
+                    },
+                    'inventory': {
+                        'choices': _provider_choices_with_blank,
                     },
                 },
             },
@@ -493,9 +511,18 @@ class AnsiblePlaybookRunView(BaseView):
     @expose('/')
     def index(self):
         """Render the list of available playbooks with run controls."""
+        playbook_entries = [
+            {
+                'file': file_name,
+                'name': display_name,
+                'default_provider': playbook_inventory_provider(file_name),
+            }
+            for file_name, display_name in available_playbooks().items()
+        ]
         return self.render(
             'admin/ansible_playbook_run.html',
-            playbooks=available_playbooks(),
+            playbooks=playbook_entries,
+            providers=list_inventory_providers(),
             ansible_dir=str(_ansible_dir()),
         )
 
@@ -505,11 +532,15 @@ class AnsiblePlaybookRunView(BaseView):
         playbook = (request.form.get('playbook') or '').strip()
         target_host = (request.form.get('target_host') or '').strip() or None
         extra_vars = (request.form.get('extra_vars') or '').strip() or None
+        provider = (request.form.get('provider') or '').strip() or None
         mode = (request.form.get('mode') or 'run').strip()
         check_mode = mode == 'check'
 
         if playbook not in available_playbooks():
             flash(f'Unknown playbook: {playbook!r}', 'error')
+            return redirect(url_for('.index'))
+        if provider and provider not in list_inventory_providers():
+            flash(f'Unknown inventory provider: {provider!r}', 'error')
             return redirect(url_for('.index'))
 
         stats = run_playbook(
@@ -517,6 +548,7 @@ class AnsiblePlaybookRunView(BaseView):
             target_host=target_host,
             extra_vars=extra_vars,
             check_mode=check_mode,
+            provider=provider,
             source='ui',
             triggered_by=current_user.email if current_user.is_authenticated else None,
         )

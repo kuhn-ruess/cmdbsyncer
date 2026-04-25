@@ -1,24 +1,30 @@
 #!/bin/bash
-#START SETTINGS
-API="https://hostname/cmdbsyncer/api/v1/ansible"
+# Backward-compatible REST inventory wrapper. Updated to talk to the
+# new /api/v1/inventory/ansible/<provider> endpoint. For most users the
+# YAML-based cmdbsyncer-inventory plugin (mode: http) is the preferred
+# way — see ansible/syncer.inventory.yml.
+#
+# START SETTINGS
+API="https://hostname/cmdbsyncer/api/v1/inventory/ansible"
+PROVIDER="ansible"
 SECRET="USER:TEST123"
-#END SETTINGS
+# END SETTINGS
+
 case "$1" in
 "--list")
-    curl -X 'GET' $API/ \
+    curl -X 'GET' "$API/$PROVIDER" \
          -H 'accept: application/json' \
          -H "x-login-user: $SECRET" \
          2> /dev/null
     ;;
 "--host")
-    curl -X 'GET' ${API}/{$2} \
+    curl -X 'GET' "$API/$PROVIDER?host=$2" \
          -H 'accept: application/json' \
          -H "x-login-user: $SECRET" \
          2> /dev/null
     ;;
 *)
-    echo "This is a Ansible Inventory Source"
-    echo "Please configure API and SECRET"
+    echo "This is an Ansible Inventory Source"
+    echo "Please configure API, PROVIDER, and SECRET"
     ;;
 esac
-

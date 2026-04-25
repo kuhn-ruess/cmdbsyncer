@@ -205,8 +205,14 @@ class AnsiblePlaybookAction(db.EmbeddedDocument):
     Dedup is per (rule, host, playbook) — once a successful (or failed)
     AnsibleRunStats record exists for that triple, the rule will not fire
     again. Delete the run record to allow a re-fire.
+
+    `inventory` is the inventory provider override; leave empty to use
+    the playbook manifest's default. Useful when one rule needs to fire
+    a playbook against a different rule source than the one the playbook
+    declares (e.g. firing cmk_server_mngmt.yml from a host-driven rule).
     """
     playbook = db.StringField(required=True)
+    inventory = db.StringField()
     extra_vars = db.StringField()
 
     meta = {

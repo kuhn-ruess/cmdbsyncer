@@ -1,2 +1,5 @@
 #!/bin/sh
-../cmdbsyncer ansible cmk-server-source $1 $2
+# Backward-compatible shim: thin proxy to the new
+# `cmdbsyncer ansible inventory cmk_sites` CLI command.
+# Used by `cmk_server_mngmt.yml` for the Checkmk Sites catalogue.
+exec ../cmdbsyncer ansible inventory cmk_sites "$@"

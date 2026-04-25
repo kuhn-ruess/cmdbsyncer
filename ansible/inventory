@@ -1,2 +1,7 @@
 #!/bin/sh
-./cmdbsyncer ansible source $1 $2 2>/dev/null
+# Backward-compatible shim: thin proxy to the new
+# `cmdbsyncer ansible inventory ansible` CLI command.
+# Existing playbook invocations using `-i ansible/inventory` keep working
+# unchanged. The modern alternative is `-i ansible/syncer.inventory.yml`
+# which routes through the cmdbsyncer-inventory plugin (mode local|http).
+exec ./cmdbsyncer ansible inventory ansible "$@"
