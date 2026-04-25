@@ -13,7 +13,7 @@ repeating the boilerplate at every call site.
 from application.enterprise import has_feature, run_hook
 
 
-def _web_context():
+def web_context():
     """
     Best-effort extraction of the current HTTP context. Swallows all
     errors so audit emission never breaks the request path.
@@ -66,7 +66,7 @@ def audit(event_type, **context):
     """
     if not has_feature('audit_log'):
         return
-    payload = _web_context()
+    payload = web_context()
     payload.update(context)
     try:
         run_hook('audit_event', event_type, **payload)
