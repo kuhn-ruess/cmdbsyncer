@@ -18,10 +18,13 @@ from application.modules.rule.filter import Filter
 from application.modules.rule.rewrite import Rewrite
 from application.helpers.cron import register_cronjob
 from application.helpers.plugins import register_cli_group
-from application.modules.inventory import register_inventory_provider
+from application.modules.inventory import (
+    register_inventory_provider,
+    register_inventory_provider_resolver,
+)
 
 from .models import AnsibleFilterRule, AnsibleRewriteAttributesRule, \
-                    AnsibleCustomVariablesRule
+                    AnsibleCustomVariablesRule, AnsibleProject
 from .rules import AnsibleVariableRule
 from .inventory import AnsibleInventory
 from .site_syncer import SyncSites
@@ -30,21 +33,34 @@ cli_ansible = register_cli_group(app, 'ansible', 'ansible',
                                  "Ansible Datasource and Debug")
 
 #   .-- Load Rules
-def load_rules():
+def load_rules(project=None):
     """
-    Cache all needed Rules for operation
+    Cache the rules feeding one Ansible inventory pass.
+
+    `project=None` (default) selects rules without a project assignment
+    — that's the legacy / global behaviour, served by the `ansible`
+    provider. Pass an `AnsibleProject` to load only that project's
+    rules (strict isolation).
+
+    The cache_name is namespaced per project so a cached run for the
+    `ansible` provider cannot leak into a per-project run on the same
+    host record.
     """
+    project_suffix = f'_{project.name}' if project else ''
+    rule_filter = {'enabled': True, 'project': project}
+
     attribute_filter = Filter()
-    attribute_filter.cache_name = 'ansible_filter'
-    attribute_filter.rules = AnsibleFilterRule.objects(enabled=True).order_by('sort_field')
+    attribute_filter.cache_name = f'ansible_filter{project_suffix}'
+    attribute_filter.rules = AnsibleFilterRule.objects(**rule_filter).order_by('sort_field')
 
     attribute_rewrite = Rewrite()
-    attribute_rewrite.cache_name = 'ansible_rewrite'
+    attribute_rewrite.cache_name = f'ansible_rewrite{project_suffix}'
     attribute_rewrite.rules = \
-            AnsibleRewriteAttributesRule.objects(enabled=True).order_by('sort_field')
+            AnsibleRewriteAttributesRule.objects(**rule_filter).order_by('sort_field')
 
     ansible_rules = AnsibleVariableRule()
-    ansible_rules.rules = AnsibleCustomVariablesRule.objects(enabled=True).order_by('sort_field')
+    ansible_rules.rules = \
+            AnsibleCustomVariablesRule.objects(**rule_filter).order_by('sort_field')
 
     return {
         'filter': attribute_filter,
@@ -298,9 +314,12 @@ register_cronjob('Ansible: Build Cache', _inner_update_cache)
 # `cmdbsyncer inventory ansible <provider>` CLI / `/api/v1/inventory/ansible`
 # HTTP endpoint can serve them — and so other modules can register their
 # own providers later without touching the Ansible plugin.
-def _build_ansible_provider():
-    """Fully configured AnsibleInventory ready to render a fresh inventory."""
-    rules = load_rules()
+def _build_ansible_provider(project=None):
+    """
+    Fully configured AnsibleInventory rendered through `project`'s rules
+    (or the global / project-less rules when `project` is None).
+    """
+    rules = load_rules(project=project)
     syncer = AnsibleInventory()
     syncer.filter = rules['filter']
     syncer.rewrite = rules['rewrite']
@@ -315,6 +334,29 @@ def _build_cmk_sites_provider():
 
 register_inventory_provider('ansible', _build_ansible_provider)
 register_inventory_provider('cmk_sites', _build_cmk_sites_provider)
+
+
+class _AnsibleProjectResolver:
+    """
+    Resolve dynamic provider names to per-project AnsibleInventory
+    factories. Registered once at app startup; the lookup happens per
+    request, so projects added or disabled at runtime via the admin UI
+    take effect on the next inventory call without an app restart.
+    """
+
+    def __call__(self, name):
+        """Return a factory for `name` if it is a known project, else None."""
+        project = AnsibleProject.objects(name=name, enabled=True).first()
+        if project is None:
+            return None
+        return lambda p=project: _build_ansible_provider(project=p)
+
+    def list_names(self):
+        """Project names currently enabled — exposed via the registry's listing API."""
+        return [p.name for p in AnsibleProject.objects(enabled=True).only('name')]
+
+
+register_inventory_provider_resolver(_AnsibleProjectResolver())
 # .---
 
 

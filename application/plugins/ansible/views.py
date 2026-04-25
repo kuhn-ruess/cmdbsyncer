@@ -6,14 +6,45 @@ from datetime import datetime
 from flask import flash, redirect, request, url_for
 from flask_admin import BaseView, expose
 from flask_admin.contrib.mongoengine.filters import FilterEqual, FilterLike
+from flask_admin.form import rules as form_rules
 from flask_login import current_user
 from markupsafe import Markup, escape
 from wtforms import SelectField
+from wtforms.validators import Regexp
 
-from application.modules.rule.views import RuleModelView
+from application.modules.rule.views import (
+    FiltereModelView,
+    RewriteAttributeView,
+    RuleModelView,
+    _modern_rule_form,
+    div_close,
+    div_open,
+)
 from application.views.default import DefaultModelView
 
 from .runner import _ansible_dir, available_playbooks, run_playbook
+
+
+def _ansible_main_fields():
+    """Standard 'main' card for Ansible rule editors: like the base
+    RuleModelView but with a Project picker between documentation and
+    the enabled/last_match toggles."""
+    return [
+        form_rules.Field('name'),
+        form_rules.Field('documentation'),
+        form_rules.Field('project'),
+        div_open,
+        form_rules.NestedRule(('enabled', 'last_match')),
+        div_close,
+        form_rules.Field('sort_field'),
+    ]
+
+
+def _format_project(_v, _c, m, _p):
+    """Render the project reference as its name, dim if unset."""
+    if m.project:
+        return Markup(f'<span class="badge badge-info">{escape(m.project.name)}</span>')
+    return Markup('<span class="text-muted">—</span>')
 
 
 def _playbook_choices():
@@ -23,6 +54,45 @@ def _playbook_choices():
     (what the runner needs); choice label = the manifest's friendly name.
     """
     return list(available_playbooks().items())
+
+
+class AnsibleProjectView(DefaultModelView):
+    """
+    CRUD for AnsibleProject. Each enabled project is exposed as its own
+    inventory provider — see Modules → Ansible → Inventory Providers.
+    """
+
+    column_default_sort = ('sort_field', False)
+    column_list = ('name', 'description', 'enabled', 'sort_field')
+    column_sortable_list = ('name', 'enabled', 'sort_field')
+    column_editable_list = ('enabled', 'sort_field')
+    column_filters = (
+        FilterLike('name', 'Name'),
+    )
+
+    form_columns = ('name', 'description', 'enabled', 'sort_field')
+
+    # The provider name is the project name, so it has to survive being
+    # used as a CLI argument, an env-var value, and a URL path segment.
+    # Reject spaces and friends at form-validate time so the user sees a
+    # red field instead of a 500 from the model's clean() defence layer.
+    form_args = {
+        'name': {
+            'validators': [
+                Regexp(
+                    r'^[A-Za-z0-9][A-Za-z0-9_.\-]*$',
+                    message=(
+                        "Name must start with a letter or digit and use only "
+                        "letters, digits, '_', '.' and '-' — no spaces."
+                    ),
+                ),
+            ],
+        },
+    }
+
+    def is_accessible(self):
+        """Overwrite — same right gates all Ansible config."""
+        return current_user.is_authenticated and current_user.has_right('ansible')
 
 
 class AnsibleCustomVariablesView(RuleModelView):
@@ -35,8 +105,86 @@ class AnsibleCustomVariablesView(RuleModelView):
         'conditions', 'outcomes',
     ]
 
+    column_filters = list(RuleModelView.column_filters) + [
+        FilterEqual('project', 'Project'),
+    ]
+
+    column_formatters = {
+        **RuleModelView.column_formatters,
+        'project': _format_project,
+    }
+
+    form_rules = _modern_rule_form(
+        main_fields=_ansible_main_fields(),
+        condition_fields=[
+            form_rules.Field('condition_typ'),
+            form_rules.Field('conditions'),
+        ],
+        outcome_fields=[form_rules.Field('outcomes')],
+        outcome_title='Outcomes',
+        outcome_desc='What the rule does to matching hosts.',
+    )
+
     def is_accessible(self):
         """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('ansible')
+
+
+class AnsibleFilterRuleView(FiltereModelView):
+    """
+    Filter rule editor with project assignment.
+    """
+
+    column_filters = list(FiltereModelView.column_filters) + [
+        FilterEqual('project', 'Project'),
+    ]
+    column_formatters = {
+        **FiltereModelView.column_formatters,
+        'project': _format_project,
+    }
+
+    form_rules = _modern_rule_form(
+        main_fields=_ansible_main_fields(),
+        condition_fields=[
+            form_rules.Field('condition_typ'),
+            form_rules.Field('conditions'),
+        ],
+        outcome_fields=[form_rules.Field('outcomes')],
+        outcome_title='Filter Actions',
+        outcome_desc='Which labels / attributes pass through for matching hosts.',
+    )
+
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.has_right('ansible')
+
+
+class AnsibleRewriteRuleView(RewriteAttributeView):  # pylint: disable=too-many-ancestors
+    """
+    Attribute-rewrite rule editor with project assignment.
+    """
+
+    column_filters = list(RewriteAttributeView.column_filters) + [
+        FilterEqual('project', 'Project'),
+    ]
+
+    form_rules = _modern_rule_form(
+        main_fields=_ansible_main_fields(),
+        condition_fields=[
+            form_rules.Field('condition_typ'),
+            form_rules.Field('conditions'),
+        ],
+        outcome_fields=[form_rules.Field('outcomes')],
+        outcome_title='Attribute Rewrites',
+        outcome_desc='Rename / reformat attributes for matching hosts.',
+    )
+
+    def __init__(self, *args, **kwargs):
+        """Append the project column formatter on top of the parent's
+        runtime-built formatter map."""
+        super().__init__(*args, **kwargs)
+        self.column_formatters['project'] = _format_project
+
+    def is_accessible(self):
         return current_user.is_authenticated and current_user.has_right('ansible')
 
 
@@ -49,6 +197,26 @@ class AnsiblePlaybookFireRuleView(RuleModelView):
         'conditions', 'outcomes', 'render_full_conditions',
         'render_playbook_outcomes',
     ]
+
+    column_filters = list(RuleModelView.column_filters) + [
+        FilterEqual('project', 'Project'),
+    ]
+
+    column_formatters = {
+        **RuleModelView.column_formatters,
+        'project': _format_project,
+    }
+
+    form_rules = _modern_rule_form(
+        main_fields=_ansible_main_fields(),
+        condition_fields=[
+            form_rules.Field('condition_typ'),
+            form_rules.Field('conditions'),
+        ],
+        outcome_fields=[form_rules.Field('outcomes')],
+        outcome_title='Playbook Fires',
+        outcome_desc='Which playbook(s) to run against matching hosts.',
+    )
 
     form_subdocuments = dict(RuleModelView.form_subdocuments)
     form_subdocuments['outcomes'] = {

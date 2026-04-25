@@ -2,8 +2,57 @@
 Ansible Rule
 """
 # pylint: disable=too-few-public-methods
+import re
+
+from mongoengine.errors import ValidationError
+
 from application import db
+from application.modules.inventory import is_reserved_provider_name
 from application.modules.rule.models import rule_types
+
+_PROJECT_NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.\-]*$')
+
+
+class AnsibleProject(db.Document):
+    """
+    A project groups Ansible rules into an isolated rule source.
+
+    Each enabled project is exposed as its own inventory provider
+    (named after the project) — that's how a playbook can pick a
+    rule source via the manifest's `inventory:` field. Rules without
+    a project are served by the default `ansible` provider, which is
+    the legacy / global behaviour.
+    """
+    name = db.StringField(required=True, unique=True)
+    description = db.StringField()
+    enabled = db.BooleanField(default=True)
+    sort_field = db.IntField(default=0)
+
+    meta = {
+        'strict': False,
+    }
+
+    def clean(self):
+        """Reject names that would collide with statically registered
+        providers (e.g. `ansible`, `cmk_sites`) or break URL routing."""
+        name = (self.name or '').strip()
+        if not _PROJECT_NAME_RE.match(name):
+            raise ValidationError(
+                "Project name must start with a letter or digit and use "
+                "only letters, digits, '_', '.', '-'."
+            )
+        if is_reserved_provider_name(name):
+            raise ValidationError(
+                f"Project name '{name}' collides with a built-in inventory "
+                "provider. Pick a different name."
+            )
+        self.name = name
+
+    def __str__(self):
+        """Used by Flask-Admin's QuerySelectField when rendering project
+        dropdowns on rule editors — without this the dropdown would show
+        `AnsibleProject Object` instead of the project name."""
+        return self.name or super().__str__()
 
 run_sources = [
     ('ui', 'UI'),
@@ -58,6 +107,8 @@ class AnsibleCustomVariablesRule(db.Document):
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
 
+    project = db.ReferenceField(document_type=AnsibleProject, required=False)
+
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for preview
@@ -83,6 +134,7 @@ class AnsibleFilterRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+    project = db.ReferenceField(document_type=AnsibleProject, required=False)
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField() # Helper for Preview
@@ -125,6 +177,8 @@ class AnsiblePlaybookFireRule(db.Document):
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
 
+    project = db.ReferenceField(document_type=AnsibleProject, required=False)
+
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
     render_full_conditions = db.StringField()  # Helper for preview
@@ -147,6 +201,8 @@ class AnsibleRewriteAttributesRule(db.Document):
     """
     name = db.StringField()
     documentation = db.StringField()
+
+    project = db.ReferenceField(document_type=AnsibleProject, required=False)
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))

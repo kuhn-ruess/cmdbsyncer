@@ -25,6 +25,7 @@ registration layer can stay this thin.
 """
 
 _inventory_providers: dict = {}
+_inventory_provider_resolvers: list = []
 
 
 def register_inventory_provider(name: str, factory) -> None:
@@ -35,17 +36,53 @@ def register_inventory_provider(name: str, factory) -> None:
     _inventory_providers[name] = factory
 
 
+def register_inventory_provider_resolver(resolver) -> None:
+    """
+    Register a fallback resolver for dynamically named providers — used
+    e.g. by Ansible Projects, where the set of provider names is not
+    known at app startup but grows as the user creates project records
+    in the UI.
+
+    A resolver is a callable `resolver(name) -> factory | None` returning
+    a zero-arg factory if it knows `name`, else None. Optionally it
+    exposes `list_names() -> list[str]` so dynamic providers show up in
+    `list_inventory_providers()`.
+    """
+    _inventory_provider_resolvers.append(resolver)
+
+
 def get_inventory_provider(name: str):
-    """Instantiate the provider registered under `name`, or None."""
+    """Instantiate the provider registered under `name`, or None.
+
+    Static registrations win; resolvers are consulted only on miss so
+    callers can override a dynamic provider by registering a static one
+    with the same name (e.g. for tests).
+    """
     factory = _inventory_providers.get(name)
-    if factory is None:
-        return None
-    return factory()
+    if factory is not None:
+        return factory()
+    for resolver in _inventory_provider_resolvers:
+        factory = resolver(name)
+        if factory is not None:
+            return factory()
+    return None
 
 
 def list_inventory_providers() -> list[str]:
-    """Sorted list of registered provider names."""
-    return sorted(_inventory_providers.keys())
+    """Sorted union of statically registered names and dynamic names
+    advertised by resolvers via their optional `list_names()` hook."""
+    names = set(_inventory_providers.keys())
+    for resolver in _inventory_provider_resolvers:
+        list_names = getattr(resolver, 'list_names', None)
+        if callable(list_names):
+            names.update(list_names())
+    return sorted(names)
+
+
+def is_reserved_provider_name(name: str) -> bool:
+    """Used by Project model validators to reject names that would
+    collide with statically registered providers."""
+    return name in _inventory_providers
 
 
 def render_ansible_inventory(provider_name: str, *, host: str | None = None):

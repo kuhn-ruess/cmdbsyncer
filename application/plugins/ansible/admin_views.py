@@ -2,19 +2,21 @@
 Flask-Admin view registration for the Ansible plugin.
 """
 # pylint: disable=too-few-public-methods
-from application.modules.rule.views import FiltereModelView, RewriteAttributeView
-
 from .models import (
     AnsibleCustomVariablesRule,
     AnsibleFilterRule,
     AnsiblePlaybookFireRule,
+    AnsibleProject,
     AnsibleRewriteAttributesRule,
     AnsibleRunStats,
 )
 from .views import (
     AnsibleCustomVariablesView,
+    AnsibleFilterRuleView,
     AnsiblePlaybookFireRuleView,
     AnsiblePlaybookRunView,
+    AnsibleProjectView,
+    AnsibleRewriteRuleView,
     AnsibleRunStatsView,
 )
 
@@ -24,7 +26,16 @@ def register_admin_views(admin):
     admin.add_sub_category(name="Ansible", parent_name="Modules")
 
     admin.add_view(
-        RewriteAttributeView(
+        AnsibleProjectView(
+            AnsibleProject,
+            name="Projects",
+            category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-folder',
+        )
+    )
+    admin.add_view(
+        AnsibleRewriteRuleView(
             AnsibleRewriteAttributesRule,
             name="Rewrite Attributes",
             category="Ansible",
@@ -33,7 +44,7 @@ def register_admin_views(admin):
         )
     )
     admin.add_view(
-        FiltereModelView(
+        AnsibleFilterRuleView(
             AnsibleFilterRule,
             name="Filter",
             category="Ansible",
