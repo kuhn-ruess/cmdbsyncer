@@ -91,10 +91,12 @@ def available_playbooks() -> "OrderedDict[str, str]":
 
 
 def _build_command(playbook: str, target_host: str | None,
-                   extra_vars: str | None) -> list[str]:
+                   extra_vars: str | None, check_mode: bool) -> list[str]:
     """Assemble the ansible-playbook argv."""
     base = _ansible_dir()
     cmd = [_ansible_binary(), '-i', str(base / 'inventory'), str(base / playbook)]
+    if check_mode:
+        cmd += ['--check', '--diff']
     if target_host:
         cmd += ['--limit', target_host]
     if extra_vars:
@@ -139,14 +141,17 @@ def _execute(stats_id, cmd: list[str], cwd: Path):
             stats.save()
 
 
-def run_playbook(playbook: str, *,
+def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
                  target_host: str | None = None,
                  extra_vars: str | None = None,
+                 check_mode: bool = False,
                  source: str = 'ui',
                  triggered_by: str | None = None) -> AnsibleRunStats:
     """
     Kick off a playbook run in a background daemon thread and return the
     AnsibleRunStats record so callers can redirect to its detail page.
+    With `check_mode=True` the playbook runs as `--check --diff` (no
+    changes applied; diff rendered into the log).
 
     Caller responsibility: validate `playbook` against available_playbooks()
     before invoking — this function does no whitelist check, so passing
@@ -158,6 +163,7 @@ def run_playbook(playbook: str, *,
         playbook=playbook,
         target_host=target_host or None,
         extra_vars=extra_vars or None,
+        mode='check' if check_mode else 'run',
         source=source,
         triggered_by=triggered_by,
         started_at=datetime.now(),
@@ -165,7 +171,7 @@ def run_playbook(playbook: str, *,
     )
     stats.save()
 
-    cmd = _build_command(playbook, target_host, extra_vars)
+    cmd = _build_command(playbook, target_host, extra_vars, check_mode)
     thread = threading.Thread(
         target=_execute,
         args=(stats.pk, cmd, base),

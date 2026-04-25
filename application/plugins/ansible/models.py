@@ -17,6 +17,11 @@ run_statuses = [
     ('failure', 'Failure'),
 ]
 
+run_modes = [
+    ('run', 'Run'),
+    ('check', 'Preview (--check --diff)'),
+]
+
 
 class AnsibleRunStats(db.Document):
     """
@@ -28,6 +33,7 @@ class AnsibleRunStats(db.Document):
     playbook = db.StringField(required=True)
     target_host = db.StringField()
     extra_vars = db.StringField()
+    mode = db.StringField(choices=run_modes, default='run')
     source = db.StringField(choices=run_sources, default='ui')
     triggered_by = db.StringField()
 

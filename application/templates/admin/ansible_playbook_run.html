@@ -15,7 +15,7 @@
   }
   .ansible-runner-card form {
     display: grid;
-    grid-template-columns: 200px 1fr 1fr auto;
+    grid-template-columns: 200px 1fr 1fr auto auto;
     gap: 8px;
     align-items: end;
   }
@@ -86,7 +86,13 @@
                placeholder="key=value key2=value2">
       </div>
       <div>
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" name="mode" value="check" class="btn btn-secondary"
+                title="ansible-playbook --check --diff (no changes applied)">
+          <i class="fa fa-eye"></i> Preview
+        </button>
+      </div>
+      <div>
+        <button type="submit" name="mode" value="run" class="btn btn-primary">
           <i class="fa fa-play"></i> Run
         </button>
       </div>

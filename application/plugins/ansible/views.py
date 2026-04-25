@@ -121,6 +121,7 @@ class AnsibleRunStatsView(DefaultModelView):
     column_list = (
         'playbook',
         'target_host',
+        'mode',
         'source',
         'triggered_by',
         'started_at',
@@ -132,6 +133,7 @@ class AnsibleRunStatsView(DefaultModelView):
     column_sortable_list = (
         'playbook',
         'target_host',
+        'mode',
         'source',
         'triggered_by',
         'started_at',
@@ -147,6 +149,10 @@ class AnsibleRunStatsView(DefaultModelView):
             ('running', 'Running'),
             ('success', 'Success'),
             ('failure', 'Failure'),
+        ]),
+        FilterEqual('mode', 'Mode', options=[
+            ('run', 'Run'),
+            ('check', 'Preview'),
         ]),
         FilterEqual('source', 'Source', options=[
             ('ui', 'UI'),
@@ -165,6 +171,7 @@ class AnsibleRunStatsView(DefaultModelView):
         'playbook',
         'target_host',
         'extra_vars',
+        'mode',
         'source',
         'triggered_by',
         'started_at',
@@ -213,6 +220,8 @@ class AnsiblePlaybookRunView(BaseView):
         playbook = (request.form.get('playbook') or '').strip()
         target_host = (request.form.get('target_host') or '').strip() or None
         extra_vars = (request.form.get('extra_vars') or '').strip() or None
+        mode = (request.form.get('mode') or 'run').strip()
+        check_mode = mode == 'check'
 
         if playbook not in available_playbooks():
             flash(f'Unknown playbook: {playbook!r}', 'error')
@@ -222,8 +231,9 @@ class AnsiblePlaybookRunView(BaseView):
             playbook,
             target_host=target_host,
             extra_vars=extra_vars,
+            check_mode=check_mode,
             source='ui',
             triggered_by=current_user.email if current_user.is_authenticated else None,
         )
-        flash(f'Run started: {playbook}', 'success')
+        flash(f'{"Preview" if check_mode else "Run"} started: {playbook}', 'success')
         return redirect(url_for('ansiblerunstats.details_view', id=str(stats.pk)))
