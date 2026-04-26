@@ -2,35 +2,35 @@
 
 Exposes the syncer over the Model Context Protocol (MCP) so Claude
 Desktop, Cursor, Cline and other MCP clients can read and write syncer
-state. Boots the app in CLI mode (no Flask-Admin, no REST blueprints) so
-startup stays under ~250 ms.
+state. Boots in CLI mode (no Flask-Admin, no REST blueprints) so cold
+start stays under ~250 ms.
 
 Authentication
 --------------
-Basic Auth — same model as the REST API. Pass credentials via either:
+Same model as the REST API: a syncer ``User`` with the ``mcp`` (or
+``all``) ``api_role`` authenticates via HTTP Basic. A user without that
+role is rejected at the boundary, so per-tool role checks are not
+needed inside the tool bodies.
 
-* CLI flags: ``--user <name> --password <pw>``
-* Env vars: ``CMDBSYNCER_API_USER`` / ``CMDBSYNCER_API_PASSWORD``
+stdio transport
+    Credentials are passed at startup via ``--user``/``--password`` or
+    ``CMDBSYNCER_API_USER`` / ``CMDBSYNCER_API_PASSWORD`` env vars.
+    The parent process owns the pipe — there is nobody else to
+    authenticate.
 
-The credentials resolve to a ``User`` document at startup; the user must
-not be disabled. Each tool call then re-checks ``User.api_roles`` against
-a synthetic path (``objects/...``, ``syncer/...``, ``rules/...``) so the
-existing role grants from the REST API apply unchanged.
-
-Transport
----------
-Two modes, selected with ``--transport``:
-
-* ``stdio`` (default) — the MCP client launches ``cmdbsyncer-mcp`` as a
-  subprocess and talks JSON-RPC over stdin/stdout. CLI flags / env vars
-  are the only way to pass credentials.
-* ``sse`` — runs as an HTTP server (Starlette/uvicorn) on
-  ``--host``/``--port`` (default ``127.0.0.1:8765``). Remote / cloud
-  MCP clients connect over Server-Sent Events. Auth is still resolved
-  at startup from the same credentials; the MCP session inherits the
-  bound user.
+sse / HTTP transport
+    Credentials are checked **per request** by a Starlette middleware.
+    Every connection presents ``Authorization: Basic …``; the
+    resolved User is bound to a per-request contextvar. HTTPS is
+    required (mirrors ``application.api.require_token``); plain HTTP
+    is only allowed from localhost or with
+    ``ALLOW_INSECURE_API_AUTH=True`` in ``local_config.py``. This
+    way an open port does *not* equal full access — every tool call
+    re-validates the caller.
 """
 import argparse
+import base64
+import contextvars
 import json
 import os
 import sys
@@ -64,6 +64,7 @@ from datetime import datetime, timedelta
 from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 
 import application  # pylint: disable=unused-import  # noqa: F401 — boot side effect
+from application import app
 from application.models.user import User
 from application.models.host import Host
 from application.models.account import Account
@@ -85,58 +86,74 @@ from application.plugins.checkmk.models import CheckmkFolderPool
 
 
 # ---------------------------------------------------------------------------
-# Auth — single User bound at startup, role check on every tool call.
+# Auth — stdio binds a single user at startup; sse binds per-request.
 # ---------------------------------------------------------------------------
 
 
-_AUTH_USER = None
-_AUTH_USERNAME = None
+_AUTH_USER = None  # stdio mode only
+_request_user: contextvars.ContextVar = contextvars.ContextVar(
+    'cmdbsyncer_mcp_user', default=None,
+)
 
 
 class MCPAuthError(Exception):
-    """Raised when a tool call is denied by the api_roles gate."""
+    """Raised when no authenticated User is bound for the current call."""
 
 
-def _login(username, password):
-    """Resolve a ``User`` from name/email + password. Aborts on failure."""
-    global _AUTH_USER, _AUTH_USERNAME  # pylint: disable=global-statement
-    user = None
+def _user_has_mcp_access(user):
+    """``mcp`` (or ``all``) in api_roles is the umbrella grant for the
+    server. Per-tool role checks are intentionally *not* layered on top —
+    the role explicitly opts a user in to MCP."""
+    roles = user.api_roles or []
+    return 'all' in roles or 'mcp' in roles
+
+
+def _resolve_user(name, password):
+    """Look up an enabled User by name/email + password. Returns the User
+    on success or ``None`` on any failure (no logging, no abort)."""
     try:
-        user = User.objects.get(
+        candidate = User.objects.get(
             disabled__ne=True,
-            __raw__={'$or': [{'name': username}, {'email': username}]},
+            __raw__={'$or': [{'name': name}, {'email': name}]},
         )
     except DoesNotExist:
-        _abort(f"Authentication failed: no enabled user '{username}'")
+        return None
     except MultipleObjectsReturned:
         # Historical duplicate names: pick the first that authenticates.
-        user = next(
-            (candidate for candidate in User.objects(
+        candidate = next(
+            (c for c in User.objects(
                 disabled__ne=True,
-                __raw__={'$or': [{'name': username}, {'email': username}]},
-            ) if candidate.check_password(password)),
+                __raw__={'$or': [{'name': name}, {'email': name}]},
+            ) if c.check_password(password)),
             None,
         )
-        if user is None:
-            _abort(f"Authentication failed: invalid credentials for '{username}'")
+        if candidate is None:
+            return None
+    if not candidate.check_password(password):
+        return None
+    return candidate
 
-    if not user.check_password(password):
-        _abort(f"Authentication failed: invalid credentials for '{username}'")
+
+def _login_stdio(username, password):
+    """stdio mode startup login. Aborts on failure or missing role."""
+    global _AUTH_USER  # pylint: disable=global-statement
+    user = _resolve_user(username, password)
+    if user is None:
+        _abort(f"Authentication failed for user '{username}'")
+    if not _user_has_mcp_access(user):
+        _abort(
+            f"User '{username}' has no 'mcp' or 'all' api_role. Grant the "
+            f"role from Profile → Users in the admin UI."
+        )
     _AUTH_USER = user
-    _AUTH_USERNAME = username
 
 
-def _require(role_path):
-    """Mirror ``application.api.require_token``: at least one of the user's
-    api_roles must equal ``'all'`` or be a prefix of *role_path*."""
-    if _AUTH_USER is None:
+def _current_user():
+    """Return the User bound to this MCP call (SSE per-request, stdio global)."""
+    user = _request_user.get() or _AUTH_USER
+    if user is None:
         raise MCPAuthError("Not authenticated")
-    roles = _AUTH_USER.api_roles or []
-    if any(r == 'all' or role_path.startswith(r) for r in roles):
-        return
-    raise MCPAuthError(
-        f"User '{_AUTH_USERNAME}' has no api_role granting '{role_path}'"
-    )
+    return user
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +203,7 @@ def list_hosts(start: int = 0, limit: int = 100) -> dict:
     of ``{hostname, labels, inventory, last_seen, last_update}`` dicts.
     Excludes non-host objects (``is_object=True``).
     """
-    _require('objects')
+    _current_user()
     if start < 0 or limit < 0:
         raise ValueError("start and limit must be non-negative")
     queryset = Host.objects(is_object__ne=True)
@@ -203,7 +220,7 @@ def list_hosts(start: int = 0, limit: int = 100) -> dict:
 @mcp.tool()
 def get_host(hostname: str) -> dict:
     """Return labels, inventory and timestamps for *hostname*."""
-    _require('objects')
+    _current_user()
     try:
         host = Host.objects.get(hostname=hostname)
     except DoesNotExist as exc:
@@ -219,7 +236,7 @@ def upsert_host(hostname: str, account: str, labels: dict) -> dict:
     call returns ``{"status": "account_conflict"}`` instead. To re-bind
     a host, edit it from the admin UI.
     """
-    _require('objects')
+    _current_user()
     try:
         account_dict = get_account_by_name(account)
     except AccountNotFoundError as exc:
@@ -238,7 +255,7 @@ def upsert_host(hostname: str, account: str, labels: dict) -> dict:
 @mcp.tool()
 def delete_host(hostname: str) -> dict:
     """Delete *hostname*. Frees a Checkmk folder pool seat if held."""
-    _require('objects')
+    _current_user()
     host_obj = Host.get_host(hostname, create=False)
     if not host_obj:
         return {'status': 'not_found', 'hostname': hostname}
@@ -262,7 +279,7 @@ def update_host_inventory(hostname: str, key: str, inventory: dict) -> dict:
     Inventory writes never auto-create a host — *hostname* must already
     exist (use ``upsert_host`` first).
     """
-    _require('objects')
+    _current_user()
     host_obj = Host.get_host(hostname, create=False)
     if not host_obj:
         return {'status': 'not_found', 'hostname': hostname}
@@ -280,7 +297,7 @@ def update_host_inventory(hostname: str, key: str, inventory: dict) -> dict:
 @mcp.tool()
 def list_accounts() -> dict:
     """List all accounts with name, type and enabled flag."""
-    _require('objects')
+    _current_user()
     out = []
     for acc in Account.objects.only('name', 'type', 'enabled', 'is_master',
                                     'is_child'):
@@ -298,8 +315,8 @@ def list_accounts() -> dict:
 def get_account(name: str) -> dict:
     """Return the resolved account record (custom_fields flattened, child
     inheriting from parent). Includes the cleartext password — handle with
-    care; only callers with the ``objects`` (or ``all``) api_role can call."""
-    _require('objects')
+    care; only callers with the ``mcp`` (or ``all``) api_role can call."""
+    _current_user()
     try:
         return _serialize(get_account_by_name(name))
     except AccountNotFoundError as exc:
@@ -312,14 +329,14 @@ def get_account(name: str) -> dict:
 @mcp.tool()
 def list_rule_types() -> dict:
     """Return the supported ``rule_type`` idents."""
-    _require('rules')
+    _current_user()
     return {'rule_types': sorted(enabled_rules)}
 
 
 @mcp.tool()
 def export_rules(rule_type: str) -> dict:
     """Export every rule of *rule_type* as a list of dicts."""
-    _require('rules')
+    _current_user()
     if rule_type not in enabled_rules:
         raise ValueError(f"Unknown rule_type '{rule_type}'")
     rules = []
@@ -341,7 +358,7 @@ def export_all_rules(include_hosts: bool = False,
     pass the matching flag to opt in. The user export contains hashed
     passwords; treat the response as secret.
     """
-    _require('rules')
+    _current_user()
     return grouped_rules_export(
         include_hosts=include_hosts,
         include_accounts=include_accounts,
@@ -353,7 +370,7 @@ def export_all_rules(include_hosts: bool = False,
 def create_rule(rule_type: str, rule: dict) -> dict:
     """Create one rule of *rule_type*. The dict shape is the same as the
     export form (one ``Document.to_json()`` per rule)."""
-    _require('rules')
+    _current_user()
     if rule_type not in enabled_rules:
         raise ValueError(f"Unknown rule_type '{rule_type}'")
     status = import_one_rule(rule, rule_type)
@@ -370,7 +387,7 @@ def import_rules_bulk(payload: dict) -> dict:
     type) or ``{"rules": {"<rule_type>": [<dict>, ...], ...}}`` (multi
     type, same shape as ``export_all_rules`` output).
     """
-    _require('rules')
+    _current_user()
     counts = import_json_bundle(payload)
     if not counts and not isinstance(payload.get('rules'), (list, dict)):
         raise ValueError("Payload must contain a 'rules' list or dict")
@@ -380,7 +397,7 @@ def import_rules_bulk(payload: dict) -> dict:
 @mcp.tool()
 def run_autorules(debug: bool = False) -> dict:
     """Run the autorules pass that builds rules from current host data."""
-    _require('rules')
+    _current_user()
     create_rules(account=False, debug=debug)
     return {'status': 'ok'}
 
@@ -391,7 +408,7 @@ def run_autorules(debug: bool = False) -> dict:
 @mcp.tool()
 def get_recent_logs(limit: int = 100) -> dict:
     """Return the latest *limit* log entries, newest first."""
-    _require('syncer')
+    _current_user()
     if limit < 1 or limit > 1000:
         raise ValueError("limit must be between 1 and 1000")
     out = []
@@ -411,7 +428,7 @@ def get_recent_logs(limit: int = 100) -> dict:
 @mcp.tool()
 def get_cron_status() -> dict:
     """Return status of every CronGroup."""
-    _require('syncer')
+    _current_user()
     out = []
     for entry in CronStats.objects:
         out.append({
@@ -430,7 +447,7 @@ def get_cron_status() -> dict:
 @mcp.tool()
 def trigger_cron_group(group_name: str) -> dict:
     """Schedule the named CronGroup to run on the next cron pass."""
-    _require('syncer')
+    _current_user()
     try:
         group = CronGroup.objects.get(name=group_name)
     except DoesNotExist as exc:
@@ -445,7 +462,7 @@ def trigger_cron_group(group_name: str) -> dict:
 @mcp.tool()
 def host_stats() -> dict:
     """Aggregate host counters: total, objects, stale (no import seen in 24h)."""
-    _require('syncer')
+    _current_user()
     ago_24h = datetime.now() - timedelta(hours=24)
     return {
         '24h_checkpoint': ago_24h.strftime('%Y-%m-%dT%H:%M:%SZ'),
@@ -463,7 +480,7 @@ def host_stats() -> dict:
 @mcp.resource("cmdbsyncer://hosts/{hostname}")
 def host_resource(hostname: str) -> str:
     """Single host record as JSON."""
-    _require('objects')
+    _current_user()
     try:
         host = Host.objects.get(hostname=hostname)
     except DoesNotExist:
@@ -474,7 +491,7 @@ def host_resource(hostname: str) -> str:
 @mcp.resource("cmdbsyncer://rules/{rule_type}")
 def rules_resource(rule_type: str) -> str:
     """Every rule of *rule_type* as a JSON list."""
-    _require('rules')
+    _current_user()
     if rule_type not in enabled_rules:
         return json.dumps({'error': f"Unknown rule_type '{rule_type}'"})
     rules = []
@@ -489,13 +506,92 @@ def rules_resource(rule_type: str) -> str:
 @mcp.resource("cmdbsyncer://cron/status")
 def cron_status_resource() -> str:
     """Cron-group status snapshot as JSON."""
-    _require('syncer')
+    _current_user()
     return json.dumps(get_cron_status(), indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Per-request Basic Auth middleware (SSE transport only)
+# ---------------------------------------------------------------------------
+
+
+def _request_is_secure(request):
+    """Mirror ``application.api._is_secure_api_request``: HTTPS, localhost,
+    or the explicit ``ALLOW_INSECURE_API_AUTH`` config flag."""
+    if app.config.get('ALLOW_INSECURE_API_AUTH'):
+        return True
+    if request.url.scheme == 'https':
+        return True
+    forwarded_proto = request.headers.get('x-forwarded-proto', '').lower()
+    if forwarded_proto == 'https' and app.config.get('TRUSTED_PROXIES', 0):
+        return True
+    client_host = request.client.host if request.client else ''
+    return client_host in {'127.0.0.1', '::1'}
+
+
+def _challenge(message='Unauthorized'):
+    """Build a 401 response with a Basic challenge."""
+    # starlette / uvicorn are optional deps from ``requirements-extras.txt``
+    # — only imported when SSE transport is requested.
+    # pylint: disable=import-outside-toplevel,import-error
+    from starlette.responses import Response
+    return Response(
+        message, status_code=401,
+        headers={'WWW-Authenticate': 'Basic realm="cmdbsyncer"'},
+    )
+
+
+def _build_auth_middleware():
+    """Return a Starlette ``BaseHTTPMiddleware`` subclass.
+
+    Imported lazily so the ``starlette`` dep only loads when the SSE
+    transport is requested — stdio mode never imports it.
+    """
+    # pylint: disable=import-outside-toplevel,import-error
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    class BasicAuthMiddleware(BaseHTTPMiddleware):  # pylint: disable=too-few-public-methods
+        """Per-request Basic Auth + HTTPS gate. Sets ``_request_user``."""
+
+        async def dispatch(self, request, call_next):  # pylint: disable=missing-function-docstring
+            if not _request_is_secure(request):
+                return _challenge("HTTPS is required for password-based "
+                                  "API authentication")
+            auth = request.headers.get('authorization', '')
+            if not auth.lower().startswith('basic '):
+                return _challenge("Basic Auth required")
+            try:
+                decoded = base64.b64decode(auth[6:].strip()).decode('utf-8')
+                username, password = decoded.split(':', 1)
+            except (ValueError, UnicodeDecodeError):
+                return _challenge()
+            user = _resolve_user(username, password)
+            if user is None or not _user_has_mcp_access(user):
+                return _challenge()
+            token = _request_user.set(user)
+            try:
+                return await call_next(request)
+            finally:
+                _request_user.reset(token)
+
+    return BasicAuthMiddleware
 
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+def _run_sse(host, port):
+    """Build the SSE Starlette app, wrap with auth middleware, run uvicorn."""
+    # pylint: disable=import-outside-toplevel,import-error
+    import uvicorn
+
+    asgi_app = mcp.sse_app()
+    asgi_app.add_middleware(_build_auth_middleware())
+    print(f"cmdbsyncer-mcp listening on http://{host}:{port}/sse "
+          f"(per-request Basic Auth)", file=sys.stderr)
+    uvicorn.run(asgi_app, host=host, port=port, log_level='warning')
 
 
 def main():
@@ -507,18 +603,19 @@ def main():
     )
     parser.add_argument(
         '--user', default=os.environ.get('CMDBSYNCER_API_USER'),
-        help='Syncer user (or CMDBSYNCER_API_USER env var). Must have at '
-             'least one matching api_role for the tools you intend to call.',
+        help='stdio-mode user (or CMDBSYNCER_API_USER). Required for '
+             'stdio; ignored for sse (which authenticates per request).',
     )
     parser.add_argument(
         '--password', default=os.environ.get('CMDBSYNCER_API_PASSWORD'),
-        help='Password (or CMDBSYNCER_API_PASSWORD env var).',
+        help='stdio-mode password (or CMDBSYNCER_API_PASSWORD).',
     )
     parser.add_argument(
         '--transport', choices=('stdio', 'sse'),
         default=os.environ.get('CMDBSYNCER_MCP_TRANSPORT', 'stdio'),
-        help='stdio (default) — JSON-RPC over stdin/stdout. '
-             'sse — HTTP/Server-Sent-Events server on --host/--port.',
+        help='stdio (default) — JSON-RPC over stdin/stdout, single user '
+             'bound at startup. sse — HTTP server on --host/--port with '
+             'per-request Basic Auth and HTTPS gate.',
     )
     parser.add_argument(
         '--host', default=os.environ.get('CMDBSYNCER_MCP_HOST', '127.0.0.1'),
@@ -531,23 +628,19 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.transport == 'sse':
+        _run_sse(args.host, args.port)
+        return
+
+    # stdio mode — single user resolved at startup.
     if not args.user or not args.password:
         _abort(
-            "Authentication required.\n"
+            "Authentication required for stdio transport.\n"
             "Pass --user and --password, or set CMDBSYNCER_API_USER and "
             "CMDBSYNCER_API_PASSWORD."
         )
-
-    _login(args.user, args.password)
-    if args.transport == 'sse':
-        # FastMCP exposes ``settings`` for host/port — set them before run().
-        mcp.settings.host = args.host
-        mcp.settings.port = args.port
-        print(f"cmdbsyncer-mcp listening on http://{args.host}:{args.port}/sse "
-              f"(user: {_AUTH_USERNAME})", file=sys.stderr)
-        mcp.run(transport='sse')
-    else:
-        mcp.run()  # stdio — JSON-RPC over stdin/stdout
+    _login_stdio(args.user, args.password)
+    mcp.run()  # JSON-RPC over stdin/stdout
 
 
 if __name__ == '__main__':

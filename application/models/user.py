@@ -29,6 +29,7 @@ roles = [
 api_roles = [
   ('all', "Full rights"),
   ('ansible', "Ansible"),
+  ('mcp', "MCP server (stdio + SSE)"),
   ('objects', "Objects"),
   ('rules', "Rule import/export and autorules"),
   ('syncer', "Syncer"),

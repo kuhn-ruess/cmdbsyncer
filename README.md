@@ -235,8 +235,9 @@ For development and testing purposes:
 
 CMDBsyncer ships an MCP server that lets LLM clients (Claude Desktop, Cursor,
 Cline, …) read and write syncer state directly. It boots in CLI mode (no web
-stack) and authenticates with the same Basic-Auth credentials the REST API
-accepts; per-tool access is gated by the user's `api_roles`.
+stack) and authenticates with HTTP Basic; access is gated by the `mcp`
+`api_role` on the user. SSE/HTTP transport authenticates **per request** and
+requires HTTPS (mirrors the REST API's gate).
 
 ```bash
 # 1. Install the MCP SDK (it's an optional dep)
