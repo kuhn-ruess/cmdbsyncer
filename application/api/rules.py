@@ -13,7 +13,7 @@ import json
 from datetime import datetime
 
 from flask import request
-from flask_restx import Namespace, Resource
+from flask_restx import Namespace, Resource, fields
 
 from application.api import require_token
 from application.plugins.rules.rule_definitions import rules as enabled_rules
@@ -26,7 +26,82 @@ from application.plugins.rules.rule_import_export import (
 from application.plugins.rules.autorules import create_rules
 
 
-API = Namespace('rules', description='Read and write syncer rule configuration')
+API = Namespace(
+    'rules',
+    description=(
+        "Read and write syncer rule configuration. Shares the import / "
+        "export / autorules helpers with the ``cmdbsyncer rules`` CLI "
+        "and the autorules cronjob, so all three stay in lockstep. A "
+        "user with ``api_roles = ['rules']`` (or ``'all'``) can call "
+        "this namespace."
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+
+ERROR = API.model('error', {
+    'message': fields.String(description='Human-readable error message'),
+})
+
+RULE_TYPES_RESPONSE = API.model('rule_types_response', {
+    'rule_types': fields.List(fields.String,
+                              description='Sorted list of every supported '
+                                          'rule_type ident.'),
+})
+
+RULES_BY_TYPE_RESPONSE = API.model('rules_by_type_response', {
+    'rule_type': fields.String,
+    'rules': fields.List(fields.Raw,
+                         description='Each item is a single rule serialised '
+                                     'via ``Document.to_json()``. Round-trips '
+                                     'unchanged through ``POST``.'),
+})
+
+RULE_IMPORT_REQUEST = API.model('rule_import_request', {
+    'rule_type': fields.String(required=False,
+                               description='Default rule_type for items that '
+                                           'do not carry a header line.'),
+    'rules': fields.Raw(description='Either a list of rule dicts (single '
+                                    'type), or an object keyed by rule_type '
+                                    'with a list of dicts as value '
+                                    '(multi-type, same shape as '
+                                    '``GET /rules/export``).',
+                        required=True),
+})
+
+RULE_IMPORT_RESPONSE = API.model('rule_import_response', {
+    'imported': fields.Raw(description='Imported counts keyed by rule_type.'),
+    'total': fields.Integer(description='Sum of imported counts.'),
+})
+
+RULE_BY_TYPE_POST_RESPONSE = API.model('rule_by_type_post_response', {
+    'rule_type': fields.String,
+    'imported': fields.Integer,
+    'duplicate': fields.Integer(description='Items skipped because a rule '
+                                            'with the same id already exists.'),
+    'invalid': fields.Integer(description='Items rejected by Mongo schema '
+                                          'validation.'),
+})
+
+RULES_EXPORT_RESPONSE = API.model('rules_export_response', {
+    'exported_at': fields.String(example='2026-04-26T17:55:00Z',
+                                 description='ISO-8601 UTC timestamp.'),
+    'rules': fields.Raw(description='Object keyed by rule_type, each value '
+                                    'is a list of rule dicts.'),
+})
+
+AUTORULES_REQUEST = API.model('autorules_request', {
+    'debug': fields.Boolean(default=False,
+                            description='Run the autorules pass with debug '
+                                        'logging enabled.'),
+})
+
+AUTORULES_RESPONSE = API.model('autorules_response', {
+    'status': fields.String(example='ok'),
+})
 
 
 def _decode_rule_lines(rules):
@@ -43,18 +118,25 @@ class RuleTypes(Resource):
     """Discoverable list of supported rule types."""
 
     @API.doc(security=['x-login-user', 'basicAuth'])
+    @API.response(200, 'Sorted list of rule_type idents.', RULE_TYPES_RESPONSE)
+    @API.response(401, 'Authentication failed', ERROR)
     @require_token
     def get(self):
-        """Return the supported rule_type idents."""
+        """Return every rule_type ident the server knows about."""
         return {'rule_types': sorted(enabled_rules)}
 
 
 @API.route('/<string:rule_type>')
-@API.param('rule_type', 'Rule type ident — see GET /rules/types')
+@API.param('rule_type',
+           'Rule type ident — call ``GET /rules/types`` for the catalog.')
 class RulesByType(Resource):
     """Read or create rules of one type."""
 
     @API.doc(security=['x-login-user', 'basicAuth'])
+    @API.response(200, 'Every rule of this type as a JSON list.',
+                  RULES_BY_TYPE_RESPONSE)
+    @API.response(401, 'Authentication failed', ERROR)
+    @API.response(404, 'Unknown rule_type.', ERROR)
     @require_token
     def get(self, rule_type):
         """Export every rule of *rule_type* as a JSON list."""
@@ -66,6 +148,14 @@ class RulesByType(Resource):
         }
 
     @API.doc(security=['x-login-user', 'basicAuth'])
+    @API.response(201, 'At least one rule was newly persisted.',
+                  RULE_BY_TYPE_POST_RESPONSE)
+    @API.response(200, 'Body parsed but every item was a duplicate '
+                       'or invalid — nothing new was saved.',
+                  RULE_BY_TYPE_POST_RESPONSE)
+    @API.response(400, 'Body was not JSON.', ERROR)
+    @API.response(401, 'Authentication failed', ERROR)
+    @API.response(404, 'Unknown rule_type.', ERROR)
     @require_token
     def post(self, rule_type):
         """Create one or many rules of *rule_type*.
@@ -101,12 +191,19 @@ class RulesExport(Resource):
     """Bulk export of every known rule type."""
 
     @API.doc(security=['x-login-user', 'basicAuth'])
-    @API.param('include_hosts', 'Set to 1 to also export the host_objects '
-                                'collection (skipped by default).')
-    @API.param('include_accounts', 'Set to 1 to also export accounts '
-                                   '(skipped by default).')
-    @API.param('include_users', 'Set to 1 to also export users — output '
-                                'contains hashed passwords (skipped by default).')
+    @API.param('include_hosts',
+               'Set to ``1`` to also export the ``host_objects`` collection. '
+               'Skipped by default — usually not what you want in a rule '
+               'backup.')
+    @API.param('include_accounts',
+               'Set to ``1`` to also export accounts. Skipped by default.')
+    @API.param('include_users',
+               'Set to ``1`` to also export users. The output contains hashed '
+               'passwords and role assignments — treat as secret. Skipped by '
+               'default.')
+    @API.response(200, 'Every rule, grouped by ``rule_type``.',
+                  RULES_EXPORT_RESPONSE)
+    @API.response(401, 'Authentication failed', ERROR)
     @require_token
     def get(self):
         """Return every enabled rule type, grouped by type."""
@@ -133,6 +230,11 @@ class RulesImport(Resource):
     """Bulk import that matches the on-disk JSONL format."""
 
     @API.doc(security=['x-login-user', 'basicAuth'])
+    @API.expect(RULE_IMPORT_REQUEST, validate=False)
+    @API.response(200, 'Imported counts keyed by rule_type, plus the total.',
+                  RULE_IMPORT_RESPONSE)
+    @API.response(400, 'JSON body could not be parsed.', ERROR)
+    @API.response(401, 'Authentication failed', ERROR)
     @require_token
     def post(self):
         """Import rules.
@@ -143,8 +245,9 @@ class RulesImport(Resource):
           single-type payload.
         * ``{"rules": {"<rule_type>": [<dict>, ...], ...}}`` — multi-type
           payload, the same shape returned by ``GET /rules/export``.
-        * Plain text body in the on-disk JSONL form, with optional
-          ``{"rule_type": "..."}`` header lines.
+        * Plain text body in the on-disk JSONL form (``Content-Type:
+          text/plain``), with optional ``{"rule_type": "..."}`` header
+          lines.
         """
         ctype = (request.content_type or '').split(';', 1)[0].strip().lower()
         if ctype == 'application/json':
@@ -184,9 +287,14 @@ class Autorules(Resource):
     """Trigger the rule-automation pass that builds rules from host data."""
 
     @API.doc(security=['x-login-user', 'basicAuth'])
+    @API.expect(AUTORULES_REQUEST, validate=False)
+    @API.response(200, 'Autorules run completed successfully.',
+                  AUTORULES_RESPONSE)
+    @API.response(401, 'Authentication failed', ERROR)
     @require_token
     def post(self):
-        """Run the autorules creator. Optional body ``{"debug": true}``."""
+        """Run the autorules creator. Body is optional; pass
+        ``{"debug": true}`` for verbose output in the server log."""
         payload = request.get_json(silent=True) or {}
         debug = bool(payload.get('debug'))
         create_rules(account=False, debug=debug)
