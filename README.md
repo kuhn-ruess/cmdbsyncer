@@ -269,6 +269,11 @@ Example `claude_desktop_config.json` snippet:
 }
 ```
 
+**Inside Docker** the server is preinstalled — set `MCPSERVER_ENABLED=1`
+(optionally `MCPSERVER_PORT=8765`) in your compose file and the container
+entrypoint starts the SSE listener for you. Map port 8765 if you want to
+expose it. Per-request Basic Auth applies the same way.
+
 Tools exposed: host CRUD, inventory write, account read, rule export/import,
 autorules trigger, cron status & trigger, log read. See
 [docs.cmdbsyncer.de — MCP](https://docs.cmdbsyncer.de) for the full catalog.

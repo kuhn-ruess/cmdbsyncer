@@ -55,3 +55,5 @@ ENTRYPOINT ["/srv/entrypoint.sh"]
 CMD ["gunicorn", "--config", "/srv/deploy_configs/gunicorn.conf.py", "app:app"]
 
 EXPOSE 9090
+# Optional MCP server port — only listened on when MCPSERVER_ENABLED=1.
+EXPOSE 8765
