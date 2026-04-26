@@ -1,6 +1,6 @@
 """ Main entry """
 # Flask app factory with intentional deferred imports to avoid circular imports.
-# pylint: disable=wrong-import-position,import-outside-toplevel,ungrouped-imports,line-too-long,wildcard-import,unused-wildcard-import,cyclic-import
+# pylint: disable=wrong-import-position,import-outside-toplevel,ungrouped-imports
 import os
 import sys
 import logging
@@ -12,6 +12,7 @@ import logging
 # ``./cmdbsyncer <command>`` or the installed ``cmdbsyncer`` console script.
 if os.path.basename(sys.argv[0] or '').removesuffix('.py') == 'cmdbsyncer':
     os.environ.setdefault('CMDBSYNCER_CLI', '1')
+
 import importlib
 import pkgutil
 import warnings
@@ -50,7 +51,12 @@ CONFIG_MAP = {
 
 app = Flask(__name__)
 config_name = os.environ.get('config', 'base').lower()
-app.config.from_object(CONFIG_MAP.get(config_name, CONFIG_MAP['base']))
+if config_name not in CONFIG_MAP:
+    raise RuntimeError(
+        f"Unknown config '{config_name}'. Set env 'config' to one of: "
+        f"{', '.join(sorted(CONFIG_MAP))}."
+    )
+app.config.from_object(CONFIG_MAP[config_name])
 if config_name == "base":
     app.jinja_env.auto_reload = True
 _trusted_proxies = int(app.config.get('TRUSTED_PROXIES', 0))
@@ -121,8 +127,8 @@ if app.config['DEBUG']:
 
 ## Sentry
 if app.config['SENTRY_ENABLED']:
-    import sentry_sdk
-    from sentry_sdk.integrations.flask import FlaskIntegration
+    import sentry_sdk  # pylint: disable=import-error
+    from sentry_sdk.integrations.flask import FlaskIntegration  # pylint: disable=import-error
 
     def filter_events(event, _hint):
         """
@@ -213,6 +219,10 @@ from application.views.default import IndexView, DefaultModelView
 from application.auth.views import AUTH
 app.register_blueprint(AUTH)
 
+from application.api.views import API_BP as api
+app.register_blueprint(api, url_prefix="/api/v1")
+csrf.exempt(api)
+
 # Give the enterprise package a chance to register its own auth-related
 # blueprints (e.g. the native OIDC client). No-op without the feature.
 enterprise_hook('register_blueprints', app)
@@ -225,63 +235,6 @@ def page_redirect():
     Redirect to admin Panel
     """
     return redirect(url_for("admin.index"))
-
-def _register_all_plugin_admin_views():
-    from application.helpers.plugins import is_plugin_disabled
-    import application.plugins as plugins_package
-    try:
-        import plugins as external_plugins_package
-    except ModuleNotFoundError:
-        # No custom plugins directory in the working directory — typical
-        # for a fresh PyPI install before self_configure has run.
-        external_plugins_package = None
-
-    plugin_modules = []
-
-    if external_plugins_package is not None:
-        for _, module_name, _ in pkgutil.iter_modules(
-            external_plugins_package.__path__, external_plugins_package.__name__ + "."
-        ):
-            # module_name is e.g. "plugins.netbox" — extract the short ident
-            short_name = module_name.rsplit(".", 1)[-1]
-            if is_plugin_disabled(short_name):
-                logger.info("Plugin '%s' is disabled, skipping", short_name)
-                continue
-            plugin_modules.append(module_name)
-
-    for _, module_name, _ in pkgutil.iter_modules(
-        plugins_package.__path__, plugins_package.__name__ + "."
-    ):
-        short_name = module_name.rsplit(".", 1)[-1]
-        if is_plugin_disabled(short_name):
-            logger.info("Plugin '%s' is disabled, skipping", short_name)
-            continue
-        plugin_modules.append(module_name)
-
-    for module_name in plugin_modules:
-        admin_module_name = f"{module_name}.admin_views"
-        try:
-            admin_module = importlib.import_module(admin_module_name)
-        except ModuleNotFoundError as exc:
-            if exc.name == admin_module_name:
-                continue
-            raise
-        except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception(
-                "Failed to register admin views for plugin %s", module_name
-            )
-            if '--debug' in sys.argv:
-                raise
-            continue
-
-        register = getattr(admin_module, "register_admin_views", None)
-        if callable(register):
-            register(admin)
-
-
-from application.api.views import API_BP as api
-app.register_blueprint(api, url_prefix="/api/v1")
-csrf.exempt(api)
 
 admin = Admin(app, name=f"cmdbsyncer {DISPLAY_VERSION}",
                    index_view=IndexView(),
@@ -308,31 +261,91 @@ from application.models.host import Host
 from application.views.host import HostModelView, ObjectModelView, TemplateModelView
 admin.add_view(HostModelView(Host, name="Hosts", menu_icon_type='fa', menu_icon_value='fa-server'))
 admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
-admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",category="Objects", menu_icon_type='fa', menu_icon_value='fa-cubes'))
-admin.add_view(TemplateModelView(Host, name="Templates", endpoint="Objects Templates",category="Objects", menu_icon_type='fa', menu_icon_value='fa-files-o'))
+admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",
+                               category="Objects",
+                               menu_icon_type='fa', menu_icon_value='fa-cubes'))
+admin.add_view(TemplateModelView(Host, name="Templates", endpoint="Objects Templates",
+                                 category="Objects",
+                                 menu_icon_type='fa', menu_icon_value='fa-files-o'))
 #.
 #   .-- Global
 from application.modules.custom_attributes.models import CustomAttributeRule
 from application.modules.custom_attributes.views import CustomAttributeView
-admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes", category="Modules", menu_icon_type='fa', menu_icon_value='fa-cog'))
+admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes",
+                                   category="Modules",
+                                   menu_icon_type='fa', menu_icon_value='fa-cog'))
 #.
+
+def _iter_enabled_plugin_modules(package):
+    """Yield dotted module names of enabled plugins inside *package*."""
+    from application.helpers.plugins import is_plugin_disabled
+    for _, module_name, _ in pkgutil.iter_modules(
+        package.__path__, package.__name__ + "."
+    ):
+        short_name = module_name.rsplit(".", 1)[-1]
+        if is_plugin_disabled(short_name):
+            logger.info("Plugin '%s' is disabled, skipping", short_name)
+            continue
+        yield module_name
+
+
+def _register_all_plugin_admin_views():
+    import application.plugins as plugins_package
+    try:
+        import plugins as external_plugins_package
+    except ModuleNotFoundError:
+        # No custom plugins directory in the working directory — typical
+        # for a fresh PyPI install before self_configure has run.
+        external_plugins_package = None
+
+    plugin_modules = []
+    if external_plugins_package is not None:
+        plugin_modules.extend(_iter_enabled_plugin_modules(external_plugins_package))
+    plugin_modules.extend(_iter_enabled_plugin_modules(plugins_package))
+
+    for module_name in plugin_modules:
+        admin_module_name = f"{module_name}.admin_views"
+        try:
+            admin_module = importlib.import_module(admin_module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name == admin_module_name:
+                continue
+            raise
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception(
+                "Failed to register admin views for plugin %s", module_name
+            )
+            if '--debug' in sys.argv:
+                raise
+            continue
+
+        register = getattr(admin_module, "register_admin_views", None)
+        if callable(register):
+            register(admin)
+
 
 _register_all_plugin_admin_views()
 
 
 from application.views.account import AccountModelView, ChildAccountModelView
 admin.add_category(name="Accounts", icon_type='fa', icon_value='fa-users')
-admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts", menu_icon_type='fa', menu_icon_value='fa-user-circle'))
-admin.add_view(ChildAccountModelView(Account, name="Config Childs", endpoint='account_childs', category="Accounts", menu_icon_type='fa', menu_icon_value='fa-users'))
+admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts",
+                                menu_icon_type='fa', menu_icon_value='fa-user-circle'))
+admin.add_view(ChildAccountModelView(Account, name="Config Childs",
+                                     endpoint='account_childs', category="Accounts",
+                                     menu_icon_type='fa', menu_icon_value='fa-users'))
 
 from application.models.cron import CronGroup, CronStats
 from application.views.cron import CronStatsView, CronGroupView
-admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs", menu_icon_type='fa', menu_icon_value='fa-calendar'))
-admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs", menu_icon_type='fa', menu_icon_value='fa-table'))
+admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs",
+                             menu_icon_type='fa', menu_icon_value='fa-calendar'))
+admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs",
+                             menu_icon_type='fa', menu_icon_value='fa-table'))
 
 from application.views.fileadmin import FileAdminView
 if os.path.exists(app.config['FILEADMIN_PATH']):
-    file_admin_view = FileAdminView(app.config['FILEADMIN_PATH'], name="Filemanager", menu_icon_type='fa', menu_icon_value='fa-folder-open')
+    file_admin_view = FileAdminView(app.config['FILEADMIN_PATH'], name="Filemanager",
+                                    menu_icon_type='fa', menu_icon_value='fa-folder-open')
     admin.add_view(file_admin_view)
 
 #.
