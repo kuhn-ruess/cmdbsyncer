@@ -4,6 +4,13 @@ CMDBsyncer uses a **Release-Train** model on `main`: changes land continuously, 
 
 ## For users — which version should I run?
 
+### Where the version lives
+
+- `pyproject.toml [project] version` — the value baked into the wheel/sdist metadata. Must be bumped manually when cutting a release.
+- `application/_version.py` — `__version__` is read at import time from the newest `## Version` header in `application/changelog/v*.md` (or, on an LTS branch with `.lts-release`, from the highest `## Version {base}-LTS{n}` header in `v{base}.md`). The display variant adds `-dev` while an `## Unreleased` section is open.
+
+The two sources are kept in sync by the maintainer at release time — there is no automation. Mismatches between them are loud (the UI shows `_version.py`, PyPI shows `pyproject.toml`).
+
 ### Git checkout
 
 - **`lts/3.12` branch** — long-term-support line. Receives only security fixes and general bugfixes, no new features. Best for production. Move forward with `git pull`.
@@ -43,7 +50,7 @@ Every tagged release is published to PyPI. `pip install cmdbsyncer` always pulls
 
 ## For maintainers — cutting a release
 
-Commits on `main` accumulate changelog bullets under `## Unreleased` at the top of the newest `changelog/v*.md` file. A release cut turns those bullets into a real version.
+Commits on `main` accumulate changelog bullets under `## Unreleased` at the top of the newest `application/changelog/v*.md` file. A release cut turns those bullets into a real version.
 
 ### 1. Accumulate on `main`
 
@@ -54,14 +61,15 @@ Every meaningful commit adds a bullet under `## Unreleased` — do not create a 
 When it's time to ship (triggered by the maintainer, typically 1–2× per week):
 
 ```bash
-# 1. Rename "## Unreleased" → "## Version 3.13.0" in the current changelog/v*.md
-#    (manual edit)
+# 1. Rename "## Unreleased" → "## Version 3.13.0" in the current
+#    application/changelog/v*.md  (manual edit; this is the source of truth
+#    for application/_version.py at runtime)
 
-# 2. Propagate the version into _version.py + pyproject.toml
-make sync-version
+# 2. Bump [project] version in pyproject.toml to "3.13.0"
+#    (manual edit; that's the value that goes into the wheel metadata)
 
 # 3. Commit the release
-git add changelog/v*.md application/_version.py pyproject.toml
+git add application/changelog/v*.md pyproject.toml
 git commit -m "Version 3.13.0"
 
 # 4. Annotated tag
@@ -73,7 +81,7 @@ git push origin v3.13.0
 
 ### 3. Open a new `## Unreleased` section
 
-The next commit on `main` that adds a changelog bullet re-opens an `## Unreleased` section at the top of the current `changelog/v*.md`.
+The next commit on `main` that adds a changelog bullet re-opens an `## Unreleased` section at the top of the current `application/changelog/v*.md`.
 
 ### 4. Publish to PyPI
 
@@ -104,9 +112,9 @@ Every LTS branch is in exactly one of three states:
 
 - **active & free** — publicly maintained, SEC + FIX backports from `main`, no new features. Exactly one branch is in this state at any time.
 - **extended / paid-only** — no longer publicly maintained. Fixes (typically CVE / severe bug backports) are cut **only** when a customer with an active support contract requests them. Pace is ticket-driven, not calendar-driven; no regular release cadence. The branch stays alive as long as at least one contract covers it.
-- **EOL** — no further commits. The branch is kept in the repo for reproducibility of old tags but is marked as archived; the last commit adds an `EOL: <date>` line at the top of `changelog/v<x.y>.md`.
+- **EOL** — no further commits. The branch is kept in the repo for reproducibility of old tags but is marked as archived; the last commit adds an `EOL: <date>` line at the top of `application/changelog/v<x.y>.md`.
 
-When promoting the current active LTS to extended status, add a short header at the top of `changelog/v<x.y>.md`:
+When promoting the current active LTS to extended status, add a short header at the top of `application/changelog/v<x.y>.md`:
 
 ```
 > Status: **extended / paid-only** as of YYYY-MM-DD.
@@ -124,15 +132,15 @@ The "one active, others paid-or-archived" rule is the bound that keeps LTS maint
 
 ### LTS version-number scheme
 
-The LTS branch carries a marker file `.lts-release` at the repo root whose content is the `MAJOR.MINOR` LTS base line (e.g. `3.12`). When `make sync-version` runs with the marker present it picks up the newest `## Version {base}-LTS{n}` header from `changelog/v{base}.md` and writes:
+The LTS branch carries a marker file `.lts-release` at the repo root whose content is the `MAJOR.MINOR` LTS base line (e.g. `3.12`). When the marker is present, `application/_version.py` resolves the runtime version from the highest `## Version {base}-LTS{n}` header in `application/changelog/v{base}.md`:
 
-- `application/_version.py` → `__version__ = "3.12-LTS1"` (shown in the UI)
-- `pyproject.toml` → `version = "3.12+lts1"` (PEP 440-compliant local version identifier, so setuptools/pip still accept it)
+- `__version__` (PEP 440) → `3.12+lts1` — also the value to mirror into `pyproject.toml [project] version`
+- `get_display_version()` → `3.12-LTS1` (shown in the UI)
 - Git tags are `v{base}-LTS{n}` (e.g. `v3.12-LTS1`, `v3.12-LTS2`)
 
 The LTS counter is independent from the upstream patch stream — once `main` moves past `3.12.13` with new features, sharing a patch number would be misleading. LTS releases are numbered `3.12-LTS1`, `3.12-LTS2`, … and count up with every cut.
 
-The LTS branch **must never contain an `## Unreleased` section** — `sync_version` aborts if one is found. This is what guarantees the UI never shows `-dev` on LTS.
+The LTS branch **must never contain an `## Unreleased` section**. The cut-flow does not handle one (`-dev` would appear in the UI), and reviewers should reject any PR that introduces it on the LTS line.
 
 The `+lts` local version identifier means LTS wheels are **not uploadable to PyPI** (PyPI rejects local versions). Distribute LTS releases via git tag / `pip install git+https://…@v3.12-LTS1` or a private index.
 
@@ -148,7 +156,7 @@ git cherry-pick <commit-sha-from-main>
 
 # 2. Resolve conflicts if needed, then verify the changelog entry. Add the
 #    bullet under the current open "## Version 3.12-LTS<n>" header in
-#    changelog/v3.12.md — never under "## Unreleased".
+#    application/changelog/v3.12.md — never under "## Unreleased".
 
 # 3. Push
 git push origin lts/3.12
@@ -161,16 +169,15 @@ On LTS, the changelog always carries an open `## Version 3.12-LTS<n>` header at 
 ```bash
 git checkout lts/3.12
 
-# 1. Verify the current "## Version 3.12-LTS<n>" header in changelog/v3.12.md
-#    is the one you want to ship (no renaming needed — the counter was already
-#    opened right after the previous tag).
+# 1. Verify the current "## Version 3.12-LTS<n>" header in
+#    application/changelog/v3.12.md is the one you want to ship (no renaming
+#    needed — the counter was already opened right after the previous tag).
 
-# 2. Sync version files (reads .lts-release + newest "-LTS<n>" header →
-#    writes 3.12-LTS<n> / 3.12+lts<n>)
-make sync-version
+# 2. Bump [project] version in pyproject.toml to "3.12+lts<n>" (PEP 440
+#    local version identifier; the UI displays it as "3.12-LTS<n>")
 
 # 3. Commit + tag
-git add application/_version.py pyproject.toml
+git add pyproject.toml
 git commit -m "Version 3.12-LTS<n>"
 git tag -a v3.12-LTS<n> -m "Version 3.12-LTS<n>"
 
@@ -178,7 +185,8 @@ git tag -a v3.12-LTS<n> -m "Version 3.12-LTS<n>"
 git push origin lts/3.12
 git push origin v3.12-LTS<n>
 
-# 5. Immediately open the next section at the top of changelog/v3.12.md:
+# 5. Immediately open the next section at the top of
+#    application/changelog/v3.12.md:
 #    ## Version 3.12-LTS<n+1>
 #    (leave it empty until the next backport lands — never use ## Unreleased)
 git commit -am "Open 3.12-LTS<n+1>"

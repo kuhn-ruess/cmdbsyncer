@@ -1,50 +1,106 @@
 """Single source of truth for the cmdbsyncer version.
 
-Regenerated from the newest ``changelog/v*.md`` entry by ``make sync-version``.
-Kept as a standalone module so ``pyproject.toml`` can resolve the version via
-``[tool.setuptools.dynamic]`` without importing the Flask application.
+Reads the current version at import time from the newest
+``application/changelog/v*.md`` file. The display variant adds a ``-dev``
+suffix while an ``## Unreleased`` section is open. LTS branches carry a
+``.lts-release`` marker at the repo root holding the ``MAJOR.MINOR`` base
+line; the version is then derived from the highest
+``## Version {base}-LTS{n}`` header in ``v{base}.md``.
 """
 import os
 import re
 
-__version__ = "4.0.0"
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_CHANGELOG_DIR = os.path.join(_HERE, 'changelog')
+_LTS_MARKER = os.path.join(os.path.dirname(_HERE), '.lts-release')
+
+_VERSION_HEADER_RE = re.compile(r'^## Version (\d+\.\d+\.\d+)\s*$')
+_FILE_NAME_RE = re.compile(r'^v(\d+)\.(\d+)\.md$')
+_UNRELEASED_RE = re.compile(
+    r'^##\s+Unreleased\s*$(.*?)(?=^##\s|\Z)', re.MULTILINE | re.DOTALL,
+)
+
+
+def _read_lts_base():
+    """Return ``MAJOR.MINOR`` from ``.lts-release`` or None."""
+    try:
+        with open(_LTS_MARKER, encoding='utf-8') as fh:
+            base = fh.read().strip()
+    except OSError:
+        return None
+    return base if re.fullmatch(r'\d+\.\d+', base) else None
+
+
+def _resolve_lts_version(base):
+    """Return ``{base}+lts{n}`` for the highest LTS counter, or None."""
+    path = os.path.join(_CHANGELOG_DIR, f'v{base}.md')
+    if not os.path.isfile(path):
+        return None
+    pattern = re.compile(rf'^## Version {re.escape(base)}-LTS(\d+)\s*$')
+    best = None
+    with open(path, encoding='utf-8') as fh:
+        for line in fh:
+            match = pattern.match(line)
+            if match:
+                n = int(match.group(1))
+                if best is None or n > best:
+                    best = n
+    return f'{base}+lts{best}' if best is not None else None
+
+
+def _resolve_main_version():
+    """Return the newest ``## Version x.y.z`` across all ``v*.md`` files."""
+    if not os.path.isdir(_CHANGELOG_DIR):
+        return None
+    candidates = []
+    for name in os.listdir(_CHANGELOG_DIR):
+        match = _FILE_NAME_RE.match(name)
+        if match:
+            candidates.append((int(match.group(1)), int(match.group(2)), name))
+    candidates.sort(reverse=True)
+    for _, _, name in candidates:
+        with open(os.path.join(_CHANGELOG_DIR, name), encoding='utf-8') as fh:
+            for line in fh:
+                match = _VERSION_HEADER_RE.match(line)
+                if match:
+                    return match.group(1)
+    return None
+
+
+def _resolve_version():
+    """Return the PEP 440 version, or '0.0.0' as a last-resort fallback."""
+    base = _read_lts_base()
+    if base:
+        version = _resolve_lts_version(base)
+        if version:
+            return version
+    return _resolve_main_version() or '0.0.0'
+
+
+__version__ = _resolve_version()
 
 
 def _has_unreleased_entries():
     """True when the active changelog still carries an ``## Unreleased``
-    section with entries above the first ``## Version …`` block."""
-    base = __version__.split('-', 1)[0]
+    section with content."""
+    base = __version__.split('+', 1)[0].split('-', 1)[0]
     parts = base.split('.')
-    fname = f"v{parts[0]}.{parts[1]}.md"
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.dirname(here)
-    for path in (
-        os.path.join(repo_root, 'changelog', fname),
-        os.path.join(here, 'changelog.md'),
-    ):
-        if not os.path.isfile(path):
-            continue
-        try:
-            with open(path, encoding='utf-8') as fh:
-                text = fh.read()
-        except OSError:
-            continue
-        match = re.search(
-            r'^##\s+Unreleased\s*$(.*?)(?=^##\s|\Z)',
-            text,
-            re.MULTILINE | re.DOTALL,
-        )
-        if not match:
-            return False
-        return bool(match.group(1).strip())
-    return False
+    path = os.path.join(_CHANGELOG_DIR, f'v{parts[0]}.{parts[1]}.md')
+    if not os.path.isfile(path):
+        return False
+    with open(path, encoding='utf-8') as fh:
+        text = fh.read()
+    match = _UNRELEASED_RE.search(text)
+    return bool(match and match.group(1).strip())
 
 
 def get_display_version():
-    """Return the version, suffixed with ``-dev`` while unreleased changelog
-    entries are pending. LTS builds carry an ``-LTSn`` counter in
-    ``__version__`` and never show ``-dev`` because the LTS changelog is not
-    allowed to contain an ``## Unreleased`` section."""
-    if '-LTS' in __version__:
-        return __version__
-    return f"{__version__}-dev" if _has_unreleased_entries() else __version__
+    """Display form: ``4.0.0`` / ``4.0.0-dev`` / ``3.12-LTS3``.
+
+    PEP 440 stores LTS as ``3.12+lts3``; users see the conventional
+    ``-LTS`` form. ``-dev`` is appended on the main line while an
+    ``## Unreleased`` section is open.
+    """
+    if '+lts' in __version__:
+        return __version__.replace('+lts', '-LTS')
+    return f'{__version__}-dev' if _has_unreleased_entries() else __version__

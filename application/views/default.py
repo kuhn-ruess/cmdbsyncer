@@ -28,68 +28,44 @@ from application._version import __version__
 _CHANGELOG_FILENAME_RE = re.compile(r'^v\d+\.\d+\.md$')
 
 
-def _changelog_search_dirs():
-    """Return the directories we look into for changelog files."""
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    package_root = os.path.dirname(os.path.dirname(__file__))
-    return [
-        os.path.join(repo_root, 'changelog'),
-        os.path.join(package_root, 'changelog'),
-    ]
+_CHANGELOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'changelog')
+
+
+def _major_minor_filename():
+    """Return ``v{MAJOR}.{MINOR}.md`` for the running version."""
+    parts = __version__.split('.')
+    return f"v{parts[0]}.{parts[1]}.md"
 
 
 def _load_changelog():
-    """Return the current release's changelog markdown.
-
-    In source checkouts the symlink ``<repo>/changelog.md`` points at the
-    active ``changelog/v{MAJOR}.{MINOR}.md`` file. PyPI installs ship that
-    same file as ``application/changelog.md`` via package-data, generated
-    by ``tools/sync_changelog.py`` at build time. The repo-root sources
-    win when present so a stale packaged copy in a source checkout cannot
-    shadow the live file.
-    """
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    packaged = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'changelog.md')
-    for candidate in (
-        os.path.join(repo_root, 'changelog.md'),
-        os.path.join(repo_root, 'changelog', _major_minor_filename()),
-        packaged,
-    ):
-        if os.path.isfile(candidate):
-            with open(candidate, 'r', encoding='utf-8') as fh:
-                return fh.read()
-    raise FileNotFoundError('changelog')
+    """Return the current release's ``v{MAJOR}.{MINOR}.md`` markdown."""
+    path = os.path.join(_CHANGELOG_DIR, _major_minor_filename())
+    if not os.path.isfile(path):
+        raise FileNotFoundError(path)
+    with open(path, 'r', encoding='utf-8') as fh:
+        return fh.read()
 
 
 def _load_changelog_file(name):
     """Return markdown for a specific ``v{MAJOR}.{MINOR}.md`` file or None."""
     if not _CHANGELOG_FILENAME_RE.match(name):
         return None
-    for base in _changelog_search_dirs():
-        candidate = os.path.join(base, name)
-        if os.path.isfile(candidate):
-            with open(candidate, 'r', encoding='utf-8') as fh:
-                return fh.read()
-    return None
+    path = os.path.join(_CHANGELOG_DIR, name)
+    if not os.path.isfile(path):
+        return None
+    with open(path, 'r', encoding='utf-8') as fh:
+        return fh.read()
 
 
 def _list_other_changelogs():
-    """Return previous ``v*.md`` files, newest first, excluding the current one.
-
-    Deduplicates between the repo source directory and the packaged copy so
-    the same ``vX.Y.md`` is not offered twice.
-    """
+    """Return previous ``v*.md`` files, newest first, excluding the current one."""
+    if not os.path.isdir(_CHANGELOG_DIR):
+        return []
     current = _major_minor_filename()
-    seen = {}
-    for base in _changelog_search_dirs():
-        if not os.path.isdir(base):
-            continue
-        for name in os.listdir(base):
-            if not _CHANGELOG_FILENAME_RE.match(name):
-                continue
-            if name == current:
-                continue
-            seen.setdefault(name, name)
+    names = [
+        name for name in os.listdir(_CHANGELOG_DIR)
+        if _CHANGELOG_FILENAME_RE.match(name) and name != current
+    ]
 
     def _version_tuple(name):
         # "v3.12.md" → (3, 12). Used to order newest-first.
@@ -99,13 +75,7 @@ def _list_other_changelogs():
         except ValueError:
             return (0,)
 
-    return sorted(seen, key=_version_tuple, reverse=True)
-
-
-def _major_minor_filename():
-    """Return ``v{MAJOR}.{MINOR}.md`` for the running version."""
-    parts = __version__.split('.')
-    return f"v{parts[0]}.{parts[1]}.md"
+    return sorted(names, key=_version_tuple, reverse=True)
 
 
 class DefaultModelView(ModelView):
@@ -309,17 +279,11 @@ class IndexView(AdminIndexView):
 
     def _load_notices(self):
         """
-        Load all notice files from the notices/ directory.
+        Load all notice files from ``application/notices/``.
         Returns list of dicts with 'id' and 'content'.
-
-        PyPI installs ship the files as ``application/notices/*.txt`` via
-        package-data (synced by ``tools/sync_notices.py`` at build time);
-        source checkouts fall back to the repo-root ``notices/`` directory.
         """
         notices = []
-        packaged_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'notices')
-        repo_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'notices')
-        notices_dir = packaged_dir if os.path.isdir(packaged_dir) else repo_dir
+        notices_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'notices')
         if not os.path.isdir(notices_dir):
             return notices
         for filename in sorted(os.listdir(notices_dir)):

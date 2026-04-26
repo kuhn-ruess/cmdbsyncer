@@ -83,7 +83,8 @@ include = ["application*", "syncerapi*"]
 [tool.setuptools.package-data]
 application = [
     "buildinfo.txt",
-    "changelog.md",
+    "changelog/*.md",
+    "changelog/.pages",
     "notices/*.txt",
     "templates/**/*",
     "static/**/*",
