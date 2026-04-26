@@ -5,12 +5,13 @@ import os
 import sys
 import logging
 
-# ``application.cli`` cannot set CMDBSYNCER_CLI before this module loads —
-# importing ``application.cli`` triggers ``application/__init__.py`` first.
-# Detect the CLI entry point here from ``sys.argv[0]`` so enterprise startup
-# can stay quiet (no banner, no ECS JSON) when the user runs
-# ``./cmdbsyncer <command>`` or the installed ``cmdbsyncer`` console script.
-if os.path.basename(sys.argv[0] or '').removesuffix('.py') == 'cmdbsyncer':
+# ``application.cli`` / ``application.plugins_cli`` / ``application.mcp_server``
+# cannot set CMDBSYNCER_CLI before this module loads — importing any of them
+# triggers ``application/__init__.py`` first. Detect the CLI entry point here
+# from ``sys.argv[0]`` so enterprise startup can stay quiet (no banner, no
+# ECS JSON) and the web layer (Flask-Admin, blueprints, …) stays unloaded.
+_CLI_ENTRYPOINTS = ('cmdbsyncer', 'cmdbsyncer-plugin', 'cmdbsyncer-mcp')
+if os.path.basename(sys.argv[0] or '').removesuffix('.py') in _CLI_ENTRYPOINTS:
     os.environ.setdefault('CMDBSYNCER_CLI', '1')
 
 # When set, skip every web-only init: blueprints, Flask-Admin views, mail,
