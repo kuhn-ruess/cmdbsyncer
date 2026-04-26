@@ -1,5 +1,14 @@
 """
 Rule Import/ Export
+
+Two layers of API:
+
+* ``iter_rules_of_type``, ``iter_all_rules``, ``import_one_rule``,
+  ``import_rule_lines`` — pure helpers that don't print and don't
+  touch the filesystem. Reusable by the CLI, the REST API, and the
+  autorules path.
+* ``export_rules``, ``export_all_rules``, ``import_rules`` — CLI
+  wrappers that print progress and read/write files.
 """
 import json
 from json.decoder import JSONDecodeError
@@ -9,6 +18,10 @@ from datetime import datetime
 from mongoengine.errors import NotUniqueError, ValidationError
 from .rule_definitions import rules as enabled_rules
 
+
+HOST_COLLECTION_RULE_TYPE = 'host_objects'
+ACCOUNTS_RULE_TYPE = 'accounts'
+USERS_RULE_TYPE = 'users'
 
 
 def get_ruletype_by_filename(filename):
@@ -22,23 +35,121 @@ def get_ruletype_by_filename(filename):
     return False
 
 
-def export_rules_from_model(rule_type):
-    """
-    Export Given Rulesets
-    """
-    model = importlib.import_module(enabled_rules[rule_type][0])
-    for db_rule in getattr(model, enabled_rules[rule_type][1]).objects():
+def _model_class_for(rule_type):
+    """Resolve the model class for *rule_type* or None on unknown type."""
+    if rule_type not in enabled_rules:
+        return None
+    module_path, class_name = enabled_rules[rule_type]
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name, None)
+
+
+def iter_rules_of_type(rule_type):
+    """Yield JSON strings (one per rule) for *rule_type*. Empty when unknown."""
+    model_class = _model_class_for(rule_type)
+    if model_class is None:
+        return
+    for db_rule in model_class.objects():
         yield db_rule.to_json()
 
 
+# Backwards-compat alias — older callers used this name.
+export_rules_from_model = iter_rules_of_type
+
+
+def iter_all_rules(include_hosts=False, include_accounts=False, include_users=False):
+    """Yield ``(rule_type, json_string)`` for every enabled rule type, in
+    sorted ``rule_type`` order.
+
+    Hosts/objects, accounts, and users are skipped by default since they
+    are usually not what you want in a rule backup. Pass the matching
+    ``include_*=True`` flag to opt in. User exports contain hashed
+    passwords and role assignments — treat the resulting data as secret.
+    """
+    skip = {
+        HOST_COLLECTION_RULE_TYPE: not include_hosts,
+        ACCOUNTS_RULE_TYPE: not include_accounts,
+        USERS_RULE_TYPE: not include_users,
+    }
+    for rule_type in sorted(enabled_rules):
+        if skip.get(rule_type):
+            continue
+        for rule in iter_rules_of_type(rule_type):
+            yield rule_type, rule
+
+
+def _save_rule(json_dict, model_class):
+    """Persist a rule from a parsed JSON dict.
+
+    Returns one of ``'imported'``, ``'duplicate'``, ``'invalid'``.
+    """
+    db_ref = model_class()
+    new = db_ref.from_json(json.dumps(json_dict))
+    try:
+        new.save(force_insert=True)
+    except NotUniqueError:
+        return 'duplicate'
+    except ValidationError:
+        return 'invalid'
+    return 'imported'
+
+
+def import_one_rule(json_dict, rule_type):
+    """Import a single rule dict for *rule_type*. No printing.
+
+    Returns ``'imported'``, ``'duplicate'``, ``'invalid'``, or
+    ``'unknown_type'``.
+    """
+    model_class = _model_class_for(rule_type)
+    if model_class is None:
+        return 'unknown_type'
+    return _save_rule(json_dict, model_class)
+
+
+def import_rule_lines(lines, default_rule_type=None):
+    """Consume an iterable of text lines (or already-parsed dicts) and
+    import them. Mirrors the on-disk format: ``{"rule_type": "..."}``
+    header lines switch the active rule type for the lines that follow.
+
+    Returns ``{rule_type: imported_count}``.
+    """
+    rule_type = default_rule_type
+    model_class = _model_class_for(rule_type) if rule_type else None
+    counts = {}
+    for line in lines:
+        if isinstance(line, str):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                json_dict = json.loads(stripped)
+            except JSONDecodeError:
+                continue
+        else:
+            json_dict = line
+        if (isinstance(json_dict, dict)
+                and len(json_dict) == 1 and 'rule_type' in json_dict):
+            rule_type = json_dict['rule_type']
+            model_class = _model_class_for(rule_type)
+            continue
+        if model_class is None:
+            continue
+        status = _save_rule(json_dict, model_class)
+        if status == 'imported':
+            counts[rule_type] = counts.get(rule_type, 0) + 1
+    return counts
+
+
+# ---------------------------------------------------------------------------
+# CLI wrappers — print progress, read/write files
+# ---------------------------------------------------------------------------
+
 
 def export_rules(rule_type):
-    """
-    Export Rules by Category
-    """
+    """Export rules of one type, printed line-by-line (CLI)."""
     if rule_type.lower() in enabled_rules:
         print(json.dumps({"rule_type": rule_type}))
-        for rule in export_rules_from_model(rule_type):
+        for rule in iter_rules_of_type(rule_type):
             print(rule)
     else:
         print("Ruletype not supported")
@@ -48,100 +159,68 @@ def export_rules(rule_type):
             print(rulename)
 
 
-HOST_COLLECTION_RULE_TYPE = 'host_objects'
-ACCOUNTS_RULE_TYPE = 'accounts'
-USERS_RULE_TYPE = 'users'
-
-
 def export_all_rules(target_path=None, include_hosts=False,
                      include_accounts=False, include_users=False):
     """
-    Export all Rules of every known type into a single file.
-
-    Hosts/objects, accounts and users are skipped by default because they
-    are usually not what you want in a rule backup. Pass the matching
-    `include_*=True` flag to include them. User exports contain hashed
-    passwords and role assignments — treat the resulting file as secret.
+    Export all Rules of every known type into a single file (CLI).
     """
     if not target_path:
         target_path = f"syncer_rules_export_{datetime.now():%Y%m%d_%H%M%S}.jsonl"
+    skipped = []
+    if not include_hosts:
+        skipped.append(f"--include-hosts to export {HOST_COLLECTION_RULE_TYPE}")
+    if not include_accounts:
+        skipped.append(f"--include-accounts to export {ACCOUNTS_RULE_TYPE}")
+    if not include_users:
+        skipped.append(f"--include-users to export {USERS_RULE_TYPE}")
+    for hint in skipped:
+        print(f"* Skipped (use {hint})")
+
     total = 0
+    last_type = None
     with open(target_path, 'w', encoding='utf-8') as outfile:
-        for rule_type in sorted(enabled_rules):
-            if rule_type == HOST_COLLECTION_RULE_TYPE and not include_hosts:
-                print(f"* Skipped {rule_type} (use --include-hosts to export)")
-                continue
-            if rule_type == ACCOUNTS_RULE_TYPE and not include_accounts:
-                print(f"* Skipped {rule_type} (use --include-accounts to export)")
-                continue
-            if rule_type == USERS_RULE_TYPE and not include_users:
-                print(f"* Skipped {rule_type} (use --include-users to export)")
-                continue
-            header_written = False
-            for rule in export_rules_from_model(rule_type):
-                if not header_written:
-                    outfile.write(json.dumps({"rule_type": rule_type}) + "\n")
-                    header_written = True
-                outfile.write(rule + "\n")
-                total += 1
-            if header_written:
-                print(f"* Exported {rule_type}")
+        for rule_type, rule in iter_all_rules(include_hosts, include_accounts, include_users):
+            if rule_type != last_type:
+                outfile.write(json.dumps({"rule_type": rule_type}) + "\n")
+                last_type = rule_type
+                print(f"* Exporting {rule_type}")
+            outfile.write(rule + "\n")
+            total += 1
     print(f"Wrote {total} rules to {target_path}")
 
 
 def import_line(json_dict, model, rule_type):
-    """
-    Import a Single line
-    """
+    """CLI helper: import a single line and print progress."""
     print(f"* Import {json_dict['_id']}")
-    db_ref = getattr(model, enabled_rules[rule_type][1])()
-    new = db_ref.from_json(json.dumps(json_dict))
-    try:
-        new.save(force_insert=True)
-    except NotUniqueError:
+    status = _save_rule(json_dict, getattr(model, enabled_rules[rule_type][1]))
+    if status == 'duplicate':
         print("   Already existed")
-    except ValidationError:
+    elif status == 'invalid':
         print(f"Problem with entry: {json_dict}")
+
 
 def import_rules(rulefile_path):
     """
-    Import Rules into the CMDB Syncer.
-    Supports single-type files and multi-type files with multiple
-    {"rule_type": "..."} header lines.
+    Import Rules into the CMDB Syncer (CLI).
+    Supports single-type files (rule_type guessed from filename) and
+    multi-type files with multiple ``{"rule_type": "..."}`` header lines.
     """
     with open(rulefile_path, encoding='utf-8') as rulefile:
-        rule_type = False
-        model = None
-        first_json_line = True
-        for line in rulefile.readlines():
-            try:
-                json_dict = json.loads(line)
-            except JSONDecodeError:
-                print(line)
-                continue
-            if 'rule_type' in json_dict and len(json_dict) == 1:
-                rule_type = json_dict['rule_type']
-                if rule_type not in enabled_rules:
-                    print(f"Ruletype {rule_type} not supported, skipping block")
-                    model = None
-                    first_json_line = False
-                    continue
-                model = importlib.import_module(enabled_rules[rule_type][0])
-                print(f"== Importing {rule_type} ==")
-                first_json_line = False
-                continue
-            if not rule_type and first_json_line:
-                # No header: guess the type by filename (GUI export mode)
-                rule_type = get_ruletype_by_filename(rulefile_path)
-                first_json_line = False
-                if rule_type not in enabled_rules:
-                    print("Ruletype not supported")
-                    print(f"Currently supported: {', '.join(enabled_rules.keys())}")
-                    return
-                model = importlib.import_module(enabled_rules[rule_type][0])
-                import_line(json_dict, model, rule_type)
-                continue
-            first_json_line = False
-            if model is None:
-                continue
-            import_line(json_dict, model, rule_type)
+        text = rulefile.read()
+
+    has_header = any(
+        line.strip().startswith('{"rule_type"') and 'rule_type' in line
+        for line in text.splitlines()
+    )
+
+    default_type = None
+    if not has_header:
+        default_type = get_ruletype_by_filename(rulefile_path)
+        if default_type not in enabled_rules:
+            print("Ruletype not supported")
+            print(f"Currently supported: {', '.join(enabled_rules.keys())}")
+            return
+
+    counts = import_rule_lines(text.splitlines(), default_rule_type=default_type)
+    for rule_type, count in counts.items():
+        print(f"== {rule_type}: imported {count} ==")

@@ -7,6 +7,7 @@ from flask_restx import Api
 from application import app, limiter
 from application.api.syncer import API as syncer
 from application.api.objects import API as objects
+from application.api.rules import API as rules
 
 API_BP = Blueprint('api', __name__)
 
@@ -50,3 +51,4 @@ API = Api(API_BP, authorizations=AUTHORIZATIONS,
 
 API.add_namespace(syncer, path='/syncer')
 API.add_namespace(objects, path='/objects')
+API.add_namespace(rules, path='/rules')
