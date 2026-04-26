@@ -2,15 +2,13 @@ PYTHON ?= venv/bin/python
 VERSION_FILE := application/_version.py
 VERSION := $(shell $(PYTHON) -c "import runpy; print(runpy.run_path('$(VERSION_FILE)')['__version__'])")
 
-.PHONY: help sync sync-deps version clean build check upload tag release
+.PHONY: help version clean build check upload tag release
 
 help:
 	@echo "Available targets:"
-	@echo "  make sync         - Sync [project.dependencies] in pyproject.toml from requirements.txt"
-	@echo "  make sync-deps    - Same as 'make sync' (alias)"
 	@echo "  make version      - Print the current version ($(VERSION))"
 	@echo "  make clean        - Remove build artefacts (build/, dist/, *.egg-info)"
-	@echo "  make build        - sync + build sdist and wheel into dist/"
+	@echo "  make build        - Build sdist and wheel into dist/"
 	@echo "  make check        - twine check dist/*"
 	@echo "  make upload       - twine upload dist/* (uses ./.pypirc)"
 	@echo "  make tag          - Create and push git tag v$(VERSION)"
@@ -19,15 +17,10 @@ help:
 version:
 	@echo $(VERSION)
 
-sync-deps:
-	@$(PYTHON) tools/sync_deps.py
-
-sync: sync-deps
-
 clean:
 	rm -rf build/ dist/ *.egg-info
 
-build: clean sync
+build: clean
 	$(PYTHON) -m build
 
 check:
