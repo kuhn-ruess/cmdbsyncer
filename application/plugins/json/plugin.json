@@ -13,6 +13,5 @@
     },
     "depends_on_syncer_plugins": [
         "rest"
-    ],
-    "enabled": true
+    ]
 }

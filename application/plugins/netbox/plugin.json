@@ -10,6 +10,5 @@
         "ca_root_cert": "",
         "import_filter": "",
         "delete_host_if_not_found_on_import": ""
-    },
-    "enabled": true
+    }
 }

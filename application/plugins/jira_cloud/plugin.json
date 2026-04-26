@@ -12,6 +12,5 @@
         "verify_cert": "True",
         "ca_cert_chain": "",
         "ca_root_cert": ""
-    },
-    "enabled": true
+    }
 }

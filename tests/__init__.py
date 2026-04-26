@@ -319,6 +319,10 @@ _plugins_helper.is_plugin_disabled = MagicMock(
     name="stub.is_plugin_disabled", return_value=False
 )
 _plugins_helper.register_cli_group = MagicMock(name="stub.register_cli_group")
+_plugins_helper.read_disabled_idents = MagicMock(
+    name="stub.read_disabled_idents", return_value=set()
+)
+_plugins_helper.write_disabled_idents = MagicMock(name="stub.write_disabled_idents")
 
 
 # --- syncerapi.v1 -----------------------------------------------------------

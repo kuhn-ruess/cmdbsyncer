@@ -15,6 +15,8 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from application.helpers.plugins import read_disabled_idents, write_disabled_idents
+
 
 DISABLED_PLUGINS_FILE = "disabled_plugins.json"
 
@@ -33,23 +35,15 @@ def _has_invalid_plugin_root(plugin_dir):
 
 
 def get_disabled_plugins():
-    """Return the set of disabled plugin idents."""
-    if not os.path.exists(DISABLED_PLUGINS_FILE):
-        return set()
-    try:
-        with open(DISABLED_PLUGINS_FILE, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-        if isinstance(data, list):
-            return set(data)
-    except (json.JSONDecodeError, IOError):
-        pass
-    return set()
+    """Return the set of disabled plugin idents from the working dir's
+    ``disabled_plugins.json``."""
+    return read_disabled_idents(DISABLED_PLUGINS_FILE)
 
 
 def save_disabled_plugins(disabled):
-    """Write the set of disabled plugin idents to disk."""
-    with open(DISABLED_PLUGINS_FILE, "w", encoding="utf-8") as fh:
-        json.dump(sorted(disabled), fh, indent=2)
+    """Write the set of disabled plugin idents to the working dir's
+    ``disabled_plugins.json``."""
+    write_disabled_idents(DISABLED_PLUGINS_FILE, disabled)
 
 
 def get_plugins():
@@ -109,9 +103,6 @@ def enable(ident):
     plugin = get_plugin_by_name(ident)
     if not plugin:
         print(f"Plugin '{ident}' not found")
-        return
-    if not plugin["data"].get("enabled", False):
-        print(f"Plugin '{ident}' is not available")
         return
     disabled = get_disabled_plugins()
     if ident not in disabled:
@@ -226,7 +217,7 @@ def list_plugins():
         is_local = "Yes" if plugin["path"].startswith("plugins/") else "No"
         data = plugin["data"]
         ident = data["ident"]
-        enabled = "No" if ident in disabled or not data.get("enabled", False) else "Yes"
+        enabled = "No" if ident in disabled else "Yes"
         table.add_row(
             is_local, enabled, ident,
             data["name"], data["version"],

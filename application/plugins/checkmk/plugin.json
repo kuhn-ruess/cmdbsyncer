@@ -19,6 +19,5 @@
         "ca_cert_chain": "",
         "ca_root_cert": "",
         "import_filter": ""
-    },
-    "enabled": true
+    }
 }

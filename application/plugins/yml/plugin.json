@@ -17,6 +17,5 @@
         "ca_cert_chain": "",
         "ca_root_cert": "",
         "path": ""
-    },
-    "enabled": true
+    }
 }

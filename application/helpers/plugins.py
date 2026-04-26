@@ -1,19 +1,33 @@
-"""Plugin discovery and enable/disable helpers."""
+"""Plugin discovery and enable/disable helpers.
+
+A plugin is enabled by default when its directory ships under
+``application/plugins/`` or ``plugins/``. The only opt-out is
+``disabled_plugins.json`` at the repo root, which holds a JSON list of
+disabled idents (or directory names — both work).
+
+Both the disabled list and the per-plugin ``plugin.json`` data are read
+exactly once per process and cached. The filesystem state cannot change
+under us during a single Flask/CLI run; if a plugin is added or
+disabled, restart the process (or call ``set_disabled_plugins`` from
+the same process — it busts its own cache).
+"""
 import os
 import json
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 _DISABLED_PLUGINS_PATH = os.path.join(_BASE_DIR, 'disabled_plugins.json')
 
-# Cache: computed once at first call, maps dirname -> bool (True = disabled)
-_disabled_cache = None  # pylint: disable=invalid-name
-
 # In-memory registry for plugin types that ship inside a pip-installed
 # Enterprise package rather than as a directory under plugins/. Callers
-# use register_plugin_type(...) at feature activation time; discover_plugins()
-# merges these on top of the filesystem discovery so Account.typ and the
-# create-account preset form pick them up uniformly.
+# use register_plugin_type(...) at feature activation time;
+# discover_plugins() merges these on top of the filesystem discovery so
+# Account.typ and the create-account preset form pick them up uniformly.
 _RUNTIME_PLUGINS = {}
+
+# Lazy caches — filled on first access, invalidated only on explicit
+# writes via ``set_disabled_plugins``.
+_DISABLED_IDENTS_CACHE = None  # set[str] | None
+_PLUGIN_DATA_CACHE = None  # dict[str, dict] | None — keyed by directory name
 
 
 def _read_plugin_json(plugin_dir_path):
@@ -28,12 +42,13 @@ def _read_plugin_json(plugin_dir_path):
         return None
 
 
-def get_disabled_plugins():
-    """Return the set of disabled plugin idents from disabled_plugins.json."""
-    if not os.path.exists(_DISABLED_PLUGINS_PATH):
+def read_disabled_idents(path):
+    """Return the set of disabled plugin idents stored at *path*, or empty
+    on missing/corrupt file. Pure I/O — no caching, no globals."""
+    if not os.path.exists(path):
         return set()
     try:
-        with open(_DISABLED_PLUGINS_PATH, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         if isinstance(data, list):
             return set(data)
@@ -42,17 +57,38 @@ def get_disabled_plugins():
     return set()
 
 
-def set_disabled_plugins(disabled):
-    """Write the set of disabled plugin idents to disk and clear cache."""
-    global _disabled_cache  # pylint: disable=global-statement
-    with open(_DISABLED_PLUGINS_PATH, 'w', encoding='utf-8') as f:
+def write_disabled_idents(path, disabled):
+    """Write the disabled-idents set to *path*, sorted."""
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(sorted(disabled), f, indent=2)
-    _disabled_cache = None
 
 
-def _build_disabled_cache():
-    """Scan all plugin dirs once and build a dirname -> disabled mapping."""
-    disabled_idents = get_disabled_plugins()
+def get_disabled_plugins():
+    """Return the set of disabled plugin idents from ``disabled_plugins.json``."""
+    return read_disabled_idents(_DISABLED_PLUGINS_PATH)
+
+
+def set_disabled_plugins(disabled):
+    """Write the set of disabled plugin idents to disk and clear the cache."""
+    global _DISABLED_IDENTS_CACHE  # pylint: disable=global-statement
+    write_disabled_idents(_DISABLED_PLUGINS_PATH, disabled)
+    _DISABLED_IDENTS_CACHE = None
+
+
+def _disabled_idents():
+    """Cached set view of ``disabled_plugins.json``."""
+    global _DISABLED_IDENTS_CACHE  # pylint: disable=global-statement
+    if _DISABLED_IDENTS_CACHE is None:
+        _DISABLED_IDENTS_CACHE = get_disabled_plugins()
+    return _DISABLED_IDENTS_CACHE
+
+
+def _plugin_data_cache():
+    """Walk the bundled and repo-local plugin trees once and return a
+    ``{directory_name: plugin_json_data}`` mapping."""
+    global _PLUGIN_DATA_CACHE  # pylint: disable=global-statement
+    if _PLUGIN_DATA_CACHE is not None:
+        return _PLUGIN_DATA_CACHE
     cache = {}
     for sub in ('plugins', os.path.join('application', 'plugins')):
         plugin_root = os.path.join(_BASE_DIR, sub)
@@ -63,24 +99,20 @@ def _build_disabled_cache():
             if not os.path.isdir(entry_path):
                 continue
             data = _read_plugin_json(entry_path)
-            if not data:
-                continue
-            ident = data.get('ident', entry)
-            if entry in disabled_idents or ident in disabled_idents:
-                cache[entry] = True
-            elif not data.get('enabled', False):
-                cache[entry] = True
-            else:
-                cache[entry] = False
-    return cache
+            if data:
+                cache[entry] = data
+    _PLUGIN_DATA_CACHE = cache
+    return _PLUGIN_DATA_CACHE
 
 
 def is_plugin_disabled(dirname):
-    """Check whether a plugin is disabled (cached after first call)."""
-    global _disabled_cache  # pylint: disable=global-statement
-    if _disabled_cache is None:
-        _disabled_cache = _build_disabled_cache()
-    return _disabled_cache.get(dirname, False)
+    """Return True iff *dirname* (or its plugin.json ident) is listed in
+    ``disabled_plugins.json``. Plugins are enabled by default."""
+    disabled = _disabled_idents()
+    if dirname in disabled:
+        return True
+    data = _plugin_data_cache().get(dirname)
+    return bool(data and data.get('ident') in disabled)
 
 
 class _DisabledCliGroup:
@@ -130,33 +162,26 @@ def register_plugin_type(ident, name, account_presets=None,
         'ident': ident,
         'name': name,
         'description': description,
-        'enabled': True,
         'account_presets': dict(account_presets or {}),
         'account_custom_field_presets': dict(account_custom_field_presets or {}),
     }
 
 
 def discover_plugins():
+    """Discover account types from filesystem plugins + the runtime registry.
+
+    Skips plugins that appear in ``disabled_plugins.json`` (matched by
+    either directory name or ``ident``).
     """
-    Discover account types from plugin.json files in plugin directories
-    and from the runtime registry. Skips plugins that are disabled
-    (via disabled_plugins.json or enabled flag).
-    """
+    disabled = _disabled_idents()
     plugins = {}
-    for sub in ('plugins', os.path.join('application', 'plugins')):
-        plugin_root = os.path.join(_BASE_DIR, sub)
-        if not os.path.isdir(plugin_root):
+    for entry, data in _plugin_data_cache().items():
+        if entry in disabled:
             continue
-        for entry in os.listdir(plugin_root):
-            entry_path = os.path.join(plugin_root, entry)
-            if not os.path.isdir(entry_path):
-                continue
-            if is_plugin_disabled(entry):
-                continue
-            data = _read_plugin_json(entry_path)
-            if data and 'ident' in data and 'name' in data:
-                plugins[data['ident']] = data
-    # Runtime-registered plugins win over filesystem ones with the same
-    # ident (Enterprise can refresh its presets without an FS write).
+        ident = data.get('ident')
+        name = data.get('name')
+        if not ident or not name or ident in disabled:
+            continue
+        plugins[ident] = data
     plugins.update(_RUNTIME_PLUGINS)
     return plugins

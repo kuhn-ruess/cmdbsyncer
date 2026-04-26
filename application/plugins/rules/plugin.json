@@ -5,6 +5,5 @@
     "description": "Rule Export and Auto Creation functions",
     "ident": "rules",
     "account_presets" : false,
-    "account_custom_field_presets": false,
-    "enabled": true
+    "account_custom_field_presets": false
 }

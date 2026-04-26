@@ -24,6 +24,5 @@
                 "inventorize_rewrite_collect_by_key": ""
     },
     "depends_on_py_modules": [ "pypyodbc"],
-    "depends_on_syncer_plugins" : ["pypyodbc"],
-    "enabled": true
+    "depends_on_syncer_plugins" : ["pypyodbc"]
 }

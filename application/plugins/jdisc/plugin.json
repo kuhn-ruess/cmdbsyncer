@@ -9,7 +9,5 @@
     "account_custom_field_presets": {
         "rewrite_hostname": "",
         "import_unnamed_devices": ""
-   },
-
-   "enabled": true
+   }
 }
