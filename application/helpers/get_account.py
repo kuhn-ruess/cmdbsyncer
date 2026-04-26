@@ -1,7 +1,11 @@
 """
 Helper to get Account
 """
+import copy
+
+from mongoengine import signals
 from mongoengine.errors import DoesNotExist
+
 from application.enterprise import has_feature, run_hook
 from application.models.account import Account
 
@@ -16,11 +20,27 @@ _CHILD_OWNED_FIELDS = ('typ', 'username', 'password', 'address', 'object_type')
 # Internal serialisation artefacts that never leave this layer.
 _INTERNAL_FIELDS = ('custom_fields', 'password_crypted', 'plugin_settings')
 
+# In-process cache: ``{(lookup_key, is_id): account_dict}``. Sync runs read
+# the same handful of accounts for every host/rule, so caching keeps Mongo
+# and the secrets-manager hook off the hot path. Invalidated on Account
+# save/delete via mongoengine signals so the web app picks up edits
+# without a process restart.
+_account_cache = {}
+
 
 class AccountNotFoundError(Exception):
     """
     Raise if Account not found
     """
+
+
+def clear_account_cache(*_args, **_kwargs):
+    """Drop all cached account dicts. Wired to Account save/delete."""
+    _account_cache.clear()
+
+
+signals.post_save.connect(clear_account_cache, sender=Account)
+signals.post_delete.connect(clear_account_cache, sender=Account)
 
 
 def _resolve_password(account):
@@ -64,10 +84,8 @@ def _flatten_account(account):
     return data
 
 
-def get_account_by_name(name, is_id=False):
-    """
-    Get Account by Name or Return False
-    """
+def _build_account_dict(name, is_id):
+    """Resolve and compose the dict — without consulting the cache."""
     lookup = {'id': name} if is_id else {'name': name}
     try:
         account = Account.objects.get(enabled=True, **lookup)
@@ -90,12 +108,24 @@ def get_account_by_name(name, is_id=False):
     return parent_data
 
 
+def get_account_by_name(name, is_id=False):
+    """
+    Get Account by Name or Return False
+    """
+    cache_key = (str(name), is_id)
+    cached = _account_cache.get(cache_key)
+    if cached is None:
+        cached = _build_account_dict(name, is_id)
+        _account_cache[cache_key] = cached
+    # Defensive copy — callers must not mutate the cached entry.
+    return copy.deepcopy(cached)
+
+
 def get_account_variable(macro):
     """
     Replaces the given Macro with the Account data
     Example: {{ACCOUNT:mon:password}}
     """
-    # @TODO: Cache
     try:
         _, account, var = macro.split(':')
         return get_account_by_name(account)[var.removesuffix('}}')]
