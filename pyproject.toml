@@ -40,9 +40,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-# Resolved at build time from requirements.txt via [tool.setuptools.dynamic]
-# below. Edit the requirements file, not this block.
-dynamic = ["dependencies"]
+# Resolved at build time from the requirements*.txt files via
+# [tool.setuptools.dynamic] below. Edit the requirements files, not these
+# blocks.
+dynamic = ["dependencies", "optional-dependencies"]
 
 [project.scripts]
 cmdbsyncer = "application.cli:main"
@@ -58,6 +59,13 @@ Changelog = "https://github.com/kuhn-ruess/cmdbsyncer/tree/main/changelog"
 
 [tool.setuptools.dynamic]
 dependencies = {file = "requirements.txt"}
+
+[tool.setuptools.dynamic.optional-dependencies]
+# ``pip install cmdbsyncer[extras]`` for LDAP / SQL / MCP / vmware /
+# ``pip install cmdbsyncer[ansible]`` for the Ansible inventory pieces.
+# ``pip install cmdbsyncer[extras,ansible]`` to get both.
+extras = {file = "requirements-extras.txt"}
+ansible = {file = "requirements-ansible.txt"}
 
 [tool.setuptools.packages.find]
 where = ["."]
