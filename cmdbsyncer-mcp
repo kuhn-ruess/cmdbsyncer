@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+# pylint: disable=invalid-name
+"""CMDB Syncer MCP server wrapper for source checkouts.
+
+Matches the pip-installed ``cmdbsyncer-mcp`` entry point
+(``[project.scripts]``), so source- and pip-based installs share the
+same command name.
+"""
+from application.mcp_server import main
+
+if __name__ == "__main__":
+    main()

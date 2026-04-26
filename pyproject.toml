@@ -47,6 +47,7 @@ dynamic = ["dependencies"]
 [project.scripts]
 cmdbsyncer = "application.cli:main"
 cmdbsyncer-plugin = "application.plugins_cli:main"
+cmdbsyncer-mcp = "application.mcp_server:main"
 
 [project.urls]
 Homepage = "https://cmdbsyncer.de"

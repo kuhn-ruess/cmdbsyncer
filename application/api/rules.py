@@ -10,7 +10,6 @@ Auth: ``@require_token``. A user with ``api_roles = ['rules']`` (or
 ``'all'``) can call this namespace.
 """
 import json
-from datetime import datetime
 
 from flask import request
 from flask_restx import Namespace, Resource, fields
@@ -19,9 +18,10 @@ from application.api import require_token
 from application.plugins.rules.rule_definitions import rules as enabled_rules
 from application.plugins.rules.rule_import_export import (
     iter_rules_of_type,
-    iter_all_rules,
     import_one_rule,
     import_rule_lines,
+    import_json_bundle,
+    grouped_rules_export,
 )
 from application.plugins.rules.autorules import create_rules
 
@@ -209,20 +209,11 @@ class RulesExport(Resource):
         """Return every enabled rule type, grouped by type."""
         def _flag(name):
             return request.args.get(name, '').lower() in ('1', 'true', 'yes')
-        grouped = {}
-        for rule_type, rule in iter_all_rules(
+        return grouped_rules_export(
             include_hosts=_flag('include_hosts'),
             include_accounts=_flag('include_accounts'),
             include_users=_flag('include_users'),
-        ):
-            try:
-                grouped.setdefault(rule_type, []).append(json.loads(rule))
-            except (ValueError, TypeError):
-                continue
-        return {
-            'exported_at': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
-            'rules': grouped,
-        }
+        )
 
 
 @API.route('/import')
@@ -254,32 +245,11 @@ class RulesImport(Resource):
             payload = request.get_json(silent=True)
             if payload is None:
                 return {'message': 'Body must be JSON'}, 400
-            counts = _import_json_payload(payload)
+            counts = import_json_bundle(payload)
         else:
             body = request.get_data(as_text=True) or ''
             counts = import_rule_lines(body.splitlines())
         return {'imported': counts, 'total': sum(counts.values())}
-
-
-def _import_json_payload(payload):
-    """Dispatch the two supported JSON shapes onto ``import_rule_lines``."""
-    if isinstance(payload, dict) and 'rules' in payload:
-        rules = payload['rules']
-        if isinstance(rules, list):
-            # Single-type form
-            rule_type = payload.get('rule_type')
-            return import_rule_lines(rules, default_rule_type=rule_type)
-        if isinstance(rules, dict):
-            # Multi-type form: replay as header + body lines.
-            counts = {}
-            for rule_type, items in rules.items():
-                if not isinstance(items, list):
-                    continue
-                sub = import_rule_lines(items, default_rule_type=rule_type)
-                for k, v in sub.items():
-                    counts[k] = counts.get(k, 0) + v
-            return counts
-    return {}
 
 
 @API.route('/autorules')

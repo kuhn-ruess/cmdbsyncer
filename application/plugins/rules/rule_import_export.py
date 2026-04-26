@@ -140,6 +140,55 @@ def import_rule_lines(lines, default_rule_type=None):
     return counts
 
 
+def grouped_rules_export(include_hosts=False, include_accounts=False,
+                         include_users=False):
+    """Return ``{exported_at, rules: {rule_type: [dict, ...]}}`` for every
+    enabled rule type. Used by both the REST ``/rules/export`` endpoint
+    and the MCP ``export_all_rules`` tool."""
+    grouped = {}
+    for rule_type, raw in iter_all_rules(
+        include_hosts=include_hosts,
+        include_accounts=include_accounts,
+        include_users=include_users,
+    ):
+        try:
+            grouped.setdefault(rule_type, []).append(json.loads(raw))
+        except (ValueError, TypeError):
+            continue
+    return {
+        'exported_at': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+        'rules': grouped,
+    }
+
+
+def import_json_bundle(payload):
+    """Import a structured JSON payload that mirrors the export shape.
+
+    Accepts:
+
+    * ``{"rule_type": "...", "rules": [<dict>, ...]}`` — single-type
+    * ``{"rules": {"<rule_type>": [<dict>, ...], ...}}`` — multi-type,
+      same shape ``GET /rules/export`` returns
+
+    Returns ``{rule_type: imported_count}``. Unknown shapes return ``{}``.
+    """
+    if not isinstance(payload, dict):
+        return {}
+    rules_field = payload.get('rules')
+    if isinstance(rules_field, list):
+        return import_rule_lines(rules_field,
+                                 default_rule_type=payload.get('rule_type'))
+    if isinstance(rules_field, dict):
+        counts = {}
+        for rule_type, items in rules_field.items():
+            if not isinstance(items, list):
+                continue
+            for k, v in import_rule_lines(items, default_rule_type=rule_type).items():
+                counts[k] = counts.get(k, 0) + v
+        return counts
+    return {}
+
+
 # ---------------------------------------------------------------------------
 # CLI wrappers — print progress, read/write files
 # ---------------------------------------------------------------------------

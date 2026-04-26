@@ -30,6 +30,7 @@ api_roles = [
   ('all', "Full rights"),
   ('ansible', "Ansible"),
   ('objects', "Objects"),
+  ('rules', "Rule import/export and autorules"),
   ('syncer', "Syncer"),
   ('metrics', "Prometheus metrics scrape"),
 ]

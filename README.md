@@ -79,6 +79,7 @@ This runs a development version that you can use to test everything.
 - **📊 Monitoring** - Integration with monitoring systems
 - **🎯 Template Support** - Jinja2 templating for configuration and rules
 - **🔄 REST API** - Full REST API for automation and integration
+- **🤖 MCP Server** - Model Context Protocol server for Claude Desktop, Cursor, Cline & co. — expose hosts, accounts, rules and cron over `cmdbsyncer-mcp`
 
 ### Rule Engine
 - **📝 Attribute Control** - Rules based on host attributes
@@ -229,6 +230,47 @@ For development and testing purposes:
 
 # Access at http://localhost:5003
 ```
+
+### MCP (Model Context Protocol)
+
+CMDBsyncer ships an MCP server that lets LLM clients (Claude Desktop, Cursor,
+Cline, …) read and write syncer state directly. It boots in CLI mode (no web
+stack) and authenticates with the same Basic-Auth credentials the REST API
+accepts; per-tool access is gated by the user's `api_roles`.
+
+```bash
+# 1. Install the MCP SDK (it's an optional dep)
+pip install -r requirements-extras.txt
+
+# 2. Run the server — usually configured into your MCP client, but you can
+#    also pipe it manually:
+cmdbsyncer-mcp --user admin@your-domain.com --password '****'
+
+# 3. Or pass credentials via env vars (handy for client config):
+export CMDBSYNCER_API_USER=admin@your-domain.com
+export CMDBSYNCER_API_PASSWORD='****'
+cmdbsyncer-mcp
+```
+
+Example `claude_desktop_config.json` snippet:
+
+```json
+{
+  "mcpServers": {
+    "cmdbsyncer": {
+      "command": "cmdbsyncer-mcp",
+      "env": {
+        "CMDBSYNCER_API_USER": "admin@your-domain.com",
+        "CMDBSYNCER_API_PASSWORD": "****"
+      }
+    }
+  }
+}
+```
+
+Tools exposed: host CRUD, inventory write, account read, rule export/import,
+autorules trigger, cron status & trigger, log read. See
+[docs.cmdbsyncer.de — MCP](https://docs.cmdbsyncer.de) for the full catalog.
 
 ## 📋 Requirements
 
