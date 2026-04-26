@@ -13,6 +13,12 @@ import logging
 if os.path.basename(sys.argv[0] or '').removesuffix('.py') == 'cmdbsyncer':
     os.environ.setdefault('CMDBSYNCER_CLI', '1')
 
+# When set, skip every web-only init: blueprints, Flask-Admin views, mail,
+# CSRF, rate-limiter, login manager, the per-request hook. CLI invocations
+# never serve HTTP, and the ``admin.add_view(...)`` calls each scaffold a
+# form via Mongo — together they account for the bulk of CLI startup time.
+CLI_MODE = os.environ.get('CMDBSYNCER_CLI') == '1'
+
 import importlib
 import pkgutil
 import warnings
@@ -74,13 +80,16 @@ if _trusted_proxies > 0:
         x_host=_trusted_proxies,
     )
 
-csrf = CSRFProtect(app)
-limiter = Limiter(
-    key_func=get_remote_address,
-    app=app,
-    storage_uri=app.config.get('RATELIMIT_STORAGE_URI', 'memory://'),
-    headers_enabled=True,
-)
+csrf = None
+limiter = None
+if not CLI_MODE:
+    csrf = CSRFProtect(app)
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        storage_uri=app.config.get('RATELIMIT_STORAGE_URI', 'memory://'),
+        headers_enabled=True,
+    )
 
 
 ## Read Build Data
@@ -161,29 +170,29 @@ def init_db():
         MongoEngine(app)
 
 
-from application.helpers.sates import get_changes
-
-
-@app.before_request
-def load_before_request():
-    """
-    Helper to have up to date data for each request
-    """
-    app.config['CHANGES'] = get_changes()
-
 # We need the db in the Module
 from application.modules.log.log import Log
 
 
 log = Log()
 
-mail = Mail(app)
-bootstrap = Bootstrap(app)
+if not CLI_MODE:
+    from application.helpers.sates import get_changes  # noqa: E402
 
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'auth.login'
-login_manager.login_message = False
+    @app.before_request
+    def load_before_request():
+        """
+        Helper to have up to date data for each request
+        """
+        app.config['CHANGES'] = get_changes()
+
+    mail = Mail(app)
+    bootstrap = Bootstrap(app)
+
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'auth.login'
+    login_manager.login_message = False
 
 
 
@@ -214,68 +223,6 @@ else:
     enterprise_hook('configure_logging', app, logger)
 
 
-from application.views.default import IndexView, DefaultModelView
-
-from application.auth.views import AUTH
-app.register_blueprint(AUTH)
-
-from application.api.views import API_BP as api
-app.register_blueprint(api, url_prefix="/api/v1")
-csrf.exempt(api)
-
-# Give the enterprise package a chance to register its own auth-related
-# blueprints (e.g. the native OIDC client). No-op without the feature.
-enterprise_hook('register_blueprints', app)
-
-from application.modules.rule.views import FiltereModelView, RewriteAttributeView
-
-@app.route('/')
-def page_redirect():
-    """
-    Redirect to admin Panel
-    """
-    return redirect(url_for("admin.index"))
-
-admin = Admin(app, name=f"cmdbsyncer {DISPLAY_VERSION}",
-                   index_view=IndexView(),
-                   category_icon_classes={
-                       'Account': 'fa fa-user-circle',
-                       'Accounts': 'fa fa-users',
-                       'Ansible': 'fa fa-cogs',
-                       'Checkmk': 'fa fa-heartbeat',
-                       'Checkmk Server': 'fa fa-building',
-                       'Cronjobs': 'fa fa-clock-o',
-                       'i-doit': 'fa fa-sitemap',
-                       'Manage Business Intelligence': 'fa fa-sitemap',
-                       'Modules': 'fa fa-puzzle-piece',
-                       'Netbox': 'fa fa-database',
-                       'Plugin: Dataflow': 'fa fa-arrows',
-                       'Settings': 'fa fa-cog',
-                       'Syncer Rules': 'fa fa-bolt',
-                       'VMware': 'fa fa-server'
-                       })
-
-
-#   .-- Host
-from application.models.host import Host
-from application.views.host import HostModelView, ObjectModelView, TemplateModelView
-admin.add_view(HostModelView(Host, name="Hosts", menu_icon_type='fa', menu_icon_value='fa-server'))
-admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
-admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",
-                               category="Objects",
-                               menu_icon_type='fa', menu_icon_value='fa-cubes'))
-admin.add_view(TemplateModelView(Host, name="Templates", endpoint="Objects Templates",
-                                 category="Objects",
-                                 menu_icon_type='fa', menu_icon_value='fa-files-o'))
-#.
-#   .-- Global
-from application.modules.custom_attributes.models import CustomAttributeRule
-from application.modules.custom_attributes.views import CustomAttributeView
-admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes",
-                                   category="Modules",
-                                   menu_icon_type='fa', menu_icon_value='fa-cog'))
-#.
-
 def _iter_enabled_plugin_modules(package):
     """Yield dotted module names of enabled plugins inside *package*."""
     from application.helpers.plugins import is_plugin_disabled
@@ -289,7 +236,9 @@ def _iter_enabled_plugin_modules(package):
         yield module_name
 
 
-def _register_all_plugin_admin_views():
+def _plugin_packages():
+    """Return the plugin packages we should walk: the bundled
+    ``application.plugins`` and the optional repo-local ``plugins``."""
     import application.plugins as plugins_package
     try:
         import plugins as external_plugins_package
@@ -297,11 +246,32 @@ def _register_all_plugin_admin_views():
         # No custom plugins directory in the working directory — typical
         # for a fresh PyPI install before self_configure has run.
         external_plugins_package = None
+    return [p for p in (external_plugins_package, plugins_package) if p is not None]
 
+
+def _import_all_plugins():
+    """Import every enabled plugin module so its side-effect registrations
+    fire — Click CLI groups, sync hooks, cron entries.
+
+    Runs in every mode: CLI commands need the Click groups, and the web
+    app needs the same hooks. ``admin_views`` submodules are *not* loaded
+    here; they are web-only and handled by
+    ``_register_all_plugin_admin_views``.
+    """
+    for package in _plugin_packages():
+        for module_name in _iter_enabled_plugin_modules(package):
+            try:
+                importlib.import_module(module_name)
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.exception("Failed to import plugin %s", module_name)
+                if '--debug' in sys.argv:
+                    raise
+
+
+def _register_all_plugin_admin_views(admin_):
     plugin_modules = []
-    if external_plugins_package is not None:
-        plugin_modules.extend(_iter_enabled_plugin_modules(external_plugins_package))
-    plugin_modules.extend(_iter_enabled_plugin_modules(plugins_package))
+    for package in _plugin_packages():
+        plugin_modules.extend(_iter_enabled_plugin_modules(package))
 
     for module_name in plugin_modules:
         admin_module_name = f"{module_name}.admin_views"
@@ -321,114 +291,194 @@ def _register_all_plugin_admin_views():
 
         register = getattr(admin_module, "register_admin_views", None)
         if callable(register):
-            register(admin)
+            register(admin_)
 
 
-_register_all_plugin_admin_views()
+def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statements
+    """Register every blueprint, Flask-Admin view, and view-only import.
+
+    Skipped entirely on CLI invocations (CLI_MODE) — none of this is reachable
+    from a Click command, and ``admin.add_view(...)`` calls each scaffold a
+    form via Mongo, which adds up to seconds of dead-weight per CLI run.
+    """
+    # Exposed as ``application.admin`` for symmetry with the rest of the
+    # module-level web globals.
+    global admin  # pylint: disable=global-statement
+    from application.views.default import IndexView
+
+    from application.auth.views import AUTH
+    app.register_blueprint(AUTH)
+
+    from application.api.views import API_BP as api
+    app.register_blueprint(api, url_prefix="/api/v1")
+    csrf.exempt(api)
+
+    # Give the enterprise package a chance to register its own auth-related
+    # blueprints (e.g. the native OIDC client). No-op without the feature.
+    enterprise_hook('register_blueprints', app)
+
+    # Imported for side effects — registering the rule views with the
+    # central registry. Symbols themselves aren't used here.
+    from application.modules.rule.views import (  # noqa: F401  pylint: disable=unused-import
+        FiltereModelView, RewriteAttributeView,
+    )
+
+    @app.route('/')
+    def page_redirect():  # pylint: disable=unused-variable
+        """Redirect to admin Panel"""
+        return redirect(url_for("admin.index"))
+
+    admin = Admin(app, name=f"cmdbsyncer {DISPLAY_VERSION}",
+                  index_view=IndexView(),
+                  category_icon_classes={
+                      'Account': 'fa fa-user-circle',
+                      'Accounts': 'fa fa-users',
+                      'Ansible': 'fa fa-cogs',
+                      'Checkmk': 'fa fa-heartbeat',
+                      'Checkmk Server': 'fa fa-building',
+                      'Cronjobs': 'fa fa-clock-o',
+                      'i-doit': 'fa fa-sitemap',
+                      'Manage Business Intelligence': 'fa fa-sitemap',
+                      'Modules': 'fa fa-puzzle-piece',
+                      'Netbox': 'fa fa-database',
+                      'Plugin: Dataflow': 'fa fa-arrows',
+                      'Settings': 'fa fa-cog',
+                      'Syncer Rules': 'fa fa-bolt',
+                      'VMware': 'fa fa-server'
+                  })
+
+    #   .-- Host
+    from application.models.host import Host
+    from application.views.host import HostModelView, ObjectModelView, TemplateModelView
+    admin.add_view(HostModelView(Host, name="Hosts",
+                                 menu_icon_type='fa', menu_icon_value='fa-server'))
+    admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
+    admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",
+                                   category="Objects",
+                                   menu_icon_type='fa', menu_icon_value='fa-cubes'))
+    admin.add_view(TemplateModelView(Host, name="Templates", endpoint="Objects Templates",
+                                     category="Objects",
+                                     menu_icon_type='fa', menu_icon_value='fa-files-o'))
+    #.
+    #   .-- Global
+    from application.modules.custom_attributes.models import CustomAttributeRule
+    from application.modules.custom_attributes.views import CustomAttributeView
+    admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes",
+                                       category="Modules",
+                                       menu_icon_type='fa', menu_icon_value='fa-cog'))
+    #.
+
+    _register_all_plugin_admin_views(admin)
+
+    from application.views.account import AccountModelView, ChildAccountModelView
+    admin.add_category(name="Accounts", icon_type='fa', icon_value='fa-users')
+    admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts",
+                                    menu_icon_type='fa', menu_icon_value='fa-user-circle'))
+    admin.add_view(ChildAccountModelView(Account, name="Config Childs",
+                                         endpoint='account_childs', category="Accounts",
+                                         menu_icon_type='fa', menu_icon_value='fa-users'))
+
+    from application.models.cron import CronGroup, CronStats
+    from application.views.cron import CronStatsView, CronGroupView
+    admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs",
+                                 menu_icon_type='fa', menu_icon_value='fa-calendar'))
+    admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs",
+                                 menu_icon_type='fa', menu_icon_value='fa-table'))
+
+    from application.views.fileadmin import FileAdminView
+    if os.path.exists(app.config['FILEADMIN_PATH']):
+        file_admin_view = FileAdminView(
+            app.config['FILEADMIN_PATH'], name="Filemanager",
+            menu_icon_type='fa', menu_icon_value='fa-folder-open',
+        )
+        admin.add_view(file_admin_view)
+
+    #.
+    #   .-- Settings (admin-facing tools, distinct from per-user actions)
+    admin.add_category(name="Settings", icon_type='fa', icon_value='fa-cog')
+    # Pre-declare enterprise sub-categories so their views land in the
+    # right place when register_admin_views runs. Flask-Admin creates
+    # them lazily on first reference otherwise, but referenced as sub-
+    # categories here gives the menu structure a predictable order.
+    admin.add_sub_category(name="Security", parent_name="Settings")
+    admin.add_sub_category(name="Compliance", parent_name="Settings")
+    admin.add_sub_category(name="Notifications", parent_name="Settings")
+    admin.add_sub_category(name="Backups", parent_name="Settings")
+
+    from application.modules.log.models import LogEntry
+    from application.modules.log.views import LogView
+    admin.add_view(LogView(LogEntry, name="Log", category="Settings",
+                           menu_icon_type='fa', menu_icon_value='fa-file-text-o'))
+
+    from application.models.user import User
+    from application.views.user import UserView
+    admin.add_view(UserView(User, category='Settings',
+                            menu_icon_type='fa', menu_icon_value='fa-user'))
+
+    from application.models.config import Config
+    from application.views.config import ConfigModelView
+
+    admin.add_view(ConfigModelView(Config, name="System Config",
+                                   endpoint='config', category="Settings",
+                                   menu_icon_type='fa', menu_icon_value='fa-cogs'))
+    admin.add_link(MenuLink(name='Edit local_config.py', category='Settings',
+                            endpoint='config.local_config_editor',
+                            icon_type='fa', icon_value='fa-file-code-o'))
+
+    from application.views.license import LicenseView
+    admin.add_view(LicenseView(name="License", endpoint="license", category="Settings",
+                               menu_icon_type='fa', menu_icon_value='fa-id-card'))
+
+    from application.models.notification_channel import NotificationChannel
+    from application.views.notification_channel import NotificationChannelView
+    admin.add_view(NotificationChannelView(
+        NotificationChannel, name="Channels",
+        category="Notifications",
+        menu_icon_type='fa', menu_icon_value='fa-paper-plane'))
+
+    from application.models.notification_rule import NotificationRule
+    from application.views.notification_rule import NotificationRuleView
+    admin.add_view(NotificationRuleView(
+        NotificationRule, name="Rules",
+        category="Notifications",
+        menu_icon_type='fa', menu_icon_value='fa-filter'))
+
+    # Give the enterprise package one chance to inject its own admin views
+    # (Secrets Manager, JSON logs UI, …). No-op when no valid license is
+    # installed, so community builds never expose enterprise menu entries.
+    enterprise_hook('register_admin_views', admin)
+    #.
+
+    # Per-user actions as their own Flask-Admin category. Using the native
+    # category + MenuLink mechanism means Flask-Admin's own dropdown JS
+    # and CSS applies — no custom widget, no click-handling quirks.
+    admin.add_category(name='Account', icon_type='fa', icon_value='fa-user-circle')
+    admin.add_link(MenuLink(name='Change Password', category='Account',
+                            url=f"{app.config['BASE_PREFIX']}change-password",
+                            icon_type='fa', icon_value='fa-key'))
+    admin.add_link(MenuLink(name='Set 2FA Code', category='Account',
+                            url=f"{app.config['BASE_PREFIX']}set-2fa",
+                            icon_type='fa', icon_value='fa-shield'))
+    admin.add_link(MenuLink(name='Logout', category='Account',
+                            url=f"{app.config['BASE_PREFIX']}logout",
+                            icon_type='fa', icon_value='fa-sign-out'))
+
+    #.
+    admin.add_link(MenuLink(name='Commit Changes',
+                            url="#activate_changes",
+                            class_name="toggle_activate_modal btn btn-primary"
+                                       " commit-changes-btn",
+                            icon_type='fa', icon_value='fa-check-circle'))
 
 
-from application.views.account import AccountModelView, ChildAccountModelView
-admin.add_category(name="Accounts", icon_type='fa', icon_value='fa-users')
-admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts",
-                                menu_icon_type='fa', menu_icon_value='fa-user-circle'))
-admin.add_view(ChildAccountModelView(Account, name="Config Childs",
-                                     endpoint='account_childs', category="Accounts",
-                                     menu_icon_type='fa', menu_icon_value='fa-users'))
+# Plugin imports register Click CLI groups + sync hooks. Always run, even
+# on CLI mode — that's the whole point of the CLI. Each plugin's
+# ``admin_views`` submodule is loaded later, only when ``_register_web_layer``
+# runs, since admin views are pure HTTP/UI.
+_import_all_plugins()
 
-from application.models.cron import CronGroup, CronStats
-from application.views.cron import CronStatsView, CronGroupView
-admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs",
-                             menu_icon_type='fa', menu_icon_value='fa-calendar'))
-admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs",
-                             menu_icon_type='fa', menu_icon_value='fa-table'))
-
-from application.views.fileadmin import FileAdminView
-if os.path.exists(app.config['FILEADMIN_PATH']):
-    file_admin_view = FileAdminView(app.config['FILEADMIN_PATH'], name="Filemanager",
-                                    menu_icon_type='fa', menu_icon_value='fa-folder-open')
-    admin.add_view(file_admin_view)
-
-#.
-#   .-- Settings (admin-facing tools, distinct from per-user actions)
-admin.add_category(name="Settings", icon_type='fa', icon_value='fa-cog')
-# Pre-declare enterprise sub-categories so their views land in the
-# right place when register_admin_views runs. Flask-Admin creates
-# them lazily on first reference otherwise, but referenced as sub-
-# categories here gives the menu structure a predictable order.
-admin.add_sub_category(name="Security", parent_name="Settings")
-admin.add_sub_category(name="Compliance", parent_name="Settings")
-admin.add_sub_category(name="Notifications", parent_name="Settings")
-admin.add_sub_category(name="Backups", parent_name="Settings")
-
-from application.modules.log.models import LogEntry
-from application.modules.log.views import LogView
-admin.add_view(LogView(LogEntry, name="Log", category="Settings",
-                       menu_icon_type='fa', menu_icon_value='fa-file-text-o'))
-
-from application.models.user import User
-from application.views.user import UserView
-admin.add_view(UserView(User, category='Settings',
-                        menu_icon_type='fa', menu_icon_value='fa-user'))
-
-from application.models.config import Config
-from application.views.config import ConfigModelView
-
-admin.add_view(ConfigModelView(Config, name="System Config",
-                               endpoint='config', category="Settings",
-                               menu_icon_type='fa', menu_icon_value='fa-cogs'))
-admin.add_link(MenuLink(name='Edit local_config.py', category='Settings',
-                        endpoint='config.local_config_editor',
-                        icon_type='fa', icon_value='fa-file-code-o'))
-
-from application.views.license import LicenseView
-admin.add_view(LicenseView(name="License", endpoint="license", category="Settings",
-                           menu_icon_type='fa', menu_icon_value='fa-id-card'))
-
-from application.models.notification_channel import NotificationChannel
-from application.views.notification_channel import NotificationChannelView
-admin.add_view(NotificationChannelView(
-    NotificationChannel, name="Channels",
-    category="Notifications",
-    menu_icon_type='fa', menu_icon_value='fa-paper-plane'))
-
-from application.models.notification_rule import NotificationRule
-from application.views.notification_rule import NotificationRuleView
-admin.add_view(NotificationRuleView(
-    NotificationRule, name="Rules",
-    category="Notifications",
-    menu_icon_type='fa', menu_icon_value='fa-filter'))
-
-# Give the enterprise package one chance to inject its own admin views
-# (Secrets Manager, JSON logs UI, …). No-op when no valid license is
-# installed, so community builds never expose enterprise menu entries.
-enterprise_hook('register_admin_views', admin)
-#.
-
-# Per-user actions as their own Flask-Admin category. Using the native
-# category + MenuLink mechanism means Flask-Admin's own dropdown JS
-# and CSS applies — no custom widget, no click-handling quirks.
-admin.add_category(name='Account', icon_type='fa', icon_value='fa-user-circle')
-admin.add_link(MenuLink(name='Change Password', category='Account',
-                        url=f"{app.config['BASE_PREFIX']}change-password",
-                        icon_type='fa', icon_value='fa-key'))
-admin.add_link(MenuLink(name='Set 2FA Code', category='Account',
-                        url=f"{app.config['BASE_PREFIX']}set-2fa",
-                        icon_type='fa', icon_value='fa-shield'))
-admin.add_link(MenuLink(name='Logout', category='Account',
-                        url=f"{app.config['BASE_PREFIX']}logout",
-                        icon_type='fa', icon_value='fa-sign-out'))
-
-#.
-admin.add_link(MenuLink(name='Commit Changes',
-                        url="#activate_changes",
-                        class_name="toggle_activate_modal btn btn-primary commit-changes-btn",
-                        icon_type='fa', icon_value='fa-check-circle'))
-
-
-
-try:
-    from plugins import *
-except ModuleNotFoundError:
-    # Optional: no custom plugins package in the working directory.
-    pass
-from application.plugins import *
+# ``admin`` is a module attribute so ``application.admin`` always resolves —
+# kept None on CLI invocations where no Flask-Admin is constructed.
+admin = None  # pylint: disable=invalid-name
+if not CLI_MODE:
+    _register_web_layer()
