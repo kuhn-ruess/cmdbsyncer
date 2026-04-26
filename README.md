@@ -240,8 +240,8 @@ stack) and authenticates with HTTP Basic; access is gated by the `mcp`
 requires HTTPS (mirrors the REST API's gate).
 
 ```bash
-# 1. Install the MCP SDK (it's an optional dep)
-pip install -r requirements-extras.txt
+# 1. Install the MCP SDK — ships in the [extras] pip extra
+pip install 'cmdbsyncer[extras]'
 
 # 2. Run the server — usually configured into your MCP client, but you can
 #    also pipe it manually:
