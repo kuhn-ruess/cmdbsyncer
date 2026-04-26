@@ -2,6 +2,7 @@
 Ansible Inventory Modul
 """
 import json
+import os
 import click
 
 from mongoengine.errors import DoesNotExist
@@ -289,8 +290,11 @@ def debug_filter(list_rules, filter_name, show_matched, show_ignored):  # pylint
 
 register_cronjob('Ansible: Build Cache', _inner_update_cache)
 
-# Iniate API
-from syncerapi.v1.rest import API  # pylint: disable=wrong-import-position,wrong-import-order
-
-from .rest_api.ansible import API as ansible  # pylint: disable=wrong-import-position
-API.add_namespace(ansible, path='/ansible')
+# Initiate REST API namespace — only when the web layer is being built.
+# In CLI mode ``application.api.views`` is intentionally not loaded, so
+# pulling ``syncerapi.v1.rest`` (which re-exports ``API`` from there)
+# would drag the whole flask-restx stack back in for nothing.
+if os.environ.get('CMDBSYNCER_CLI') != '1':
+    from syncerapi.v1.rest import API  # pylint: disable=wrong-import-position,wrong-import-order
+    from .rest_api.ansible import API as ansible  # pylint: disable=wrong-import-position
+    API.add_namespace(ansible, path='/ansible')
