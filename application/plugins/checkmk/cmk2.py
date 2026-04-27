@@ -53,6 +53,10 @@ class CMK2(Plugin):
         Check for Version
         """
         super().__init__(account)
+        # Reopen the save_log gate while we do the version probe — if
+        # Checkmk is unreachable, this raises and we do NOT want a
+        # ghost atexit log entry for a never-actually-started run.
+        self._init_complete = False
 
         # Per-instance runtime caches. Keeping these on the instance (not the
         # class) ensures each Checkmk account / repeated run starts with a
@@ -67,6 +71,8 @@ class CMK2(Plugin):
         if self.config and not self.checkmk_version:
             data = self.request('/version')[0]
             self.checkmk_version = data['versions']['checkmk']
+
+        self._init_complete = True
 
 
     def request(self, url, method='GET', data=None,  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals

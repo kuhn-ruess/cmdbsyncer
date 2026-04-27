@@ -71,6 +71,23 @@ class Log():
             },
         )
 
+        # Fan the entry into the notification dispatcher directly.
+        # We do *not* go through Python logging because the syncer's
+        # 'debug' logger level is configurable and routinely set high
+        # enough to drop info/error records before any handler sees
+        # them — the entry would be in the Log view but never trigger
+        # a notification.
+        try:
+            from application.helpers.notification_dispatch import (  # pylint: disable=import-outside-toplevel
+                dispatch_log_entry,
+            )
+            dispatch_log_entry(
+                message['message'], message['source'],
+                has_error, details_struct, affected_hosts,
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
     def log(self, message, affected_hosts=None, source="SYSTEM", details=None):
         """ LOG Messages"""
         self._log_function({'message' : message,

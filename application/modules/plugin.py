@@ -179,8 +179,28 @@ class Plugin():
         if not self.source:
             self.source = self.__class__.__qualname__.replace('.','')
 
+        # Gate for save_log. Set to True once the *deepest* subclass
+        # __init__ has finished its own work; flipped back to False at
+        # the start of any subclass __init__ that does additional work
+        # after super().__init__() (e.g. CMK2's version probe). Without
+        # this, a subclass init that raises mid-flight would still leave
+        # a ghost atexit save_log entry behind.
+        self._init_complete = True
 
         atexit.register(self.save_log)
+
+    def record_exception(self, error_obj):
+        """
+        Fold a CLI-level exception into ``log_details`` so the single
+        atexit ``save_log()`` entry carries it.
+
+        CLI wrappers used to catch the exception and emit their own
+        ``log.log("…FAILED…", details=[('error', …)])`` call alongside
+        the plugin's auto-saved log entry — that produced two entries
+        (and two notifications) for the same event. They now call this
+        instead, so the event is reported in exactly one place.
+        """
+        self.log_details.append(('error', f'{error_obj}'))
 
     def save_log(self):
         """
@@ -189,7 +209,19 @@ class Plugin():
         This method is automatically called at exit via atexit.register().
         It calculates the total execution duration and saves all collected
         log details including start time, end time, and duration.
+
+        If ``record_exception`` was called earlier in the run, the entry
+        carries the error detail and `Log._log_function` will flag it
+        as an error so notification rules with ``only_errors=True`` fire.
+
+        Skipped when ``self._init_complete`` is False — that means a
+        subclass ``__init__`` (e.g. ``CMK2.__init__`` doing a version
+        probe) raised after this atexit handler had already been
+        registered, so the instance is half-built and would otherwise
+        leave a ghost log entry behind.
         """
+        if not getattr(self, '_init_complete', False):
+            return
         duration = time.time() - self.start_time
         self.log_details.append(('duration', duration))
         self.log_details.append(('ended', datetime.now()))

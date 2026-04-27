@@ -127,6 +127,7 @@ def show_labels():
 #.
 #   .-- Command: Export Hosts
 def _inner_export_hosts(account, limit=False, debug=False, dry_run=False, save_requests=False):
+    syncer = None
     try:
         from .syncer import SyncCMK2
         rules = _load_rules()
@@ -146,9 +147,16 @@ def _inner_export_hosts(account, limit=False, debug=False, dry_run=False, save_r
     except Exception as error_obj:
         if debug:
             raise
-        log.log(f"Export to Checkmk Account: {account} maybe not found FAILED",
-        source="checkmk_host_export", details=[('error', str(error_obj))])
         print(f'{ColorCodes.FAIL}CMK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            # Construction itself failed (e.g. unknown account) — there
+            # is no plugin instance whose save_log will fire, so emit
+            # one log entry directly.
+            log.log(f"Export to Checkmk Account: {account} not started",
+                    source="cmk_host_sync",
+                    details=[('error', str(error_obj))])
 
 
 @cli_cmk.command('export_hosts')

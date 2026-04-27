@@ -58,7 +58,7 @@ def export_tags(account, dry_run=False, save_requests=False, debug=False):
     """
     Export Tags to Checkmk
     """
-    details = []
+    syncer = None
     try:
         rules = _load_rules()
         syncer = CheckmkTagSync(account)
@@ -70,14 +70,15 @@ def export_tags(account, dry_run=False, save_requests=False, debug=False):
         syncer.name = 'Checkmk: Export Tags'
         syncer.source = "cmk_tag_sync"
         syncer.export_tags()
-    except Exception as error_obj:
-        print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'Error: {error_obj}'))
-        log.log(f"Exception Syncing Tags to Account: {account}",
-                source="checkmk_tag_export",
-                details=details)
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export Tags to Account {account} not started",
+                    source="cmk_tag_sync", details=[('error', str(error_obj))])
 
 #.
 #   .-- Export BI Rules
@@ -85,7 +86,7 @@ def export_bi_rules(account, debug):
     """
     Export BI Rules to Checkmk
     """
-    details = []
+    syncer = None
     try:
         rules = _load_rules()
         syncer = BI(account)
@@ -95,7 +96,7 @@ def export_bi_rules(account, debug):
 
         class ExportBiRule(DefaultRule):
             """
-            Name overwrite 
+            Name overwrite
             """
 
         actions = ExportBiRule()
@@ -105,25 +106,31 @@ def export_bi_rules(account, debug):
         syncer.source = "cmk_bi_sync"
         syncer.export_bi_rules()
     except CmkException as error_obj:
-        details.append(('error', f'CMK Error: {error_obj}'))
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        log.log(f"Exception Export BI Rules to Checkmk Account: {account}",
-                source="cmk_bi_sync", details=details)
         if debug:
             raise
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export BI Rules to Account {account} not started",
+                    source="cmk_bi_sync", details=[('error', str(error_obj))])
 #.
 #   .-- Export BI Aggregations
 def export_bi_aggregations(account, debug):
     """
     Export BI Aggregations to Checkmk
     """
-    details = []
+    syncer = None
     try:
         rules = _load_rules()
         syncer = BI(account)
         syncer.rewrite = rules['rewrite']
         syncer.filter = rules['filter']
         syncer.debug = debug
+        # Set name + source BEFORE the work runs so the atexit save_log
+        # entry is identifiable even if the work raises.
+        syncer.name = 'Checkmk: Export BI Aggregations'
+        syncer.source = "cmk_bi_aggrigation_sync"
         class ExportBiAggr(DefaultRule):
             """
             Name overwrite
@@ -132,15 +139,16 @@ def export_bi_aggregations(account, debug):
         actions.rules = CheckmkBiAggregation.objects(enabled=True)
         syncer.actions = actions
         syncer.export_bi_aggregations()
-        syncer.name = 'Checkmk: Export BI Aggregations'
-        syncer.source = "cmk_bi_aggrigation_sync"
     except CmkException as error_obj:
-        details.append(('error', f'CMK Error: {error_obj}'))
-        print(f'{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        log.log(f"Export BI Aggregations to Checkmk Account: {account}",
-                source="Checkmk", details=details)
         if debug:
             raise
+        print(f'{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export BI Aggregations to Account {account} not started",
+                    source="cmk_bi_aggrigation_sync",
+                    details=[('error', str(error_obj))])
 
 #.
 #   .-- Inventorize Hosts
@@ -150,6 +158,7 @@ def inventorize_hosts(account, debug=False):
     """
     Inventorize information from Checkmk Installation
     """
+    inven = None
     try:
         inven = InventorizeHosts(account)
         inven.debug = debug
@@ -157,11 +166,13 @@ def inventorize_hosts(account, debug=False):
     except CmkException as error_obj:
         if debug:
             raise
-        details = []
-        details.append(('error', f'Error: {error_obj}'))
         print(f'{ColorCodes.FAIL} Error: {error_obj} {ColorCodes.ENDC}')
-        log.log(f"Failure Inventorize Hosts Account: {account}",
-                source="Checkmk", details=details)
+        if inven is not None:
+            inven.record_exception(error_obj)
+        else:
+            log.log(f"Inventorize Hosts Account {account} not started",
+                    source="checkmk_inventorize",
+                    details=[('error', str(error_obj))])
 
 #.
 #   . -- Show missing hosts
@@ -187,7 +198,7 @@ def bake_and_sign_agents(account):
     """
     Bake and Sign Agents in Checkmk
     """
-    from application.helpers.get_account import get_account_by_name
+    from application.helpers.get_account import get_account_by_name  # pylint: disable=import-outside-toplevel
     account_config = get_account_by_name(account)
     if account_config['typ'] != 'cmkv2':
         print(f"{ColorCodes.FAIL} Not a Checkmk 2.x Account {ColorCodes.ENDC}")
@@ -259,7 +270,7 @@ def export_groups(account, test_run=False, debug=False):
     """
     Manage Groups in Checkmk
     """
-    details = []
+    syncer = None
     try:
         rules = _load_rules()
         syncer = CheckmkGroupSync(account)
@@ -273,16 +284,19 @@ def export_groups(account, test_run=False, debug=False):
         if debug:
             raise
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporting Groups to Checkmk Account: {account}",
-                source="Checkmk", details=details)
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export Groups to Account {account} not started",
+                    source="cmk_group_sync",
+                    details=[('error', str(error_obj))])
 #.
 #   .-- Export Rules
 def export_rules(account):
     """
     Create Rules in Checkmk
     """
-    details = []
+    syncer = None
     try:
         rules = _load_rules()
         syncer = CheckmkRuleSync(account)
@@ -297,16 +311,19 @@ def export_rules(account):
         syncer.export_cmk_rules()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error exporting Rules to Checkmk Account: {account}",
-                source="cmk_rule_sync", details=details)
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export Rules to Account {account} not started",
+                    source="cmk_rule_sync",
+                    details=[('error', str(error_obj))])
 #.
 #   .-- Export Downtimes
 def export_downtimes(account, debug=False, debug_rules=False):
     """
     Create Rules in Checkmk
     """
-    details = []
+    syncer = None
     try:
         rules = _load_rules()
         class ExportDowntimes(DefaultRule):
@@ -336,16 +353,19 @@ def export_downtimes(account, debug=False, debug_rules=False):
         if debug:
             raise
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Export Downtimes to Checkmk Account: {account}",
-                source="Checkmk", details=details)
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export Downtimes to Account {account} not started",
+                    source="cmk_downtime_sync",
+                    details=[('error', str(error_obj))])
 #.
 #   . DCD Rules
 def export_dcd_rules(account, debug=False, debug_rules=False):
     """
     Export DCD Rules to Checkmk
     """
-    details = []
+    syncer = None
     try:
         rules = _load_rules()
         class ExportDCD(DefaultRule):
@@ -371,59 +391,71 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
             syncer.filter = rules['filter']
             syncer.debug_rules(debug_rules, "Checkmk")
 
-
     except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporing DCD Rules to Checkmk Account: {account}",
-                source="cmk_dcd_rule_sync", details=details)
         if debug:
             raise
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export DCD Rules to Account {account} not started",
+                    source="cmk_dcd_rule_sync",
+                    details=[('error', str(error_obj))])
 #.
 #   . Passwords
 def export_passwords(account):
     """
     Export Passwords to Checkmk
     """
-    details = []
+    syncer = None
     try:
         syncer = CheckmkPasswordSync(account)
         syncer.export_passwords()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Syncing Sites from Checkmk: {account}",
-            source="cmk_password_sync", details=details)
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export Passwords to Account {account} not started",
+                    source="cmk_password_sync",
+                    details=[('error', str(error_obj))])
 #.
 #   . Import Sites
 def import_sites(account):
-    details = []
+    """Import Checkmk sites of ``account`` into the local Object table."""
+    syncer = None
     try:
         syncer = CheckmkSites(account)
         syncer.import_sites()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error Exporting Passwords to Checkmk Account: {account}",
-            source="cmk_site_sync", details=details)
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Import Sites from Account {account} not started",
+                    source="cmk_site_sync",
+                    details=[('error', str(error_obj))])
 #   . Export Users
 def export_users(account):
     """
     Export configured Users to Checkmk
     """
-    details = []
+    syncer = None
     try:
         syncer = CheckmkUserSync(account)
         syncer.export_users()
     except CmkException as error_obj:
         print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        details.append(('error', f'CMK Error: {error_obj}'))
-        log.log(f"Error exporting Users to Checkmk Account: {account}",
-                source="cmk_user_sync", details=details)
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export Users to Account {account} not started",
+                    source="cmk_user_sync",
+                    details=[('error', str(error_obj))])
 #.
 #   . Sync Folder Pools
-def sync_folderpools(account=False, debug=False):
-
+def sync_folderpools(_account=False, _debug=False):
+    """Refresh ``folder_seats_taken`` on every CheckmkFolderPool from current host counts."""
     pool_usage = {}
     for host in Host.objects():
         if host.folder:
@@ -438,6 +470,5 @@ def sync_folderpools(account=False, debug=False):
             folder.folder_seats_taken = usage
             folder.save()
         else:
-            print(f" - Is already up to date")
+            print(" - Is already up to date")
 #.
-

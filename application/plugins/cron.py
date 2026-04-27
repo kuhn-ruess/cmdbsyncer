@@ -7,7 +7,6 @@ import click
 from mongoengine.errors import DoesNotExist
 
 from application import app, cron_register, log
-from application.helpers.notify import notify
 from application.modules.debug import ColorCodes as CC
 from application.models.cron import CronStats, CronGroup
 
@@ -237,19 +236,17 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
             stats.pid = None
             stats.save()
 
-            # Notify dispatcher. Separate event types so rules can route
-            # failures to PagerDuty while recoveries go to a quieter
-            # channel (or vice versa).
+            # Surface result to the syncer Log so notification rules
+            # with source_type=log can pick it up.
             if group_failure:
-                notify('cron.group.failed', severity='error',
-                       title=f"Cron group '{job.name}' failed",
-                       message=stats.last_message or 'See Audit / Log view',
-                       source='cron', dedup_key=f'cron:{job.name}',
-                       details={'group': job.name,
-                                'last_message': stats.last_message})
+                log.log(
+                    f"Cron group '{job.name}' failed: "
+                    f"{stats.last_message or 'See Audit / Log view'}",
+                    source='cron',
+                    details=[('error', stats.last_message or '')],
+                )
             elif previously_failing:
-                notify('cron.group.recovered', severity='info',
-                       title=f"Cron group '{job.name}' recovered",
-                       message='Back to green after previous failure',
-                       source='cron', dedup_key=f'cron:{job.name}',
-                       details={'group': job.name})
+                log.log(
+                    f"Cron group '{job.name}' recovered",
+                    source='cron',
+                )

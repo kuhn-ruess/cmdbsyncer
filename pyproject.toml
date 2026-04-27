@@ -84,6 +84,14 @@ application = [
 [tool.pylint.main]
 init-hook = 'import sys; sys.path.extend([".", "./application"])'
 
+[tool.pylint."messages control"]
+# `application.models.*` modules import `db` from the parent `application`
+# package, which pylint sees as a cycle. It resolves cleanly at import
+# time (every model loads after `db` is set on the parent module) and
+# per-file `# pylint: disable=cyclic-import` does not suppress R0401
+# because the check runs across the whole import graph.
+disable = ["cyclic-import"]
+
 [tool.pylint.typecheck]
 # mongoengine's Document.objects is a QuerySetManager descriptor that pylint
 # cannot resolve statically. Tell pylint to trust the attribute.

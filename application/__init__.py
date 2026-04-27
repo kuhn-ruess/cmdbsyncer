@@ -177,6 +177,11 @@ from application.modules.log.log import Log
 
 log = Log()
 
+# Mail is initialized in every mode — the notification dispatcher needs
+# it to deliver email channels from CLI commands too. Constructing the
+# Flask-Mail instance does not open an SMTP connection.
+mail = Mail(app)
+
 if not CLI_MODE:
     from application.helpers.sates import get_changes  # noqa: E402
 
@@ -187,7 +192,6 @@ if not CLI_MODE:
         """
         app.config['CHANGES'] = get_changes()
 
-    mail = Mail(app)
     bootstrap = Bootstrap(app)
 
     login_manager = LoginManager()
