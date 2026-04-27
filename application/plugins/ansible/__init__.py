@@ -283,7 +283,7 @@ register_cronjob('Ansible: Build Cache', _inner_update_cache)
 # .--- Inventory provider registration
 # Both the CLI host inventory and the Checkmk-Sites inventory go through
 # the cross-module registry so the unified
-# `cmdbsyncer ansible inventory <provider>` CLI / `/api/v1/inventory/ansible`
+# `cmdbsyncer ansible inventory <provider>` CLI / `/api/v1/ansible/inventory`
 # HTTP endpoint can serve them — and so other modules can register their
 # own providers later without touching the Ansible plugin.
 def _build_ansible_provider(project=None):
@@ -347,7 +347,7 @@ register_inventory_provider_resolver(_AnsibleProjectResolver())
 # CLI front-end for the cross-module inventory registry, rendered as
 # Ansible-format JSON. Lives under `cmdbsyncer ansible …` alongside
 # the other Ansible-specific subcommands; the same render function
-# backs `/api/v1/inventory/ansible/<provider>` so HTTP and CLI never
+# backs `/api/v1/ansible/inventory/<provider>` so HTTP and CLI never
 # drift.
 @cli_ansible.command(name='inventory')
 @click.argument('provider')

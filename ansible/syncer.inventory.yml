@@ -7,9 +7,9 @@
 #     per-playbook based on the manifest's `inventory:` field.
 #   - Or the defaults below.
 #
-# In `local` mode the plugin shells `cmdbsyncer inventory ansible
+# In `local` mode the plugin shells `cmdbsyncer ansible inventory
 # <provider> --list` against the local Syncer binary. In `http` mode
-# it talks to /api/v1/inventory/ansible/<provider> on a remote Syncer.
+# it talks to /api/v1/ansible/inventory/<provider> on a remote Syncer.
 plugin: cmdbsyncer_inventory
 mode: local
 provider: ansible

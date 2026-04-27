@@ -88,8 +88,8 @@ def is_reserved_provider_name(name: str) -> bool:
 def render_ansible_inventory(provider_name: str, *, host: str | None = None):
     """
     Render `provider_name` in the Ansible JSON format used by both the
-    CLI (`cmdbsyncer inventory ansible <provider>`) and the HTTP
-    endpoint (`/api/v1/inventory/ansible/<provider>`).
+    CLI (`cmdbsyncer ansible inventory <provider>`) and the HTTP
+    endpoint (`/api/v1/ansible/inventory/<provider>`).
 
     Returns:
         dict   — full inventory (`host=None`) or single host's vars.

@@ -1,14 +1,15 @@
 """
-Inventory provider HTTP endpoints.
+Ansible namespace — inventory provider HTTP endpoints.
 
 The cross-module provider registry (`application.modules.inventory`)
-holds named providers. This namespace exposes them in the formats
-external systems expect — currently the standard Ansible JSON shape
-under `/api/v1/inventory/ansible/<provider>`.
+holds named providers. This namespace exposes them in the Ansible JSON
+shape under `/api/v1/ansible/inventory/<provider>` — same convention
+as the CLI (`cmdbsyncer ansible inventory <provider>`), so URL and
+command path read in the same order.
 
-Both the CLI (`cmdbsyncer inventory ansible <provider>`) and this HTTP
-endpoint share `render_ansible_inventory`, so the data and the format
-stay in lockstep regardless of how a consumer reaches them.
+Both the CLI and this HTTP endpoint share `render_ansible_inventory`,
+so data and format stay in lockstep regardless of how a consumer
+reaches them.
 """
 from flask import request
 from flask_restx import Namespace, Resource
@@ -19,10 +20,10 @@ from application.modules.inventory import (
     render_ansible_inventory,
 )
 
-API = Namespace('inventory', description='Cross-module inventory provider endpoints')
+API = Namespace('ansible', description='Ansible-side endpoints (inventory provider)')
 
 
-@API.route('/ansible')
+@API.route('/inventory')
 class AnsibleProviderIndex(Resource):
     """List the providers the Ansible-format adapter can serve."""
 
@@ -32,7 +33,7 @@ class AnsibleProviderIndex(Resource):
         return {'providers': list_inventory_providers()}
 
 
-@API.route('/ansible/<provider>')
+@API.route('/inventory/<provider>')
 class AnsibleProviderInventory(Resource):
     """Full inventory for `provider`, in Ansible JSON shape.
 
