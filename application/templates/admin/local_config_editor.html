@@ -19,22 +19,33 @@
       </p>
     </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-        <div class="alert alert-{{ 'danger' if category == 'error' else category }}">
-          {{ message }}
-        </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+    {# Flash messages are rendered by Flask-Admin's master.html — do
+       not duplicate them here, otherwise every notice shows twice. #}
 
+    {% if not grouped_rows %}
     <div class="app-card">
       <h3 style="margin-top:0;">Current entries</h3>
-      {% if not rows %}
-        <p><em>No editable entries in local_config.py yet.</em></p>
-      {% else %}
-      <table class="table table-striped" style="vertical-align: middle;">
+      <p><em>No editable entries in local_config.py yet.</em></p>
+    </div>
+    {% else %}
+    {% for group in grouped_rows %}
+    <div class="app-card" style="{% if not loop.first %}margin-top: 1rem;{% endif %}">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 0.5rem;">
+        <h3 style="margin:0;">{{ group.name }}</h3>
+        {% if group.ident != '_other' %}
+        <form method="POST" action="{{ url_for('.local_config_editor') }}" style="margin:0;"
+              onsubmit="return confirm('Remove every {{ group.name }} key from local_config.py? Protected keys are kept; the BaseConfig defaults apply on next restart for the rest.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="_action" value="delete_group">
+          <input type="hidden" name="group" value="{{ group.ident }}">
+          <button type="submit" class="btn btn-sm btn-outline-danger"
+                  {% if not writable %}disabled{% endif %}>
+            Delete group
+          </button>
+        </form>
+        {% endif %}
+      </div>
+      <table class="table table-striped" style="vertical-align: middle; margin-bottom: 0;">
         <thead>
           <tr>
             <th style="width: 28%;">Key</th>
@@ -44,12 +55,19 @@
           </tr>
         </thead>
         <tbody>
-          {% for row in rows %}
+          {% for row in group.rows %}
           <tr>
             <td>
               <code>{{ row.key }}</code>
               {% if row.restart_only %}
               <span class="badge badge-warning" style="background:#f39c12;color:#fff;margin-left:6px;">restart</span>
+              {% endif %}
+              {% if row.is_protected %}
+              <span class="badge"
+                    style="background:#c0392b;color:#fff;margin-left:6px;"
+                    title="Current value is hidden. Leave the input blank to keep it; type a new value to overwrite.">
+                protected
+              </span>
               {% endif %}
             </td>
             <td>
@@ -69,7 +87,11 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="_action" value="update">
                 <input type="hidden" name="key" value="{{ row.key }}">
-                {% if row.type == 'bool' %}
+                {% if row.is_protected %}
+                <input type="password" name="value" class="form-control form-control-sm" value=""
+                       placeholder="(value hidden — leave blank to keep, type to overwrite)"
+                       autocomplete="new-password">
+                {% elif row.type == 'bool' %}
                 <select name="value" class="form-control form-control-sm">
                   <option value="true" {% if row.value %}selected{% endif %}>true</option>
                   <option value="false" {% if not row.value %}selected{% endif %}>false</option>
@@ -83,6 +105,9 @@
               </form>
             </td>
             <td style="text-align:right;">
+              {% if row.is_protected %}
+              <span class="text-muted" style="font-size: 12px;">no delete</span>
+              {% else %}
               <form method="POST" action="{{ url_for('.local_config_editor') }}" style="display:inline;"
                     onsubmit="return confirm('Remove {{ row.key }} from local_config.py? The BaseConfig default will apply on next restart.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -90,13 +115,128 @@
                 <input type="hidden" name="key" value="{{ row.key }}">
                 <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
               </form>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
-      {% endif %}
     </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if presets %}
+    <div class="app-card" style="margin-top: 1.5rem;">
+      <h3 style="margin-top:0;">Quick configurations</h3>
+      <p style="margin: 0 0 1rem; color: #666;">
+        One-click presets that bundle a set of related keys with sensible
+        defaults. Tweak the values inline before saving — every preset
+        runs through the same validation as the manual editor above.
+      </p>
+
+      <div class="accordion" id="presetAccordion">
+        {% for preset in presets %}
+        <div class="card" style="margin-bottom: 0.75rem;">
+          <div class="card-header" id="preset-head-{{ preset.ident }}"
+               style="padding: 0.6rem 1rem;">
+            <button type="button"
+                    class="btn btn-link"
+                    data-toggle="collapse"
+                    data-target="#preset-body-{{ preset.ident }}"
+                    aria-expanded="false"
+                    aria-controls="preset-body-{{ preset.ident }}"
+                    style="text-decoration:none; padding:0; color:inherit;">
+              <strong>{{ preset.name }}</strong>
+              {% if preset.overlap %}
+              <span class="badge"
+                    style="background:#f39c12;color:#fff;margin-left:8px;font-size:11px;"
+                    title="{{ preset.overlap }} of {{ preset.total }} key(s) already set in local_config.py — applying overwrites them.">
+                {{ preset.overlap }} of {{ preset.total }} already set
+              </span>
+              {% endif %}
+            </button>
+            <div style="font-size: 13px; color: #888; margin-top: 4px;">
+              {{ preset.description }}
+            </div>
+          </div>
+
+          <div id="preset-body-{{ preset.ident }}"
+               class="collapse"
+               aria-labelledby="preset-head-{{ preset.ident }}"
+               data-parent="#presetAccordion">
+            <div class="card-body">
+              <form method="POST" action="{{ url_for('.local_config_editor') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="_action" value="apply_preset">
+                <input type="hidden" name="preset" value="{{ preset.ident }}">
+
+                <table class="table table-sm" style="margin-bottom: 0.75rem;">
+                  <thead>
+                    <tr>
+                      <th style="width: 30%;">Key</th>
+                      <th style="width: 12%;">Type</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for entry in preset['keys'] %}
+                    <tr>
+                      <td>
+                        <code>{{ entry.key }}</code>
+                        {% if entry.exists %}
+                        <span class="badge"
+                              style="background:#f39c12;color:#fff;font-size:10px;margin-left:4px;"
+                              title="Already set in local_config.py — will be overwritten.">
+                          set
+                        </span>
+                        {% endif %}
+                      </td>
+                      <td><small>{{ entry.type }}</small></td>
+                      <td>
+                        {% if entry.type == 'bool' %}
+                        <select name="value__{{ entry.key }}"
+                                class="form-control form-control-sm">
+                          <option value="true" {% if entry.default %}selected{% endif %}>true</option>
+                          <option value="false" {% if not entry.default %}selected{% endif %}>false</option>
+                        </select>
+                        {% else %}
+                        <input type="text"
+                               name="value__{{ entry.key }}"
+                               value="{{ entry.default }}"
+                               class="form-control form-control-sm">
+                        {% endif %}
+                        {% if entry.hint %}
+                        <small style="color: #888; display:block; margin-top: 2px;">
+                          {{ entry.hint }}
+                        </small>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+
+                {% if preset.note %}
+                <div class="alert alert-info" style="margin-bottom: 0.75rem; font-size: 13px;">
+                  {{ preset.note }}
+                </div>
+                {% endif %}
+
+                <button type="submit" class="btn btn-primary btn-sm"
+                        {% if not writable %}disabled{% endif %}>
+                  Apply preset
+                </button>
+                <small style="margin-left: 8px; color: #888;">
+                  Empty <code>str</code> values are skipped — only filled fields are written.
+                </small>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
     <div class="app-card" style="margin-top: 1.5rem;">
       <h3 style="margin-top:0;">Add new entry</h3>
@@ -134,24 +274,6 @@
         </p>
       </form>
     </div>
-
-    {% if protected_rows %}
-    <div class="app-card" style="margin-top: 1.5rem; border-left: 4px solid #c0392b;">
-      <h3 style="margin-top:0;">Protected keys (read-only)</h3>
-      <p>These keys are present in <code>local_config.py</code> but cannot be edited
-         from this view. Editing them online would invalidate existing sessions or
-         silently weaken a security default.</p>
-      <ul>
-        {% for key in protected_rows %}
-        <li><code>{{ key }}</code></li>
-        {% endfor %}
-      </ul>
-      <p style="margin:0; color:#888; font-size: 13px;">
-        To change any of these, edit <code>local_config.py</code> on disk and
-        restart the service.
-      </p>
-    </div>
-    {% endif %}
 
   </div>
 </div>

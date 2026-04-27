@@ -87,6 +87,24 @@ class DefaultModelView(ModelView):
         EndpointLinkRowAction("fa fa-clone", ".clone_view"),
     ]
 
+    def _run_view(self, fn, *args, **kwargs):
+        """
+        Skip Flask-Admin 2.0.2's silent retry-with-cls fallback.
+
+        ``BaseView._run_view`` wraps the view call in
+        ``try: fn(self, ...) except TypeError: fn(cls=self, ...)`` for
+        backward compatibility with very old Flask-Admin views that took
+        ``cls`` as their first arg. None of our views use that
+        signature, so the fallback is dead code — and it actively hurts
+        us: any genuine ``TypeError`` raised inside a view body gets
+        swallowed and re-thrown as a misleading ``unexpected keyword
+        argument 'cls'``, masking the real bug.
+
+        Calling ``fn(self, ...)`` once and letting exceptions propagate
+        gives us the actual stack trace.
+        """
+        return fn(self, *args, **kwargs)
+
     def create_model(self, form):
         """ 
         Create model with NotUniqueError handling
