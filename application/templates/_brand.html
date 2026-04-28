@@ -1,0 +1,19 @@
+{#
+  Shared navbar brand: logo + name + optional HEADER_HINT.
+
+  Used by ``base.html`` (public templates) and ``admin/master.html``
+  (Flask-Admin pages). Set ``brand_name`` in the calling template
+  before including, e.g.::
+
+      {% set brand_name = admin_view.admin.name %}
+      {% include '_brand.html' %}
+#}
+<a class="navbar-brand d-flex align-items-center text-decoration-none" href="{{ url_for('admin.index') }}">
+    <img src="{{ config['BASE_PREFIX'] }}static/logo_white.png" alt="Logo" class="navbar-logo me-2">
+    <div class="brand-text">
+        <span class="brand-name">{{ brand_name }}</span>
+        {% if config['HEADER_HINT'] %}
+        <small class="brand-hint">{{ config['HEADER_HINT'] }}</small>
+        {% endif %}
+    </div>
+</a>

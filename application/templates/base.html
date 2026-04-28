@@ -3,16 +3,9 @@
 {% block title %}cmdbsyncer {{config['HEADER_HINT'] }}{% endblock %}
 
 {% block navbar %}
-<nav id="top-nav" class="navbar navbar-expand-lg sticky-top navbar-light" style="background-color: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }}">
-    <a class="navbar-brand d-flex align-items-center text-decoration-none" href="{{ url_for('admin.index') }}">
-        <img src="{{ config['BASE_PREFIX'] }}static/logo_white.png" alt="Logo" class="navbar-logo me-2">
-        <div class="brand-text">
-            <span class="brand-name">cmdbsyncer</span>
-            {% if config['HEADER_HINT'] %}
-            <small class="brand-hint">{{config['HEADER_HINT']}}</small>
-            {% endif %}
-        </div>
-    </a>
+<nav id="top-nav" class="navbar navbar-expand-lg sticky-top navbar-light">
+    {% set brand_name = 'cmdbsyncer' %}
+    {% include '_brand.html' %}
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
   </button>
@@ -28,93 +21,22 @@
 {% block styles %}
    {{super()}}
 <style>
-        body {
-            padding-top: 0px;
-        }
-        .container {
-            width: 100% !important;
-            max-width: 100%;
-        }
-
-        .icon-minus-sign {
-            color: red;
-        }
-        .icon-ok-circle {
-            color: green;
-        }
-
-       .navbar {
-           background-color: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }} !important;
-           width: 100vw;
-           position: relative;
-           left: 50%;
-           right: 50%;
-           margin-left: -50vw;
-           margin-right: -50vw;
-           padding-left: 0;
-           padding-right: 0;
-       }
-       
-       #top-nav {
-           border-radius: 0;
-       }
-       
-       #top-nav .container {
-           max-width: 100% !important;
-           padding-left: 15px;
-           padding-right: 15px;
-       }
-
-       .navbar .nav-link {
-           color: {{ config['STYLE_NAV_LINK_COLOR'] }} !important;
-           padding: 0.35rem 0.7rem !important;
-           margin: 0 0.175rem;
-       }
-
-       /* Navbar Brand Styling */
-       .navbar-brand {
-           color: white !important;
-           font-weight: 600;
-           transition: all 0.3s ease;
-           padding: 0.25rem 0.75rem;
-           display: flex;
-           align-items: center;
-           height: auto;
-           min-height: 48px;
-       }
-       
-       .navbar-logo {
-           width: 38px;
-           height: 38px;
-           object-fit: contain;
-           filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-           transition: all 0.3s ease;
-           margin-right: 12px;
-           flex-shrink: 0;
-       }
-       
-       .brand-text {
-           display: flex;
-           flex-direction: column;
-           line-height: 1.1;
-       }
-       
-       .brand-name {
-           font-size: 1.2rem;
-           font-weight: 700;
-           letter-spacing: -0.5px;
-           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-       }
-       
-       .brand-hint {
-           font-size: 0.65rem;
-           opacity: 0.85;
-           font-weight: 400;
-           margin-top: -2px;
-           text-transform: uppercase;
-           letter-spacing: 0.5px;
-       }
-
+  /* Inject the runtime-configurable theme colors as CSS custom
+     properties so the static cmdbsyncer.css file (shared with
+     ``admin/master.html``) can pick them up. */
+  :root {
+      --nav-bg: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }};
+      --nav-link: {{ config['STYLE_NAV_LINK_COLOR'] }};
+  }
+</style>
+<link rel="stylesheet" href="{{ config['BASE_PREFIX'] }}static/css/cmdbsyncer.css">
+<style>
+       /* Public-template-specific styles: login form layout and the
+          card / hero pattern used by the start page, license info,
+          changelog archive, 2FA setup and bulk-action forms.
+          The duplicated brand/navbar/utility CSS now lives in
+          ``static/css/cmdbsyncer.css`` so both base.html and
+          admin/master.html can share it. */
        .login-form {
            max-width: 30%;
            text-align: center;
@@ -129,11 +51,7 @@
        .form {
            padding-top: 3rem;
        }
-       
-       /* Shared card / hero pattern used by modernized views
-          (start page, license info, changelog archive, 2FA setup,
-          bulk-action forms, etc.). Consistent look without every
-          template defining its own CSS. */
+
        .app-hero {
            /* Minimalist hero: no filled block; just the title
               section with a thin black hairline below — the Syncer
@@ -197,27 +115,6 @@
            margin-bottom: 0.75rem;
        }
        .app-backlink:hover { color: #2c3e50; text-decoration: underline; }
-
-       /* Responsive Design */
-       @media (max-width: 576px) {
-           .navbar-logo {
-               width: 32px;
-               height: 32px;
-           }
-           
-           .brand-name {
-               font-size: 1rem;
-           }
-           
-           .brand-hint {
-               font-size: 0.55rem;
-           }
-           
-           .navbar-brand {
-               padding: 0.2rem 0.5rem;
-               min-height: 40px;
-           }
-       }
 </style>
 {% endblock %}
 
