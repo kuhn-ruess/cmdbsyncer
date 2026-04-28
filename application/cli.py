@@ -31,7 +31,7 @@ def main():
 
         if len(sys.argv) == 1:
             print(f"CMDB Syncer Version: {DISPLAY_VERSION}")
-            return
+            sys.argv.append("--help")
         # AppGroup commands re-resolve the app via ScriptInfo.load_app(), which
         # otherwise scans for FLASK_APP / app.py / wsgi.py. PyPI installs have
         # none of those in the cwd, so hand Click a ScriptInfo that returns the

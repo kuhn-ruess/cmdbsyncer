@@ -6,6 +6,7 @@
     "account_presets" : {
         "address": "https://servername/path"
     },
+    "enabled": true,
     "account_custom_field_presets": {
         "api_token": "",
         "object_types": "C__OBJTYPE__SERVER,C__OBJTYPE__VIRTUAL_SERVER",

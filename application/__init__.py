@@ -184,7 +184,7 @@ def page_redirect():
     """
     return redirect(url_for("admin.index"))
 
-def _register_all_plugin_admin_views():
+def _register_all_plugin_admin_views():  # pylint: disable=too-many-branches
     from application.helpers.plugins import is_plugin_disabled
     import application.plugins as plugins_package
     try:
@@ -217,6 +217,21 @@ def _register_all_plugin_admin_views():
         plugin_modules.append(module_name)
 
     for module_name in plugin_modules:
+        # Import the plugin package itself first so its top-level
+        # ``__init__.py`` runs — that's where Click command groups,
+        # cron registrations, and other side-effect decorators live.
+        # Without this only plugins that ship an ``admin_views.py`` got
+        # imported (via the cascading parent-package import of
+        # ``<pkg>.admin_views``) and CLI-only plugins (ldap, csv,
+        # json, …) silently disappeared from ``./cmdbsyncer --help``.
+        try:
+            importlib.import_module(module_name)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("Failed to import plugin %s", module_name)
+            if '--debug' in sys.argv:
+                raise
+            continue
+
         admin_module_name = f"{module_name}.admin_views"
         try:
             admin_module = importlib.import_module(admin_module_name)
