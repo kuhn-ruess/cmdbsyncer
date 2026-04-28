@@ -331,8 +331,10 @@ class CheckmkRuleSync(CMK2):
 
 
         self.optimize_rules()
+        self._sort_rulsets_by_intent()
         self.clean_rules()
         self.create_rules()
+        self.sort_rules()
 
 
     def calculate_rules_of_host(self, host_actions, attributes):
@@ -366,6 +368,132 @@ class CheckmkRuleSync(CMK2):
                         self.rulsets_by_type[rule_type].append(updated_rule)
 
 
+
+    def _sort_rulsets_by_intent(self):
+        """
+        Stable-sort every ``rulsets_by_type[ruleset]`` list by the
+        ``folder_index`` carried on each ``RuleMngmtOutcome``. The
+        rule-engine already iterates ``CheckmkRuleMngmt`` in
+        ``sort_field`` order (see ``inits.export_rules``), and stable
+        sort preserves that ordering for outcomes sharing the same
+        ``folder_index`` (default 0). Sorting before ``create_rules``
+        means the POST loop already creates rules in the desired
+        order; ``sort_rules`` then enforces the order in Checkmk.
+        """
+        for ruleset_name, rules in self.rulsets_by_type.items():
+            rules.sort(
+                key=lambda r: (r.get('folder', '/'), r.get('folder_index', 0)),
+            )
+            self.rulsets_by_type[ruleset_name] = rules
+
+    def sort_rules(self):
+        """
+        Reorder syncer-owned rules in each Checkmk ruleset so they
+        appear in the ``folder_index`` / ``sort_field`` order the
+        admin configured. Only rules with our description marker
+        (``cmdbsyncer_{account_id}``) are moved — user-created rules
+        in the same ruleset are never touched.
+
+        The chosen strategy chains ``after_specific_rule`` moves
+        anchored to the first syncer rule's current position: the
+        first rule keeps its place relative to user rules around it,
+        every subsequent syncer rule is pulled to sit right after the
+        previous one. This minimises disruption to user rules
+        compared to a ``top_of_folder`` / ``bottom_of_folder`` sweep
+        that would push the syncer block past every user rule.
+        """
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Reorder syncer rules")
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            task1 = progress.add_task(
+                "Sort Rules", total=len(self.rulsets_by_type),
+            )
+            for ruleset_name, rules in self.rulsets_by_type.items():
+                if len(rules) < 2:
+                    progress.advance(task1)
+                    continue
+                desired_ids = self._desired_cmk_id_chain(ruleset_name, rules)
+                if len(desired_ids) < 2:
+                    progress.advance(task1)
+                    continue
+                for i in range(1, len(desired_ids)):
+                    move_url = (
+                        f"objects/rule/{desired_ids[i]}/actions/move/invoke"
+                    )
+                    payload = {
+                        "position": "after_specific_rule",
+                        "dest_rule_id": desired_ids[i - 1],
+                    }
+                    try:
+                        self.request(move_url, data=payload, method="POST")
+                        self.log_details.append((
+                            "INFO",
+                            f"Reordered rule in {ruleset_name}: "
+                            f"{desired_ids[i]} after {desired_ids[i - 1]}",
+                        ))
+                    except CmkException as error:
+                        self.log_details.append((
+                            "ERROR",
+                            f"Could not reorder rule {desired_ids[i]} in "
+                            f"{ruleset_name}: {error}",
+                        ))
+                progress.advance(task1)
+
+    def _desired_cmk_id_chain(self, ruleset_name, rules):
+        """
+        Build the list of Checkmk rule IDs corresponding to ``rules``
+        (already sorted by ``_sort_rulsets_by_intent``) for use by
+        ``sort_rules``. Skips rules that no longer exist in Checkmk
+        (e.g. failed POSTs) and any rule that doesn't carry our
+        description marker.
+        """
+        url = (
+            f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
+        )
+        try:
+            cmk_rules = self.request(url, method="GET")[0]['value']
+        except CmkException as error:
+            self.log_details.append((
+                "ERROR",
+                f"Could not fetch rules for sort in {ruleset_name}: "
+                f"{error}",
+            ))
+            return []
+
+        own_marker = f'cmdbsyncer_{self.account_id}'
+        # Match each local rule entry against an owning Checkmk rule by
+        # (conditions, value) — same logic clean_rules uses, just
+        # walked the other direction (local → cmk_id) and without the
+        # delete/update side-effects.
+        desired_ids = []
+        used_cmk_ids = set()
+        for rule in rules:
+            try:
+                local_value = ast.literal_eval(rule['value'])
+            except (SyntaxError, KeyError, ValueError):
+                continue
+            for cmk_rule in cmk_rules:
+                cmk_id = cmk_rule['id']
+                if cmk_id in used_cmk_ids:
+                    continue
+                if cmk_rule['extensions']['properties'].get(
+                        'description', '') != own_marker:
+                    continue
+                if cmk_rule['extensions']['conditions'] != rule['condition']:
+                    continue
+                try:
+                    cmk_value = ast.literal_eval(
+                        cmk_rule['extensions']['value_raw'])
+                except (SyntaxError, KeyError, ValueError):
+                    continue
+                if not deep_compare(cmk_value, local_value):
+                    continue
+                desired_ids.append(cmk_id)
+                used_cmk_ids.add(cmk_id)
+                break
+        return desired_ids
 
     def create_rules(self):
         """

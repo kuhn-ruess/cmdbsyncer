@@ -304,7 +304,12 @@ def export_rules(account):
         syncer.rewrite = rules['rewrite']
 
         actions = CheckmkRulesetRule()
-        actions.rules = CheckmkRuleMngmt.objects(enabled=True)
+        # Process rules in their configured ``sort_field`` order so the
+        # resulting outcomes feed into ``rulsets_by_type`` already
+        # ordered. The Checkmk-side reorder step (``sort_rules``) then
+        # only needs to chain ``after_specific_rule`` moves to lock the
+        # order into Checkmk's ruleset.
+        actions.rules = CheckmkRuleMngmt.objects(enabled=True).order_by('sort_field')
         syncer.actions = actions
         syncer.name = 'Checkmk: Export Rules'
         syncer.source = "cmk_rule_sync"
