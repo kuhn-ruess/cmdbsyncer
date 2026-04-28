@@ -1135,7 +1135,76 @@ def _process_copy_as_new(label):
     return redirect(url_for('.edit_view', id=str(clone.pk)))
 
 
-class ObjectModelView(DefaultModelView):
+class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods
+    """
+    Top-right quick-search box that matches `hostname` OR any value
+    in `labels`. Shared by HostModelView and ObjectModelView so both
+    list pages behave identically — Objects' cmdb_fields are mirrored
+    into `labels` by `update_host()`, so the same query covers them.
+    """
+
+    column_searchable_list = ['hostname']
+
+    def init_search(self):
+        """
+        Bypass Flask-Admin's strict `type(p) in allowed_search_types`
+        check — flask-mongoengine wraps StringField in a subclass that
+        fails identity comparison. We only need the search box to
+        render; `_search()` drives the actual query.
+        """
+        for name in self.column_searchable_list or []:
+            field = self.model._fields.get(name) if isinstance(name, str) else name
+            if field is None:
+                raise ValueError(f"Invalid search field: {name!r}")
+            self._search_fields.append(field)
+        return bool(self._search_fields)
+
+    def _search(self, query, search_term):
+        """
+        Match hostname OR any label value against the term. Falls back
+        to a literal match if the user typed something that doesn't
+        compile as a regex.
+        """
+        term = (search_term or '').strip()
+        if not term:
+            return query
+        try:
+            re.compile(term)
+        except re.error:
+            term = re.escape(term)
+        pipeline = {
+            '$or': [
+                {'hostname': {'$regex': term, '$options': 'i'}},
+                {'$expr': {
+                    '$anyElementTrue': {
+                        '$map': {
+                            'input': {'$objectToArray': {
+                                '$ifNull': ['$labels', {}],
+                            }},
+                            'as': 'kv',
+                            'in': {
+                                '$regexMatch': {
+                                    'input': {
+                                        '$convert': {
+                                            'input': '$$kv.v',
+                                            'to': 'string',
+                                            'onError': '',
+                                            'onNull': '',
+                                        },
+                                    },
+                                    'regex': term,
+                                    'options': 'i',
+                                },
+                            },
+                        },
+                    },
+                }},
+            ],
+        }
+        return query.filter(__raw__=pipeline)
+
+
+class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
     """
     Onlye show objects
     """
@@ -1175,6 +1244,18 @@ class ObjectModelView(DefaultModelView):
        FilterObjectType(
         Host,
         "Object Type",
+       ),
+       FilterAccountRegex(
+           Host,
+           'Account',
+       ),
+       FilterLabelKeyAndValue(
+        Host,
+        "Label Key:Value"
+       ),
+       FilterInventoryKeyAndValue(
+        Host,
+        "Inventory Key:Value"
        ),
     )
 
@@ -1413,7 +1494,7 @@ class ObjectModelView(DefaultModelView):
         return _process_copy_as_new('Object')
 
 
-class TemplateModelView(ObjectModelView):
+class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
     """Template Model View for CMDB templates."""
 
     form_rules = [
@@ -1467,7 +1548,7 @@ class TemplateModelView(ObjectModelView):
         return Host.objects(is_object=True, object_type="template")
 
 
-class HostModelView(DefaultModelView):  # pylint: disable=too-many-public-methods
+class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: disable=too-many-public-methods,too-many-ancestors
     """
     Host Model
     """
@@ -1517,13 +1598,6 @@ class HostModelView(DefaultModelView):  # pylint: disable=too-many-public-method
         LinkRowAction("fa fa-copy", app.config['BASE_PREFIX'] + \
                     "admin/host/copy_as_new_form?source_id={row_id}"),
     ]
-
-    # Adds the top-right search box. Flask-Admin's `init_search` would
-    # reject flask-mongoengine's StringField subclass as a non-text
-    # column, so we bypass that check in `init_search` below. The actual
-    # query is built in `_search()` which searches hostname AND every
-    # label value.
-    column_searchable_list = ['hostname']
 
     column_filters = (
        FilterHostnameRegex(
@@ -1944,70 +2018,6 @@ below and do not appear here.
         Limit Objects
         """
         return Host.objects(is_object__ne=True)
-
-    def init_search(self):
-        """
-        Bypass Flask-Admin's `type(p) in allowed_search_types` check —
-        flask-mongoengine wraps StringField in its own subclass, which
-        identity-fails that comparison. We only need the search box to
-        appear; `_search()` below drives the actual query.
-        """
-        for name in self.column_searchable_list or []:
-            field = self.model._fields.get(name) if isinstance(name, str) else name
-            if field is None:
-                raise ValueError(f"Invalid search field: {name!r}")
-            self._search_fields.append(field)
-        return bool(self._search_fields)
-
-    def _search(self, query, search_term):
-        """
-        Full-text-ish search across hostname AND any label value.
-
-        Flask-Admin's default search only walks `column_searchable_list`
-        (string fields). For a CMDB the most useful search is "find hosts
-        whose hostname or ANY label value contains this term", which we
-        express as a single Mongo `$or` with `$regex` on hostname and
-        `$expr` / `$regexMatch` over the `labels` subdocument values.
-        """
-        term = (search_term or '').strip()
-        if not term:
-            return query
-        try:
-            re.compile(term)
-        except re.error:
-            # Fall back to a literal match so users typing a stray
-            # '[' don't get a 500.
-            term = re.escape(term)
-        pipeline = {
-            '$or': [
-                {'hostname': {'$regex': term, '$options': 'i'}},
-                {'$expr': {
-                    '$anyElementTrue': {
-                        '$map': {
-                            'input': {'$objectToArray': {
-                                '$ifNull': ['$labels', {}],
-                            }},
-                            'as': 'kv',
-                            'in': {
-                                '$regexMatch': {
-                                    'input': {
-                                        '$convert': {
-                                            'input': '$$kv.v',
-                                            'to': 'string',
-                                            'onError': '',
-                                            'onNull': '',
-                                        },
-                                    },
-                                    'regex': term,
-                                    'options': 'i',
-                                },
-                            },
-                        },
-                    },
-                }},
-            ],
-        }
-        return query.filter(__raw__=pipeline)
 
     def scaffold_form(self):
         """Scaffold form with extra CMDB fields."""
