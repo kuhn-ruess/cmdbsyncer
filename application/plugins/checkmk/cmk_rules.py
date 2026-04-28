@@ -414,7 +414,7 @@ class CheckmkRuleSync(CMK2):
                 if len(rules) < 2:
                     progress.advance(task1)
                     continue
-                desired_ids = self._desired_cmk_id_chain(ruleset_name, rules)
+                desired_ids = self._desired_cmk_id_chain(rules)
                 if len(desired_ids) < 2:
                     progress.advance(task1)
                     continue
@@ -441,59 +441,22 @@ class CheckmkRuleSync(CMK2):
                         ))
                 progress.advance(task1)
 
-    def _desired_cmk_id_chain(self, ruleset_name, rules):
+    def _desired_cmk_id_chain(self, rules):
         """
-        Build the list of Checkmk rule IDs corresponding to ``rules``
-        (already sorted by ``_sort_rulsets_by_intent``) for use by
-        ``sort_rules``. Skips rules that no longer exist in Checkmk
-        (e.g. failed POSTs) and any rule that doesn't carry our
-        description marker.
-        """
-        url = (
-            f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
-        )
-        try:
-            cmk_rules = self.request(url, method="GET")[0]['value']
-        except CmkException as error:
-            self.log_details.append((
-                "ERROR",
-                f"Could not fetch rules for sort in {ruleset_name}: "
-                f"{error}",
-            ))
-            return []
+        Build the ordered list of Checkmk rule IDs for ``sort_rules``.
 
-        own_marker = f'cmdbsyncer_{self.account_id}'
-        # Match each local rule entry against an owning Checkmk rule by
-        # (conditions, value) — same logic clean_rules uses, just
-        # walked the other direction (local → cmk_id) and without the
-        # delete/update side-effects.
-        desired_ids = []
-        used_cmk_ids = set()
-        for rule in rules:
-            try:
-                local_value = ast.literal_eval(rule['value'])
-            except (SyntaxError, KeyError, ValueError):
-                continue
-            for cmk_rule in cmk_rules:
-                cmk_id = cmk_rule['id']
-                if cmk_id in used_cmk_ids:
-                    continue
-                if cmk_rule['extensions']['properties'].get(
-                        'description', '') != own_marker:
-                    continue
-                if cmk_rule['extensions']['conditions'] != rule['condition']:
-                    continue
-                try:
-                    cmk_value = ast.literal_eval(
-                        cmk_rule['extensions']['value_raw'])
-                except (SyntaxError, KeyError, ValueError):
-                    continue
-                if not deep_compare(cmk_value, local_value):
-                    continue
-                desired_ids.append(cmk_id)
-                used_cmk_ids.add(cmk_id)
-                break
-        return desired_ids
+        IDs are captured on the local rule dict at create-time
+        (``create_rules``) and at keep-time (``clean_rules``); we just
+        read them back here. Content-based matching against a fresh
+        GET of the ruleset is unreliable when several outcomes share
+        the same conditions+value (different comments only) — the
+        matcher would then bind in CMK-return order and silently
+        cancel the desired sort.
+        """
+        return [
+            rule['_cmk_id'] for rule in rules
+            if rule.get('_cmk_id')
+        ]
 
     def create_rules(self):
         """
@@ -521,11 +484,27 @@ class CheckmkRuleSync(CMK2):
                     }
 
 
+                    if rule.get('_skip_create'):
+                        # ``clean_rules`` already paired this entry with
+                        # an existing Checkmk rule (full match or in-
+                        # place update). No POST needed; the captured
+                        # ``_cmk_id`` is what ``sort_rules`` will move.
+                        continue
                     print(f"{CC.OKBLUE} *{CC.ENDC} Create Rule in {ruleset_name} " \
                           f"({rule['condition']})")
                     url = "domain-types/rule/collections/all"
                     try:
-                        self.request(url, data=template, method="POST")
+                        response = self.request(url, data=template, method="POST")
+                        # Checkmk returns the freshly created rule's
+                        # JSON body; pin its id on the local entry so
+                        # ``sort_rules`` can chain after_specific_rule
+                        # moves without round-tripping a GET + content
+                        # match (which is ambiguous when multiple
+                        # outcomes share conditions+value).
+                        try:
+                            rule['_cmk_id'] = response[0].get('id')
+                        except (TypeError, IndexError, AttributeError):
+                            rule['_cmk_id'] = None
                         self.log_details.append(("INFO",
                                               f"Created Rule in {ruleset_name}: {rule['value']}"))
                     except CmkException as error:
@@ -563,7 +542,17 @@ class CheckmkRuleSync(CMK2):
                     rule_found = False
                     condition_matches = []  # Collect all rules with matching conditions
 
+                    cmk_comment = cmk_rule['extensions']['properties'].get(
+                        'comment', '')
                     for rule in list(rules):
+                        # ``sort_rules`` needs every owned rule to keep
+                        # its (rulesets_by_type) slot with a captured
+                        # ``_cmk_id``. Skip entries already paired with
+                        # a different cmk_rule on a previous iteration
+                        # of this outer loop — re-matching them would
+                        # only produce duplicates.
+                        if rule.get('_skip_create'):
+                            continue
                         try:
                             cmk_value = ast.literal_eval(rule['value'])
                             check_value = ast.literal_eval(value)
@@ -572,6 +561,15 @@ class CheckmkRuleSync(CMK2):
                             continue
 
                         condition_match = rule['condition'] == cmk_condition
+                        # Comment is admin-supplied free text per outcome
+                        # (RuleMngmtOutcome.comment). When several
+                        # outcomes share the same condition+value the
+                        # comment is the only distinguishing identifier
+                        # — without it ``sort_rules`` ends up pairing
+                        # local→cmk in CMK iteration order, silently
+                        # cancelling the configured folder_index
+                        # ordering on idempotent re-runs.
+                        comment_match = rule.get('comment', '') == cmk_comment
                         value_match = deep_compare(cmk_value, check_value)
 
                         # Collect all rules with matching conditions
@@ -583,11 +581,17 @@ class CheckmkRuleSync(CMK2):
                                 'value_match': value_match
                             })
 
-                        if condition_match and value_match:
+                        if condition_match and comment_match and value_match:
                             logger.debug("FULL MATCH")
                             rule_found = True
-                            # Remove from list, so that it not will be created in the next step
-                            rules.remove(rule)
+                            # Pin the cmk_rule id on the local entry and
+                            # mark it skip-create so create_rules leaves
+                            # it alone but sort_rules can still reorder
+                            # it. The entry stays in ``rules`` so the
+                            # sort step sees a contiguous picture of
+                            # every owned rule.
+                            rule['_cmk_id'] = cmk_rule['id']
+                            rule['_skip_create'] = True
                             break
 
                     # If exactly one of our rules has the same condition but a
@@ -613,7 +617,8 @@ class CheckmkRuleSync(CMK2):
                             self.update_rule(rule_id, update_payload)
                             print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE Rule in "
                                   f"{ruleset_name} {rule_id}")
-                            rules.remove(our_rule)
+                            our_rule['_cmk_id'] = rule_id
+                            our_rule['_skip_create'] = True
                             rule_found = True
                             self.log_details.append((
                                 "INFO",
