@@ -26,6 +26,19 @@ class BaseConfig():
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_SAMESITE = 'Lax'
 
+    # Master switch for the GUI HTTPS enforcement.
+    # True (default): keep SESSION_COOKIE_SECURE = True. A yellow banner
+    #   is rendered on every admin/login page over plain HTTP, telling
+    #   the admin to either configure TLS (and a trusted proxy if
+    #   applicable) or to acknowledge HTTP-only mode by flipping this
+    #   switch off.
+    # False: SESSION_COOKIE_SECURE is forced to False at startup so
+    #   plain-HTTP logins still work, and the banner is suppressed —
+    #   set this once you have intentionally chosen HTTP-only.
+    # Does NOT affect the separate API HTTPS gate
+    # (see ALLOW_INSECURE_API_AUTH).
+    REQUIRE_HTTPS = True
+
     LOGGING = {
         "version": 1,
         "disable_existing_loggers": "False",

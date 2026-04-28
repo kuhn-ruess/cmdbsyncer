@@ -141,9 +141,14 @@ PRESETS = [
             {'key': 'TRUSTED_PROXIES', 'type': 'int', 'default': 1,
              'hint': 'Reverse-proxy hops between client and app. '
                      '0 = no proxy, 1 = one (typical), 2 = e.g. CDN+nginx.'},
+            {'key': 'REQUIRE_HTTPS', 'type': 'bool', 'default': True,
+             'hint': 'Enforce HTTPS for the admin GUI (default). Keeps '
+                     'SESSION_COOKIE_SECURE on and shows a banner on '
+                     'plain HTTP. Set to False only to allow HTTP-only '
+                     'mode intentionally.'},
             {'key': 'SESSION_COOKIE_SECURE', 'type': 'bool', 'default': True,
-             'hint': 'Set the Secure flag on the session cookie. Requires '
-                     'HTTPS reachability.'},
+             'hint': 'Set the Secure flag on the session cookie. '
+                     'Auto-disabled at startup when REQUIRE_HTTPS=False.'},
             {'key': 'SESSION_COOKIE_NAME', 'type': 'str', 'default': 'syncer',
              'hint': 'Cookie name. Change to avoid collisions when '
                      'multiple syncers share a hostname.'},

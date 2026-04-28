@@ -129,6 +129,15 @@ except ModuleNotFoundError:
     pass
 
 
+# REQUIRE_HTTPS is the single switch that controls whether the GUI's
+# Secure cookie + HTTPS banner are active. Default True keeps the secure
+# cookie on; admins on plain HTTP see a banner pointing at the fix.
+# Setting REQUIRE_HTTPS=False in local_config.py forces
+# SESSION_COOKIE_SECURE off so HTTP logins work and suppresses the banner.
+if not app.config.get('REQUIRE_HTTPS'):
+    app.config['SESSION_COOKIE_SECURE'] = False
+
+
 if '--debug' in sys.argv:
     logger.setLevel(logging.DEBUG)
 
@@ -184,6 +193,7 @@ mail = Mail(app)
 
 if not CLI_MODE:
     from application.helpers.sates import get_changes  # noqa: E402
+    from flask import request as _flask_request  # noqa: E402
 
     @app.before_request
     def load_before_request():
@@ -191,6 +201,25 @@ if not CLI_MODE:
         Helper to have up to date data for each request
         """
         app.config['CHANGES'] = get_changes()
+
+    @app.context_processor
+    def _inject_https_warning():
+        """Show a banner when HTTPS is required (default) but the
+        request came in over plain HTTP. Suppressed when the admin
+        explicitly opted into HTTP-only by setting REQUIRE_HTTPS=False,
+        and on localhost — browsers treat http://localhost as a secure
+        context and accept Secure cookies there, so login still works
+        and the banner would just be noise during local development."""
+        if not app.config.get('REQUIRE_HTTPS'):
+            return {'show_https_warning': False}
+        try:
+            insecure = (
+                not _flask_request.is_secure
+                and _flask_request.remote_addr not in {'127.0.0.1', '::1'}
+            )
+        except RuntimeError:
+            insecure = False
+        return {'show_https_warning': insecure}
 
     bootstrap = Bootstrap(app)
 

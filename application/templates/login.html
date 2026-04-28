@@ -157,6 +157,19 @@ body {
             {% endif %}
         </div>
 
+        {% if show_https_warning %}
+        <div class="alert alert-warning" role="alert" style="font-size: 0.85rem;">
+            <strong>HTTPS is required but not in use.</strong>
+            Login over plain HTTP is blocked because
+            <code>SESSION_COOKIE_SECURE</code> is on. Either configure
+            TLS (directly or via a reverse proxy with
+            <code>TRUSTED_PROXIES</code> set), or — if you intentionally
+            want to keep running on HTTP — add
+            <code>REQUIRE_HTTPS = False</code> to
+            <code>local_config.py</code> and restart the service.
+        </div>
+        {% endif %}
+
         <form method="POST" novalidate>
             {{ LoginForm.hidden_tag() }}
 
