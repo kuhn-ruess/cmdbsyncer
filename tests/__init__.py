@@ -74,6 +74,7 @@ _application.app = _StubApp()
 _application.logger = MagicMock(name="stub.logger")
 _application.log = MagicMock(name="stub.log")
 _application.db = MagicMock(name="stub.db")
+_application.init_db = MagicMock(name="stub.init_db")
 
 # Subpackages that the real modules import from. We mark __path__ so that any
 # later "from application.X import Y" resolves against sys.modules first.

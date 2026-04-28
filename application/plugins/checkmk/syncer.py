@@ -6,7 +6,7 @@ import ast
 import math
 import multiprocessing
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application import app, logger, log
+from application import app, logger, log, init_db
 from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes as CC
@@ -639,7 +639,7 @@ class SyncCMK2(CMK2):
             task1 = progress.add_task("Calculating Hostrules and Attributes", total=total)
             host_actions = {}
             disabled_hosts = []
-            with multiprocessing.Pool() as pool:
+            with multiprocessing.Pool(initializer=init_db) as pool:
                 tasks = []
                 for db_host in db_objects:
                     if not self.use_host(db_host.hostname, db_host.source_account_name):
