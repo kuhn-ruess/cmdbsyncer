@@ -12,7 +12,9 @@
         "object_categories": "C__CATG__IP,C__CATG__MONITORING",
         "language": "en",
         "filter_cmdb_status": "6",
-        "filter_monitoring_status": "False"
-    },
-    "enabled": true
+        "filter_monitoring_status": "False",
+        "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": ""
+    }
 }
