@@ -69,10 +69,31 @@ class CMK2(Plugin):
         self.custom_folder_attributes = {}
 
         if self.config and not self.checkmk_version:
-            data = self.request('/version')[0]
-            self.checkmk_version = data['versions']['checkmk']
+            self.checkmk_version = self._probe_checkmk_version()
 
         self._init_complete = True
+
+
+    def _probe_checkmk_version(self):
+        """
+        Ask Checkmk for its version and return the bare version string.
+
+        Works for both 2.4 and 2.5+. Checkmk 2.5 appended the edition suffix
+        (e.g. ``2.5.0.pro``) where 2.4 used patch-level strings like
+        ``2.4.0p25.cce``. ``.startswith('2.x')`` checks elsewhere keep
+        working unchanged for both formats — we just need to fail loudly
+        instead of with KeyError when the probe returns nothing.
+        """
+        data, _headers = self.request('/version')
+        try:
+            return data['versions']['checkmk']
+        except (KeyError, TypeError) as exc:
+            raise CmkException(
+                f"Could not read Checkmk version from {self.config.get('address')!r}. "
+                "The /version endpoint returned no usable payload — "
+                "verify the account address (it should end in /<site>, "
+                "not /<site>/check_mk) and that the credentials are valid."
+            ) from exc
 
 
     def request(self, url, method='GET', data=None,  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
