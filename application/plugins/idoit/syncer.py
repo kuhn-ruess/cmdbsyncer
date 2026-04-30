@@ -5,14 +5,9 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from application.models.host import Host
-from application import app, log, logger
+from application import log, logger
 from application.modules.debug import ColorCodes as CC
 from application.modules.plugin import Plugin
-
-if app.config.get("DISABLE_SSL_ERRORS"):
-    from urllib3.exceptions import InsecureRequestWarning
-    from urllib3 import disable_warnings
-    disable_warnings(InsecureRequestWarning)
 
 
 class IdoitAuthError(Exception):
