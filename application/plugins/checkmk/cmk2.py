@@ -11,11 +11,6 @@ from application.helpers.plugins import register_cli_group
 
 cli_cmk = register_cli_group(app, 'checkmk', 'checkmk', "Checkmk commands")
 
-if app.config.get("DISABLE_SSL_ERRORS"):
-    from urllib3.exceptions import InsecureRequestWarning
-    from urllib3 import disable_warnings
-    disable_warnings(InsecureRequestWarning)
-
 class CmkException(Exception):
     """Cmk Errors"""
 

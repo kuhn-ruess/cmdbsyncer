@@ -15,12 +15,6 @@ from .syncer import CiscoDNA
 _cli_cisco_dna = register_cli_group(app, 'cisco-dna', 'cisco_dna',
                                     "Cisco DNA Interface and Devices")
 
-if app.config.get("DISABLE_SSL_ERRORS"):
-    from urllib3.exceptions import InsecureRequestWarning
-    from urllib3 import disable_warnings
-    disable_warnings(InsecureRequestWarning)
-
-
 
 #.
 #   .-- CLI Commands

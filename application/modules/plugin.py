@@ -28,6 +28,15 @@ from syncerapi.v1 import (
     cc,
 )
 
+# Suppress urllib3 InsecureRequestWarning once for the whole process when
+# the legacy DISABLE_SSL_ERRORS toggle is on. Plugins import Plugin, so
+# this side-effect runs before any HTTP call and replaces the per-plugin
+# duplicates that used to live in cmk2/netbox/idoit/cisco_dna/vmware.
+if app.config.get("DISABLE_SSL_ERRORS"):
+    from urllib3.exceptions import InsecureRequestWarning
+    from urllib3 import disable_warnings
+    disable_warnings(InsecureRequestWarning)
+
 _REDACTION = '***REDACTED***'
 _SENSITIVE_HEADER_KEYS = frozenset({
     'authorization', 'x-api-key', 'x-auth-token', 'cookie',
