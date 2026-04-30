@@ -9,7 +9,6 @@ from application import app
 from application.modules.rule.rewrite import Rewrite
 from application.modules.debug import ColorCodes, attribute_table
 from application.models.host import Host
-from application.helpers.get_account import get_account_by_name
 from application.helpers.cron import register_cronjob
 from application.helpers.plugins import register_cli_group
 
@@ -44,10 +43,8 @@ def import_hosts(account, debug=False):
     Import hosts from i-doit
     """
 
-    target_config = get_account_by_name(account)
-    syncer = SyncIdoit()
+    syncer = SyncIdoit(account)
     syncer.debug = debug
-    syncer.config = target_config
     syncer.import_hosts()
 
 
@@ -70,12 +67,9 @@ def export_hosts(account):
 
     rules = load_rules()
 
-    target_config = get_account_by_name(account)
-
-    syncer = SyncIdoit()
+    syncer = SyncIdoit(account)
     syncer.rewrite = rules['rewrite']
     syncer.actions = rules['rules']
-    syncer.config = target_config
     syncer.export_hosts()
 
 
