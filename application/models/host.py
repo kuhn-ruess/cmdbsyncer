@@ -133,7 +133,7 @@ class Host(db.Document):
             full_filter = db_filter & (extra_filter)
         else:
             full_filter = db_filter
-        Host.objects(full_filter).delete()
+        return Host.objects(full_filter).delete()
 
 
     @staticmethod
