@@ -5,10 +5,15 @@ Unit tests for checkmk cmk_rules module
 import unittest
 from unittest.mock import patch
 
+from types import SimpleNamespace
+
 from application.plugins.checkmk.cmk_rules import (
     clean_postproccessed,
     deep_compare,
     analyze_value_differences,
+    preview_rule_for_attributes,
+    preview_group_rule_for_attributes,
+    render_jinja_in_value,
     CheckmkRuleSync,
 )
 from tests import base_mock_init
@@ -270,6 +275,178 @@ class TestCheckmkRuleSync(unittest.TestCase):
         result = self.sync.build_condition_and_update_rule_params(
             shared_rule_params, attributes)
         self.assertIn('condition', result)
+
+
+def _outcome(**fields):
+    """Build a minimal RuleMngmtOutcome stand-in for preview tests."""
+    defaults = {
+        'ruleset': 'host_groups',
+        'folder': '/{{ env }}',
+        'folder_index': 0,
+        'comment': '',
+        'loop_over_list': False,
+        'list_to_loop': '',
+        'value_template': "'group_{{ HOSTNAME }}'",
+        'condition_label_template': '',
+        'condition_host': '',
+        'condition_service': '',
+        'condition_service_label': '',
+    }
+    defaults.update(fields)
+    return SimpleNamespace(**defaults)
+
+
+def _fake_render_jinja(value, **kwargs):
+    """
+    Tiny stand-in for syncer_jinja.render_jinja used in preview tests.
+    Replaces ``{{ key }}`` placeholders with the value from kwargs.
+    """
+    if not value:
+        return value
+    out = str(value)
+    for k, v in kwargs.items():
+        out = out.replace('{{ ' + k + ' }}', str(v))
+        out = out.replace('{{' + k + '}}', str(v))
+    return out
+
+
+def _fake_get_list(value):
+    if isinstance(value, list):
+        return value
+    if not value:
+        return []
+    return [value]
+
+
+class TestPreviewRuleForAttributes(unittest.TestCase):
+    """Tests for preview_rule_for_attributes (host-debug GUI helper)"""
+
+    def setUp(self):
+        # The test harness stubs render_jinja/get_list as MagicMocks.
+        # Replace them with tiny real implementations so the preview
+        # helper produces deterministic output.
+        self.render_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.render_jinja',
+            side_effect=_fake_render_jinja)
+        self.list_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.get_list',
+            side_effect=_fake_get_list)
+        self.render_patcher.start()
+        self.list_patcher.start()
+
+    def tearDown(self):
+        self.render_patcher.stop()
+        self.list_patcher.stop()
+
+    def _row(self, outcome, key):
+        return dict(outcome['rows'])[key]
+
+    def test_renders_value_and_folder(self):
+        rule = SimpleNamespace(outcomes=[_outcome()])
+        attrs = {'HOSTNAME': 'srv01', 'env': 'prod'}
+        result = preview_rule_for_attributes(rule, attrs)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['title'], 'host_groups')
+        self.assertEqual(self._row(result[0], 'value'), "'group_srv01'")
+        self.assertEqual(self._row(result[0], 'folder'), '/prod')
+
+    def test_loop_over_list_expands(self):
+        rule = SimpleNamespace(outcomes=[_outcome(
+            loop_over_list=True, list_to_loop='services',
+            value_template="'svc_{{ loop }}'", folder='/',
+        )])
+        attrs = {'HOSTNAME': 'srv01', 'services': ['web', 'db']}
+        result = preview_rule_for_attributes(rule, attrs)
+        self.assertEqual([self._row(r, 'value') for r in result],
+                         ["'svc_web'", "'svc_db'"])
+        self.assertIn('loop[0] = web', result[0]['meta'])
+        self.assertIn('loop[1] = db', result[1]['meta'])
+
+    def test_renders_jinja_in_nested_dict(self):
+        data = {
+            'host_alias': '{{ HOSTNAME }}',
+            'tags': ['static', '{{ env }}'],
+            'plain': 'no jinja here',
+        }
+        result = render_jinja_in_value(
+            data, {'HOSTNAME': 'srv01', 'env': 'prod'})
+        self.assertEqual(result['host_alias'], 'srv01')
+        self.assertEqual(result['tags'], ['static', 'prod'])
+        self.assertEqual(result['plain'], 'no jinja here')
+
+    def test_loop_over_empty_list_emits_note(self):
+        rule = SimpleNamespace(outcomes=[_outcome(
+            loop_over_list=True, list_to_loop='missing', folder='/',
+        )])
+        result = preview_rule_for_attributes(rule, {'HOSTNAME': 'srv01'})
+        self.assertEqual(len(result), 1)
+        self.assertIn('missing', result[0]['note'])
+
+
+def _group_outcome(**fields):
+    """Build a CmkGroupOutcome stand-in for group-rule preview tests."""
+    defaults = {
+        'group_name': 'host_groups',
+        'foreach_type': 'label',
+        'foreach': 'environment',
+        'rewrite': '',
+        'rewrite_title': '',
+    }
+    defaults.update(fields)
+    return SimpleNamespace(**defaults)
+
+
+class TestPreviewGroupRule(unittest.TestCase):
+    """Tests for preview_group_rule_for_attributes (manage-groups debug)"""
+
+    def setUp(self):
+        self.render_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.render_jinja',
+            side_effect=_fake_render_jinja)
+        self.list_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.get_list',
+            side_effect=_fake_get_list)
+        self.render_patcher.start()
+        self.list_patcher.start()
+
+    def tearDown(self):
+        self.render_patcher.stop()
+        self.list_patcher.stop()
+
+    def test_label_foreach_takes_host_value(self):
+        rule = SimpleNamespace(
+            outcome=_group_outcome(foreach_type='label', foreach='environment'))
+        result = preview_group_rule_for_attributes(
+            rule, {'HOSTNAME': 'srv01', 'environment': 'prod'})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['title'], 'host_groups: prod')
+        rows = dict(result[0]['rows'])
+        self.assertEqual(rows['source_item'], 'prod')
+        self.assertEqual(rows['group_name'], 'prod')
+
+    def test_label_foreach_missing_emits_note(self):
+        rule = SimpleNamespace(
+            outcome=_group_outcome(foreach_type='label', foreach='missing'))
+        result = preview_group_rule_for_attributes(
+            rule, {'HOSTNAME': 'srv01'})
+        self.assertEqual(len(result), 1)
+        self.assertIn('No matching items', result[0]['note'])
+
+    def test_object_foreach_marked_as_cross_host(self):
+        rule = SimpleNamespace(
+            outcome=_group_outcome(foreach_type='object', foreach=''))
+        result = preview_group_rule_for_attributes(
+            rule, {'HOSTNAME': 'srv01'})
+        self.assertEqual(len(result), 1)
+        self.assertIn('across', result[0]['note'])
+
+    def test_value_foreach_collects_keys(self):
+        rule = SimpleNamespace(
+            outcome=_group_outcome(foreach_type='value', foreach='prod'))
+        result = preview_group_rule_for_attributes(
+            rule, {'HOSTNAME': 'srv01', 'environment': 'prod', 'role': 'web'})
+        names = sorted(dict(o['rows'])['group_name'] for o in result)
+        self.assertEqual(names, ['environment'])
 
 
 if __name__ == '__main__':

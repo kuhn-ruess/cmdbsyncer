@@ -20,7 +20,11 @@ from mongoengine.errors import DoesNotExist
 
 # pylint: disable=import-error
 from application.plugins.checkmk.models import CheckmkFolderPool
-from application.plugins.checkmk import get_host_debug_data as cmk_host_debug
+from application.plugins.checkmk import (
+    get_host_debug_data as cmk_host_debug,
+    get_rule_preview as cmk_rule_preview,
+)
+from application.plugins.checkmk.cmk_rules import get_preview_providers
 from application.plugins.netbox import get_device_debug_data as netbox_host_debug
 from application.plugins.ansible import get_ansible_debug_data as ansible_host_debug
 from application.plugins.idoit import get_idoit_debug_data as idoit_host_debug
@@ -1957,8 +1961,37 @@ below and do not appear here.
         if "Error" in output:
             output = f"Error: {output['Error']}"
 
+        # Optional rule preview: when an admin picks a rule from any
+        # registered Checkmk rule-type, render its outcomes against
+        # this host's attributes so the debug page shows what the
+        # corresponding export would emit for this host. The dropdown
+        # value is encoded as ``"<rule_type>:<id>"`` so a single
+        # selector can offer rules from every registered provider.
+        rule_preview = None
+        rule_preview_error = None
+        rule_preview_groups = []
+        preview_rule_id = request.args.get('preview_rule_id', '').strip()
+        if mode == 'checkmk_host' and current_user.has_right('checkmk'):
+            for rule_type, provider in get_preview_providers().items():
+                entries = list(
+                    provider['model'].objects().only('id', 'name').order_by('name')
+                )
+                rule_preview_groups.append({
+                    'type': rule_type,
+                    'label': provider['label'],
+                    'entries': entries,
+                })
+            if preview_rule_id and hostname and ':' in preview_rule_id:
+                preview_type, _, raw_id = preview_rule_id.partition(':')
+                rule_preview, rule_preview_error = \
+                    cmk_rule_preview(hostname, preview_type, raw_id)
+
         return self.render('debug_host.html', hostname=hostname, output=output,
-                           rules=new_rules, mode=mode)
+                           rules=new_rules, mode=mode,
+                           rule_preview=rule_preview,
+                           rule_preview_error=rule_preview_error,
+                           rule_preview_groups=rule_preview_groups,
+                           preview_rule_id=preview_rule_id)
 
 
     # Bulk actions that only make sense when the syncer is in CMDB mode

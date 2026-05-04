@@ -45,6 +45,25 @@
 .rule-acc .rule-tabs .btn { padding: 3px 10px; font-size: 0.85rem; }
 .rule-table th { font-size: 0.82rem; font-weight: 600; background: #f8f9fa; }
 .rule-hit { background: #e8f5e8; }
+
+.preview-card { border-left: 4px solid #6610f2; }
+.preview-outcome { border: 1px solid #e2e6ea; border-radius: 4px;
+    padding: 8px 12px; margin-bottom: 8px; background: #fdfdfd; }
+.preview-outcome .head { display: flex; justify-content: space-between;
+    align-items: baseline; border-bottom: 1px dashed #e2e6ea;
+    padding-bottom: 4px; margin-bottom: 6px; }
+.preview-outcome .head .ruleset { font-weight: bold; color: #2c3e50;
+    font-family: monospace; }
+.preview-outcome .head .meta { color: #6c757d; font-size: 0.8rem; }
+.preview-outcome table.preview-table { width: 100%; font-size: 0.85rem;
+    table-layout: fixed; }
+.preview-outcome table.preview-table th { width: 200px; padding: 2px 6px;
+    color: #6c757d; font-weight: 600; vertical-align: top; }
+.preview-outcome table.preview-table td { padding: 2px 6px; font-family: monospace;
+    color: #2c3e50; word-wrap: break-word; white-space: pre-wrap; }
+.preview-outcome table.preview-table td.tpl { color: #6c757d; }
+.preview-outcome .note { color: #b15300; font-style: italic;
+    padding: 4px 0; font-size: 0.85rem; }
 </style>
 
 <div class="container-fluid" style="max-width: 1400px;">
@@ -69,8 +88,65 @@
         <option value="vmware_host" {% if mode == 'vmware_host' %}selected{% endif %}>VMware Host</option>
       </select>
     </div>
+    {% if rule_preview_groups %}
+    <div class="form-group">
+      <label for="previewRule">Preview Rule</label>
+      <select id="previewRule" name="preview_rule_id" class="form-control">
+        <option value="">— none —</option>
+        {% for group in rule_preview_groups %}
+          {% if group.entries %}
+          <optgroup label="{{ group.label }}">
+            {% for r in group.entries %}
+              {% set opt_value = group.type ~ ':' ~ r.id %}
+              <option value="{{ opt_value }}" {% if preview_rule_id == opt_value %}selected{% endif %}>{{ r.name }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
     <button type="submit" class="btn btn-primary btn-sm">Analyze</button>
   </form>
+
+  {% if rule_preview_error %}
+    <div class="alert alert-warning">
+      <i class="fa fa-exclamation-triangle"></i> Rule preview: {{ rule_preview_error }}
+    </div>
+  {% endif %}
+
+  {% if rule_preview %}
+    <div class="debug-card preview-card" style="margin-bottom: 1rem;">
+      <div class="debug-card-head">
+        <span><i class="fa fa-eye"></i> {{ rule_preview.rule_type_label }} Preview — {{ rule_preview.rule_name }}</span>
+        <span class="muted">What the export would render for this host</span>
+      </div>
+      <div class="debug-card-body">
+        {% if not rule_preview.outcomes %}
+          <div class="debug-empty">This rule has no outcomes configured.</div>
+        {% endif %}
+        {% for o in rule_preview.outcomes %}
+          <div class="preview-outcome">
+            <div class="head">
+              <span class="ruleset">{{ o.title }}</span>
+              {% if o.meta %}<span class="meta">{{ o.meta }}</span>{% endif %}
+            </div>
+            {% if o.note %}<div class="note">{{ o.note }}</div>{% endif %}
+            {% if o.rows %}
+            <table class="preview-table">
+              {% for label, value in o.rows %}
+                <tr>
+                  <th>{{ label }}</th>
+                  <td>{{ value }}</td>
+                </tr>
+              {% endfor %}
+            </table>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
 
   {% if output is mapping %}
 

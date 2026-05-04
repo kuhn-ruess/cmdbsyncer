@@ -221,6 +221,13 @@ def get_host_debug_data(hostname):
 
     if attributes:
         actions = syncer.get_host_actions(db_host, attributes['all'])
+        # Render Jinja in outcome values so the debug page shows the
+        # values that would actually be exported, not raw templates
+        # (the export pipeline renders these later — without this,
+        # admins debugging a host see `{{ var }}` instead of the
+        # resolved value).
+        from .cmk_rules import render_jinja_in_value
+        actions = render_jinja_in_value(actions, attributes['all'])
     else:
         actions = {}
 
@@ -255,6 +262,46 @@ def get_host_debug_data(hostname):
     db_host.save()
 
     return attributes, actions, rule_logs
+
+
+def get_rule_preview(hostname, rule_type, rule_id):
+    """
+    GUI helper: render every outcome of one rule against the live
+    attributes of ``hostname``. Dispatches by ``rule_type`` against
+    the registry from ``cmk_rules.get_preview_providers()``. Returns
+    ``(preview, error)`` — exactly one of which is set.
+    """
+    from .syncer import SyncCMK2
+    from .cmk_rules import get_preview_providers
+    from application.models.host import Host
+
+    providers = get_preview_providers()
+    provider = providers.get(rule_type)
+    if not provider:
+        return None, f"Unknown rule type: {rule_type}"
+
+    try:
+        db_host = Host.objects.get(hostname=hostname)
+    except DoesNotExist:
+        return None, "Host not found"
+
+    try:
+        rule = provider['model'].objects.get(id=rule_id)
+    except (DoesNotExist, Exception):  # pylint: disable=broad-except
+        return None, f"{provider['label']} not found"
+
+    syncer = SyncCMK2()
+    attributes = syncer.get_attributes(db_host, 'checkmk')
+    if not attributes:
+        return None, "Host is disabled by a filter rule — no attributes available for preview"
+
+    return {
+        'rule_name': rule.name,
+        'rule_id': str(rule.id),
+        'rule_type': rule_type,
+        'rule_type_label': provider['label'],
+        'outcomes': provider['render'](rule, attributes['all']),
+    }, None
 
 
 @cli_cmk.command('debug_host')

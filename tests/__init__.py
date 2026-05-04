@@ -83,6 +83,8 @@ _stub_package("application.modules.rule", path=[])
 _stub_package("application.models", path=[])
 _stub_package("application.plugins", path=[])
 _stub_package("application.plugins.checkmk", path=[])
+sys.modules["application.plugins.checkmk"].get_rule_preview = MagicMock(
+    name="stub.get_rule_preview")
 # Stubs for the plugin modules the host view imports debug entry points
 # from. Minimal: expose a callable under the same name so `from … import
 # get_X_debug_data` resolves — tests don't exercise the debug path.

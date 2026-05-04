@@ -2,6 +2,7 @@
 """
 Export Checkmk Rules
 """
+# pylint: disable=too-many-lines
 import ast
 import re
 from pprint import pformat
@@ -27,6 +28,281 @@ def normalize_folder(folder):
     if len(folder) > 1 and folder.endswith('/'):
         folder = folder[:-1]
     return folder
+
+
+def render_jinja_in_value(value, context):
+    """
+    Walk a debug-output value (dict / list / string) and Jinja-render
+    every string that contains a ``{{ }}`` placeholder, against the
+    given host attribute context. Used so the host-debug GUI shows the
+    actually-rendered outcome values instead of the raw templates an
+    admin configured.
+    """
+    if isinstance(value, dict):
+        return {k: render_jinja_in_value(v, context) for k, v in value.items()}
+    if isinstance(value, list):
+        return [render_jinja_in_value(v, context) for v in value]
+    if isinstance(value, str) and '{{' in value:
+        try:
+            return render_jinja(value, **context)
+        except Exception:  # pylint: disable=broad-except
+            return value
+    return value
+
+
+def preview_rule_for_attributes(rule, attributes):
+    """
+    Render every outcome of a ``CheckmkRuleMngmt`` against the given
+    host attributes for the host-debug GUI. No Checkmk API call, no
+    version probe — only Jinja-rendering of the fields the export
+    pipeline would also render. ``loop_over_list`` outcomes expand
+    into one entry per loop value.
+    """
+    results = []
+    for outcome in rule.outcomes:
+        if outcome.loop_over_list and outcome.list_to_loop:
+            loop_list = get_list(attributes.get(outcome.list_to_loop, ''))
+            if not loop_list:
+                results.append(_render_outcome_preview(
+                    outcome, attributes,
+                    note=(f"loop_over_list active, but '{outcome.list_to_loop}' "
+                          f"is empty for this host — no rule would be exported"),
+                ))
+                continue
+            for loop_idx, loop_value in enumerate(loop_list):
+                results.append(_render_outcome_preview(
+                    outcome, attributes, loop_value=loop_value, loop_idx=loop_idx,
+                ))
+        else:
+            results.append(_render_outcome_preview(outcome, attributes))
+    return results
+
+
+def _safe_render_factory(context):
+    """Closure over the host-attribute Jinja context used by the previews."""
+    def _safe_render(template):
+        if not template:
+            return ''
+        try:
+            return render_jinja(template, **context)
+        except Exception as exp:  # pylint: disable=broad-except
+            return f"!! render error: {type(exp).__name__}: {exp}"
+    return _safe_render
+
+
+def _render_outcome_preview(outcome, attributes, loop_value=None,
+                            loop_idx=None, note=None):
+    """
+    Jinja-render a single ``RuleMngmtOutcome`` against the host's
+    attributes and return the generic ``{title, meta, rows, note}``
+    preview shape consumed by the debug template.
+    """
+    context = dict(attributes)
+    if loop_value is not None:
+        context['loop'] = loop_value
+        context['loop_idx'] = loop_idx
+    render = _safe_render_factory(context)
+
+    rows = [
+        ('folder', normalize_folder(render(outcome.folder or '/'))),
+        ('value', render(outcome.value_template)),
+    ]
+    if outcome.condition_host:
+        rows.append(('condition_host', render(outcome.condition_host)))
+    if outcome.condition_label_template:
+        rows.append(('condition_label', render(outcome.condition_label_template)))
+    if outcome.condition_service:
+        rows.append(('condition_service', render(outcome.condition_service)))
+    if outcome.condition_service_label:
+        rows.append(('condition_service_label',
+                     render(outcome.condition_service_label)))
+
+    meta_parts = [f"folder_index={outcome.folder_index}"]
+    if loop_idx is not None:
+        meta_parts.append(f"loop[{loop_idx}] = {loop_value}")
+    if outcome.comment:
+        meta_parts.append(render(outcome.comment))
+
+    return {
+        'title': outcome.ruleset or '— no ruleset —',
+        'meta': ' · '.join(meta_parts),
+        'rows': rows,
+        'note': note,
+    }
+
+
+def preview_group_rule_for_attributes(rule, attributes):
+    """
+    Render a ``CheckmkGroupRule`` outcome against a single host's
+    attributes for the host-debug GUI.
+
+    The production export aggregates label keys / values across every
+    host before deciding which groups to create. For the per-host
+    debug page we restrict that aggregation to the selected host's
+    own attributes — the result tells the admin "for *this* host this
+    rule contributes the following group(s)". ``foreach_type='object'``
+    is intrinsically cross-host (it iterates objects from an account)
+    and is reported as such instead of pretending to evaluate.
+    """
+    outcome = rule.outcome
+    if not outcome:
+        return [{
+            'title': '— empty rule —',
+            'meta': '',
+            'rows': [],
+            'note': 'This group rule has no outcome configured.',
+        }]
+
+    foreach = outcome.foreach or ''
+    foreach_type = outcome.foreach_type or ''
+    group_type = outcome.group_name or ''
+
+    if foreach_type == 'object':
+        return [{
+            'title': f"{group_type} ({foreach_type})",
+            'meta': f"foreach={foreach!r}",
+            'rows': [],
+            'note': ("foreach_type='object' iterates Account-objects across "
+                     "all hosts — this preview only inspects a single host, "
+                     "so the per-host outcome is not meaningful here. The "
+                     "export will create one group per matching object."),
+        }]
+
+    items = _collect_group_items_for_host(foreach_type, foreach, attributes)
+
+    if not items:
+        return [{
+            'title': f"{group_type} ({foreach_type})",
+            'meta': f"foreach={foreach!r}",
+            'rows': [],
+            'note': (f"No matching items on this host for "
+                     f"foreach_type={foreach_type!r}, foreach={foreach!r} "
+                     f"— this rule would not contribute a group for this host."),
+        }]
+
+    render = _safe_render_factory(dict(attributes))
+    results = []
+    for item in items:
+        rows = [('source_item', str(item))]
+        if outcome.rewrite:
+            try:
+                rendered_name = render_jinja(
+                    outcome.rewrite, name=item, result=item, **attributes)
+            except Exception as exp:  # pylint: disable=broad-except
+                rendered_name = f"!! render error: {type(exp).__name__}: {exp}"
+        else:
+            rendered_name = str(item)
+        if outcome.rewrite_title:
+            try:
+                rendered_title = render_jinja(
+                    outcome.rewrite_title, name=item, result=item, **attributes)
+            except Exception as exp:  # pylint: disable=broad-except
+                rendered_title = f"!! render error: {type(exp).__name__}: {exp}"
+        else:
+            rendered_title = str(item)
+        rows.append(('group_name', rendered_name))
+        rows.append(('group_title', rendered_title))
+        # Reuse `render` so attribute-driven rewrites stay consistent
+        # even if a future field gains Jinja support without `name=`.
+        _ = render  # keep the helper present for symmetry / future use
+
+        results.append({
+            'title': f"{group_type}: {rendered_name}",
+            'meta': f"foreach_type={foreach_type}",
+            'rows': rows,
+            'note': None,
+        })
+    return results
+
+
+def _collect_group_items_for_host(foreach_type, foreach, attributes):
+    """
+    Mirror ``CheckmkGroupSync`` collection logic but restricted to
+    one host's attributes so the GUI debug page can show what groups
+    the rule would contribute for *this* host. Production exports
+    aggregate across every host; for a per-host preview we only look
+    at this host's labels / inventory.
+    """
+    if not foreach:
+        return []
+
+    collectors = {
+        'value': _collect_group_items_value,
+        'label': _collect_group_items_label,
+        'list': _collect_group_items_list,
+    }
+    collect = collectors.get(foreach_type)
+    return collect(foreach, attributes) if collect else []
+
+
+def _collect_group_items_value(foreach, attributes):
+    """For ``foreach_type='value'`` — keys on this host whose own value
+    is exactly ``foreach`` (or any key starting with ``prefix*``
+    contributes its values)."""
+    items = []
+    if foreach.endswith('*'):
+        prefix = foreach[:-1]
+        for key, value in attributes.items():
+            if key.startswith(prefix):
+                items.extend(get_list(value))
+    else:
+        for key, value in attributes.items():
+            if str(value) == foreach:
+                items.append(key)
+    return items
+
+
+def _collect_group_items_label(foreach, attributes):
+    """For ``foreach_type='label'`` — this host's value(s) for label
+    ``foreach`` (prefix*: collect values of every matching label)."""
+    if foreach.endswith('*'):
+        prefix = foreach[:-1]
+        items = []
+        for key, value in attributes.items():
+            if key.startswith(prefix):
+                items.extend(get_list(value))
+        return items
+    value = attributes.get(foreach)
+    if value is None or value == '':
+        return []
+    return get_list(value)
+
+
+def _collect_group_items_list(foreach, attributes):
+    """For ``foreach_type='list'`` — flatten the host attribute that
+    holds the list."""
+    items = []
+    for entry in get_list(attributes.get(foreach, [])):
+        items.extend(get_list(entry))
+    return items
+
+
+def get_preview_providers():
+    """
+    Registry of host-debug rule previews. Each provider lists the
+    rule-type slug used in URLs, a human label, the MongoEngine
+    model that backs the dropdown, and the renderer that turns one
+    rule + the host attributes into the outcome-dict shape the
+    debug template expects (see ``_render_outcome_preview``).
+
+    Adding a new rule type to the GUI debugger is a one-liner here:
+    register ``(model, render_fn)`` and the dropdown / dispatch /
+    template all pick it up automatically.
+    """
+    # pylint: disable=import-outside-toplevel
+    from .models import CheckmkRuleMngmt, CheckmkGroupRule
+    return {
+        'setup_rule': {
+            'label': 'Setup Rule',
+            'model': CheckmkRuleMngmt,
+            'render': preview_rule_for_attributes,
+        },
+        'group_rule': {
+            'label': 'Manage Group',
+            'model': CheckmkGroupRule,
+            'render': preview_group_rule_for_attributes,
+        },
+    }
 
 
 def clean_postproccessed(data):
@@ -129,6 +405,11 @@ class CheckmkRuleSync(CMK2):
         #   True  = wildcard rejected, fall back to GET+PUT for the rest
         #           of this run so we don't retry on every rule
         self._rule_etag_wildcard_rejected = None
+        # Captured in clean_rules: ordered list of syncer-owned CMK rule
+        # IDs as they appeared in the GET response, per ruleset. Used by
+        # sort_rules to skip the move chain when CMK already lists the
+        # rules in the desired order.
+        self._cmk_order_by_ruleset = {}
 
     def build_rule_hash(self, rule_template, conditions):
         """
@@ -440,6 +721,11 @@ class CheckmkRuleSync(CMK2):
                 if len(desired_ids) < 2:
                     progress.advance(task1)
                     continue
+                # Skip the move chain when CMK already lists the
+                # syncer-owned rules in the desired order.
+                if self._is_already_sorted(ruleset_name, rules, desired_ids):
+                    progress.advance(task1)
+                    continue
                 for i in range(1, len(desired_ids)):
                     move_url = (
                         f"objects/rule/{desired_ids[i]}/actions/move/invoke"
@@ -492,6 +778,28 @@ class CheckmkRuleSync(CMK2):
             rule['_cmk_id'] for rule in rules
             if rule.get('_cmk_id')
         ]
+
+    def _is_already_sorted(self, ruleset_name, rules, desired_ids):
+        """
+        Return True when CMK already lists the syncer-owned rules in
+        ``desired_ids`` order, so ``sort_rules`` can skip the move
+        chain entirely. The snapshot was taken in ``clean_rules`` from
+        the GET response — valid only when no rule in the chain was
+        freshly created since (a fresh POST lands at the bottom of the
+        folder, outside the captured order). ``_skip_create`` marks
+        rules that ``clean_rules`` paired with an existing CMK rule;
+        anything missing that flag was created during this run and
+        forces the chain.
+        """
+        for rule in rules:
+            if rule.get('_cmk_id') and not rule.get('_skip_create'):
+                return False
+        captured = self._cmk_order_by_ruleset.get(ruleset_name)
+        if not captured:
+            return False
+        desired_set = set(desired_ids)
+        cmk_subset = [rid for rid in captured if rid in desired_set]
+        return cmk_subset == desired_ids
 
     def create_rules(self):
         """
@@ -565,6 +873,15 @@ class CheckmkRuleSync(CMK2):
             for ruleset_name, rules in self.rulsets_by_type.items():
                 url = f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
                 rule_response = self.request(url, method="GET")[0]
+                # Capture the order of syncer-owned rule IDs as CMK
+                # currently lists them. sort_rules uses this snapshot to
+                # skip the move chain when the desired order already
+                # matches reality.
+                self._cmk_order_by_ruleset[ruleset_name] = [
+                    cmk_rule['id'] for cmk_rule in rule_response['value']
+                    if cmk_rule['extensions']['properties'].get('description', '')
+                    == f'cmdbsyncer_{self.account_id}'
+                ]
                 for cmk_rule in rule_response['value']:
                     if cmk_rule['extensions']['properties'].get('description', '') != \
                         f'cmdbsyncer_{self.account_id}':
