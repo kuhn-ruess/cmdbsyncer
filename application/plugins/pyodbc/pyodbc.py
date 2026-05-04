@@ -21,12 +21,14 @@ from application.helpers.sql import (
 
 try:
     import pypyodbc as pyodbc  # pylint: disable=import-error
-except ImportError:
+except Exception:  # pylint: disable=broad-exception-caught
+    # pypyodbc raises OdbcNoLibrary (not ImportError) when libodbc.so is
+    # missing — catch broadly so the plugin stays loadable without ODBC.
     logger.info("Info: ODBC Plugin was not able to load required modules")
 
 try:
     import sqlserverport
-except ImportError:
+except Exception:  # pylint: disable=broad-exception-caught
     logger.debug("Info: Serverport module not available")
 
 class ODBC(Plugin):
