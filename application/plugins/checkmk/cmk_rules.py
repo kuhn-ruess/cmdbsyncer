@@ -600,8 +600,14 @@ class CheckmkRuleSync(CMK2):
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         if not object_filter:
-            # Default/ Legacy Behavior
-            db_objects = Host.objects()
+            # Default/ Legacy Behavior. Exclude CMDB template objects:
+            # they are label vehicles for real hosts (applied via
+            # ``cmdb_templates``) and have no business showing up as
+            # condition_host targets — Jinja-rendering ``{{HOSTNAME}}``
+            # against a template would otherwise create a rule pointing
+            # at the template's name (and a folder derived from its
+            # labels), which never matches any real host in CMK.
+            db_objects = Host.objects(object_type__ne='template')
         else:
             db_objects = Host.objects_by_filter(object_filter)
 
@@ -703,8 +709,10 @@ class CheckmkRuleSync(CMK2):
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
+            total_rules = sum(len(r) for r in self.rulsets_by_type.values())
             task1 = progress.add_task(
-                "Sort Rules", total=len(self.rulsets_by_type),
+                f"Sort {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
+                total=len(self.rulsets_by_type),
             )
             for ruleset_name, rules in self.rulsets_by_type.items():
                 if len(rules) < 2:
@@ -811,7 +819,11 @@ class CheckmkRuleSync(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
 
-            task1 = progress.add_task("Create Rules", total=len(self.rulsets_by_type))
+            total_rules = sum(len(r) for r in self.rulsets_by_type.values())
+            task1 = progress.add_task(
+                f"Create across {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
+                total=len(self.rulsets_by_type),
+            )
             for ruleset_name, rules in self.rulsets_by_type.items():
                 for rule in rules:
                     template = {
@@ -869,7 +881,11 @@ class CheckmkRuleSync(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
 
-            task1 = progress.add_task("Cleanup Rules", total=len(self.rulsets_by_type))
+            total_rules = sum(len(r) for r in self.rulsets_by_type.values())
+            task1 = progress.add_task(
+                f"Cleanup across {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
+                total=len(self.rulsets_by_type),
+            )
             for ruleset_name, rules in self.rulsets_by_type.items():
                 url = f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
                 rule_response = self.request(url, method="GET")[0]

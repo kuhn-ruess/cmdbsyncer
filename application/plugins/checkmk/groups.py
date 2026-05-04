@@ -38,7 +38,7 @@ class CheckmkGroupSync(CMK2):
         """
         collection_keys = {}
         collection_values = {}
-        for db_host in Host.objects():
+        for db_host in Host.objects(object_type__ne='template'):
             if attributes := self.get_attributes(db_host, 'cmk_conf'):
                 for key, value in attributes['all'].items():
                     key, value = str(key), str(value)
@@ -53,7 +53,8 @@ class CheckmkGroupSync(CMK2):
         # [0] All Values behind Label
         # [1] All Keys which have value
         return collection_keys, collection_values
-    
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,line-too-long,redefined-outer-name
     def _add_group_entries(self, items, rewrite_name, rewrite_title, outcome, group_type, groups, str_replace, replace_exceptions):
         """
         Hilfsfunktion zum Hinzufügen von Gruppen-Einträgen
@@ -70,6 +71,7 @@ class CheckmkGroupSync(CMK2):
             if new_group_name and (new_group_title, new_group_name) not in groups[group_type]:
                 groups[group_type].append((new_group_title, new_group_name))
 
+    # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def export_cmk_groups(self, test_run):
         """
         Export all Checkmk Groups
@@ -133,7 +135,8 @@ class CheckmkGroupSync(CMK2):
 
             elif outcome.foreach_type == "object":
                 db_filter = {
-                    'is_object': True
+                    'is_object': True,
+                    'object_type__ne': 'template',
                 }
                 object_filter = outcome.foreach
                 if object_filter:

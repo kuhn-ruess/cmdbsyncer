@@ -151,7 +151,7 @@ class CheckmkDCDRuleSync(CMK2):
         Export DCD Rules
         """
 
-        db_objects = Host.objects()
+        db_objects = Host.objects(object_type__ne='template')
         total = db_objects.count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
