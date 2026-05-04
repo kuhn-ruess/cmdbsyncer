@@ -11,6 +11,7 @@ local_*
 !application/templates/admin/local_config_editor.html
 .obsidian*
 .claude*
+CLAUDE.md
 */artifacts
 offline_bundle*
 license.jwt

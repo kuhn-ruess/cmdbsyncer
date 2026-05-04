@@ -16,6 +16,7 @@ from collections import namedtuple
 from mongoengine.errors import DoesNotExist
 import requests
 from application import logger, app, log
+from application.helpers.syncer_jinja import render_jinja
 from application.modules.custom_attributes.models import CustomAttributeRule as \
     CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
@@ -418,7 +419,20 @@ class Plugin():
         attributes.update(db_host.labels.items())
         attributes.update(db_host.inventory.items())
         for tmpl in (db_host.cmdb_templates or []):
-            attributes.update(tmpl.labels.items())
+            for key, value in (tmpl.labels or {}).items():
+                if isinstance(value, str) and '{{' in value:
+                    try:
+                        value = render_jinja(
+                            value,
+                            HOSTNAME=db_host.hostname,
+                            **attributes,
+                        )
+                    except Exception as exp:  # pylint: disable=broad-exception-caught
+                        logger.debug(
+                            f"CMDB template Jinja render failed for "
+                            f"{tmpl.hostname}.{key}: {exp}"
+                        )
+                attributes[key] = value
 
         self.init_custom_attributes()
         attributes.update(

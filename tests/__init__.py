@@ -362,6 +362,15 @@ _load_real_module(
     "application.modules.rule.match",
     os.path.join("modules", "rule", "match.py"),
 )
+
+# application.modules.plugin pulls in render_jinja at import time, so the
+# helpers.syncer_jinja stub must be in place before the real plugin module
+# is loaded (the duplicated stub further down stays for the checkmk loaders
+# that rely on it).
+_syncer_jinja_early = _stub_package("application.helpers.syncer_jinja")
+_syncer_jinja_early.render_jinja = MagicMock(name="stub.render_jinja")
+_syncer_jinja_early.get_list = MagicMock(name="stub.get_list")
+
 _try_load_real_module(
     "application.modules.plugin",
     os.path.join("modules", "plugin.py"),

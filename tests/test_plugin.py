@@ -323,6 +323,51 @@ class TestPlugin(unittest.TestCase):
         )
         self.assertEqual(plugin.filter.get_outcomes.call_args.kwargs['persist_cache'], False)
 
+    @patch('application.modules.plugin.render_jinja')
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_renders_jinja_in_template_values(
+            self, mock_app, mock_render):
+        mock_app.config = self.mock_app_config
+        mock_render.side_effect = (
+            lambda value, **kwargs: f"rendered:{value}:{kwargs['HOSTNAME']}"
+        )
+
+        tmpl = Mock()
+        tmpl.hostname = 'web-template'
+        tmpl.labels = {
+            'description': 'Server {{ HOSTNAME }}',
+            'plain': 'no jinja here',
+        }
+
+        mock_host = Mock()
+        mock_host.hostname = 'web01'
+        mock_host.cache = {}
+        mock_host.labels = {'environment': 'prod'}
+        mock_host.inventory = {}
+        mock_host.cmdb_templates = [tmpl]
+
+        plugin = Plugin()
+        plugin.custom_attributes = Mock()
+        plugin.custom_attributes.get_outcomes.return_value = {}
+        plugin.init_custom_attributes = Mock()
+        plugin.rewrite = None
+        plugin.filter = None
+
+        result = plugin.get_attributes(mock_host, False)
+
+        # Values containing `{{` are routed through render_jinja with
+        # HOSTNAME plus the existing host attributes as context.
+        self.assertEqual(
+            result['all']['description'],
+            'rendered:Server {{ HOSTNAME }}:web01',
+        )
+        # Plain strings without `{{` skip render_jinja entirely.
+        self.assertEqual(result['all']['plain'], 'no jinja here')
+        mock_render.assert_called_once()
+        call_kwargs = mock_render.call_args.kwargs
+        self.assertEqual(call_kwargs['HOSTNAME'], 'web01')
+        self.assertEqual(call_kwargs['environment'], 'prod')
+
     @patch('application.modules.plugin.app')
     def test_get_host_data(self, mock_app):
         mock_app.config = self.mock_app_config
