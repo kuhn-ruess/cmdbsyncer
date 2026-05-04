@@ -84,7 +84,7 @@ class DefaultModelView(ModelView):
     """
     page_size = 300
     column_extra_row_actions = [
-        EndpointLinkRowAction("fa fa-clone", ".clone_view"),
+        EndpointLinkRowAction("fa fa-clone", ".clone_view", title="Clone"),
     ]
 
     def _run_view(self, fn, *args, **kwargs):

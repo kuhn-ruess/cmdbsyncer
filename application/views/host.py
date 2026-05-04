@@ -16,6 +16,8 @@ from flask_admin.base import expose
 from wtforms import HiddenField, Field, StringField, BooleanField
 from wtforms.validators import Optional
 from markupsafe import Markup, escape
+from bson import ObjectId
+from bson.errors import InvalidId
 from mongoengine.errors import DoesNotExist
 
 # pylint: disable=import-error
@@ -356,11 +358,33 @@ def _template_edit_url(tmpl):
         return ''
 
 
-def _render_cmdb_template_preview(_view, _context, model, _name):
+def _cmdb_template_filter_url(view, tmpl):
+    """
+    Build a host-list URL pre-filtered to the given template. Looks up
+    `FilterCmdbTemplate`'s position in `view._filters` so the link
+    survives reordering of `column_filters`. Returns '' if the filter
+    isn't wired into this view (e.g. ObjectModelView).
+    """
+    filters = getattr(view, '_filters', None) or []
+    for idx, flt in enumerate(filters):
+        if isinstance(flt, FilterCmdbTemplate):
+            try:
+                return url_for(
+                    f'{view.endpoint}.index_view',
+                    **{f'flt0_{idx}': str(tmpl.id)},
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                return ''
+    return ''
+
+
+def _render_cmdb_template_preview(view, _context, model, _name):
     """
     Compact badge preview of assigned CMDB templates for the list
     view — just the template hostnames, same badge style as the
-    label preview. Each badge links to the template's edit page.
+    label preview. Each badge links to the template's edit page; a
+    small filter icon next to it filters the host list to all hosts
+    sharing that template (the "group by template" shortcut).
     """
     if not model.cmdb_templates:
         return Markup("")
@@ -368,19 +392,36 @@ def _render_cmdb_template_preview(_view, _context, model, _name):
     for tmpl in model.cmdb_templates:
         name = escape(tmpl.hostname)
         badge = (
-            f'<span class="badge badge-dark mr-1" '
+            f'<span class="badge badge-dark" '
             f'style="{_LABEL_BADGE_STYLE}" '
             f'title="{name}">'
             f'<i class="fa fa-file"></i> {name}</span>'
         )
         href = _template_edit_url(tmpl)
         if href:
-            html += (
+            badge_html = (
                 f'<a href="{escape(href)}" '
                 f'style="text-decoration: none;">{badge}</a>'
             )
         else:
-            html += badge
+            badge_html = badge
+
+        filter_href = _cmdb_template_filter_url(view, tmpl)
+        if filter_href:
+            filter_icon = (
+                f'<a href="{escape(filter_href)}" '
+                f'style="text-decoration: none; color: #6c757d; '
+                f'margin-left: 4px;" '
+                f'title="Show all hosts using this template">'
+                f'<i class="fa fa-filter"></i></a>'
+            )
+        else:
+            filter_icon = ''
+
+        html += (
+            f'<span style="display: inline-block; white-space: nowrap; '
+            f'margin-right: 6px;">{badge_html}{filter_icon}</span>'
+        )
     html += '</div>'
     return Markup(html)
 
@@ -624,6 +665,42 @@ class FilterPoolFolder(BaseMongoEngineFilter):
 
     def operation(self):
         return "contains"
+
+
+class FilterCmdbTemplate(BaseMongoEngineFilter):
+    """
+    Filter hosts by an assigned CMDB template. Accepts either a
+    template ObjectId (24-char hex — used by the click-to-filter icon
+    next to each template badge) or a case-insensitive substring of a
+    template hostname. The click case is exact; the typed case is
+    fuzzy. Uses a `__raw__` `$in` query because mongoengine's
+    `cmdb_templates__in=[oid]` keyword form has bitten us before with
+    `ListField(ReferenceField)` storage.
+    """
+
+    def apply(self, query, value):
+        value = (value or '').strip()
+        if not value:
+            return query
+
+        ids = []
+        try:
+            ids = [ObjectId(value)]
+        except (InvalidId, TypeError):
+            templates = Host.objects(
+                object_type='template',
+                hostname__icontains=value,
+            ).only('id')
+            ids = [t.id for t in templates]
+
+        if not ids:
+            # No template matched — short-circuit to an empty result.
+            return query.filter(hostname=None)
+        return query.filter(__raw__={'cmdb_templates': {'$in': ids}})
+
+    def operation(self):
+        return "contains"
+
 
 def _build_keyvalue_pipeline(field, value):
     """
@@ -1142,9 +1219,10 @@ def _process_copy_as_new(label):
 class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods
     """
     Top-right quick-search box that matches `hostname` OR any value
-    in `labels`. Shared by HostModelView and ObjectModelView so both
-    list pages behave identically — Objects' cmdb_fields are mirrored
-    into `labels` by `update_host()`, so the same query covers them.
+    in `labels` OR any value in `inventory`. Shared by HostModelView
+    and ObjectModelView so both list pages behave identically —
+    Objects' cmdb_fields are mirrored into `labels` by
+    `update_host()`, so the same query covers them.
     """
 
     column_searchable_list = ['hostname']
@@ -1163,11 +1241,39 @@ class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods
             self._search_fields.append(field)
         return bool(self._search_fields)
 
+    @staticmethod
+    def _dict_value_match_expr(field_name, term):
+        """`$expr` that regex-matches any value of a dict-typed field."""
+        return {'$expr': {
+            '$anyElementTrue': {
+                '$map': {
+                    'input': {'$objectToArray': {
+                        '$ifNull': [f'${field_name}', {}],
+                    }},
+                    'as': 'kv',
+                    'in': {
+                        '$regexMatch': {
+                            'input': {
+                                '$convert': {
+                                    'input': '$$kv.v',
+                                    'to': 'string',
+                                    'onError': '',
+                                    'onNull': '',
+                                },
+                            },
+                            'regex': term,
+                            'options': 'i',
+                        },
+                    },
+                },
+            },
+        }}
+
     def _search(self, query, search_term):
         """
-        Match hostname OR any label value against the term. Falls back
-        to a literal match if the user typed something that doesn't
-        compile as a regex.
+        Match hostname OR any label value OR any inventory value
+        against the term. Falls back to a literal match if the user
+        typed something that doesn't compile as a regex.
         """
         term = (search_term or '').strip()
         if not term:
@@ -1179,30 +1285,8 @@ class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods
         pipeline = {
             '$or': [
                 {'hostname': {'$regex': term, '$options': 'i'}},
-                {'$expr': {
-                    '$anyElementTrue': {
-                        '$map': {
-                            'input': {'$objectToArray': {
-                                '$ifNull': ['$labels', {}],
-                            }},
-                            'as': 'kv',
-                            'in': {
-                                '$regexMatch': {
-                                    'input': {
-                                        '$convert': {
-                                            'input': '$$kv.v',
-                                            'to': 'string',
-                                            'onError': '',
-                                            'onNull': '',
-                                        },
-                                    },
-                                    'regex': term,
-                                    'options': 'i',
-                                },
-                            },
-                        },
-                    },
-                }},
+                self._dict_value_match_expr('labels', term),
+                self._dict_value_match_expr('inventory', term),
             ],
         }
         return query.filter(__raw__=pipeline)
@@ -1464,8 +1548,11 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
     # strings this replaced were case-mismatched against the registered
     # endpoint and broke whenever the front-end didn't case-fold paths.
     column_extra_row_actions = [
-        EndpointLinkRowAction("fa fa-history", ".timeline", id_arg="obj_id"),
+        EndpointLinkRowAction("fa fa-history", ".timeline",
+                              title="Show change timeline",
+                              id_arg="obj_id"),
         EndpointLinkRowAction("fa fa-copy", ".copy_as_new_form",
+                              title="Copy as new",
                               id_arg="source_id"),
     ]
 
@@ -1596,11 +1683,14 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
 
     column_extra_row_actions = [
         LinkRowAction("fa fa-bug", app.config['BASE_PREFIX'] + \
-                    "admin/host/debug?obj_id={row_id}"),
+                    "admin/host/debug?obj_id={row_id}",
+                    title="Debug host"),
         LinkRowAction("fa fa-history", app.config['BASE_PREFIX'] + \
-                    "admin/host/timeline?obj_id={row_id}"),
+                    "admin/host/timeline?obj_id={row_id}",
+                    title="Show change timeline"),
         LinkRowAction("fa fa-copy", app.config['BASE_PREFIX'] + \
-                    "admin/host/copy_as_new_form?source_id={row_id}"),
+                    "admin/host/copy_as_new_form?source_id={row_id}",
+                    title="Copy as new"),
     ]
 
     column_filters = (
@@ -1619,6 +1709,10 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
        FilterInventoryKeyAndValue(
         Host,
         "Inventory Key:Value"
+       ),
+       FilterCmdbTemplate(
+           Host,
+           'CMDB Template'
        ),
        FilterPoolFolder(
            Host,
@@ -2023,6 +2117,17 @@ below and do not appear here.
             self.column_exclude_list.append('labels')
 
         super().__init__(model, **kwargs)
+
+        # CMDB Template filter is reachable only via the click-to-filter
+        # icon next to each template badge — exposing it in the filter
+        # dropdown would just confuse users (the typed value is a
+        # template ObjectId nobody types by hand). Strip it from the
+        # filter-group UI but leave _filter_args wired so the URL keeps
+        # resolving.
+        if self._filter_groups:
+            for flt in list(self._filter_groups):
+                if flt == 'CMDB Template':
+                    self._filter_groups.pop(flt)
 
     def is_action_allowed(self, name):
         if (name in self._CMDB_ONLY_ACTIONS
