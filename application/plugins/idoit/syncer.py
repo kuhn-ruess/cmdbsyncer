@@ -194,7 +194,7 @@ class SyncIdoit(Plugin):
                         for name, value in values.items():
                             server[name] = value
 
-            if "True" == self.config["filter_monitoring_status"].capitalize():
+            if True == self.config["filter_monitoring_status"]:
                 if "monitoring_active_value" in server and "1" == server["monitoring_active_value"]:
                     servers[title] = server
             else:
