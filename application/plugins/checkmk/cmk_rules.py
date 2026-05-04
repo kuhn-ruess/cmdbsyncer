@@ -414,6 +414,13 @@ class CheckmkRuleSync(CMK2):
                 if len(rules) < 2:
                     progress.advance(task1)
                     continue
+                # folder_index defaults to 0; if no rule in this ruleset
+                # has an explicit folder_index > 0, the admin has not
+                # configured an order — leave the Checkmk-side ordering
+                # untouched instead of chaining a move per rule.
+                if not any(r.get('folder_index', 0) for r in rules):
+                    progress.advance(task1)
+                    continue
                 desired_ids = self._desired_cmk_id_chain(rules)
                 if len(desired_ids) < 2:
                     progress.advance(task1)
@@ -424,7 +431,7 @@ class CheckmkRuleSync(CMK2):
                     )
                     payload = {
                         "position": "after_specific_rule",
-                        "dest_rule_id": desired_ids[i - 1],
+                        "rule_id": desired_ids[i - 1],
                     }
                     try:
                         self.request(move_url, data=payload, method="POST")
@@ -434,11 +441,12 @@ class CheckmkRuleSync(CMK2):
                             f"{desired_ids[i]} after {desired_ids[i - 1]}",
                         ))
                     except CmkException as error:
-                        self.log_details.append((
-                            "ERROR",
+                        message = (
                             f"Could not reorder rule {desired_ids[i]} in "
-                            f"{ruleset_name}: {error}",
-                        ))
+                            f"{ruleset_name}: {error}"
+                        )
+                        self.log_details.append(("ERROR", message))
+                        print(f"{CC.FAIL} {message} {CC.ENDC}")
                 progress.advance(task1)
 
     def _desired_cmk_id_chain(self, rules):
