@@ -3,6 +3,7 @@
 Export Checkmk Rules
 """
 import ast
+import re
 from pprint import pformat
 
 
@@ -13,6 +14,19 @@ from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
 from application.modules.debug import ColorCodes as CC
+
+
+def normalize_folder(folder):
+    """
+    Collapse repeated slashes and trim trailing ones so the rendered
+    folder path matches Checkmk's rule-folder pattern. Configs that
+    combine a leading "/" with a folder field that also starts with
+    "/" produce "//", which the CMK API rejects outright.
+    """
+    folder = re.sub(r'/+', '/', folder) or '/'
+    if len(folder) > 1 and folder.endswith('/'):
+        folder = folder[:-1]
+    return folder
 
 
 def clean_postproccessed(data):
@@ -191,7 +205,8 @@ class CheckmkRuleSync(CMK2):
 
         # Render value and folder
         value = render_jinja(rule_params['value_template'], **context)
-        rule_params['folder'] = render_jinja(rule_params['folder'], **context)
+        rule_params['folder'] = normalize_folder(
+            render_jinja(rule_params['folder'], **context))
         rule_params['value'] = value
         del rule_params['value_template']
         rule_params['optimize'] = False
