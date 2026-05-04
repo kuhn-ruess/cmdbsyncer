@@ -363,7 +363,7 @@ class Plugin():
                 )
         except requests.exceptions.JSONDecodeError:
             if resp:
-                logger.debug("Response Text: [non-JSON body omitted from debug log]")
+                logger.debug(f"Response Text: {resp}")
         except AttributeError:
             logger.debug(f"Response Raw: {pformat(resp)}")
         return resp
