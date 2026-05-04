@@ -1,2 +1,5 @@
 #!/bin/sh
-docker exec -it cmdb_syncer-api-1 /srv/cmdbsyncer ansible cmk-server-source $1 $2
+# Backward-compatible shim: dockerised version of `cmk_server_inventory`.
+# Invokes the new `cmdbsyncer ansible inventory cmk_sites` CLI inside the
+# Syncer container.
+exec docker exec -it cmdb_syncer-api-1 /srv/cmdbsyncer ansible inventory cmk_sites "$@"

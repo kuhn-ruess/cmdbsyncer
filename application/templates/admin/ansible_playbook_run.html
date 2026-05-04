@@ -1,0 +1,121 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<style>
+  .ansible-runner-grid {
+    display: grid;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .ansible-runner-card {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px 16px;
+    background: #fafafa;
+  }
+  .ansible-runner-card form {
+    display: grid;
+    grid-template-columns: 200px 160px 1fr 1fr auto auto;
+    gap: 8px;
+    align-items: end;
+  }
+  .ansible-runner-card label {
+    font-size: 11px;
+    color: #555;
+    margin: 0 0 2px 0;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .ansible-runner-card .playbook-name {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 6px 0 0 0;
+  }
+  .ansible-runner-card .playbook-file {
+    font-family: monospace;
+    font-size: 11px;
+    color: #888;
+    padding-bottom: 4px;
+  }
+  .ansible-runner-card input.form-control {
+    height: 32px;
+    font-size: 13px;
+  }
+  .ansible-empty {
+    padding: 24px;
+    text-align: center;
+    color: #888;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+  }
+</style>
+
+<h2>Ansible Playbook Runner</h2>
+<p class="text-muted">
+  Trigger one of the playbooks declared in
+  <code>{{ ansible_dir }}/playbooks.yml</code>
+  (and <code>playbooks.local.yml</code> for site-local additions).
+  Each run is recorded in the
+  <a href="{{ url_for('ansiblerunstats.index_view') }}">Run History</a>
+  with full log output.
+</p>
+
+{% if playbooks %}
+<div class="ansible-runner-grid">
+  {% for entry in playbooks %}
+  <div class="ansible-runner-card">
+    <form method="POST" action="{{ url_for('.run') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="playbook" value="{{ entry.file }}">
+      <div>
+        <label>Playbook</label>
+        <div class="playbook-name">{{ entry.name }}</div>
+        <div class="playbook-file">{{ entry.file }}</div>
+      </div>
+      <div>
+        <label for="provider-{{ loop.index }}">Inventory Provider</label>
+        <select class="form-control" id="provider-{{ loop.index }}" name="provider">
+          {% for provider in providers %}
+          <option value="{{ provider }}"
+                  {% if provider == entry.default_provider %}selected{% endif %}>
+            {{ provider }}{% if provider == entry.default_provider %} (default){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="limit-{{ loop.index }}">Limit (host/group, optional)</label>
+        <input class="form-control" id="limit-{{ loop.index }}"
+               type="text" name="target_host"
+               placeholder="hostname or group">
+      </div>
+      <div>
+        <label for="extra-{{ loop.index }}">Extra Vars (optional)</label>
+        <input class="form-control" id="extra-{{ loop.index }}"
+               type="text" name="extra_vars"
+               placeholder="key=value key2=value2">
+      </div>
+      <div>
+        <button type="submit" name="mode" value="check" class="btn btn-secondary"
+                title="ansible-playbook --check --diff (no changes applied)">
+          <i class="fa fa-eye"></i> Preview
+        </button>
+      </div>
+      <div>
+        <button type="submit" name="mode" value="run" class="btn btn-primary">
+          <i class="fa fa-play"></i> Run
+        </button>
+      </div>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="ansible-empty">
+  No playbooks declared. Add entries to
+  <code>{{ ansible_dir }}/playbooks.yml</code>
+  or <code>playbooks.local.yml</code>.
+</div>
+{% endif %}
+{% endblock %}

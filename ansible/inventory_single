@@ -1,7 +1,8 @@
 #!/bin/sh
-#
-# Use this script to generate an Ansible inventory file for a specific host.
-# This will deliver a faster response time than the full inventory script.
+# Backward-compatible shim: per-host inventory wrapper used by older
+# integrations that pass --host but expect the full Ansible inventory
+# shape. Wraps the new `cmdbsyncer ansible inventory ansible --host`
+# call so the surrounding playbooks keep working unchanged.
 
 LIMIT_VALUE=""
 
@@ -12,7 +13,7 @@ case "$1" in
         shift 2
         ;;
     --host=*)
-        LIMIT_VALUE="${1#--limit=}"
+        LIMIT_VALUE="${1#--host=}"
         shift
         ;;
     *)
@@ -21,8 +22,8 @@ case "$1" in
 esac
 done
 
- vars=$(../cmdbsyncer ansible source --host "$LIMIT_VALUE" 2>/dev/null)
- if [ -z "$vars" ]; then
-     vars="{}"
- fi
- printf '{"_meta":{"hostvars": {"%s": %s}}, "all": {"hosts": ["%s"]}}\n' "$LIMIT_VALUE" "$vars" "$LIMIT_VALUE"
+vars=$(../cmdbsyncer ansible inventory ansible --host "$LIMIT_VALUE" 2>/dev/null)
+if [ -z "$vars" ]; then
+    vars="{}"
+fi
+printf '{"_meta":{"hostvars": {"%s": %s}}, "all": {"hosts": ["%s"]}}\n' "$LIMIT_VALUE" "$vars" "$LIMIT_VALUE"

@@ -1,11 +1,24 @@
-from application.modules.rule.views import FiltereModelView, RewriteAttributeView
-
+"""
+Flask-Admin view registration for the Ansible plugin.
+"""
+# pylint: disable=too-few-public-methods
 from .models import (
     AnsibleCustomVariablesRule,
     AnsibleFilterRule,
+    AnsiblePlaybookFireRule,
+    AnsibleProject,
     AnsibleRewriteAttributesRule,
+    AnsibleRunStats,
 )
-from .views import AnsibleCustomVariablesView
+from .views import (
+    AnsibleCustomVariablesView,
+    AnsibleFilterRuleView,
+    AnsiblePlaybookFireRuleView,
+    AnsiblePlaybookRunView,
+    AnsibleProjectView,
+    AnsibleRewriteRuleView,
+    AnsibleRunStatsView,
+)
 
 
 def register_admin_views(admin):
@@ -13,19 +26,58 @@ def register_admin_views(admin):
     admin.add_sub_category(name="Ansible", parent_name="Modules")
 
     admin.add_view(
-        RewriteAttributeView(
+        AnsibleProjectView(
+            AnsibleProject,
+            name="Rules by Project",
+            category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-folder',
+        )
+    )
+    admin.add_view(
+        AnsiblePlaybookFireRuleView(
+            AnsiblePlaybookFireRule,
+            name="Playbook Fire Rules",
+            category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-bolt',
+        )
+    )
+    admin.add_view(
+        AnsiblePlaybookRunView(
+            name="Run Playbook",
+            endpoint='ansibleplaybookrun',
+            category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-play',
+        )
+    )
+    admin.add_view(
+        AnsibleRunStatsView(
+            AnsibleRunStats,
+            name="Run History",
+            endpoint='ansiblerunstats',
+            category="Ansible",
+            menu_icon_type='fa',
+            menu_icon_value='fa-history',
+        )
+    )
+
+    admin.add_sub_category(name="All Rules", parent_name="Ansible")
+    admin.add_view(
+        AnsibleRewriteRuleView(
             AnsibleRewriteAttributesRule,
             name="Rewrite Attributes",
-            category="Ansible",
+            category="All Rules",
             menu_icon_type='fa',
             menu_icon_value='fa-exchange',
         )
     )
     admin.add_view(
-        FiltereModelView(
+        AnsibleFilterRuleView(
             AnsibleFilterRule,
             name="Filter",
-            category="Ansible",
+            category="All Rules",
             menu_icon_type='fa',
             menu_icon_value='fa-filter',
         )
@@ -34,7 +86,7 @@ def register_admin_views(admin):
         AnsibleCustomVariablesView(
             AnsibleCustomVariablesRule,
             name="Ansible Attributes",
-            category="Ansible",
+            category="All Rules",
             menu_icon_type='fa',
             menu_icon_value='fa-tags',
         )

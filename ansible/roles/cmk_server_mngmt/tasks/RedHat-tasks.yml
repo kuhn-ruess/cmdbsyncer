@@ -1,7 +1,7 @@
 ---
 - name: Install Checkmk Version
   become: true
-  ansible.builtin.yum:
+  ansible.builtin.dnf:
     name: "/tmp/{{ cmk_version_filename }}"
     state: present
     disable_gpg_check: true

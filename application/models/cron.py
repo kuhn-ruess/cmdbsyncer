@@ -101,6 +101,7 @@ commands = [
     ('cmk-export_rules', "Checkmk: Export Rules"),
     ('ansible-manage_hosts', "Ansible: Manage Hosts"),
     ('ansible-manage_servers', "Ansible: Manage Servers"),
+    ('ansible-fire_playbook_rules', "Ansible: Fire Playbook Rules"),
 ]
 
 class CronStats(db.Document):

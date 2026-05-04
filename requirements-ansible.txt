@@ -3,3 +3,6 @@ pykerberos==1.2.4
 pywinrm==0.4.3
 ntlm-auth==1.5.0
 ansible==10.5.0
+# Inventory plugin used by ansible/syncer.inventory.yml — local mode
+# shells the cmdbsyncer CLI, http mode hits /api/v1/inventory/ansible/.
+cmdbsyncer-inventory>=0.2.0

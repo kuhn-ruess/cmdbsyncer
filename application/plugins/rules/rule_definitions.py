@@ -5,6 +5,7 @@ rule-type ident to its (module_path, model_class_name).
 rules = {
     'ansible_customvars': ('application.plugins.ansible.models', 'AnsibleCustomVariablesRule'),
     'ansible_filter': ('application.plugins.ansible.models', 'AnsibleFilterRule'),
+    'ansible_playbook_fire': ('application.plugins.ansible.models', 'AnsiblePlaybookFireRule'),
     'ansible_rewrite': ('application.plugins.ansible.models', 'AnsibleRewriteAttributesRule'),
     'custom_attributes': ('application.modules.custom_attributes.models', 'CustomAttributeRule'),
     'cmk_tags': ('application.plugins.checkmk.models', 'CheckmkTagMngmt'),

@@ -1,82 +1,87 @@
 ---
-   - name: Create Folder to store Webserver Certificates
-     ansible.builtin.file:
-        path: /etc/ssl/checkmk
-        owner: root
-        group: root
-        state: directory
-        mode: 0755
-     when:
-       - webserver_certificate is defined
-       - webserver_certificate | length > 0
-     become: True
+- name: Create Folder to store Webserver Certificates
+  ansible.builtin.file:
+    path: /etc/ssl/checkmk
+    owner: root
+    group: root
+    state: directory
+    mode: "0755"
+  when:
+    - webserver_certificate is defined
+    - webserver_certificate | length > 0
+  become: true
 
-   - name: Copy Webserver Certificate
-     ansible.builtin.copy:
-        src: "{{ webserver_certificate }}"
-        dest: /etc/ssl/checkmk/certificate.pem
-        follow: true
-        mode: "0755"
-        owner: root
-        group: root
-     when:
-       - webserver_certificate is defined
-       - webserver_certificate | length > 0
-     become: True
+- name: Copy Webserver Certificate
+  ansible.builtin.copy:
+    src: "{{ webserver_certificate }}"
+    dest: /etc/ssl/checkmk/certificate.pem
+    follow: true
+    mode: "0755"
+    owner: root
+    group: root
+  when:
+    - webserver_certificate is defined
+    - webserver_certificate | length > 0
+  become: true
 
-   - name: Copy Private Certificate
-     ansible.builtin.copy:
-        src: "{{ webserver_private_certificate }}"
-        dest: /etc/ssl/checkmk/private.pem
-        follow: true
-        mode: "0755"
-        owner: root
-        group: root
-     when:
-       - webserver_private_certificate is defined
-       - webserver_private_certificate | length > 0
-     become: True
+- name: Copy Private Certificate
+  ansible.builtin.copy:
+    src: "{{ webserver_private_certificate }}"
+    dest: /etc/ssl/checkmk/private.pem
+    follow: true
+    mode: "0755"
+    owner: root
+    group: root
+  when:
+    - webserver_private_certificate is defined
+    - webserver_private_certificate | length > 0
+  become: true
 
-   - name: Copy Intermediate Certificate
-     ansible.builtin.copy:
-        src: "{{ webserver_intermediate_certificate }}"
-        dest: /etc/ssl/checkmk/intermediate.pem
-        follow: true
-        mode: "0755"
-        owner: root
-        group: root
-     when:
-       - webserver_intermediate_certificate is defined
-       - webserver_intermediate_certificate | length > 0
-     become: true
+- name: Copy Intermediate Certificate
+  ansible.builtin.copy:
+    src: "{{ webserver_intermediate_certificate }}"
+    dest: /etc/ssl/checkmk/intermediate.pem
+    follow: true
+    mode: "0755"
+    owner: root
+    group: root
+  when:
+    - webserver_intermediate_certificate is defined
+    - webserver_intermediate_certificate | length > 0
+  become: true
 
-   - name: Update ssl.conf for certificate
-     ansible.builtin.lineinfile:
-       path: /etc/httpd/conf.d/ssl.conf
-       regexp: '^\s*SSLCertificateFile\b'
-       line: 'SSLCertificateFile /etc/ssl/checkmk/certificate.pem'
-     when:
-       - webserver_certificate is defined
-       - webserver_certificate | length > 0
-     become: true
+# httpd ssl.conf paths below are RHEL-family specific. Skip on Debian/Ubuntu —
+# Apache config layout there is /etc/apache2/sites-available/*.conf and is not
+# managed by this role yet.
+- name: Update ssl.conf for certificate
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf.d/ssl.conf
+    regexp: '^\s*SSLCertificateFile\b'
+    line: 'SSLCertificateFile /etc/ssl/checkmk/certificate.pem'
+  when:
+    - ansible_os_family == 'RedHat'
+    - webserver_certificate is defined
+    - webserver_certificate | length > 0
+  become: true
 
-   - name: Update ssl.conf for private
-     ansible.builtin.lineinfile:
-       path: /etc/httpd/conf.d/ssl.conf
-       regexp: '^\s*SSLCertificateKeyFile\b'
-       line: 'SSLCertificateKeyFile /etc/ssl/checkmk/private.pem'
-     when:
-       - webserver_private_certificate is defined
-       - webserver_private_certificate | length > 0
-     become: true
+- name: Update ssl.conf for private
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf.d/ssl.conf
+    regexp: '^\s*SSLCertificateKeyFile\b'
+    line: 'SSLCertificateKeyFile /etc/ssl/checkmk/private.pem'
+  when:
+    - ansible_os_family == 'RedHat'
+    - webserver_private_certificate is defined
+    - webserver_private_certificate | length > 0
+  become: true
 
-   - name: Update ssl.conf for intermediate
-     ansible.builtin.lineinfile:
-       path: /etc/httpd/conf.d/ssl.conf
-       regexp: '^\s*SSLCertificateChainFile\b'
-       line: 'SSLCertificateChainFile /etc/ssl/checkmk/intermediate.pem'
-     when:
-       - webserver_intermediate_certificate is defined
-       - webserver_intermediate_certificate | length > 0
-     become: true
-
+- name: Update ssl.conf for intermediate
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf.d/ssl.conf
+    regexp: '^\s*SSLCertificateChainFile\b'
+    line: 'SSLCertificateChainFile /etc/ssl/checkmk/intermediate.pem'
+  when:
+    - ansible_os_family == 'RedHat'
+    - webserver_intermediate_certificate is defined
+    - webserver_intermediate_certificate | length > 0
+  become: true

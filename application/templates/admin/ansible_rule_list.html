@@ -1,0 +1,61 @@
+{% extends 'admin/model/list.html' %}
+
+{# Visual grouping for Ansible rule lists: when the table is sorted by
+   project, walk it after render and insert a project-name banner row
+   before every transition. Cheap, no server-side work, and degrades
+   gracefully — if the user re-sorts by another column the banners are
+   still inserted but no longer make sense, so we only emit them when
+   the current sort key is `project`. #}
+{% block tail %}
+{{ super() }}
+<style>
+  tr.project-group-header > th {
+    background: #f1f5f9;
+    color: #1f2937;
+    padding: 8px 12px;
+    font-weight: 600;
+    border-top: 2px solid #94a3b8;
+    text-align: left;
+    letter-spacing: 0.02em;
+  }
+</style>
+<script>
+(function() {
+  var url = new URL(window.location.href);
+  var sortKey = url.searchParams.get('sort');
+  var explicitSort = sortKey !== null;
+  if (explicitSort && sortKey !== 'project') return;
+
+  var table = document.querySelector('.model-list table');
+  if (!table || !table.tHead || !table.tBodies[0]) return;
+  var headers = Array.prototype.slice.call(table.tHead.rows[0].cells);
+  var projectIdx = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if ((headers[i].textContent || '').trim().toLowerCase() === 'project') {
+      projectIdx = i;
+      break;
+    }
+  }
+  if (projectIdx < 0) return;
+  var tbody = table.tBodies[0];
+  var rows = Array.prototype.slice.call(tbody.rows);
+  var colCount = headers.length;
+  var lastProject = null;
+  rows.forEach(function(row) {
+    var cell = row.cells[projectIdx];
+    if (!cell) return;
+    var project = (cell.textContent || '').trim() || '— (no project)';
+    if (project !== lastProject) {
+      var headerRow = document.createElement('tr');
+      headerRow.className = 'project-group-header';
+      var th = document.createElement('th');
+      th.colSpan = colCount;
+      th.textContent = project;
+      headerRow.appendChild(th);
+      tbody.insertBefore(headerRow, row);
+      lastProject = project;
+    }
+  });
+})();
+</script>
+{% endblock %}
