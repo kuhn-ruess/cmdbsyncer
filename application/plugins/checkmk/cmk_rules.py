@@ -462,6 +462,18 @@ class CheckmkRuleSync(CMK2):
                         )
                         self.log_details.append(("ERROR", message))
                         print(f"{CC.FAIL} {message} {CC.ENDC}")
+                    except Exception as error:  # pylint: disable=broad-except
+                        # A non-CmkException (timeout, network reset, JSON
+                        # decode, …) used to bubble out of sort_rules and
+                        # silently abort the rest of the reorder. Catch it
+                        # explicitly so the run continues and the failure
+                        # is visible on stdout and in the run log.
+                        message = (
+                            f"Unexpected error reordering rule {desired_ids[i]} in "
+                            f"{ruleset_name}: {type(error).__name__}: {error}"
+                        )
+                        self.log_details.append(("ERROR", message))
+                        print(f"{CC.FAIL} {message} {CC.ENDC}")
                 progress.advance(task1)
 
     def _desired_cmk_id_chain(self, rules):
