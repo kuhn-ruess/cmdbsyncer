@@ -31,7 +31,7 @@ from application.plugins.netbox import get_device_debug_data as netbox_host_debu
 from application.plugins.ansible import get_ansible_debug_data as ansible_host_debug
 from application.plugins.idoit import get_idoit_debug_data as idoit_host_debug
 from application.plugins.vmware import get_vmware_debug_data as vmware_host_debug
-from application import app
+from application import app, logger
 from application.views.default import DefaultModelView
 from application.views.host_widgets import (
     StaticLabelField,
@@ -1428,7 +1428,7 @@ below and do not appear here.
                                return_to=request.args.get('return_to', ''))
 
     @expose('/bulk_label_process', methods=['POST'])
-    def bulk_label_process(self):
+    def bulk_label_process(self):  # pylint: disable=too-many-branches
         """
         Apply an add / remove / rename label operation to every host in
         `host_ids`. Uses `update_host` so existing side-effects (log entry,
@@ -1445,6 +1445,12 @@ below and do not appear here.
             return redirect(url_for('.index_view'))
         if mode == 'rename' and not new_key:
             flash('Rename needs a new key', 'error')
+            return redirect(url_for('.index_view'))
+        # Empty value in add-mode would silently overwrite an existing
+        # value — the operator has to either type a value or pick remove.
+        if mode == 'add' and not value:
+            flash('Add mode requires a non-empty value '
+                  '(use Remove mode to drop a label).', 'error')
             return redirect(url_for('.index_view'))
 
         changed = 0
@@ -1467,6 +1473,29 @@ below and do not appear here.
                 else:
                     skipped += 1
                     continue
+
+            # Defensive check: a bulk action must only touch the one key
+            # the operator named. If anything else moved (e.g. an upstream
+            # config quietly flattened a nested label), bail out instead
+            # of writing the truncated dict back.
+            expected_keys = set(before.keys())
+            if mode == 'add':
+                expected_keys.add(key)
+            elif mode == 'remove':
+                expected_keys.discard(key)
+            elif mode == 'rename':
+                expected_keys.discard(key)
+                expected_keys.add(new_key)
+            if set(labels.keys()) != expected_keys:
+                logger.error(
+                    "bulk_label_process aborted for %s: key drift "
+                    "(before=%s, after=%s, mode=%s, key=%s)",
+                    host.hostname, sorted(before.keys()),
+                    sorted(labels.keys()), mode, key,
+                )
+                skipped += 1
+                continue
+
             if labels != before:
                 # Tag the change so HostLabelChange rows show "manual"
                 # + the acting user in the Timeline, not "import".
