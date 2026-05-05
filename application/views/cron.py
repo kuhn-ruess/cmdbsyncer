@@ -8,7 +8,7 @@ from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLi
 from flask_admin.form import rules
 from flask_login import current_user
 from markupsafe import Markup, escape
-from wtforms import HiddenField
+from wtforms import BooleanField, HiddenField
 
 from application.views.default import DefaultModelView
 from application.views._form_sections import modern_form, section
@@ -119,14 +119,22 @@ class CronGroupView(DefaultModelView):
         'protected': HiddenField,
     }
 
-    form_widget_args = {
-        'webhook_token_hash': {
-            'readonly': True,
-            'placeholder': 'Generated automatically when Webhook is enabled.',
-        },
+    column_exclude_list = ('webhook_token', 'webhook_token_hash')
+    form_excluded_columns = ('webhook_token', 'webhook_token_hash')
+
+    # Non-model checkbox: when ticked, on_model_change rotates the
+    # token and flashes the new plaintext (the only place the operator
+    # ever sees it). The hash itself stays out of the form entirely.
+    form_extra_fields = {
+        'rotate_webhook_token': BooleanField(
+            'Regenerate webhook token on save',
+            description='Tick this and save to rotate the token. '
+                        'The new plaintext is shown ONCE in a flash '
+                        'message — copy it then; it cannot be retrieved '
+                        'later. Existing URLs using the old token stop '
+                        'working immediately.',
+        ),
     }
-    column_exclude_list = ('webhook_token',)
-    form_excluded_columns = ('webhook_token',)
 
     form_rules = modern_form(
         section('1', 'main', 'Basics',
@@ -148,12 +156,13 @@ class CronGroupView(DefaultModelView):
                  rules.Field('continue_on_error')]),
         section('4', 'aux', 'Webhook Trigger',
                 'External systems can trigger this group via HTTPS POST. '
-                'The token is auto-generated on first enable. The DB only '
-                'stores its SHA-256 hash, so the plaintext is shown ONCE '
-                'in a flash message after generation — copy it then. '
-                'Rotate it with the "Regenerate Webhook Token" action.',
+                'A token is auto-generated on first enable and shown ONCE '
+                'in a flash message — copy it then; the DB only keeps a '
+                'SHA-256 hash, so the plaintext is not retrievable later. '
+                'To rotate, tick the regenerate checkbox and save (or use '
+                'the "Regenerate Webhook Token" bulk action).',
                 [rules.Field('webhook_enabled'),
-                 rules.Field('webhook_token_hash')]),
+                 rules.Field('rotate_webhook_token')]),
     )
 
     form_subdocuments = {
@@ -181,14 +190,22 @@ class CronGroupView(DefaultModelView):
     }
 
     def on_model_change(self, form, model, is_created):
-        """Allocate a webhook token on first enable. Plaintext is
-        flashed once because the DB never sees it again — only the
-        SHA-256 hash is persisted."""
-        plaintext = model.ensure_webhook_token()
+        """Allocate or rotate the webhook token. Plaintext is flashed
+        once because the DB only keeps the SHA-256 hash — there is no
+        way to show it again later. New groups: ensure_webhook_token
+        generates on first enable. Existing groups: the operator ticks
+        the `rotate_webhook_token` checkbox to force regeneration."""
+        plaintext = None
+        rotate = bool(getattr(form, 'rotate_webhook_token', None)
+                      and form.rotate_webhook_token.data)
+        if rotate and model.webhook_enabled:
+            plaintext = model.regenerate_webhook_token()
+        else:
+            plaintext = model.ensure_webhook_token()
         if plaintext:
             flash(
                 Markup(
-                    'Webhook token generated for '
+                    'Webhook token for '
                     f'<strong>{escape(model.name)}</strong>. '
                     'Copy it now — it will not be shown again:<br>'
                     f'<code style="word-break:break-all;">{escape(plaintext)}</code>'
