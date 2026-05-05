@@ -349,6 +349,13 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
 
     from application.api.views import API_BP as api
     app.register_blueprint(api, url_prefix="/api/v1")
+    # Intentional: every /api/v1 route authenticates per request via
+    # @require_token (Basic Auth) or @require_api_role, so CSRF tokens
+    # would only break external clients (CLI, MCP, Ansible inventory
+    # pulls, Grafana scrapes — none of which fetch a CSRF cookie). The
+    # invariant that no /api/v1/* route falls back to session auth is
+    # enforced by tests/test_api_csrf_invariant.py — DO NOT remove this
+    # exempt during a code review without first reading that test.
     csrf.exempt(api)
 
     # Give the enterprise package a chance to register its own auth-related
