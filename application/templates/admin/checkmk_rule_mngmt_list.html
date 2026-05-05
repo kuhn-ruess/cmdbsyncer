@@ -1,0 +1,75 @@
+{% extends 'admin/model/list.html' %}
+
+{% block body %}
+{{ super() }}
+
+{# Hard cap the rendered-card column so a long ruleset can no longer
+   stretch the table off-screen. The cards inside already wrap. #}
+<style>
+  .table td .cmk-rule-card,
+  .table .cmk-rule-card {
+    max-width: 720px;
+  }
+  /* Flask-Admin renders one cell per column; constrain the cell too,
+     so the column itself stops growing past 720px even when the row
+     is otherwise narrow. */
+  .table th[class*="column-render_cmk_rule_mngmt"],
+  .table td[class*="column-render_cmk_rule_mngmt"] {
+    max-width: 720px;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+</style>
+{% endblock %}
+
+{% block tail %}
+{{ super() }}
+{% include 'admin/_live_search.html' %}
+<script>
+(function() {
+  // Auto-suggest existing rulesets in the "Ruleset contains" filter.
+  // The filter input is a plain <input> rendered by Flask-Admin; we
+  // attach a <datalist> populated from the JSON endpoint defined on
+  // the view (.ruleset_choices).
+  var listId = 'cmk-rule-mngmt-rulesets';
+  var datalist = document.getElementById(listId);
+  if (!datalist) {
+    datalist = document.createElement('datalist');
+    datalist.id = listId;
+    document.body.appendChild(datalist);
+  }
+
+  fetch('{{ url_for(".ruleset_choices") }}', {credentials: 'same-origin'})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      datalist.innerHTML = '';
+      (data.rulesets || []).forEach(function(rs) {
+        var opt = document.createElement('option');
+        opt.value = rs;
+        datalist.appendChild(opt);
+      });
+    })
+    .catch(function() { /* fail open — input still works without autocomplete */ });
+
+  // Wire the datalist onto every "Ruleset" filter input. Flask-Admin
+  // renders multiple filter rows when the user adds the same filter
+  // more than once; cover them all.
+  function attachDatalist() {
+    document.querySelectorAll('input[name^="flt"]').forEach(function(input) {
+      var label = input.previousElementSibling;
+      // Be liberal — match the parent .field-filters wrapper too.
+      var labelText = (label && label.textContent || '').trim().toLowerCase();
+      var nearest = input.closest('.field-filters, .filter, td, .form-group');
+      var nearestText = (nearest && nearest.textContent || '').toLowerCase();
+      if (labelText.indexOf('ruleset') !== -1 || nearestText.indexOf('ruleset contains') !== -1) {
+        input.setAttribute('list', listId);
+      }
+    });
+  }
+  attachDatalist();
+  // Filter inputs can be added dynamically — observe the document.
+  var observer = new MutationObserver(attachDatalist);
+  observer.observe(document.body, {childList: true, subtree: true});
+})();
+</script>
+{% endblock %}

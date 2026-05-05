@@ -14,7 +14,11 @@ from wtforms.validators import ValidationError
 from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
-from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
+from flask_admin.contrib.mongoengine.filters import (
+    BaseMongoEngineFilter,
+    BooleanEqualFilter,
+    FilterLike,
+)
 from flask import redirect, url_for, request, render_template, flash
 
 from flask_login import current_user
@@ -228,52 +232,65 @@ class CheckmkRuleView(RuleModelView):
         return current_user.is_authenticated and current_user.has_right('checkmk')
 
 
+_RULE_MNGMT_CARD_CSS = (
+    '<style>'
+    '.cmk-rule-card{max-width:100%;margin-bottom:6px;}'
+    '.cmk-rule-card .card-title{font-size:0.95rem;margin:0;'
+    'word-break:break-all;overflow-wrap:anywhere;}'
+    '.cmk-rule-card .card-body{padding:8px 12px;}'
+    '.cmk-rule-card ul{margin:4px 0 0;padding-left:20px;}'
+    '.cmk-rule-card li{word-break:break-word;overflow-wrap:anywhere;}'
+    '.cmk-rule-card .highlight{max-width:100%;overflow-x:auto;'
+    'background:#f7f9fa;padding:2px 6px;border-radius:3px;'
+    'display:inline-block;vertical-align:top;}'
+    '.cmk-rule-card .highlight pre{margin:0;white-space:pre-wrap;'
+    'word-break:break-all;}'
+    '</style>'
+)
+
+
 def _render_rule_mngmt_outcome(_view, _context, model, _name):
     """
-    Render Group Outcome
+    Render Group Outcome — long ruleset names / value templates wrap
+    inside the card instead of overflowing the table column.
     """
-    html = ""
+    html = [_RULE_MNGMT_CARD_CSS]
     for _idx, rule in enumerate(model.outcomes):
-        value_template = \
-                highlight(rule.value_template, DjangoLexer(),
-                          HtmlFormatter(sytle='colorfull'))
-        html += f'''
-           <div class="card">
+        value_template = highlight(
+            rule.value_template, DjangoLexer(),
+            HtmlFormatter(sytle='colorfull'),
+        )
+        html.append(f'''
+           <div class="card cmk-rule-card">
              <div class="card-body">
-               <p class="card-text">
-                <h5 class="card-title mb-2">{escape(rule.ruleset)}</h5>
-               </p>
-               <p class="card-text">
+               <h5 class="card-title mb-2">{escape(rule.ruleset)}</h5>
                <ul>
                 <li><b>Template</b>: {value_template}</li>
-        '''
+        ''')
         if rule.loop_over_list:
-            html += f'''
-                   <li><b>Loop over</b>: {escape(rule.list_to_loop)}</li>
-            '''
-        html += "</ul></p>"
-        html += '''
-               <p class="card-text">
-                <h6 class="card-subtitle mb-2">Conditions:</h6>
-               </p>
-               <p class="card-text">
-               <ul>
-        '''
+            html.append(
+                f'<li><b>Loop over</b>: {escape(rule.list_to_loop)}</li>'
+            )
+        html.append('</ul>')
+        html.append(
+            '<h6 class="card-subtitle mb-2 mt-2">Conditions:</h6><ul>'
+        )
         if rule.condition_host:
-            html += f'<li><b>Host</b>: {escape(rule.condition_host)}</li>'
+            html.append(f'<li><b>Host</b>: {escape(rule.condition_host)}</li>')
         if rule.condition_label_template:
-            html += f'<li><b>Host Label</b>: {escape(rule.condition_label_template)}</li>'
+            html.append(
+                f'<li><b>Host Label</b>: {escape(rule.condition_label_template)}</li>'
+            )
         if rule.condition_service:
-            html += f'<li><b>Service</b>: {escape(rule.condition_service)}</li>'
+            html.append(
+                f'<li><b>Service</b>: {escape(rule.condition_service)}</li>'
+            )
         if rule.condition_service_label:
-            html += f'<li><b>Service Label</b>: {escape(rule.condition_service_label)}</li>'
-        html += '''
-                   </ul>
-                   </p>
-                 </div>
-               </div>
-            '''
-    return Markup(html)
+            html.append(
+                f'<li><b>Service Label</b>: {escape(rule.condition_service_label)}</li>'
+            )
+        html.append('</ul></div></div>')
+    return Markup(''.join(html))
 
 class CheckmkGroupRuleView(RuleModelView):
     """
@@ -448,10 +465,74 @@ class CheckmkBiRuleView(DefaultModelView):
 
 
 
+class FilterRulesetContains(BaseMongoEngineFilter):
+    """Substring filter against any outcome's ruleset on a CheckmkRuleMngmt
+    document. Uses `__raw__` because mongoengine's keyword form is
+    fiddly on embedded ListField regex matches."""
+
+    def apply(self, query, value):
+        value = (value or '').strip()
+        if not value:
+            return query
+        return query.filter(__raw__={
+            'outcomes': {
+                '$elemMatch': {
+                    'ruleset': {'$regex': value, '$options': 'i'},
+                },
+            },
+        })
+
+    def operation(self):
+        return "contains"
+
+
 class CheckmkMngmtRuleView(RuleModelView):
     """
     Management of Rules inside Checkmk
     """
+    list_template = 'admin/checkmk_rule_mngmt_list.html'
+
+    # Group the listing by the first outcome's ruleset so rules of the
+    # same Checkmk ruleset land next to each other instead of being
+    # interleaved by sort_field.
+    column_default_sort = ('outcomes.ruleset', False)
+
+    column_searchable_list = ('name',)
+
+    def init_search(self):
+        """
+        Bypass Flask-Admin's strict `type(p) in allowed_search_types`
+        check — flask-mongoengine wraps StringField in a subclass that
+        fails identity comparison and raises
+        "Can only search on text columns. Failed to setup search for
+        StringField …". Mirrors the same workaround used by
+        `HostnameAndLabelSearchMixin` on the host views.
+        """
+        for name in self.column_searchable_list or []:
+            field = self.model._fields.get(name) if isinstance(name, str) else name
+            if field is None:
+                raise ValueError(f"Invalid search field: {name!r}")
+            self._search_fields.append(field)
+        return bool(self._search_fields)
+
+    column_filters = (
+        FilterLike("name", 'Name'),
+        BooleanEqualFilter("enabled", 'Enabled'),
+        FilterRulesetContains("outcomes.ruleset", 'Ruleset'),
+    )
+
+    @expose('/_ruleset_choices')
+    def ruleset_choices(self):
+        """JSON list of distinct rulesets currently in use — feeds the
+        ruleset filter's <datalist> autocomplete on the list view."""
+        from .models import CheckmkRuleMngmt  # pylint: disable=import-outside-toplevel
+        seen = set()
+        for rule in CheckmkRuleMngmt.objects.only('outcomes.ruleset'):
+            for outcome in rule.outcomes or []:
+                if outcome.ruleset:
+                    seen.add(outcome.ruleset)
+        return {'rulesets': sorted(seen)}
+
     form_rules = [
         rules.HTML(f'<a href="{docu_links["cmk_setup_rules"]}" target="_blank" '
                    f'class="badge badge-light" style="margin-bottom: 8px;">'
