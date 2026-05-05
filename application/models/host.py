@@ -77,6 +77,13 @@ class Host(db.Document):
     deleted_at = db.DateTimeField()
     delete_reason = db.StringField(max_length=255)
 
+    # Stale tracking — set by the `sys mark_stale` cronjob when the host
+    # has not been seen by its source for longer than the per-account
+    # `stale_after_days`. Cleared automatically when the host shows up
+    # again on a fresh import.
+    is_stale = db.BooleanField(default=False)
+    stale_since = db.DateTimeField()
+
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
     create_time = db.DateTimeField()
@@ -761,6 +768,10 @@ class Host(db.Document):
         """
         self.available = True
         self.last_import_seen = datetime.datetime.now()
+        # Fresh import contradicts an earlier "stale" verdict.
+        if self.is_stale:
+            self.is_stale = False
+            self.stale_since = None
 
     def soft_delete(self, reason=None):
         """

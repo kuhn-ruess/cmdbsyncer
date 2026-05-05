@@ -105,6 +105,24 @@ class FilterLifecycleState(BaseMongoEngineFilter):
         return "is"
 
 
+class FilterStale(BaseMongoEngineFilter):
+    """
+    Boolean filter: 'yes' shows only hosts the `mark_stale` job has
+    flagged, 'no' shows only fresh hosts.
+    """
+
+    def apply(self, query, value):
+        value = (value or '').strip().lower()
+        if value in ('1', 'yes', 'y', 'true'):
+            return query.filter(is_stale=True)
+        if value in ('0', 'no', 'n', 'false'):
+            return query.filter(is_stale__ne=True)
+        return query
+
+    def operation(self):
+        return "is"
+
+
 class FilterPoolFolder(BaseMongoEngineFilter):
     """
     Filter Value

@@ -68,18 +68,30 @@ _LIFECYCLE_BADGES = {
 def _render_lifecycle_state(_view, _context, model, _name):
     """
     Bootstrap badge for the host lifecycle state. Default 'active'
-    when the field is empty so legacy rows render usefully.
+    when the field is empty so legacy rows render usefully. Adds a
+    secondary "Stale" badge when the `sys mark_stale` cronjob has
+    flagged the host as not seen recently.
     """
     state = getattr(model, 'lifecycle_state', None) or 'active'
     badge_class, icon_class = _LIFECYCLE_BADGES.get(
         state, ('badge-light', 'fa fa-question')
     )
     label = state.replace('_', ' ').title()
-    return Markup(
+    html = (
         f'<span class="badge {escape(badge_class)}">'
         f'<i class="{escape(icon_class)}" style="margin-right: 4px;"></i>'
         f'{escape(label)}</span>'
     )
+    if getattr(model, 'is_stale', False):
+        stale_since = getattr(model, 'stale_since', None)
+        title = (f"Stale since {stale_since:%Y-%m-%d}"
+                 if stale_since else "No fresh import for too long")
+        html += (
+            f' <span class="badge badge-warning" title="{escape(title)}">'
+            f'<i class="fa fa-hourglass-end" style="margin-right: 4px;"></i>'
+            f'Stale</span>'
+        )
+    return Markup(html)
 
 
 def _render_datetime(_view, _context, model, name):

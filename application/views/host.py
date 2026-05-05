@@ -45,6 +45,7 @@ from application.views.host_filters import (
     FilterLifecycleState,
     FilterObjectType,
     FilterPoolFolder,
+    FilterStale,
     FilterCmdbTemplate,
     FilterLabelKeyAndValue,
     FilterInventoryKeyAndValue,
@@ -704,6 +705,10 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
         'last_import_sync',
         'cmdb_match',
         'lifecycle_state_changed_at',
+        'is_stale',
+        'stale_since',
+        'deleted_at',
+        'delete_reason',
     ]
 
 
@@ -750,6 +755,11 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
            Host,
            'Lifecycle State',
            options=LIFECYCLE_STATES,
+       ),
+       FilterStale(
+           Host,
+           'Stale',
+           options=(('yes', 'Stale'), ('no', 'Fresh')),
        ),
     )
 

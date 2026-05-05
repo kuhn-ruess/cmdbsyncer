@@ -115,6 +115,69 @@ def cli_maintenance(days):
     """
     maintenance(days)
 #.
+#   .-- Command: Mark Stale
+
+def mark_stale(account):
+    """
+    Walk one account's hosts and flip `is_stale` based on the account's
+    `stale_after_days`. When the account also enables
+    `auto_archive_when_stale`, stale hosts are soft-deleted so they
+    leave the active fleet but stay restorable from the Archive view.
+
+    Skips quietly when `stale_after_days` is 0 / unset.
+    """
+    print(f"{CC.HEADER} ***** Mark Stale ({account}) ***** {CC.ENDC}")
+    details = []
+
+    acc = get_account_by_name(account)
+    try:
+        days = int(acc.get('stale_after_days') or 0)
+    except (TypeError, ValueError):
+        days = 0
+    if not days:
+        print(f"{CC.WARNING} stale_after_days not configured, skipping {CC.ENDC}")
+        return
+    auto_archive = bool(acc.get('auto_archive_when_stale'))
+
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+    base = {
+        'source_account_id': str(acc['id']),
+        'no_autodelete__ne': True,
+        'object_type__ne': 'template',
+        'deleted_at__exists': False,
+    }
+
+    stale_q = Host.objects(last_import_seen__lte=cutoff, is_stale__ne=True, **base)
+    fresh_q = Host.objects(last_import_seen__gt=cutoff, is_stale=True, **base)
+    marked = stale_q.update(set__is_stale=True, set__stale_since=cutoff)
+    cleared = fresh_q.update(set__is_stale=False, set__stale_since=None)
+    details.append(('hosts_marked_stale', marked))
+    details.append(('hosts_cleared_stale', cleared))
+
+    archived = 0
+    if auto_archive:
+        for host in Host.objects(is_stale=True, **base):
+            host.soft_delete(reason=f"stale > {days} days")
+            host.save()
+            archived += 1
+    details.append(('hosts_auto_archived', archived))
+
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}stale={marked}, cleared={cleared}, "
+          f"auto-archived={archived}")
+    log.log(f"Mark Stale {account}", source="Maintenance", details=details)
+
+
+@_cli_sys.command('mark_stale')
+@click.argument('account')
+@click.option('--debug', is_flag=True)
+def cli_mark_stale(account, debug):  # pylint: disable=unused-argument
+    """
+    Mark hosts of ACCOUNT as stale based on the account's
+    `stale_after_days` custom field. With `auto_archive_when_stale`
+    enabled the stale rows are also archived.
+    """
+    mark_stale(account)
+#.
 #   .-- Command: Delete Caches
 
 def clear_host_caches(cache_name=""):
@@ -451,3 +514,4 @@ def install_playbooks(target, version, repo, force):
 
 #.
 register_cronjob("Syncer: Maintenence", maintenance)
+register_cronjob("Syncer: Mark Stale Hosts", mark_stale)
