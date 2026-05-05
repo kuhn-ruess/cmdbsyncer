@@ -58,7 +58,7 @@ def fire_playbook_rules(account=False):  # pylint: disable=unused-argument
     available = set(available_playbooks())
     fired = 0
 
-    for db_host in Host.objects(available=True):
+    for db_host in Host.get_export_hosts():
         matcher = _PlaybookMatcher()
         matcher.rules = enabled
         matcher.attributes = db_host.get_labels() or {}

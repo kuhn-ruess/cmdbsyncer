@@ -97,8 +97,6 @@ class Host(db.Document):
     source_account_id = db.StringField()
     source_account_name = db.StringField()
 
-    available = db.BooleanField()
-
     lifecycle_state = db.StringField(choices=LIFECYCLE_STATES, default='active')
     lifecycle_state_changed_at = db.DateTimeField()
 
@@ -212,7 +210,7 @@ class Host(db.Document):
 
 
     @staticmethod
-    def _active_only_q():
+    def active_q():
         """
         Q-fragment that selects only `lifecycle_state='active'` while
         also matching legacy rows that never had the field written
@@ -231,13 +229,12 @@ class Host(db.Document):
     @staticmethod
     def get_export_hosts():
         """
-        Return all Hosts eligible for export. Only `available=True`
-        rows that are not soft-deleted and whose lifecycle_state is
-        'active' (or missing for legacy rows) are returned.
+        Return all Hosts eligible for export. Only rows that are not
+        soft-deleted and whose lifecycle_state is 'active' (or missing
+        for legacy rows) are returned.
         """
         return Host.objects(
-            Host._active_only_q()
-            & Q(available=True)
+            Host.active_q()
             & Q(is_object__ne=True)
             & Q(deleted_at__exists=False)
         )
@@ -249,7 +246,7 @@ class Host(db.Document):
         Soft-deleted and non-active lifecycle rows are excluded so
         outbound syncers never touch them.
         """
-        active = Host._active_only_q() & Q(deleted_at__exists=False)
+        active = Host.active_q() & Q(deleted_at__exists=False)
         if not object_list:
             logger.debug("HOST FILTER OFF")
             return Host.objects(active & Q(is_object__ne=True))
@@ -798,10 +795,14 @@ class Host(db.Document):
 
     def set_import_seen(self):
         """
-        Mark that this host was found on import
+        Mark that this host was found on import. New / legacy hosts
+        without a lifecycle state are flipped to 'active'; an explicit
+        non-active state ('decommissioned', 'archived', ...) is left
+        alone so a fresh import can't undo a manual state change.
         """
-        self.available = True
         self.last_import_seen = datetime.datetime.now()
+        if not self.lifecycle_state:
+            self.lifecycle_state = 'active'
         # Fresh import contradicts an earlier "stale" verdict.
         if self.is_stale:
             self.is_stale = False

@@ -216,7 +216,6 @@ def _process_copy_as_new(label):
     ]
     clone.cmdb_templates = list(source.cmdb_templates or [])
     clone.cmdb_match = source.cmdb_match
-    clone.available = source.available
     clone.lifecycle_state = source.lifecycle_state or 'active'
     clone.last_import_sync = datetime.now()
     clone.last_import_seen = datetime.now()
@@ -638,7 +637,6 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         'create_time',
         'last_import_id',
         'last_import_sync',
-        'available',
         'no_autodelete',
         'source_account_name',
         'labels',
@@ -691,7 +689,7 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
     # duplicate the same information. Keep `cmdb_templates` out of the
     # detail list.
     column_details_list = [
-        'hostname', 'folder', 'no_autodelete', 'available', 'lifecycle_state',
+        'hostname', 'folder', 'no_autodelete', 'lifecycle_state',
         'relations',
         'labels', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
@@ -860,7 +858,6 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
         rules.FieldSet(
             (
                 rules.Field('hostname'),
-                rules.Field('available'),
                 rules.Field('lifecycle_state'),
             ),
             "Object",
@@ -1657,7 +1654,6 @@ below and do not appear here.
         headers = [
             'hostname',
             'object_type',
-            'available',
             'lifecycle_state',
             'source_account_name',
             'folder',
@@ -1684,7 +1680,6 @@ below and do not appear here.
             row = [
                 host.hostname or '',
                 host.object_type or '',
-                host.available if host.available is not None else '',
                 host.lifecycle_state or 'active',
                 host.source_account_name or '',
                 host.folder or '',

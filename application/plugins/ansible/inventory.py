@@ -82,10 +82,10 @@ class AnsibleInventory(Plugin):
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
-            # Match the single-host lookup below: only return hosts that
-            # are currently marked available, so --list and --host agree
-            # on which hostnames exist in this source.
-            query = Host.objects(available=True)
+            # Match the single-host lookup below: only return hosts whose
+            # lifecycle state is 'active' so --list and --host agree on
+            # which hostnames exist in this source.
+            query = Host.get_export_hosts()
             if show_status:
                 task1 = progress.add_task("Calculating Variables", total=query.count())
             for db_host in query:
@@ -123,7 +123,7 @@ class AnsibleInventory(Plugin):
         Get Inventory for single host
         """
         try:
-            db_host = Host.objects.get(hostname=hostname, available=True)
+            db_host = Host.get_export_hosts().get(hostname=hostname)
         except DoesNotExist:
             return False
 

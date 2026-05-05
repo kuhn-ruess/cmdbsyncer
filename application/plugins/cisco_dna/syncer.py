@@ -2,6 +2,7 @@
 Cisco DNA Syncer
 """
 import requests
+from mongoengine import Q
 from requests.auth import HTTPBasicAuth
 
 from application import app
@@ -129,7 +130,9 @@ class CiscoDNA():
         base_url = f"{self.address}/dna/intent/api/v1/interface/network-device/"
         headers = {"x-auth-token": token}
 
-        for db_host in Host.objects(available=True, source_account_id=self.account_id):
+        for db_host in Host.objects(
+                Host.active_q() & Q(source_account_id=self.account_id)
+                & Q(deleted_at__exists=False)):
             print(f"{ColorCodes.HEADER}{db_host.hostname}{ColorCodes.ENDC}")
             url = base_url + db_host.sync_id
             response = requests.request(
