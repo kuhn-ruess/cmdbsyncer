@@ -420,26 +420,9 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     )
     admin.add_view(HostModelView(Host, name="Hosts",
                                  menu_icon_type='fa', menu_icon_value='fa-server'))
-    admin.add_view(HostArchiveView(Host, name="Archive", endpoint="archive",
-                                   category="Objects",
-                                   menu_icon_type='fa', menu_icon_value='fa-archive'))
-    from application.views.data_quality import DataQualityView
-    admin.add_view(DataQualityView(name="Data Quality", endpoint="data_quality",
-                                   menu_icon_type='fa',
-                                   menu_icon_value='fa-stethoscope'))
 
-    from application.models.saved_search import SavedSearch
-    from application.views.saved_search import SavedSearchView
-    admin.add_view(SavedSearchView(SavedSearch, name="Saved Searches",
-                                   category="Settings",
-                                   menu_icon_type='fa',
-                                   menu_icon_value='fa-bookmark'))
 
-    from application.models.field_approval import FieldApproval
-    from application.views.field_approval import FieldApprovalView
-    admin.add_view(FieldApprovalView(FieldApproval, name="Approvals",
-                                     menu_icon_type='fa',
-                                     menu_icon_value='fa-hourglass-half'))
+
     admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
     admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",
                                    category="Objects",
@@ -447,6 +430,14 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_view(TemplateModelView(Host, name="Templates", endpoint="Objects Templates",
                                      category="Objects",
                                      menu_icon_type='fa', menu_icon_value='fa-files-o'))
+    admin.add_view(HostArchiveView(Host, name="Archive", endpoint="archive",
+                                   category="Objects",
+                                   menu_icon_type='fa', menu_icon_value='fa-archive'))
+    from application.views.data_quality import DataQualityView
+    admin.add_view(DataQualityView(name="Data Quality", endpoint="data_quality",
+                                   category="Objects",
+                                   menu_icon_type='fa',
+                                   menu_icon_value='fa-stethoscope'))
     #.
     #   .-- Global
     from application.modules.custom_attributes.models import CustomAttributeRule
@@ -492,6 +483,11 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_sub_category(name="Compliance", parent_name="Settings")
     admin.add_sub_category(name="Notifications", parent_name="Settings")
     admin.add_sub_category(name="Backups", parent_name="Settings")
+    from application.models.field_approval import FieldApproval
+    from application.views.field_approval import FieldApprovalView
+    admin.add_view(FieldApprovalView(FieldApproval, name="Approvals",
+                                     menu_icon_type='fa',
+                                     menu_icon_value='fa-hourglass-half'))
 
     from application.modules.log.models import LogEntry
     from application.modules.log.views import LogView
@@ -512,6 +508,13 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_link(MenuLink(name='Edit local_config.py', category='Settings',
                             endpoint='config.local_config_editor',
                             icon_type='fa', icon_value='fa-file-code-o'))
+
+    from application.models.saved_search import SavedSearch
+    from application.views.saved_search import SavedSearchView
+    admin.add_view(SavedSearchView(SavedSearch, name="Saved Searches",
+                                   category="Settings",
+                                   menu_icon_type='fa',
+                                   menu_icon_value='fa-bookmark'))
 
     from application.views.license import LicenseView
     admin.add_view(LicenseView(name="License", endpoint="license", category="Settings",

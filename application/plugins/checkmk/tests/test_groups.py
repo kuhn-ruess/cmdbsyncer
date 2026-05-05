@@ -128,7 +128,7 @@ class TestCheckmkGroupSync(unittest.TestCase):
     def test_parse_attributes(self, mock_host):
         mock_db_host1 = Mock()
         mock_db_host2 = Mock()
-        mock_host.objects.return_value = [mock_db_host1, mock_db_host2]
+        mock_host.get_export_hosts.return_value = [mock_db_host1, mock_db_host2]
 
         with patch.object(self.sync, 'get_attributes') as mock_get:
             mock_get.side_effect = [
@@ -146,7 +146,7 @@ class TestCheckmkGroupSync(unittest.TestCase):
     @patch('application.plugins.checkmk.groups.Host')
     def test_parse_attributes_skips_no_attributes(self, mock_host):
         mock_db_host = Mock()
-        mock_host.objects.return_value = [mock_db_host]
+        mock_host.get_export_hosts.return_value = [mock_db_host]
 
         with patch.object(self.sync, 'get_attributes', return_value=None):
             keys, values = self.sync.parse_attributes()

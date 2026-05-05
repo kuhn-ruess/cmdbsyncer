@@ -30,7 +30,7 @@ class BI(CMK2):
 
         unique_rules = {}
         related_packs = []
-        for db_host in Host.objects(object_type__ne='template'):
+        for db_host in Host.active_non_template():
             logger.debug(f"Working on {db_host.hostname}")
             attributes = self.get_attributes(db_host, 'checkmk')
             logger.debug(f"His Attributes {attributes}")
@@ -126,7 +126,7 @@ class BI(CMK2):
 
         unique_aggregations = {}
         related_packs = []
-        for db_host in Host.objects(object_type__ne='template'):
+        for db_host in Host.active_non_template():
             logger.debug(f"Working on {db_host.hostname}")
             attributes = self.get_attributes(db_host, 'checkmk')
             logger.debug(f"His Attributes {attributes}")

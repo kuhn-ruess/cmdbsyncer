@@ -32,7 +32,7 @@ class TestBI(unittest.TestCase):
     def test_export_bi_rules_creates_new(self, mock_print, mock_render, mock_host):
         mock_db_host = Mock()
         mock_db_host.hostname = 'host1'
-        mock_host.objects.return_value = [mock_db_host]
+        mock_host.active_non_template.return_value = [mock_db_host]
 
         with patch.object(self.bi, 'get_attributes') as mock_attrs:
             mock_attrs.return_value = {'all': {'HOSTNAME': 'host1'}}
@@ -61,7 +61,7 @@ class TestBI(unittest.TestCase):
     @patch('application.plugins.checkmk.bi.render_jinja')
     @patch('builtins.print')
     def test_export_bi_rules_deletes_old(self, mock_print, mock_render, mock_host):
-        mock_host.objects.return_value = []
+        mock_host.active_non_template.return_value = []
 
         # No rules from hosts, but pack has a rule -> should delete
         # With no hosts, unique_rules is empty, so no packs are loaded
@@ -74,7 +74,7 @@ class TestBI(unittest.TestCase):
     def test_export_bi_rules_syncs_existing(self, mock_print, mock_render, mock_host):
         mock_db_host = Mock()
         mock_db_host.hostname = 'host1'
-        mock_host.objects.return_value = [mock_db_host]
+        mock_host.active_non_template.return_value = [mock_db_host]
 
         with patch.object(self.bi, 'get_attributes') as mock_attrs:
             mock_attrs.return_value = {'all': {'HOSTNAME': 'host1'}}
@@ -103,7 +103,7 @@ class TestBI(unittest.TestCase):
     @patch('application.plugins.checkmk.bi.render_jinja')
     @patch('builtins.print')
     def test_export_bi_aggregations_empty(self, mock_print, mock_render, mock_host):
-        mock_host.objects.return_value = []
+        mock_host.active_non_template.return_value = []
         self.bi.export_bi_aggregations()
 
     @patch('application.plugins.checkmk.bi.Host')
@@ -115,7 +115,7 @@ class TestBI(unittest.TestCase):
         # skipped so other rules keep exporting.
         mock_db_host = Mock()
         mock_db_host.hostname = 'host1'
-        mock_host.objects.return_value = [mock_db_host]
+        mock_host.active_non_template.return_value = [mock_db_host]
 
         with patch.object(self.bi, 'get_attributes') as mock_attrs:
             mock_attrs.return_value = {'all': {'HOSTNAME': 'host1'}}
@@ -137,7 +137,7 @@ class TestBI(unittest.TestCase):
             self, mock_print, mock_render, mock_host):
         mock_db_host = Mock()
         mock_db_host.hostname = 'host1'
-        mock_host.objects.return_value = [mock_db_host]
+        mock_host.active_non_template.return_value = [mock_db_host]
 
         with patch.object(self.bi, 'get_attributes') as mock_attrs:
             mock_attrs.return_value = {'all': {'HOSTNAME': 'host1'}}
@@ -156,7 +156,7 @@ class TestBI(unittest.TestCase):
     def test_export_bi_rules_skips_no_attributes(self, mock_print, mock_host):
         mock_db_host = Mock()
         mock_db_host.hostname = 'host1'
-        mock_host.objects.return_value = [mock_db_host]
+        mock_host.active_non_template.return_value = [mock_db_host]
 
         with patch.object(self.bi, 'get_attributes', return_value=None):
             self.bi.export_bi_rules()

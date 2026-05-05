@@ -249,7 +249,7 @@ class CheckmkDowntimeSync(CMK2):
         Export Downtimes
         """
         # Collect Rules
-        total = Host.objects(object_type__ne='template').count()
+        total = Host.active_non_template().count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),

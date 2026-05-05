@@ -122,7 +122,7 @@ class RuleCreation(Plugin):
         total_work = 0
         for rule in enabled_rules:
             object_filter = rule.object_filter
-            host_count = Host.objects(object_type=object_filter).count()
+            host_count = Host.objects_by_filter([object_filter]).count()
             total_work += host_count
 
         with Progress(SpinnerColumn(),
@@ -148,7 +148,7 @@ class RuleCreation(Plugin):
 
                 if object_filter not in self.found_objects:
                     self.found_objects[object_filter] = []
-                    for host_obj in Host.objects(object_type=object_filter):
+                    for host_obj in Host.objects_by_filter([object_filter]):
                         attributes = self.get_attributes(host_obj, 'syncer_rules')['all']
                         self.found_objects[object_filter].append(attributes)
                         progress.advance(task1)

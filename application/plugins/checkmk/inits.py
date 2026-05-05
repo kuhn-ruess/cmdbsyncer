@@ -462,7 +462,9 @@ def export_users(account):
 def sync_folderpools(_account=False, _debug=False):
     """Refresh ``folder_seats_taken`` on every CheckmkFolderPool from current host counts."""
     pool_usage = {}
-    for host in Host.objects(object_type__ne='template'):
+    # Folder-pool counts only matter for hosts that ship to Checkmk —
+    # anything not 'active' won't take a seat on the next sync.
+    for host in Host.get_export_hosts():
         if host.folder:
             pool_usage.setdefault(host.folder, 0)
             pool_usage[host.folder] += 1

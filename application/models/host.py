@@ -253,6 +253,20 @@ class Host(db.Document):
         logger.debug("HOST FILTER %s", object_list)
         return Host.objects(active & Q(object_type__in=object_list))
 
+    @staticmethod
+    def active_non_template():
+        """
+        Outbound helper: every active, non-soft-deleted, non-template
+        document — Hosts AND CMDB-managed Objects. Used by syncers that
+        write rules / groups / BI targeted at the full active fleet,
+        not just the host slice.
+        """
+        return Host.objects(
+            Host.active_q()
+            & Q(deleted_at__exists=False)
+            & Q(object_type__ne='template')
+        )
+
 
     @staticmethod
     def get_host(hostname, create=True):

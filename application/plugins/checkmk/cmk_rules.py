@@ -607,7 +607,7 @@ class CheckmkRuleSync(CMK2):
             # against a template would otherwise create a rule pointing
             # at the template's name (and a folder derived from its
             # labels), which never matches any real host in CMK.
-            db_objects = Host.objects(object_type__ne='template')
+            db_objects = Host.active_non_template()
         else:
             db_objects = Host.objects_by_filter(object_filter)
 

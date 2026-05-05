@@ -1,6 +1,7 @@
 """
 Checkmk Groups Export
 """
+from mongoengine import Q
 from mongoengine.errors import DoesNotExist
 
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
@@ -38,7 +39,7 @@ class CheckmkGroupSync(CMK2):
         """
         collection_keys = {}
         collection_values = {}
-        for db_host in Host.objects(object_type__ne='template'):
+        for db_host in Host.get_export_hosts():
             if attributes := self.get_attributes(db_host, 'cmk_conf'):
                 for key, value in attributes['all'].items():
                     key, value = str(key), str(value)
@@ -134,14 +135,14 @@ class CheckmkGroupSync(CMK2):
                 )
 
             elif outcome.foreach_type == "object":
-                db_filter = {
-                    'is_object': True,
-                    'object_type__ne': 'template',
-                }
+                # Outbound — only ship objects whose lifecycle is active
+                # and that are not soft-deleted.
+                db_filter = Host.active_q() & Q(deleted_at__exists=False) & \
+                    Q(is_object=True) & Q(object_type__ne='template')
                 object_filter = outcome.foreach
                 if object_filter:
-                    db_filter['inventory__syncer_account'] = object_filter
-                hostnames = [entry.hostname for entry in Host.objects(**db_filter)]
+                    db_filter &= Q(inventory__syncer_account=object_filter)
+                hostnames = [entry.hostname for entry in Host.objects(db_filter)]
                 self._add_group_entries(
                     hostnames,
                     rewrite_name,

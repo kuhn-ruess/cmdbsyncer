@@ -235,10 +235,12 @@ def debug_filter(list_rules, filter_name, show_matched, show_ignored):  # pylint
         attribute_filter.cache_name = 'ansible_filter_debug'
         attribute_filter.rules = rules.order_by('sort_field')
 
-        hosts = Host.objects()
+        # Outbound filter-rules debugger: only the active fleet would
+        # actually be pushed, so we list dry-run results for that set.
+        hosts = Host.get_export_hosts()
         total_hosts = hosts.count()
 
-        console.print(f"Total hosts in database: {total_hosts}\n")
+        console.print(f"Total active hosts in database: {total_hosts}\n")
 
         matched_table = Table(title="Hosts MATCHED by Filter (will be processed)")
         matched_table.add_column("Hostname", style="cyan")
