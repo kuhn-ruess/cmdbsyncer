@@ -402,6 +402,10 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_view(HostArchiveView(Host, name="Archive", endpoint="archive",
                                    category="Objects",
                                    menu_icon_type='fa', menu_icon_value='fa-archive'))
+    from application.views.data_quality import DataQualityView
+    admin.add_view(DataQualityView(name="Data Quality", endpoint="data_quality",
+                                   menu_icon_type='fa',
+                                   menu_icon_value='fa-stethoscope'))
     admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
     admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",
                                    category="Objects",

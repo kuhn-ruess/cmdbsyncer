@@ -1,0 +1,143 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container-fluid" style="margin-top: 1rem;">
+    <h1 style="margin-bottom: 1rem;">
+        <i class="fa fa-stethoscope"></i> Data Quality
+    </h1>
+    <p class="text-muted">
+        Snapshot generated {{ now.strftime('%Y-%m-%d %H:%M UTC') }}.
+        All counts cover non-template, non-object hosts; archived rows
+        are listed separately so they don't inflate the live counts.
+    </p>
+
+    <div class="row">
+        <div class="col-md-6 col-lg-4">
+            <div class="app-card mb-4" style="padding: 1rem;">
+                <h2 style="font-size: 1rem; font-weight: 600; margin-top: 0;">
+                    Lifecycle Distribution
+                </h2>
+                <table class="table table-sm mb-0">
+                    {% for state, count in lifecycle_counts.items() %}
+                    <tr>
+                        <td>{{ state.replace('_', ' ').title() }}</td>
+                        <td class="text-right"><strong>{{ count }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <h2 style="font-size: 1.1rem; font-weight: 600;">Per-source breakdown</h2>
+    <div class="table-responsive mb-4">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th class="text-right">Total live</th>
+                    <th class="text-right">Stale</th>
+                    <th class="text-right">Archived</th>
+                    <th>Last seen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in sources %}
+                <tr>
+                    <td><code>{{ row.name }}</code></td>
+                    <td class="text-right">{{ row.total }}</td>
+                    <td class="text-right">
+                        {% if row.stale %}
+                        <span class="badge badge-warning">{{ row.stale }}</span>
+                        {% else %}
+                        0
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        {% if row.archived %}
+                        <span class="badge badge-dark">{{ row.archived }}</span>
+                        {% else %}
+                        0
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.last_seen %}
+                            {{ row.last_seen.strftime('%Y-%m-%d %H:%M') }}
+                            {% if row.last_seen < stale_recent_threshold %}
+                            <span class="badge badge-warning">old</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">never</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-muted">No live hosts.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2 style="font-size: 1.1rem; font-weight: 600;">
+        Possible duplicate hostnames
+        <small class="text-muted">(top {{ duplicates|length }})</small>
+    </h2>
+    {% if duplicates %}
+    <div class="table-responsive mb-4">
+        <table class="table table-sm">
+            <thead>
+                <tr><th>Group</th><th>Hostnames</th></tr>
+            </thead>
+            <tbody>
+                {% for cluster in duplicates %}
+                <tr>
+                    <td><code>{{ cluster|length }}</code></td>
+                    <td>
+                        {% for name in cluster %}
+                        <span class="badge badge-secondary mr-1">{{ name }}</span>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-4">No duplicate-looking hostnames found.</p>
+    {% endif %}
+
+    <h2 style="font-size: 1.1rem; font-weight: 600;">
+        Configured CMDB fields with empty values
+        <small class="text-muted">(top {{ empty_fields|length }})</small>
+    </h2>
+    {% if empty_fields %}
+    <div class="table-responsive mb-4">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Hostname</th>
+                    <th>Type</th>
+                    <th>Missing fields</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in empty_fields %}
+                <tr>
+                    <td><code>{{ row.hostname }}</code></td>
+                    <td>{{ row.object_type }}</td>
+                    <td>
+                        {% for f in row.missing %}
+                        <span class="badge badge-warning mr-1">{{ f }}</span>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted mb-4">All configured fields are filled in.</p>
+    {% endif %}
+
+</div>
+{% endblock %}
