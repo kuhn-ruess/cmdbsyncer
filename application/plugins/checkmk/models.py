@@ -1,6 +1,9 @@
 """
 Checkmk Rules
 """
+# Mongoengine Document classes are data carriers; they don't need
+# additional public methods to satisfy pylint.
+# pylint: disable=too-few-public-methods
 from mongoengine import DENY
 from cryptography.fernet import Fernet
 from application import db, app
@@ -258,11 +261,16 @@ class CheckmkRuleMngmt(db.Document):
     render_full_conditions = db.StringField() # Helper for Preview
 
     outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="RuleMngmtOutcome"))
+    # Denormalised first-outcome ruleset so the admin list can sort and
+    # group by it directly (and search hits it via a top-level field).
+    # Maintained by `CheckmkMngmtRuleView.on_model_change`.
+    primary_ruleset = db.StringField()
     render_cmk_rule_mngmt = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     meta = {
-        'strict': False
+        'strict': False,
+        'indexes': ['primary_ruleset'],
     }
 
 #.

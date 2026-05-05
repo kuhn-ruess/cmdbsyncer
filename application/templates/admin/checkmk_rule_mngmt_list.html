@@ -19,6 +19,24 @@
     word-break: break-word;
     overflow-wrap: anywhere;
   }
+  /* Group-header rows injected by JS so the listing visibly clusters
+     by primary_ruleset. */
+  tr.cmk-ruleset-group-header > td {
+    background: linear-gradient(90deg, #2c6da8 0%, #3498db 100%);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 6px 12px;
+    border-top: 2px solid #1d4669;
+  }
+  tr.cmk-ruleset-group-header .cmk-ruleset-group-count {
+    background: rgba(255,255,255,0.2);
+    border-radius: 10px;
+    padding: 1px 8px;
+    margin-left: 8px;
+    font-weight: 500;
+    font-size: 0.8rem;
+  }
 </style>
 {% endblock %}
 
@@ -69,6 +87,70 @@
   // Filter inputs can be added dynamically — observe the document.
   var observer = new MutationObserver(attachDatalist);
   observer.observe(document.body, {childList: true, subtree: true});
+
+  // Inject group-header rows before each cluster of rules sharing the
+  // same primary ruleset. Reads the ruleset name from the rendered
+  // card title (.cmk-rule-card .card-title) so the script doesn't need
+  // a separate column injected server-side.
+  function injectGroupHeaders() {
+    var table = document.querySelector('table.model-list, .table.model-list, .admin-table table, .table');
+    if (!table) { return; }
+    var tbody = table.tBodies[0];
+    if (!tbody) { return; }
+    // Clear stale headers from a previous pass (e.g. ajax sort).
+    tbody.querySelectorAll('tr.cmk-ruleset-group-header').forEach(function(r) {
+      r.parentNode.removeChild(r);
+    });
+    var rows = Array.prototype.slice.call(tbody.rows);
+    if (!rows.length) { return; }
+    var colCount = (table.tHead && table.tHead.rows[0])
+      ? table.tHead.rows[0].cells.length
+      : (rows[0].cells.length || 1);
+
+    var lastRuleset = null;
+    var groupHeader = null;
+    var countInGroup = 0;
+
+    function setCount() {
+      if (!groupHeader) { return; }
+      var badge = groupHeader.querySelector('.cmk-ruleset-group-count');
+      if (badge) { badge.textContent = countInGroup + ' rule' + (countInGroup === 1 ? '' : 's'); }
+    }
+
+    rows.forEach(function(row) {
+      var titleEl = row.querySelector('.cmk-rule-card .card-title');
+      var ruleset = (titleEl && titleEl.textContent || '').trim() || '(no ruleset)';
+      if (ruleset !== lastRuleset) {
+        setCount();
+        var header = document.createElement('tr');
+        header.className = 'cmk-ruleset-group-header';
+        var cell = document.createElement('td');
+        cell.colSpan = colCount;
+        cell.innerHTML = '<i class="fa fa-folder-open" style="margin-right:6px;"></i>'
+          + escapeHtml(ruleset)
+          + '<span class="cmk-ruleset-group-count">0 rules</span>';
+        header.appendChild(cell);
+        row.parentNode.insertBefore(header, row);
+        groupHeader = header;
+        countInGroup = 0;
+        lastRuleset = ruleset;
+      }
+      countInGroup += 1;
+    });
+    setCount();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'})[c];
+    });
+  }
+
+  if (document.readyState !== 'loading') {
+    injectGroupHeaders();
+  } else {
+    document.addEventListener('DOMContentLoaded', injectGroupHeaders);
+  }
 })();
 </script>
 {% endblock %}

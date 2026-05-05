@@ -492,12 +492,18 @@ class CheckmkMngmtRuleView(RuleModelView):
     """
     list_template = 'admin/checkmk_rule_mngmt_list.html'
 
-    # Group the listing by the first outcome's ruleset so rules of the
-    # same Checkmk ruleset land next to each other instead of being
-    # interleaved by sort_field.
-    column_default_sort = ('outcomes.ruleset', False)
+    # Group the listing by the rule's ruleset so rules of the same
+    # Checkmk ruleset land next to each other. `primary_ruleset` is
+    # denormalised in on_model_change; legacy rows are backfilled
+    # lazily by `get_query` below. The field itself is hidden from
+    # the form and the column list — operators only see/edit the
+    # ruleset on the single outcome.
+    column_default_sort = ('primary_ruleset', False)
 
-    column_searchable_list = ('name',)
+    column_exclude_list = list(RuleModelView.column_exclude_list) + ['primary_ruleset']
+    form_excluded_columns = ('primary_ruleset',)
+
+    column_searchable_list = ('name', 'primary_ruleset')
 
     def init_search(self):
         """
@@ -514,6 +520,43 @@ class CheckmkMngmtRuleView(RuleModelView):
                 raise ValueError(f"Invalid search field: {name!r}")
             self._search_fields.append(field)
         return bool(self._search_fields)
+
+    def _search(self, query, search_term):
+        """
+        Match `name` OR `primary_ruleset` OR any outcome's `ruleset`.
+        Without this override the toolbar quick-search would only hit
+        the two top-level columns and miss rules whose ruleset the
+        operator is typing — exactly what people expect when looking
+        for "all my labels rules" or similar.
+        """
+        term = (search_term or '').strip()
+        if not term:
+            return query
+        regex = {'$regex': term, '$options': 'i'}
+        return query.filter(__raw__={
+            '$or': [
+                {'name': regex},
+                {'primary_ruleset': regex},
+                {'outcomes.ruleset': regex},
+            ],
+        })
+
+    def get_query(self):
+        """Backfill `primary_ruleset` on legacy rows so existing data
+        sorts/searches without a separate one-shot migration. Uses an
+        atomic update per row instead of `.save()` so the partial
+        `only('id', 'outcomes')` fetch can't trip Document-level
+        validation (e.g. the required `name` field)."""
+        from .models import CheckmkRuleMngmt  # pylint: disable=import-outside-toplevel
+        legacy = CheckmkRuleMngmt.objects(
+            primary_ruleset__exists=False,
+        ).only('id', 'outcomes')
+        for stale in legacy:
+            value = stale.outcomes[0].ruleset if stale.outcomes else ''
+            CheckmkRuleMngmt.objects(id=stale.id).update_one(
+                set__primary_ruleset=value or '',
+            )
+        return super().get_query()
 
     column_filters = (
         FilterLike("name", 'Name'),
@@ -637,9 +680,57 @@ class CheckmkMngmtRuleView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def scaffold_form(self):
+        """
+        Build the form class normally, then drop `min_entries` on the
+        `outcomes` inline list so the operator can remove every entry,
+        including the last one. Patching the field's kwargs dict
+        sidesteps the
+        "got multiple values for keyword argument 'min_entries'"
+        crash that `form_args` runs into.
+        """
+        form_class = super().scaffold_form()
+        outcomes_field = getattr(form_class, 'outcomes', None)
+        if outcomes_field is not None:
+            outcomes_field.kwargs['min_entries'] = 0
+        return form_class
+
+    def validate_form(self, form):
+        """
+        Reject saves where outcomes target different rulesets. Doing
+        the check here (instead of raising from `on_model_change`)
+        keeps Flask-Admin's standard validation flow intact —
+        the user sees a flash and stays on the edit form with their
+        inputs preserved, instead of getting a raw 500.
+        """
+        if not super().validate_form(form):
+            return False
+        outcomes = getattr(form, 'outcomes', None)
+        if outcomes is not None and getattr(outcomes, 'entries', None):
+            rulesets = set()
+            for entry in outcomes.entries:
+                rs_field = entry.form.ruleset if hasattr(entry, 'form') else None
+                if rs_field is None:
+                    continue
+                rulesets.add((rs_field.data or '').strip())
+            if len(rulesets) > 1:
+                seen = sorted(r for r in rulesets if r)
+                flash(
+                    'All outcomes on a rule must use the same Ruleset; '
+                    f'got {", ".join(seen) or "(empty)"}. '
+                    'Split into one rule per ruleset, or harmonise '
+                    'the ruleset field on every outcome.',
+                    'danger',
+                )
+                return False
+        return True
+
     def on_model_change(self, form, model, is_created):
         """
-        Cleanup Inputs
+        Cleanup Inputs and refresh the denormalised primary_ruleset so
+        the list view sorts/groups by it without re-reading the
+        embedded outcomes. The uniform-ruleset rule is enforced in
+        `validate_form` above; here we just trust the model.
         """
         for rule in model.outcomes:
             if rule.value_template[0] == '"':
@@ -647,6 +738,10 @@ class CheckmkMngmtRuleView(RuleModelView):
             if rule.value_template[-1] == '"':
                 rule.value_template = rule.value_template[:-1]
             rule.value_template = rule.value_template.replace('\\n',' ')
+
+        model.primary_ruleset = (
+            model.outcomes[0].ruleset if model.outcomes else ''
+        )
 
         return super().on_model_change(form, model, is_created)
 
