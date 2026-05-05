@@ -8,11 +8,10 @@ from mongoengine.errors import OperationError
 from flask_login import current_user
 from flask_admin.base import expose
 from flask_admin.form import rules
-from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from wtforms import StringField
 from wtforms.validators import ValidationError
 from application.models.cron import CronGroup
-from application.views.default import DefaultModelView
+from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 from application.models.account import CustomEntry, Account
 from application.helpers.plugins import discover_plugins
@@ -68,16 +67,7 @@ class ChildAccountModelView(DefaultModelView):
             'custom_fields', 'is_child', 'type',
             'is_master', 'address', 'username', 'password']
 
-    column_filters = (
-       FilterLike(
-            "name",
-           'Name'
-       ),
-       BooleanEqualFilter(
-            "enabled",
-           'Enabled'
-       )
-    )
+    column_filters = name_and_enabled_filters()
 
     form_rules = [
         _DOCS_BADGE,
@@ -121,22 +111,9 @@ class AccountModelView(DefaultModelView):
         """
         return Account.objects(is_child__ne=True).order_by('name', 'typ')
 
-    column_filters = (
-       FilterLike(
-            "name",
-           'Name'
-       ),
-       BooleanEqualFilter(
-            "enabled",
-           'Enabled'
-       )
-    )
+    column_filters = name_and_enabled_filters()
 
     column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted']
-
-    column_formatters = {
-        'plugin_settings': _render_plugin_data,
-    }
 
     form_subdocuments = {
         'custom_fields': {

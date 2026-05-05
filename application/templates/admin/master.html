@@ -584,6 +584,13 @@
                 handle: 'legend',
                 filter: '.inline-remove-field, input, label',
                 preventOnFilter: false,
+                // Native HTML5 drag-and-drop on <legend> handles is
+                // broken in Firefox <=142 (works in newer Firefox and
+                // Chromium). forceFallback uses SortableJS's own mouse
+                // event implementation, which behaves identically in
+                // every browser and sidesteps the quirk.
+                forceFallback: true,
+                fallbackTolerance: 4,
                 onEnd: function() {
                     renumberInlineFields(listEl);
                 }

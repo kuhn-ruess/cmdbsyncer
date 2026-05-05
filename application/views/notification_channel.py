@@ -5,10 +5,9 @@ Same collection + same view in OSS and Enterprise — Enterprise only
 registers additional channel types, it does not bring its own UI.
 """
 from flask_admin.form import rules
-from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from flask_login import current_user
 
-from application.views.default import DefaultModelView
+from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 from application.views._form_fields import AccountSelectField
 
@@ -17,8 +16,7 @@ class NotificationChannelView(DefaultModelView):
     """Delivery channels (email in OSS; Slack / Teams / webhook with Enterprise)."""
     column_list = ('name', 'type', 'enabled', 'description')
     column_sortable_list = ('name', 'type', 'enabled')
-    column_filters = (FilterLike('name', 'Name'),
-                      BooleanEqualFilter('enabled', 'Enabled'))
+    column_filters = name_and_enabled_filters()
     column_editable_list = ['enabled']
 
     form_overrides = {

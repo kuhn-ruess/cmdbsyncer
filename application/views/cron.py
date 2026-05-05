@@ -4,13 +4,12 @@ Cron Model View
 from datetime import datetime
 from flask import flash
 from flask_admin.actions import action
-from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from flask_admin.form import rules
 from flask_login import current_user
 from markupsafe import Markup, escape
 from wtforms import BooleanField, HiddenField
 
-from application.views.default import DefaultModelView
+from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 
 def format_error_flag(_v, _c, m, _p):
@@ -69,11 +68,6 @@ class CronGroupView(DefaultModelView):
     Cron Group View
     """
 
-    column_exclude_list = [
-        'jobs',
-    ]
-
-
     column_default_sort = ("sort_field", False)
 
     column_sortable_list = (
@@ -90,16 +84,7 @@ class CronGroupView(DefaultModelView):
         'protected': "Managed",
     }
 
-    column_filters = (
-       FilterLike(
-            "name",
-           'Name'
-       ),
-       BooleanEqualFilter(
-            "enabled",
-           'Enabled'
-       )
-    )
+    column_filters = name_and_enabled_filters()
 
     column_editable_list = [
         'enabled',
@@ -119,7 +104,7 @@ class CronGroupView(DefaultModelView):
         'protected': HiddenField,
     }
 
-    column_exclude_list = ('webhook_token', 'webhook_token_hash')
+    column_exclude_list = ('jobs', 'webhook_token', 'webhook_token_hash')
     form_excluded_columns = ('webhook_token', 'webhook_token_hash')
 
     # Non-model checkbox: when ticked, on_model_change rotates the

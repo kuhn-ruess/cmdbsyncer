@@ -11,6 +11,7 @@ from flask_login import current_user
 from flask_admin import AdminIndexView
 from flask_admin import expose
 from flask_admin.contrib.mongoengine import ModelView
+from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from flask_admin.model.template import EndpointLinkRowAction
 from flask_admin.helpers import get_redirect_target
 from flask_admin.model.helpers import get_mdict_item_or_list
@@ -26,6 +27,14 @@ from application._version import __version__
 # endpoint. This is the whitelist that prevents path traversal / arbitrary
 # file reads through a user-supplied ``name`` parameter.
 _CHANGELOG_FILENAME_RE = re.compile(r'^v\d+\.\d+\.md$')
+
+
+def name_and_enabled_filters():
+    """Standard ``(name LIKE, enabled =)`` filter pair used by every
+    list view that just needs a quick search and an active/inactive
+    toggle (Accounts, CronGroups, NotificationChannels, ...)."""
+    return (FilterLike('name', 'Name'),
+            BooleanEqualFilter('enabled', 'Enabled'))
 
 
 _CHANGELOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'changelog')
