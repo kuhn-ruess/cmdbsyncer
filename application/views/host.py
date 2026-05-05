@@ -72,6 +72,7 @@ from application.views.host_renderers import (
     _render_relations,
     _render_relations_preview,
 )
+from application.views.saved_search import SavedSearchRoutesMixin
 from application.models.host import (
     Host, CmdbField, HostLabelChange, LIFECYCLE_STATES,
 )
@@ -670,6 +671,7 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
 
 
 class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint: disable=too-many-public-methods,too-many-ancestors
+                    SavedSearchRoutesMixin,
                     HostnameAndLabelSearchMixin,
                     DefaultModelView):
     """

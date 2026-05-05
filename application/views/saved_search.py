@@ -13,8 +13,8 @@ from flask import flash, redirect, request, url_for
 from flask_admin.base import expose
 from flask_admin.contrib.mongoengine import ModelView
 from flask_login import current_user
+from mongoengine import Q
 from mongoengine.errors import DoesNotExist
-from mongoengine.queryset.visitor import Q
 
 from application.models.saved_search import SavedSearch
 
@@ -77,15 +77,19 @@ def list_for_path(path):
     return own + shared
 
 
-def register_saved_search_routes(host_view_cls):
+class SavedSearchRoutesMixin:
     """
-    Attach two endpoints to a flask-admin list view so the "Save current
-    filter" / "Delete preset" buttons can post back without their own
-    blueprint. Decorators are applied here at import time.
+    Adds /save_preset and /delete_preset/<id> POST endpoints to a
+    flask-admin list view. Flask-Admin discovers @expose-decorated
+    methods by walking the class at view-init time, so the routes
+    must be defined on a base class — assigning the functions onto an
+    already-built class after the fact does not register them.
     """
+    # pylint: disable=too-few-public-methods
 
     @expose('/save_preset', methods=['POST'])
-    def save_preset(self):  # pylint: disable=unused-argument
+    def save_preset(self):
+        """Capture the current list URL as a named SavedSearch."""
         if not current_user.is_authenticated:
             return redirect(url_for('admin.login_view'))
         name = (request.form.get('name') or '').strip()
@@ -106,7 +110,8 @@ def register_saved_search_routes(host_view_cls):
         return redirect(request.referrer or url_for('.index_view'))
 
     @expose('/delete_preset/<preset_id>', methods=['POST'])
-    def delete_preset(self, preset_id):  # pylint: disable=unused-argument
+    def delete_preset(self, preset_id):
+        """Delete a SavedSearch the current user owns."""
         if not current_user.is_authenticated:
             return redirect(url_for('admin.login_view'))
         try:
@@ -121,7 +126,3 @@ def register_saved_search_routes(host_view_cls):
         preset.delete()
         flash(f'Deleted preset "{preset.name}"', 'success')
         return redirect(request.referrer or url_for('.index_view'))
-
-    host_view_cls.save_preset = save_preset
-    host_view_cls.delete_preset = delete_preset
-    return host_view_cls

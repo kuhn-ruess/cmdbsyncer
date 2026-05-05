@@ -192,6 +192,19 @@ _models_host.HostLabelChange = _HostLabelChange
 _models_host.LIFECYCLE_STATES = ()
 
 
+# --- application.models.saved_search ---------------------------------------
+
+_models_saved_search = _stub_package("application.models.saved_search")
+
+
+class _SavedSearch:  # pylint: disable=too-few-public-methods
+    """Stub SavedSearch model — tests don't exercise persistence."""
+    objects = MagicMock()
+
+
+_models_saved_search.SavedSearch = _SavedSearch
+
+
 # --- mongoengine / flask_admin.contrib.mongoengine --------------------------
 # Stubs mongoengine so modules under test can do `from mongoengine.errors
 # import ...` without a live MongoDB. flask_admin.contrib.mongoengine is also
@@ -201,6 +214,7 @@ _models_host.LIFECYCLE_STATES = ()
 _mongoengine = _stub_package("mongoengine", path=[])
 _mongoengine.Document = type("Document", (), {})
 _mongoengine.ValidationError = type("ValidationError", (Exception,), {})
+_mongoengine.Q = type("Q", (), {})
 
 _mongoengine_errors = _stub_package("mongoengine.errors")
 _mongoengine_errors.DoesNotExist = type("DoesNotExist", (Exception,), {})
