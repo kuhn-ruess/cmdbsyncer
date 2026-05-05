@@ -35,7 +35,7 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
         'status', 'hostname', 'field_name', 'old_value', 'new_value',
         'requested_by_email', 'requested_at',
     )
-    column_default_sort = ('-requested_at',)
+    column_default_sort = '-requested_at'
     column_filters = ('status', 'hostname', 'field_name', 'requested_by_email')
 
     def is_accessible(self):

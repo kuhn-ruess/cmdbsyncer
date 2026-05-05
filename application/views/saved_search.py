@@ -30,7 +30,7 @@ class SavedSearchView(ModelView):  # pylint: disable=too-many-public-methods,too
     can_delete = True
     column_list = ('name', 'path', 'shared', 'owner_email', 'created_at')
     column_filters = ('path', 'shared', 'owner_email')
-    column_default_sort = ('-created_at',)
+    column_default_sort = '-created_at'
     form_excluded_columns = ('owner_email', 'created_at', 'path', 'query_string')
 
     def is_accessible(self):
