@@ -556,6 +556,11 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         self.column_formatters_detail = dict(self.column_formatters_detail)
         self.column_labels = dict(self.column_labels)
         self.column_exclude_list = list(self.column_exclude_list)
+        # Drop the Relations graph row icon — the route is CMDB-only.
+        self.column_extra_row_actions = [
+            a for a in (self.column_extra_row_actions or [])
+            if 'relations_graph' not in getattr(a, 'url', '')
+        ]
         for col in _CMDB_ONLY_FIELDS:
             self.column_formatters.pop(col, None)
             self.column_formatters_detail.pop(col, None)
@@ -1194,6 +1199,9 @@ Impact Chain.
     @expose('/relations_graph')
     def relations_graph(self):
         """Render the interactive Relations graph page for one host."""
+        if not app.config.get('CMDB_MODE'):
+            flash('Relations graph is only available in CMDB mode.', 'error')
+            return redirect(url_for('.index_view'))
         obj_id = request.args.get('obj_id', '').strip()
         host = Host.objects(id=obj_id).first() if obj_id else None
         if not host:
@@ -1216,6 +1224,8 @@ Impact Chain.
         # pylint: disable=import-outside-toplevel
         from flask import jsonify
         from application.models.host import RELATION_TYPES, RELATION_INVERSE_LABEL
+        if not app.config.get('CMDB_MODE'):
+            return jsonify({'nodes': [], 'edges': []}), 403
         obj_id = request.args.get('obj_id', '').strip()
         focus = Host.objects(id=obj_id).first() if obj_id else None
         if not focus:
@@ -1416,10 +1426,12 @@ Impact Chain.
                 'cmdb_fields', 'cmdb_templates',
             ]
             # The copy-row icon only makes sense when the user is
-            # expected to create hosts by hand.
+            # expected to create hosts by hand. The relations-graph
+            # icon is CMDB-only too — drop both.
             self.column_extra_row_actions = [
                 a for a in (self.column_extra_row_actions or [])
                 if 'copy_as_new_form' not in getattr(a, 'url', '')
+                and 'relations_graph' not in getattr(a, 'url', '')
             ]
             self.column_formatters = dict(self.column_formatters)
             self.column_formatters_detail = dict(self.column_formatters_detail)
