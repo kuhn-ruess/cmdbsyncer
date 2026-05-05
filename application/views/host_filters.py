@@ -214,3 +214,79 @@ class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
 
     def operation(self):
         return "regex search"
+
+
+class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods
+    """
+    Top-right quick-search box that matches `hostname` OR any value
+    in `labels` OR any value in `inventory`. Shared by HostModelView
+    and ObjectModelView so both list pages behave identically —
+    Objects' cmdb_fields are mirrored into `labels` by
+    `update_host()`, so the same query covers them.
+    """
+
+    column_searchable_list = ['hostname']
+
+    def init_search(self):
+        """
+        Bypass Flask-Admin's strict `type(p) in allowed_search_types`
+        check — flask-mongoengine wraps StringField in a subclass that
+        fails identity comparison. We only need the search box to
+        render; `_search()` drives the actual query.
+        """
+        for name in self.column_searchable_list or []:
+            field = self.model._fields.get(name) if isinstance(name, str) else name
+            if field is None:
+                raise ValueError(f"Invalid search field: {name!r}")
+            self._search_fields.append(field)
+        return bool(self._search_fields)
+
+    @staticmethod
+    def _dict_value_match_expr(field_name, term):
+        """`$expr` that regex-matches any value of a dict-typed field."""
+        return {'$expr': {
+            '$anyElementTrue': {
+                '$map': {
+                    'input': {'$objectToArray': {
+                        '$ifNull': [f'${field_name}', {}],
+                    }},
+                    'as': 'kv',
+                    'in': {
+                        '$regexMatch': {
+                            'input': {
+                                '$convert': {
+                                    'input': '$$kv.v',
+                                    'to': 'string',
+                                    'onError': '',
+                                    'onNull': '',
+                                },
+                            },
+                            'regex': term,
+                            'options': 'i',
+                        },
+                    },
+                },
+            },
+        }}
+
+    def _search(self, query, search_term):
+        """
+        Match hostname OR any label value OR any inventory value
+        against the term. Falls back to a literal match if the user
+        typed something that doesn't compile as a regex.
+        """
+        term = (search_term or '').strip()
+        if not term:
+            return query
+        try:
+            re.compile(term)
+        except re.error:
+            term = re.escape(term)
+        pipeline = {
+            '$or': [
+                {'hostname': {'$regex': term, '$options': 'i'}},
+                self._dict_value_match_expr('labels', term),
+                self._dict_value_match_expr('inventory', term),
+            ],
+        }
+        return query.filter(__raw__=pipeline)

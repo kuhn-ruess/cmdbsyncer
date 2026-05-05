@@ -241,7 +241,14 @@ class HostViewFormattingTest(unittest.TestCase):
         )
 
     def test_format_log_escapes_preview_entries(self):
-        host_module = self._import_host_module()
+        # `format_log` was extracted to `application.views.host_renderers`
+        # in the host.py split; LogEntry now lives next to it. The host
+        # module is still imported here so the chain of stub setups runs.
+        self._import_host_module()
+        renderers_module = _load_source_module(
+            'application.views.host_renderers',
+            os.path.join('application', 'views', 'host_renderers.py'),
+        )
 
         log_cls = MagicMock()
         chain = MagicMock()
@@ -253,8 +260,8 @@ class HostViewFormattingTest(unittest.TestCase):
             log=['Inventory Change: key to <img src=x onerror=alert(1)>'],
         )
 
-        with patch.object(host_module, 'LogEntry', log_cls):
-            rendered = str(host_module.format_log(None, None, model, None))
+        with patch.object(renderers_module, 'LogEntry', log_cls):
+            rendered = str(renderers_module.format_log(None, None, model, None))
 
         self.assertIn('&lt;img src=x onerror=alert(1)&gt;', rendered)
         self.assertNotIn('<li>Inventory Change: key to <img src=x onerror=alert(1)></li>', rendered)
