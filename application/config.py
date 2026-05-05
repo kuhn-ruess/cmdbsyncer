@@ -172,6 +172,13 @@ class BaseConfig():
 
     }
 
+    # Labels listed here go through a four-eyes approval queue: any
+    # change to one of these labels in the UI is held back until a user
+    # with the 'approval' role accepts it. The 'approval_bypass' role
+    # opts a user out of the queue entirely (normal behavior, edit
+    # lands immediately). Empty list disables the workflow.
+    APPROVAL_REQUIRED_LABELS = []
+
     HOST_PAGESIZE = 100
     LABEL_PREVIEW_DISABLED = False
 

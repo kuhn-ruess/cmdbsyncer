@@ -1334,6 +1334,17 @@ below and do not appear here.
             if label_key not in new_labels:
                 new_labels[label_key] = label_value
 
+        # Hold back changes to APPROVAL_REQUIRED_LABELS until a second
+        # operator approves them. enqueue_critical_label_changes() rolls
+        # each contested key back to its old value inside `new_labels`,
+        # so update_host below persists the safe subset only.
+        # pylint: disable=import-outside-toplevel
+        from application.views.field_approval import enqueue_critical_label_changes
+        queued = enqueue_critical_label_changes(model, new_labels, existing_labels)
+        if queued:
+            flash(f'{queued} change(s) on protected fields are pending '
+                  'approval and were not applied yet.', 'warning')
+
         model.update_host(new_labels)
         model.set_inventory_attributes('cmdb')
 

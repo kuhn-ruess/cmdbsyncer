@@ -16,6 +16,8 @@ roles = [
   ('host', "Hosts"),
   ('objects', "Objects"),
   ('hard_delete', "Permanently delete archived objects"),
+  ('approval', "Approve or reject pending field changes"),
+  ('approval_bypass', "Skip the approval queue when editing critical fields"),
   ('account', "Account Management"),
   ('log', "Log View"),
   ('global_attributes', "Global Attributes"),

@@ -203,6 +203,27 @@ if not CLI_MODE:
         app.config['CHANGES'] = get_changes()
 
     @app.context_processor
+    def _inject_pending_approvals():
+        """
+        Feed the navbar badge in master.html. Runs on every admin
+        request, so it must be cheap and fail-soft — the count is a
+        nicety, not a correctness requirement.
+        """
+        # pylint: disable=import-outside-toplevel
+        from flask_login import current_user as _user
+        try:
+            if not _user.is_authenticated:
+                return {'pending_approval_count': 0}
+            from application.views.field_approval import pending_count
+            count = pending_count()
+        except Exception:  # pylint: disable=broad-exception-caught
+            return {'pending_approval_count': 0}
+        return {
+            'pending_approval_count': count,
+            'pending_approval_url': '/admin/fieldapproval/',
+        }
+
+    @app.context_processor
     def _inject_https_warning():
         """Show a banner when HTTPS is required (default) but the
         request came in over plain HTTP. Suppressed when the admin
@@ -416,6 +437,12 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
                                    category="Settings",
                                    menu_icon_type='fa',
                                    menu_icon_value='fa-bookmark'))
+
+    from application.models.field_approval import FieldApproval
+    from application.views.field_approval import FieldApprovalView
+    admin.add_view(FieldApprovalView(FieldApproval, name="Approvals",
+                                     menu_icon_type='fa',
+                                     menu_icon_value='fa-hourglass-half'))
     admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
     admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",
                                    category="Objects",
