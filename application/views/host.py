@@ -938,12 +938,6 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         ),
         rules.FieldSet(
             (
-                rules.Field('relations'),
-            ),
-            "Relations",
-        ),
-        rules.FieldSet(
-            (
                 rules.HTML('''
 <style>
 /* Flask-Admin inline-field-list DOM for cmdb_fields (bootstrap4 template):
@@ -1057,6 +1051,76 @@ below and do not appear here.
                 rules.Field('labels_from_template'),
             ),
             "Template Labels (read-only)",
+        ),
+        rules.FieldSet(
+            (
+                rules.HTML('''
+<style>
+/* Compact, table-ish layout for the typed Host relations list. Same
+   pattern as cmdb_fields above: scope to #relations so generic
+   Flask-Admin forms stay untouched. */
+label[for="relations"] { display: none !important; }
+#relations .inline-field { position: relative; }
+#relations .inline-field.card {
+    margin: 0 0 4px 0 !important;
+    padding: 6px 28px 6px 8px !important;
+    border: 1px solid #e3e6ea !important;
+    box-shadow: none !important;
+    background-color: #fbfbfc !important;
+    border-radius: 4px !important;
+}
+#relations .inline-field > legend {
+    position: absolute !important;
+    top: 4px !important;
+    right: 6px !important;
+    margin: 0 !important; padding: 0 !important; border: none !important;
+    width: auto !important; line-height: 1 !important;
+    font-size: 0 !important;
+}
+#relations .inline-field > legend .pull-right,
+#relations .inline-field > legend small .pull-right {
+    font-size: 0.95rem !important;
+    float: none !important;
+    position: static !important;
+}
+#relations .inline-field > legend small { font-size: 0 !important; }
+#relations .inline-field > .clearfix { display: none !important; }
+#relations .form-row {
+    margin: 0 !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px;
+    width: 100%;
+}
+#relations .form-group { margin: 0 !important; padding: 0 !important; }
+#relations .form-group > label {
+    font-size: 0.7rem !important;
+    color: #6c757d !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    margin: 0 0 1px 0 !important;
+    font-weight: 600 !important;
+}
+#relations .form-row > .form-group:nth-of-type(1) { flex: 0 0 180px; }
+#relations .form-row > .form-group:nth-of-type(2) { flex: 1 1 auto; min-width: 0; }
+#relations .form-row > .form-group:nth-of-type(3) { flex: 0 0 120px; }
+#relations select, #relations input {
+    padding: 2px 7px !important;
+    height: auto !important;
+    font-size: 0.9rem !important;
+}
+#relations > a.btn { margin-top: 8px; }
+</style>
+<p class="text-muted small" style="margin: -6px 0 6px 0;">
+<i class="fa fa-link"></i>
+Typed links from this host to other CMDB objects (depends on, runs on,
+member of, ...). Inverse direction is shown on the target host's
+Impact Chain.
+</p>
+'''),
+                rules.Field('relations'),
+            ),
+            "Relations",
         ),
     ]
 
