@@ -1,0 +1,50 @@
+{# Live-search snippet shared by host_list.html and object_list.html.
+
+   Auto-submits the Flask-Admin search form ~350 ms after the user
+   stops typing, once the term reaches 3 characters. Below the
+   threshold the form keeps the existing on-Enter behaviour. The
+   actual matching runs through `HostnameAndLabelSearchMixin._search`
+   server-side, so the UX gain is just "no Enter required". #}
+<script>
+(function() {
+  var MIN_CHARS = 3;
+  var DEBOUNCE_MS = 350;
+
+  // Flask-Admin renders <input type="text" name="search" …> inside a
+  // form on the list-view toolbar. Multiple matches would be unusual,
+  // but be defensive.
+  var inputs = document.querySelectorAll('input[name="search"]');
+  inputs.forEach(function(input) {
+    var form = input.closest('form');
+    if (!form) { return; }
+
+    var timer = null;
+    var lastSubmittedValue = (input.value || '').trim();
+
+    input.addEventListener('input', function() {
+      var value = (input.value || '').trim();
+      if (timer) { clearTimeout(timer); }
+
+      // User cleared the box — submit so the listing returns to
+      // "everything" without waiting for Enter.
+      if (value.length === 0 && lastSubmittedValue.length > 0) {
+        timer = setTimeout(function() {
+          lastSubmittedValue = '';
+          form.submit();
+        }, DEBOUNCE_MS);
+        return;
+      }
+
+      // Below the live-search threshold — let Enter keep working,
+      // don't fire requests on every keystroke.
+      if (value.length < MIN_CHARS) { return; }
+      if (value === lastSubmittedValue) { return; }
+
+      timer = setTimeout(function() {
+        lastSubmittedValue = value;
+        form.submit();
+      }, DEBOUNCE_MS);
+    });
+  });
+})();
+</script>

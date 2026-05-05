@@ -162,6 +162,7 @@
 
 {% block tail %}
 {{ super() }}
+{% include 'admin/_live_search.html' %}
 <script>
 (function() {
   // The "With selected…" dropdown items call modelActions.execute(name).
