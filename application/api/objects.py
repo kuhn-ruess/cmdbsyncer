@@ -11,8 +11,11 @@ from mongoengine.errors import DoesNotExist
 
 from flask import request, abort
 from flask_restx import Namespace, Resource, reqparse, fields
+from application import app
 from application.api import require_token
-from application.models.host import Host
+from application.models.host import (
+    Host, HostError, RELATION_TYPES, RELATION_INVERSE_LABEL,
+)
 # @TODO pre_deletion method for Host so no import needed
 from application.plugins.checkmk.models import CheckmkFolderPool
 
@@ -163,6 +166,41 @@ LIST_RESPONSE = API.model('list_response', {
                                        '(non-objects only).'),
     '_links': fields.Nested(LIST_LINKS),
 })
+
+_RELATION_TYPE_VALUES = [t for t, _ in RELATION_TYPES]
+
+RELATION_INPUT = API.model('relation_input', {
+    'type': fields.String(required=True, enum=_RELATION_TYPE_VALUES,
+                          description='Edge type. One of: '
+                                      + ', '.join(_RELATION_TYPE_VALUES)),
+    'target': fields.String(required=True,
+                            description='Hostname of the target object.'),
+    'source': fields.String(required=False, default='manual',
+                            description='Free-form provenance tag '
+                                        '(default "manual"). Stored on the '
+                                        'edge so importers can later prune '
+                                        'their own edges without touching '
+                                        'manual ones.'),
+})
+
+RELATION_ITEM = API.model('relation_item', {
+    'type': fields.String(description='Edge type code'),
+    'type_label': fields.String(description='Human label for the type'),
+    'target': fields.String(description='Target hostname'),
+    'source': fields.String(description='Provenance tag (manual / import / …)'),
+})
+
+RELATIONS_RESPONSE = API.model('relations_response', {
+    'hostname': fields.String,
+    'outgoing': fields.List(fields.Nested(RELATION_ITEM)),
+    'inbound': fields.List(fields.Nested(RELATION_ITEM)),
+})
+
+
+def _require_cmdb_mode():
+    """Abort with 404 unless CMDB_MODE is enabled."""
+    if not app.config.get('CMDB_MODE'):
+        abort(404, 'CMDB_MODE is disabled on this install.')
 
 
 # ---------------------------------------------------------------------------
@@ -448,3 +486,124 @@ class HostDetailListApi(Resource):
             'size': total,
             '_links': links,
         }
+
+
+@API.route('/<hostname>/relations')
+@API.param('hostname', 'Existing host name. CMDB_MODE only.')
+class HostRelationsApi(Resource):
+    """
+    Read, add or remove typed Host relations.
+
+    Only available when ``CMDB_MODE`` is True. Outgoing edges live on
+    the source host; inbound edges are computed via a Mongo query and
+    are read-only on this endpoint (mutate them on the source host).
+    """
+
+    @staticmethod
+    def _serialize_outgoing(host):
+        type_label = dict(RELATION_TYPES)
+        out = []
+        for rel in (host.relations or []):
+            target = rel.target_host
+            if not target:
+                continue
+            out.append({
+                'type': rel.type,
+                'type_label': type_label.get(rel.type, rel.type),
+                'target': target.hostname,
+                'source': rel.source or '',
+            })
+        return out
+
+    @staticmethod
+    def _serialize_inbound(host):
+        if not host.pk:
+            return []
+        out = []
+        sources = Host.objects(__raw__={'relations.target_host': host.pk}).only(
+            'hostname', 'relations'
+        )
+        for src in sources:
+            for rel in (src.relations or []):
+                if rel.target_host and rel.target_host.pk == host.pk:
+                    out.append({
+                        'type': rel.type,
+                        'type_label': RELATION_INVERSE_LABEL.get(rel.type,
+                                                                 rel.type),
+                        'target': src.hostname,
+                        'source': rel.source or '',
+                    })
+        return out
+
+    @API.doc(security=['x-login-user', 'basicAuth'])
+    @API.response(200, 'Outgoing and inbound edges for this host.',
+                  RELATIONS_RESPONSE)
+    @API.response(401, 'Authentication failed', ERROR)
+    @API.response(404, 'Host not found or CMDB_MODE disabled.', ERROR)
+    @require_token
+    def get(self, hostname):
+        """List outgoing + inbound relations for *hostname*."""
+        _require_cmdb_mode()
+        try:
+            host = Host.objects.get(hostname=hostname)
+        except DoesNotExist:
+            return {'error': 'Host not found'}, 404
+        return {
+            'hostname': hostname,
+            'outgoing': self._serialize_outgoing(host),
+            'inbound': self._serialize_inbound(host),
+        }
+
+    @API.doc(security=['x-login-user', 'basicAuth'])
+    @API.expect(RELATION_INPUT, validate=True)
+    @API.response(200, 'Relation added (or no-op if it already existed).',
+                  STATUS)
+    @API.response(400, 'Unknown relation type or self-edge.', ERROR)
+    @API.response(401, 'Authentication failed', ERROR)
+    @API.response(404, 'Source or target host not found, or CMDB_MODE off.',
+                  ERROR)
+    @require_token
+    def post(self, hostname):
+        """Add a relation from *hostname* to ``target``."""
+        _require_cmdb_mode()
+        body = request.json or {}
+        target_name = body.get('target')
+        rtype = body.get('type')
+        rsource = body.get('source') or 'manual'
+        try:
+            host = Host.objects.get(hostname=hostname)
+            target = Host.objects.get(hostname=target_name)
+        except DoesNotExist:
+            return {'error': 'Host or target not found'}, 404
+        try:
+            added = host.add_relation(target, rtype, source=rsource)
+        except HostError as exc:
+            abort(400, str(exc))
+        if added:
+            host.save()
+            return {'status': 'added'}, 200
+        return {'status': 'unchanged'}, 200
+
+    @API.doc(security=['x-login-user', 'basicAuth'])
+    @API.expect(RELATION_INPUT, validate=True)
+    @API.response(200, 'Relation removed (or no-op if it never existed).',
+                  STATUS)
+    @API.response(401, 'Authentication failed', ERROR)
+    @API.response(404, 'Source or target host not found, or CMDB_MODE off.',
+                  ERROR)
+    @require_token
+    def delete(self, hostname):
+        """Remove the relation ``(type, target)`` from *hostname*."""
+        _require_cmdb_mode()
+        body = request.json or {}
+        target_name = body.get('target')
+        rtype = body.get('type')
+        try:
+            host = Host.objects.get(hostname=hostname)
+            target = Host.objects.get(hostname=target_name)
+        except DoesNotExist:
+            return {'error': 'Host or target not found'}, 404
+        if host.remove_relation(target, rtype):
+            host.save()
+            return {'status': 'removed'}, 200
+        return {'status': 'unchanged'}, 200
