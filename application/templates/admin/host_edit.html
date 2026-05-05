@@ -1,0 +1,13 @@
+{# Custom Host edit template: replaces Flask-Admin's tabbed navlinks
+   block with our shared host-tabs partial so Edit lives in the same
+   strip as Overview / Relations / Timeline / Debug. The form body
+   itself comes from the default flask-admin edit template. #}
+{% extends 'admin/model/edit.html' %}
+
+{% block navlinks %}
+  {% if model %}
+  {% with host=model, active='edit', cmdb_mode=config.get('CMDB_MODE', False) %}
+  {% include 'admin/_host_tabs.html' with context %}
+  {% endwith %}
+  {% endif %}
+{% endblock %}

@@ -2,22 +2,20 @@
 
 {% block body %}
 <div class="container-fluid">
+  {% with active='relations' %}
+  {% include 'admin/_host_tabs.html' with context %}
+  {% endwith %}
   <div class="d-flex align-items-center mb-3">
-    <h3 class="mb-0">Relations: <code>{{ host.hostname }}</code></h3>
-    <span class="text-muted small ml-3">
+    <span class="text-muted small">
       <i class="fa fa-info-circle"></i>
       Click a node to expand its neighbours. Solid arrows = outgoing,
       dashed = inbound.
     </span>
-    <label class="ml-auto mb-0 mr-3 small text-muted"
+    <label class="ml-auto mb-0 small text-muted"
            style="cursor:pointer;user-select:none;">
       <input type="checkbox" id="rel-show-templates" style="margin-right:4px;">
       Include templates
     </label>
-    <a class="btn btn-sm btn-outline-secondary"
-       href="{{ url_for('host.details_view', id=host.id) }}">
-      <i class="fa fa-arrow-left"></i> Back to host
-    </a>
   </div>
 
   <div id="rel-graph-wrap" style="position:relative;">

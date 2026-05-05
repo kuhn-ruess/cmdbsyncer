@@ -1194,6 +1194,7 @@ Impact Chain.
             'admin/host_timeline.html',
             host=host,
             changes=changes,
+            cmdb_mode=app.config.get('CMDB_MODE', False),
         )
 
     @expose('/relations_graph')
@@ -1210,6 +1211,7 @@ Impact Chain.
         return self.render(
             'admin/host_relations_graph.html',
             host=host,
+            cmdb_mode=True,
         )
 
     @expose('/relations_graph_data')
@@ -1303,14 +1305,18 @@ Impact Chain.
         return jsonify({'nodes': list(nodes.values()), 'edges': edges})
 
     @expose('/debug')
-    def debug(self):  # pylint: disable=too-many-locals
+    def debug(self):  # pylint: disable=too-many-locals,too-many-branches
         """
         Checkmk specific Debug Page
         """
+        host = None
         if obj_id := request.args.get('obj_id'):
-            hostname = Host.objects.get(id=obj_id).hostname
+            host = Host.objects.get(id=obj_id)
+            hostname = host.hostname
         else:
-            hostname = request.args.get('hostname','').strip()
+            hostname = request.args.get('hostname', '').strip()
+            if hostname:
+                host = Host.objects(hostname=hostname).first()
         mode = request.args.get('mode', 'checkmk_host')
 
 
@@ -1398,6 +1404,8 @@ Impact Chain.
                     cmk_rule_preview(hostname, preview_type, raw_id)
 
         return self.render('debug_host.html', hostname=hostname, output=output,
+                           host=host,
+                           cmdb_mode=app.config.get('CMDB_MODE', False),
                            rules=new_rules, mode=mode,
                            rule_preview=rule_preview,
                            rule_preview_error=rule_preview_error,
@@ -1658,6 +1666,8 @@ Impact Chain.
         )
 
     list_template = 'admin/host_list.html'
+    details_template = 'admin/host_details.html'
+    edit_template = 'admin/host_edit.html'
 
     def render(self, template, **kwargs):
         """

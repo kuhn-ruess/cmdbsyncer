@@ -1,0 +1,84 @@
+{# Shared tab bar for the per-host pages (Overview / Edit / Relations
+   Graph / Timeline / Debug). Pass:
+     * host    — Host document
+     * active  — one of 'overview', 'edit', 'relations', 'timeline', 'debug'
+     * cmdb_mode — bool; when False the Relations Graph tab is hidden
+#}
+{% set _id = host.id %}
+<style>
+.host-tabs-wrap {
+    margin: 0.6rem 0 1rem 0;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.host-tabs-wrap .host-title {
+    font-weight: 600;
+    color: #495057;
+    margin-right: 8px;
+}
+.host-tabs-wrap .host-title code {
+    background: #f1f3f5;
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: #2c3e50;
+    font-size: 0.95rem;
+}
+.host-tabs {
+    display: flex;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.host-tabs li a {
+    display: inline-block;
+    padding: 6px 14px;
+    color: #6c757d;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    font-size: 0.92rem;
+}
+.host-tabs li a:hover { color: #1abc9c; text-decoration: none; }
+.host-tabs li.active a {
+    color: #1abc9c;
+    border-bottom-color: #1abc9c;
+    font-weight: 600;
+}
+.host-tabs li a i { margin-right: 4px; }
+</style>
+<div class="host-tabs-wrap">
+    <span class="host-title"><code>{{ host.hostname }}</code></span>
+    <ul class="host-tabs">
+        <li class="{{ 'active' if active == 'overview' else '' }}">
+            <a href="{{ url_for('host.details_view', id=_id) }}">
+                <i class="fa fa-info-circle"></i> Overview
+            </a>
+        </li>
+        <li class="{{ 'active' if active == 'edit' else '' }}">
+            <a href="{{ url_for('host.edit_view', id=_id) }}">
+                <i class="fa fa-pencil"></i> Edit
+            </a>
+        </li>
+        {% if cmdb_mode %}
+        <li class="{{ 'active' if active == 'relations' else '' }}">
+            <a href="{{ url_for('host.relations_graph', obj_id=_id) }}">
+                <i class="fa fa-sitemap"></i> Relations Graph
+            </a>
+        </li>
+        {% endif %}
+        <li class="{{ 'active' if active == 'timeline' else '' }}">
+            <a href="{{ url_for('host.timeline', obj_id=_id) }}">
+                <i class="fa fa-history"></i> Timeline
+            </a>
+        </li>
+        <li class="{{ 'active' if active == 'debug' else '' }}">
+            <a href="{{ url_for('host.debug', obj_id=_id) }}">
+                <i class="fa fa-bug"></i> Debug
+            </a>
+        </li>
+    </ul>
+</div>

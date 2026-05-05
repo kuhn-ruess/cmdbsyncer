@@ -1,0 +1,11 @@
+{# Custom Host details template: replaces the default Flask-Admin
+   navlinks block with our shared host-tabs partial so the Overview
+   page lives in the same tab strip as Edit / Relations / Timeline /
+   Debug. The default <table> render below stays untouched. #}
+{% extends 'admin/model/details.html' %}
+
+{% block navlinks %}
+  {% with host=model, active='overview', cmdb_mode=config.get('CMDB_MODE', False) %}
+  {% include 'admin/_host_tabs.html' with context %}
+  {% endwith %}
+{% endblock %}

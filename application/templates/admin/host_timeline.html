@@ -34,12 +34,9 @@
 </style>
 
 <div class="tl-wrap">
-    <div class="tl-header">
-        <a href="{{ url_for('.index_view') }}" class="btn btn-sm btn-secondary">
-            <i class="fa fa-arrow-left"></i> Back
-        </a>
-        <h2>Timeline — {{ host.hostname }}</h2>
-    </div>
+    {% with active='timeline' %}
+    {% include 'admin/_host_tabs.html' with context %}
+    {% endwith %}
 
     {% if not changes %}
     <div class="app-card tl-empty">
