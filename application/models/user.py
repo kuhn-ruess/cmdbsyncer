@@ -15,6 +15,7 @@ from application import db
 roles = [
   ('host', "Hosts"),
   ('objects', "Objects"),
+  ('hard_delete', "Permanently delete archived objects"),
   ('account', "Account Management"),
   ('log', "Log View"),
   ('global_attributes', "Global Attributes"),

@@ -1736,8 +1736,9 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
             'Permanently delete the selected hosts? This cannot be undone.')
     def action_hard_delete(self, ids):
         """Permanently drop archived hosts from the database."""
-        if not current_user.has_right('admin'):
-            flash('Hard delete requires the admin role.', 'error')
+        if not current_user.has_right('hard_delete'):
+            flash('Hard delete requires the "Permanently delete archived '
+                  'objects" role.', 'error')
             return redirect(request.referrer or url_for('.index_view'))
         deleted = Host.objects(id__in=ids, deleted_at__exists=True).delete()
         flash(f'Hard-deleted {deleted} host(s).', 'success')
