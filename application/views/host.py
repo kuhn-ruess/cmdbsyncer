@@ -42,6 +42,7 @@ from application.views.host_widgets import (
 from application.views.host_filters import (
     FilterAccountRegex,
     FilterHostnameRegex,
+    FilterLifecycleState,
     FilterObjectType,
     FilterPoolFolder,
     FilterCmdbTemplate,
@@ -64,10 +65,11 @@ from application.views.host_renderers import (
     _render_inventory_grid,
     _render_labels,
     _render_labels_with_origin,
+    _render_lifecycle_state,
     _render_log_grid,
     _render_object_type_icon,
 )
-from application.models.host import Host, CmdbField, HostLabelChange
+from application.models.host import Host, CmdbField, HostLabelChange, LIFECYCLE_STATES
 from application.models.config import Config
 # pylint: enable=import-error
 
@@ -209,6 +211,7 @@ def _process_copy_as_new(label):
     clone.cmdb_templates = list(source.cmdb_templates or [])
     clone.cmdb_match = source.cmdb_match
     clone.available = source.available
+    clone.lifecycle_state = source.lifecycle_state or 'active'
     clone.last_import_sync = datetime.now()
     clone.last_import_seen = datetime.now()
     clone.save()
@@ -593,7 +596,7 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
     # duplicate the same information. Keep `cmdb_templates` out of the
     # detail list.
     column_details_list = [
-        'hostname', 'folder', 'no_autodelete', 'available',
+        'hostname', 'folder', 'no_autodelete', 'available', 'lifecycle_state',
         'labels', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
@@ -612,6 +615,7 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
         'last_import_id',
         'last_import_sync',
         'cmdb_match',
+        'lifecycle_state_changed_at',
     ]
 
 
@@ -654,6 +658,11 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
            Host,
            'CMK Pool Folder'
        ),
+       FilterLifecycleState(
+           Host,
+           'Lifecycle State',
+           options=LIFECYCLE_STATES,
+       ),
     )
 
     column_formatters = {
@@ -666,6 +675,7 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
         'last_import_sync': _render_datetime,
         'create_time': _render_datetime,
         'object_type': _render_object_type_icon,
+        'lifecycle_state': _render_lifecycle_state,
     }
 
     # Detail view groups labels by origin (manual vs. each assigned
@@ -684,6 +694,7 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
         'last_import_sync': _render_datetime,
         'create_time': _render_datetime,
         'object_type': _render_object_type_icon,
+        'lifecycle_state': _render_lifecycle_state,
     }
 
     column_formatters_export = {
@@ -694,9 +705,11 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
         'source_account_name': "Account",
         'folder': "CMK Pool Folder",
         'cmdb_templates': "CMDB",
+        'lifecycle_state': "Lifecycle",
     }
 
     column_sortable_list = ('hostname',
+                            'lifecycle_state',
                             'last_import_seen',
                             'last_import_sync')
 
@@ -740,6 +753,7 @@ class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: d
             (
                 rules.Field('hostname'),
                 rules.Field('available'),
+                rules.Field('lifecycle_state'),
             ),
             "Object",
         ),
@@ -1261,6 +1275,46 @@ below and do not appear here.
                       return_to=request.referrer or '')
         return redirect(url)
 
+    def _bulk_set_lifecycle(self, ids, new_state):
+        """
+        Apply Lifecycle state to every selected host. Saves per-doc so
+        the log entry and lifecycle_state_changed_at timestamp written
+        by `set_lifecycle_state` make it to the database.
+        """
+        changed = 0
+        for host in Host.objects(id__in=ids):
+            if host.set_lifecycle_state(new_state):
+                host.save()
+                changed += 1
+        flash(f'Lifecycle state set to "{new_state}" on {changed} host(s).',
+              'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('lifecycle_planned', 'Lifecycle: Planned', None)
+    def action_lifecycle_planned(self, ids):
+        """Mark hosts as planned."""
+        return self._bulk_set_lifecycle(ids, 'planned')
+
+    @action('lifecycle_staged', 'Lifecycle: Staged', None)
+    def action_lifecycle_staged(self, ids):
+        """Mark hosts as staged."""
+        return self._bulk_set_lifecycle(ids, 'staged')
+
+    @action('lifecycle_active', 'Lifecycle: Active', None)
+    def action_lifecycle_active(self, ids):
+        """Mark hosts as active."""
+        return self._bulk_set_lifecycle(ids, 'active')
+
+    @action('lifecycle_decommissioned', 'Lifecycle: Decommissioned', None)
+    def action_lifecycle_decommissioned(self, ids):
+        """Mark hosts as decommissioned."""
+        return self._bulk_set_lifecycle(ids, 'decommissioned')
+
+    @action('lifecycle_archived', 'Lifecycle: Archived', None)
+    def action_lifecycle_archived(self, ids):
+        """Mark hosts as archived."""
+        return self._bulk_set_lifecycle(ids, 'archived')
+
     @action('bulk_label_edit', 'Bulk Edit Labels', None)
     def action_bulk_label_edit(self, ids):
         """
@@ -1482,6 +1536,7 @@ below and do not appear here.
             'hostname',
             'object_type',
             'available',
+            'lifecycle_state',
             'source_account_name',
             'folder',
             'last_import_seen',
@@ -1508,6 +1563,7 @@ below and do not appear here.
                 host.hostname or '',
                 host.object_type or '',
                 host.available if host.available is not None else '',
+                host.lifecycle_state or 'active',
                 host.source_account_name or '',
                 host.folder or '',
                 host.last_import_seen.strftime(

@@ -187,6 +187,9 @@ class _HostLabelChange:  # pylint: disable=too-few-public-methods
 
 _models_host.CmdbField = _CmdbField
 _models_host.HostLabelChange = _HostLabelChange
+# Tests don't exercise the lifecycle-state filter, so an empty option list
+# is enough to satisfy `from application.models.host import LIFECYCLE_STATES`.
+_models_host.LIFECYCLE_STATES = ()
 
 
 # --- mongoengine / flask_admin.contrib.mongoengine --------------------------

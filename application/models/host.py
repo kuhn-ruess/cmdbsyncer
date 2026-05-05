@@ -11,6 +11,15 @@ from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.models.account import object_types
 
+LIFECYCLE_STATES = (
+    ('planned', 'Planned'),
+    ('staged', 'Staged'),
+    ('active', 'Active'),
+    ('decommissioned', 'Decommissioned'),
+    ('archived', 'Archived'),
+)
+
+
 class HostError(Exception):
     """
     Errors related to host updates or creation
@@ -57,6 +66,9 @@ class Host(db.Document):
     source_account_name = db.StringField()
 
     available = db.BooleanField()
+
+    lifecycle_state = db.StringField(choices=LIFECYCLE_STATES, default='active')
+    lifecycle_state_changed_at = db.DateTimeField()
 
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
@@ -700,6 +712,24 @@ class Host(db.Document):
         """
         self.available = True
         self.last_import_seen = datetime.datetime.now()
+
+    def set_lifecycle_state(self, new_state):
+        """
+        Set Lifecycle state and stamp the change timestamp.
+
+        Returns:
+            bool: True if the state actually changed, False otherwise.
+        """
+        valid = {choice[0] for choice in LIFECYCLE_STATES}
+        if new_state not in valid:
+            raise HostError(f"Unknown lifecycle state: {new_state}")
+        if self.lifecycle_state == new_state:
+            return False
+        old = self.lifecycle_state or 'active'
+        self.lifecycle_state = new_state
+        self.lifecycle_state_changed_at = datetime.datetime.utcnow()
+        self.add_log(f"Lifecycle: {old} -> {new_state}")
+        return True
 
 
 class HostLabelChange(db.Document):

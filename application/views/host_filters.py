@@ -79,6 +79,32 @@ class FilterObjectType(BaseMongoEngineFilter):
         return "contains"
 
 
+class FilterLifecycleState(BaseMongoEngineFilter):
+    """
+    Filter hosts by Lifecycle State. Empty/missing rows are treated as
+    'active' so the legacy fleet maps onto the new state machine
+    without a one-shot migration.
+    """
+
+    def apply(self, query, value):
+        value = (value or '').strip().lower()
+        if not value:
+            return query
+        if value == 'active':
+            return query.filter(__raw__={
+                '$or': [
+                    {'lifecycle_state': 'active'},
+                    {'lifecycle_state': {'$exists': False}},
+                    {'lifecycle_state': None},
+                    {'lifecycle_state': ''},
+                ]
+            })
+        return query.filter(lifecycle_state=value)
+
+    def operation(self):
+        return "is"
+
+
 class FilterPoolFolder(BaseMongoEngineFilter):
     """
     Filter Value

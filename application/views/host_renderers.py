@@ -56,6 +56,32 @@ def _render_object_type_icon(_view, _context, model, _name):
         f'</i>{escape(object_type_display)}'
     )
 
+_LIFECYCLE_BADGES = {
+    'planned':        ('badge-secondary', 'fa fa-clock'),
+    'staged':         ('badge-info',      'fa fa-flask'),
+    'active':         ('badge-success',   'fa fa-check-circle'),
+    'decommissioned': ('badge-warning',   'fa fa-power-off'),
+    'archived':       ('badge-dark',      'fa fa-archive'),
+}
+
+
+def _render_lifecycle_state(_view, _context, model, _name):
+    """
+    Bootstrap badge for the host lifecycle state. Default 'active'
+    when the field is empty so legacy rows render usefully.
+    """
+    state = getattr(model, 'lifecycle_state', None) or 'active'
+    badge_class, icon_class = _LIFECYCLE_BADGES.get(
+        state, ('badge-light', 'fa fa-question')
+    )
+    label = state.replace('_', ' ').title()
+    return Markup(
+        f'<span class="badge {escape(badge_class)}">'
+        f'<i class="{escape(icon_class)}" style="margin-right: 4px;"></i>'
+        f'{escape(label)}</span>'
+    )
+
+
 def _render_datetime(_view, _context, model, name):
     """
     Render datetime fields in a human-readable format.
