@@ -636,6 +636,10 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         EndpointLinkRowAction("fa fa-history", ".timeline",
                               title="Show change timeline",
                               id_arg="obj_id"),
+        LinkRowAction("fa fa-sitemap",
+                      app.config['BASE_PREFIX'] +
+                      "admin/host/relations_graph?obj_id={row_id}",
+                      title="Relations graph"),
         EndpointLinkRowAction("fa fa-copy", ".copy_as_new_form",
                               title="Copy as new",
                               id_arg="source_id"),
@@ -800,6 +804,9 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         LinkRowAction("fa fa-history", app.config['BASE_PREFIX'] + \
                     "admin/host/timeline?obj_id={row_id}",
                     title="Show change timeline"),
+        LinkRowAction("fa fa-sitemap", app.config['BASE_PREFIX'] + \
+                    "admin/host/relations_graph?obj_id={row_id}",
+                    title="Relations graph"),
         LinkRowAction("fa fa-copy", app.config['BASE_PREFIX'] + \
                     "admin/host/copy_as_new_form?source_id={row_id}",
                     title="Copy as new"),
@@ -1183,6 +1190,76 @@ Impact Chain.
             host=host,
             changes=changes,
         )
+
+    @expose('/relations_graph')
+    def relations_graph(self):
+        """Render the interactive Relations graph page for one host."""
+        obj_id = request.args.get('obj_id', '').strip()
+        host = Host.objects(id=obj_id).first() if obj_id else None
+        if not host:
+            flash('Host not found.', 'error')
+            return redirect(url_for('.index_view'))
+        return self.render(
+            'admin/host_relations_graph.html',
+            host=host,
+        )
+
+    @expose('/relations_graph_data')
+    def relations_graph_data(self):  # pylint: disable=too-many-locals
+        """
+        Return nodes/edges around `obj_id` as JSON for vis-network.
+
+        Single hop in both directions: outgoing edges from the focus
+        host plus inbound edges that point at it. The frontend can call
+        this endpoint again with a neighbour id to expand the graph.
+        """
+        # pylint: disable=import-outside-toplevel
+        from flask import jsonify
+        from application.models.host import RELATION_TYPES, RELATION_INVERSE_LABEL
+        obj_id = request.args.get('obj_id', '').strip()
+        focus = Host.objects(id=obj_id).first() if obj_id else None
+        if not focus:
+            return jsonify({'nodes': [], 'edges': []})
+        type_label = dict(RELATION_TYPES)
+
+        def _node(h, is_focus=False):
+            return {
+                'id': str(h.pk),
+                'label': h.hostname,
+                'group': h.object_type or 'host',
+                'is_focus': is_focus,
+            }
+
+        nodes = {str(focus.pk): _node(focus, is_focus=True)}
+        edges = []
+        for rel in (focus.relations or []):
+            tgt = rel.target_host
+            if not tgt:
+                continue
+            tgt_id = str(tgt.pk)
+            nodes.setdefault(tgt_id, _node(tgt))
+            edges.append({
+                'from': str(focus.pk), 'to': tgt_id,
+                'label': type_label.get(rel.type, rel.type),
+                'arrows': 'to',
+            })
+        inbound = Host.objects(
+            __raw__={'relations.target_host': focus.pk}
+        ).only('hostname', 'object_type', 'relations')
+        for src in inbound:
+            src_id = str(src.pk)
+            if src_id == str(focus.pk):
+                continue
+            nodes.setdefault(src_id, _node(src))
+            for rel in (src.relations or []):
+                if rel.target_host and rel.target_host.pk == focus.pk:
+                    edges.append({
+                        'from': src_id, 'to': str(focus.pk),
+                        'label': RELATION_INVERSE_LABEL.get(rel.type, rel.type),
+                        'arrows': 'to',
+                        'dashes': True,
+                    })
+        return jsonify({'nodes': list(nodes.values()), 'edges': edges})
 
     @expose('/debug')
     def debug(self):  # pylint: disable=too-many-locals

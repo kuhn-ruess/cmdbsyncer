@@ -1,0 +1,239 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container-fluid">
+  <div class="d-flex align-items-center mb-3">
+    <h3 class="mb-0">Relations: <code>{{ host.hostname }}</code></h3>
+    <span class="text-muted small ml-3">
+      <i class="fa fa-info-circle"></i>
+      Click a node to expand its neighbours. Solid arrows = outgoing,
+      dashed = inbound.
+    </span>
+    <a class="btn btn-sm btn-outline-secondary ml-auto"
+       href="{{ url_for('host.details_view', id=host.id) }}">
+      <i class="fa fa-arrow-left"></i> Back to host
+    </a>
+  </div>
+
+  <div id="rel-graph-wrap" style="position:relative;">
+    <svg id="rel-graph" width="100%" height="640"
+         style="border:1px solid #e3e6ea;border-radius:6px;background:#fbfbfc;">
+    </svg>
+    <div id="rel-legend"
+         style="position:absolute;top:8px;left:8px;background:#fff;
+                border:1px solid #e3e6ea;border-radius:4px;padding:6px 10px;
+                font-size:0.8rem;line-height:1.5;">
+      <div><span style="display:inline-block;width:10px;height:10px;
+                       background:#3498db;border-radius:50%;
+                       margin-right:6px;"></span>host</div>
+      <div><span style="display:inline-block;width:10px;height:10px;
+                       background:#27ae60;border-radius:50%;
+                       margin-right:6px;"></span>service</div>
+      <div><span style="display:inline-block;width:10px;height:10px;
+                       background:#e67e22;border-radius:50%;
+                       margin-right:6px;"></span>application</div>
+      <div><span style="display:inline-block;width:10px;height:10px;
+                       background:#9b59b6;border-radius:50%;
+                       margin-right:6px;"></span>location</div>
+      <div><span style="display:inline-block;width:10px;height:10px;
+                       background:#7f8c8d;border-radius:50%;
+                       margin-right:6px;"></span>other</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // Self-contained force-directed graph. No external library — every
+  // CMDBsyncer install ships this view, even those without internet.
+  const svg = document.getElementById('rel-graph');
+  const W = svg.clientWidth, H = svg.clientHeight;
+  const dataUrl = "{{ url_for('host.relations_graph_data') }}";
+  const focusId = "{{ host.id }}";
+
+  const TYPE_COLOR = {
+    host: '#3498db', service: '#27ae60', application: '#e67e22',
+    location: '#9b59b6',
+  };
+  const fallbackColor = '#7f8c8d';
+
+  let nodes = [];      // {id, label, group, is_focus, x, y, vx, vy, fx?, fy?}
+  let edges = [];      // {from, to, label, dashes}
+  const expanded = new Set();
+
+  function svgEl(name, attrs) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  function fetchAround(id) {
+    return fetch(dataUrl + '?obj_id=' + encodeURIComponent(id))
+      .then(r => r.json());
+  }
+
+  function mergeData(payload) {
+    const known = new Map(nodes.map(n => [n.id, n]));
+    payload.nodes.forEach(n => {
+      if (!known.has(n.id)) {
+        n.x = W / 2 + (Math.random() - 0.5) * 60;
+        n.y = H / 2 + (Math.random() - 0.5) * 60;
+        n.vx = 0; n.vy = 0;
+        nodes.push(n);
+      } else {
+        // Keep existing position/velocity; just refresh label/group.
+        const cur = known.get(n.id);
+        cur.label = n.label; cur.group = n.group;
+        cur.is_focus = cur.is_focus || n.is_focus;
+      }
+    });
+    const seen = new Set(edges.map(e => e.from + '|' + e.to + '|' + e.label));
+    payload.edges.forEach(e => {
+      const key = e.from + '|' + e.to + '|' + e.label;
+      if (!seen.has(key)) { edges.push(e); seen.add(key); }
+    });
+  }
+
+  // Simple velocity-Verlet force layout — good enough for <100 nodes.
+  function step() {
+    const k_rep = 4500, k_spring = 0.04, restLen = 130, damping = 0.82;
+    nodes.forEach(a => {
+      if (a.fx !== undefined) return;
+      let fx = 0, fy = 0;
+      nodes.forEach(b => {
+        if (a === b) return;
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const d2 = Math.max(50, dx * dx + dy * dy);
+        const f = k_rep / d2;
+        const d = Math.sqrt(d2);
+        fx += (dx / d) * f; fy += (dy / d) * f;
+      });
+      // Centre pull keeps disconnected components on screen.
+      fx += (W / 2 - a.x) * 0.0025;
+      fy += (H / 2 - a.y) * 0.0025;
+      a.fxAccum = fx; a.fyAccum = fy;
+    });
+    edges.forEach(e => {
+      const a = nodes.find(n => n.id === e.from);
+      const b = nodes.find(n => n.id === e.to);
+      if (!a || !b) return;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f = (d - restLen) * k_spring;
+      const ux = dx / d, uy = dy / d;
+      if (a.fx === undefined) { a.fxAccum += ux * f; a.fyAccum += uy * f; }
+      if (b.fx === undefined) { b.fxAccum -= ux * f; b.fyAccum -= uy * f; }
+    });
+    nodes.forEach(n => {
+      if (n.fx !== undefined) { n.x = n.fx; n.y = n.fy; return; }
+      n.vx = (n.vx + n.fxAccum) * damping;
+      n.vy = (n.vy + n.fyAccum) * damping;
+      n.x += n.vx; n.y += n.vy;
+      // Soft border.
+      n.x = Math.max(40, Math.min(W - 40, n.x));
+      n.y = Math.max(40, Math.min(H - 40, n.y));
+    });
+  }
+
+  function render() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    // Edges first.
+    edges.forEach(e => {
+      const a = nodes.find(n => n.id === e.from);
+      const b = nodes.find(n => n.id === e.to);
+      if (!a || !b) return;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const r = 22;
+      const x1 = a.x + ux * r, y1 = a.y + uy * r;
+      const x2 = b.x - ux * r, y2 = b.y - uy * r;
+      const line = svgEl('line', {
+        x1, y1, x2, y2,
+        stroke: e.dashes ? '#7f8c8d' : '#34495e',
+        'stroke-width': 1.4,
+        'stroke-dasharray': e.dashes ? '4 3' : null,
+        'marker-end': 'url(#arrow)',
+      });
+      svg.appendChild(line);
+      // Label
+      const tx = (x1 + x2) / 2, ty = (y1 + y2) / 2;
+      const lbl = svgEl('text', {
+        x: tx, y: ty - 4, 'text-anchor': 'middle',
+        'font-size': 10, fill: '#555',
+      });
+      lbl.textContent = e.label || '';
+      svg.appendChild(lbl);
+    });
+    // Arrowhead marker.
+    const defs = svgEl('defs');
+    const marker = svgEl('marker', {
+      id: 'arrow', viewBox: '0 0 10 10', refX: 8, refY: 5,
+      markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse',
+    });
+    marker.appendChild(svgEl('path', { d: 'M0,0 L10,5 L0,10 Z', fill: '#34495e' }));
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+    // Nodes.
+    nodes.forEach(n => {
+      const g = svgEl('g', {
+        transform: `translate(${n.x},${n.y})`,
+        style: 'cursor: grab;',
+        'data-id': n.id,
+      });
+      const fill = TYPE_COLOR[n.group] || fallbackColor;
+      const radius = n.is_focus ? 26 : 20;
+      g.appendChild(svgEl('circle', {
+        r: radius, fill,
+        stroke: n.is_focus ? '#1a1a1a' : '#fff',
+        'stroke-width': n.is_focus ? 3 : 2,
+      }));
+      const t = svgEl('text', {
+        y: radius + 14, 'text-anchor': 'middle',
+        'font-size': 11, fill: '#222',
+      });
+      t.textContent = n.label.length > 28 ? n.label.slice(0, 27) + '…' : n.label;
+      g.appendChild(t);
+      svg.appendChild(g);
+
+      // Drag + click-to-expand.
+      let dragging = false, didMove = false, off = null;
+      g.addEventListener('mousedown', ev => {
+        dragging = true; didMove = false;
+        const pt = svg.createSVGPoint();
+        pt.x = ev.clientX; pt.y = ev.clientY;
+        const cur = pt.matrixTransform(svg.getScreenCTM().inverse());
+        off = { dx: cur.x - n.x, dy: cur.y - n.y };
+        n.fx = n.x; n.fy = n.y;
+        ev.preventDefault();
+      });
+      window.addEventListener('mousemove', ev => {
+        if (!dragging) return;
+        const pt = svg.createSVGPoint();
+        pt.x = ev.clientX; pt.y = ev.clientY;
+        const cur = pt.matrixTransform(svg.getScreenCTM().inverse());
+        n.fx = cur.x - off.dx; n.fy = cur.y - off.dy;
+        didMove = true;
+      });
+      window.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        n.fx = undefined; n.fy = undefined;
+        if (!didMove && !expanded.has(n.id)) {
+          expanded.add(n.id);
+          fetchAround(n.id).then(d => mergeData(d));
+        }
+      });
+    });
+  }
+
+  function tick() { step(); render(); requestAnimationFrame(tick); }
+
+  fetchAround(focusId).then(d => {
+    expanded.add(focusId);
+    mergeData(d);
+    requestAnimationFrame(tick);
+  });
+})();
+</script>
+{% endblock %}
