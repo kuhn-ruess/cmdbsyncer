@@ -406,6 +406,16 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_view(DataQualityView(name="Data Quality", endpoint="data_quality",
                                    menu_icon_type='fa',
                                    menu_icon_value='fa-stethoscope'))
+
+    from application.models.saved_search import SavedSearch
+    from application.views.saved_search import (
+        SavedSearchView, register_saved_search_routes,
+    )
+    register_saved_search_routes(HostModelView)
+    admin.add_view(SavedSearchView(SavedSearch, name="Saved Searches",
+                                   category="Settings",
+                                   menu_icon_type='fa',
+                                   menu_icon_value='fa-bookmark'))
     admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
     admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",
                                    category="Objects",

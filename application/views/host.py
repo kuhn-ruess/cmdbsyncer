@@ -1368,10 +1368,17 @@ below and do not appear here.
     def render(self, template, **kwargs):
         """
         Supply the template choice list to the list view so the
-        "Set Template" modal can render its <select> inline.
+        "Set Template" modal can render its <select> inline. Also
+        pre-load the user's Saved Searches for this list path so the
+        preset bar renders without a follow-up DB round-trip.
         """
         if template.endswith('host_list.html') or template.endswith('list.html'):
             kwargs.setdefault('set_template_choices', self.get_template_list())
+            # pylint: disable=import-outside-toplevel
+            from application.views.saved_search import list_for_path
+            kwargs.setdefault(
+                'saved_searches', list_for_path(request.path),
+            )
         return super().render(template, **kwargs)
 
     # `action_set_template` stays as a server-side fallback. The
