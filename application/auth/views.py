@@ -1,6 +1,8 @@
 """
 Login Routes
 """
+import time
+import uuid
 from datetime import datetime
 from datetime import timedelta
 import pyotp
@@ -62,7 +64,7 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
                         hours=(current_app.config['ADMIN_SESSION_HOURS'] or 8)
                     )
                 )
-                existing_user.last_login = datetime.now()
+                existing_user.last_login = datetime.utcnow()
                 existing_user.save()
                 audit('user.login.success',
                       actor_type='user',
@@ -149,7 +151,7 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
                 hours=(current_app.config['ADMIN_SESSION_HOURS'] or 8)
             )
         )
-        existing_user.last_login = datetime.now()
+        existing_user.last_login = datetime.utcnow()
         existing_user.save()
         audit('user.login.success',
               actor_type='user',
@@ -221,7 +223,7 @@ def change_password():
     if form.validate_on_submit():
         password = request.form.get('password')
         current_user.set_password(password)
-        current_user.last_login = datetime.now()
+        current_user.last_login = datetime.utcnow()
         current_user.force_password_change = False
         current_user.save()
         return redirect(url_for("admin.index"))
@@ -231,11 +233,31 @@ def change_password():
 
     return render_template('formular.html', form=form)
 
+def _decoy_token():
+    """
+    Match the cost of `User.generate_token` for unknown emails so the
+    response time of /request-password does not reveal whether the
+    address is registered. Same JWT encode + same SECRET_KEY load.
+    """
+    now_epoch = time.time()
+    key = OctKey.import_key(current_app.config['SECRET_KEY'])
+    jwt.encode({'alg': 'HS256'}, {
+        'userid': uuid.uuid4().hex,
+        'purpose': 'pw_reset',
+        'pwd_iat': 0,
+        'jti': uuid.uuid4().hex,
+        'iat': int(now_epoch),
+        'exp': int(now_epoch + 60 * 60),
+    }, key)
+
+
 @AUTH.route('/request-password', methods=['GET', 'POST'])
 @limiter.limit(AUTH_RATE_LIMIT, methods=['POST'])
 def request_password():
     """
-    Password Request Page
+    Password Request Page. Both the existing-user and unknown-email
+    branches do equivalent work (JWT signing) so the response time
+    cannot be used to enumerate registered addresses.
     """
     form = RequestPasswordForm(request.form)
     if form.validate_on_submit():
@@ -246,6 +268,8 @@ def request_password():
             token = existing_user.generate_token(purpose='pw_reset')
             send_email(existing_user.email, "New Password", 'email/resetpassword',
                        user=existing_user, token=token)
+        else:
+            _decoy_token()
         flash("New Password will be sent", 'info')
         return redirect(url_for("admin.index"))
 
@@ -262,8 +286,7 @@ def get_userid(token, purpose):
         decoded = jwt.decode(token, key)
         data = decoded.claims
         if 'exp' in data:
-            now = datetime.utcnow().timestamp()
-            if now > data['exp']:
+            if time.time() > data['exp']:
                 raise ValueError("Token Expired")
     except JoseError as error:
         raise ValueError(error) from error
@@ -313,7 +336,7 @@ def reset_password(token):
     if form.validate_on_submit():
         password = request.form.get('password')
         existing_user.set_password(password)
-        existing_user.last_login = datetime.now()
+        existing_user.last_login = datetime.utcnow()
         existing_user.save()
         session.clear()
         login_user(

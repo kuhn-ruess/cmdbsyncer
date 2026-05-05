@@ -2,8 +2,9 @@
 Internal User Accounts
 """
 # pylint: disable=no-member  # mongoengine document fields (id, objects, ...) are dynamic
+import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import current_app
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -83,9 +84,10 @@ class User(db.Document, UserMixin):
         """
         Token generator. `purpose` binds the token to a specific action
         (e.g. "pw_reset") so it cannot be replayed in a different context.
+        Epochs use `time.time()` so iat/exp are UTC and the validator's
+        clock comparison stays correct on non-UTC hosts.
         """
-        now = datetime.now()
-        exp = now + timedelta(minutes=expiration)
+        now_epoch = time.time()
         pwd_iat = int(self.date_password.timestamp()) if self.date_password else 0
         header = {
               'alg': 'HS256'
@@ -96,8 +98,8 @@ class User(db.Document, UserMixin):
             'purpose': purpose,
             'pwd_iat': pwd_iat,
             'jti': uuid.uuid4().hex,
-            'iat': int(now.timestamp()),
-            'exp': int(exp.timestamp()),
+            'iat': int(now_epoch),
+            'exp': int(now_epoch + expiration * 60),
         }
 
         return jwt.encode(header, data, key)
