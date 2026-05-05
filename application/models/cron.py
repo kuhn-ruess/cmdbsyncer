@@ -1,12 +1,75 @@
 """
 Cron Jobs
 """
+import hashlib
+import hmac
 import secrets
 from application import db, cron_register
 
 
 def _generate_webhook_token():
+    """Return a fresh URL-safe token *plaintext*. The DB only stores
+    the hash (see `_hash_webhook_token`); the plaintext is shown to the
+    operator once via the admin UI flash and never persisted."""
     return secrets.token_urlsafe(32)
+
+
+def _hash_webhook_token(plaintext):
+    """SHA-256 hex digest of a webhook-token plaintext.
+
+    Equality-only comparison is sufficient (no replay-protection — that
+    is what the enterprise `webhook_signatures` HMAC flow is for), so
+    a fast hash is fine. The verifier hashes the submitted token the
+    same way and runs `hmac.compare_digest` against the stored digest.
+    """
+    return hashlib.sha256(plaintext.encode('utf-8')).hexdigest()
+
+
+# Free-function helpers — keep the actual hash flow out of the
+# MongoEngine class machinery so tests can drive it against a plain
+# stub without duplicating the logic.
+
+def migrate_legacy_webhook_token(group):
+    """Hash the pre-4.1 plaintext token in place if `group` still has
+    one. Returns True iff a migration write is needed."""
+    if group.webhook_token and not group.webhook_token_hash:
+        group.webhook_token_hash = _hash_webhook_token(group.webhook_token)
+        group.webhook_token = None
+        return True
+    return False
+
+
+def ensure_webhook_token(group):
+    """Allocate a webhook token on first enable. Returns the plaintext
+    on first allocation (None otherwise). The DB only ever sees the
+    SHA-256 hex hash."""
+    if not group.webhook_enabled:
+        return None
+    if group.webhook_token_hash:
+        return None
+    plaintext = _generate_webhook_token()
+    group.webhook_token_hash = _hash_webhook_token(plaintext)
+    group.webhook_token = None
+    return plaintext
+
+
+def regenerate_webhook_token(group):
+    """Rotate the token. Returns the new plaintext for one-shot display."""
+    plaintext = _generate_webhook_token()
+    group.webhook_token_hash = _hash_webhook_token(plaintext)
+    group.webhook_token = None
+    return plaintext
+
+
+def verify_webhook_token(group, submitted):
+    """Constant-time equality between SHA-256 of the submitted plaintext
+    and the stored hash."""
+    if not submitted or not group.webhook_token_hash:
+        return False
+    return hmac.compare_digest(
+        _hash_webhook_token(submitted),
+        group.webhook_token_hash,
+    )
 
 intervals = [
     ("10min", "Every 15 minute"), # Crond runs 15min, but the 10 min makes sure it runs everytime
@@ -70,6 +133,13 @@ class CronGroup(db.Document):
     run_once_next = db.BooleanField(default=False)
     continue_on_error = db.BooleanField(default=False)
     webhook_enabled = db.BooleanField(default=False)
+    # Plaintext is shown to the operator exactly once after generate /
+    # regenerate; the DB only carries the SHA-256 hex digest so a leaked
+    # backup or replica does not hand the secret to an attacker.
+    webhook_token_hash = db.StringField()
+    # Legacy plaintext field — kept around so old documents upgrade
+    # transparently. Migrated on read by `migrate_legacy_webhook_token`
+    # and never written back.
     webhook_token = db.StringField()
     sort_field = db.IntField(default=0)
 
@@ -82,17 +152,21 @@ class CronGroup(db.Document):
         'strict': False,
     }
 
+    def migrate_legacy_webhook_token(self):
+        """See module-level `migrate_legacy_webhook_token`."""
+        return migrate_legacy_webhook_token(self)
+
     def ensure_webhook_token(self):
-        """
-        Allocate a webhook token on first enable. Kept out of the field's
-        `default=` so groups that never use webhooks stay tokenless.
-        """
-        if self.webhook_enabled and not self.webhook_token:
-            self.webhook_token = _generate_webhook_token()
+        """See module-level `ensure_webhook_token`."""
+        return ensure_webhook_token(self)
 
     def regenerate_webhook_token(self):
-        """Rotate the token so old URLs stop working immediately."""
-        self.webhook_token = _generate_webhook_token()
+        """See module-level `regenerate_webhook_token`."""
+        return regenerate_webhook_token(self)
+
+    def verify_webhook_token(self, submitted):
+        """See module-level `verify_webhook_token`."""
+        return verify_webhook_token(self, submitted)
 
 
 commands = [

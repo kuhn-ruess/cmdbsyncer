@@ -120,11 +120,13 @@ class CronGroupView(DefaultModelView):
     }
 
     form_widget_args = {
-        'webhook_token': {
+        'webhook_token_hash': {
             'readonly': True,
             'placeholder': 'Generated automatically when Webhook is enabled.',
         },
     }
+    column_exclude_list = ('webhook_token',)
+    form_excluded_columns = ('webhook_token',)
 
     form_rules = modern_form(
         section('1', 'main', 'Basics',
@@ -146,10 +148,12 @@ class CronGroupView(DefaultModelView):
                  rules.Field('continue_on_error')]),
         section('4', 'aux', 'Webhook Trigger',
                 'External systems can trigger this group via HTTPS POST. '
-                'The token is auto-generated on first enable; rotate it '
-                'with the "Regenerate Webhook Token" action.',
+                'The token is auto-generated on first enable. The DB only '
+                'stores its SHA-256 hash, so the plaintext is shown ONCE '
+                'in a flash message after generation — copy it then. '
+                'Rotate it with the "Regenerate Webhook Token" action.',
                 [rules.Field('webhook_enabled'),
-                 rules.Field('webhook_token')]),
+                 rules.Field('webhook_token_hash')]),
     )
 
     form_subdocuments = {
@@ -177,8 +181,20 @@ class CronGroupView(DefaultModelView):
     }
 
     def on_model_change(self, form, model, is_created):
-        """Allocate a webhook token on first enable."""
-        model.ensure_webhook_token()
+        """Allocate a webhook token on first enable. Plaintext is
+        flashed once because the DB never sees it again — only the
+        SHA-256 hash is persisted."""
+        plaintext = model.ensure_webhook_token()
+        if plaintext:
+            flash(
+                Markup(
+                    'Webhook token generated for '
+                    f'<strong>{escape(model.name)}</strong>. '
+                    'Copy it now — it will not be shown again:<br>'
+                    f'<code style="word-break:break-all;">{escape(plaintext)}</code>'
+                ),
+                'success',
+            )
         return super().on_model_change(form, model, is_created)
 
     def delete_model(self, model):
@@ -198,15 +214,23 @@ class CronGroupView(DefaultModelView):
             'Rotate the webhook token? Existing URLs using the old token '
             'will stop working immediately.')
     def action_regenerate_webhook_token(self, ids):
-        """Rotate per-group webhook tokens for the selected groups."""
+        """Rotate per-group webhook tokens for the selected groups.
+
+        The DB only stores SHA-256 hashes, so each new plaintext is
+        flashed once here — there is no later way to retrieve it."""
         from application.models.cron import CronGroup  # pylint: disable=import-outside-toplevel
-        count = 0
         for group in CronGroup.objects(id__in=ids):
-            group.regenerate_webhook_token()
+            plaintext = group.regenerate_webhook_token()
             group.webhook_enabled = True
             group.save()
-            count += 1
-        flash(f'Webhook token regenerated for {count} group(s)', 'success')
+            flash(
+                Markup(
+                    f'New webhook token for <strong>{escape(group.name)}</strong> '
+                    '(copy now — not retrievable later):<br>'
+                    f'<code style="word-break:break-all;">{escape(plaintext)}</code>'
+                ),
+                'success',
+            )
 
     def is_accessible(self):
         """ Overwrite """

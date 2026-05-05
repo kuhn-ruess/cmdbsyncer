@@ -8,7 +8,6 @@ namespace. The ``/cron/trigger/<group>`` route additionally accepts an
 ``X-Webhook-Token`` header tied to the CronGroup, so external systems
 can fire a sync without carrying a user credential.
 """
-import hmac
 from datetime import datetime, timedelta
 from mongoengine.errors import DoesNotExist
 from flask import request
@@ -302,7 +301,13 @@ class SyncerCronTriggerApi(Resource):
 
         token = request.headers.get('X-Webhook-Token')
         if auth_method is None and token:
-            if not group.webhook_enabled or not group.webhook_token:
+            # Hash-on-read: legacy rows still carrying plaintext get
+            # upgraded the first time they authenticate after the
+            # rollout, so operators don't have to run a separate
+            # migration step.
+            if group.migrate_legacy_webhook_token():
+                group.save()
+            if not group.webhook_enabled or not group.webhook_token_hash:
                 log.log("Webhook trigger rejected", source="API",
                         details=[('group', group_name),
                                  ('reason', 'webhook disabled or no token set'),
@@ -313,8 +318,8 @@ class SyncerCronTriggerApi(Resource):
                       target_name=group_name,
                       metadata={'reason': 'webhook disabled or no token set'})
                 return {'error': "Webhook not enabled for this group"}, 403
-            # hmac.compare_digest prevents timing-based token discovery.
-            if not hmac.compare_digest(token, group.webhook_token):
+            # verify_webhook_token uses hmac.compare_digest internally.
+            if not group.verify_webhook_token(token):
                 log.log("Webhook trigger rejected", source="API",
                         details=[('group', group_name),
                                  ('reason', 'token mismatch'),
