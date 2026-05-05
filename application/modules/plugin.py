@@ -155,6 +155,11 @@ class Plugin():
         self._ca_cert_tempfile = None
         self._http_session = None
         self.log_details.append(('started', datetime.now()))
+        # Resource cleanup must run even when a subclass __init__ raises
+        # before _init_complete flips to True. save_log gates on
+        # _init_complete (skips the half-built ghost entry); the session
+        # close + tempfile unlink do not — register them separately.
+        atexit.register(self._cleanup_resources)
         if account:
             self.config = get_account(account)
             if not self.config:
@@ -238,13 +243,29 @@ class Plugin():
 
         log.log(self.name, source=self.source, details=self.log_details)
 
-        if self._ca_cert_tempfile:
+    def _cleanup_resources(self):
+        """
+        Close the requests Session and unlink the CA-cert temp file.
+
+        Registered via ``atexit`` directly from ``__init__`` so it fires
+        even when a subclass init raises before ``_init_complete`` flips
+        to True — the previous design hung this off ``save_log``, which
+        returns early in that half-built case and leaked the Session.
+        Idempotent: safe to call multiple times.
+        """
+        tempfile_path = getattr(self, '_ca_cert_tempfile', None)
+        if tempfile_path:
             try:
-                os.unlink(self._ca_cert_tempfile)
+                os.unlink(tempfile_path)
             except OSError:
                 pass
-        if self._http_session:
-            self._http_session.close()
+            self._ca_cert_tempfile = None
+        session = getattr(self, '_http_session', None)
+        if session is not None:
+            try:
+                session.close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
             self._http_session = None
 
 
