@@ -979,19 +979,22 @@ label[for="cmdb_fields"] { display: none !important; }
 /* Flatten each row card to a plain padded line. */
 #cmdb_fields .inline-field.card {
     margin: 0 !important;
-    padding: 2px 24px 2px 6px !important;  /* right padding = delete-X area */
+    padding: 2px 40px 2px 24px !important;
+    /* right padding leaves room for the JS-injected delete X,
+       left padding for the drag-handle in the legend. */
     border: none !important;
     box-shadow: none !important;
     background-color: transparent !important;
     border-radius: 0 !important;
 }
 
-/* Pin the delete-X to the top-right corner and hide the "#N" caption
-   while the X stays interactive. */
+/* Drag-handle (FA sort icon injected via legend small::before) on the
+   LEFT, so it does not collide with the JS delete-X on the right. */
 #cmdb_fields .inline-field > legend {
     position: absolute !important;
-    top: 2px !important;
-    right: 2px !important;
+    top: 4px !important;
+    left: 4px !important;
+    right: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
@@ -999,13 +1002,13 @@ label[for="cmdb_fields"] { display: none !important; }
     line-height: 1 !important;
     font-size: 0 !important;  /* kills "Manual Labels #N" caption */
 }
-#cmdb_fields .inline-field > legend .pull-right {
-    font-size: 0.95rem !important;
-    float: none !important;
-    position: static !important;
+/* The JS-injected .cmdb-inline-remove handles the delete; hide the
+   legend's native [X] so we don't show two delete affordances. */
+#cmdb_fields .inline-field > legend .pull-right,
+#cmdb_fields .inline-field > legend small .pull-right {
+    display: none !important;
 }
 #cmdb_fields .inline-field > legend small { font-size: 0 !important; }
-#cmdb_fields .inline-field > legend small .pull-right { font-size: 0.95rem !important; }
 #cmdb_fields .inline-field > .clearfix { display: none !important; }
 
 /* Form-row: horizontal, no wrap, no vertical gap. */
@@ -1075,7 +1078,8 @@ label[for="relations"] { display: none !important; }
 #relations .inline-field { position: relative; }
 #relations .inline-field.card {
     margin: 0 0 4px 0 !important;
-    padding: 6px 28px 6px 8px !important;
+    padding: 6px 44px 6px 28px !important;
+    /* right pad: JS delete-X; left pad: drag-handle in legend */
     border: 1px solid #e3e6ea !important;
     box-shadow: none !important;
     background-color: #fbfbfc !important;
@@ -1083,17 +1087,16 @@ label[for="relations"] { display: none !important; }
 }
 #relations .inline-field > legend {
     position: absolute !important;
-    top: 4px !important;
-    right: 6px !important;
+    top: 8px !important;
+    left: 6px !important;
+    right: auto !important;
     margin: 0 !important; padding: 0 !important; border: none !important;
     width: auto !important; line-height: 1 !important;
     font-size: 0 !important;
 }
 #relations .inline-field > legend .pull-right,
 #relations .inline-field > legend small .pull-right {
-    font-size: 0.95rem !important;
-    float: none !important;
-    position: static !important;
+    display: none !important;
 }
 #relations .inline-field > legend small { font-size: 0 !important; }
 #relations .inline-field > .clearfix { display: none !important; }

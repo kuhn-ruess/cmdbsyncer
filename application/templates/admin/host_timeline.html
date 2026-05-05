@@ -33,10 +33,10 @@
 .tl-empty { padding: 24px; text-align: center; color: #6c757d; }
 </style>
 
+{% with active='timeline' %}
+{% include 'admin/_host_tabs.html' with context %}
+{% endwith %}
 <div class="tl-wrap">
-    {% with active='timeline' %}
-    {% include 'admin/_host_tabs.html' with context %}
-    {% endwith %}
 
     {% if not changes %}
     <div class="app-card tl-empty">

@@ -66,13 +66,15 @@
     padding: 4px 0; font-size: 0.85rem; }
 </style>
 
+{% if host %}
+  {% with active='debug' %}
+  {% include 'admin/_host_tabs.html' with context %}
+  {% endwith %}
+{% endif %}
+
 <div class="container-fluid" style="max-width: 1400px;">
 
-  {% if host %}
-    {% with active='debug' %}
-    {% include 'admin/_host_tabs.html' with context %}
-    {% endwith %}
-  {% else %}
+  {% if not host %}
   <div class="debug-head">
     <h2><i class="fa fa-bug"></i> Debug: {{ hostname or 'pick a host' }}</h2>
   </div>
