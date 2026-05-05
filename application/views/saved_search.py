@@ -55,8 +55,10 @@ class SavedSearchView(ModelView):  # pylint: disable=too-many-public-methods,too
     def on_model_delete(self, model):
         if not current_user.global_admin and \
                 model.owner_email != getattr(current_user, 'email', None):
-            raise PermissionError(
-                "Only the owner can delete this saved search."
+            # Flask-Admin surfaces ValueError as a flash; PermissionError
+            # would bubble up as a 500.
+            raise ValueError(
+                "Only the owner of a saved search can delete it."
             )
 
 

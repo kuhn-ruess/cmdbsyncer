@@ -8,11 +8,25 @@
   </strong>
   {% if saved_searches %}
     {% for preset in saved_searches %}
-      <a href="{{ preset.path }}{% if preset.query_string %}?{{ preset.query_string }}{% endif %}"
-         class="btn btn-sm btn-outline-primary"
-         title="{{ preset.owner_email }}{% if preset.shared %} (shared){% endif %}">
-        {{ preset.name }}{% if preset.shared %} <i class="fa fa-share-alt fa-xs"></i>{% endif %}
-      </a>
+      <div class="btn-group btn-group-sm" role="group">
+        <a href="{{ preset.path }}{% if preset.query_string %}?{{ preset.query_string }}{% endif %}"
+           class="btn btn-sm btn-outline-primary"
+           title="{{ preset.owner_email }}{% if preset.shared %} (shared){% endif %}">
+          {{ preset.name }}{% if preset.shared %} <i class="fa fa-share-alt fa-xs"></i>{% endif %}
+        </a>
+        {% if preset.owner_email == current_user.email or current_user.global_admin %}
+        <form method="POST" action="{{ url_for('.delete_preset', preset_id=preset.id) }}"
+              style="display:inline; margin:0;"
+              onsubmit="return confirm('Delete preset &quot;{{ preset.name }}&quot;?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-outline-danger"
+                  title="Delete this preset"
+                  style="padding: 0.15rem 0.4rem;">
+            <i class="fa fa-times"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
     {% endfor %}
   {% else %}
     <span class="text-muted" style="font-size: 0.9rem;">none yet</span>
