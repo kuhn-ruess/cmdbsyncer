@@ -10,6 +10,7 @@ from application.helpers.plugins import discover_plugins
 
 
 def get_account_types():
+    """Return the static base list plus dynamically-discovered plugin types."""
     account_types = [
         ('cmkv1', "Checkmk Version 1.x"), # Legacy remaining
         ('cmdb', "Object Managed only in Syncer"),
@@ -31,6 +32,8 @@ object_types = [
     ('auto', 'Undefined'),
     ('host', 'Host Object'),
     ('application', 'Application'),
+    ('service', 'Service'),
+    ('location', 'Location'),
     ('contact', 'Contact'),
     ('group', 'Group Object'),
     ('shadow_host', 'Shadow Host Object'),
@@ -47,14 +50,14 @@ object_types = [
 ]
 
 
-class PluginSettings(db.EmbeddedDocument):
+class PluginSettings(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     Custom Attributes for Setup
     """
     plugin = db.StringField(choices=plugin_register)
     object_filter = db.ListField(field=db.StringField(choices=object_types))
 
-class CustomEntry(db.EmbeddedDocument):
+class CustomEntry(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     Custom Attributes for Setup
     """

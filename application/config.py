@@ -142,6 +142,29 @@ class BaseConfig():
         'host': {
             #'ipaddress' : {"type": "string"},
         },
+        # First-class CI types — opinionated default fields that an
+        # operator typically wants on a Service / Application /
+        # Location entry. Override or extend in local_config.py to
+        # match your environment; the keys here only define what
+        # appears empty on a fresh CI.
+        'service': {
+            'owner':       {'type': 'string'},
+            'criticality': {'type': 'string'},
+            'sla':         {'type': 'string'},
+            'description': {'type': 'string'},
+        },
+        'application': {
+            'owner':       {'type': 'string'},
+            'criticality': {'type': 'string'},
+            'repo_url':    {'type': 'string'},
+            'description': {'type': 'string'},
+        },
+        'location': {
+            'address':     {'type': 'string'},
+            'city':        {'type': 'string'},
+            'country':     {'type': 'string'},
+            'room':        {'type': 'string'},
+        },
         'all': {
             #'notification': {"type": "boolean"},
 

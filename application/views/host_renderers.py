@@ -24,6 +24,8 @@ from application.views.host_filters import FilterCmdbTemplate
 OBJECT_TYPE_ICONS = {
     'auto': 'fa fa-magic',
     'application': 'fa fa-code',
+    'service': 'fa fa-cogs',
+    'location': 'fa fa-map-marker',
     'contact': 'fa fa-user',
     'group': 'fa fa-users',
     'host': 'fa fa-server',
