@@ -12,6 +12,7 @@ from mongoengine.errors import DoesNotExist
 from application.modules.plugin import Plugin
 
 
+# pylint: disable=protected-access
 class TestPlugin(unittest.TestCase):
     """Test cases for Plugin class"""
 
@@ -37,7 +38,9 @@ class TestPlugin(unittest.TestCase):
         self.assertTrue(plugin.verify)
         self.assertFalse(plugin.dry_run)
         self.assertFalse(plugin.save_requests)
-        mock_atexit.register.assert_called_once_with(plugin.save_log)
+        registered = [c.args[0] for c in mock_atexit.register.call_args_list]
+        self.assertIn(plugin.save_log, registered)
+        self.assertIn(plugin._cleanup_resources, registered)
         mock_get_account.assert_not_called()
 
     @patch('application.modules.plugin.app')
@@ -191,7 +194,7 @@ class TestPlugin(unittest.TestCase):
     @patch('application.modules.plugin.requests')
     @patch('application.modules.plugin.log')
     @patch('application.modules.plugin.logger')
-    def test_save_log_closes_http_session(self, _logger, _log, mock_requests, mock_app):
+    def test_cleanup_closes_http_session(self, _logger, _log, mock_requests, mock_app):
         mock_app.config = self.mock_app_config
         mock_session = Mock()
         mock_requests.exceptions = requests.exceptions
@@ -202,7 +205,31 @@ class TestPlugin(unittest.TestCase):
 
         plugin = Plugin()
         plugin.inner_request('GET', 'http://example.com')
-        plugin.save_log()
+        plugin._cleanup_resources()
+
+        mock_session.close.assert_called_once()
+        self.assertIsNone(plugin._http_session)
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.requests')
+    @patch('application.modules.plugin.log')
+    @patch('application.modules.plugin.logger')
+    def test_cleanup_runs_on_half_built_plugin(
+            self, _logger, _log, mock_requests, mock_app
+    ):
+        """Regression: a subclass __init__ that raises before
+        _init_complete = True must still release the Session."""
+        mock_app.config = self.mock_app_config
+        mock_session = Mock()
+        mock_requests.exceptions = requests.exceptions
+        mock_session.request.return_value = Mock(json=lambda: {})
+        mock_requests.Session.return_value = mock_session
+
+        plugin = Plugin()
+        plugin.inner_request('GET', 'http://example.com')
+        plugin._init_complete = False  # simulate subclass init failure
+
+        plugin._cleanup_resources()
 
         mock_session.close.assert_called_once()
 
