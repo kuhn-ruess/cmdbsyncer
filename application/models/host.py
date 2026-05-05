@@ -19,6 +19,25 @@ LIFECYCLE_STATES = (
     ('archived', 'Archived'),
 )
 
+RELATION_TYPES = (
+    ('depends_on', 'Depends on'),
+    ('runs_on', 'Runs on'),
+    ('member_of', 'Member of'),
+    ('parent_of', 'Parent of'),
+    ('connects_to', 'Connects to'),
+)
+
+# Reverse-label used when rendering "what depends on me" for the inbound
+# side of a relation. Keep this here so the renderer and any future
+# CLI/report use one source of truth.
+RELATION_INVERSE_LABEL = {
+    'depends_on': 'Required by',
+    'runs_on':    'Hosts',
+    'member_of':  'Contains',
+    'parent_of':  'Child of',
+    'connects_to': 'Reachable from',
+}
+
 
 class HostError(Exception):
     """
@@ -36,6 +55,19 @@ class CmdbField(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     field_name = db.StringField(max_length=255)
     field_value = db.StringField(max_length=255)
+
+
+class HostRelation(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
+    """
+    Typed link from one Host to another. Stored only on the source side
+    of the edge; inverse traversal is done via a Mongo query so the
+    inverse label stays in sync without a second write.
+
+    `source` records who created the edge ('manual', 'import', etc.).
+    """
+    type = db.StringField(choices=RELATION_TYPES, required=True)
+    target_host = db.ReferenceField(document_type='Host', required=True)
+    source = db.StringField(default='manual', max_length=64)
 
 
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
@@ -83,6 +115,8 @@ class Host(db.Document):
     # again on a fresh import.
     is_stale = db.BooleanField(default=False)
     stale_since = db.DateTimeField()
+
+    relations = db.ListField(field=db.EmbeddedDocumentField(document_type='HostRelation'))
 
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
@@ -828,6 +862,59 @@ class Host(db.Document):
         self.lifecycle_state_changed_at = datetime.datetime.utcnow()
         self.add_log(f"Lifecycle: {old} -> {new_state}")
         return True
+
+    def add_relation(self, target, rtype, source='manual'):
+        """
+        Add a typed relation to `target`. Self-edges are rejected and
+        existing edges of the same (type, target) pair are deduped.
+
+        Returns:
+            bool: True if a new edge was appended, False otherwise.
+        """
+        if not target or target.pk == self.pk:
+            return False
+        valid = {choice[0] for choice in RELATION_TYPES}
+        if rtype not in valid:
+            raise HostError(f"Unknown relation type: {rtype}")
+        for existing in (self.relations or []):
+            if existing.type == rtype and existing.target_host \
+                    and existing.target_host.pk == target.pk:
+                return False
+        rel = HostRelation(type=rtype, target_host=target, source=source)
+        if self.relations is None:
+            self.relations = []
+        self.relations.append(rel)
+        self.add_log(f"Relation +{rtype} -> {target.hostname}")
+        return True
+
+    def remove_relation(self, target, rtype):
+        """
+        Remove a (type, target) edge. Returns True if anything dropped.
+        """
+        if not target or not self.relations:
+            return False
+        before = len(self.relations)
+        self.relations = [
+            rel for rel in self.relations
+            if not (rel.type == rtype and rel.target_host
+                    and rel.target_host.pk == target.pk)
+        ]
+        if len(self.relations) != before:
+            self.add_log(f"Relation -{rtype} -> {target.hostname}")
+            return True
+        return False
+
+    def get_dependents(self, rtype='depends_on'):
+        """
+        Return Hosts that point at this host with `rtype` — i.e. the
+        inbound edges. Used by the Detail view to render an Impact
+        Chain ("if I take this host down, who else breaks").
+        """
+        if not self.pk:
+            return []
+        return list(Host.objects(__raw__={'relations': {'$elemMatch': {
+            'type': rtype, 'target_host': self.pk,
+        }}}))
 
 
 class HostLabelChange(db.Document):

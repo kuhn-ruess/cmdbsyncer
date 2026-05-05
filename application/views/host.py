@@ -69,8 +69,12 @@ from application.views.host_renderers import (
     _render_lifecycle_state,
     _render_log_grid,
     _render_object_type_icon,
+    _render_relations,
+    _render_relations_preview,
 )
-from application.models.host import Host, CmdbField, HostLabelChange, LIFECYCLE_STATES
+from application.models.host import (
+    Host, CmdbField, HostLabelChange, LIFECYCLE_STATES,
+)
 from application.models.config import Config
 # pylint: enable=import-error
 
@@ -686,6 +690,7 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
     # detail list.
     column_details_list = [
         'hostname', 'folder', 'no_autodelete', 'available', 'lifecycle_state',
+        'relations',
         'labels', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
@@ -774,6 +779,7 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
         'create_time': _render_datetime,
         'object_type': _render_object_type_icon,
         'lifecycle_state': _render_lifecycle_state,
+        'relations': _render_relations_preview,
     }
 
     # Detail view groups labels by origin (manual vs. each assigned
@@ -793,6 +799,7 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
         'create_time': _render_datetime,
         'object_type': _render_object_type_icon,
         'lifecycle_state': _render_lifecycle_state,
+        'relations': _render_relations,
     }
 
     column_formatters_export = {
@@ -804,6 +811,7 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
         'folder': "CMK Pool Folder",
         'cmdb_templates': "CMDB",
         'lifecycle_state': "Lifecycle",
+        'relations': "Relations",
     }
 
     column_sortable_list = ('hostname',
@@ -854,6 +862,12 @@ class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint:
                 rules.Field('lifecycle_state'),
             ),
             "Object",
+        ),
+        rules.FieldSet(
+            (
+                rules.Field('relations'),
+            ),
+            "Relations",
         ),
         rules.FieldSet(
             (

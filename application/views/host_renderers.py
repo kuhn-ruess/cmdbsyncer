@@ -94,6 +94,89 @@ def _render_lifecycle_state(_view, _context, model, _name):
     return Markup(html)
 
 
+def _render_relations(_view, _context, model, _name):  # pylint: disable=too-many-locals
+    """
+    Detail-view rendering for `Host.relations`. Lists outgoing edges as
+    a small key/value grid, then appends inbound edges grouped by type
+    so the Impact Chain (incoming `depends_on`) is visible at a glance.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import RELATION_TYPES, RELATION_INVERSE_LABEL
+    relations = model.relations or []
+    type_label = dict(RELATION_TYPES)
+
+    rows = []
+    for rel in relations:
+        target = rel.target_host
+        if not target:
+            continue
+        href = url_for('host.details_view', id=str(target.pk))
+        label = type_label.get(rel.type, rel.type)
+        rows.append(
+            f'<tr><td><span class="badge badge-secondary">{escape(label)}</span></td>'
+            f'<td><a href="{escape(href)}">{escape(target.hostname)}</a></td>'
+            f'<td><small class="text-muted">{escape(rel.source or "")}</small></td>'
+            f'</tr>'
+        )
+
+    inbound_by_type = {}
+    pk = getattr(model, 'pk', None)
+    if pk is not None:
+        from application.models.host import Host
+        inbound = Host.objects(__raw__={'relations.target_host': pk}).only(
+            'hostname', 'relations'
+        )
+        for src in inbound:
+            for rel in (src.relations or []):
+                if rel.target_host and rel.target_host.pk == pk:
+                    inbound_by_type.setdefault(rel.type, []).append(src)
+
+    inbound_rows = []
+    for rtype, sources in inbound_by_type.items():
+        inv_label = RELATION_INVERSE_LABEL.get(rtype, rtype)
+        for src in sources:
+            href = url_for('host.details_view', id=str(src.pk))
+            inbound_rows.append(
+                f'<tr><td><span class="badge badge-info">{escape(inv_label)}</span></td>'
+                f'<td><a href="{escape(href)}">{escape(src.hostname)}</a></td>'
+                f'<td></td></tr>'
+            )
+
+    if not rows and not inbound_rows:
+        return Markup('<span class="text-muted">No relations</span>')
+
+    html = ['<table class="table table-sm table-borderless mb-0">'
+            '<thead><tr><th style="width:160px">Type</th>'
+            '<th>Host</th><th>Source</th></tr></thead><tbody>']
+    if rows:
+        html.append('<tr><td colspan="3" class="bg-light"><strong>'
+                    'Outgoing</strong></td></tr>')
+        html.extend(rows)
+    if inbound_rows:
+        html.append('<tr><td colspan="3" class="bg-light"><strong>'
+                    'Inbound (Impact Chain)</strong></td></tr>')
+        html.extend(inbound_rows)
+    html.append('</tbody></table>')
+    return Markup(''.join(html))
+
+
+def _render_relations_preview(_view, _context, model, _name):
+    """List view: just show count of outgoing/inbound edges."""
+    out = len(model.relations or [])
+    inbound = 0
+    pk = getattr(model, 'pk', None)
+    if pk is not None:
+        # pylint: disable=import-outside-toplevel
+        from application.models.host import Host
+        inbound = Host.objects(__raw__={'relations.target_host': pk}).count()
+    if not out and not inbound:
+        return Markup('<span class="text-muted">—</span>')
+    return Markup(
+        f'<span title="outgoing">→ {out}</span>'
+        f' <span title="inbound" class="text-muted">← {inbound}</span>'
+    )
+
+
 def _render_datetime(_view, _context, model, name):
     """
     Render datetime fields in a human-readable format.
