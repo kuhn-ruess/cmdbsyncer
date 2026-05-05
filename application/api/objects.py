@@ -393,9 +393,13 @@ parser.add_argument('start', type=int, help='Pagination start')
 parser.add_argument('limit', type=int, help='Pagination limit')
 
 
+MAX_PAGE_LIMIT = 10000
+
+
 @API.route('/all')
 @API.param('start', 'Zero-based page offset. Default ``1``.', type='integer')
-@API.param('limit', 'Page size, max items returned per call. Default ``100``.',
+@API.param('limit', 'Page size, max items returned per call. Default ``100``,'
+                    f' max ``{MAX_PAGE_LIMIT}``.',
            type='integer')
 class HostDetailListApi(Resource):
     """Paginated listing of every host."""
@@ -403,7 +407,8 @@ class HostDetailListApi(Resource):
     @API.doc(security=['x-login-user', 'basicAuth'])
     @API.response(200, 'A page of host objects plus pagination links.',
                   LIST_RESPONSE)
-    @API.response(400, 'Pagination params not numeric or negative.', ERROR)
+    @API.response(400, 'Pagination params not numeric, negative, or limit '
+                       f'above {MAX_PAGE_LIMIT}.', ERROR)
     @API.response(401, 'Authentication failed', ERROR)
     @require_token
     def get(self):
@@ -420,6 +425,8 @@ class HostDetailListApi(Resource):
             abort(400, "start and limit must be integers")
         if start < 0 or limit < 0:
             abort(400, "start and limit must be non-negative")
+        if limit > MAX_PAGE_LIMIT:
+            abort(400, f"limit must be <= {MAX_PAGE_LIMIT}")
         end = start+limit
 
         db_objecs = Host.objects(is_object__ne=True)

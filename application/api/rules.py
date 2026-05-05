@@ -14,6 +14,7 @@ import json
 from flask import request
 from flask_restx import Namespace, Resource, fields
 
+from application import log
 from application.api import require_token
 from application.plugins.rules.rule_definitions import rules as enabled_rules
 from application.plugins.rules.rule_import_export import (
@@ -105,11 +106,21 @@ AUTORULES_RESPONSE = API.model('autorules_response', {
 
 
 def _decode_rule_lines(rules):
-    """Yield JSON dicts from ``to_json()`` strings."""
+    """Yield JSON dicts from ``to_json()`` strings.
+
+    Skipped lines are surfaced in the syncer Log so a corrupted rule
+    document doesn't silently disappear from /rules/<type> exports.
+    """
     for raw in rules:
         try:
             yield json.loads(raw)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as exp:
+            preview = (raw[:200] + '…') if isinstance(raw, str) and len(raw) > 200 else raw
+            log.log(
+                f"Skipping rule with invalid JSON: {exp}",
+                source='api.rules',
+                details=[('error', str(exp)), ('preview', str(preview))],
+            )
             continue
 
 

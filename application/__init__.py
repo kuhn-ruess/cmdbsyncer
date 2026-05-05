@@ -283,6 +283,12 @@ def _plugin_packages():
     return [p for p in (external_plugins_package, plugins_package) if p is not None]
 
 
+# Cached list of dotted plugin module names. Populated by
+# ``_import_all_plugins`` so the web-layer doesn't have to walk the
+# plugin packages with ``pkgutil.iter_modules`` a second time at startup.
+_DISCOVERED_PLUGIN_MODULES = []
+
+
 def _import_all_plugins():
     """Import every enabled plugin module so its side-effect registrations
     fire — Click CLI groups, sync hooks, cron entries.
@@ -292,8 +298,10 @@ def _import_all_plugins():
     here; they are web-only and handled by
     ``_register_all_plugin_admin_views``.
     """
+    _DISCOVERED_PLUGIN_MODULES.clear()
     for package in _plugin_packages():
         for module_name in _iter_enabled_plugin_modules(package):
+            _DISCOVERED_PLUGIN_MODULES.append(module_name)
             try:
                 importlib.import_module(module_name)
             except Exception:  # pylint: disable=broad-exception-caught
@@ -303,11 +311,7 @@ def _import_all_plugins():
 
 
 def _register_all_plugin_admin_views(admin_):
-    plugin_modules = []
-    for package in _plugin_packages():
-        plugin_modules.extend(_iter_enabled_plugin_modules(package))
-
-    for module_name in plugin_modules:
+    for module_name in _DISCOVERED_PLUGIN_MODULES:
         admin_module_name = f"{module_name}.admin_views"
         try:
             admin_module = importlib.import_module(admin_module_name)
