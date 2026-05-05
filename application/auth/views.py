@@ -273,7 +273,7 @@ def request_password():
         flash("New Password will be sent", 'info')
         return redirect(url_for("admin.index"))
 
-    return render_template('formular.html', form=form)
+    return render_template('request_password.html', form=form)
 
 def get_userid(token, purpose):
     """

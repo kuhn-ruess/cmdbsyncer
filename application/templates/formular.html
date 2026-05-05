@@ -5,12 +5,7 @@
 <div class="row justify-content-center">
     <div class="col-md-6 col-lg-5">
         <div class="app-card" style="margin-top: 2rem;">
-            {% if form.__class__.__name__ == 'RequestPasswordForm' %}
-            <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
-                <h2>Reset password</h2>
-                <p>Enter the e-mail address of your account.</p>
-            </div>
-            {% elif form.__class__.__name__ == 'ResetPasswordForm' %}
+            {% if form.__class__.__name__ == 'ResetPasswordForm' %}
             <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
                 <h2>Set a new password</h2>
                 <p>Choose a strong password for your account.</p>
