@@ -11,11 +11,29 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 import re
 
+from flask import url_for
 from flask_admin import BaseView, expose
 from flask_login import current_user
 
 from application import app
 from application.models.host import Host
+
+
+def _host_filter_indices():
+    """
+    Look up the Flask-Admin filter position for each caption used by
+    the dashboard's deep-links. Computed from the HostModelView class
+    so the indices stay correct if column_filters is reordered.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.views.host import HostModelView
+    by_name = {}
+    for idx, flt in enumerate(HostModelView.column_filters):
+        # BaseMongoEngineFilter.name carries the filter caption.
+        caption = getattr(flt, 'name', None)
+        if caption:
+            by_name[caption] = idx
+    return by_name
 
 
 _DUPLICATE_HOST_LIMIT = 50
@@ -126,6 +144,11 @@ class DataQualityView(BaseView):
         empty_fields = empty_fields[:_DUPLICATE_HOST_LIMIT]
 
         now = datetime.utcnow()
+        # Flask-Admin filter URL = ?flt0_<index>=<value>. Pre-compute
+        # the relevant indices so the template can build deep-links
+        # without knowing the filter order.
+        idx = _host_filter_indices()
+        host_list_url = url_for('host.index_view')
         return self.render(
             'admin/data_quality.html',
             sources=sources,
@@ -135,4 +158,9 @@ class DataQualityView(BaseView):
             empty_fields=empty_fields,
             now=now,
             stale_recent_threshold=now - timedelta(days=7),
+            host_list_url=host_list_url,
+            lifecycle_filter_idx=idx.get('Lifecycle State'),
+            account_filter_idx=idx.get('Account'),
+            hostname_filter_idx=idx.get('Hostname'),
+            stale_filter_idx=idx.get('Stale'),
         )

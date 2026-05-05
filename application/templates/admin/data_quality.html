@@ -21,7 +21,16 @@
                     {% for state, count in lifecycle_counts.items() %}
                     <tr>
                         <td>{{ state.replace('_', ' ').title() }}</td>
-                        <td class="text-right"><strong>{{ count }}</strong></td>
+                        <td class="text-right">
+                            {% if lifecycle_filter_idx is not none %}
+                            <a href="{{ host_list_url }}?flt0_{{ lifecycle_filter_idx }}={{ state }}"
+                               title="Show hosts in lifecycle '{{ state }}'">
+                                <strong>{{ count }}</strong>
+                            </a>
+                            {% else %}
+                            <strong>{{ count }}</strong>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </table>
@@ -43,12 +52,37 @@
             </thead>
             <tbody>
                 {% for row in sources %}
+                {% set source_link =
+                    host_list_url ~ '?flt0_' ~ account_filter_idx ~ '=' ~ row.name
+                    if account_filter_idx is not none and row.name != '(none)'
+                    else None %}
                 <tr>
-                    <td><code>{{ row.name }}</code></td>
-                    <td class="text-right">{{ row.total }}</td>
+                    <td>
+                        {% if source_link %}
+                        <a href="{{ source_link }}"
+                           title="Show hosts from this source">
+                            <code>{{ row.name }}</code>
+                        </a>
+                        {% else %}
+                        <code>{{ row.name }}</code>
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        {% if source_link %}
+                        <a href="{{ source_link }}">{{ row.total }}</a>
+                        {% else %}
+                        {{ row.total }}
+                        {% endif %}
+                    </td>
                     <td class="text-right">
                         {% if row.stale %}
+                        {% if source_link and stale_filter_idx is not none %}
+                        <a href="{{ source_link }}&flt1_{{ stale_filter_idx }}=yes">
+                            <span class="badge badge-warning">{{ row.stale }}</span>
+                        </a>
+                        {% else %}
                         <span class="badge badge-warning">{{ row.stale }}</span>
+                        {% endif %}
                         {% else %}
                         0
                         {% endif %}
@@ -94,7 +128,13 @@
                     <td><code>{{ cluster|length }}</code></td>
                     <td>
                         {% for name in cluster %}
+                        {% if hostname_filter_idx is not none %}
+                        <a href="{{ host_list_url }}?flt0_{{ hostname_filter_idx }}={{ name }}"
+                           class="badge badge-secondary mr-1"
+                           style="text-decoration:none;">{{ name }}</a>
+                        {% else %}
                         <span class="badge badge-secondary mr-1">{{ name }}</span>
+                        {% endif %}
                         {% endfor %}
                     </td>
                 </tr>
@@ -123,7 +163,15 @@
             <tbody>
                 {% for row in empty_fields %}
                 <tr>
-                    <td><code>{{ row.hostname }}</code></td>
+                    <td>
+                        {% if hostname_filter_idx is not none %}
+                        <a href="{{ host_list_url }}?flt0_{{ hostname_filter_idx }}={{ row.hostname }}">
+                            <code>{{ row.hostname }}</code>
+                        </a>
+                        {% else %}
+                        <code>{{ row.hostname }}</code>
+                        {% endif %}
+                    </td>
                     <td>{{ row.object_type }}</td>
                     <td>
                         {% for f in row.missing %}
