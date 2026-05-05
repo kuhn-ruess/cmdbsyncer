@@ -394,9 +394,14 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
 
     #   .-- Host
     from application.models.host import Host
-    from application.views.host import HostModelView, ObjectModelView, TemplateModelView
+    from application.views.host import (
+        HostArchiveView, HostModelView, ObjectModelView, TemplateModelView,
+    )
     admin.add_view(HostModelView(Host, name="Hosts",
                                  menu_icon_type='fa', menu_icon_value='fa-server'))
+    admin.add_view(HostArchiveView(Host, name="Archive", endpoint="archive",
+                                   category="Objects",
+                                   menu_icon_type='fa', menu_icon_value='fa-archive'))
     admin.add_category(name="Objects", icon_type='fa', icon_value='fa-folder-open')
     admin.add_view(ObjectModelView(Host, name="All Objects", endpoint="Objects",
                                    category="Objects",

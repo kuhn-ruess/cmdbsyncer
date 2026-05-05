@@ -1105,7 +1105,7 @@ below and do not appear here.
         """
         Limit Objects
         """
-        return Host.objects(is_object__ne=True)
+        return Host.objects(is_object__ne=True, deleted_at__exists=False)
 
     def scaffold_form(self):
         """Scaffold form with extra CMDB fields."""
@@ -1604,3 +1604,82 @@ below and do not appear here.
         )
 
         return response
+
+
+class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
+    # pylint: disable=too-many-ancestors
+    """
+    Archive of soft-deleted hosts. Read-only by default; the only ways
+    out are Restore (clears deleted_at, transitions back to active) and
+    Hard-Delete (drops the row permanently).
+    """
+    can_create = False
+    can_edit = False
+    can_delete = False  # disable per-row delete; bulk action is gated
+    can_export = False
+    can_view_details = True
+    can_set_page_size = True
+
+    page_size = app.config['HOST_PAGESIZE']
+
+    column_list = [
+        'hostname',
+        'lifecycle_state',
+        'source_account_name',
+        'deleted_at',
+        'delete_reason',
+        'last_import_seen',
+    ]
+    column_details_list = column_list + ['labels', 'inventory', 'log']
+    column_sortable_list = ('hostname', 'deleted_at', 'last_import_seen')
+
+    column_formatters = {
+        'lifecycle_state': _render_lifecycle_state,
+        'deleted_at': _render_datetime,
+        'last_import_seen': _render_datetime,
+    }
+    column_formatters_detail = {
+        'lifecycle_state': _render_lifecycle_state,
+        'deleted_at': _render_datetime,
+        'last_import_seen': _render_datetime,
+        'labels': _render_labels_with_origin,
+        'inventory': _render_inventory_grid,
+        'log': _render_log_grid,
+    }
+    column_labels = {
+        'source_account_name': 'Account',
+        'lifecycle_state': 'Lifecycle',
+        'deleted_at': 'Deleted At',
+        'delete_reason': 'Reason',
+    }
+
+    column_filters = (
+        FilterHostnameRegex(Host, 'Hostname'),
+        FilterAccountRegex(Host, 'Account'),
+    )
+
+    def get_query(self):
+        return Host.objects(is_object__ne=True, deleted_at__exists=True)
+
+    @action('restore', 'Restore', 'Restore the selected hosts to active?')
+    def action_restore(self, ids):
+        """Bring archived hosts back as active."""
+        restored = 0
+        for host in Host.objects(id__in=ids):
+            if host.restore():
+                host.save()
+                restored += 1
+        flash(f'Restored {restored} host(s) to active.', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('hard_delete',
+            'Hard Delete (irreversible)',
+            'Permanently delete the selected hosts? This cannot be undone.')
+    def action_hard_delete(self, ids):
+        """Permanently drop archived hosts from the database."""
+        if not current_user.has_right('admin'):
+            flash('Hard delete requires the admin role.', 'error')
+            return redirect(request.referrer or url_for('.index_view'))
+        deleted = Host.objects(id__in=ids, deleted_at__exists=True).delete()
+        flash(f'Hard-deleted {deleted} host(s).', 'success')
+        return redirect(request.referrer or url_for('.index_view'))

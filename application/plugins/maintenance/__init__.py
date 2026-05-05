@@ -70,11 +70,13 @@ def maintenance(account):
         objects = Host.objects(last_import_seen__lte=timedelta,
                                source_account_id=str(account_filter['id']),
                                no_autodelete__ne=True,
-                               object_type__ne='template')
+                               object_type__ne='template',
+                               deleted_at__exists=False)
     else:
         objects = Host.objects(last_import_seen__lte=timedelta,
                                no_autodelete__ne=True,
-                               object_type__ne='template')
+                               object_type__ne='template',
+                               deleted_at__exists=False)
 
     if dont_delete_if_more:
         if len(objects) >= int(dont_delete_if_more):
@@ -89,14 +91,15 @@ def maintenance(account):
 
     deleted_hosts = 0
     for host in objects:
-        print(f"{CC.WARNING}  ** {CC.ENDC}Deleted host {host.hostname}")
+        print(f"{CC.WARNING}  ** {CC.ENDC}Archived host {host.hostname}")
         if host.get_folder():
             folder = host.get_folder()
             remove_seat(folder)
             print(f"{CC.WARNING}  *** {CC.ENDC}Seat in Pool {folder} free now")
-        host.delete()
+        host.soft_delete(reason=f"maintenance: not seen for {days} days")
+        host.save()
         deleted_hosts += 1
-    details.append(('hosts_deleted', deleted_hosts))
+    details.append(('hosts_archived', deleted_hosts))
     log.log(f"Database Maintenance {account}",
             source="Maintenance", details=details)
 

@@ -70,6 +70,13 @@ class Host(db.Document):
     lifecycle_state = db.StringField(choices=LIFECYCLE_STATES, default='active')
     lifecycle_state_changed_at = db.DateTimeField()
 
+    # Soft-delete bookkeeping. Both fields are set together by
+    # `soft_delete()`; `restore()` clears `deleted_at` and resets the
+    # lifecycle state. Hard delete remains via `Document.delete()` and
+    # is exposed only as an admin action on the archive view.
+    deleted_at = db.DateTimeField()
+    delete_reason = db.StringField(max_length=255)
+
     last_import_seen = db.DateTimeField()
     last_import_sync = db.DateTimeField()
     create_time = db.DateTimeField()
@@ -126,11 +133,20 @@ class Host(db.Document):
     @staticmethod
     def delete_host_not_found_on_import(account, import_id, raw_filter=None):
         """
-        Delete all hosts which are not available
-        and match the given pattern
+        Soft-delete all hosts which were not seen on the last import and
+        match the configured filter. The hosts stay in the database with
+        `deleted_at` and `lifecycle_state='archived'` so an operator can
+        review and restore them from the Archive view.
+
+        Returns the number of rows that were marked. Already-archived
+        hosts are skipped so a re-run does not bump their timestamp.
         """
 
-        db_filter = Q(source_account_name=account) & Q(last_import_id__ne=import_id)
+        db_filter = (
+            Q(source_account_name=account)
+            & Q(last_import_id__ne=import_id)
+            & Q(deleted_at__exists=False)
+        )
         user_filters = raw_filter.split('||')
         extra_filter = False
         for user_filter in user_filters:
@@ -145,7 +161,13 @@ class Host(db.Document):
             full_filter = db_filter & (extra_filter)
         else:
             full_filter = db_filter
-        return Host.objects(full_filter).delete()
+        now = datetime.datetime.utcnow()
+        return Host.objects(full_filter).update(
+            set__deleted_at=now,
+            set__lifecycle_state='archived',
+            set__lifecycle_state_changed_at=now,
+            set__delete_reason='not seen on import',
+        )
 
 
     @staticmethod
@@ -153,7 +175,8 @@ class Host(db.Document):
         """
         Return all Objects for Exports
         """
-        return Host.objects(available=True, is_object__ne=True)
+        return Host.objects(available=True, is_object__ne=True,
+                            deleted_at__exists=False)
 
     @staticmethod
     def objects_by_filter(object_list):
@@ -712,6 +735,44 @@ class Host(db.Document):
         """
         self.available = True
         self.last_import_seen = datetime.datetime.now()
+
+    def soft_delete(self, reason=None):
+        """
+        Mark the host as deleted without removing the document. Sets
+        `deleted_at`, transitions lifecycle to 'archived' and stores the
+        reason. Restorable via `restore()`. No-op if already soft-deleted.
+
+        Returns:
+            bool: True if the host was newly archived, False if already.
+        """
+        if self.deleted_at:
+            return False
+        now = datetime.datetime.utcnow()
+        self.deleted_at = now
+        self.delete_reason = (reason or '')[:255]
+        if self.lifecycle_state != 'archived':
+            self.lifecycle_state = 'archived'
+            self.lifecycle_state_changed_at = now
+        suffix = f" ({reason})" if reason else ''
+        self.add_log(f"Soft-deleted{suffix}")
+        return True
+
+    def restore(self, new_state='active'):
+        """
+        Reverse a `soft_delete`. Clears the deletion bookkeeping and
+        moves the host into `new_state` (defaults to 'active').
+
+        Returns:
+            bool: True if the host was deleted before, False otherwise.
+        """
+        if not self.deleted_at:
+            return False
+        self.deleted_at = None
+        self.delete_reason = None
+        if self.lifecycle_state == 'archived':
+            self.set_lifecycle_state(new_state)
+        self.add_log(f"Restored to {new_state}")
+        return True
 
     def set_lifecycle_state(self, new_state):
         """
