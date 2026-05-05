@@ -1,5 +1,7 @@
-{% extends 'base.html' %}
-{% block page_content %}
+{# Rendered through ``admin.index_view.render`` so the admin navbar
+   is present on this logged-in 2FA setup page. #}
+{% extends 'admin/master.html' %}
+{% block body %}
 <div class="app-hero">
     <h2>Login Security</h2>
     <p>Setup and authenticate two-factor authentication for your account.</p>

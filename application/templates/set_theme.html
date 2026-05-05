@@ -1,0 +1,38 @@
+{# Rendered through ``admin.index_view.render`` so the admin navbar
+   (Hosts, Accounts, Modules, Settings, …) is present and the user
+   can navigate back without the browser back button. #}
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="app-hero">
+    <h2>Theme</h2>
+    <p>Personal colour scheme. Affects only your own browser session.</p>
+</div>
+
+<form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="row">
+    <div class="col-lg-6">
+        <div class="app-card">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" role="alert">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+            <div class="form-group">
+                <label for="theme">Theme</label>
+                <select class="form-control" name="theme" id="theme">
+                    {% for key, label in themes %}
+                    <option value="{{ key }}"{% if key == current %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fa fa-check"></i> Save
+            </button>
+        </div>
+    </div>
+</div>
+</form>
+{% endblock %}

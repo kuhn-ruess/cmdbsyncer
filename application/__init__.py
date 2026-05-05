@@ -226,6 +226,27 @@ if not CLI_MODE:
         }
 
     @app.context_processor
+    def _inject_user_theme():
+        """Expose the logged-in user's theme to ``_theme.html``.
+        Anonymous visitors and any error path fall back to the
+        default theme so the public templates (login, license)
+        render the same as before. Themes that no longer exist on
+        disk (e.g. an operator removed the CSS file) also fall
+        back, so a stale ``user.theme`` value never 404s."""
+        # pylint: disable=import-outside-toplevel
+        from flask_login import current_user as _user
+        from application.themes_registry import is_known
+        try:
+            if _user.is_authenticated:
+                slug = _user.theme or 'default'
+                if not is_known(slug):
+                    slug = 'default'
+                return {'user_theme': slug}
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+        return {'user_theme': 'default'}
+
+    @app.context_processor
     def _inject_https_warning():
         """Show a banner when HTTPS is required (default) but the
         request came in over plain HTTP. Suppressed when the admin
@@ -369,6 +390,10 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
 
     from application.auth.views import AUTH
     app.register_blueprint(AUTH)
+
+    from application.themes_registry import init_themes, themes_blueprint
+    init_themes(app)
+    app.register_blueprint(themes_blueprint)
 
     from application.api.views import API_BP as api
     app.register_blueprint(api, url_prefix="/api/v1")
@@ -553,6 +578,9 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_link(MenuLink(name='Set 2FA Code', category='Account',
                             url=f"{app.config['BASE_PREFIX']}set-2fa",
                             icon_type='fa', icon_value='fa-shield'))
+    admin.add_link(MenuLink(name='Theme', category='Account',
+                            url=f"{app.config['BASE_PREFIX']}set-theme",
+                            icon_type='fa', icon_value='fa-paint-brush'))
     admin.add_link(MenuLink(name='Logout', category='Account',
                             url=f"{app.config['BASE_PREFIX']}logout",
                             icon_type='fa', icon_value='fa-sign-out'))

@@ -30,6 +30,11 @@ class UserView(DefaultModelView):
         'disabled',
     )
 
+    # Populated in ``scaffold_form`` from the theme registry — declared
+    # here so the attribute exists even when the parent view leaves it
+    # undefined (Flask-Admin only sets it on its own BaseModelView).
+    form_choices = {}
+
     form_rules = modern_form(
         section('1', 'main', 'Identity',
                 'Display name and login email. The email is the primary '
@@ -53,6 +58,10 @@ class UserView(DefaultModelView):
                  rules.Field('date_changed'),
                  rules.Field('date_password'),
                  rules.Field('last_login')]),
+        section('4', 'aux', 'Preferences',
+                'Personal UI preferences. Users can also change their '
+                'own theme under Account → Theme.',
+                [rules.Field('theme')]),
     )
 
     form_widget_args = {
@@ -63,6 +72,10 @@ class UserView(DefaultModelView):
     }
 
     def scaffold_form(self):
+        # pylint: disable=import-outside-toplevel
+        from application.themes_registry import get_choices as theme_choices
+        self.form_choices = dict(self.form_choices or {})
+        self.form_choices.setdefault('theme', theme_choices())
         form_class = super().scaffold_form()
         form_class.password = PasswordField("Password")
         return form_class

@@ -28,7 +28,7 @@ def _render_custom_data(_view, _context, model, _name):
     """
     Render for detail table
     """
-    html = "<table width=100%>"
+    html = '<table class="cmdb-inline-kv">'
     for entry in model.custom_fields:
         max_len = 80
         value = entry.value[:max_len]
@@ -42,7 +42,7 @@ def _render_plugin_data(_view, _context, model, _name):
     """
     Render for Plugin Settings
     """
-    html = "<table width=100%>"
+    html = '<table class="cmdb-inline-kv">'
     for entry in model.plugin_settings:
         max_len = 80
         value = entry.object_filter[:max_len]

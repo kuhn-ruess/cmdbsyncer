@@ -2,15 +2,7 @@
 {% block head_css %}
     {{ super() }}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
-    <style>
-        /* Inject the runtime-configurable theme colors as CSS custom
-           properties so the static cmdbsyncer.css file (shared with
-           ``base.html``) can pick them up. */
-        :root {
-            --nav-bg: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }};
-            --nav-link: {{ config['STYLE_NAV_LINK_COLOR'] }};
-        }
-    </style>
+    {% include '_theme.html' %}
     <link rel="stylesheet" href="{{ config['BASE_PREFIX'] }}static/css/cmdbsyncer.css">
     <style>
        /* Admin-only navbar extensions: dropdown menus, the

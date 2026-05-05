@@ -129,3 +129,28 @@ body { padding-top: 0; }
     .brand-hint  { font-size: 0.55rem; }
     .navbar-brand { padding: 0.2rem 0.5rem; min-height: 40px; }
 }
+
+/* Inline key/value mini-table emitted by Account list-view formatters
+   (_render_custom_data, _render_plugin_data) and similar inline
+   summaries. Strips Bootstrap's table-bordered border inheritance and
+   keeps the rows transparent so they read on every theme. */
+.cmdb-inline-kv {
+    width: 100%;
+    background-color: transparent;
+    color: inherit;
+    border-collapse: collapse;
+}
+.cmdb-inline-kv td,
+.cmdb-inline-kv th {
+    background-color: transparent !important;
+    color: inherit !important;
+    border: none !important;
+    padding: 1px 6px;
+    vertical-align: top;
+}
+.cmdb-inline-kv td:first-child,
+.cmdb-inline-kv th:first-child {
+    font-weight: 600;
+    white-space: nowrap;
+    width: 1%;
+}

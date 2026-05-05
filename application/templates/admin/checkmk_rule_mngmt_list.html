@@ -20,19 +20,21 @@
     overflow-wrap: anywhere;
   }
   /* Group-header rows injected by JS so the listing visibly clusters
-     by primary_ruleset. Click toggles collapse of the group's rows. */
+     by primary_ruleset. Click toggles collapse of the group's rows.
+     Colours come from CSS variables so per-user themes can recolour
+     the bar (default falls back to the original Checkmk blue). */
   tr.cmk-ruleset-group-header > td {
-    background: linear-gradient(90deg, #2c6da8 0%, #3498db 100%);
-    color: #fff;
+    background: var(--cmk-group-bg, linear-gradient(90deg, #2c6da8 0%, #3498db 100%));
+    color: var(--cmk-group-fg, #fff);
     font-weight: 600;
     font-size: 0.95rem;
     padding: 6px 12px;
-    border-top: 2px solid #1d4669;
+    border-top: 2px solid var(--cmk-group-border, #1d4669);
     cursor: pointer;
     user-select: none;
   }
   tr.cmk-ruleset-group-header > td:hover {
-    background: linear-gradient(90deg, #244f7a 0%, #2980b9 100%);
+    background: var(--cmk-group-bg-hover, linear-gradient(90deg, #244f7a 0%, #2980b9 100%));
   }
   tr.cmk-ruleset-group-header .cmk-ruleset-group-caret {
     display: inline-block;

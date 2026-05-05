@@ -18,6 +18,7 @@ from application import login_manager, app, log, limiter
 from application.enterprise import run_hook
 from application.helpers.audit import audit
 from application.models.user import User
+from application.themes_registry import get_choices as theme_choices, is_known as theme_is_known
 from application.models.forms import LoginForm, RequestPasswordForm, ResetPasswordForm
 from application.modules.email import send_email
 
@@ -191,7 +192,34 @@ def set_2fa():
             return redirect(url_for("admin.index"))
         flash("You have supplied an invalid 2FA token!", "danger")
 
-    return render_template("set_2fa.html", form=form)
+    # pylint: disable=import-outside-toplevel
+    from application import admin
+    return admin.index_view.render("set_2fa.html", form=form)
+
+@AUTH.route('/set-theme', methods=['GET', 'POST'])
+@login_required
+def set_theme():
+    """
+    Per-user theme picker. Persists the chosen theme on the
+    current user; the next page render picks it up via the
+    ``_inject_user_theme`` context processor.
+    """
+    if request.method == 'POST':
+        chosen = request.form.get('theme', 'default')
+        if not theme_is_known(chosen):
+            flash('Invalid theme', 'danger')
+            return redirect(url_for('auth.set_theme'))
+        current_user.theme = chosen
+        current_user.save()
+        flash('Theme updated', 'success')
+        return redirect(url_for('auth.set_theme'))
+
+    # pylint: disable=import-outside-toplevel
+    from application import admin
+    return admin.index_view.render('set_theme.html',
+                                   themes=theme_choices(),
+                                   current=current_user.theme or 'default')
+
 
 @AUTH.route('/logout', methods=['GET', 'POST'])
 @login_required
@@ -231,7 +259,9 @@ def change_password():
         for _, message in form.errors.items():
             flash(message[0], 'danger')
 
-    return render_template('formular.html', form=form)
+    # pylint: disable=import-outside-toplevel
+    from application import admin
+    return admin.index_view.render('change_password.html', form=form)
 
 def _decoy_token():
     """

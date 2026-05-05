@@ -20,15 +20,7 @@
 
 {% block styles %}
    {{super()}}
-<style>
-  /* Inject the runtime-configurable theme colors as CSS custom
-     properties so the static cmdbsyncer.css file (shared with
-     ``admin/master.html``) can pick them up. */
-  :root {
-      --nav-bg: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }};
-      --nav-link: {{ config['STYLE_NAV_LINK_COLOR'] }};
-  }
-</style>
+{% include '_theme.html' %}
 <link rel="stylesheet" href="{{ config['BASE_PREFIX'] }}static/css/cmdbsyncer.css">
 <style>
        /* Public-template-specific styles: login form layout and the

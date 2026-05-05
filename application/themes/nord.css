@@ -1,0 +1,226 @@
+/* @name: Nord */
+:root {
+    --nav-bg: #2e3440;
+    --nav-link: #d8dee9;
+    --cmk-group-bg: #5e81ac;
+    --cmk-group-bg-hover: #81a1c1;
+    --cmk-group-fg: #eceff4;
+    --cmk-group-border: #434c5e;
+}
+body, .main-container, .container, .container-fluid {
+    background-color: #2e3440 !important;
+    color: #d8dee9;
+}
+a { color: #88c0d0; }
+a:hover, a:focus { color: #ebcb8b; }
+h1, h2, h3, h4, h5, h6, label, legend, .form-text, p { color: #d8dee9; }
+
+.table, .model-list, .table.searchable, .table.table-bordered {
+    --bs-table-bg: #3b4252;
+    --bs-table-color: #d8dee9;
+    --bs-table-striped-bg: #353b48;
+    --bs-table-striped-color: #d8dee9;
+    --bs-table-hover-bg: #434c5e;
+    --bs-table-hover-color: #ebcb8b;
+    --bs-table-border-color: #434c5e;
+    --bs-table-active-bg: #434c5e;
+    --bs-table-active-color: #ebcb8b;
+    background-color: #3b4252 !important;
+    color: #d8dee9 !important;
+    border-color: #434c5e !important;
+}
+.table th, .table td,
+.model-list th, .model-list td {
+    background-color: transparent !important;
+    color: #d8dee9 !important;
+    border-color: #434c5e !important;
+}
+.model-list thead th, .table thead th {
+    background-color: #434c5e !important;
+    color: #eceff4 !important;
+    border-bottom-color: #4c566a !important;
+    box-shadow: inset 0 -1px 0 #4c566a;
+}
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #353b48 !important;
+    color: #d8dee9 !important;
+}
+.table-hover > tbody > tr:hover > *,
+.table.searchable tbody tr:hover > * {
+    background-color: #434c5e !important;
+    color: #ebcb8b !important;
+}
+.table.searchable td:first-child {
+    background-color: #353b48 !important;
+    color: #88c0d0 !important;
+}
+.table-responsive {
+    border-color: #434c5e;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+}
+
+.table .fa, .table .fas, .table .far, .table .glyphicon,
+.table a, .table a > i,
+.model-list .fa, .model-list .fas, .model-list .glyphicon,
+.model-list a, .model-list a > i {
+    color: #d8dee9 !important;
+}
+.table a:hover, .table a:hover > i,
+.table .fa:hover, .table .glyphicon:hover,
+.model-list a:hover, .model-list a:hover > i {
+    color: #ebcb8b !important;
+}
+.icon-minus-sign, .fa-times, .fa-trash, .fa-remove { color: #bf616a !important; }
+.icon-ok-circle, .fa-check, .fa-ok { color: #a3be8c !important; }
+
+.app-card, .card, fieldset.inline-field, .well, .panel,
+.rule-section, .rule-section-body {
+    background-color: #3b4252 !important;
+    border-color: #434c5e !important;
+    color: #d8dee9 !important;
+}
+.rule-section-head {
+    background-color: #353b48 !important;
+    border-bottom-color: #434c5e !important;
+}
+.rule-section-head h4, .rule-section-head p { color: #d8dee9 !important; }
+
+.form-control, .form-control:focus, .form-select,
+select, textarea,
+input[type=text], input[type=email], input[type=password],
+input[type=number], input[type=search], input[type=url],
+input[type=date], input[type=time], input[type=datetime-local] {
+    background-color: #2e3440 !important;
+    color: #d8dee9 !important;
+    border-color: #4c566a !important;
+}
+select option, .form-select option { background-color: #2e3440; color: #d8dee9; }
+.form-control::placeholder { color: #6c7686; }
+
+.dropdown-menu {
+    background-color: #3b4252 !important;
+    border-color: #434c5e !important;
+    color: #d8dee9 !important;
+}
+.dropdown-item, .dropdown-menu > li > a {
+    color: #d8dee9 !important;
+}
+.dropdown-item:hover, .dropdown-item:focus,
+.dropdown-menu > li > a:hover, .dropdown-menu > li > a:focus {
+    background-color: #434c5e !important;
+    color: #ebcb8b !important;
+}
+.dropdown-divider, .dropdown-menu .divider { border-top-color: #434c5e !important; background-color: #434c5e !important; }
+.dropdown-header { color: #6c7686 !important; }
+
+.btn-default, .btn-secondary, .btn-light,
+.btn-outline-secondary, .btn-outline-default {
+    background-color: #434c5e !important;
+    border-color: #4c566a !important;
+    color: #d8dee9 !important;
+}
+.btn-default:hover, .btn-secondary:hover, .btn-light:hover,
+.btn-outline-secondary:hover, .btn-outline-default:hover {
+    background-color: #4c566a !important;
+    color: #ebcb8b !important;
+}
+
+.pagination .page-link {
+    background-color: #3b4252;
+    color: #d8dee9;
+    border-color: #434c5e;
+}
+.pagination .page-item.active .page-link {
+    background-color: #88c0d0;
+    border-color: #88c0d0;
+    color: #2e3440;
+}
+.pagination .page-link:hover { background-color: #434c5e; color: #ebcb8b; }
+
+.modal-content { background-color: #3b4252 !important; color: #d8dee9 !important; border-color: #434c5e !important; }
+.modal-header, .modal-footer { border-color: #434c5e !important; }
+.alert { background-color: #3b4252; color: #d8dee9; border-color: #434c5e; }
+
+.filters .filter-op, .filters select, .filters input { background-color: #2e3440 !important; color: #d8dee9 !important; border-color: #4c566a !important; }
+
+.home-hero { color: #d8dee9 !important; border-bottom-color: #434c5e !important; }
+.home-hero h1, .home-hero p { color: #d8dee9 !important; }
+.home-hero .build-pill { background-color: #88c0d0 !important; color: #2e3440 !important; }
+.home-card {
+    background-color: #3b4252 !important;
+    border-color: #434c5e !important;
+    color: #d8dee9 !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.45) !important;
+}
+.home-card h2, .home-card h4 { color: #eceff4 !important; border-bottom-color: #434c5e !important; }
+.links-list a { color: #d8dee9 !important; }
+.links-list a:hover { color: #ebcb8b !important; }
+#changelog-content {
+    background-color: #353b48 !important;
+    border-color: #434c5e !important;
+    color: #d8dee9 !important;
+}
+#changelog-content details { border-left-color: #434c5e !important; }
+#changelog-content details[open] { border-left-color: #88c0d0 !important; }
+#changelog-content summary.changelog-version::before { color: #6c7686 !important; }
+#changelog-content details[open] > summary.changelog-version::before { color: #88c0d0 !important; }
+#changelog-content .changelog-version-title { color: #d8dee9 !important; }
+#changelog-content details[open] > summary .changelog-version-title { color: #eceff4 !important; }
+.filter-chip { background-color: #353b48 !important; border-color: #434c5e !important; color: #d8dee9 !important; }
+.filter-chip.active-feat { color: #88c0d0 !important; border-color: #5e81ac !important; background-color: #2e3440 !important; }
+.filter-chip.active-fix  { color: #a3be8c !important; border-color: #a3be8c !important; background-color: #2e3440 !important; }
+.filter-chip.active-inc  { color: #bf616a !important; border-color: #bf616a !important; background-color: #2e3440 !important; }
+.filter-chip.active-sec  { color: #d08770 !important; border-color: #d08770 !important; background-color: #2e3440 !important; }
+.filter-chip.active-oth  { color: #6c7686 !important; border-color: #434c5e !important; background-color: #2e3440 !important; }
+.filter-toggle-all { background-color: #434c5e !important; color: #d8dee9 !important; }
+.filter-toggle-all:hover { background-color: #4c566a !important; }
+.notice-box {
+    background-color: #3b4252 !important;
+    border-color: #88c0d0 !important;
+    border-left-color: #88c0d0 !important;
+    color: #d8dee9 !important;
+}
+.notice-box .notice-confirm { background-color: #88c0d0 !important; color: #2e3440 !important; }
+.notice-box .notice-confirm:hover { background-color: #81a1c1 !important; }
+.previous-releases a { background-color: #434c5e !important; color: #d8dee9 !important; }
+.previous-releases a:hover { background-color: #4c566a !important; color: #ebcb8b !important; }
+
+/* Renderer-injected widgets: host_renderers.py emits inline <style>
+   blocks with hardcoded light-theme colours (e.g. .lbl-val:#2c3e50 on
+   white). Override the few classes whose colours don't read on dark
+   backgrounds. The badges themselves keep their contrast. */
+.cmdb-label-row,
+.cmdb-inv-grid .cmdb-label-row { border-bottom-color: #434c5e !important; }
+.cmdb-label-row .lbl-val,
+.cmdb-inv-grid .lbl-val { color: #d8dee9 !important; }
+.cmdb-inv-grid .lbl-src { background: #434c5e !important; color: #d8dee9 !important; }
+.cmdb-log-list { background: #353b48 !important; border-color: #434c5e !important; }
+.cmdb-log-row { border-bottom-color: #434c5e !important; }
+.cmdb-log-row .log-msg { color: #d8dee9 !important; }
+.cmdb-log-row .log-ts,
+.cmdb-log-meta { color: #6c7686 !important; }
+
+/* Nav-tabs strip at the top of every Flask-Admin edit/detail page
+   (List / Create / Edit / Details). Bootstrap defaults give the
+   active tab a white border-bottom and inactive tabs default link
+   blue, both invisible on dark themes. */
+.nav-tabs {
+    border-bottom-color: #434c5e !important;
+}
+.nav-tabs .nav-link {
+    color: #d8dee9 !important;
+    border-color: transparent !important;
+}
+.nav-tabs .nav-link:hover,
+.nav-tabs .nav-link:focus {
+    color: #ebcb8b !important;
+    border-color: #434c5e #434c5e #434c5e !important;
+    background-color: #3b4252 !important;
+}
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item.show .nav-link {
+    background-color: #2e3440 !important;
+    color: #ebcb8b !important;
+    border-color: #434c5e #434c5e #2e3440 !important;
+}
+

@@ -53,6 +53,8 @@ class User(db.Document, UserMixin):
     roles = db.ListField(field=db.StringField(choices=roles))
     api_roles = db.ListField(field=db.StringField(choices=api_roles, default="all"))
 
+    theme = db.StringField(default='default')
+
     tfa_secret = db.StringField()
 
     disabled = db.BooleanField(default=False)

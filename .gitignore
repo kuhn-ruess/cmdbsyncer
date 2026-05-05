@@ -2,6 +2,9 @@ plugins/*
 !plugins/example_*.py
 *.syncerplugin
 !plugins/__init__.py
+!plugins/themes/
+plugins/themes/*
+!plugins/themes/README.md
 application/config.local.py
 ansible/playbooks.local.yml
 cmdbsyncer-files

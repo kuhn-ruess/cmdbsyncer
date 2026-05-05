@@ -1,0 +1,27 @@
+{# Per-user theme override.
+
+   For ``default`` we keep the global STYLE_NAV_* config values so the
+   public templates (login, license) and admin pages render exactly
+   as before for users who haven't picked a theme.
+
+   For any other theme the matching CSS file (shipped under
+   ``application/themes/<slug>.css`` or dropped into
+   ``plugins/themes/<slug>.css``) is loaded via the ``themes`` blueprint.
+   Each theme file is responsible for setting ``--nav-bg`` /
+   ``--nav-link`` itself.
+
+   ``user_theme`` is fed by ``_inject_user_theme`` in
+   ``application/__init__.py`` and has already been validated against
+   the registry, so an unknown slug never reaches this template.
+#}
+{% set _theme = user_theme | default('default') %}
+{% if _theme == 'default' %}
+<style>
+  :root {
+      --nav-bg: {{ config['STYLE_NAV_BACKGROUND_COLOR'] }};
+      --nav-link: {{ config['STYLE_NAV_LINK_COLOR'] }};
+  }
+</style>
+{% else %}
+<link rel="stylesheet" href="{{ url_for('themes.serve', slug=_theme) }}">
+{% endif %}
