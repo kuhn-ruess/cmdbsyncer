@@ -65,6 +65,9 @@ def _basic_auth(username='tester', password='secret'):
     return {'Authorization': 'Basic ' + base64.b64encode(raw).decode()}
 
 
+_FAKE_USER_COUNTER = [0]
+
+
 class _FakeUser:  # pylint: disable=too-few-public-methods
     """Minimal stand-in for application.models.user.User instances."""
 
@@ -72,6 +75,8 @@ class _FakeUser:  # pylint: disable=too-few-public-methods
         self.api_roles = api_roles if api_roles is not None else ['all']
         self.disabled = disabled
         self._password_ok = password_ok
+        _FAKE_USER_COUNTER[0] += 1
+        self.id = f'fake-user-{_FAKE_USER_COUNTER[0]}'
 
     def check_password(self, _password):
         return self._password_ok
