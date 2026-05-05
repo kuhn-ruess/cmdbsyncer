@@ -227,6 +227,38 @@
           color: #999;
       }
 
+      /* JS-injected ✕ button on every inline-list card.
+         See `injectRemoveButton` at the bottom of this template. */
+      .cmdb-inline-remove {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          z-index: 5;
+          width: 28px;
+          height: 28px;
+          line-height: 22px;
+          padding: 0;
+          text-align: center;
+          border-radius: 50%;
+          background: #f5f5f5;
+          color: #c0392b;
+          border: 1px solid #e0e0e0;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+      }
+      .cmdb-inline-remove:hover,
+      .cmdb-inline-remove:focus {
+          background: #c0392b;
+          color: #fff;
+          outline: none;
+      }
+      /* Hide the (unreliable) upstream remove link — our floating
+         button replaces it. */
+      a.inline-remove-field {
+          display: none !important;
+      }
+
     .loader {
       width: 40px;
       aspect-ratio: 1;
@@ -550,12 +582,66 @@
                 animation: 150,
                 ghostClass: 'sortable-ghost',
                 handle: 'legend',
+                filter: '.inline-remove-field, input, label',
+                preventOnFilter: false,
                 onEnd: function() {
                     renumberInlineFields(listEl);
                 }
             });
         });
     });
+
+    // Inject a guaranteed-visible ✕ button into every inline-list
+    // entry. The Flask-Admin upstream <a class="inline-remove-field">
+    // approach turned out to be unreliable on this admin (sometimes
+    // the legend renders empty, sometimes the FA glyph is invisible),
+    // so we draw our own absolute-positioned button on every
+    // .inline-field card and bind a click handler that removes the
+    // card from the DOM. Idempotent + works for entries cloned in
+    // afterwards via "Add".
+    (function() {
+      function injectRemoveButton(card) {
+        if (!card || card.classList.contains('inline-field-template')) { return; }
+        if (card.querySelector(':scope > .cmdb-inline-remove')) { return; }
+        // Skip the outer wrapper — only the inner per-entry cards.
+        if (!card.id || !card.id.match(/-\d+$/)) { return; }
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cmdb-inline-remove';
+        btn.title = 'Remove this entry';
+        btn.setAttribute('aria-label', 'Remove this entry');
+        btn.textContent = '✕';
+        btn.addEventListener('click', function(ev) {
+          ev.preventDefault();
+          if (!confirm('Remove this entry?')) { return; }
+          card.parentNode.removeChild(card);
+        });
+        // Make the card the positioning context.
+        if (getComputedStyle(card).position === 'static') {
+          card.style.position = 'relative';
+        }
+        card.appendChild(btn);
+      }
+      function scan(scope) {
+        (scope || document).querySelectorAll(
+          '.inline-field-list > .inline-field'
+        ).forEach(injectRemoveButton);
+      }
+      $(document).ready(function() { scan(); });
+      $(document).ready(function() {
+        if (typeof MutationObserver === 'undefined') { return; }
+        var obs = new MutationObserver(function(records) {
+          records.forEach(function(rec) {
+            rec.addedNodes && rec.addedNodes.forEach(function(node) {
+              if (node.nodeType === 1) { scan(node.parentNode || document); }
+            });
+          });
+        });
+        document.querySelectorAll('.inline-field-list').forEach(function(el) {
+          obs.observe(el, {childList: true, subtree: true});
+        });
+      });
+    })();
 
     </script>
 {% endblock %}
