@@ -220,7 +220,81 @@ def _process_copy_as_new(label):
     return redirect(url_for('.edit_view', id=str(clone.pk)))
 
 
-class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
+class _SoftDeleteHostMixin:
+    """
+    Replace per-row / bulk Delete with `Host.soft_delete`. Hard delete
+    stays reachable from the Archive view's admin-only action. Used by
+    every Flask-Admin view that lists Host documents (Hosts, Objects,
+    Templates) so their delete buttons all behave consistently.
+    """
+    # pylint: disable=too-few-public-methods
+
+    def delete_model(self, model):
+        """Soft-delete the host instead of removing the document."""
+        # Best-effort hook chain for any subclass-specific cleanup
+        # (e.g. Checkmk pool seat accounting in HostModelView).
+        try:
+            self.on_model_delete(model)
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
+        actor = getattr(current_user, 'email', None) or 'web UI'
+        model.soft_delete(reason=f"deleted via UI by {actor}")
+        model.save()
+        flash(
+            f'"{getattr(model, "hostname", "object")}" archived '
+            '(soft-deleted). Restore or hard-delete from Objects → Archive.',
+            'success',
+        )
+        return True
+
+
+class _LifecycleBulkActionsMixin:
+    """
+    Bulk actions and `lifecycle_state` form/filter/column wiring shared
+    across HostModelView and ObjectModelView. Subclasses still own the
+    rest of their layout — this mixin only owns lifecycle.
+    """
+    # pylint: disable=too-few-public-methods
+
+    def _bulk_set_lifecycle(self, ids, new_state):
+        changed = 0
+        for host in Host.objects(id__in=ids):
+            if host.set_lifecycle_state(new_state):
+                host.save()
+                changed += 1
+        flash(f'Lifecycle state set to "{new_state}" on {changed} object(s).',
+              'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('lifecycle_planned', 'Lifecycle: Planned', None)
+    def action_lifecycle_planned(self, ids):
+        """Mark selection as planned."""
+        return self._bulk_set_lifecycle(ids, 'planned')
+
+    @action('lifecycle_staged', 'Lifecycle: Staged', None)
+    def action_lifecycle_staged(self, ids):
+        """Mark selection as staged."""
+        return self._bulk_set_lifecycle(ids, 'staged')
+
+    @action('lifecycle_active', 'Lifecycle: Active', None)
+    def action_lifecycle_active(self, ids):
+        """Mark selection as active."""
+        return self._bulk_set_lifecycle(ids, 'active')
+
+    @action('lifecycle_decommissioned', 'Lifecycle: Decommissioned', None)
+    def action_lifecycle_decommissioned(self, ids):
+        """Mark selection as decommissioned."""
+        return self._bulk_set_lifecycle(ids, 'decommissioned')
+
+    @action('lifecycle_archived', 'Lifecycle: Archived', None)
+    def action_lifecycle_archived(self, ids):
+        """Mark selection as archived."""
+        return self._bulk_set_lifecycle(ids, 'archived')
+
+
+class ObjectModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint: disable=too-many-ancestors
+                      HostnameAndLabelSearchMixin, DefaultModelView):
     """
     Onlye show objects
     """
@@ -231,7 +305,8 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
     can_view_details = True
 
     column_details_list = [
-        'hostname', 'no_autodelete', 'inventory', 'labels', 'cache'
+        'hostname', 'no_autodelete', 'lifecycle_state',
+        'inventory', 'labels', 'cache'
     ]
 
     column_exclude_list = [
@@ -248,6 +323,7 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
         'raw',
         'cache',
         'is_object',
+        'lifecycle_state_changed_at',
     ]
 
     column_export_list = ('hostname', )
@@ -273,6 +349,11 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
         Host,
         "Inventory Key:Value"
        ),
+       FilterLifecycleState(
+           Host,
+           'Lifecycle State',
+           options=LIFECYCLE_STATES,
+       ),
     )
 
     column_formatters = {
@@ -283,6 +364,7 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
         'cmdb_fields': _render_cmdb_fields_preview,
         'cmdb_match': _render_cmdb_match_label,
         'object_type': _render_object_type_icon,
+        'lifecycle_state': _render_lifecycle_state,
     }
 
     # Detail view uses the rich Key / Value / Type table; the list
@@ -295,6 +377,7 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
         'cmdb_fields': _render_cmdb_fields,
         'cmdb_match': _render_cmdb_match_label,
         'object_type': _render_object_type_icon,
+        'lifecycle_state': _render_lifecycle_state,
     }
 
     column_formatters_export = {
@@ -305,6 +388,7 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
         'hostname': "Object Name",
         'source_account_name': "Account",
         'cmdb_fields': "CMDB Attributes",
+        'lifecycle_state': "Lifecycle",
     }
 
     export_types = ['syncer_rules',]
@@ -335,6 +419,7 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
         '''),
         rules.Field('hostname'),
         rules.Field('object_type'),
+        rules.Field('lifecycle_state'),
         rules.FieldSet(('cmdb_fields',), "CMDB Fields"),
     ]
 
@@ -442,7 +527,8 @@ class ObjectModelView(HostnameAndLabelSearchMixin, DefaultModelView):
         """
         Limit Objects
         """
-        return Host.objects(is_object=True, object_type__ne='template')
+        return Host.objects(is_object=True, object_type__ne='template',
+                            deleted_at__exists=False)
 
     # Subclasses (e.g. TemplateModelView) set this so on_model_change
     # stamps the right object_type. None = "leave whatever the form had".
@@ -578,7 +664,9 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         Host.clear_template_cache()
 
 
-class HostModelView(HostnameAndLabelSearchMixin, DefaultModelView):  # pylint: disable=too-many-public-methods,too-many-ancestors
+class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint: disable=too-many-public-methods,too-many-ancestors
+                    HostnameAndLabelSearchMixin,
+                    DefaultModelView):
     """
     Host Model
     """
@@ -1179,7 +1267,8 @@ below and do not appear here.
 
     def on_model_delete(self, model):
         """
-        Housekeeping on host deletion
+        Housekeeping on host deletion (called by the soft-delete mixin
+        before the host transitions to archived).
         """
         if model.folder:
             folder = CheckmkFolderPool.objects.get(folder_name__iexact=model.folder)
@@ -1274,46 +1363,6 @@ below and do not appear here.
         url = url_for('.set_template_form', ids=','.join(ids),
                       return_to=request.referrer or '')
         return redirect(url)
-
-    def _bulk_set_lifecycle(self, ids, new_state):
-        """
-        Apply Lifecycle state to every selected host. Saves per-doc so
-        the log entry and lifecycle_state_changed_at timestamp written
-        by `set_lifecycle_state` make it to the database.
-        """
-        changed = 0
-        for host in Host.objects(id__in=ids):
-            if host.set_lifecycle_state(new_state):
-                host.save()
-                changed += 1
-        flash(f'Lifecycle state set to "{new_state}" on {changed} host(s).',
-              'success')
-        return redirect(request.referrer or url_for('.index_view'))
-
-    @action('lifecycle_planned', 'Lifecycle: Planned', None)
-    def action_lifecycle_planned(self, ids):
-        """Mark hosts as planned."""
-        return self._bulk_set_lifecycle(ids, 'planned')
-
-    @action('lifecycle_staged', 'Lifecycle: Staged', None)
-    def action_lifecycle_staged(self, ids):
-        """Mark hosts as staged."""
-        return self._bulk_set_lifecycle(ids, 'staged')
-
-    @action('lifecycle_active', 'Lifecycle: Active', None)
-    def action_lifecycle_active(self, ids):
-        """Mark hosts as active."""
-        return self._bulk_set_lifecycle(ids, 'active')
-
-    @action('lifecycle_decommissioned', 'Lifecycle: Decommissioned', None)
-    def action_lifecycle_decommissioned(self, ids):
-        """Mark hosts as decommissioned."""
-        return self._bulk_set_lifecycle(ids, 'decommissioned')
-
-    @action('lifecycle_archived', 'Lifecycle: Archived', None)
-    def action_lifecycle_archived(self, ids):
-        """Mark hosts as archived."""
-        return self._bulk_set_lifecycle(ids, 'archived')
 
     @action('bulk_label_edit', 'Bulk Edit Labels', None)
     def action_bulk_label_edit(self, ids):

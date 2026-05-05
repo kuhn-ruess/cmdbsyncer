@@ -171,23 +171,49 @@ class Host(db.Document):
 
 
     @staticmethod
+    def _active_only_q():
+        """
+        Q-fragment that selects only `lifecycle_state='active'` while
+        also matching legacy rows that never had the field written
+        (default in the schema, but missing in the database). Used by
+        every export / sync entry point so non-active rows
+        (planned/staged/decommissioned/archived) never reach a
+        downstream system.
+        """
+        return Q(__raw__={'$or': [
+            {'lifecycle_state': 'active'},
+            {'lifecycle_state': {'$exists': False}},
+            {'lifecycle_state': None},
+            {'lifecycle_state': ''},
+        ]})
+
+    @staticmethod
     def get_export_hosts():
         """
-        Return all Objects for Exports
+        Return all Hosts eligible for export. Only `available=True`
+        rows that are not soft-deleted and whose lifecycle_state is
+        'active' (or missing for legacy rows) are returned.
         """
-        return Host.objects(available=True, is_object__ne=True,
-                            deleted_at__exists=False)
+        return Host.objects(
+            Host._active_only_q()
+            & Q(available=True)
+            & Q(is_object__ne=True)
+            & Q(deleted_at__exists=False)
+        )
 
     @staticmethod
     def objects_by_filter(object_list):
         """
-        Return DB Objects Matching Filter
+        Return Objects matching the Plugin's `object_filter` choice.
+        Soft-deleted and non-active lifecycle rows are excluded so
+        outbound syncers never touch them.
         """
+        active = Host._active_only_q() & Q(deleted_at__exists=False)
         if not object_list:
             logger.debug("HOST FILTER OFF")
-            return Host.objects(is_object__ne=True)
+            return Host.objects(active & Q(is_object__ne=True))
         logger.debug("HOST FILTER %s", object_list)
-        return Host.objects(object_type__in=object_list)
+        return Host.objects(active & Q(object_type__in=object_list))
 
 
     @staticmethod
