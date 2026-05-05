@@ -10,6 +10,7 @@
       <form method="POST" action="{{ url_for('.process_template_assignment') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="host_ids" id="setTemplateHostIds" value="">
+        <input type="hidden" name="return_to" value="{{ request.full_path }}">
 
         <div class="modal-header">
           <h5 class="modal-title" id="setTemplateModalLabel">Set CMDB Template</h5>
@@ -49,6 +50,7 @@
       <form method="POST" action="{{ url_for('.bulk_label_process') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="host_ids" id="bulkLabelHostIds" value="">
+        <input type="hidden" name="return_to" value="{{ request.full_path }}">
 
         <div class="modal-header">
           <h5 class="modal-title" id="bulkLabelModalLabel">Bulk edit labels</h5>

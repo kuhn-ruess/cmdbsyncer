@@ -8,6 +8,7 @@
             <form method="POST" action="{{ url_for('.bulk_label_process') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
+                <input type="hidden" name="return_to" value="{{ return_to or '' }}">
 
                 <div class="form-group">
                     <label>Action</label>
@@ -65,7 +66,7 @@
 
                 <div class="form-group mb-0">
                     <button type="submit" class="btn btn-primary">Apply</button>
-                    <a href="{{ url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
+                    <a href="{{ return_to or url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>
         </div>

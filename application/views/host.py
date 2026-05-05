@@ -796,6 +796,27 @@ def format_inventory_export(_v, _c, m, _p):
     return Markup(", ".join(inventory))
 
 
+def _safe_return_to(candidate, fallback_endpoint='.index_view'):
+    """
+    Validate a `return_to` URL coming from a query/form param and return
+    it iff it points back at this server's admin (relative URL or same
+    host). Used by the bulk-action processors so users land on the same
+    list page (with their pagination/filters) instead of the first page
+    of an unfiltered listing. Anything looking like an open redirect
+    falls back to `fallback_endpoint`.
+    """
+    if not candidate:
+        return url_for(fallback_endpoint)
+    candidate = str(candidate).strip()
+    # Reject scheme/netloc-bearing URLs and protocol-relative URLs —
+    # only same-app relative paths are accepted.
+    if candidate.startswith('//') or '://' in candidate:
+        return url_for(fallback_endpoint)
+    if not candidate.startswith('/'):
+        return url_for(fallback_endpoint)
+    return candidate
+
+
 def _render_copy_as_new_form(view, label):
     """
     Render the new-hostname modal for the copy-as-new row action.
@@ -1976,7 +1997,8 @@ below and do not appear here.
         """
         Action to set CMDB template
         """
-        url = url_for('.set_template_form', ids=','.join(ids))
+        url = url_for('.set_template_form', ids=','.join(ids),
+                      return_to=request.referrer or '')
         return redirect(url)
 
     @action('bulk_label_edit', 'Bulk Edit Labels', None)
@@ -1985,7 +2007,8 @@ below and do not appear here.
         Open the bulk label editor (add/remove/rename) for the
         selected hosts. The actual change is applied in bulk_label_process.
         """
-        return redirect(url_for('.bulk_label_form', ids=','.join(ids)))
+        return redirect(url_for('.bulk_label_form', ids=','.join(ids),
+                                return_to=request.referrer or ''))
 
     @action('copy_as_new', 'Copy as new', None)
     def action_copy_as_new(self, ids):
@@ -2014,7 +2037,8 @@ below and do not appear here.
     def bulk_label_form(self):
         """Render the bulk label editor for the ids passed in the URL."""
         ids = [str(escape(i)) for i in request.args.get('ids', '').split(',') if i]
-        return render_template('admin/bulk_label_form.html', ids=ids)
+        return render_template('admin/bulk_label_form.html', ids=ids,
+                               return_to=request.args.get('return_to', ''))
 
     @expose('/bulk_label_process', methods=['POST'])
     def bulk_label_process(self):
@@ -2071,7 +2095,7 @@ below and do not appear here.
             + (f', {skipped} skipped (key not present)' if skipped else ''),
             'success' if changed else 'warning',
         )
-        return redirect(url_for('.index_view'))
+        return redirect(_safe_return_to(request.form.get('return_to')))
 
 
     @expose('/set_template_form')
@@ -2082,26 +2106,29 @@ below and do not appear here.
         ids = [str(escape(i)) for i in request.args.get('ids', '').split(',')]
         templates = self.get_template_list()
 
-        return render_template('admin/set_template_form.html', ids=ids, templates=templates)
+        return render_template('admin/set_template_form.html', ids=ids,
+                               templates=templates,
+                               return_to=request.args.get('return_to', ''))
 
     @expose('/process_template_assignment', methods=['POST'])
-    def process_template_assignment(self):
+    def process_template_assignment(self):  # pylint: disable=too-many-locals
         """
         Process the template assignment
         """
         host_ids = request.form.get('host_ids', '').split(',')
         template_id = request.form.get('template_id')
 
+        return_to = _safe_return_to(request.form.get('return_to'))
         if not template_id:
             flash('Please select a template', 'error')
-            return redirect(url_for('.index_view'))
+            return redirect(return_to)
 
         try:
             # Get the template
             template = Host.objects(id=template_id).first()
             if not template:
                 flash('Template not found', 'error')
-                return redirect(url_for('.index_view'))
+                return redirect(return_to)
 
             # Single id__in fetch instead of one query per host. Per-doc
             # .save() is kept because mongoengine signals + update_host
@@ -2151,7 +2178,7 @@ below and do not appear here.
         except Exception as e:  # pylint: disable=broad-exception-caught
             flash(f'Error applying template: {str(e)}', 'error')
 
-        return redirect(url_for('.index_view'))
+        return redirect(return_to)
 
     def get_template_list(self):
         """Get available CMDB templates for the action form"""
