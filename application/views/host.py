@@ -2395,10 +2395,11 @@ below and do not appear here.
         changed = 0
         skipped = 0
         user_email = getattr(current_user, 'email', None)
-        for host_id in host_ids:
-            host = Host.objects(id=host_id).first()
-            if not host:
-                continue
+        # Fetch all selected hosts in one query instead of one round-trip
+        # per id. Per-doc .save() stays — HostLabelChange signal handling
+        # and update_host's import_seen/sync bumps need it.
+        hosts = Host.objects(id__in=host_ids)
+        for host in hosts:
             labels = dict(host.labels or {})
             before = dict(labels)
             if mode == 'add':
@@ -2458,49 +2459,48 @@ below and do not appear here.
                 flash('Template not found', 'error')
                 return redirect(url_for('.index_view'))
 
-            # Apply template to selected hosts
+            # Single id__in fetch instead of one query per host. Per-doc
+            # .save() is kept because mongoengine signals + update_host
+            # side-effects need it.
+            valid_ids = [hid for hid in host_ids if hid.strip()]
+            hosts = list(Host.objects(id__in=valid_ids))
             updated_count = 0
-            for host_id in host_ids:
-                if not host_id.strip():
-                    continue
+            for host in hosts:
+                # Append template if not already in the list
+                existing_ids = [t.id for t in host.cmdb_templates]
+                if template.id not in existing_ids:
+                    host.cmdb_templates.append(template)
 
-                host = Host.objects(id=host_id).first()
-                if host:
-                    # Append template if not already in the list
-                    existing_ids = [t.id for t in host.cmdb_templates]
-                    if template.id not in existing_ids:
-                        host.cmdb_templates.append(template)
+                # Apply the same logic as on_model_change
+                host.last_import_sync = datetime.now()
+                host.last_import_seen = datetime.now()
+                host.cache = {}
+                host.source_account_name = "cmdb"
 
-                    # Apply the same logic as on_model_change
-                    host.last_import_sync = datetime.now()
-                    host.last_import_seen = datetime.now()
-                    host.cache = {}
-                    host.source_account_name = "cmdb"
+                # Set Extra Fields from CMDB config
+                cmdb_fields = app.config['CMDB_MODELS'].get(host.object_type, {})
+                cmdb_fields.update(app.config['CMDB_MODELS']['all'])
 
-                    # Set Extra Fields from CMDB config
-                    cmdb_fields = app.config['CMDB_MODELS'].get(host.object_type, {})
-                    cmdb_fields.update(app.config['CMDB_MODELS']['all'])
+                # Create labels from existing cmdb_fields
+                new_labels = {
+                    x.field_name: x.field_value
+                    for x in host.cmdb_fields
+                    if x.field_value
+                }
 
-                    # Create labels from existing cmdb_fields
-                    new_labels = {
-                        x.field_name: x.field_value
-                        for x in host.cmdb_fields
-                        if x.field_value
-                    }
+                host.update_host(new_labels)
+                host.set_inventory_attributes('cmdb')
 
-                    host.update_host(new_labels)
-                    host.set_inventory_attributes('cmdb')
+                # Add missing CMDB fields based on configuration
+                existing_field_names = {x.field_name for x in host.cmdb_fields}
+                for cfg_key in cmdb_fields:
+                    if cfg_key not in existing_field_names:
+                        new_field = CmdbField()
+                        new_field.field_name = cfg_key
+                        host.cmdb_fields.append(new_field)
 
-                    # Add missing CMDB fields based on configuration
-                    existing_field_names = {x.field_name for x in host.cmdb_fields}
-                    for key in cmdb_fields:
-                        if key not in existing_field_names:
-                            new_field = CmdbField()
-                            new_field.field_name = key
-                            host.cmdb_fields.append(new_field)
-
-                    host.save()
-                    updated_count += 1
+                host.save()
+                updated_count += 1
 
             flash(f'Template applied to {updated_count} hosts', 'success')
 
