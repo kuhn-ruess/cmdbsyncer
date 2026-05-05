@@ -1205,7 +1205,7 @@ Impact Chain.
         )
 
     @expose('/relations_graph_data')
-    def relations_graph_data(self):  # pylint: disable=too-many-locals
+    def relations_graph_data(self):  # pylint: disable=too-many-locals,too-many-branches
         """
         Return nodes/edges around `obj_id` as JSON for vis-network.
 
@@ -1258,6 +1258,37 @@ Impact Chain.
                         'label': RELATION_INVERSE_LABEL.get(rel.type, rel.type),
                         'arrows': 'to',
                         'dashes': True,
+                    })
+
+        # Template links — opt-in via query param so the graph stays
+        # uncluttered for users who don't care about template
+        # provenance. A host points at the templates it uses; a
+        # template points back at the hosts that consume it.
+        if request.args.get('include_templates') == '1':
+            if focus.object_type == 'template':
+                consumers = Host.objects(cmdb_templates=focus.pk).only(
+                    'hostname', 'object_type'
+                )
+                for c in consumers:
+                    cid = str(c.pk)
+                    nodes.setdefault(cid, _node(c))
+                    edges.append({
+                        'from': cid, 'to': str(focus.pk),
+                        'label': 'template',
+                        'arrows': 'to',
+                        'kind': 'template',
+                    })
+            else:
+                for tpl in (focus.cmdb_templates or []):
+                    if not tpl:
+                        continue
+                    tid = str(tpl.pk)
+                    nodes.setdefault(tid, _node(tpl))
+                    edges.append({
+                        'from': str(focus.pk), 'to': tid,
+                        'label': 'template',
+                        'arrows': 'to',
+                        'kind': 'template',
                     })
         return jsonify({'nodes': list(nodes.values()), 'edges': edges})
 
