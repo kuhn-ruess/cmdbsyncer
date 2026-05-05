@@ -40,6 +40,10 @@ class DataQualityView(BaseView):
     """
 
     def is_accessible(self):
+        # CMDB-only dashboard: hide menu link and block direct access
+        # when the install is running in plain syncer mode.
+        if not app.config.get('CMDB_MODE'):
+            return False
         return current_user.is_authenticated and current_user.has_right('host')
 
     @expose('/')

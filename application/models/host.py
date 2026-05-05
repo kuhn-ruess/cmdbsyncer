@@ -218,7 +218,12 @@ class Host(db.Document):
         every export / sync entry point so non-active rows
         (planned/staged/decommissioned/archived) never reach a
         downstream system.
+
+        When CMDB_MODE is off the syncer ignores lifecycle entirely —
+        every non-soft-deleted host counts as active.
         """
+        if not app.config.get('CMDB_MODE'):
+            return Q()
         return Q(__raw__={'$or': [
             {'lifecycle_state': 'active'},
             {'lifecycle_state': {'$exists': False}},

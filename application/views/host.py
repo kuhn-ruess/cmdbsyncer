@@ -83,6 +83,37 @@ div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
 
 
+# Fields that only make sense when the syncer is in CMDB mode. Stripped
+# from list/detail/filter/form when CMDB_MODE is off so the syncer-only
+# install gets a clean, minimal Host UI.
+_CMDB_ONLY_FIELDS = ('lifecycle_state', 'relations', 'is_stale', 'stale_since')
+
+
+def _strip_cmdb_form_rules(rule_list, drop_fields):
+    """
+    Walk a flask_admin form_rules tree and drop every `rules.Field`
+    entry whose name is in `drop_fields`. Containers (FieldSet,
+    NestedRule) are recursed into; empty containers are removed.
+    """
+    out = []
+    for entry in rule_list:
+        if isinstance(entry, rules.Field):
+            if entry.field_name in drop_fields:
+                continue
+            out.append(entry)
+            continue
+        sub = getattr(entry, 'rules', None)
+        if sub is None:
+            out.append(entry)
+            continue
+        kept = _strip_cmdb_form_rules(sub, drop_fields)
+        if not kept:
+            continue
+        entry.rules = kept
+        out.append(entry)
+    return out
+
+
 def get_debug(hostname, mode):
     """
     Get Output for Host Debug Page
@@ -298,7 +329,8 @@ class _LifecycleBulkActionsMixin:
         return self._bulk_set_lifecycle(ids, 'archived')
 
 
-class ObjectModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint: disable=too-many-ancestors
+class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestors,too-many-instance-attributes
+                      _LifecycleBulkActionsMixin,
                       HostnameAndLabelSearchMixin, DefaultModelView):
     """
     Onlye show objects
@@ -507,10 +539,44 @@ class ObjectModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylin
         if not app.config['CMDB_MODE']:
             self.can_edit = False
             self.can_create = False
+            self.can_delete = False
             self.column_exclude_list.append('CMDB Attributes')
             self.column_exclude_list.append('cmdb_fields')
+            self._strip_cmdb_only_ui()
 
         super().__init__(model, **kwargs)
+
+    def _strip_cmdb_only_ui(self):
+        """
+        Hide lifecycle/relations columns, filters and form rules.
+        Copies class-level dicts/lists first so the mutation does not
+        leak into other view instances of the same class.
+        """
+        self.column_formatters = dict(self.column_formatters)
+        self.column_formatters_detail = dict(self.column_formatters_detail)
+        self.column_labels = dict(self.column_labels)
+        self.column_exclude_list = list(self.column_exclude_list)
+        for col in _CMDB_ONLY_FIELDS:
+            self.column_formatters.pop(col, None)
+            self.column_formatters_detail.pop(col, None)
+            self.column_labels.pop(col, None)
+            if col not in self.column_exclude_list:
+                self.column_exclude_list.append(col)
+        self.column_details_list = [
+            c for c in self.column_details_list if c not in _CMDB_ONLY_FIELDS
+        ]
+        self.column_filters = tuple(
+            f for f in self.column_filters
+            if not isinstance(f, (FilterLifecycleState, FilterStale))
+        )
+        self.form_rules = _strip_cmdb_form_rules(
+            list(self.form_rules), set(_CMDB_ONLY_FIELDS),
+        )
+
+    def is_action_allowed(self, name):
+        if name.startswith('lifecycle_') and not app.config.get('CMDB_MODE'):
+            return False
+        return super().is_action_allowed(name)
 
     def get_export_name(self, _export_type):  # pylint: disable=signature-differs
         """
@@ -607,6 +673,13 @@ class ObjectModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylin
 class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
     """Template Model View for CMDB templates."""
 
+    def is_accessible(self):
+        # Templates only exist for CMDB users — hide menu and route
+        # entirely when the install is in plain syncer mode.
+        if not app.config.get('CMDB_MODE'):
+            return False
+        return super().is_accessible()
+
     form_rules = [
         rules.HTML('''
         <style>
@@ -668,7 +741,8 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         Host.clear_template_cache()
 
 
-class HostModelView(_SoftDeleteHostMixin, _LifecycleBulkActionsMixin,  # pylint: disable=too-many-public-methods,too-many-ancestors
+class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-methods,too-many-ancestors,too-many-instance-attributes
+                    _LifecycleBulkActionsMixin,
                     SavedSearchRoutesMixin,
                     HostnameAndLabelSearchMixin,
                     DefaultModelView):
@@ -1165,14 +1239,38 @@ below and do not appear here.
         if not app.config['CMDB_MODE']:
             self.can_edit = False
             self.can_create = False
-            self.column_exclude_list.append('cmdb_fields')
-            self.column_exclude_list.append('cmdb_templates')
+            self.can_delete = False
+            self.column_exclude_list = list(self.column_exclude_list) + [
+                'cmdb_fields', 'cmdb_templates',
+            ]
             # The copy-row icon only makes sense when the user is
             # expected to create hosts by hand.
             self.column_extra_row_actions = [
                 a for a in (self.column_extra_row_actions or [])
                 if 'copy_as_new_form' not in getattr(a, 'url', '')
             ]
+            self.column_formatters = dict(self.column_formatters)
+            self.column_formatters_detail = dict(self.column_formatters_detail)
+            self.column_labels = dict(self.column_labels)
+            for col in _CMDB_ONLY_FIELDS:
+                self.column_formatters.pop(col, None)
+                self.column_formatters_detail.pop(col, None)
+                self.column_labels.pop(col, None)
+                if col not in self.column_exclude_list:
+                    self.column_exclude_list.append(col)
+            self.column_details_list = [
+                c for c in self.column_details_list if c not in _CMDB_ONLY_FIELDS
+            ]
+            self.column_sortable_list = tuple(
+                c for c in self.column_sortable_list if c not in _CMDB_ONLY_FIELDS
+            )
+            self.column_filters = tuple(
+                f for f in self.column_filters
+                if not isinstance(f, (FilterLifecycleState, FilterStale))
+            )
+            self.form_rules = _strip_cmdb_form_rules(
+                list(self.form_rules), set(_CMDB_ONLY_FIELDS),
+            )
 
         if app.config['LABEL_PREVIEW_DISABLED']:
             self.column_exclude_list.append('labels')
@@ -1193,6 +1291,8 @@ below and do not appear here.
     def is_action_allowed(self, name):
         if (name in self._CMDB_ONLY_ACTIONS
                 and not app.config.get('CMDB_MODE')):
+            return False
+        if name.startswith('lifecycle_') and not app.config.get('CMDB_MODE'):
             return False
         return super().is_action_allowed(name)
 
@@ -1736,6 +1836,13 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     can_export = False
     can_view_details = True
     can_set_page_size = True
+
+    def is_accessible(self):
+        # The Archive only exists in CMDB mode (soft-delete is a
+        # CMDB-only flow). Returning False here also hides the menu link.
+        if not app.config.get('CMDB_MODE'):
+            return False
+        return super().is_accessible()
 
     page_size = app.config['HOST_PAGESIZE']
 

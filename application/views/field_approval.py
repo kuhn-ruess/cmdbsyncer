@@ -39,6 +39,10 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
     column_filters = ('status', 'hostname', 'field_name', 'requested_by_email')
 
     def is_accessible(self):
+        # The approval queue is part of the CMDB workflow — hide it (and
+        # its menu link) when the install is running in plain syncer mode.
+        if not app.config.get('CMDB_MODE'):
+            return False
         return current_user.is_authenticated and (
             current_user.global_admin
             or current_user.has_right('approval')

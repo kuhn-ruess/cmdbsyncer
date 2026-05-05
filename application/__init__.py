@@ -211,6 +211,8 @@ if not CLI_MODE:
         """
         # pylint: disable=import-outside-toplevel
         from flask_login import current_user as _user
+        if not app.config.get('CMDB_MODE'):
+            return {'pending_approval_count': 0}
         try:
             if not _user.is_authenticated:
                 return {'pending_approval_count': 0}
@@ -486,6 +488,7 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     from application.models.field_approval import FieldApproval
     from application.views.field_approval import FieldApprovalView
     admin.add_view(FieldApprovalView(FieldApproval, name="Approvals",
+                                     category="Settings",
                                      menu_icon_type='fa',
                                      menu_icon_value='fa-hourglass-half'))
 
