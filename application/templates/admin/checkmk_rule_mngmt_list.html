@@ -20,7 +20,7 @@
     overflow-wrap: anywhere;
   }
   /* Group-header rows injected by JS so the listing visibly clusters
-     by primary_ruleset. */
+     by primary_ruleset. Click toggles collapse of the group's rows. */
   tr.cmk-ruleset-group-header > td {
     background: linear-gradient(90deg, #2c6da8 0%, #3498db 100%);
     color: #fff;
@@ -28,6 +28,21 @@
     font-size: 0.95rem;
     padding: 6px 12px;
     border-top: 2px solid #1d4669;
+    cursor: pointer;
+    user-select: none;
+  }
+  tr.cmk-ruleset-group-header > td:hover {
+    background: linear-gradient(90deg, #244f7a 0%, #2980b9 100%);
+  }
+  tr.cmk-ruleset-group-header .cmk-ruleset-group-caret {
+    display: inline-block;
+    width: 14px;
+    margin-right: 4px;
+    transition: transform 0.15s ease;
+    text-align: center;
+  }
+  tr.cmk-ruleset-group-header.collapsed .cmk-ruleset-group-caret {
+    transform: rotate(-90deg);
   }
   tr.cmk-ruleset-group-header .cmk-ruleset-group-count {
     background: rgba(255,255,255,0.2);
@@ -91,7 +106,34 @@
   // Inject group-header rows before each cluster of rules sharing the
   // same primary ruleset. Reads the ruleset name from the rendered
   // card title (.cmk-rule-card .card-title) so the script doesn't need
-  // a separate column injected server-side.
+  // a separate column injected server-side. Header rows are clickable
+  // — click toggles collapse of the rules belonging to that group;
+  // open/closed state is remembered per-ruleset in localStorage.
+  var COLLAPSED_KEY = 'cmk-rule-mngmt-collapsed-rulesets';
+
+  function loadCollapsedSet() {
+    try {
+      var raw = window.localStorage.getItem(COLLAPSED_KEY);
+      if (!raw) { return new Set(); }
+      var arr = JSON.parse(raw);
+      return new Set(Array.isArray(arr) ? arr : []);
+    } catch (e) { return new Set(); }
+  }
+
+  function saveCollapsedSet(set) {
+    try {
+      window.localStorage.setItem(
+        COLLAPSED_KEY, JSON.stringify(Array.from(set))
+      );
+    } catch (e) { /* quota / disabled — silently skip */ }
+  }
+
+  function applyCollapsed(header, collapsed) {
+    var members = header._cmkGroupMembers || [];
+    members.forEach(function(r) { r.style.display = collapsed ? 'none' : ''; });
+    header.classList.toggle('collapsed', collapsed);
+  }
+
   function injectGroupHeaders() {
     var table = document.querySelector('table.model-list, .table.model-list, .admin-table table, .table');
     if (!table) { return; }
@@ -107,37 +149,58 @@
       ? table.tHead.rows[0].cells.length
       : (rows[0].cells.length || 1);
 
+    var collapsedSet = loadCollapsedSet();
     var lastRuleset = null;
     var groupHeader = null;
+    var groupMembers = [];
     var countInGroup = 0;
 
-    function setCount() {
+    function finishGroup() {
       if (!groupHeader) { return; }
       var badge = groupHeader.querySelector('.cmk-ruleset-group-count');
       if (badge) { badge.textContent = countInGroup + ' rule' + (countInGroup === 1 ? '' : 's'); }
+      groupHeader._cmkGroupMembers = groupMembers;
+      if (collapsedSet.has(groupHeader.dataset.ruleset)) {
+        applyCollapsed(groupHeader, true);
+      }
     }
 
     rows.forEach(function(row) {
       var titleEl = row.querySelector('.cmk-rule-card .card-title');
       var ruleset = (titleEl && titleEl.textContent || '').trim() || '(no ruleset)';
       if (ruleset !== lastRuleset) {
-        setCount();
+        finishGroup();
         var header = document.createElement('tr');
         header.className = 'cmk-ruleset-group-header';
         var cell = document.createElement('td');
         cell.colSpan = colCount;
-        cell.innerHTML = '<i class="fa fa-folder-open" style="margin-right:6px;"></i>'
+        cell.innerHTML =
+          '<span class="cmk-ruleset-group-caret">&#x25BC;</span>'
+          + '<i class="fa fa-folder-open" style="margin-right:6px;"></i>'
           + escapeHtml(ruleset)
           + '<span class="cmk-ruleset-group-count">0 rules</span>';
         header.appendChild(cell);
+        header.dataset.ruleset = ruleset;
         row.parentNode.insertBefore(header, row);
+        cell.addEventListener('click', function() {
+          var nowCollapsed = !header.classList.contains('collapsed');
+          applyCollapsed(header, nowCollapsed);
+          if (nowCollapsed) {
+            collapsedSet.add(ruleset);
+          } else {
+            collapsedSet.delete(ruleset);
+          }
+          saveCollapsedSet(collapsedSet);
+        });
         groupHeader = header;
+        groupMembers = [];
         countInGroup = 0;
         lastRuleset = ruleset;
       }
+      groupMembers.push(row);
       countInGroup += 1;
     });
-    setCount();
+    finishGroup();
   }
 
   function escapeHtml(s) {
