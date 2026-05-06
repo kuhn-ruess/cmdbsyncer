@@ -275,6 +275,45 @@ def _process_copy_as_new(label):
     return redirect(url_for('.edit_view', id=str(clone.pk)))
 
 
+def _build_tree_view(tree):
+    """
+    Shape a HostInventoryTree document for the CMDB Tree template:
+    sorted current paths, plus an added / removed / changed diff against
+    the previous snapshot. Returns a plain dict so the template doesn't
+    have to call methods on a mongoengine document.
+    """
+    current = {p.path: p.value for p in (tree.paths or [])}
+    previous = {p.path: p.value for p in (tree.previous_paths or [])}
+
+    added_keys = sorted(set(current) - set(previous))
+    removed_keys = sorted(set(previous) - set(current))
+    changed_keys = sorted(
+        k for k in current.keys() & previous.keys()
+        if current[k] != previous[k]
+    )
+
+    return {
+        'source': tree.source,
+        'last_update': tree.last_update,
+        'previous_update': tree.previous_update,
+        'entries': sorted(
+            ({'path': p, 'value': v} for p, v in current.items()),
+            key=lambda e: e['path'],
+        ),
+        'diff': {
+            'added': [{'path': k, 'value': current[k]} for k in added_keys],
+            'removed': [{'path': k, 'value': previous[k]} for k in removed_keys],
+            'changed': [
+                {'path': k, 'old': previous[k], 'new': current[k]}
+                for k in changed_keys
+            ],
+        },
+        'has_diff': bool(
+            tree.previous_update and (added_keys or removed_keys or changed_keys)
+        ),
+    }
+
+
 class _SoftDeleteHostMixin:
     """
     Replace per-row / bulk Delete with `Host.soft_delete`. Hard delete
@@ -1219,6 +1258,37 @@ Impact Chain.
             cmdb_mode=app.config.get('CMDB_MODE', False),
         )
 
+    @expose('/cmdb_tree')
+    def cmdb_tree(self):
+        """
+        Render the full inventory tree(s) for a host. Each
+        ``HostInventoryTree`` document attached to the host is rendered
+        as one collapsible source section listing every ``path: value``
+        pair. The promoted subset stays on the host's regular Inventory
+        view; this page is the un-curated raw tree.
+
+        For each tree, computes a diff against the previous snapshot
+        (``previous_paths``) so the page can highlight what was added,
+        removed or changed in the last import.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.models.host_inventory_tree import HostInventoryTree
+        obj_id = request.args.get('obj_id', '').strip()
+        host = Host.objects(id=obj_id).first() if obj_id else None
+        if not host:
+            flash('Host not found.', 'error')
+            return redirect(url_for('.index_view'))
+        trees = list(
+            HostInventoryTree.objects(hostname=host.hostname).order_by('source')
+        )
+        tree_views = [_build_tree_view(tree) for tree in trees]
+        return self.render(
+            'admin/host_cmdb_tree.html',
+            host=host,
+            tree_views=tree_views,
+            cmdb_mode=app.config.get('CMDB_MODE', False),
+        )
+
     @expose('/relations_graph')
     def relations_graph(self):
         """Render the interactive Relations graph page for one host."""
@@ -2124,10 +2194,22 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
             'Permanently delete the selected hosts? This cannot be undone.')
     def action_hard_delete(self, ids):
         """Permanently drop archived hosts from the database."""
+        # pylint: disable=import-outside-toplevel
+        from application.models.host_inventory_tree import HostInventoryTree
         if not current_user.has_right('hard_delete'):
             flash('Hard delete requires the "Permanently delete archived '
                   'objects" role.', 'error')
             return redirect(request.referrer or url_for('.index_view'))
+        # Snapshot the hostnames before deletion so the side-doc cleanup
+        # has something to match against. Side docs are keyed by
+        # hostname (string), not by Host reference, so orphans would
+        # otherwise survive and silently resurface if a host with the
+        # same name is re-imported later.
+        hostnames = list(
+            Host.objects(id__in=ids, deleted_at__exists=True).distinct('hostname')
+        )
         deleted = Host.objects(id__in=ids, deleted_at__exists=True).delete()
+        if hostnames:
+            HostInventoryTree.objects(hostname__in=hostnames).delete()
         flash(f'Hard-deleted {deleted} host(s).', 'success')
         return redirect(request.referrer or url_for('.index_view'))

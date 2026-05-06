@@ -1,0 +1,264 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<style>
+.tree-wrap { max-width: 1200px; margin: 1.25rem auto; }
+.tree-source { margin-bottom: 1.5rem; }
+.tree-source > summary {
+    cursor: pointer;
+    padding: 8px 12px;
+    font-weight: 600;
+    list-style: none;
+    border-radius: 4px;
+}
+.tree-source > summary::-webkit-details-marker { display: none; }
+.tree-source > summary::before {
+    content: '\25B6';
+    display: inline-block;
+    margin-right: 8px;
+    font-size: 0.7em;
+    transition: transform 0.15s;
+}
+.tree-source[open] > summary::before { transform: rotate(90deg); }
+.tree-source .tree-meta {
+    font-size: 0.78rem;
+    color: var(--surface-muted, #6c757d);
+    margin-left: 8px;
+    font-weight: normal;
+}
+.tree-search {
+    width: 100%;
+    margin: 8px 0 12px 0;
+    padding: 6px 10px;
+    box-sizing: border-box;
+    border: 1px solid var(--surface-border, #dee2e6);
+    border-radius: 4px;
+    background: var(--surface-bg, #fff);
+    color: var(--surface-text, #2c3e50);
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+.tree-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.tree-table th, .tree-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--surface-border, #f1f3f5);
+    text-align: left;
+    vertical-align: top;
+}
+.tree-table th {
+    font-weight: 600;
+    color: var(--surface-muted, #6c757d);
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+}
+.tree-path { font-family: monospace; color: var(--accent, #1abc9c); white-space: nowrap; }
+.tree-value { font-family: monospace; word-break: break-word; }
+.tree-value pre {
+    margin: 0;
+    padding: 4px 6px;
+    background: var(--surface-subtle, #f8f9fa);
+    border-radius: 3px;
+    font-size: 0.82rem;
+    max-height: 200px;
+    overflow: auto;
+    white-space: pre-wrap;
+}
+.tree-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--surface-muted, #6c757d);
+}
+
+.tree-diff {
+    margin: 0 0 12px 0;
+    padding: 10px 12px;
+    border-left: 3px solid var(--accent, #1abc9c);
+    background: var(--surface-subtle, #f8f9fa);
+    border-radius: 0 4px 4px 0;
+    font-size: 0.86rem;
+}
+.tree-diff h4 {
+    margin: 0 0 6px 0;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--surface-muted, #6c757d);
+    font-weight: 600;
+}
+.tree-diff .tree-diff-summary {
+    margin-bottom: 8px;
+    color: var(--surface-text, #2c3e50);
+}
+.tree-diff .tree-diff-tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    margin-right: 6px;
+}
+.tree-diff-tag.add    { background: #d4edda; color: #155724; }
+.tree-diff-tag.remove { background: #f8d7da; color: #721c24; }
+.tree-diff-tag.change { background: #fff3cd; color: #856404; }
+.tree-diff details {
+    margin-top: 4px;
+}
+.tree-diff details > summary {
+    cursor: pointer;
+    color: var(--accent, #1abc9c);
+    font-size: 0.82rem;
+}
+.tree-diff-list {
+    margin: 6px 0 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: monospace;
+    font-size: 0.82rem;
+    max-height: 220px;
+    overflow: auto;
+}
+.tree-diff-list li {
+    padding: 2px 0;
+    border-bottom: 1px dashed var(--surface-border, #e9ecef);
+}
+.tree-diff-list .old { color: #c0392b; text-decoration: line-through; }
+.tree-diff-list .arrow { color: var(--surface-muted, #6c757d); margin: 0 4px; }
+.tree-diff-list .new { color: #1e8449; }
+</style>
+
+{% with active='cmdb_tree' %}
+{% include 'admin/_host_tabs.html' with context %}
+{% endwith %}
+
+<div class="tree-wrap">
+    {% if not tree_views %}
+    <div class="app-card tree-empty">
+        No raw inventory tree has been collected for <code>{{ host.hostname }}</code> yet.
+        Configure a source plugin's inventory settings (e.g. Checkmk →
+        <em>Inventorize from Checkmk Settings</em>) and run the import — the full tree
+        will then be stored here while only the configured paths land on
+        <em>Host.inventory</em> for the rule engine.
+    </div>
+    {% else %}
+    {% for view in tree_views %}
+    <details class="app-card tree-source" open>
+        <summary>
+            {{ view.source }}
+            <span class="tree-meta">
+                {{ view.entries|length }} entries
+                {% if view.last_update %}· updated {{ view.last_update.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+            </span>
+        </summary>
+
+        {% if view.has_diff %}
+        <div class="tree-diff">
+            <h4>Changes since last import
+                {% if view.previous_update %}
+                ({{ view.previous_update.strftime('%Y-%m-%d %H:%M') }})
+                {% endif %}
+            </h4>
+            <div class="tree-diff-summary">
+                {% if view.diff.added %}
+                <span class="tree-diff-tag add">+{{ view.diff.added|length }} added</span>
+                {% endif %}
+                {% if view.diff.removed %}
+                <span class="tree-diff-tag remove">−{{ view.diff.removed|length }} removed</span>
+                {% endif %}
+                {% if view.diff.changed %}
+                <span class="tree-diff-tag change">~{{ view.diff.changed|length }} changed</span>
+                {% endif %}
+            </div>
+
+            {% if view.diff.added %}
+            <details>
+                <summary>Added paths</summary>
+                <ul class="tree-diff-list">
+                    {% for entry in view.diff.added %}
+                    <li>
+                        <span class="tree-path">{{ entry.path }}</span>
+                        <span class="arrow">=</span>
+                        <span class="new">{{ entry.value }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+
+            {% if view.diff.removed %}
+            <details>
+                <summary>Removed paths</summary>
+                <ul class="tree-diff-list">
+                    {% for entry in view.diff.removed %}
+                    <li>
+                        <span class="tree-path">{{ entry.path }}</span>
+                        <span class="arrow">=</span>
+                        <span class="old">{{ entry.value }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+
+            {% if view.diff.changed %}
+            <details>
+                <summary>Changed values</summary>
+                <ul class="tree-diff-list">
+                    {% for entry in view.diff.changed %}
+                    <li>
+                        <span class="tree-path">{{ entry.path }}</span>:
+                        <span class="old">{{ entry.old }}</span>
+                        <span class="arrow">→</span>
+                        <span class="new">{{ entry.new }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </details>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <input type="text" class="tree-search"
+               placeholder="Filter paths…"
+               oninput="filterTree(this, '{{ view.source }}')" />
+        <table class="tree-table" data-source="{{ view.source }}">
+            <thead>
+                <tr><th style="width: 35%;">Path</th><th>Value</th></tr>
+            </thead>
+            <tbody>
+                {% for entry in view.entries %}
+                <tr>
+                    <td class="tree-path">{{ entry.path }}</td>
+                    <td class="tree-value">
+                        {% if entry.value is mapping or entry.value is iterable and entry.value is not string %}
+                            <pre>{{ entry.value|tojson(indent=2) }}</pre>
+                        {% else %}
+                            {{ entry.value }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </details>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<script>
+function filterTree(input, source) {
+    var needle = input.value.toLowerCase();
+    var rows = document.querySelectorAll(
+        '.tree-table[data-source="' + source + '"] tbody tr'
+    );
+    rows.forEach(function(row) {
+        var path = row.querySelector('.tree-path').textContent.toLowerCase();
+        row.style.display = path.indexOf(needle) === -1 ? 'none' : '';
+    });
+}
+</script>
+{% endblock %}

@@ -194,6 +194,24 @@ _models_host.RELATION_TYPES = ()
 _models_host.RELATION_INVERSE_LABEL = {}
 
 
+class _HostInventoryTreePath:  # pylint: disable=too-few-public-methods
+    """Stub for the embedded path/value pair on a HostInventoryTree."""
+
+    def __init__(self, path=None, value=None):
+        self.path = path
+        self.value = value
+
+
+class _HostInventoryTree:  # pylint: disable=too-few-public-methods
+    """Stub HostInventoryTree side-doc; tests patch .objects."""
+    objects = MagicMock()
+
+
+_models_host_inv_tree = _stub_package("application.models.host_inventory_tree")
+_models_host_inv_tree.HostInventoryTreePath = _HostInventoryTreePath
+_models_host_inv_tree.HostInventoryTree = _HostInventoryTree
+
+
 # --- application.models.saved_search ---------------------------------------
 
 _models_saved_search = _stub_package("application.models.saved_search")

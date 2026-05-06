@@ -1272,7 +1272,11 @@ class CheckmkInventorizeAttributesView(DefaultModelView):
         *modern_form(
             section('1', 'main', 'Attributes to Inventorize',
                     'Which host attributes to pull from Checkmk into '
-                    'the syncer inventory.',
+                    'the syncer inventory. For source <code>HW/SW '
+                    'Inventory</code> the full Checkmk inventory tree is '
+                    'additionally stored under <em>Host → CMDB Tree</em>; '
+                    'only the paths listed here are promoted to '
+                    '<code>Host.inventory</code> for the rule engine.',
                     [rules.Field('attribute_names'),
                      rules.Field('attribute_source')]),
         ),

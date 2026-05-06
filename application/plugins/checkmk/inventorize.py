@@ -2,22 +2,32 @@
 Checkmk Inventorize
 """
 # pylint: disable=too-many-locals,too-many-branches,too-many-nested-blocks,duplicate-code
+import datetime
 import json
 import multiprocessing
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application.models.host import Host, app
+from application.models.host_inventory_tree import (
+    HostInventoryTree,
+    HostInventoryTreePath,
+)
 from application.plugins.checkmk.models import (
    CheckmkInventorizeAttributes
 )
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 
+# Source identifier for the HW/SW tree side-document. Kept in lockstep
+# with the Host.inventory key prefix so a curated subset and its full
+# tree share the same name.
+HW_SW_TREE_SOURCE = "cmk_hw_sw_inv"
+
 
 #@TODO Refactor into class with small methods
 
-class InventorizeHosts(CMK2):
+class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
     """
     Host Inventorize in Checkmk
     """
@@ -45,6 +55,11 @@ class InventorizeHosts(CMK2):
         self.found_hosts = set()
         self.status_inventory = {}
         self.hw_sw_inventory = {}
+        # Full flat HW/SW tree per host, persisted as-is to
+        # HostInventoryTree. Separate from `hw_sw_inventory` (which is
+        # the configured subset that lands on Host.inventory) so the
+        # rule engine never sees the un-curated payload.
+        self.hw_sw_inventory_full = {}
         self.service_label_inventory = {}
         self.config_inventory = {}
         self.label_inventory = {}
@@ -59,14 +74,18 @@ class InventorizeHosts(CMK2):
         """
         Fetch and flatten HW/SW inventory for a single host.
 
-        Returns (hostname, data_or_None). Plain-tuple return avoids the
-        multiprocessing Manager().dict() proxy that the old signature
-        required — the parent collects results directly from task.get().
+        Returns ``(hostname, full_flat, filtered_subset)``:
+          * ``full_flat`` is the complete flat path→value map, used as
+            the side-document tree (Host → CMDB Tree).
+          * ``filtered_subset`` is only the keys configured via
+            ``CheckmkInventorizeAttributes`` for ``cmk_inventory`` —
+            this is what gets promoted onto ``Host.inventory`` so the
+            rule engine still works against a curated set.
         """
         url = f"host_inv_api.py?host={hostname}&output_format=json"
         dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
         if not dict_inventory:
-            return hostname, None
+            return hostname, None, None
 
         def flatten_inventory(data, path=""):
             result = {}
@@ -100,7 +119,7 @@ class InventorizeHosts(CMK2):
                 if key.startswith(needed_field):
                     return_data[friendly_name] = data
 
-        return hostname, return_data
+        return hostname, flat_inventory, return_data
 
 
     def get_hw_sw_inventory(self):
@@ -132,7 +151,8 @@ class InventorizeHosts(CMK2):
 
                 for task in tasks:
                     try:
-                        hostname, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
+                        hostname, full_data, data = \
+                            task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
                         progress.console.print("- ERROR: Timeout for a object")
                     except Exception as error:  # pylint: disable=broad-exception-caught
@@ -143,6 +163,7 @@ class InventorizeHosts(CMK2):
                         progress.advance(task1)
                         if data is not None:
                             self.hw_sw_inventory[hostname] = data
+                            self.hw_sw_inventory_full[hostname] = full_data
                 pool.close()
                 pool.join()
 
@@ -323,6 +344,43 @@ class InventorizeHosts(CMK2):
                                          self.service_label_inventory.get(hostname, {}))
                 db_host.update_inventory('cmk_hw_sw_inv', self.hw_sw_inventory.get(hostname, {}))
                 db_host.save()
+                if hostname in self.hw_sw_inventory_full:
+                    self._save_inventory_tree(
+                        hostname, self.hw_sw_inventory_full[hostname],
+                    )
                 print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
             else:
                 print(f" {ColorCodes.FAIL}* {ColorCodes.ENDC} Not in Syncer: {hostname}")
+
+    @staticmethod
+    def _save_inventory_tree(hostname, flat_tree):
+        """
+        Persist the full flat HW/SW inventory tree as a HostInventoryTree
+        side document. Called per host once the curated subset has been
+        written to Host.inventory.
+
+        The current snapshot is shifted into ``previous_paths`` before
+        the new state is written so the CMDB Tree tab can render a
+        "changes since last import" banner.
+        """
+        now = datetime.datetime.utcnow()
+        paths = [
+            HostInventoryTreePath(path=key, value=value)
+            for key, value in (flat_tree or {}).items()
+        ]
+        existing = HostInventoryTree.objects(
+            hostname=hostname, source=HW_SW_TREE_SOURCE,
+        ).first()
+        if existing:
+            existing.previous_paths = list(existing.paths or [])
+            existing.previous_update = existing.last_update
+            existing.paths = paths
+            existing.last_update = now
+            existing.save()
+        else:
+            HostInventoryTree(
+                hostname=hostname,
+                source=HW_SW_TREE_SOURCE,
+                paths=paths,
+                last_update=now,
+            ).save()

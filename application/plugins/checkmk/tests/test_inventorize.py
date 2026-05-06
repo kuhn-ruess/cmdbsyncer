@@ -5,7 +5,10 @@ Unit tests for checkmk inventorize module
 import unittest
 from unittest.mock import Mock, patch
 
-from application.plugins.checkmk.inventorize import InventorizeHosts
+from application.plugins.checkmk.inventorize import (
+    InventorizeHosts,
+    HW_SW_TREE_SOURCE,
+)
 from application.plugins.checkmk.cmk2 import CmkException
 from application.helpers.mongo_keys import validate_mongo_keys
 from tests import base_mock_init
@@ -20,6 +23,7 @@ class TestInventorizeHosts(unittest.TestCase):
                            account_name='Test Account', debug=False,
                            fields={}, found_hosts=set(),
                            status_inventory={}, hw_sw_inventory={},
+                           hw_sw_inventory_full={},
                            service_label_inventory={}, config_inventory={},
                            label_inventory={}, checkmk_hosts={})
 
@@ -111,11 +115,16 @@ class TestInventorizeHosts(unittest.TestCase):
         self.inv.fields = {'cmk_inventory': ['model*', 'hardware*']}
 
         with patch.object(self.inv, 'request', return_value=api_response):
-            hostname, data = self.inv.get_hw_sw_inventory_data('host1')
+            hostname, full_tree, data = self.inv.get_hw_sw_inventory_data('host1')
 
         self.assertEqual(hostname, 'host1')
         self.assertIsNotNone(data)
         self.assertIn('model', data)
+        # Full tree is returned alongside the curated subset; it carries
+        # the original dotted paths that get stored in HostInventoryTree.
+        self.assertIsNotNone(full_tree)
+        self.assertIn('model', full_tree)
+        self.assertIn('hardware.cpu_model', full_tree)
 
     @patch('application.plugins.checkmk.inventorize.app')
     def test_get_attr_labels_flattens_dots_in_label_names(self, mock_app):
@@ -184,10 +193,64 @@ class TestInventorizeHosts(unittest.TestCase):
         self.inv.fields = {'cmk_inventory': ['model']}
 
         with patch.object(self.inv, 'request', return_value=api_response):
-            hostname, data = self.inv.get_hw_sw_inventory_data('host1')
+            hostname, full_tree, data = self.inv.get_hw_sw_inventory_data('host1')
 
         self.assertEqual(hostname, 'host1')
+        self.assertIsNone(full_tree)
         self.assertIsNone(data)
+
+    @patch('application.plugins.checkmk.inventorize.HostInventoryTree')
+    def test_save_inventory_tree_persists_full_paths(self, mock_tree):
+        # The side-doc must carry every key from the flat tree, not just
+        # the configured subset. Persistence path is upsert-style: an
+        # existing doc gets its paths replaced, otherwise a fresh doc is
+        # created. Either way, the original dotted paths survive.
+        mock_tree.objects.return_value.first.return_value = None
+
+        flat = {
+            'hardware.cpu.model': 'Xeon Gold',
+            'software.os.name': 'Linux',
+            'unrelated.path': 'value',
+        }
+
+        InventorizeHosts._save_inventory_tree('host1', flat)
+
+        mock_tree.objects.assert_called_once_with(
+            hostname='host1', source=HW_SW_TREE_SOURCE,
+        )
+        # New-doc branch: the freshly built HostInventoryTree gets saved.
+        mock_tree.assert_called_once()
+        kwargs = mock_tree.call_args.kwargs
+        self.assertEqual(kwargs['hostname'], 'host1')
+        self.assertEqual(kwargs['source'], HW_SW_TREE_SOURCE)
+        stored_paths = {p.path for p in kwargs['paths']}
+        self.assertEqual(stored_paths, set(flat.keys()))
+
+    @patch('application.plugins.checkmk.inventorize.HostInventoryTree')
+    def test_save_inventory_tree_shifts_previous_snapshot(self, mock_tree):
+        # On a re-import the existing snapshot has to roll into
+        # `previous_paths` BEFORE the new state is written, so the CMDB
+        # Tree tab can render the "changes since last import" diff. The
+        # previous_update timestamp moves alongside.
+        existing = Mock()
+        prior_path = Mock()
+        prior_path.path = 'hardware.cpu.model'
+        prior_path.value = 'Xeon Silver'
+        existing.paths = [prior_path]
+        existing.last_update = 'prior-timestamp'
+        mock_tree.objects.return_value.first.return_value = existing
+
+        InventorizeHosts._save_inventory_tree(
+            'host1', {'hardware.cpu.model': 'Xeon Gold'},
+        )
+
+        # previous_paths now mirrors the prior snapshot; current paths is
+        # the new state.
+        self.assertEqual(existing.previous_paths, [prior_path])
+        self.assertEqual(existing.previous_update, 'prior-timestamp')
+        new_paths = {p.path: p.value for p in existing.paths}
+        self.assertEqual(new_paths, {'hardware.cpu.model': 'Xeon Gold'})
+        existing.save.assert_called_once()
 
 
 if __name__ == '__main__':
