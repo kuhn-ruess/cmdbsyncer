@@ -224,3 +224,18 @@ select option, .form-select option { background-color: #32302f; color: #ebdbb2; 
     border-color: #504945 #504945 #282828 !important;
 }
 
+
+/* Theme-aware surface tokens — used by debug_host, _host_tabs,
+   ansible_project_detail, host_relations_graph, ansible_rule_list,
+   ansible_playbook_run and any future template that opts in via
+   var(--surface-*, fallback). */
+:root {
+    --surface-bg: #3c3836;
+    --surface-subtle:  #504945;
+    --surface-border:  #504945;
+    --surface-divider: #504945;
+    --surface-text:    #ebdbb2;
+    --surface-muted:   #a89984;
+    --debug-key:     #8ec07c;
+    --debug-row-hit: #2d4a2d;
+}
