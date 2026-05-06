@@ -55,11 +55,6 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         self.found_hosts = set()
         self.status_inventory = {}
         self.hw_sw_inventory = {}
-        # Full flat HW/SW tree per host, persisted as-is to
-        # HostInventoryTree. Separate from `hw_sw_inventory` (which is
-        # the configured subset that lands on Host.inventory) so the
-        # rule engine never sees the un-curated payload.
-        self.hw_sw_inventory_full = {}
         self.service_label_inventory = {}
         self.config_inventory = {}
         self.label_inventory = {}
@@ -74,18 +69,17 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         Fetch and flatten HW/SW inventory for a single host.
 
-        Returns ``(hostname, full_flat, filtered_subset)``:
-          * ``full_flat`` is the complete flat path→value map, used as
-            the side-document tree (Host → CMDB Tree).
-          * ``filtered_subset`` is only the keys configured via
-            ``CheckmkInventorizeAttributes`` for ``cmk_inventory`` —
-            this is what gets promoted onto ``Host.inventory`` so the
-            rule engine still works against a curated set.
+        Returns ``(hostname, filtered_subset)`` — only the small curated
+        dict that gets promoted onto ``Host.inventory`` for the rule
+        engine. The full flat tree is persisted to ``HostInventoryTree``
+        directly from the worker so it never crosses the multiprocessing
+        IPC boundary; shipping a 100-500 KB blob per host through the
+        result pipe was a runtime catastrophe at scale.
         """
         url = f"host_inv_api.py?host={hostname}&output_format=json"
         dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
         if not dict_inventory:
-            return hostname, None, None
+            return hostname, None
 
         def flatten_inventory(data, path=""):
             result = {}
@@ -119,7 +113,11 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                 if key.startswith(needed_field):
                     return_data[friendly_name] = data
 
-        return hostname, flat_inventory, return_data
+        # Side-doc write happens here, in-worker, so only the small
+        # curated subset travels back to the parent process.
+        self._save_inventory_tree(hostname, flat_inventory)
+
+        return hostname, return_data
 
 
     def get_hw_sw_inventory(self):
@@ -151,8 +149,7 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
 
                 for task in tasks:
                     try:
-                        hostname, full_data, data = \
-                            task.get(timeout=app.config['PROCESS_TIMEOUT'])
+                        hostname, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
                         progress.console.print("- ERROR: Timeout for a object")
                     except Exception as error:  # pylint: disable=broad-exception-caught
@@ -163,7 +160,6 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                         progress.advance(task1)
                         if data is not None:
                             self.hw_sw_inventory[hostname] = data
-                            self.hw_sw_inventory_full[hostname] = full_data
                 pool.close()
                 pool.join()
 
@@ -344,10 +340,6 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                                          self.service_label_inventory.get(hostname, {}))
                 db_host.update_inventory('cmk_hw_sw_inv', self.hw_sw_inventory.get(hostname, {}))
                 db_host.save()
-                if hostname in self.hw_sw_inventory_full:
-                    self._save_inventory_tree(
-                        hostname, self.hw_sw_inventory_full[hostname],
-                    )
                 print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
             else:
                 print(f" {ColorCodes.FAIL}* {ColorCodes.ENDC} Not in Syncer: {hostname}")

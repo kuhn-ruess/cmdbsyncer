@@ -23,7 +23,6 @@ class TestInventorizeHosts(unittest.TestCase):
                            account_name='Test Account', debug=False,
                            fields={}, found_hosts=set(),
                            status_inventory={}, hw_sw_inventory={},
-                           hw_sw_inventory_full={},
                            service_label_inventory={}, config_inventory={},
                            label_inventory={}, checkmk_hosts={})
 
@@ -114,17 +113,21 @@ class TestInventorizeHosts(unittest.TestCase):
 
         self.inv.fields = {'cmk_inventory': ['model*', 'hardware*']}
 
-        with patch.object(self.inv, 'request', return_value=api_response):
-            hostname, full_tree, data = self.inv.get_hw_sw_inventory_data('host1')
+        with patch.object(self.inv, 'request', return_value=api_response), \
+             patch.object(self.inv, '_save_inventory_tree') as save_tree:
+            hostname, data = self.inv.get_hw_sw_inventory_data('host1')
 
         self.assertEqual(hostname, 'host1')
         self.assertIsNotNone(data)
         self.assertIn('model', data)
-        # Full tree is returned alongside the curated subset; it carries
-        # the original dotted paths that get stored in HostInventoryTree.
-        self.assertIsNotNone(full_tree)
-        self.assertIn('model', full_tree)
-        self.assertIn('hardware.cpu_model', full_tree)
+        # Side-doc save runs in-worker so the full tree never crosses
+        # multiprocessing IPC; assert it was handed the full flat dict
+        # with the original dotted paths.
+        save_tree.assert_called_once()
+        save_args = save_tree.call_args.args
+        self.assertEqual(save_args[0], 'host1')
+        self.assertIn('model', save_args[1])
+        self.assertIn('hardware.cpu_model', save_args[1])
 
     @patch('application.plugins.checkmk.inventorize.app')
     def test_get_attr_labels_flattens_dots_in_label_names(self, mock_app):
@@ -192,12 +195,14 @@ class TestInventorizeHosts(unittest.TestCase):
 
         self.inv.fields = {'cmk_inventory': ['model']}
 
-        with patch.object(self.inv, 'request', return_value=api_response):
-            hostname, full_tree, data = self.inv.get_hw_sw_inventory_data('host1')
+        with patch.object(self.inv, 'request', return_value=api_response), \
+             patch.object(self.inv, '_save_inventory_tree') as save_tree:
+            hostname, data = self.inv.get_hw_sw_inventory_data('host1')
 
         self.assertEqual(hostname, 'host1')
-        self.assertIsNone(full_tree)
         self.assertIsNone(data)
+        # No tree to save when Checkmk has no inventory for the host.
+        save_tree.assert_not_called()
 
     @patch('application.plugins.checkmk.inventorize.HostInventoryTree')
     def test_save_inventory_tree_persists_full_paths(self, mock_tree):
