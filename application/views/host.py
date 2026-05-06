@@ -171,6 +171,25 @@ def get_debug(hostname, mode):
         return {'Error': "Host not found in Database"}, {}
 
 
+def _find_rule_match(rules_by_group, raw_id):
+    """
+    Look up a rule's hit/no-match info from the per-group rules dict
+    that the debug page already builds. Returns a small dict with
+    `hit`, `no_match_reason` and `condition_type`, or None if the rule
+    is not present (e.g. a rule type that doesn't appear in this host's
+    debug output).
+    """
+    for group_rules in rules_by_group.values():
+        for rule_row in group_rules:
+            if str(rule_row.get('id')) == raw_id:
+                return {
+                    'hit': bool(rule_row.get('hit')),
+                    'no_match_reason': rule_row.get('no_match_reason'),
+                    'condition_type': rule_row.get('condition_type'),
+                }
+    return None
+
+
 def _safe_return_to(candidate, fallback_endpoint='.index_view'):
     """
     Validate a `return_to` URL coming from a query/form param and return
@@ -1405,6 +1424,13 @@ Impact Chain.
                 preview_type, _, raw_id = preview_rule_id.partition(':')
                 rule_preview, rule_preview_error = \
                     cmk_rule_preview(hostname, preview_type, raw_id)
+                # The preview itself only renders the outcome — it does
+                # not know whether the rule's conditions match this host.
+                # Reuse the per-rule hit info already computed for the
+                # Rules section so the preview can show a "won't match"
+                # warning when relevant.
+                if rule_preview:
+                    rule_preview['match'] = _find_rule_match(new_rules, raw_id)
 
         return self.render('debug_host.html', hostname=hostname, output=output,
                            host=host,

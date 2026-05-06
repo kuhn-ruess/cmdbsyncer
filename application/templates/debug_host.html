@@ -1,13 +1,18 @@
 {% extends 'admin/master.html' %}
 {% block body %}
 <style>
+/* All hardcoded colors below resolve through CSS variables so the
+   per-user themes (gruvbox-dark, dracula, nord, gruvbox-light) can
+   override them. The fallbacks preserve the current light look. */
 .debug-head { display: flex; align-items: center; gap: 12px; margin: 1rem 0 0.75rem; }
 .debug-head h2 { margin: 0; }
 .debug-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-              padding: 8px 12px; background: #f8f9fa; border-radius: 6px;
-              margin-bottom: 1rem; }
+              padding: 8px 12px;
+              background: var(--surface-subtle, #f8f9fa);
+              border-radius: 6px; margin-bottom: 1rem; }
 .debug-form .form-group { margin: 0; }
-.debug-form label { margin: 0; font-size: 0.85rem; color: #6c757d; }
+.debug-form label { margin: 0; font-size: 0.85rem;
+                    color: var(--surface-muted, #6c757d); }
 .debug-form input.form-control, .debug-form select.form-control {
     width: auto; display: inline-block; height: auto; padding: 3px 8px;
 }
@@ -16,12 +21,18 @@
                  gap: 16px; margin-bottom: 1rem; }
 @media (max-width: 992px) { .debug-summary { grid-template-columns: 1fr; } }
 
-.debug-card { border: 1px solid #e2e6ea; border-radius: 6px; background: #fff; }
-.debug-card > .debug-card-head { padding: 6px 12px; background: #f8f9fa;
-    border-bottom: 1px solid #e2e6ea; font-weight: bold;
+.debug-card { border: 1px solid var(--surface-border, #e2e6ea);
+              border-radius: 6px;
+              background: var(--surface-bg, #fff);
+              color: var(--surface-text, inherit); }
+.debug-card > .debug-card-head { padding: 6px 12px;
+    background: var(--surface-subtle, #f8f9fa);
+    border-bottom: 1px solid var(--surface-border, #e2e6ea);
+    font-weight: bold;
     border-radius: 6px 6px 0 0; display: flex; justify-content: space-between;
     align-items: center; }
-.debug-card > .debug-card-head .muted { color: #6c757d; font-weight: normal;
+.debug-card > .debug-card-head .muted {
+    color: var(--surface-muted, #6c757d); font-weight: normal;
     font-size: 0.82rem; }
 .debug-card > .debug-card-body { padding: 8px 12px; }
 .debug-card.accent-outcomes { border-left: 4px solid #28a745; }
@@ -31,37 +42,46 @@
 
 .debug-kv { display: grid; grid-template-columns: 1fr; gap: 2px 0; }
 .debug-kv-row { display: flex; align-items: baseline; gap: 6px;
-    padding: 3px 0; border-bottom: 1px solid #f1f3f5; min-width: 0; }
+    padding: 3px 0;
+    border-bottom: 1px solid var(--surface-divider, #f1f3f5); min-width: 0; }
 .debug-kv-row:last-child { border-bottom: none; }
-.debug-kv-row .k { flex: 0 0 auto; font-weight: bold; color: #1abc9c;
-    font-family: monospace; }
+.debug-kv-row .k { flex: 0 0 auto; font-weight: bold;
+    color: var(--debug-key, #1abc9c); font-family: monospace; }
 .debug-kv-row .v { flex: 1 1 auto; min-width: 0; font-family: monospace;
-    color: #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
+    color: var(--surface-text, #2c3e50);
+    white-space: pre-wrap; word-wrap: break-word; }
 
-.debug-empty { color: #6c757d; font-style: italic; padding: 12px; }
+.debug-empty { color: var(--surface-muted, #6c757d);
+    font-style: italic; padding: 12px; }
 
 .rule-acc .rule-tabs { margin: 4px 0 10px; display: flex; gap: 6px;
     flex-wrap: wrap; }
 .rule-acc .rule-tabs .btn { padding: 3px 10px; font-size: 0.85rem; }
-.rule-table th { font-size: 0.82rem; font-weight: 600; background: #f8f9fa; }
-.rule-hit { background: #e8f5e8; }
+.rule-table th { font-size: 0.82rem; font-weight: 600;
+    background: var(--surface-subtle, #f8f9fa); }
+.rule-hit { background: var(--debug-row-hit, #e8f5e8); }
 
 .preview-card { border-left: 4px solid #6610f2; }
-.preview-outcome { border: 1px solid #e2e6ea; border-radius: 4px;
-    padding: 8px 12px; margin-bottom: 8px; background: #fdfdfd; }
+.preview-outcome { border: 1px solid var(--surface-border, #e2e6ea);
+    border-radius: 4px; padding: 8px 12px; margin-bottom: 8px;
+    background: var(--surface-bg, #fdfdfd); }
 .preview-outcome .head { display: flex; justify-content: space-between;
-    align-items: baseline; border-bottom: 1px dashed #e2e6ea;
+    align-items: baseline;
+    border-bottom: 1px dashed var(--surface-border, #e2e6ea);
     padding-bottom: 4px; margin-bottom: 6px; }
-.preview-outcome .head .ruleset { font-weight: bold; color: #2c3e50;
-    font-family: monospace; }
-.preview-outcome .head .meta { color: #6c757d; font-size: 0.8rem; }
+.preview-outcome .head .ruleset { font-weight: bold;
+    color: var(--surface-text, #2c3e50); font-family: monospace; }
+.preview-outcome .head .meta { color: var(--surface-muted, #6c757d);
+    font-size: 0.8rem; }
 .preview-outcome table.preview-table { width: 100%; font-size: 0.85rem;
     table-layout: fixed; }
 .preview-outcome table.preview-table th { width: 200px; padding: 2px 6px;
-    color: #6c757d; font-weight: 600; vertical-align: top; }
+    color: var(--surface-muted, #6c757d);
+    font-weight: 600; vertical-align: top; }
 .preview-outcome table.preview-table td { padding: 2px 6px; font-family: monospace;
-    color: #2c3e50; word-wrap: break-word; white-space: pre-wrap; }
-.preview-outcome table.preview-table td.tpl { color: #6c757d; }
+    color: var(--surface-text, #2c3e50);
+    word-wrap: break-word; white-space: pre-wrap; }
+.preview-outcome table.preview-table td.tpl { color: var(--surface-muted, #6c757d); }
 .preview-outcome .note { color: #b15300; font-style: italic;
     padding: 4px 0; font-size: 0.85rem; }
 </style>
@@ -127,8 +147,39 @@
     <div class="debug-card preview-card" style="margin-bottom: 1rem;">
       <div class="debug-card-head">
         <span><i class="fa fa-eye"></i> {{ rule_preview.rule_type_label }} Preview — {{ rule_preview.rule_name }}</span>
-        <span class="muted">What the export would render for this host</span>
+        <span class="muted">
+          {% if rule_preview.match and rule_preview.match.hit %}
+            <span class="badge badge-success"><i class="fa fa-check"></i> Rule matches this host</span>
+          {% elif rule_preview.match and not rule_preview.match.hit %}
+            <span class="badge badge-warning"><i class="fa fa-exclamation-triangle"></i>
+              Rule would NOT match this host
+            </span>
+          {% else %}
+            What the export would render for this host
+          {% endif %}
+        </span>
       </div>
+      {% if rule_preview.match and not rule_preview.match.hit %}
+      <div class="alert alert-warning" style="margin: 8px 12px 0; padding: 8px 12px;">
+        <i class="fa fa-exclamation-triangle"></i>
+        <strong>This rule does not match the current host</strong> — the
+        preview below is hypothetical: the export will skip this rule for
+        <code>{{ hostname }}</code>.
+        {% if rule_preview.match.no_match_reason %}
+          {% set nm = rule_preview.match.no_match_reason %}
+          <div style="margin-top: 4px; font-size: 0.85rem;">
+            First failing condition:
+            {% if nm.match_type == 'host' %}
+              hostname <code>{{ nm.hostname }}</code>
+              (<code>{{ nm.hostname_match }}</code>{% if nm.hostname_match_negate %}, negated{% endif %})
+            {% else %}
+              tag <code>{{ nm.tag }}</code> = <code>{{ nm.value }}</code>
+              (<code>{{ nm.tag_match }}</code> / <code>{{ nm.value_match }}</code>)
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+      {% endif %}
       <div class="debug-card-body">
         {% if not rule_preview.outcomes %}
           <div class="debug-empty">This rule has no outcomes configured.</div>
