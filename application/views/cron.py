@@ -39,17 +39,47 @@ def _render_interval(_view, _context, model, _name):
         return "Daily"
     return "Unknown"
 
+_CRONJOB_TABLE_STYLE = (
+    '<style>'
+    '.cron-jobs-table{width:100%;border-collapse:collapse;'
+    'background-color:var(--surface-bg,transparent)!important;'
+    'color:var(--surface-text,inherit)!important;}'
+    '.cron-jobs-table td{padding:2px 8px;border-bottom:1px solid '
+    'var(--surface-border,#e9ecef);vertical-align:top;'
+    'background-color:transparent!important;'
+    'color:inherit!important;}'
+    '.cron-jobs-table tr{background-color:transparent!important;}'
+    '.cron-jobs-table tr:last-child td{border-bottom:none;}'
+    '.cron-jobs-table .cj-idx{color:var(--surface-muted,#6c757d)!important;width:24px;}'
+    '.cron-jobs-table .cj-name{font-weight:600;}'
+    '.cron-jobs-table .cj-cmd{font-family:monospace;}'
+    '.cron-jobs-table .cj-acc{color:var(--surface-muted,#6c757d)!important;}'
+    '</style>'
+)
+
+
 def _render_cronjob(_view, _context, model, _name):
     """
-    Render BI Rule
+    Render the per-group jobs as a compact table. Theme tokens drive
+    text and border colours so the cell renders correctly under
+    Gruvbox / Nord / Dracula instead of inheriting Bootstrap's
+    light-theme defaults.
     """
-    html = "<table width=100%>"
+    if not model.jobs:
+        return ''
+    rows = []
     for idx, entry in enumerate(model.jobs):
         account = entry['account'] or ''
-        html += f"<tr><td>{idx}</td><td>{escape(entry['name'])}</td>"\
-                f"<td>{escape(entry['command'])}</td><td>{escape(account)}</td></tr>"
-    html += "</table>"
-    return Markup(html)
+        rows.append(
+            f'<tr><td class="cj-idx">{idx}</td>'
+            f'<td class="cj-name">{escape(entry["name"])}</td>'
+            f'<td class="cj-cmd">{escape(entry["command"])}</td>'
+            f'<td class="cj-acc">{escape(account)}</td></tr>'
+        )
+    return Markup(
+        f'{_CRONJOB_TABLE_STYLE}'
+        f'<table class="cron-jobs-table"><tbody>{"".join(rows)}</tbody></table>'
+    )
 
 
 def _format_protected(_v, _c, m, _p):
