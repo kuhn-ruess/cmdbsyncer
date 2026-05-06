@@ -16,6 +16,7 @@ from datetime import datetime
 from flask import url_for
 from markupsafe import Markup, escape
 
+from application import app
 from application.modules.log.models import LogEntry
 from application.views.host_filters import FilterCmdbTemplate
 
@@ -258,18 +259,22 @@ _LABEL_GRID_CSS = (
 
 
 def _render_labels_with_origin(_view, _context, model, _name):
+    # pylint: disable=too-many-locals
     """
     Compact read-only detail rendering of a host's labels grouped by
-    origin. Each row shows a small badge ("manual" or the template
-    hostname), the key, the value, and a BSON-type badge (so admins
-    can tell a string `"True"` from a BSON bool `True` — they match
-    different filters).
+    origin. In CMDB mode each row carries a small badge (``manual`` or
+    the template hostname) so the admin can tell where a label came
+    from; without CMDB mode there are no templates and the prefix is
+    just visual noise, so it's dropped. Type badge stays in both modes
+    (admins still want to tell a string `"True"` from a BSON bool).
     """
+    cmdb_mode = bool(app.config.get('CMDB_MODE'))
     manual = model.labels or {}
     templates = []
-    for tmpl in (model.cmdb_templates or []):
-        if getattr(tmpl, 'labels', None):
-            templates.append((tmpl.hostname, dict(tmpl.labels)))
+    if cmdb_mode:
+        for tmpl in (model.cmdb_templates or []):
+            if getattr(tmpl, 'labels', None):
+                templates.append((tmpl.hostname, dict(tmpl.labels)))
 
     if not manual and not templates:
         return Markup('<em class="text-muted">No labels.</em>')
@@ -283,7 +288,9 @@ def _render_labels_with_origin(_view, _context, model, _name):
 
     html = [_LABEL_GRID_CSS, '<div class="cmdb-label-grid">']
     for origin, src_name, key, value in rows:
-        if origin == 'manual':
+        if not cmdb_mode:
+            src_badge = ''
+        elif origin == 'manual':
             src_badge = (
                 '<span class="lbl-src src-manual" '
                 'title="Maintained manually on this host">manual</span>'
@@ -675,8 +682,12 @@ def _value_type_name(value):
     Human-friendly Python type name, treating `bool` as its own type
     (rather than the `int` subclass it technically is) — that is the
     distinction users care about when they wonder why
-    `input_monitoring:True` does or doesn't match a filter.
+    `input_monitoring:True` does or doesn't match a filter. ``None``
+    becomes ``empty`` so the badge stays readable when an importer
+    drops a label with no value.
     """
+    if value is None:
+        return 'empty'
     if isinstance(value, bool):
         return 'bool'
     return type(value).__name__
