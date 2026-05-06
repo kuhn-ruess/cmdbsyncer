@@ -2,6 +2,8 @@
 Unit tests for checkmk inventorize module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument,no-value-for-parameter
+import hashlib
+import json
 import unittest
 from unittest.mock import Mock, patch
 
@@ -210,6 +212,7 @@ class TestInventorizeHosts(unittest.TestCase):
         # the configured subset. Persistence path is upsert-style: an
         # existing doc gets its paths replaced, otherwise a fresh doc is
         # created. Either way, the original dotted paths survive.
+        mock_tree.objects.return_value.only.return_value.first.return_value = None
         mock_tree.objects.return_value.first.return_value = None
 
         flat = {
@@ -220,9 +223,12 @@ class TestInventorizeHosts(unittest.TestCase):
 
         InventorizeHosts._save_inventory_tree('host1', flat)
 
-        mock_tree.objects.assert_called_once_with(
-            hostname='host1', source=HW_SW_TREE_SOURCE,
-        )
+        # objects() is hit twice on a fresh host: once for the hash
+        # probe, once for the full fetch that confirms there is no
+        # existing doc to update. Both queries use the same key.
+        for call in mock_tree.objects.call_args_list:
+            self.assertEqual(call.kwargs,
+                             {'hostname': 'host1', 'source': HW_SW_TREE_SOURCE})
         # New-doc branch: the freshly built HostInventoryTree gets saved.
         mock_tree.assert_called_once()
         kwargs = mock_tree.call_args.kwargs
@@ -232,11 +238,38 @@ class TestInventorizeHosts(unittest.TestCase):
         self.assertEqual(stored_paths, set(flat.keys()))
 
     @patch('application.plugins.checkmk.inventorize.HostInventoryTree')
+    def test_save_inventory_tree_skips_when_hash_matches(self, mock_tree):
+        # Steady-state imports pull the same tree over and over; the
+        # cheap hash probe must short-circuit before any rewrite or
+        # snapshot shift happens.
+        flat = {'hardware.cpu.model': 'Xeon Gold'}
+        canonical = json.dumps(flat, sort_keys=True, default=str)
+        unchanged_hash = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+        probe = Mock()
+        probe.tree_hash = unchanged_hash
+        mock_tree.objects.return_value.only.return_value.first.return_value = probe
+
+        result = InventorizeHosts._save_inventory_tree('host1', flat)
+
+        self.assertFalse(result)
+        # Only the probe ran — no full fetch, no save, no constructor call.
+        mock_tree.objects.return_value.only.assert_called_once_with('tree_hash')
+        mock_tree.objects.assert_called_once()
+        mock_tree.assert_not_called()
+
+    @patch('application.plugins.checkmk.inventorize.HostInventoryTree')
     def test_save_inventory_tree_shifts_previous_snapshot(self, mock_tree):
         # On a re-import the existing snapshot has to roll into
         # `previous_paths` BEFORE the new state is written, so the CMDB
         # Tree tab can render the "changes since last import" diff. The
         # previous_update timestamp moves alongside.
+        # Probe returns a non-matching hash so the code falls through to
+        # the full-fetch / shift path.
+        probe = Mock()
+        probe.tree_hash = 'mismatching-hash'
+        mock_tree.objects.return_value.only.return_value.first.return_value = probe
+
         existing = Mock()
         prior_path = Mock()
         prior_path.path = 'hardware.cpu.model'

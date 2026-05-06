@@ -3,6 +3,7 @@ Checkmk Inventorize
 """
 # pylint: disable=too-many-locals,too-many-branches,too-many-nested-blocks,duplicate-code
 import datetime
+import hashlib
 import json
 import multiprocessing
 
@@ -351,10 +352,25 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         side document. Called per host once the curated subset has been
         written to Host.inventory.
 
-        The current snapshot is shifted into ``previous_paths`` before
-        the new state is written so the CMDB Tree tab can render a
-        "changes since last import" banner.
+        Cheap-probes the existing ``tree_hash`` first: if it matches the
+        SHA-256 of the new tree, no rewrite happens (the common steady-
+        state path where Checkmk reports unchanged inventory). On change
+        the current snapshot is shifted into ``previous_paths`` so the
+        CMDB Tree tab can render a "changes since last import" banner.
+
+        Returns True when the side document was written (caller can use
+        this to decide whether the curated subset on Host.inventory
+        also needs a save), False when nothing changed.
         """
+        canonical = json.dumps(flat_tree or {}, sort_keys=True, default=str)
+        new_hash = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+        probe = HostInventoryTree.objects(
+            hostname=hostname, source=HW_SW_TREE_SOURCE,
+        ).only('tree_hash').first()
+        if probe and probe.tree_hash == new_hash:
+            return False
+
         now = datetime.datetime.utcnow()
         paths = [
             HostInventoryTreePath(path=key, value=value)
@@ -368,6 +384,7 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
             existing.previous_update = existing.last_update
             existing.paths = paths
             existing.last_update = now
+            existing.tree_hash = new_hash
             existing.save()
         else:
             HostInventoryTree(
@@ -375,4 +392,6 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                 source=HW_SW_TREE_SOURCE,
                 paths=paths,
                 last_update=now,
+                tree_hash=new_hash,
             ).save()
+        return True

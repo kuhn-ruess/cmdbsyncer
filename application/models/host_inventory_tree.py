@@ -34,6 +34,10 @@ class HostInventoryTree(db.Document):
         field=db.EmbeddedDocumentField(document_type='HostInventoryTreePath')
     )
     previous_update = db.DateTimeField()
+    # SHA-256 of the canonical JSON of the current flat tree. Used as a
+    # cheap probe to skip rewrites and downstream Host saves when an
+    # inventorize run pulls an unchanged tree (the steady state).
+    tree_hash = db.StringField(max_length=64)
     meta = {
         'collection': 'host_inventory_tree',
         'strict': False,
