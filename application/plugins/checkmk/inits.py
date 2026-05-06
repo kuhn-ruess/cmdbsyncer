@@ -18,6 +18,10 @@ from application.plugins.checkmk.groups import CheckmkGroupSync
 from application.plugins.checkmk.users import CheckmkUserSync
 from application.plugins.checkmk.bi import BI
 from application.plugins.checkmk.sites import CheckmkSites
+from application.plugins.checkmk.notification_rules import (
+    CheckmkNotificationRuleSync,
+    NotificationRuleAction,
+)
 
 
 
@@ -31,6 +35,7 @@ from application.plugins.checkmk.models import (
    CheckmkFilterRule,
    CheckmkDCDRule,
    CheckmkFolderPool,
+   CheckmkNotificationRule,
 )
 
 
@@ -321,6 +326,33 @@ def export_rules(account):
         else:
             log.log(f"Export Rules to Account {account} not started",
                     source="cmk_rule_sync",
+                    details=[('error', str(error_obj))])
+#.
+#   .-- Export Notification Rules
+def export_notifications(account, debug=False):
+    """
+    Create / clean Notification Rules in Checkmk
+    """
+    syncer = None
+    try:
+        syncer = CheckmkNotificationRuleSync(account)
+        syncer.debug = debug
+
+        actions = NotificationRuleAction()
+        actions.rules = CheckmkNotificationRule.objects(enabled=True).order_by('sort_field')
+        syncer.actions = actions
+        syncer.name = 'Checkmk: Export Notification Rules'
+        syncer.source = "cmk_notification_rule_sync"
+        syncer.export_notification_rules()
+    except CmkException as error_obj:
+        if debug:
+            raise
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export Notification Rules to Account {account} not started",
+                    source="cmk_notification_rule_sync",
                     details=[('error', str(error_obj))])
 #.
 #   .-- Export Downtimes

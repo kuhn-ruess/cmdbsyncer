@@ -36,6 +36,7 @@ from .inits import (
     export_downtimes,
     export_dcd_rules,
     export_passwords,
+    export_notifications,
     import_sites,
     sync_folderpools,
 )
@@ -440,6 +441,25 @@ def cli_export_groups(account, test_run, debug=False):
     """
     export_groups(account, test_run, debug)
 
+
+#.
+#   .-- Command: Export Notification Rules
+@cli_cmk.command('export_notifications')
+@click.argument("account")
+@click.option("--debug", is_flag=True)
+def cli_export_notifications(account, debug=False):
+    """
+    Export configured Notification Rules to a Checkmk Account.
+
+    Requires Checkmk 2.4 or 2.5.
+
+    ### Example
+    _./cmdbsyncer checkmk export_notifications SITEACCOUNT_
+
+    Args:
+        account (string): Name Account Config
+    """
+    export_notifications(account, debug=debug)
 
 #.
 #   .-- Command: Activate Changes

@@ -274,6 +274,80 @@ class CheckmkRuleMngmt(db.Document):
     }
 
 #.
+#   .-- Checkmk Notification Rules
+
+class NotificationRuleOutcome(db.EmbeddedDocument):
+    """
+    ## Notification Rule Outcome
+
+    Each outcome turns into one Checkmk notification rule per matching
+    host (after de-duplication of identical rendered bodies). All
+    template fields support Jinja and have access to the host's
+    attributes. Empty fields disable the corresponding condition.
+    """
+    notification_method = db.StringField(default='mail')
+
+    # Recipients
+    contact_group_recipients = db.StringField()
+
+    # Match: groups
+    match_contact_groups = db.StringField()
+    match_host_groups = db.StringField()
+    match_service_groups = db.StringField()
+
+    # Match: event types — choices are enforced by the form widget
+    # (see CheckmkNotificationRuleView), kept off the field itself so
+    # `models.py` stays free of presentation constants.
+    match_host_event_types = db.ListField(field=db.StringField())
+    match_service_event_types = db.ListField(field=db.StringField())
+
+    # Match: scope
+    match_sites = db.StringField()
+    match_folder = db.StringField()
+    match_hosts = db.StringField()
+    match_exclude_hosts = db.StringField()
+    match_services = db.StringField()
+    match_exclude_services = db.StringField()
+    match_host_labels = db.StringField()
+    match_service_labels = db.StringField()
+    match_host_tags = db.StringField()
+    match_check_types = db.StringField()
+    match_plugin_output = db.StringField()
+    match_only_during_time_period = db.StringField()
+    match_service_levels = db.StringField()
+    match_contacts = db.StringField()
+
+    disable_rule = db.BooleanField(default=False)
+
+    meta = {
+        'strict': False,
+    }
+
+
+class CheckmkNotificationRule(db.Document):
+    """
+    Generate Checkmk notification rules from host attributes.
+    """
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
+    render_full_conditions = db.StringField() # Helper for Preview
+
+    outcomes = db.ListField(
+        field=db.EmbeddedDocumentField(document_type="NotificationRuleOutcome"))
+    render_cmk_notification_rule = db.StringField()
+
+    last_match = db.BooleanField(default=False)
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
+
+    meta = {
+        'strict': False,
+    }
+
+#.
 #   .-- Checkmk Tag Managment
 
 class CheckmkTagMngmt(db.Document):

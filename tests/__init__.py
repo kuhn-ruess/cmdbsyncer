@@ -478,6 +478,7 @@ for _mod_name, _mod_path in [
     ("inventorize", "inventorize.py"),
     ("import_v1", "import_v1.py"),
     ("import_v2", "import_v2.py"),
+    ("notification_rules", "notification_rules.py"),
 ]:
     _try_load_real_module(
         f"application.plugins.checkmk.{_mod_name}",

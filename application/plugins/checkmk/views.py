@@ -9,7 +9,7 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter  # pylint: disable=no-name-in-module
 from pygments.lexers import DjangoLexer  # pylint: disable=no-name-in-module
 
-from wtforms import HiddenField, StringField, PasswordField
+from wtforms import HiddenField, StringField, PasswordField, SelectMultipleField
 from wtforms.validators import ValidationError
 from flask_admin.form import rules
 from flask_admin.actions import action
@@ -1202,6 +1202,296 @@ class CheckmkDowntimeView(RuleModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
+
+_NOTIFICATION_LIST_LABELS = [
+    ('match_contact_groups', 'Filter Contact Groups'),
+    ('match_host_groups', 'Filter Host Groups'),
+    ('match_service_groups', 'Filter Service Groups'),
+    ('match_sites', 'Filter Sites'),
+    ('match_folder', 'Filter Folder'),
+    ('match_hosts', 'Filter Hosts'),
+    ('match_exclude_hosts', 'Exclude Hosts'),
+    ('match_services', 'Filter Services'),
+    ('match_exclude_services', 'Exclude Services'),
+    ('match_host_labels', 'Filter Host Labels'),
+    ('match_service_labels', 'Filter Service Labels'),
+    ('match_host_tags', 'Filter Host Tags'),
+    ('match_check_types', 'Filter Check Types'),
+    ('match_plugin_output', 'Filter Plugin Output'),
+    ('match_only_during_time_period', 'Filter Time Period'),
+    ('match_service_levels', 'Filter Service Levels'),
+    ('match_contacts', 'Filter Contacts'),
+]
+
+
+def _render_notification_rule(_view, _context, model, _name):
+    """
+    Compact key/value listing of a notification rule's outcomes for
+    the Flask-Admin list column.
+    """
+    # pylint: disable=import-outside-toplevel
+    from .notification_rules import (
+        HOST_EVENT_TYPE_CHOICES, SERVICE_EVENT_TYPE_CHOICES)
+    host_labels = dict(HOST_EVENT_TYPE_CHOICES)
+    svc_labels = dict(SERVICE_EVENT_TYPE_CHOICES)
+
+    html = [_RULE_MNGMT_CARD_CSS]
+    for entry in model.outcomes:
+        rows = [('Method', entry.notification_method or 'mail')]
+        if entry.contact_group_recipients:
+            rows.append(('Recipients', entry.contact_group_recipients))
+        for field, label in _NOTIFICATION_LIST_LABELS:
+            value = getattr(entry, field, None)
+            if value:
+                rows.append((label, value))
+        if entry.match_host_event_types:
+            rows.append(('Host events', ', '.join(
+                host_labels.get(f, f) for f in entry.match_host_event_types)))
+        if entry.match_service_event_types:
+            rows.append(('Service events', ', '.join(
+                svc_labels.get(f, f) for f in entry.match_service_event_types)))
+        if entry.disable_rule:
+            rows.append(('Disabled', 'yes'))
+        items = ''.join(
+            f'<li><b>{escape(label)}</b>: {escape(value)}</li>'
+            for label, value in rows
+        )
+        html.append(
+            '<div class="card cmk-rule-card"><div class="card-body">'
+            f'<ul>{items}</ul>'
+            '</div></div>'
+        )
+    return Markup(''.join(html))
+
+
+class _NotificationMethodWidget:
+    """Render a free-text input with a <datalist> of built-in plugins
+    so admins get autocomplete suggestions but can still type any
+    custom notification plugin name."""
+    # pylint: disable=too-few-public-methods
+
+    def __call__(self, field, **kwargs):
+        # pylint: disable=import-outside-toplevel
+        from .notification_rules import NOTIFICATION_METHOD_SUGGESTIONS
+        kwargs.setdefault('id', field.id)
+        kwargs.setdefault('class', 'form-control')
+        list_id = f'{field.id}_suggestions'
+        value = field.data or ''
+        options = ''.join(
+            f'<option value="{escape(name)}">' for name in NOTIFICATION_METHOD_SUGGESTIONS
+        )
+        return Markup(
+            f'<input type="text" name="{field.name}" '
+            f'id="{kwargs["id"]}" class="{kwargs["class"]}" '
+            f'list="{list_id}" value="{escape(value)}" '
+            f'placeholder="mail, slack, msteams, custom_script_name, …">'
+            f'<datalist id="{list_id}">{options}</datalist>'
+        )
+
+
+class _StringFieldWithDatalist(StringField):
+    """StringField that renders with the datalist widget above."""
+    widget = _NotificationMethodWidget()
+
+
+class _CheckboxMultiWidget:
+    """
+    Render a SelectMultipleField as a contained, scrollable
+    Bootstrap form-check group so the checkboxes don't overflow into
+    the surrounding inputs (which the wtforms ListWidget did) and
+    remain unambiguously multi-select (Flask-Admin's default Select2
+    hijacks a plain ``<select multiple>`` to single-select).
+    """
+    # pylint: disable=too-few-public-methods
+
+    def __call__(self, field, **_kwargs):
+        selected = set(field.data or [])
+        parts = [
+            '<div class="cmk-event-checkboxes" '
+            'style="max-height:220px;overflow-y:auto;padding:8px 12px;'
+            'border:1px solid var(--bs-border-color, #ced4da);'
+            'border-radius:4px;">'
+        ]
+        for value, label in field.choices:
+            cid = f'{field.id}-{value}'
+            check = ' checked' if value in selected else ''
+            parts.append(
+                f'<div class="form-check">'
+                f'<input class="form-check-input" type="checkbox" '
+                f'name="{field.name}" id="{cid}" '
+                f'value="{escape(value)}"{check}>'
+                f'<label class="form-check-label" for="{cid}">'
+                f'{escape(label)}</label>'
+                f'</div>'
+            )
+        parts.append('</div>')
+        return Markup(''.join(parts))
+
+
+class _CheckboxMultiField(SelectMultipleField):
+    widget = _CheckboxMultiWidget()
+
+
+def _host_event_select(*args, **kwargs):
+    # pylint: disable=import-outside-toplevel
+    from .notification_rules import HOST_EVENT_TYPE_CHOICES
+    kwargs.setdefault('choices', HOST_EVENT_TYPE_CHOICES)
+    return _CheckboxMultiField(*args, **kwargs)
+
+
+def _service_event_select(*args, **kwargs):
+    # pylint: disable=import-outside-toplevel
+    from .notification_rules import SERVICE_EVENT_TYPE_CHOICES
+    kwargs.setdefault('choices', SERVICE_EVENT_TYPE_CHOICES)
+    return _CheckboxMultiField(*args, **kwargs)
+
+
+class CheckmkNotificationRuleView(RuleModelView):
+    """
+    Custom Notification Rule Model View
+    """
+    form_rules = _modern_rule_form(
+        main_fields=[
+            rules.Field('name'),
+            rules.Field('documentation'),
+            div_open,
+            rules.NestedRule(('enabled', 'last_match')),
+            div_close,
+            rules.Field('sort_field'),
+        ],
+        condition_fields=[
+            rules.Field('condition_typ'),
+            rules.Field('conditions'),
+        ],
+        outcome_fields=[rules.Field('outcomes')],
+        outcome_title='Notification Rule',
+        outcome_desc='One Checkmk notification rule body, rendered '
+                     'against each matching host\'s attributes. '
+                     'Empty fields disable the corresponding condition.',
+    )
+
+    column_labels = {
+        'render_cmk_notification_rule': "Notification Rules",
+        'render_full_conditions': "Conditions",
+    }
+
+    def __init__(self, model, **kwargs):
+        """
+        Update elements
+        """
+        self.column_formatters.update({
+            'render_cmk_notification_rule': _render_notification_rule,
+        })
+
+        self.form_overrides.update({
+            'render_cmk_notification_rule': HiddenField,
+            'name': StringField,
+        })
+
+        base_config = dict(self.form_subdocuments)
+        match_field_overrides = {
+            field: StringField for field, _label in _NOTIFICATION_LIST_LABELS
+        }
+        match_field_overrides['contact_group_recipients'] = StringField
+        match_field_overrides['notification_method'] = _StringFieldWithDatalist
+        # Multi-select with human-readable labels for the event-type
+        # ListFields. wtforms posts a plain list of API-flag strings.
+        match_field_overrides['match_host_event_types'] = _host_event_select
+        match_field_overrides['match_service_event_types'] = _service_event_select
+
+        # Form labels — drop the noisy "Match" prefix; the section
+        # context already says these are match conditions.
+        form_args = {
+            field: {'label': label}
+            for field, label in _NOTIFICATION_LIST_LABELS
+        }
+        form_args['contact_group_recipients'] = {'label': 'Contact Group Recipients'}
+        form_args['notification_method'] = {'label': 'Notification Method'}
+        form_args['match_host_event_types'] = {'label': 'Filter Host Event Types'}
+        form_args['match_service_event_types'] = {'label': 'Filter Service Event Types'}
+        form_args['disable_rule'] = {'label': 'Disable Rule'}
+        base_config.update({
+            'outcomes': {
+                'form_subdocuments': {
+                    '': {
+                        'form_overrides': match_field_overrides,
+                        'form_args': form_args,
+                        'form_widget_args': {
+                            'contact_group_recipients': {
+                                'placeholder': (
+                                    'Comma-separated CG names, Jinja. '
+                                    'e.g. {{cmk_contact_group}}_ALARM'
+                                )
+                            },
+                            'match_contact_groups': {
+                                'placeholder': (
+                                    'Comma-separated CG names, Jinja. '
+                                    'e.g. {{cmk_contact_group}}'
+                                )
+                            },
+                            'match_host_groups': {
+                                'placeholder': 'Comma-separated host group names, Jinja',
+                            },
+                            'match_service_groups': {
+                                'placeholder': 'Comma-separated service group names, Jinja',
+                            },
+                            'match_sites': {
+                                'placeholder': 'Comma-separated site IDs, Jinja',
+                            },
+                            'match_folder': {
+                                'placeholder': 'Single folder path (subfolders matched), Jinja',
+                            },
+                            'match_hosts': {
+                                'placeholder': 'Comma-separated host names, Jinja',
+                            },
+                            'match_exclude_hosts': {
+                                'placeholder': 'Comma-separated host names, Jinja',
+                            },
+                            'match_services': {
+                                'placeholder': (
+                                    'Comma-separated service descriptions / regex, Jinja'),
+                            },
+                            'match_exclude_services': {
+                                'placeholder': (
+                                    'Comma-separated service descriptions / regex, Jinja'),
+                            },
+                            'match_host_labels': {
+                                'placeholder': 'Comma-separated key:value pairs, Jinja',
+                            },
+                            'match_service_labels': {
+                                'placeholder': 'Comma-separated key:value pairs, Jinja',
+                            },
+                            'match_host_tags': {
+                                'placeholder': 'Comma-separated tag_group:tag_id pairs, Jinja',
+                            },
+                            'match_check_types': {
+                                'placeholder': 'Comma-separated check plugin names, Jinja',
+                            },
+                            'match_plugin_output': {
+                                'placeholder': 'Regex against service plugin output, Jinja',
+                            },
+                            'match_only_during_time_period': {
+                                'placeholder': 'Single time period name, Jinja',
+                            },
+                            'match_service_levels': {
+                                'placeholder': 'Range "min,max" (numeric), Jinja',
+                            },
+                            'match_contacts': {
+                                'placeholder': 'Comma-separated user IDs, Jinja',
+                            },
+                        },
+                    },
+                }
+            }
+        })
+        self.form_subdocuments = base_config
+
+        super().__init__(model, **kwargs)
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
 
 class CheckmkCacheView(DefaultModelView):
     """

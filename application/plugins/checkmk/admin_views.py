@@ -15,6 +15,7 @@ from .models import (
     CheckmkFilterRule,
     CheckmkFolderPool,
     CheckmkInventorizeAttributes,
+    CheckmkNotificationRule,
     CheckmkObjectCache,
     CheckmkPassword,
     CheckmkRewriteAttributeRule,
@@ -35,6 +36,7 @@ from .views import (
     CheckmkFolderPoolView,
     CheckmkInventorizeAttributesView,
     CheckmkMngmtRuleView,
+    CheckmkNotificationRuleView,
     CheckmkPasswordView,
     CheckmkRuleView,
     CheckmkSettingsView,
@@ -119,6 +121,15 @@ def register_admin_views(admin):
             category="Checkmk",
             menu_icon_type='fa',
             menu_icon_value='fa-calendar-times-o',
+        )
+    )
+    admin.add_view(
+        CheckmkNotificationRuleView(
+            CheckmkNotificationRule,
+            name="Manage Notification Rules",
+            category="Checkmk",
+            menu_icon_type='fa',
+            menu_icon_value='fa-bell',
         )
     )
     admin.add_view(
