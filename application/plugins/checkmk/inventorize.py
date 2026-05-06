@@ -356,7 +356,8 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         SHA-256 of the new tree, no rewrite happens (the common steady-
         state path where Checkmk reports unchanged inventory). On change
         the current snapshot is shifted into ``previous_paths`` so the
-        CMDB Tree tab can render a "changes since last import" banner.
+        Inventory Tree tab can render a "changes since last import"
+        banner.
 
         Returns True when the side document was written (caller can use
         this to decide whether the curated subset on Host.inventory

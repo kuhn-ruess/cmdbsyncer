@@ -1274,7 +1274,7 @@ class CheckmkInventorizeAttributesView(DefaultModelView):
                     'Which host attributes to pull from Checkmk into '
                     'the syncer inventory. For source <code>HW/SW '
                     'Inventory</code> the full Checkmk inventory tree is '
-                    'additionally stored under <em>Host → CMDB Tree</em>; '
+                    'additionally stored under <em>Host → Inventory Tree</em>; '
                     'only the paths listed here are promoted to '
                     '<code>Host.inventory</code> for the rule engine.',
                     [rules.Field('attribute_names'),

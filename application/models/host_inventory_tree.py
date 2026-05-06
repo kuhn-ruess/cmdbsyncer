@@ -22,7 +22,7 @@ class HostInventoryTreePath(db.EmbeddedDocument):
 
 class HostInventoryTree(db.Document):
     """Full raw inventory tree per (hostname, source). ``previous_paths``
-    carries one prior snapshot so the CMDB Tree tab can render an
+    carries one prior snapshot so the Inventory Tree tab can render an
     added/removed/changed diff against the last import."""
     hostname = db.StringField(required=True, max_length=255)
     source = db.StringField(required=True, max_length=120)

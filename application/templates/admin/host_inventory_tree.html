@@ -58,16 +58,56 @@
 }
 .tree-path { font-family: monospace; color: var(--accent, #1abc9c); white-space: nowrap; }
 .tree-value { font-family: monospace; word-break: break-word; }
-.tree-value pre {
-    margin: 0;
-    padding: 4px 6px;
-    background: var(--surface-subtle, #f8f9fa);
-    border-radius: 3px;
+
+.tree-rows-table {
+    width: 100%;
+    border-collapse: collapse;
     font-size: 0.82rem;
-    max-height: 200px;
-    overflow: auto;
-    white-space: pre-wrap;
+    background: var(--surface-bg, #fff);
+    border: 1px solid var(--surface-border, #e9ecef);
+    border-radius: 4px;
+    overflow: hidden;
 }
+.tree-rows-table th, .tree-rows-table td {
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--surface-border, #f1f3f5);
+    text-align: left;
+    vertical-align: top;
+    color: var(--surface-text, #2c3e50);
+}
+.tree-rows-table tr:last-child td { border-bottom: none; }
+.tree-rows-table th {
+    background: var(--surface-subtle, #f8f9fa);
+    font-weight: 600;
+    color: var(--surface-muted, #6c757d);
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.tree-list {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--surface-text, #2c3e50);
+}
+.tree-list li { padding: 1px 0; }
+.tree-mapping {
+    width: auto;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.tree-mapping th, .tree-mapping td {
+    padding: 2px 8px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px dashed var(--surface-border, #e9ecef);
+}
+.tree-mapping th {
+    color: var(--surface-muted, #6c757d);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 .tree-empty {
     padding: 24px;
     text-align: center;
@@ -131,7 +171,7 @@
 .tree-diff-list .new { color: #1e8449; }
 </style>
 
-{% with active='cmdb_tree' %}
+{% with active='inventory_tree' %}
 {% include 'admin/_host_tabs.html' with context %}
 {% endwith %}
 
@@ -234,10 +274,44 @@
                 <tr>
                     <td class="tree-path">{{ entry.path }}</td>
                     <td class="tree-value">
-                        {% if entry.value is mapping or entry.value is iterable and entry.value is not string %}
-                            <pre>{{ entry.value|tojson(indent=2) }}</pre>
+                        {% if entry.render.kind == 'table' %}
+                            <table class="tree-rows-table">
+                                <thead>
+                                    <tr>
+                                        {% for col in entry.render.columns %}
+                                        <th>{{ col }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in entry.render.rows %}
+                                    <tr>
+                                        {% for cell in row %}
+                                        <td>{{ '' if cell is none else cell }}</td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% elif entry.render.kind == 'list' %}
+                            <ul class="tree-list">
+                                {% for item in entry.render.items %}
+                                <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% elif entry.render.kind == 'mapping' %}
+                            <table class="tree-mapping">
+                                <tbody>
+                                    {% for key, val in entry.render.items %}
+                                    <tr>
+                                        <th>{{ key }}</th>
+                                        <td>{{ '' if val is none else val }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         {% else %}
-                            {{ entry.value }}
+                            {{ entry.render.text }}
                         {% endif %}
                     </td>
                 </tr>
@@ -253,7 +327,7 @@
 function filterTree(input, source) {
     var needle = input.value.toLowerCase();
     var rows = document.querySelectorAll(
-        '.tree-table[data-source="' + source + '"] tbody tr'
+        '.tree-table[data-source="' + source + '"] > tbody > tr'
     );
     rows.forEach(function(row) {
         var path = row.querySelector('.tree-path').textContent.toLowerCase();

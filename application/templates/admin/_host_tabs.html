@@ -1,8 +1,8 @@
 {# Shared tab bar for the per-host pages (Overview / Edit / Relations
-   Graph / Timeline / CMDB Tree / Debug). Pass:
+   Graph / Timeline / Inventory Tree / Debug). Pass:
      * host    — Host document
      * active  — one of 'overview', 'edit', 'relations', 'timeline',
-                 'cmdb_tree', 'debug'
+                 'inventory_tree', 'debug'
      * cmdb_mode — bool; when False the Relations Graph tab is hidden
 #}
 {% set _id = host.id %}
@@ -77,9 +77,9 @@
                 <i class="fa fa-history"></i> Timeline
             </a>
         </li>
-        <li class="{{ 'active' if active == 'cmdb_tree' else '' }}">
-            <a href="{{ url_for('host.cmdb_tree', obj_id=_id) }}">
-                <i class="fa fa-tree"></i> CMDB Tree
+        <li class="{{ 'active' if active == 'inventory_tree' else '' }}">
+            <a href="{{ url_for('host.inventory_tree', obj_id=_id) }}">
+                <i class="fa fa-tree"></i> Inventory Tree
             </a>
         </li>
         <li class="{{ 'active' if active == 'debug' else '' }}">

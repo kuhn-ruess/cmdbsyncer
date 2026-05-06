@@ -275,12 +275,40 @@ def _process_copy_as_new(label):
     return redirect(url_for('.edit_view', id=str(clone.pk)))
 
 
+def _classify_tree_value(value):
+    """
+    Pick a render kind for one inventory-tree value. Lists of dicts are
+    Checkmk's ``Table.Rows`` shape and deserve a real mini-table; flat
+    lists collapse to a comma-separated line; nested dicts get a
+    key/value table; everything else falls back to scalar text.
+    """
+    if isinstance(value, list) and value and all(isinstance(r, dict) for r in value):
+        columns = []
+        seen = set()
+        for row in value:
+            for key in row.keys():
+                if key not in seen:
+                    seen.add(key)
+                    columns.append(key)
+        rows = [
+            [row.get(col) for col in columns]
+            for row in value
+        ]
+        return {'kind': 'table', 'columns': columns, 'rows': rows}
+    if isinstance(value, list):
+        return {'kind': 'list', 'items': value}
+    if isinstance(value, dict):
+        return {'kind': 'mapping', 'items': list(value.items())}
+    return {'kind': 'scalar', 'text': '' if value is None else str(value)}
+
+
 def _build_tree_view(tree):
     """
-    Shape a HostInventoryTree document for the CMDB Tree template:
-    sorted current paths, plus an added / removed / changed diff against
-    the previous snapshot. Returns a plain dict so the template doesn't
-    have to call methods on a mongoengine document.
+    Shape a HostInventoryTree document for the Inventory Tree template:
+    sorted current paths (each tagged with a render kind), plus an
+    added / removed / changed diff against the previous snapshot.
+    Returns a plain dict so the template doesn't have to call methods
+    on a mongoengine document.
     """
     current = {p.path: p.value for p in (tree.paths or [])}
     previous = {p.path: p.value for p in (tree.previous_paths or [])}
@@ -292,14 +320,19 @@ def _build_tree_view(tree):
         if current[k] != previous[k]
     )
 
+    entries = sorted(
+        (
+            {'path': p, 'render': _classify_tree_value(v)}
+            for p, v in current.items()
+        ),
+        key=lambda e: e['path'],
+    )
+
     return {
         'source': tree.source,
         'last_update': tree.last_update,
         'previous_update': tree.previous_update,
-        'entries': sorted(
-            ({'path': p, 'value': v} for p, v in current.items()),
-            key=lambda e: e['path'],
-        ),
+        'entries': entries,
         'diff': {
             'added': [{'path': k, 'value': current[k]} for k in added_keys],
             'removed': [{'path': k, 'value': previous[k]} for k in removed_keys],
@@ -1266,8 +1299,8 @@ Impact Chain.
             cmdb_mode=app.config.get('CMDB_MODE', False),
         )
 
-    @expose('/cmdb_tree')
-    def cmdb_tree(self):
+    @expose('/inventory_tree')
+    def inventory_tree(self):
         """
         Render the full inventory tree(s) for a host. Each
         ``HostInventoryTree`` document attached to the host is rendered
@@ -1291,7 +1324,7 @@ Impact Chain.
         )
         tree_views = [_build_tree_view(tree) for tree in trees]
         return self.render(
-            'admin/host_cmdb_tree.html',
+            'admin/host_inventory_tree.html',
             host=host,
             tree_views=tree_views,
             cmdb_mode=app.config.get('CMDB_MODE', False),
