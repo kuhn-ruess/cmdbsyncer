@@ -504,7 +504,9 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         [id^="cmdb_fields-"] .card {
             margin-bottom: 8px !important;
             padding: 10px !important;
-            background-color: #f8f9fa !important;
+            background-color: var(--surface-subtle, #f8f9fa) !important;
+            color: var(--surface-text, inherit) !important;
+            border: 1px solid var(--surface-border, transparent) !important;
             border-radius: 8px !important;
         }
         [id^="cmdb_fields-"] label { display: none !important; }
@@ -756,7 +758,9 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         [id^="cmdb_fields-"] .card {
             margin-bottom: 8px !important;
             padding: 10px !important;
-            background-color: #f8f9fa !important;
+            background-color: var(--surface-subtle, #f8f9fa) !important;
+            color: var(--surface-text, inherit) !important;
+            border: 1px solid var(--surface-border, transparent) !important;
             border-radius: 8px !important;
         }
         [id^="cmdb_fields-"] label { display: none !important; }
@@ -1138,9 +1142,10 @@ label[for="relations"] { display: none !important; }
     margin: 0 0 4px 0 !important;
     padding: 6px 44px 6px 28px !important;
     /* right pad: JS delete-X; left pad: drag-handle in legend */
-    border: 1px solid #e3e6ea !important;
+    border: 1px solid var(--surface-border, #e3e6ea) !important;
     box-shadow: none !important;
-    background-color: #fbfbfc !important;
+    background-color: var(--surface-subtle, #fbfbfc) !important;
+    color: var(--surface-text, inherit) !important;
     border-radius: 4px !important;
 }
 #relations .inline-field > legend {
@@ -1168,7 +1173,7 @@ label[for="relations"] { display: none !important; }
 #relations .form-group { margin: 0 !important; padding: 0 !important; }
 #relations .form-group > label {
     font-size: 0.7rem !important;
-    color: #6c757d !important;
+    color: var(--surface-muted, #6c757d) !important;
     text-transform: uppercase !important;
     letter-spacing: 0.04em !important;
     margin: 0 0 1px 0 !important;
@@ -1181,6 +1186,9 @@ label[for="relations"] { display: none !important; }
     padding: 2px 7px !important;
     height: auto !important;
     font-size: 0.9rem !important;
+    background-color: var(--surface-bg, #fff) !important;
+    color: var(--surface-text, #2c3e50) !important;
+    border: 1px solid var(--surface-border, #ced4da) !important;
 }
 #relations > a.btn { margin-top: 8px; }
 </style>
