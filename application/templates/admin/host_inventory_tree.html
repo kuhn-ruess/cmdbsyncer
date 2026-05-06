@@ -40,6 +40,7 @@
 }
 .tree-table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: 0.88rem;
 }
@@ -56,8 +57,19 @@
     font-size: 0.72rem;
     letter-spacing: 0.04em;
 }
-.tree-path { font-family: monospace; color: var(--accent, #1abc9c); white-space: nowrap; }
-.tree-value { font-family: monospace; word-break: break-word; }
+.tree-path {
+    font-family: monospace;
+    color: var(--accent, #1abc9c);
+    overflow-wrap: anywhere;
+}
+.tree-value { font-family: monospace; overflow-wrap: anywhere; }
+/* Nested renderings (row-table, list, mapping) get a scrollable wrapper
+   so a wide ``Table.Rows`` block (lots of columns or long values) stays
+   inside its parent cell instead of pushing the outer table's width. */
+.tree-value-inner {
+    max-width: 100%;
+    overflow-x: auto;
+}
 
 .tree-rows-table {
     width: 100%;
@@ -66,7 +78,6 @@
     background: var(--surface-bg, #fff);
     border: 1px solid var(--surface-border, #e9ecef);
     border-radius: 4px;
-    overflow: hidden;
 }
 .tree-rows-table th, .tree-rows-table td {
     padding: 3px 6px;
@@ -85,6 +96,7 @@
     letter-spacing: 0.04em;
     white-space: nowrap;
 }
+.tree-rows-table td { overflow-wrap: anywhere; }
 .tree-list {
     margin: 0;
     padding-left: 18px;
@@ -275,41 +287,47 @@
                     <td class="tree-path">{{ entry.path }}</td>
                     <td class="tree-value">
                         {% if entry.render.kind == 'table' %}
-                            <table class="tree-rows-table">
-                                <thead>
-                                    <tr>
-                                        {% for col in entry.render.columns %}
-                                        <th>{{ col }}</th>
+                            <div class="tree-value-inner">
+                                <table class="tree-rows-table">
+                                    <thead>
+                                        <tr>
+                                            {% for col in entry.render.columns %}
+                                            <th>{{ col }}</th>
+                                            {% endfor %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in entry.render.rows %}
+                                        <tr>
+                                            {% for cell in row %}
+                                            <td>{{ '' if cell is none else cell }}</td>
+                                            {% endfor %}
+                                        </tr>
                                         {% endfor %}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for row in entry.render.rows %}
-                                    <tr>
-                                        {% for cell in row %}
-                                        <td>{{ '' if cell is none else cell }}</td>
-                                        {% endfor %}
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </div>
                         {% elif entry.render.kind == 'list' %}
-                            <ul class="tree-list">
-                                {% for item in entry.render.items %}
-                                <li>{{ item }}</li>
-                                {% endfor %}
-                            </ul>
-                        {% elif entry.render.kind == 'mapping' %}
-                            <table class="tree-mapping">
-                                <tbody>
-                                    {% for key, val in entry.render.items %}
-                                    <tr>
-                                        <th>{{ key }}</th>
-                                        <td>{{ '' if val is none else val }}</td>
-                                    </tr>
+                            <div class="tree-value-inner">
+                                <ul class="tree-list">
+                                    {% for item in entry.render.items %}
+                                    <li>{{ item }}</li>
                                     {% endfor %}
-                                </tbody>
-                            </table>
+                                </ul>
+                            </div>
+                        {% elif entry.render.kind == 'mapping' %}
+                            <div class="tree-value-inner">
+                                <table class="tree-mapping">
+                                    <tbody>
+                                        {% for key, val in entry.render.items %}
+                                        <tr>
+                                            <th>{{ key }}</th>
+                                            <td>{{ '' if val is none else val }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         {% else %}
                             {{ entry.render.text }}
                         {% endif %}
