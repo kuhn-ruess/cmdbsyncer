@@ -1,22 +1,127 @@
 {% extends 'admin/master.html' %}
 
+{% macro pct(part, whole) -%}
+    {%- if whole -%}
+        {{ "%.0f"|format(100.0 * part / whole) }}%
+    {%- else -%}
+        0%
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro freshness_badge(state) -%}
+    {%- if state == 'never' -%}
+        <span class="badge badge-dark" title="No import has touched this source">never</span>
+    {%- elif state == 'very_old' -%}
+        <span class="badge badge-danger" title="Last seen > 7 days ago">stale &gt;7d</span>
+    {%- elif state == 'old' -%}
+        <span class="badge badge-warning" title="Last seen > 24 hours ago">stale &gt;24h</span>
+    {%- endif -%}
+{%- endmacro %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        .dq-kpis { display: grid; gap: 0.75rem;
+                   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                   margin-bottom: 1.5rem; }
+        /* Re-use .app-card so per-theme overrides apply; just tighten
+           spacing for the compact KPI tiles. */
+        .dq-kpi.app-card { padding: 0.85rem 1rem; margin-bottom: 0;
+                           color: inherit; text-decoration: none;
+                           display: block; transition: transform .08s; }
+        a.dq-kpi.app-card:hover { text-decoration: none;
+                                  transform: translateY(-1px); }
+        .dq-kpi .dq-kpi-label { font-size: 0.78rem; text-transform: uppercase;
+                                letter-spacing: 0.5px; opacity: 0.7;
+                                font-weight: 600; }
+        .dq-kpi .dq-kpi-value { font-size: 1.6rem; font-weight: 600;
+                                line-height: 1.1; margin-top: 0.25rem; }
+        .dq-kpi .dq-kpi-sub { font-size: 0.78rem; opacity: 0.7;
+                              margin-top: 0.15rem; }
+        .dq-kpi-good  .dq-kpi-value { color: #4caf50; }
+        .dq-kpi-warn  .dq-kpi-value { color: #f0a020; }
+        .dq-kpi-bad   .dq-kpi-value { color: #e74c3c; }
+        .dq-section-head { display: flex; align-items: baseline;
+                           justify-content: space-between;
+                           margin-top: 1.5rem; margin-bottom: 0.5rem; }
+        .dq-section-head h2 { font-size: 1.1rem; font-weight: 600; margin: 0; }
+        .dq-section-head .dq-tools a { font-size: 0.8rem; }
+        /* Tables that live inside an .app-card don't need a second
+           frame from .table-responsive — drop its border/shadow so
+           the card owns the visual frame in all themes. */
+        .dq-card.app-card { padding: 0.25rem 0.75rem; margin-bottom: 1rem; }
+        .dq-card .table-responsive { border: 0; box-shadow: none;
+                                     margin-bottom: 0; }
+        .dq-card .table { margin-bottom: 0; }
+    </style>
+{% endblock %}
+
 {% block body %}
 <div class="container-fluid" style="margin-top: 1rem;">
-    <h1 style="margin-bottom: 1rem;">
+    <h1 style="margin-bottom: 0.25rem;">
         <i class="fa fa-stethoscope"></i> Data Quality
     </h1>
-    <p class="text-muted">
+    <p class="text-muted" style="margin-bottom: 1rem;">
         Snapshot generated {{ now.strftime('%Y-%m-%d %H:%M UTC') }}.
-        All counts cover non-template, non-object hosts; archived rows
-        are listed separately so they don't inflate the live counts.
+        Counts cover non-template, non-object hosts; archived rows are
+        listed separately so they don't inflate the live counts.
     </p>
 
+    {# ---- KPI scorecard ---- #}
+    {% set live = totals.live %}
+    {% set with_missing = totals.with_missing %}
+    {% set stale_pct = (100.0 * totals.stale / live) if live else 0 %}
+    {% set missing_pct = (100.0 * with_missing / live) if live else 0 %}
+    {# Stale links go straight to the Hosts list filtered to is_stale=yes. #}
+    {% set stale_link =
+        host_list_url ~ '?flt0_' ~ stale_filter_idx ~ '=yes'
+        if stale_filter_idx is not none else '#per-source' %}
+    <div class="dq-kpis">
+        <a class="dq-kpi app-card" href="#per-source"
+           title="Jump to per-source breakdown">
+            <div class="dq-kpi-label">Live hosts</div>
+            <div class="dq-kpi-value">{{ live }}</div>
+            <div class="dq-kpi-sub">{{ totals.archived }} archived</div>
+        </a>
+        <a class="dq-kpi app-card {% if stale_pct >= 10 %}dq-kpi-bad{% elif stale_pct > 0 %}dq-kpi-warn{% else %}dq-kpi-good{% endif %}"
+           href="{{ stale_link }}"
+           title="Show stale hosts">
+            <div class="dq-kpi-label">Stale</div>
+            <div class="dq-kpi-value">{{ totals.stale }}</div>
+            <div class="dq-kpi-sub">{{ pct(totals.stale, live) }} of live</div>
+        </a>
+        {% if has_cmdb_schema %}
+        <a class="dq-kpi app-card {% if missing_pct >= 25 %}dq-kpi-bad{% elif missing_pct > 0 %}dq-kpi-warn{% else %}dq-kpi-good{% endif %}"
+           href="#missing-fields"
+           title="Jump to most-missed CMDB fields">
+            <div class="dq-kpi-label">Missing CMDB fields</div>
+            <div class="dq-kpi-value">{{ with_missing }}</div>
+            <div class="dq-kpi-sub">{{ pct(with_missing, live) }} of live</div>
+        </a>
+        {% endif %}
+        <a class="dq-kpi app-card {% if totals.duplicate_clusters %}dq-kpi-warn{% else %}dq-kpi-good{% endif %}"
+           href="#duplicates"
+           title="Jump to duplicate hostnames">
+            <div class="dq-kpi-label">Duplicate hostname groups</div>
+            <div class="dq-kpi-value">{{ totals.duplicate_clusters }}</div>
+            <div class="dq-kpi-sub">probable collisions</div>
+        </a>
+        <a class="dq-kpi app-card {% if totals.silent_sources %}dq-kpi-warn{% else %}dq-kpi-good{% endif %}"
+           href="#silent-sources"
+           title="Jump to silent / stale sources">
+            <div class="dq-kpi-label">Silent sources</div>
+            <div class="dq-kpi-value">{{ totals.silent_sources }}</div>
+            <div class="dq-kpi-sub">never &amp; &gt;7d</div>
+        </a>
+    </div>
+
+    {# ---- Lifecycle distribution + per-source ---- #}
     <div class="row">
-        <div class="col-md-6 col-lg-4">
-            <div class="app-card mb-4" style="padding: 1rem;">
-                <h2 style="font-size: 1rem; font-weight: 600; margin-top: 0;">
-                    Lifecycle Distribution
-                </h2>
+        <div class="col-md-5 col-lg-4">
+            <div class="dq-section-head">
+                <h2>Lifecycle distribution</h2>
+            </div>
+            <div class="app-card dq-card">
                 <table class="table table-sm mb-0">
                     {% for state, count in lifecycle_counts.items() %}
                     <tr>
@@ -36,88 +141,221 @@
                 </table>
             </div>
         </div>
+
+        <div class="col-md-7 col-lg-8" id="per-source">
+            <div class="dq-section-head">
+                <h2>Per-source breakdown</h2>
+                <span class="dq-tools">
+                    <a href="?export=sources">⬇ CSV</a>
+                </span>
+            </div>
+            <div class="app-card dq-card">
+              <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Source</th>
+                            <th class="text-right">Total live</th>
+                            <th class="text-right">Stale</th>
+                            <th class="text-right">Archived</th>
+                            <th>Last seen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in sources %}
+                        {% set source_link =
+                            host_list_url ~ '?flt0_' ~ account_filter_idx ~ '=' ~ row.name
+                            if account_filter_idx is not none and row.name != '(none)'
+                            else None %}
+                        <tr>
+                            <td>
+                                {% if source_link %}
+                                <a href="{{ source_link }}"
+                                   title="Show hosts from this source">
+                                    <code>{{ row.name }}</code>
+                                </a>
+                                {% else %}
+                                <code>{{ row.name }}</code>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {% if source_link %}
+                                <a href="{{ source_link }}">{{ row.total }}</a>
+                                {% else %}
+                                {{ row.total }}
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {% if row.stale %}
+                                {% if source_link and stale_filter_idx is not none %}
+                                <a href="{{ source_link }}&flt1_{{ stale_filter_idx }}=yes">
+                                    <span class="badge badge-warning">{{ row.stale }}</span>
+                                </a>
+                                {% else %}
+                                <span class="badge badge-warning">{{ row.stale }}</span>
+                                {% endif %}
+                                {% else %}
+                                0
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {% if row.archived %}
+                                  {% if archive_list_url and row.name != '(none)' %}
+                                  <a href="{{ archive_list_url }}?flt1_1={{ row.name }}"
+                                     title="Show archived hosts from this source">
+                                    <span class="badge badge-dark">{{ row.archived }}</span>
+                                  </a>
+                                  {% else %}
+                                  <span class="badge badge-dark">{{ row.archived }}</span>
+                                  {% endif %}
+                                {% else %}
+                                0
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.last_seen %}
+                                    {{ row.last_seen.strftime('%Y-%m-%d %H:%M') }}
+                                {% else %}
+                                    <span class="text-muted">never</span>
+                                {% endif %}
+                                {{ freshness_badge(row.freshness) }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-muted">No live hosts.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+              </div>
+            </div>
+        </div>
     </div>
 
-    <h2 style="font-size: 1.1rem; font-weight: 600;">Per-source breakdown</h2>
-    <div class="table-responsive mb-4">
+    {# ---- Per-object-type breakdown ---- #}
+    <div class="dq-section-head">
+        <h2>Per-object-type breakdown</h2>
+        <span class="dq-tools"><a href="?export=types">⬇ CSV</a></span>
+    </div>
+    <div class="app-card dq-card"><div class="table-responsive">
         <table class="table table-sm">
             <thead>
                 <tr>
-                    <th>Source</th>
+                    <th>Object type</th>
                     <th class="text-right">Total live</th>
                     <th class="text-right">Stale</th>
-                    <th class="text-right">Archived</th>
-                    <th>Last seen</th>
+                    {% if has_cmdb_schema %}
+                    <th class="text-right">With missing fields</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
-                {% for row in sources %}
-                {% set source_link =
-                    host_list_url ~ '?flt0_' ~ account_filter_idx ~ '=' ~ row.name
-                    if account_filter_idx is not none and row.name != '(none)'
-                    else None %}
+                {% for row in types %}
+                <tr>
+                    <td><code>{{ row.name }}</code></td>
+                    <td class="text-right">{{ row.total }}</td>
+                    <td class="text-right">
+                        {% if row.stale %}
+                        <span class="badge badge-warning">{{ row.stale }}</span>
+                        {% else %}0{% endif %}
+                    </td>
+                    {% if has_cmdb_schema %}
+                    <td class="text-right">
+                        {% if row.with_missing_fields %}
+                        <span class="badge badge-warning">{{ row.with_missing_fields }}</span>
+                        <small class="text-muted">({{ pct(row.with_missing_fields, row.total) }})</small>
+                        {% else %}0{% endif %}
+                    </td>
+                    {% endif %}
+                </tr>
+                {% else %}
+                <tr><td colspan="{% if has_cmdb_schema %}4{% else %}3{% endif %}" class="text-muted">No live hosts.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+
+    {# ---- Most-missed CMDB fields ---- #}
+    {% if has_cmdb_schema %}
+    <div class="dq-section-head" id="missing-fields">
+        <h2>
+            Most-missed CMDB fields
+            <small class="text-muted">(top {{ missing_top|length }})</small>
+        </h2>
+        <span class="dq-tools"><a href="?export=missing_fields">⬇ CSV</a></span>
+    </div>
+    {% if missing_top %}
+    <div class="app-card dq-card"><div class="table-responsive">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th class="text-right">Hosts missing it</th>
+                    <th class="text-right">% of live</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for field, count in missing_top %}
+                <tr>
+                    <td><code>{{ field }}</code></td>
+                    <td class="text-right"><strong>{{ count }}</strong></td>
+                    <td class="text-right text-muted">{{ pct(count, live) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+    {% else %}
+    <p class="text-muted mb-4">All configured fields are filled in.</p>
+    {% endif %}
+    {% endif %}
+
+    {# ---- Silent sources ---- #}
+    <div class="dq-section-head" id="silent-sources">
+        <h2>
+            Configured accounts with no live hosts
+            <small class="text-muted">({{ silent_sources|length }})</small>
+        </h2>
+        <span class="dq-tools"><a href="?export=silent_sources">⬇ CSV</a></span>
+    </div>
+    {% if silent_sources %}
+    <div class="app-card dq-card"><div class="table-responsive">
+        <table class="table table-sm">
+            <thead>
+                <tr><th>Account</th><th>Type</th></tr>
+            </thead>
+            <tbody>
+                {% for row in silent_sources %}
                 <tr>
                     <td>
-                        {% if source_link %}
-                        <a href="{{ source_link }}"
-                           title="Show hosts from this source">
+                        {% if account_edit_url %}
+                        <a href="{{ account_edit_url }}?id={{ row.id }}"
+                           title="Open this account">
                             <code>{{ row.name }}</code>
                         </a>
                         {% else %}
                         <code>{{ row.name }}</code>
                         {% endif %}
                     </td>
-                    <td class="text-right">
-                        {% if source_link %}
-                        <a href="{{ source_link }}">{{ row.total }}</a>
-                        {% else %}
-                        {{ row.total }}
-                        {% endif %}
-                    </td>
-                    <td class="text-right">
-                        {% if row.stale %}
-                        {% if source_link and stale_filter_idx is not none %}
-                        <a href="{{ source_link }}&flt1_{{ stale_filter_idx }}=yes">
-                            <span class="badge badge-warning">{{ row.stale }}</span>
-                        </a>
-                        {% else %}
-                        <span class="badge badge-warning">{{ row.stale }}</span>
-                        {% endif %}
-                        {% else %}
-                        0
-                        {% endif %}
-                    </td>
-                    <td class="text-right">
-                        {% if row.archived %}
-                        <span class="badge badge-dark">{{ row.archived }}</span>
-                        {% else %}
-                        0
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if row.last_seen %}
-                            {{ row.last_seen.strftime('%Y-%m-%d %H:%M') }}
-                            {% if row.last_seen < stale_recent_threshold %}
-                            <span class="badge badge-warning">old</span>
-                            {% endif %}
-                        {% else %}
-                            <span class="text-muted">never</span>
-                        {% endif %}
-                    </td>
+                    <td>{{ row.type }}</td>
                 </tr>
-                {% else %}
-                <tr><td colspan="5" class="text-muted">No live hosts.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
-    </div>
+    </div></div>
+    {% else %}
+    <p class="text-muted mb-4">All enabled accounts have delivered at least one host.</p>
+    {% endif %}
 
-    <h2 style="font-size: 1.1rem; font-weight: 600;">
-        Possible duplicate hostnames
-        <small class="text-muted">(top {{ duplicates|length }})</small>
-    </h2>
+    {# ---- Possible duplicate hostnames ---- #}
+    <div class="dq-section-head" id="duplicates">
+        <h2>
+            Possible duplicate hostnames
+            <small class="text-muted">(top {{ duplicates|length }})</small>
+        </h2>
+        <span class="dq-tools"><a href="?export=duplicates">⬇ CSV</a></span>
+    </div>
     {% if duplicates %}
-    <div class="table-responsive mb-4">
+    <div class="app-card dq-card"><div class="table-responsive">
         <table class="table table-sm">
             <thead>
                 <tr><th>Group</th><th>Hostnames</th></tr>
@@ -141,17 +379,22 @@
                 {% endfor %}
             </tbody>
         </table>
-    </div>
+    </div></div>
     {% else %}
     <p class="text-muted mb-4">No duplicate-looking hostnames found.</p>
     {% endif %}
 
-    <h2 style="font-size: 1.1rem; font-weight: 600;">
-        Configured CMDB fields with empty values
-        <small class="text-muted">(top {{ empty_fields|length }})</small>
-    </h2>
+    {# ---- Per-host empty CMDB fields ---- #}
+    {% if has_cmdb_schema %}
+    <div class="dq-section-head">
+        <h2>
+            Hosts with empty CMDB fields
+            <small class="text-muted">(first {{ empty_fields|length }})</small>
+        </h2>
+        <span class="dq-tools"><a href="?export=empty_fields">⬇ CSV</a></span>
+    </div>
     {% if empty_fields %}
-    <div class="table-responsive mb-4">
+    <div class="app-card dq-card"><div class="table-responsive">
         <table class="table table-sm">
             <thead>
                 <tr>
@@ -182,9 +425,10 @@
                 {% endfor %}
             </tbody>
         </table>
-    </div>
+    </div></div>
     {% else %}
     <p class="text-muted mb-4">All configured fields are filled in.</p>
+    {% endif %}
     {% endif %}
 
 </div>
