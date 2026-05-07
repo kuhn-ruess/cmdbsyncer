@@ -30,6 +30,31 @@ from application.helpers.plugins import register_cli_group
 _cli_sys = register_cli_group(app, 'sys', 'maintenance', "Syncer Commands")
 
 
+_DEFAULT_APP_WSGI = '''\
+#!/usr/bin/env python3
+"""
+WSGI entry point for CMDBsyncer.
+
+Used by:
+- gunicorn  (Docker image: `gunicorn ... application:app`)
+- Apache + mod_wsgi (`WSGIScriptAlias / .../app.wsgi`, expects `application`)
+- uWSGI (`wsgi-file = .../app.wsgi`, `callable = app`)
+"""
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+os.chdir(HERE)
+sys.path.insert(0, HERE)
+
+if 'config' not in os.environ:
+    os.environ['config'] = 'prod'
+
+from application import app  # noqa: E402  pylint: disable=wrong-import-position
+application = app
+'''
+
+
 #   .-- Command: Maintenance
 
 def maintenance(account):
@@ -310,6 +335,50 @@ def migrate_accounts(old_key, new_key):
             account.set_password(password, new_key)
 
 
+def _ensure_local_config():
+    """Create a stub local_config.py if missing."""
+    print("Check for local_config.py File")
+    if os.path.isfile('local_config.py'):
+        print(" -> Existed")
+        return
+    with open('local_config.py', 'w', encoding="utf-8") as lf:
+        lf.write("#!/usr/bin/env python3\n")
+        lf.write('"""\nLocal Config File\n"""\n')
+        lf.write("import logging\n")
+        lf.write("# Only Update from here inside the config = {} object\n")
+        lf.write("config = {}\n")
+    print(" -> Created new local_config.py")
+
+
+def _ensure_plugins_dir():
+    """Create plugins/ as a Python package if missing."""
+    print("Check for plugins/ directory")
+    if not os.path.isdir('plugins'):
+        os.makedirs('plugins')
+        with open('plugins/__init__.py', 'w', encoding="utf-8") as pf:
+            pf.write('"""Local plugins package."""\n')
+        print(" -> Created new plugins/ directory")
+    elif not os.path.isfile('plugins/__init__.py'):
+        with open('plugins/__init__.py', 'w', encoding="utf-8") as pf:
+            pf.write('"""Local plugins package."""\n')
+        print(" -> Added missing plugins/__init__.py")
+    else:
+        print(" -> Existed")
+
+
+def _ensure_app_wsgi():
+    """Drop a default app.wsgi so Apache/mod_wsgi or uWSGI can serve a
+    pip install out of the box. Existing files (Git checkout, Docker
+    image) are left untouched."""
+    print("Check for app.wsgi entry point")
+    if os.path.isfile('app.wsgi'):
+        print(" -> Existed")
+        return
+    with open('app.wsgi', 'w', encoding="utf-8") as wf:
+        wf.write(_DEFAULT_APP_WSGI)
+    print(" -> Created new app.wsgi")
+
+
 @_cli_sys.command('self_configure')
 def self_configure():
     """
@@ -324,31 +393,9 @@ def self_configure():
     else:
         print(" -> Existed")
 
-
-    print("Check for local_config.py File")
-    if not os.path.isfile('local_config.py'):
-        with open('local_config.py', 'w', encoding="utf-8") as lf:
-            lf.write("#!/usr/bin/env python3\n")
-            lf.write('"""\nLocal Config File\n"""\n')
-            lf.write("import logging\n")
-            lf.write("# Only Update from here inside the config = {} object\n")
-            lf.write("config = {}\n")
-        print(" -> Created new local_config.py")
-    else:
-        print(" -> Existed")
-
-    print("Check for plugins/ directory")
-    if not os.path.isdir('plugins'):
-        os.makedirs('plugins')
-        with open('plugins/__init__.py', 'w', encoding="utf-8") as pf:
-            pf.write('"""Local plugins package."""\n')
-        print(" -> Created new plugins/ directory")
-    elif not os.path.isfile('plugins/__init__.py'):
-        with open('plugins/__init__.py', 'w', encoding="utf-8") as pf:
-            pf.write('"""Local plugins package."""\n')
-        print(" -> Added missing plugins/__init__.py")
-    else:
-        print(" -> Existed")
+    _ensure_local_config()
+    _ensure_plugins_dir()
+    _ensure_app_wsgi()
 
     print("Seed missing Default Values to the local_config.py")
     alphabet = string.ascii_letters + string.digits + string.punctuation
