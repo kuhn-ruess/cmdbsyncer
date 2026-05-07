@@ -1,6 +1,7 @@
 """
 Models Config
 """
+import importlib.util
 import os
 
 from flask import flash, redirect, request, url_for
@@ -58,8 +59,22 @@ _MISSING = object()
 
 
 def _local_config_path():
-    """`local_config.py` lives next to the app root."""
-    return os.path.join(os.path.dirname(app.root_path), 'local_config.py')
+    """Locate the `local_config.py` Python actually imports.
+
+    Source checkouts have it next to the ``application`` package, but pip
+    installs put ``application`` inside site-packages while the real
+    ``local_config.py`` lives in the deployment directory (next to
+    ``app.wsgi`` / wherever ``self_configure`` was run). ``app.root_path``
+    therefore points into site-packages and is wrong for the pip layout.
+    Use ``find_spec`` to ask Python where it loads the module from — same
+    approach as the License view at ``views/license.py``. Falls back to
+    the cwd so the editor can still create the file on a fresh install
+    where it doesn't exist yet.
+    """
+    spec = importlib.util.find_spec('local_config')
+    if spec and spec.origin:
+        return spec.origin
+    return os.path.join(os.getcwd(), 'local_config.py')
 
 
 def _baseconfig_default(key):
