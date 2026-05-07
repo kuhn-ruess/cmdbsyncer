@@ -174,11 +174,11 @@ body {
             {{ LoginForm.hidden_tag() }}
 
             <div class="form-group">
-                <label for="{{ LoginForm.login_email.id }}">E-Mail</label>
+                <label for="{{ LoginForm.login_email.id }}">E-Mail or Username</label>
                 <div class="input-with-icon">
                     <i class="fa fa-envelope"></i>
                     {{ LoginForm.login_email(class="form-control",
-                        placeholder="you@example.com",
+                        placeholder="you@example.com or username",
                         autocomplete="username",
                         autofocus=true) }}
                 </div>

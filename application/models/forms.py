@@ -1,17 +1,17 @@
-from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, RadioField, SubmitField, BooleanField, \
-                    TextAreaField, HiddenField, DateField, SelectMultipleField, IntegerField
-from wtforms.validators import InputRequired, Email, EqualTo, ValidationError
-from mongoengine.errors import NotUniqueError, DoesNotExist
-from wtforms.widgets import TextArea
-from flask import current_app
+"""WTForms used by the auth blueprint (login, password reset, change password)."""
 import re
+
+from flask import current_app
+from flask_wtf import FlaskForm
+from wtforms import PasswordField, StringField, SubmitField
+from wtforms.validators import Email, EqualTo, InputRequired, ValidationError
 
 
 def validate_password(form, field):
+    """Enforce the PASSWD_* policy from the running app config."""
     password = field.data
     if hasattr(form, 'old_password') and form.old_password.data == password:
-        raise ValidationError(_('password_old_new_not_match'))
+        raise ValidationError("New password must differ from the old one")
 
     passwd_length = current_app.config['PASSWD_MIN_PASSWD_LENGTH']
     if len(password) < passwd_length:
@@ -43,17 +43,29 @@ def validate_password(form, field):
     if matches <= current_app.config['PASSWD_SPECIAL_NEEDED']:
         raise ValidationError("Unsave Password")
 
+
 class LoginForm(FlaskForm):
-    login_email = StringField("E-Mail", [InputRequired(), Email()])
+    """Login form. Accepts either an email or a bare username — LDAP /
+    Kerberos / Basic-Auth deployments often use the latter, and the
+    downstream handlers normalise the value, so the form-level validator
+    only enforces presence."""
+    login_email = StringField("E-Mail or Username", [InputRequired()])
     password = PasswordField("Password", [InputRequired()])
     otp = StringField("OTP")
-    login_submit   = SubmitField("Login")
+    login_submit = SubmitField("Login")
+
 
 class RequestPasswordForm(FlaskForm):
+    """Password-reset request — local accounts only, so the email validator stays."""
     request_email = StringField("E-Mail", [InputRequired(), Email()])
-    request_submit   = SubmitField("Send")
+    request_submit = SubmitField("Send")
+
 
 class ResetPasswordForm(FlaskForm):
-    password  = PasswordField("New Password", validators=[InputRequired(),validate_password, EqualTo('password_repeat')])
+    """Reset password form invoked from the email link."""
+    password = PasswordField(
+        "New Password",
+        validators=[InputRequired(), validate_password, EqualTo('password_repeat')],
+    )
     password_repeat = PasswordField("Password repeat", validators=[InputRequired()])
     submit = SubmitField("Send")
