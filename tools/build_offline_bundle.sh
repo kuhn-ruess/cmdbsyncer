@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
 #
-# Builds an offline installation bundle of all Python dependencies.
-# The result is a directory (and optionally a tar.gz) that a customer
-# can install with pip on a server without internet access.
+# Builds an offline installation bundle of all Python dependencies and the
+# default Ansible playbook collection. The result is a directory (and
+# optionally a tar.gz) that a customer can install with pip on a server
+# without internet access.
 #
 # Usage:
-#   ./tools/build_offline_bundle.sh [--extras] [--ansible] [--all]
-#                             [--include-syncer] [--include-enterprise]
+#   ./tools/build_offline_bundle.sh [--include-syncer] [--include-enterprise]
 #                             [--python-version 3.11]
 #                             [--platform manylinux2014_x86_64]
 #                             [--output-dir offline_bundle]
 #                             [--no-archive]
 #
 # Options:
-#   --extras              Include requirements-extras.txt (LDAP, ODBC, vmware)
-#   --ansible             Include requirements-ansible.txt (Kerberos, WinRM)
-#   --all                 Shortcut for --extras --ansible
 #   --include-syncer      Also download cmdbsyncer from PyPI into the bundle
 #   --include-enterprise  Also download cmdbsyncer-enterprise from PyPI
 #   --python-version      Target Python version, e.g. 3.11
@@ -24,7 +21,7 @@
 #   --no-archive          Do not create a tar.gz, only the directory
 #
 # Example (typical Linux target server, Python 3.11):
-#   ./tools/build_offline_bundle.sh --all --include-syncer --include-enterprise \
+#   ./tools/build_offline_bundle.sh --include-syncer --include-enterprise \
 #       --python-version 3.11 \
 #       --platform manylinux2014_x86_64
 #
@@ -35,8 +32,6 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # --- Defaults ---------------------------------------------------------------
-INCLUDE_EXTRAS=0
-INCLUDE_ANSIBLE=0
 INCLUDE_SYNCER=0
 INCLUDE_ENTERPRISE=0
 PYTHON_VERSION=""
@@ -47,9 +42,6 @@ CREATE_ARCHIVE=1
 # --- Arguments --------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --extras)              INCLUDE_EXTRAS=1; shift ;;
-        --ansible)             INCLUDE_ANSIBLE=1; shift ;;
-        --all)                 INCLUDE_EXTRAS=1; INCLUDE_ANSIBLE=1; shift ;;
         --include-syncer)      INCLUDE_SYNCER=1; shift ;;
         --include-enterprise)  INCLUDE_ENTERPRISE=1; shift ;;
         --python-version)      PYTHON_VERSION="$2"; shift 2 ;;
@@ -64,13 +56,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- Collect requirements ---------------------------------------------------
-REQ_FILES=("requirements.txt")
-[[ $INCLUDE_EXTRAS  -eq 1 ]] && REQ_FILES+=("requirements-extras.txt")
-[[ $INCLUDE_ANSIBLE -eq 1 ]] && REQ_FILES+=("requirements-ansible.txt")
+# Always bundle base + extras + ansible. An offline bundle is meant to be a
+# complete installable artifact; cherry-picking sub-requirement-files just
+# leaves the customer guessing which optional features they have.
+REQ_FILES=(requirements.txt requirements-extras.txt requirements-ansible.txt)
 
 for f in "${REQ_FILES[@]}"; do
     [[ -f "$f" ]] || { echo "Missing file: $f" >&2; exit 1; }
 done
+
+if [[ ! -d ansible ]]; then
+    echo "Missing ansible/ directory in repo root — cannot bundle playbooks." >&2
+    exit 1
+fi
 
 # --- Clean output directory -------------------------------------------------
 if [[ -d "$OUTPUT_DIR" ]]; then
@@ -141,6 +139,14 @@ if (( ${#SDISTS[@]} > 0 )); then
     done
 fi
 
+# --- Bundle the Ansible playbook collection ---------------------------------
+# The pip-installed cmdbsyncer package does not contain the ansible/ tree;
+# operators normally fetch it via `cmdbsyncer sys install_playbooks`, which
+# git-clones from GitHub. That is unreachable in an air-gapped install, so
+# ship a copy here and let install.sh place it in $ANSIBLE_TARGET.
+echo "Bundling Ansible playbook collection ..."
+cp -R ansible "$OUTPUT_DIR/ansible"
+
 # --- Customer-facing install script -----------------------------------------
 EXTRA_PACKAGES=""
 [[ $INCLUDE_SYNCER     -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer"
@@ -150,21 +156,54 @@ if [[ -n "$EXTRA_PACKAGES" ]]; then
     INSTALL_EXTRA_LINE="PIP_ARGS+=($EXTRA_PACKAGES)"
 fi
 
-cat > "$OUTPUT_DIR/install.sh" <<EOS
+cat > "$OUTPUT_DIR/install.sh" <<'EOS'
 #!/usr/bin/env bash
-# Offline installer: installs every bundled Python package.
+# Offline installer: installs every bundled Python package and copies the
+# Ansible playbook collection into ANSIBLE_TARGET (default
+# /opt/cmdbsyncer/ansible). Override by exporting ANSIBLE_TARGET=/path
+# before running this script. Set FORCE=1 to overwrite an existing
+# playbook directory; set SKIP_ANSIBLE=1 to skip the playbook copy.
 set -euo pipefail
-HERE="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ANSIBLE_TARGET="${ANSIBLE_TARGET:-/opt/cmdbsyncer/ansible}"
 
 REQ_FILES=(requirements.txt)
-[[ -f "\$HERE/requirements-extras.txt"  ]] && REQ_FILES+=(requirements-extras.txt)
-[[ -f "\$HERE/requirements-ansible.txt" ]] && REQ_FILES+=(requirements-ansible.txt)
+[[ -f "$HERE/requirements-extras.txt"  ]] && REQ_FILES+=(requirements-extras.txt)
+[[ -f "$HERE/requirements-ansible.txt" ]] && REQ_FILES+=(requirements-ansible.txt)
 
-PIP_ARGS=(install --no-index --find-links "\$HERE/packages" --upgrade)
-for f in "\${REQ_FILES[@]}"; do PIP_ARGS+=(-r "\$HERE/\$f"); done
-${INSTALL_EXTRA_LINE}
+PIP_ARGS=(install --no-index --find-links "$HERE/packages" --upgrade)
+for f in "${REQ_FILES[@]}"; do PIP_ARGS+=(-r "$HERE/$f"); done
+EOS
 
-python3 -m pip "\${PIP_ARGS[@]}"
+# Inject the optional extra-packages line (cmdbsyncer / cmdbsyncer-enterprise
+# wheels), produced earlier from --include-syncer / --include-enterprise.
+if [[ -n "$INSTALL_EXTRA_LINE" ]]; then
+    echo "$INSTALL_EXTRA_LINE" >> "$OUTPUT_DIR/install.sh"
+fi
+
+cat >> "$OUTPUT_DIR/install.sh" <<'EOS'
+
+python3 -m pip "${PIP_ARGS[@]}"
+
+# --- Ansible playbook collection -------------------------------------------
+if [[ "${SKIP_ANSIBLE:-0}" == "1" ]]; then
+    echo "Skipping Ansible playbook install (SKIP_ANSIBLE=1)."
+elif [[ ! -d "$HERE/ansible" ]]; then
+    echo "Bundle has no ansible/ directory — skipping playbook install."
+else
+    if [[ -e "$ANSIBLE_TARGET" && "${FORCE:-0}" != "1" ]]; then
+        echo "Refusing to overwrite existing $ANSIBLE_TARGET (set FORCE=1 to replace)."
+    else
+        echo "Installing Ansible playbooks to $ANSIBLE_TARGET ..."
+        rm -rf "$ANSIBLE_TARGET"
+        mkdir -p "$(dirname "$ANSIBLE_TARGET")"
+        cp -R "$HERE/ansible" "$ANSIBLE_TARGET"
+        echo "Playbooks installed to $ANSIBLE_TARGET."
+        echo "Point cmdbsyncer at them by setting CMDBSYNCER_ANSIBLE_DIR=$ANSIBLE_TARGET"
+        echo "or ANSIBLE_DIR='$ANSIBLE_TARGET' in local_config.py."
+    fi
+fi
+
 echo "Installation complete."
 EOS
 chmod +x "$OUTPUT_DIR/install.sh"
@@ -178,6 +217,7 @@ Built on       : $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 Python version : ${PYTHON_VERSION:-build host default}
 Platform       : ${PLATFORM:-build host default}
 Included files : ${REQ_FILES[*]}
+Ansible        : ansible/ (default install target /opt/cmdbsyncer/ansible)
 
 Installation
 ------------
@@ -192,6 +232,17 @@ We recommend installing into a virtual environment:
     python3 -m venv /opt/cmdbsyncer/venv
     source /opt/cmdbsyncer/venv/bin/activate
     ./install.sh
+
+Customising the install
+-----------------------
+- ANSIBLE_TARGET=/path        Where to copy the playbook collection.
+                              Defaults to /opt/cmdbsyncer/ansible.
+- FORCE=1                     Overwrite an existing ANSIBLE_TARGET.
+- SKIP_ANSIBLE=1              Skip the playbook copy entirely.
+
+After installing, point cmdbsyncer at the playbooks via either
+CMDBSYNCER_ANSIBLE_DIR=<path> in the environment, or ANSIBLE_DIR=<path>
+in local_config.py.
 
 Notes
 -----
