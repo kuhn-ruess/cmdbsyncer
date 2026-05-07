@@ -82,6 +82,13 @@ class LicenseView(BaseView):
     def is_accessible(self):
         return current_user.is_authenticated and current_user.global_admin
 
+    def is_visible(self):
+        # Community Edition installs (no enterprise package on disk) have
+        # nothing useful on the License page — no upload form, no feature
+        # table — so hide the menu entry to avoid pointing admins at a
+        # dead end. The route stays reachable via direct URL for support.
+        return importlib.util.find_spec('cmdbsyncer_enterprise') is not None
+
     @expose('/')
     def index(self):
         """
