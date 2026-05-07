@@ -120,4 +120,33 @@
     </div>
   </div>
 </div>
+
+{% if package_installed %}
+<div class="row justify-content-center mt-3">
+  <div class="col-lg-8">
+    <div class="app-card">
+      <h4 class="mb-2">Upload License</h4>
+      <p class="text-muted small mb-3">
+        Replace the active license file. The signature is verified
+        against the public key shipped with the enterprise package
+        before the file is written. Restart the application after a
+        successful upload to load the new license.
+        {% if license_destination %}
+        <br>Destination: <code>{{ license_destination }}</code>
+        {% endif %}
+      </p>
+      <form action="{{ url_for('license.upload') }}" method="POST"
+            enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+          <input type="file" name="license_file" required
+                 accept=".jwt,.txt,application/jwt"
+                 class="form-control-file">
+        </div>
+        <button type="submit" class="btn btn-primary">Upload license</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
