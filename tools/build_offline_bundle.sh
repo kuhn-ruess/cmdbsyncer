@@ -80,7 +80,10 @@ fi
 mkdir -p "$OUTPUT_DIR/packages"
 
 # --- pip download arguments -------------------------------------------------
-PIP_ARGS=(download --dest "$OUTPUT_DIR/packages")
+# --no-cache-dir prevents pip from reusing an older wheel that's still in
+# ~/.cache/pip when a newer release is on the index. Without it, rebuilds
+# silently ship the cached version.
+PIP_ARGS=(download --no-cache-dir --dest "$OUTPUT_DIR/packages")
 
 # When a target platform is specified, source distributions cannot be
 # resolved locally. --only-binary :all: forces wheels for every package.
@@ -106,11 +109,18 @@ python3 -m pip "${PIP_ARGS[@]}"
 download_from_pypi() {
     local pkg="$1"
     echo "Downloading $pkg and its dependencies from PyPI ..."
-    local args=(download --dest "$OUTPUT_DIR/packages")
+    local args=(download --no-cache-dir --dest "$OUTPUT_DIR/packages")
     [[ -n "$PLATFORM" ]]       && args+=(--platform "$PLATFORM" --only-binary=:all:)
     [[ -n "$PYTHON_VERSION" ]] && args+=(--python-version "$PYTHON_VERSION")
     args+=("$pkg")
     python3 -m pip "${args[@]}"
+    # Print the resolved version so the build log shows what actually
+    # ended up in the bundle — surfaces "old version pinned somewhere"
+    # immediately instead of after a customer install.
+    local resolved
+    resolved=$(ls "$OUTPUT_DIR/packages/" \
+        | grep -iE "^${pkg//-/[-_]}-[0-9]" | head -1 || true)
+    [[ -n "$resolved" ]] && echo "  -> resolved: $resolved"
 }
 
 [[ $INCLUDE_SYNCER     -eq 1 ]] && download_from_pypi "cmdbsyncer"
