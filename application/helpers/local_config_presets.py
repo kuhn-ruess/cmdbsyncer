@@ -306,6 +306,11 @@ PRESETS = [
             {'key': 'LDAP_AUTO_CREATE', 'type': 'bool', 'default': True,
              'hint': 'Create a local User record on first successful '
                      'LDAP login.'},
+            {'key': 'AUTH_DEBUG', 'type': 'bool', 'default': False,
+             'hint': 'Write detailed login-flow steps to Settings → Log '
+                     '(LDAP and remote_user hooks). Turn on temporarily '
+                     'to debug failed logins; turn off again for normal '
+                     'operation.'},
         ],
     },
     {

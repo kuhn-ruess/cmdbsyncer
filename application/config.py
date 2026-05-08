@@ -184,6 +184,14 @@ class BaseConfig():
 
     REMOTE_USER_LOGIN = False
 
+    # Verbose login-flow logging. Off by default — flip on temporarily to
+    # diagnose why an LDAP / remote_user login is rejected. When True, the
+    # auth code (OSS dispatcher + Enterprise LDAP / remote_user hooks)
+    # writes structured entries to the Settings -> Log view at every
+    # decision point: bind mode chosen, search filter, group membership,
+    # auto-create vs lookup, role mapping. No password is ever logged.
+    AUTH_DEBUG = False
+
     # Rate limit for login and password-reset request (Flask-Limiter syntax).
     # Applied per client IP to the POST handler; GET (rendering the form) is
     # not rate-limited.
