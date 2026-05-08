@@ -15,6 +15,9 @@
 # Options:
 #   --include-syncer      Also download cmdbsyncer from PyPI into the bundle
 #   --include-enterprise  Also download cmdbsyncer-enterprise from PyPI
+#   --pre                 Allow pre-releases (.devN / aN / bN / rcN) when
+#                         resolving cmdbsyncer / cmdbsyncer-enterprise from
+#                         PyPI. Use this to bundle a Test-Build for QA.
 #   --python-version      Target Python version, e.g. 3.11
 #   --platform            Target platform tag, e.g. manylinux2014_x86_64
 #   --output-dir DIR      Output directory (default: offline_bundle)
@@ -34,6 +37,7 @@ cd "$REPO_ROOT"
 # --- Defaults ---------------------------------------------------------------
 INCLUDE_SYNCER=0
 INCLUDE_ENTERPRISE=0
+ALLOW_PRE=0
 PYTHON_VERSION=""
 PLATFORM=""
 OUTPUT_DIR="offline_bundle"
@@ -44,6 +48,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --include-syncer)      INCLUDE_SYNCER=1; shift ;;
         --include-enterprise)  INCLUDE_ENTERPRISE=1; shift ;;
+        --pre)                 ALLOW_PRE=1; shift ;;
         --python-version)      PYTHON_VERSION="$2"; shift 2 ;;
         --platform)            PLATFORM="$2"; shift 2 ;;
         --output-dir)          OUTPUT_DIR="$2"; shift 2 ;;
@@ -110,6 +115,10 @@ download_from_pypi() {
     local args=(download --no-cache-dir --dest "$OUTPUT_DIR/packages")
     [[ -n "$PLATFORM" ]]       && args+=(--platform "$PLATFORM" --only-binary=:all:)
     [[ -n "$PYTHON_VERSION" ]] && args+=(--python-version "$PYTHON_VERSION")
+    # --pre tells pip to consider .devN / aN / bN / rcN releases when
+    # picking a version. Only needed for cmdbsyncer / cmdbsyncer-enterprise
+    # — the requirement files are version-pinned and unaffected.
+    [[ $ALLOW_PRE -eq 1 ]]     && args+=(--pre)
     args+=("$pkg")
     python3 -m pip "${args[@]}"
     # Print the resolved version so the build log shows what actually
@@ -153,7 +162,12 @@ EXTRA_PACKAGES=""
 [[ $INCLUDE_ENTERPRISE -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer-enterprise"
 INSTALL_EXTRA_LINE=""
 if [[ -n "$EXTRA_PACKAGES" ]]; then
+    # When the bundle carries a pre-release wheel (.devN / rcN / …) pip
+    # refuses to pick it for an unpinned ``cmdbsyncer`` request unless
+    # --pre is on, even with --no-index. Propagate the flag so the
+    # generated install.sh resolves the bundled wheel.
     INSTALL_EXTRA_LINE="PIP_ARGS+=($EXTRA_PACKAGES)"
+    [[ $ALLOW_PRE -eq 1 ]] && INSTALL_EXTRA_LINE="PIP_ARGS+=(--pre$EXTRA_PACKAGES)"
 fi
 
 cat > "$OUTPUT_DIR/install.sh" <<'EOS'
