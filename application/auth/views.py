@@ -15,7 +15,7 @@ from joserfc.errors import JoseError
 from mongoengine.errors import DoesNotExist
 
 from application import login_manager, app, log, limiter
-from application.enterprise import run_hook
+from application.enterprise import has_feature, run_hook
 from application.helpers.audit import audit
 from application.models.user import User
 from application.themes_registry import get_choices as theme_choices, is_known as theme_is_known
@@ -25,6 +25,23 @@ from application.modules.email import send_email
 
 AUTH_RATE_LIMIT = app.config.get('AUTH_RATE_LIMIT', '3 per minute; 10 per hour')
 AUTH = Blueprint('auth', __name__)
+
+
+def _dbg(message, **details):
+    """Write a Settings → Log entry only when AUTH_DEBUG is on."""
+    if not app.config.get('AUTH_DEBUG'):
+        return
+    log.log(message, source='AUTH', details=details or None)
+
+
+def _candidate_remote_user_headers(req):
+    """Common reverse-proxy headers that *should* carry the user id when
+    REMOTE_USER itself is empty. Helps operators spot a misconfigured
+    Apache/nginx that forwards e.g. ``X-Forwarded-User`` instead of
+    setting the WSGI ``REMOTE_USER`` environ key."""
+    wanted = {'x-remote-user', 'x-forwarded-user',
+              'remote-user', 'x-authenticated-user', 'x-auth-user'}
+    return {k: v for k, v in req.headers.items() if k.lower() in wanted} or None
 
 
 @AUTH.errorhandler(429)
@@ -53,33 +70,56 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
         flash('Already Logged in')
         return redirect(url_for("admin.index"))
 
-    if app.config['REMOTE_USER_LOGIN'] and request.remote_user:
-        try:
-            existing_user = run_hook('remote_user', request)
-            if existing_user:
-                session.clear()
-                login_user(
-                    existing_user,
-                    remember=False,
-                    duration=timedelta(
-                        hours=(current_app.config['ADMIN_SESSION_HOURS'] or 8)
+    if app.config['REMOTE_USER_LOGIN']:
+        _dbg('remote_user dispatcher: entry',
+             remote_user=request.remote_user or None,
+             has_remote_user=bool(request.remote_user),
+             remote_addr=request.remote_addr,
+             trusted_proxies=app.config.get('TRUSTED_PROXIES', 0),
+             enterprise_hook_registered=has_feature('remote_user'))
+        if not request.remote_user:
+            _dbg('remote_user dispatcher: REMOTE_USER_LOGIN is on, but '
+                 'the proxy did not pass REMOTE_USER',
+                 remote_addr=request.remote_addr,
+                 candidate_headers=_candidate_remote_user_headers(request))
+        else:
+            try:
+                existing_user = run_hook('remote_user', request)
+                if existing_user:
+                    session.clear()
+                    login_user(
+                        existing_user,
+                        remember=False,
+                        duration=timedelta(
+                            hours=(current_app.config['ADMIN_SESSION_HOURS'] or 8)
+                        )
                     )
-                )
-                existing_user.last_login = datetime.utcnow()
-                existing_user.save()
-                audit('user.login.success',
-                      actor_type='user',
-                      actor_id=str(existing_user.id),
-                      actor_name=existing_user.email,
-                      metadata={'method': 'remote_user'})
-                return redirect(url_for("admin.index"))
-        except Exception:  # pylint: disable=broad-exception-caught
-            log.log("Remote User login failed", source="AUTH")
-            audit('user.login.failure', outcome='failure',
-                  actor_name=request.remote_user,
-                  metadata={'method': 'remote_user',
-                            'reason': 'hook_exception'})
-            flash('Remote User Error', 'danger')
+                    existing_user.last_login = datetime.utcnow()
+                    existing_user.save()
+                    audit('user.login.success',
+                          actor_type='user',
+                          actor_id=str(existing_user.id),
+                          actor_name=existing_user.email,
+                          metadata={'method': 'remote_user'})
+                    _dbg('remote_user dispatcher: login success',
+                         remote_user=request.remote_user,
+                         user_id=str(existing_user.id),
+                         email=existing_user.email)
+                    return redirect(url_for("admin.index"))
+                _dbg('remote_user dispatcher: hook returned no user — '
+                     'falling through to login form',
+                     remote_user=request.remote_user,
+                     enterprise_hook_registered=has_feature('remote_user'))
+            except Exception as exp:  # pylint: disable=broad-exception-caught
+                log.log("Remote User login failed", source="AUTH")
+                _dbg('remote_user dispatcher: hook raised exception',
+                     remote_user=request.remote_user,
+                     error=f'{exp.__class__.__name__}: {exp}')
+                audit('user.login.failure', outcome='failure',
+                      actor_name=request.remote_user,
+                      metadata={'method': 'remote_user',
+                                'reason': 'hook_exception'})
+                flash('Remote User Error', 'danger')
 
 
     login_form = LoginForm(request.form)
