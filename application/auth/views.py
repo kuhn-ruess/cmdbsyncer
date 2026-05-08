@@ -28,10 +28,16 @@ AUTH = Blueprint('auth', __name__)
 
 
 def _dbg(message, **details):
-    """Write a Settings → Log entry only when AUTH_DEBUG is on."""
+    """Write a Settings → Log entry only when AUTH_DEBUG is on.
+
+    ``Log.log`` expects ``details`` as a list of ``(key, value)`` pairs;
+    passing a dict makes ``_log_function`` iterate the keys as strings
+    and slice characters off them, which is why the entries used to
+    render as garbled single chars."""
     if not app.config.get('AUTH_DEBUG'):
         return
-    log.log(message, source='AUTH', details=details or None)
+    log.log(message, source='AUTH',
+            details=list(details.items()) if details else None)
 
 
 def _candidate_remote_user_headers(req):
