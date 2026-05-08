@@ -13,20 +13,29 @@
 #                             [--no-archive]
 #
 # Options:
-#   --include-syncer      Also download cmdbsyncer from PyPI into the bundle
-#   --include-enterprise  Also download cmdbsyncer-enterprise from PyPI
-#   --pre                 Allow pre-releases (.devN / aN / bN / rcN) when
-#                         resolving cmdbsyncer / cmdbsyncer-enterprise from
-#                         PyPI. Use this to bundle a Test-Build for QA.
-#   --python-version      Target Python version, e.g. 3.11
-#   --platform            Target platform tag, e.g. manylinux2014_x86_64
-#   --output-dir DIR      Output directory (default: offline_bundle)
-#   --no-archive          Do not create a tar.gz, only the directory
+#   --include-syncer          Also download cmdbsyncer from PyPI into the
+#                             bundle.
+#   --include-enterprise      Also download cmdbsyncer-enterprise from PyPI.
+#   --syncer-version VER      Pin cmdbsyncer to exactly this version (e.g.
+#                             4.1.0.dev3). Without this flag, pip picks the
+#                             latest stable. Required for pre-releases — pip
+#                             only installs .devN / aN / bN / rcN versions
+#                             when they are pinned explicitly.
+#   --enterprise-version VER  Same idea for cmdbsyncer-enterprise.
+#   --python-version VER      Target Python version, e.g. 3.11
+#   --platform TAG            Target platform tag, e.g. manylinux2014_x86_64
+#   --output-dir DIR          Output directory (default: offline_bundle)
+#   --no-archive              Do not create a tar.gz, only the directory
 #
-# Example (typical Linux target server, Python 3.11):
+# Example (stable build for a typical Linux target, Python 3.11):
 #   ./tools/build_offline_bundle.sh --include-syncer --include-enterprise \
 #       --python-version 3.11 \
 #       --platform manylinux2014_x86_64
+#
+# Example (pre-release test build):
+#   ./tools/build_offline_bundle.sh \
+#       --include-syncer    --syncer-version 4.1.0.dev3 \
+#       --include-enterprise --enterprise-version 0.3.9.dev1
 #
 set -euo pipefail
 
@@ -37,7 +46,8 @@ cd "$REPO_ROOT"
 # --- Defaults ---------------------------------------------------------------
 INCLUDE_SYNCER=0
 INCLUDE_ENTERPRISE=0
-ALLOW_PRE=0
+SYNCER_VERSION=""
+ENTERPRISE_VERSION=""
 PYTHON_VERSION=""
 PLATFORM=""
 OUTPUT_DIR="offline_bundle"
@@ -46,15 +56,16 @@ CREATE_ARCHIVE=1
 # --- Arguments --------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --include-syncer)      INCLUDE_SYNCER=1; shift ;;
-        --include-enterprise)  INCLUDE_ENTERPRISE=1; shift ;;
-        --pre)                 ALLOW_PRE=1; shift ;;
-        --python-version)      PYTHON_VERSION="$2"; shift 2 ;;
-        --platform)            PLATFORM="$2"; shift 2 ;;
-        --output-dir)          OUTPUT_DIR="$2"; shift 2 ;;
-        --no-archive)          CREATE_ARCHIVE=0; shift ;;
+        --include-syncer)        INCLUDE_SYNCER=1; shift ;;
+        --include-enterprise)    INCLUDE_ENTERPRISE=1; shift ;;
+        --syncer-version)        SYNCER_VERSION="$2"; shift 2 ;;
+        --enterprise-version)    ENTERPRISE_VERSION="$2"; shift 2 ;;
+        --python-version)        PYTHON_VERSION="$2"; shift 2 ;;
+        --platform)              PLATFORM="$2"; shift 2 ;;
+        --output-dir)            OUTPUT_DIR="$2"; shift 2 ;;
+        --no-archive)            CREATE_ARCHIVE=0; shift ;;
         -h|--help)
-            sed -n '2,30p' "$0"; exit 0 ;;
+            sed -n '2,35p' "$0"; exit 0 ;;
         *)
             echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -106,32 +117,53 @@ echo "Downloading packages into $OUTPUT_DIR/packages ..."
 python3 -m pip "${PIP_ARGS[@]}"
 
 # --- Optional: ship cmdbsyncer and cmdbsyncer-enterprise from PyPI ----------
-# These packages may pull in transitive dependencies that are not listed
-# in requirements.txt (e.g. cmdbsyncer-enterprise depends on authlib), so
-# we intentionally resolve the full dependency tree here.
+# Resolution for both packages is explicit:
+#   --syncer-version / --enterprise-version on the CLI: pin exactly.
+#                Deterministic, ships the requested wheel, and fails
+#                loudly if the version is missing on PyPI. Required to
+#                bundle a pre-release (.devN / aN / bN / rcN), since
+#                pip only installs those when pinned explicitly.
+#   No flag:     pip picks the latest stable from PyPI.
+#
+# An earlier revision had a --pre fallback that let pip pick the highest
+# pre-release for unpinned packages. It looked convenient but was also
+# fragile — pip's resolver behaviour around --pre depends on its config
+# (PIP_NO_PRE, --user index, version) and a customer build could
+# silently land on the wrong wheel. Pinning is the only path that
+# reliably ships the version the operator intended.
 download_from_pypi() {
-    local pkg="$1"
-    echo "Downloading $pkg and its dependencies from PyPI ..."
+    local spec="$1"     # e.g. "cmdbsyncer==4.1.0.dev1" or just "cmdbsyncer"
+    local pkg_name="$2" # bare package name for the resolved-line glob
+    echo "Downloading $spec and its dependencies from PyPI ..."
     local args=(download --no-cache-dir --dest "$OUTPUT_DIR/packages")
     [[ -n "$PLATFORM" ]]       && args+=(--platform "$PLATFORM" --only-binary=:all:)
     [[ -n "$PYTHON_VERSION" ]] && args+=(--python-version "$PYTHON_VERSION")
-    # --pre tells pip to consider .devN / aN / bN / rcN releases when
-    # picking a version. Only needed for cmdbsyncer / cmdbsyncer-enterprise
-    # — the requirement files are version-pinned and unaffected.
-    [[ $ALLOW_PRE -eq 1 ]]     && args+=(--pre)
-    args+=("$pkg")
+    args+=("$spec")
     python3 -m pip "${args[@]}"
     # Print the resolved version so the build log shows what actually
     # ended up in the bundle — surfaces "old version pinned somewhere"
     # immediately instead of after a customer install.
     local resolved
     resolved=$(ls "$OUTPUT_DIR/packages/" \
-        | grep -iE "^${pkg//-/[-_]}-[0-9]" | head -1 || true)
+        | grep -iE "^${pkg_name//-/[-_]}-[0-9]" | head -1 || true)
     [[ -n "$resolved" ]] && echo "  -> resolved: $resolved"
 }
 
-[[ $INCLUDE_SYNCER     -eq 1 ]] && download_from_pypi "cmdbsyncer"
-[[ $INCLUDE_ENTERPRISE -eq 1 ]] && download_from_pypi "cmdbsyncer-enterprise"
+if [[ $INCLUDE_SYNCER -eq 1 ]]; then
+    if [[ -n "$SYNCER_VERSION" ]]; then
+        download_from_pypi "cmdbsyncer==$SYNCER_VERSION" "cmdbsyncer"
+    else
+        download_from_pypi "cmdbsyncer" "cmdbsyncer"
+    fi
+fi
+if [[ $INCLUDE_ENTERPRISE -eq 1 ]]; then
+    if [[ -n "$ENTERPRISE_VERSION" ]]; then
+        download_from_pypi "cmdbsyncer-enterprise==$ENTERPRISE_VERSION" \
+                           "cmdbsyncer-enterprise"
+    else
+        download_from_pypi "cmdbsyncer-enterprise" "cmdbsyncer-enterprise"
+    fi
+fi
 
 # --- Convert any remaining source distributions to wheels -------------------
 # pip install --no-index refuses to build sdists on the target because the
@@ -157,17 +189,27 @@ echo "Bundling Ansible playbook collection ..."
 cp -R ansible "$OUTPUT_DIR/ansible"
 
 # --- Customer-facing install script -----------------------------------------
+# Mirror the same pinning into install.sh so the customer's pip lands on
+# the same wheel we just bundled. With ==X.Y.Z (or ==X.Y.Z.devN) pip
+# happily installs pre-releases too.
 EXTRA_PACKAGES=""
-[[ $INCLUDE_SYNCER     -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer"
-[[ $INCLUDE_ENTERPRISE -eq 1 ]] && EXTRA_PACKAGES+=" cmdbsyncer-enterprise"
+if [[ $INCLUDE_SYNCER -eq 1 ]]; then
+    if [[ -n "$SYNCER_VERSION" ]]; then
+        EXTRA_PACKAGES+=" cmdbsyncer==$SYNCER_VERSION"
+    else
+        EXTRA_PACKAGES+=" cmdbsyncer"
+    fi
+fi
+if [[ $INCLUDE_ENTERPRISE -eq 1 ]]; then
+    if [[ -n "$ENTERPRISE_VERSION" ]]; then
+        EXTRA_PACKAGES+=" cmdbsyncer-enterprise==$ENTERPRISE_VERSION"
+    else
+        EXTRA_PACKAGES+=" cmdbsyncer-enterprise"
+    fi
+fi
 INSTALL_EXTRA_LINE=""
 if [[ -n "$EXTRA_PACKAGES" ]]; then
-    # When the bundle carries a pre-release wheel (.devN / rcN / …) pip
-    # refuses to pick it for an unpinned ``cmdbsyncer`` request unless
-    # --pre is on, even with --no-index. Propagate the flag so the
-    # generated install.sh resolves the bundled wheel.
     INSTALL_EXTRA_LINE="PIP_ARGS+=($EXTRA_PACKAGES)"
-    [[ $ALLOW_PRE -eq 1 ]] && INSTALL_EXTRA_LINE="PIP_ARGS+=(--pre$EXTRA_PACKAGES)"
 fi
 
 cat > "$OUTPUT_DIR/install.sh" <<'EOS'
