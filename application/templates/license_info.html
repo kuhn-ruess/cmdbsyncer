@@ -121,6 +121,33 @@
   </div>
 </div>
 
+{% if package_installed and license is not none %}
+<div class="row justify-content-center mt-3">
+  <div class="col-lg-8">
+    <div class="app-card">
+      <h4 class="mb-2">Runtime Registry</h4>
+      <p class="text-muted small mb-2">
+        What the OSS code can actually call right now. Compare against
+        the license-claim Features above &mdash; if a feature is in the
+        claim but missing here, the enterprise package failed to wire
+        it up at startup.
+      </p>
+      <p class="mb-1">
+        <strong>Registered features:</strong>
+        <code>{{ registry_features or '(none)' }}</code>
+      </p>
+      <p class="mb-0">
+        <strong>Registered hooks:</strong>
+        <code>{{ registry_hooks or '(none)' }}</code>
+      </p>
+      {% if load_status %}
+      <p class="mb-0 mt-2"><strong>Load status:</strong> <code>{{ load_status }}</code></p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% if package_installed %}
 <div class="row justify-content-center mt-3">
   <div class="col-lg-8">
