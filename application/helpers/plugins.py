@@ -2,8 +2,8 @@
 
 A plugin is enabled by default when its directory ships under
 ``application/plugins/`` or ``plugins/``. The only opt-out is
-``disabled_plugins.json`` at the repo root, which holds a JSON list of
-disabled idents (or directory names — both work).
+``disabled_plugins.json`` in the deployment directory, which holds a
+JSON list of disabled idents (or directory names — both work).
 
 Both the disabled list and the per-plugin ``plugin.json`` data are read
 exactly once per process and cached. The filesystem state cannot change
@@ -14,8 +14,16 @@ the same process — it busts its own cache).
 import os
 import json
 
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_DISABLED_PLUGINS_PATH = os.path.join(_BASE_DIR, 'disabled_plugins.json')
+# Bundled plugins live next to this file (``application/plugins/``),
+# regardless of pip-install vs. source-checkout. Derive the path from
+# ``__file__`` so it always resolves to the package root.
+_APP_DIR = os.path.dirname(os.path.dirname(__file__))
+# User plugins and ``disabled_plugins.json`` live in the deployment
+# directory (cwd at app-import time): ``/opt/cmdbsyncer/`` for pip
+# installs, the repo root for source checkouts. Using ``__file__`` here
+# would point into ``site-packages/`` on pip and miss the user files.
+_USER_DIR = os.getcwd()
+_DISABLED_PLUGINS_PATH = os.path.join(_USER_DIR, 'disabled_plugins.json')
 
 # In-memory registry for plugin types that ship inside a pip-installed
 # Enterprise package rather than as a directory under plugins/. Callers
@@ -90,8 +98,8 @@ def _plugin_data_cache():
     if _PLUGIN_DATA_CACHE is not None:
         return _PLUGIN_DATA_CACHE
     cache = {}
-    for sub in ('plugins', os.path.join('application', 'plugins')):
-        plugin_root = os.path.join(_BASE_DIR, sub)
+    for plugin_root in (os.path.join(_USER_DIR, 'plugins'),
+                        os.path.join(_APP_DIR, 'plugins')):
         if not os.path.isdir(plugin_root):
             continue
         for entry in os.listdir(plugin_root):

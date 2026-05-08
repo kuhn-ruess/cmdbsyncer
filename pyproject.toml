@@ -79,6 +79,7 @@ application = [
     "notices/*.txt",
     "templates/**/*",
     "static/**/*",
+    "plugins/**/plugin.json",
 ]
 
 [tool.pylint.main]
