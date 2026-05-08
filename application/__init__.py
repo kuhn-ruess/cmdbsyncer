@@ -31,7 +31,6 @@ if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
 
 import importlib
-import importlib.util
 import pkgutil
 import warnings
 from logging import config as log_config
@@ -133,20 +132,21 @@ from application import enterprise  # noqa: E402
 from application.enterprise import run_hook as enterprise_hook  # noqa: E402
 
 
-# Load local_config.py via absolute path from cwd, not via ``sys.path``.
-# Belt + suspenders: cwd is already on sys.path (see top of file), but
-# loading by absolute path makes a missing file loud (warning) instead of
-# a silent ``ModuleNotFoundError`` — so a misplaced deployment surfaces
-# immediately instead of leaving CRYPTOGRAPHY_KEY at None.
-_lc_path = os.path.join(os.getcwd(), 'local_config.py')
-if os.path.isfile(_lc_path):
-    _spec = importlib.util.spec_from_file_location('local_config', _lc_path)
-    _mod = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(_mod)
-    sys.modules.setdefault('local_config', _mod)
-    app.config.update(_mod.config)
-else:
-    logger.warning("local_config.py not found in %s", os.getcwd())
+# Load local_config.py via the standard import path. ``sys.path`` already
+# carries the deployment directory by now: pip console scripts are covered
+# by the cwd-injection at the top of this module, source checkouts get the
+# script directory from Python automatically, and mod_wsgi / gunicorn
+# entries add their own dir from ``app.wsgi``. A missing file is logged
+# (was a silent ``pass``) so a misplaced deployment surfaces immediately
+# instead of leaving CRYPTOGRAPHY_KEY at None.
+try:
+    from local_config import config
+    app.config.update(config)
+except ModuleNotFoundError:
+    logger.warning(
+        "local_config.py not importable — sys.path=%s cwd=%s",
+        sys.path, os.getcwd(),
+    )
 
 
 # REQUIRE_HTTPS is the single switch that controls whether the GUI's
