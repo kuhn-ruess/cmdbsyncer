@@ -21,6 +21,7 @@ if os.path.basename(sys.argv[0] or '').removesuffix('.py') in _CLI_ENTRYPOINTS:
 CLI_MODE = os.environ.get('CMDBSYNCER_CLI') == '1'
 
 import importlib
+import importlib.util
 import pkgutil
 import warnings
 from logging import config as log_config
@@ -122,11 +123,21 @@ from application import enterprise  # noqa: E402
 from application.enterprise import run_hook as enterprise_hook  # noqa: E402
 
 
-try:
-    from local_config import config
-    app.config.update(config)
-except ModuleNotFoundError:
-    pass
+# Load local_config.py via absolute path from cwd, not via ``sys.path``.
+# Pip-installed console scripts (``cmdbsyncer …``) trigger
+# ``application/__init__.py`` through ``from application.cli import main``
+# *before* cli.py's ``sys.path.insert(0, cwd)`` runs — so a plain
+# ``from local_config import config`` would silently fail and leave
+# ``CRYPTOGRAPHY_KEY`` at ``None``, breaking every Account.get_password() call.
+_lc_path = os.path.join(os.getcwd(), 'local_config.py')
+if os.path.isfile(_lc_path):
+    _spec = importlib.util.spec_from_file_location('local_config', _lc_path)
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    sys.modules.setdefault('local_config', _mod)
+    app.config.update(_mod.config)
+else:
+    logger.warning("local_config.py not found in %s", os.getcwd())
 
 
 # REQUIRE_HTTPS is the single switch that controls whether the GUI's
