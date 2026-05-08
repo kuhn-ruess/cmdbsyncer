@@ -20,6 +20,16 @@ if os.path.basename(sys.argv[0] or '').removesuffix('.py') in _CLI_ENTRYPOINTS:
 # form via Mongo — together they account for the bulk of CLI startup time.
 CLI_MODE = os.environ.get('CMDBSYNCER_CLI') == '1'
 
+# Pip console scripts (``cmdbsyncer …``) trigger this module via
+# ``from application.cli import main`` and don't put cwd on ``sys.path``
+# beforehand — but ``local_config.py``, the user ``plugins/`` package,
+# ``disabled_plugins.json`` and friends all live in the deployment
+# directory. Inject cwd here, before any import that depends on it,
+# so pip-install behaves like a source checkout (where Python adds the
+# script directory to ``sys.path[0]`` automatically).
+if os.getcwd() not in sys.path:
+    sys.path.insert(0, os.getcwd())
+
 import importlib
 import importlib.util
 import pkgutil
