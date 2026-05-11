@@ -10,6 +10,8 @@ from application.helpers.plugins import discover_plugins
 
 
 def get_account_types():
+    """Return the choices list for ``Account.type``: built-in types plus
+    whatever plugin ``ident`` strings the plugin discovery turns up."""
     account_types = [
         ('cmkv1', "Checkmk Version 1.x"), # Legacy remaining
         ('cmdb', "Object Managed only in Syncer"),
@@ -47,14 +49,14 @@ object_types = [
 ]
 
 
-class PluginSettings(db.EmbeddedDocument):
+class PluginSettings(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     Custom Attributes for Setup
     """
     plugin = db.StringField(choices=plugin_register)
     object_filter = db.ListField(field=db.StringField(choices=object_types))
 
-class CustomEntry(db.EmbeddedDocument):
+class CustomEntry(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     Custom Attributes for Setup
     """
@@ -141,6 +143,17 @@ class Account(db.Document):
             cryptography_key = key
         else:
             cryptography_key = app.config['CRYPTOGRAPHY_KEY']
+        if not cryptography_key:
+            # Without a key Fernet(None) explodes a few frames deeper with
+            # an opaque "argument should be a bytes-like object or ASCII
+            # string, not 'NoneType'" — surface the real cause instead so
+            # operators can fix their config.
+            raise RuntimeError(
+                "CRYPTOGRAPHY_KEY is not set — local_config.py was not "
+                "loaded. Set CMDBSYNCER_CONFIG_DIR to its directory, run "
+                "cmdbsyncer from that directory, or place "
+                "local_config.py at /etc/cmdbsyncer/."
+            )
         if not self.password_crypted and self.password:
             uncrypted = self.password
             self.password = None
