@@ -2,13 +2,18 @@
 Checkmk Inventorize
 """
 # pylint: disable=too-many-locals,too-many-branches,too-many-nested-blocks,duplicate-code
+import ast
+import base64
+import binascii
 import datetime
 import hashlib
 import json
 import multiprocessing
+import traceback
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
+from application import init_db
 from application.models.host import Host, app
 from application.models.host_inventory_tree import (
     HostInventoryTree,
@@ -77,8 +82,51 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         IPC boundary; shipping a 100-500 KB blob per host through the
         result pipe was a runtime catastrophe at scale.
         """
-        url = f"host_inv_api.py?host={hostname}&output_format=json"
-        dict_inventory = self.request(url, method="GET", api_version="/")[0]['result'][hostname]
+        # Pull the inventory tree via the Livestatus column
+        # ``host_mk_inventory`` on the REST API. host_inv_api.py is the
+        # legacy Multisite endpoint and is unreachable behind OIDC/SSO
+        # proxies (they intercept it before Checkmk sees the Bearer
+        # token). The REST API stays Bearer-auth'd, so this path works
+        # behind any auth proxy the GUI is normally fronted by. The blob
+        # comes back base64-encoded as a Python ``repr()`` of the
+        # inventory tree — same key casing (Attributes/Nodes/Pairs/…) as
+        # host_inv_api.py, so flatten_inventory below works unchanged.
+        url = "domain-types/service/collections/all"
+        query = {
+            "op": "and",
+            "expr": [
+                {"op": "=", "left": "description", "right": "Check_MK"},
+                {"op": "=", "left": "host_name", "right": hostname},
+            ],
+        }
+        params = {
+            "query": json.dumps(query),
+            "columns": ['host_mk_inventory'],
+        }
+        api_response = self.request(url, params=params, method="GET")
+        rows = api_response[0].get('value') or []
+        if not rows:
+            return hostname, None
+        raw = rows[0].get('extensions', {}).get('host_mk_inventory') or {}
+        encoded = raw.get('value') if isinstance(raw, dict) else None
+        if not encoded:
+            return hostname, None
+        try:
+            text = base64.b64decode(encoded).decode('utf-8', 'replace')
+            if not text:
+                dict_inventory = None
+            else:
+                # Checkmk 2.5 emits JSON; older releases ship a Python
+                # repr() blob. Try JSON first (cheap, strict, common path),
+                # fall back to literal_eval for old data.
+                try:
+                    dict_inventory = json.loads(text)
+                except json.JSONDecodeError:
+                    dict_inventory = ast.literal_eval(text)
+        except (binascii.Error, ValueError, SyntaxError) as exc:
+            raise CmkException(
+                f"host_mk_inventory parse failed for {hostname}: {exc}"
+            ) from exc
         if not dict_inventory:
             return hostname, None
 
@@ -140,23 +188,47 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Requesting HW/SW Inventory Data from Checkmk", total=total)
-            with multiprocessing.Pool() as pool:
+            # init_db gives each worker a fresh MongoEngine connection;
+            # without it the workers inherit the parent's connection across
+            # fork() and the first _save_inventory_tree() write raises
+            # immediately (matching the "instant timeout" symptom).
+            with multiprocessing.Pool(initializer=init_db) as pool:
+                # Pair every async result with its hostname so error output
+                # can name the failing host. Previously the hostname was
+                # only recoverable from the worker's return tuple, which we
+                # never see when the worker raised or timed out.
                 tasks = []
                 for host_resp in response:
                     hostname = host_resp['extensions']['host_name']
                     self.add_host(hostname)
-                    task = pool.apply_async(self.get_hw_sw_inventory_data, args=(hostname,))
-                    tasks.append(task)
+                    async_result = pool.apply_async(
+                        self.get_hw_sw_inventory_data, args=(hostname,)
+                    )
+                    tasks.append((hostname, async_result))
 
-                for task in tasks:
+                process_timeout = app.config['PROCESS_TIMEOUT']
+                for hostname, task in tasks:
                     try:
-                        hostname, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
+                        _host, data = task.get(timeout=process_timeout)
                     except multiprocessing.TimeoutError:
-                        progress.console.print("- ERROR: Timeout for a object")
+                        progress.console.print(
+                            f"- {ColorCodes.FAIL}TIMEOUT{ColorCodes.ENDC} "
+                            f"after {process_timeout}s for {hostname}"
+                        )
                     except Exception as error:  # pylint: disable=broad-exception-caught
+                        # apply_async preserves the worker traceback on
+                        # .get(); print it so the operator can see what
+                        # really blew up instead of a misleading
+                        # "Timeout error" label. --debug re-raises to abort
+                        # the run for interactive inspection.
                         if self.debug:
                             raise
-                        progress.console.print(f"- ERROR: Timeout error for object ({error})")
+                        progress.console.print(
+                            f"- {ColorCodes.FAIL}ERROR{ColorCodes.ENDC} "
+                            f"in worker for {hostname}: "
+                            f"{type(error).__name__}: {error}"
+                        )
+                        progress.console.print(traceback.format_exc())
                     else:
                         progress.advance(task1)
                         if data is not None:
