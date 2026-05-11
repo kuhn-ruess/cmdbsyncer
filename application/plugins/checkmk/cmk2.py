@@ -91,7 +91,7 @@ class CMK2(Plugin):
             ) from exc
 
 
-    def request(self, url, method='GET', data=None,  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    def request(self, url, method='GET', data=None,  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches
                 params=None, additional_header=None, api_version="api/1.0/"):
         """
         Handle Request to CMK
@@ -140,9 +140,22 @@ class CMK2(Plugin):
                 return {}, {"error": "Object not found"}
             if response.status_code != 200:
                 if  response_json.get('title') not in error_whitelist:
-                    raise CmkException(f"{response_json.get('title')} "\
-                                       f"{response_json.get('detail')}"\
-                                       f"{response_json.get('fields')}")
+                    title = response_json.get('title')
+                    detail = response_json.get('detail')
+                    fields = response_json.get('fields')
+                    if title is None and detail is None and fields is None:
+                        # Non-JSON error body (HTML error page, auth
+                        # redirect, legacy endpoint disabled, …) — surface
+                        # status + URL + a body snippet so the failure is
+                        # debuggable instead of a useless "None NoneNone".
+                        body = (response.text or '').strip().replace('\n', ' ')
+                        if len(body) > 300:
+                            body = body[:300] + '…'
+                        raise CmkException(
+                            f"HTTP {response.status_code} {method.upper()} "
+                            f"{url}: {body or '<empty response body>'}"
+                        )
+                    raise CmkException(f"{title} {detail}{fields}")
                 return {}, {'status_code': response.status_code}
             resp_header['status_code'] = response.status_code
 

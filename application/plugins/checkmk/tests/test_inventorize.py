@@ -2,6 +2,7 @@
 Unit tests for checkmk inventorize module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument,no-value-for-parameter
+import base64
 import unittest
 from unittest.mock import Mock, patch
 
@@ -18,6 +19,7 @@ class TestInventorizeHosts(unittest.TestCase):
         def mock_init(self_param, account=False):
             base_mock_init(self_param,
                            account_name='Test Account', debug=False,
+                           config={'settings': {}},
                            fields={}, found_hosts=set(),
                            status_inventory={}, hw_sw_inventory={},
                            service_label_inventory={}, config_inventory={},
@@ -91,21 +93,21 @@ class TestInventorizeHosts(unittest.TestCase):
         mock_host.objects.assert_called_once_with(hostname__in=['unknown_host'])
 
     def test_get_hw_sw_inventory_data_success(self):
-        api_response = ({
-            'result': {
-                'host1': {
-                    'Attributes': {
-                        'Pairs': {'model': 'PowerEdge'}
-                    },
-                    'Nodes': {
-                        'hardware': {
-                            'Attributes': {
-                                'Pairs': {'cpu_model': 'Xeon'}
-                            }
-                        }
-                    }
+        inventory_tree = {
+            'Attributes': {'Pairs': {'model': 'PowerEdge'}},
+            'Nodes': {
+                'hardware': {
+                    'Attributes': {'Pairs': {'cpu_model': 'Xeon'}}
                 }
-            }
+            },
+        }
+        encoded = base64.b64encode(repr(inventory_tree).encode('utf-8')).decode('ascii')
+        api_response = ({
+            'value': [{
+                'extensions': {
+                    'host_mk_inventory': {'value': encoded}
+                }
+            }]
         }, {})
 
         self.inv.fields = {'cmk_inventory': ['model*', 'hardware*']}
@@ -177,8 +179,12 @@ class TestInventorizeHosts(unittest.TestCase):
         validate_mongo_keys(self.inv.config_inventory['host1'], 'inventory')
 
     def test_get_hw_sw_inventory_data_empty(self):
+        # Host known but no inventory column populated yet — empty value
+        # string. The REST path returns (hostname, None).
         api_response = ({
-            'result': {'host1': None}
+            'value': [{
+                'extensions': {'host_mk_inventory': {'value': ''}}
+            }]
         }, {})
 
         self.inv.fields = {'cmk_inventory': ['model']}
@@ -188,7 +194,6 @@ class TestInventorizeHosts(unittest.TestCase):
 
         self.assertEqual(hostname, 'host1')
         self.assertIsNone(data)
-
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
