@@ -12,22 +12,26 @@ def format_log(_view, _ctx, model, _path):
 
     The key column shrinks to its widest token (``width:1%`` + ``nowrap``);
     the value column takes everything else and breaks on word boundaries
-    so long URLs / stack lines stay inside the row.
+    so long URLs / stack lines stay inside the row. ``background:transparent``
+    on every cell — without it the bare ``<table>`` (no ``.table`` class)
+    inherits Bootstrap's default white ``<th>`` background and the key
+    column ends up white on dark themes.
     """
     rows = ''.join(
-        '<tr>'
+        '<tr style="background:transparent;">'
         '<th style="width:1%;vertical-align:top;padding:2px 8px 2px 0;'
-        'white-space:nowrap;color:var(--surface-muted,#666);'
-        f'font-weight:600;">{escape(entry.level)}</th>'
+        'white-space:nowrap;background:transparent;'
+        'color:var(--surface-muted,#666);font-weight:600;">'
+        f'{escape(entry.level)}</th>'
         '<td style="vertical-align:top;word-break:break-word;'
-        f'overflow-wrap:anywhere;white-space:pre-wrap;">{escape(entry.message)}</td>'
+        'overflow-wrap:anywhere;white-space:pre-wrap;'
+        f'background:transparent;">{escape(entry.message)}</td>'
         '</tr>'
         for entry in model.details
     )
     return Markup(
-        '<table style="width:100%;max-width:100%;border-collapse:collapse;">'
-        f'{rows}'
-        '</table>'
+        '<table style="width:100%;max-width:100%;border-collapse:collapse;'
+        f'background:transparent;">{rows}</table>'
     )
 
 
