@@ -144,6 +144,17 @@ class Account(db.Document):
             cryptography_key = key
         else:
             cryptography_key = app.config['CRYPTOGRAPHY_KEY']
+        if not cryptography_key:
+            # Without a key Fernet(None) explodes a few frames deeper with
+            # an opaque "argument should be a bytes-like object or ASCII
+            # string, not 'NoneType'" — surface the real cause instead so
+            # operators can fix their config.
+            raise RuntimeError(
+                "CRYPTOGRAPHY_KEY is not set — local_config.py was not "
+                "loaded. Set CMDBSYNCER_CONFIG_DIR to its directory, run "
+                "cmdbsyncer from that directory, or place "
+                "local_config.py at /etc/cmdbsyncer/."
+            )
         if not self.password_crypted and self.password:
             uncrypted = self.password
             self.password = None
