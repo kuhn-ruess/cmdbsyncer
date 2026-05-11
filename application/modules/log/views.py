@@ -17,7 +17,8 @@ def format_log(_view, _ctx, model, _path):
     rows = ''.join(
         '<tr>'
         '<th style="width:1%;vertical-align:top;padding:2px 8px 2px 0;'
-        f'white-space:nowrap;color:#666;font-weight:600;">{escape(entry.level)}</th>'
+        'white-space:nowrap;color:var(--surface-muted,#666);'
+        f'font-weight:600;">{escape(entry.level)}</th>'
         '<td style="vertical-align:top;word-break:break-word;'
         f'overflow-wrap:anywhere;white-space:pre-wrap;">{escape(entry.message)}</td>'
         '</tr>'
@@ -34,19 +35,23 @@ def format_traceback(_view, _ctx, model, _path):
     """
     Tracebacks are routinely 30-80 lines and would otherwise blow up the
     detail card. Render them inside a collapsed `<details>` so the row
-    stays scannable and the operator can pop it open on click.
+    stays scannable and the operator can pop it open on click. Colours
+    come from theme tokens so the `<pre>` block doesn't show up as a
+    white card on Gruvbox/Nord/Dracula rows.
     """
     trace = (model.traceback or '').strip()
     if not trace or trace == 'NoneType: None':
         return ''
     return Markup(
         '<details style="margin:0;">'
-        '<summary style="cursor:pointer;color:#2c5d99;'
+        '<summary style="cursor:pointer;color:var(--surface-muted,#2c5d99);'
         'font-family:ui-monospace,monospace;font-size:0.88rem;">'
         'Show traceback</summary>'
         '<pre style="margin-top:6px;padding:8px 10px;'
-        'background:#f6f8fa;border:1px solid #e2e6ea;border-radius:6px;'
-        'font-size:0.82rem;white-space:pre-wrap;'
+        'background:var(--surface-subtle,#f6f8fa);'
+        'border:1px solid var(--surface-border,#e2e6ea);'
+        'color:var(--surface-text,inherit);'
+        'border-radius:6px;font-size:0.82rem;white-space:pre-wrap;'
         f'overflow-x:auto;">{escape(trace)}</pre>'
         '</details>'
     )
