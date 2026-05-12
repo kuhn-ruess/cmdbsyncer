@@ -22,7 +22,13 @@ case "$1" in
 esac
 done
 
-vars=$(../cmdbsyncer ansible inventory ansible --host "$LIMIT_VALUE" 2>/dev/null)
+# Prefer the pip-installed `cmdbsyncer` on PATH; fall back to the
+# source-checkout wrapper next to ansible/ so both install layouts work.
+if command -v cmdbsyncer >/dev/null 2>&1; then
+    vars=$(cmdbsyncer ansible inventory ansible --host "$LIMIT_VALUE" 2>/dev/null)
+else
+    vars=$("$(dirname "$0")/../cmdbsyncer" ansible inventory ansible --host "$LIMIT_VALUE" 2>/dev/null)
+fi
 if [ -z "$vars" ]; then
     vars="{}"
 fi

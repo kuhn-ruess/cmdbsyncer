@@ -2,4 +2,10 @@
 # Backward-compatible shim: thin proxy to the new
 # `cmdbsyncer ansible inventory cmk_sites` CLI command.
 # Used by `cmk_server_mngmt.yml` for the Checkmk Sites catalogue.
-exec ../cmdbsyncer ansible inventory cmk_sites "$@"
+# Prefer the pip-installed `cmdbsyncer` on PATH; fall back to the
+# source-checkout wrapper next to ansible/ so both install layouts work.
+if command -v cmdbsyncer >/dev/null 2>&1; then
+    exec cmdbsyncer ansible inventory cmk_sites "$@"
+else
+    exec "$(dirname "$0")/../cmdbsyncer" ansible inventory cmk_sites "$@"
+fi

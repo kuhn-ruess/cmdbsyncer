@@ -217,9 +217,10 @@ cat > "$OUTPUT_DIR/install.sh" <<'EOS'
 # Offline installer: installs every bundled Python package and copies the
 # Ansible playbook collection into ANSIBLE_TARGET (default
 # /opt/cmdbsyncer/ansible). Override by exporting ANSIBLE_TARGET=/path
-# before running this script. Set FORCE=1 to overwrite an existing
-# playbook directory; set SKIP_ANSIBLE=1 to skip the playbook copy.
-set -euo pipefail
+# before running this script. Set SKIP_ANSIBLE=1 to skip the playbook
+# copy entirely. Both steps run independently — a failure in one is
+# reported but never silently swallows the other.
+set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANSIBLE_TARGET="${ANSIBLE_TARGET:-/opt/cmdbsyncer/ansible}"
 
@@ -239,28 +240,41 @@ fi
 
 cat >> "$OUTPUT_DIR/install.sh" <<'EOS'
 
-python3 -m pip "${PIP_ARGS[@]}"
+PIP_OK=1
+ANSIBLE_OK=1
 
-# --- Ansible playbook collection -------------------------------------------
+echo "=== Step 1/2: installing Python packages ==="
+python3 -m pip "${PIP_ARGS[@]}" || PIP_OK=0
+
+echo ""
+echo "=== Step 2/2: copying Ansible playbooks to $ANSIBLE_TARGET ==="
 if [[ "${SKIP_ANSIBLE:-0}" == "1" ]]; then
-    echo "Skipping Ansible playbook install (SKIP_ANSIBLE=1)."
+    echo "Skipped (SKIP_ANSIBLE=1)."
 elif [[ ! -d "$HERE/ansible" ]]; then
-    echo "Bundle has no ansible/ directory — skipping playbook install."
+    echo "Skipped: bundle has no ansible/ directory."
 else
-    if [[ -e "$ANSIBLE_TARGET" && "${FORCE:-0}" != "1" ]]; then
-        echo "Refusing to overwrite existing $ANSIBLE_TARGET (set FORCE=1 to replace)."
-    else
-        echo "Installing Ansible playbooks to $ANSIBLE_TARGET ..."
-        rm -rf "$ANSIBLE_TARGET"
-        mkdir -p "$(dirname "$ANSIBLE_TARGET")"
-        cp -R "$HERE/ansible" "$ANSIBLE_TARGET"
+    rm -rf "$ANSIBLE_TARGET" \
+        && mkdir -p "$(dirname "$ANSIBLE_TARGET")" \
+        && cp -R "$HERE/ansible" "$ANSIBLE_TARGET" \
+        || ANSIBLE_OK=0
+    if [[ "$ANSIBLE_OK" == "1" ]]; then
         echo "Playbooks installed to $ANSIBLE_TARGET."
         echo "Point cmdbsyncer at them by setting CMDBSYNCER_ANSIBLE_DIR=$ANSIBLE_TARGET"
         echo "or ANSIBLE_DIR='$ANSIBLE_TARGET' in local_config.py."
+    else
+        echo "ERROR: failed to copy playbooks to $ANSIBLE_TARGET — see output above."
     fi
 fi
 
-echo "Installation complete."
+echo ""
+if [[ "$PIP_OK" == "1" && "$ANSIBLE_OK" == "1" ]]; then
+    echo "Installation complete."
+else
+    echo "Installation finished with errors:"
+    [[ "$PIP_OK" != "1" ]]    && echo "  - pip install failed (see Step 1/2)"
+    [[ "$ANSIBLE_OK" != "1" ]] && echo "  - ansible copy failed (see Step 2/2)"
+    exit 1
+fi
 EOS
 chmod +x "$OUTPUT_DIR/install.sh"
 
@@ -293,7 +307,7 @@ Customising the install
 -----------------------
 - ANSIBLE_TARGET=/path        Where to copy the playbook collection.
                               Defaults to /opt/cmdbsyncer/ansible.
-- FORCE=1                     Overwrite an existing ANSIBLE_TARGET.
+                              An existing directory is replaced.
 - SKIP_ANSIBLE=1              Skip the playbook copy entirely.
 
 After installing, point cmdbsyncer at the playbooks via either
