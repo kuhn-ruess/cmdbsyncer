@@ -298,9 +298,10 @@
           <div class="rule-tabs">
             {% for rule_name, rule_raw in rules.items() %}
               {% set hit_count = rule_raw | selectattr('hit') | list | length %}
+              {% set anchor = 'rule_' ~ rule_name | replace(' ', '_') %}
               <a class="btn btn-outline-info" data-toggle="collapse"
-                 href="#rule_{{ rule_name }}" role="button"
-                 aria-expanded="false" aria-controls="rule_{{ rule_name }}">
+                 href="#{{ anchor }}" role="button"
+                 aria-expanded="false" aria-controls="{{ anchor }}">
                 {{ rule_name.capitalize() }}
                 <span class="badge badge-light">{{ hit_count }}/{{ rule_raw | length }}</span>
               </a>
@@ -308,7 +309,8 @@
           </div>
 
           {% for rule_name, rule_raw in rules.items() %}
-            <div class="collapse" id="rule_{{ rule_name }}"
+            {% set anchor = 'rule_' ~ rule_name | replace(' ', '_') %}
+            <div class="collapse" id="{{ anchor }}"
                  data-parent="#accordion-export">
               <table class="table table-sm table-bordered rule-table" style="margin-top: 8px;">
                 <thead>
