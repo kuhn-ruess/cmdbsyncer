@@ -22,12 +22,17 @@ case "$1" in
 esac
 done
 
+# Tell cmdbsyncer where local_config.py lives: ansible/ sits next to
+# local_config.py in both source-checkout and pip-install layouts, so
+# the shim's parent directory is always the right config root.
+SHIM_DIR="$(cd "$(dirname "$0")" && pwd)"
+export CMDBSYNCER_CONFIG_DIR="${CMDBSYNCER_CONFIG_DIR:-$(dirname "$SHIM_DIR")}"
 # Prefer the pip-installed `cmdbsyncer` on PATH; fall back to the
 # source-checkout wrapper next to ansible/ so both install layouts work.
 if command -v cmdbsyncer >/dev/null 2>&1; then
     vars=$(cmdbsyncer ansible inventory ansible --host "$LIMIT_VALUE" 2>/dev/null)
 else
-    vars=$("$(dirname "$0")/../cmdbsyncer" ansible inventory ansible --host "$LIMIT_VALUE" 2>/dev/null)
+    vars=$("$SHIM_DIR/../cmdbsyncer" ansible inventory ansible --host "$LIMIT_VALUE" 2>/dev/null)
 fi
 if [ -z "$vars" ]; then
     vars="{}"

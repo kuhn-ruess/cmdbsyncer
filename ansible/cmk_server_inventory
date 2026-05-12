@@ -2,10 +2,16 @@
 # Backward-compatible shim: thin proxy to the new
 # `cmdbsyncer ansible inventory cmk_sites` CLI command.
 # Used by `cmk_server_mngmt.yml` for the Checkmk Sites catalogue.
+# Tell cmdbsyncer where local_config.py lives: ansible/ sits next to
+# local_config.py in both source-checkout and pip-install layouts, so
+# the shim's parent directory is always the right config root. Only set
+# this when the operator hasn't overridden it.
+SHIM_DIR="$(cd "$(dirname "$0")" && pwd)"
+export CMDBSYNCER_CONFIG_DIR="${CMDBSYNCER_CONFIG_DIR:-$(dirname "$SHIM_DIR")}"
 # Prefer the pip-installed `cmdbsyncer` on PATH; fall back to the
 # source-checkout wrapper next to ansible/ so both install layouts work.
 if command -v cmdbsyncer >/dev/null 2>&1; then
     exec cmdbsyncer ansible inventory cmk_sites "$@"
 else
-    exec "$(dirname "$0")/../cmdbsyncer" ansible inventory cmk_sites "$@"
+    exec "$SHIM_DIR/../cmdbsyncer" ansible inventory cmk_sites "$@"
 fi
