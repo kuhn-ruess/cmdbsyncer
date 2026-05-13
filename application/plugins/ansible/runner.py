@@ -8,8 +8,10 @@ captured log.
 """
 import os
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from collections import OrderedDict
 from datetime import datetime
@@ -163,6 +165,17 @@ def _execute(stats_id, cmd: list[str], cwd: Path, provider: str):
         env = os.environ.copy()
         env['CMDBSYNCER_INVENTORY_PROVIDER'] = provider
         env.setdefault('CMDBSYNCER_INVENTORY_MODE', 'local')
+        # Ansible writes scratch files under ``$HOME/.ansible/tmp`` and
+        # respects ``ANSIBLE_LOCAL_TEMP`` for the same path. Under mod_wsgi
+        # / gunicorn the process inherits the web user's $HOME (e.g.
+        # ``/usr/share/httpd/`` on RHEL Apache), which is not writable and
+        # makes every playbook abort with "Unable to create local
+        # directories(/usr/share/httpd/.ansible/tmp): Permission denied".
+        # Give each run its own temp dir, point both vars at it, and
+        # clean up afterwards so we don't leak under /tmp.
+        run_tmp = tempfile.mkdtemp(prefix='cmdbsyncer-ansible-')
+        env['ANSIBLE_LOCAL_TEMP'] = run_tmp
+        env['HOME'] = run_tmp
         try:
             proc = subprocess.Popen(  # pylint: disable=consider-using-with
                 cmd,
@@ -188,6 +201,7 @@ def _execute(stats_id, cmd: list[str], cwd: Path, provider: str):
             stats.exit_code = -1
             stats.status = 'failure'
         finally:
+            shutil.rmtree(run_tmp, ignore_errors=True)
             stats.ended_at = datetime.now()
             stats.save()
 
