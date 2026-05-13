@@ -22,7 +22,7 @@
   }
   .ansible-runner-card label {
     font-size: 11px;
-    color: #555;
+    color: var(--surface-muted, #555);
     margin: 0 0 2px 0;
     display: block;
     text-transform: uppercase;
@@ -32,11 +32,12 @@
     font-size: 14px;
     font-weight: 600;
     padding: 6px 0 0 0;
+    color: var(--surface-text, inherit);
   }
   .ansible-runner-card .playbook-file {
     font-family: monospace;
     font-size: 11px;
-    color: #888;
+    color: var(--surface-muted, #888);
     padding-bottom: 4px;
   }
   .ansible-runner-card input.form-control {
@@ -46,8 +47,8 @@
   .ansible-empty {
     padding: 24px;
     text-align: center;
-    color: #888;
-    border: 1px dashed #ccc;
+    color: var(--surface-muted, #888);
+    border: 1px dashed var(--surface-border, #ccc);
     border-radius: 4px;
   }
 </style>
