@@ -9,6 +9,7 @@ captured log.
 import os
 import shlex
 import subprocess
+import sys
 import threading
 from collections import OrderedDict
 from datetime import datetime
@@ -28,11 +29,26 @@ DEFAULT_PROVIDER = 'ansible'
 def _ansible_dir() -> Path:
     """
     Directory containing playbooks and the inventory script. Resolution
-    order: explicit config override → `<repo>/ansible/`.
+    order:
+      1. explicit config override (`ANSIBLE_DIR` / `CMDBSYNCER_ANSIBLE_DIR`)
+      2. `<dirname(sys.prefix)>/ansible/` — pip-install convention where
+         the venv lives inside the deployment dir
+         (e.g. `/opt/cmdbsyncer/venv` → `/opt/cmdbsyncer/ansible`)
+      3. `<repo>/ansible/` — source-checkout fallback, derived from the
+         `application` package location
+
+    The first existing directory wins. Pip-install layouts previously
+    fell straight through to `Path(app.root_path).parent / 'ansible'`,
+    which resolves to `<site-packages>/ansible/` — that directory doesn't
+    exist on a normal install, so the runner reported "No playbooks
+    declared" pointing at the wrong path.
     """
     override = app.config.get('ANSIBLE_DIR') or os.environ.get('CMDBSYNCER_ANSIBLE_DIR')
     if override:
         return Path(override)
+    deploy_root = Path(sys.prefix).parent / 'ansible'
+    if deploy_root.is_dir():
+        return deploy_root
     return Path(app.root_path).parent / 'ansible'
 
 
