@@ -158,6 +158,11 @@ PRESETS = [
              'default': '3 per minute; 10 per hour',
              'hint': 'Per-IP rate limit for login + password-reset POSTs '
                      '(Flask-Limiter syntax).'},
+            {'key': 'API_RATE_LIMIT', 'type': 'str',
+             'default': '30 per minute; 300 per hour',
+             'hint': 'Per-IP rate limit for /api/v1. Only 401 responses '
+                     'count, so legitimate polling never spends quota. '
+                     'Raise if your monitoring polls many endpoints.'},
             {'key': 'RATELIMIT_STORAGE_URI', 'type': 'str',
              'default': 'memory://',
              'hint': 'Backend for rate-limit counters. Use redis:// or '

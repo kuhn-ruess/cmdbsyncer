@@ -14,9 +14,12 @@ API_BP = Blueprint('api', __name__)
 
 # Rate-limit API auth failures per client IP. Only 401 responses deduct from
 # the bucket, so legitimate high-volume API traffic is not throttled — only
-# brute-force / credential-stuffing attempts are.
+# brute-force / credential-stuffing attempts are. Uses its own bucket
+# (API_RATE_LIMIT), independent of the much stricter form-login budget
+# (AUTH_RATE_LIMIT, used by /auth) — otherwise a polling monitoring agent
+# whose creds are momentarily wrong can lock the whole API for an hour.
 limiter.limit(
-    lambda: app.config.get('AUTH_RATE_LIMIT', '3 per minute; 10 per hour'),
+    lambda: app.config.get('API_RATE_LIMIT', '30 per minute; 300 per hour'),
     deduct_when=lambda response: response.status_code == 401,
 )(API_BP)
 

@@ -196,6 +196,14 @@ class BaseConfig():
     # Applied per client IP to the POST handler; GET (rendering the form) is
     # not rate-limited.
     AUTH_RATE_LIMIT = '3 per minute; 10 per hour'
+    # Rate limit for the /api/v1 namespace. Only 401 responses deduct from
+    # the bucket (see application/api/views.py), so legitimate polling
+    # never spends quota. Picked generous enough that a misconfigured
+    # monitoring agent producing repeated 401s does not lock out the whole
+    # API for the rest of the hour, while still throttling credential
+    # stuffing. Set tighter via local_config.py if your network is fully
+    # trusted, or looser if you have many polling clients.
+    API_RATE_LIMIT = '30 per minute; 300 per hour'
     # Flask-Limiter storage backend. Default is in-process memory, which is
     # fine for single-worker deployments. For multiple workers, set to
     # e.g. 'redis://localhost:6379' or 'mongodb://localhost:27017/cmdb-api'.
