@@ -24,9 +24,34 @@ CLI_MODE = os.environ.get('CMDBSYNCER_CLI') == '1'
 # ``from application.cli import main`` and don't put cwd on ``sys.path``
 # beforehand — but ``local_config.py``, the user ``plugins/`` package,
 # ``disabled_plugins.json`` and friends all live in the deployment
-# directory. Inject cwd here, before any import that depends on it,
-# so pip-install behaves like a source checkout (where Python adds the
-# script directory to ``sys.path[0]`` automatically).
+# directory. We need to put the deployment directory on ``sys.path``
+# *before* the ``from local_config import config`` further down runs.
+# Doing this in ``application/cli.py:main()`` is too late: that function
+# only executes after ``from application.cli import main`` has already
+# fully imported this module — including the local_config load.
+#
+# Search in priority order:
+#   1. ``$CMDBSYNCER_CONFIG_DIR`` — operator override (set e.g. by the
+#      ansible inventory shims so ``ansible-playbook`` works from any cwd)
+#   2. cwd — source checkouts running ``./cmdbsyncer …`` from the repo
+#   3. parent of ``sys.prefix`` — pip layout where the venv lives
+#      inside the deployment dir (``/opt/cmdbsyncer/venv`` → ``/opt/cmdbsyncer``)
+#   4. ``/etc/cmdbsyncer`` — packaged-install convention
+# The first candidate that actually contains ``local_config.py`` wins
+# and is prepended to ``sys.path``. cwd is always injected as a fallback
+# so user ``plugins/`` resolution keeps working in source checkouts even
+# when local_config.py lives elsewhere.
+_config_candidates = []
+if _env_dir := os.environ.get("CMDBSYNCER_CONFIG_DIR"):
+    _config_candidates.append(_env_dir)
+_config_candidates.append(os.getcwd())
+_config_candidates.append(os.path.dirname(sys.prefix))
+_config_candidates.append("/etc/cmdbsyncer")
+for _candidate in _config_candidates:
+    if _candidate and os.path.isfile(os.path.join(_candidate, "local_config.py")):
+        if _candidate not in sys.path:
+            sys.path.insert(0, _candidate)
+        break
 if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
 
