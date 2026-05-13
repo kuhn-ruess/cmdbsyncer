@@ -94,13 +94,42 @@ def _has_unreleased_entries():
     return bool(match and match.group(1).strip())
 
 
-def get_display_version():
-    """Display form: ``4.0.0`` / ``4.0.0-dev`` / ``3.12-LTS3``.
+def _installed_version():
+    """The version recorded in installed-package metadata, or None.
 
-    PEP 440 stores LTS as ``3.12+lts3``; users see the conventional
-    ``-LTS`` form. ``-dev`` is appended on the main line while an
-    ``## Unreleased`` section is open.
+    `pyproject.toml` carries the authoritative pre-release counter
+    (``4.1.0.dev22`` etc.) but is gone after ``pip install``. The wheel's
+    dist-info keeps it, so ``importlib.metadata`` recovers the suffix on
+    both PyPI installs and editable installs. Source checkouts without
+    an installation just fall through to the changelog-derived version.
+    """
+    try:
+        from importlib.metadata import (  # pylint: disable=import-outside-toplevel
+            PackageNotFoundError, version as _md_version,
+        )
+        return _md_version('cmdbsyncer')
+    except (PackageNotFoundError, ImportError, ModuleNotFoundError):
+        return None
+
+
+def get_display_version():
+    """Display form: ``4.0.0`` / ``4.0.0-dev22`` / ``3.12-LTS3``.
+
+    Resolution:
+    - LTS lines keep their ``-LTS`` suffix (PEP 440 stores it as ``+lts``).
+    - If the installed metadata carries a pre-release suffix (``.devN``,
+      ``aN``, ``bN``, ``rcN``), surface it as ``-dev22`` / ``-rc1`` etc.
+      so users can tell which dev build they are on.
+    - Otherwise, while an ``## Unreleased`` section is still open in the
+      active changelog, append a bare ``-dev`` (source checkouts before
+      the next pre-release is cut).
     """
     if '+lts' in __version__:
         return __version__.replace('+lts', '-LTS')
+    installed = _installed_version()
+    if installed:
+        match = re.search(r'\.(dev\d+|a\d+|b\d+|rc\d+)$', installed)
+        if match:
+            base = installed[:match.start()]
+            return f'{base}-{match.group(1)}'
     return f'{__version__}-dev' if _has_unreleased_entries() else __version__
