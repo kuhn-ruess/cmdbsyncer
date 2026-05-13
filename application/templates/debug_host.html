@@ -317,12 +317,30 @@
                   <tr>
                     <th style="width: 280px;">Rule</th>
                     <th style="width: 70px;">Hit</th>
-                    <th>First reason the rule won't match</th>
+                    <th>Matching condition / first reason it won't match</th>
                     <th style="width: 120px;">Condition Type</th>
                     <th style="width: 100px;">Last Match</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {% macro render_condition(cond) %}
+                    {% if cond['match_type'] == 'host' %}
+                      <span class="badge badge-primary">
+                        {{ negate[cond['hostname_match_negate']] }}{{ condition_types[cond['hostname_match']] }}
+                      </span>
+                      <span class="badge badge-info">{{ cond['hostname'] }}</span>
+                    {% else %}
+                      <span class="badge badge-primary">
+                        {{ negate[cond['tag_match_negate']] }}{{ condition_types[cond['tag_match']] }}
+                      </span>
+                      <span class="badge badge-info">{{ cond['tag'] }}</span>
+                      =
+                      <span class="badge badge-primary">
+                        {{ negate[cond['value_match_negate']] }}{{ condition_types[cond['value_match']] }}
+                      </span>
+                      <span class="badge badge-info">{{ cond['value'] }}</span>
+                    {% endif %}
+                  {% endmacro %}
                   {% for rule in rule_raw %}
                     <tr {% if rule['hit'] %} class="rule-hit" {% endif %}>
                       <td>
@@ -340,24 +358,14 @@
                         {% endif %}
                       </td>
                       <td>
-                        {% if rule['no_match_reason'] %}
-                          {% set no_match = rule['no_match_reason'] %}
-                          {% if no_match['match_type'] == 'host' %}
-                            <span class="badge badge-primary">
-                              {{ negate[no_match['hostname_match_negate']] }}{{ condition_types[no_match['hostname_match']] }}
-                            </span>
-                            <span class="badge badge-info">{{ no_match['hostname'] }}</span>
+                        {% if rule['hit'] %}
+                          {% if rule['match_reason'] %}
+                            {{ render_condition(rule['match_reason']) }}
                           {% else %}
-                            <span class="badge badge-primary">
-                              {{ negate[no_match['tag_match_negate']] }}{{ condition_types[no_match['tag_match']] }}
-                            </span>
-                            <span class="badge badge-info">{{ no_match['tag'] }}</span>
-                            =
-                            <span class="badge badge-primary">
-                              {{ negate[no_match['value_match_negate']] }}{{ condition_types[no_match['value_match']] }}
-                            </span>
-                            <span class="badge badge-info">{{ no_match['value'] }}</span>
+                            <span class="text-muted"><i class="fa fa-check"></i> always matches</span>
                           {% endif %}
+                        {% elif rule['no_match_reason'] %}
+                          {{ render_condition(rule['no_match_reason']) }}
                         {% endif %}
                       </td>
                       <td>{{ rule['condition_type'] }}</td>

@@ -216,7 +216,7 @@ class Rule():
         self._rule_docs_cache = (current_key, objs, prepared)
         return objs, prepared
 
-    # pylint: disable=too-many-branches
+    # pylint: disable=too-many-branches,too-many-statements
     def check_rules(self, hostname):
         """
         Handle Rule Match logic
@@ -252,11 +252,14 @@ class Rule():
             conditions = rule['conditions']
 
             no_match_reason = None
+            match_reason = None
             if condition_typ == 'any':
                 for condition in conditions:
                     if self.handle_match(condition, hostname):
                         rule_hit = True
                         no_match_reason = None
+                        if self.debug:
+                            match_reason = dict(condition)
                         break # We have a hit, no need to check more
                     if self.debug:
                         no_match_reason = dict(condition)
@@ -269,6 +272,10 @@ class Rule():
                         if self.debug:
                             no_match_reason = dict(condition)
                         break # One was no hit, no need for loop
+                if self.debug and rule_hit and conditions:
+                    # All conditions matched — surface the last one as the
+                    # representative match (mirrors no_match_reason shape).
+                    match_reason = dict(conditions[-1])
 
             elif condition_typ == 'anyway':
                 rule_hit = True
@@ -279,6 +286,7 @@ class Rule():
                     "group": self.name,
                     "hit": rule_hit,
                     'no_match_reason': no_match_reason,
+                    'match_reason': match_reason,
                     "condition_type": _RULE_DESCRIPTIONS[condition_typ],
                     "name": rule['name'],
                     "id": str(rule['_id']),
