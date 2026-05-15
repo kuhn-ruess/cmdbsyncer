@@ -252,11 +252,15 @@ if not CLI_MODE:
         """
         Feed the navbar badge in master.html. Runs on every admin
         request, so it must be cheap and fail-soft — the count is a
-        nicety, not a correctness requirement.
+        nicety, not a correctness requirement. The workflow only
+        applies when the operator has nominated critical labels in
+        APPROVAL_REQUIRED_LABELS, so the badge stays hidden otherwise.
         """
         # pylint: disable=import-outside-toplevel
         from flask_login import current_user as _user
         if not app.config.get('CMDB_MODE'):
+            return {'pending_approval_count': 0}
+        if not app.config.get('APPROVAL_REQUIRED_LABELS'):
             return {'pending_approval_count': 0}
         try:
             if not _user.is_authenticated:
@@ -557,7 +561,8 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_sub_category(name="Backups", parent_name="Settings")
     from application.models.field_approval import FieldApproval
     from application.views.field_approval import FieldApprovalView
-    admin.add_view(FieldApprovalView(FieldApproval, name="Approvals",
+    admin.add_view(FieldApprovalView(FieldApproval,
+                                     name="Critical Label Approvals",
                                      category="Settings",
                                      menu_icon_type='fa',
                                      menu_icon_value='fa-hourglass-half'))

@@ -361,11 +361,11 @@
                     {% if pending_approval_count and pending_approval_count > 0 %}
                     <li id='pending-approvals' class="nav-item">
                       <a href="{{ pending_approval_url }}" class="nav-link"
-                         title="Pending approvals waiting for a second admin">
+                         title="Critical label changes waiting for approval">
                         <i class="fa fa-hourglass-half"></i>
                         <span class="badge badge-warning"
                               style="background:#f39c12;color:#000;">
-                          {{ pending_approval_count }} waiting
+                          {{ pending_approval_count }} label approvals
                         </span>
                       </a>
                     </li>

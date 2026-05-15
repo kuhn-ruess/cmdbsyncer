@@ -39,9 +39,13 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
     column_filters = ('status', 'hostname', 'field_name', 'requested_by_email')
 
     def is_accessible(self):
-        # The approval queue is part of the CMDB workflow — hide it (and
-        # its menu link) when the install is running in plain syncer mode.
+        # The approval queue only applies when the operator has nominated
+        # critical labels in APPROVAL_REQUIRED_LABELS; with the default
+        # empty list nothing can ever land in the queue, so hide the menu
+        # entry entirely. Also hidden outside CMDB mode.
         if not app.config.get('CMDB_MODE'):
+            return False
+        if not app.config.get('APPROVAL_REQUIRED_LABELS'):
             return False
         return current_user.is_authenticated and (
             current_user.global_admin
@@ -56,8 +60,8 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
     def action_approve(self, ids):
         """Apply each pending change to its host and mark the row approved."""
         if not self._can_decide():
-            flash('Approval requires the "Approve or reject pending field '
-                  'changes" role.', 'error')
+            flash('Approval requires the "Approve or reject pending '
+                  'critical-label changes" role.', 'error')
             return redirect(request.referrer or url_for('.index_view'))
         applied, skipped = 0, 0
         for approval in FieldApproval.objects(id__in=ids, status='pending'):
@@ -95,8 +99,8 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
     def action_reject(self, ids):
         """Mark each pending change as rejected without touching the host."""
         if not self._can_decide():
-            flash('Approval requires the "Approve or reject pending field '
-                  'changes" role.', 'error')
+            flash('Approval requires the "Approve or reject pending '
+                  'critical-label changes" role.', 'error')
             return redirect(request.referrer or url_for('.index_view'))
         rejected = 0
         for approval in FieldApproval.objects(id__in=ids, status='pending'):
