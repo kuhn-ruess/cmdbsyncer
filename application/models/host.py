@@ -19,6 +19,17 @@ LIFECYCLE_STATES = (
     ('archived', 'Archived'),
 )
 
+# `delete_reason` prefixes written by automatic archival paths
+# (delete_host_not_found_on_import + the maintenance stale auto-archive).
+# A host carrying one of these is brought back to 'active' the next time
+# it is seen on import. A manual UI delete uses a different reason and is
+# deliberately left archived so an import can't undo an operator action.
+AUTO_ARCHIVE_REASON_PREFIXES = (
+    'not seen on import',
+    'stale > ',
+    'maintenance: not seen for ',
+)
+
 RELATION_TYPES = (
     ('depends_on', 'Depends on'),
     ('runs_on', 'Runs on'),
@@ -814,11 +825,16 @@ class Host(db.Document):
     def set_import_seen(self):
         """
         Mark that this host was found on import. New / legacy hosts
-        without a lifecycle state are flipped to 'active'; an explicit
-        non-active state ('decommissioned', 'archived', ...) is left
-        alone so a fresh import can't undo a manual state change.
+        without a lifecycle state are flipped to 'active'. A host that
+        was *automatically* archived (not seen on import / stale auto-
+        archive) is restored to 'active' now that it is back in the
+        source. A manual UI delete or an explicit non-active state
+        (decommissioned, manually archived) is left alone so a fresh
+        import can't undo an operator decision.
         """
         self.last_import_seen = datetime.datetime.now()
+        if self.deleted_at and self._was_auto_archived():
+            self.restore('active')
         if not self.lifecycle_state:
             self.lifecycle_state = 'active'
         # Fresh import contradicts an earlier "stale" verdict.
@@ -863,6 +879,15 @@ class Host(db.Document):
             self.set_lifecycle_state(new_state)
         self.add_log(f"Restored to {new_state}")
         return True
+
+    def _was_auto_archived(self):
+        """True if the current archival was done by an automatic path
+        (not seen on import / stale auto-archive), not a manual UI
+        delete — only those are reversed automatically on re-import.
+        """
+        reason = self.delete_reason or ''
+        return any(reason.startswith(prefix)
+                   for prefix in AUTO_ARCHIVE_REASON_PREFIXES)
 
     def set_lifecycle_state(self, new_state):
         """
