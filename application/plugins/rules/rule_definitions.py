@@ -44,6 +44,7 @@ rules = {
     'vmware_custom_attributes': ('application.plugins.vmware.models', 'VMwareCustomAttributes'),
     'vmware_rewrite_attributes': ('application.plugins.vmware.models', 'VMwareRewriteAttributes'),
     'syncer_rule_automation': ('application.plugins.rules.models', 'SyncerRuleAutomation'),
+    'cron_groups': ('application.models.cron', 'CronGroup'),
 }
 
 

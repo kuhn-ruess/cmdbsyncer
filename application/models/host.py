@@ -411,7 +411,6 @@ class Host(db.Document):
         but checks first if needed and also sets
         set_import_sync and import_seen as needed
         """
-        validate_mongo_keys(labels, "label")
         if app.config['LABELS_ITERATE_FIRST_LEVEL']:
             for key, value in list(labels.items()):
                 if isinstance(value, dict):
@@ -419,9 +418,10 @@ class Host(db.Document):
                         labels[f'{key}_{sub_key}'] = sub_value
                     del labels[key]
         label_dict = dict(map(lambda kv: (self._fix_key(kv[0]), kv[1]), labels.items()))
-        # Re-validate after _fix_key so a LOWERCASE/REPLACER config that
-        # strips a key down to an empty / MongoDB-reserved form cannot slip
-        # past the input check.
+        # Validate only after _fix_key: REPLACERS are the intended way to
+        # turn `.`/`$` in incoming label names into MongoDB-safe keys, so
+        # the check must run on the post-replacer form. Anything still
+        # invalid here is rejected with a clear error.
         validate_mongo_keys(label_dict, "label")
         if self.get_labels() != label_dict:
             self.set_import_sync()
