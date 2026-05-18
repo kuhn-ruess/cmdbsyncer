@@ -51,9 +51,11 @@ class ValidateMongoKeyTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_mongo_key('$set', 'inventory')
 
-    def test_rejects_dot_in_key(self):
-        with self.assertRaises(ValueError):
-            validate_mongo_key('a.b', 'inventory')
+    def test_allows_dot_in_key(self):
+        # Dots are valid in stored MongoDB field names (5.0+) and common
+        # in real label names (FQDNs), so they must not be rejected.
+        validate_mongo_key('host.example.com', 'label')
+        validate_mongo_key('a.b', 'inventory')
 
     def test_allows_dollar_not_at_start(self):
         # MongoDB only disallows `$` at position 0.

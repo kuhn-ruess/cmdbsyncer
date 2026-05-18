@@ -1,7 +1,9 @@
 """
 Validate dictionary keys before they are handed to MongoDB.
 
-MongoDB rejects field names that are empty, `$`-prefixed, or contain `.`.
+MongoDB rejects field names that are empty or `$`-prefixed. Dots are
+accepted in stored field names (MongoDB 5.0+) and are common in real
+label names (FQDNs), so they are deliberately *not* rejected here.
 Validating at the point of write — from API handlers, plugins, and
 importers alike — raises ValueError with a clear message instead of
 leaking a driver-level 500 mid-save.
@@ -12,10 +14,8 @@ def validate_mongo_key(key, what):
     """Raise ValueError if `key` cannot be stored as a MongoDB field name."""
     if not isinstance(key, str) or not key or not key.strip():
         raise ValueError(f"{what} key must be a non-empty string")
-    if key.startswith('$') or '.' in key:
-        raise ValueError(
-            f"{what} key '{key}' must not start with '$' or contain '.'"
-        )
+    if key.startswith('$'):
+        raise ValueError(f"{what} key '{key}' must not start with '$'")
 
 
 def validate_mongo_keys(mapping, what):

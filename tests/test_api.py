@@ -764,7 +764,7 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         get_account.return_value = {'name': 'acct', '_id': 'id1'}
         host = MagicMock()
         host.update_host.side_effect = ValueError(
-            "label key '$bad' must not start with '$' or contain '.'")
+            "label key '$bad' must not start with '$'")
         host_cls.get_host.return_value = host
         resp = self.client.post(
             '/api/v1/objects/web01',
@@ -780,7 +780,7 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         get_account.return_value = {'name': 'acct', '_id': 'id1'}
         host = MagicMock()
         host.update_host.side_effect = ValueError(
-            "label key '$bad' must not start with '$' or contain '.'")
+            "label key '$bad' must not start with '$'")
         host_cls.get_host.return_value = host
         payload = {
             'account': 'acct',
@@ -903,7 +903,7 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
     def test_inventory_post_rejects_dollar_prefixed_key(self, host_cls):
         host = MagicMock()
         host.update_inventory.side_effect = ValueError(
-            "inventory key '$bad' must not start with '$' or contain '.'")
+            "inventory key '$bad' must not start with '$'")
         host_cls.get_host.return_value = host
         resp = self.client.post(
             '/api/v1/objects/web01/inventory',

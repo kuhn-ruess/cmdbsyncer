@@ -418,10 +418,9 @@ class Host(db.Document):
                         labels[f'{key}_{sub_key}'] = sub_value
                     del labels[key]
         label_dict = dict(map(lambda kv: (self._fix_key(kv[0]), kv[1]), labels.items()))
-        # Validate only after _fix_key: REPLACERS are the intended way to
-        # turn `.`/`$` in incoming label names into MongoDB-safe keys, so
-        # the check must run on the post-replacer form. Anything still
-        # invalid here is rejected with a clear error.
+        # Validate after _fix_key so a configured REPLACER still gets the
+        # chance to neutralize a `$`-prefixed key before it is rejected.
+        # Dots are allowed and pass through untouched.
         validate_mongo_keys(label_dict, "label")
         if self.get_labels() != label_dict:
             self.set_import_sync()
