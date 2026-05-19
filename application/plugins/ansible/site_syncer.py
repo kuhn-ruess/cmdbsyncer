@@ -33,7 +33,13 @@ class SyncSites(Plugin):
         # Render user, secret, and server with syncer_jinja
         cmk_user = render_jinja(site.settings_master.cmk_user or "")
         cmk_secret = render_jinja(site.settings_master.cmk_secret or "")
+        # cmk_server_address is an optional override. When it's not set, the
+        # API base is the server/site we are managing anyway, which is always
+        # present (server_address is required), so fall back to that instead
+        # of emitting an empty, unusable URL.
         cmk_main_server = render_jinja(site.settings_master.cmk_server_address or "")
+        if not cmk_main_server.strip():
+            cmk_main_server = f"https://{site.server_address}/{site.name}"
 
         inventory.update({
             'cmk_site': site.name,
