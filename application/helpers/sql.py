@@ -80,8 +80,46 @@ def _validate_identifier(identifier):
     return value
 
 
+def _validate_table_expression(table):
+    """
+    Validate the ``table`` value of an account config.
+
+    Accepts either a bare identifier (the common case) or an identifier
+    followed by additional FROM-clause SQL — typically a WHERE filter
+    that some installations have historically baked into the table
+    field. The extra SQL must not contain statement separators, SQL
+    comments or destructive / data-mutating keywords, so the relaxed
+    form cannot be used to smuggle DROP/TRUNCATE/UPDATE/INSERT/… into
+    the executed statement.
+    """
+    value = table.strip()
+    if not value:
+        raise ValueError(f"Unsafe SQL identifier: {table}")
+    if IDENTIFIER_RE.fullmatch(value):
+        return value
+    # Extended form: ``<identifier> <free SQL>``. Split off the leading
+    # identifier (table / view name) and audit the remainder.
+    head_match = re.match(r"^([^\W\d][\w$]*(?:\.[^\W\d][\w$]*)*)\s+(.+)$",
+                          value, re.UNICODE | re.DOTALL)
+    if not head_match:
+        raise ValueError(f"Unsafe SQL identifier: {table}")
+    tail = head_match.group(2)
+    if ';' in tail or _COMMENT_RE.search(tail):
+        raise ValueError(f"Unsafe SQL identifier: {table}")
+    if _DESTRUCTIVE_KEYWORDS_RE.search(tail):
+        raise ValueError(f"Unsafe SQL identifier: {table}")
+    return value
+
+
 def build_select_query(fields, table):
-    """Build a SELECT query from validated identifiers only."""
+    """Build a SELECT query from validated identifiers only.
+
+    ``fields`` is always a strict comma-separated identifier list.
+    ``table`` is a bare identifier in the normal case, but may carry an
+    appended ``WHERE …`` filter as long as it passes the destructive-
+    keyword / no-semicolon / no-comment audit in
+    :func:`_validate_table_expression`.
+    """
     safe_fields = ", ".join(_validate_identifier(field) for field in fields.split(','))
-    safe_table = _validate_identifier(table)
+    safe_table = _validate_table_expression(table)
     return f"SELECT {safe_fields} FROM {safe_table}"

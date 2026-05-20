@@ -127,6 +127,28 @@ class TestBuildSelectQuery(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_select_query("Eigentümer Firma", "hosts")
 
+    def test_allows_where_clause_in_table(self):
+        q = build_select_query(
+            "Hostname,CITyp",
+            "V_CMDBCI4CHECKMK where (CITyp LIKE '%server%' OR CITyp = 'Netzwerk') "
+            "AND Hostname != '' AND NOT (AssetStatus = 'Bereitstellung' "
+            "AND Clustername IS NOT NULL AND Clustername != '')",
+        )
+        self.assertTrue(q.startswith("SELECT Hostname, CITyp FROM V_CMDBCI4CHECKMK where "))
+        self.assertIn("CITyp LIKE '%server%'", q)
+
+    def test_table_with_where_still_blocks_drop(self):
+        with self.assertRaises(ValueError):
+            build_select_query("host", "hosts WHERE 1=1; DROP TABLE x")
+
+    def test_table_with_where_still_blocks_update(self):
+        with self.assertRaises(ValueError):
+            build_select_query("host", "hosts WHERE id IN (UPDATE x SET a=1 RETURNING id)")
+
+    def test_table_with_where_blocks_sql_comment(self):
+        with self.assertRaises(ValueError):
+            build_select_query("host", "hosts WHERE 1=1 -- truncate everything")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
