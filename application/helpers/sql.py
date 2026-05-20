@@ -4,7 +4,12 @@ Helpers for building restricted SQL queries from account configuration.
 import re
 
 
-IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*$")
+# Unicode-aware: real-world column names contain umlauts and other
+# non-ASCII letters (e.g. ``EigentümerFirmaName``), and every SQL dialect
+# we drive (MySQL, MSSQL/ODBC, PostgreSQL) accepts them. ``\w`` in Python 3
+# already matches Unicode word chars, so we only need to forbid leading
+# digits and keep ``$`` allowed for the engines that use it.
+IDENTIFIER_RE = re.compile(r"^[^\W\d][\w$]*(\.[^\W\d][\w$]*)*$", re.UNICODE)
 
 _WRITE_KEYWORDS_RE = re.compile(
     r'\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|EXEC|EXECUTE|'

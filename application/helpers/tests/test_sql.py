@@ -117,6 +117,16 @@ class TestBuildSelectQuery(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_select_query("host", "hosts; DROP TABLE x")
 
+    def test_allows_unicode_identifier(self):
+        self.assertEqual(
+            build_select_query("EigentümerFirmaName,ip", "hösts"),
+            "SELECT EigentümerFirmaName, ip FROM hösts",
+        )
+
+    def test_rejects_whitespace_in_unicode_identifier(self):
+        with self.assertRaises(ValueError):
+            build_select_query("Eigentümer Firma", "hosts")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
