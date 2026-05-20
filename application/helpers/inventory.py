@@ -23,14 +23,14 @@ def inventorize_host(host_obj, labels, key, config):
 
 
 
-def run_inventory(config, objects, sub_key=None):
+def run_inventory(config, objects, sub_key=None):  # pylint: disable=too-many-branches
     """
     Execute the inventory process for a collection of hosts and their associated labels.
-    
+
     This function processes host inventory data by iterating through host objects,
     applying hostname transformations, and storing inventory information. It supports
     collecting hosts by a specified key and can match hosts by domain patterns.
-    
+
     Args:
         config (dict): Configuration dictionary containing inventory settings including:
             - inventorize_key: Base key for inventory storage
@@ -40,8 +40,10 @@ def run_inventory(config, objects, sub_key=None):
             - inventorize_match_by_domain: Boolean flag for domain-based host matching
         objects (list): List of tuples in the format (hostname, labels) where:
             - hostname (str): The hostname of the host
-            - labels (dict or list): Dictionary of labels or list that will be converted to {'list': labels}
-        sub_key (str, optional): Additional key suffix to append to the inventory key. Defaults to None.
+            - labels (dict or list): Dictionary of labels, or a list that is
+              wrapped as {'list': labels}
+        sub_key (str, optional): Additional key suffix to append to the inventory key.
+            Defaults to None.
     
     Returns:
         None
@@ -92,4 +94,9 @@ def run_inventory(config, objects, sub_key=None):
         for hostname, subs in collected_by_key.items():
             # Loop ALL hosts to delete empty collections if not found anymore
             host_obj = Host.get_host(hostname, create=False)
-            inventorize_host(host_obj, dict(enumerate(subs)), f"{inv_key}_collection", False)
+            # Stringify the enumeration index — the MongoDB-key validator
+            # in update_inventory() runs before _fix_key() and refuses
+            # raw ints, while the on-disk shape (``<key>__0``, ``__1``, …)
+            # has always been string-keyed via ``_fix_key``.
+            inventorize_host(host_obj, {str(i): v for i, v in enumerate(subs)},
+                             f"{inv_key}_collection", False)
