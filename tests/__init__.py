@@ -257,6 +257,7 @@ _mongoengine_errors.MultipleObjectsReturned = type(
     {},
 )
 _mongoengine_errors.NotUniqueError = type("NotUniqueError", (Exception,), {})
+_mongoengine_errors.ValidationError = type("ValidationError", (Exception,), {})
 
 # Replace the real flask_admin.contrib.mongoengine integration with a minimal
 # stub that only exposes BaseMongoEngineFilter / ModelView so admin views load.
