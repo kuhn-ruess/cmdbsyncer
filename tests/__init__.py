@@ -103,6 +103,19 @@ sys.modules["application.plugins.vmware"].get_vmware_debug_data = MagicMock(
 _stub_package("application.modules.custom_attributes", path=[])
 _stub_package("application.helpers", path=[])
 
+# application.views.host_filters imports the search parser at module load
+# time; stub it so test_api's direct importlib loader of host.py doesn't
+# choke on an unresolved sub-module.
+_search_parser = _stub_package("application.modules.search_parser")
+
+
+class _SearchSyntaxError(Exception):  # pylint: disable=missing-class-docstring
+    pass
+
+
+_search_parser.parse_search = MagicMock(name="stub.parse_search", return_value=None)
+_search_parser.SearchSyntaxError = _SearchSyntaxError
+
 
 # --- application.modules.custom_attributes.models ----------------------------
 

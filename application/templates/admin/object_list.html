@@ -44,6 +44,23 @@
 {{ super() }}
 <script>
 (function() {
+  // Same search-syntax tooltip as the host list — the Object list
+  // shares HostnameAndLabelSearchMixin and therefore the same parser.
+  var SEARCH_HELP = [
+    'Search syntax:',
+    '  prod              — substring on hostname / label & inventory values; exact match on label/inventory key',
+    '  prod AND web      — both must match (space alone also means AND)',
+    '  prod OR stage     — either matches',
+    '  NOT archived  /  !archived',
+    '  (prod OR stage) AND NOT test',
+    '  hostname:web*     — wildcard match against the hostname',
+    '  env:prod          — value under labels.env or inventory.env',
+    '  labels.env:prod   — only labels.env (use inventory. for inventory)',
+    '  basti_test*       — keys starting with basti_test (e.g. basti_test2)',
+    '  "foo bar"         — quote to keep spaces and disable * / ?'
+  ].join('\n');
+  $('input[name="search"]').attr('title', SEARCH_HELP);
+
   // Intercept the Copy-as-new ROW icon so it opens the modal instead
   // of navigating to the bare form template. The icon is rendered as
   // <a href="…/copy_as_new_form?source_id=…"> by EndpointLinkRowAction.

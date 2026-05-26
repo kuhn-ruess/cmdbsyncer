@@ -13,6 +13,7 @@ from flask import flash
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 
 from application.models.host import Host
+from application.modules.search_parser import parse_search, SearchSyntaxError
 
 FILTER_KEY_RE = re.compile(r'^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$')
 
@@ -285,52 +286,21 @@ class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods
             self._search_fields.append(field)
         return bool(self._search_fields)
 
-    @staticmethod
-    def _dict_value_match_expr(field_name, term):
-        """`$expr` that regex-matches any value of a dict-typed field."""
-        return {'$expr': {
-            '$anyElementTrue': {
-                '$map': {
-                    'input': {'$objectToArray': {
-                        '$ifNull': [f'${field_name}', {}],
-                    }},
-                    'as': 'kv',
-                    'in': {
-                        '$regexMatch': {
-                            'input': {
-                                '$convert': {
-                                    'input': '$$kv.v',
-                                    'to': 'string',
-                                    'onError': '',
-                                    'onNull': '',
-                                },
-                            },
-                            'regex': term,
-                            'options': 'i',
-                        },
-                    },
-                },
-            },
-        }}
-
     def _search(self, query, search_term):
         """
-        Match hostname OR any label value OR any inventory value
-        against the term. Falls back to a literal match if the user
-        typed something that doesn't compile as a regex.
+        Run the user-typed expression through the Lucene-flavoured
+        search parser. A bare term still matches hostname/labels/
+        inventory like before; boolean operators (AND/OR/NOT, `!`,
+        parentheses) and `field:value` pairs extend that. Malformed
+        input flashes a message and yields an empty result instead of
+        raising — the form re-renders with the user's expression intact
+        so they can fix it.
         """
-        term = (search_term or '').strip()
-        if not term:
-            return query
         try:
-            re.compile(term)
-        except re.error:
-            term = re.escape(term)
-        pipeline = {
-            '$or': [
-                {'hostname': {'$regex': term, '$options': 'i'}},
-                self._dict_value_match_expr('labels', term),
-                self._dict_value_match_expr('inventory', term),
-            ],
-        }
+            pipeline = parse_search(search_term)
+        except SearchSyntaxError as error:
+            flash(f"Search syntax error: {error}", 'danger')
+            return query.filter(hostname=None)
+        if pipeline is None:
+            return query
         return query.filter(__raw__=pipeline)

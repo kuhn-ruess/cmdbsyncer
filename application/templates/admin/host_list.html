@@ -31,9 +31,14 @@
   {% else %}
     <span class="text-muted" style="font-size: 0.9rem;">none yet</span>
   {% endif %}
+  <a href="{{ url_for('.export_csv') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}"
+     class="btn btn-sm btn-outline-secondary"
+     title="Download the currently filtered hosts as CSV (uses the configured export label/inventory fields)"
+     style="margin-left: auto;">
+    <i class="fa fa-download"></i> Export CSV
+  </a>
   <button type="button" class="btn btn-sm btn-outline-secondary"
-          data-toggle="modal" data-target="#savePresetModal"
-          style="margin-left: auto;">
+          data-toggle="modal" data-target="#savePresetModal">
     <i class="fa fa-plus"></i> Save current filter
   </button>
 </div>
@@ -240,6 +245,26 @@
 {{ super() }}
 <script>
 (function() {
+  // Attach a syntax cheat-sheet to the search box. We use the native
+  // `title` attribute because flask-admin's bootstrap4 layout doesn't
+  // initialise Bootstrap tooltips on the search input by default — a
+  // plain title keeps the help discoverable on hover without pulling
+  // in extra JS.
+  var SEARCH_HELP = [
+    'Search syntax:',
+    '  prod              — substring on hostname / label & inventory values; exact match on label/inventory key',
+    '  prod AND web      — both must match (space alone also means AND)',
+    '  prod OR stage     — either matches',
+    '  NOT archived  /  !archived',
+    '  (prod OR stage) AND NOT test',
+    '  hostname:web*     — wildcard match against the hostname',
+    '  env:prod          — value under labels.env or inventory.env',
+    '  labels.env:prod   — only labels.env (use inventory. for inventory)',
+    '  basti_test*       — keys starting with basti_test (e.g. basti_test2)',
+    '  "foo bar"         — quote to keep spaces and disable * / ?'
+  ].join('\n');
+  $('input[name="search"]').attr('title', SEARCH_HELP);
+
   // The "With selected…" dropdown items call modelActions.execute(name).
   // `modelActions` is created by actions.js which is loaded inside
   // flask-admin's `tail` block — we must hook in this same block,

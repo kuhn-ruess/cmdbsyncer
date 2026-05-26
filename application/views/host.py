@@ -2106,8 +2106,20 @@ Impact Chain.
 
         writer.writerow(headers)
 
-        # Get all hosts (excluding objects/templates)
-        hosts = Host.objects(is_object__ne=True).order_by('hostname')
+        # Honour the current list view's filters + search so the
+        # exported CSV matches what the user sees on screen. We lean
+        # on flask-admin's own filter parser (`_get_list_extra_args`)
+        # and then apply filters + search via `get_query`, mirroring
+        # the no-pagination branch of `get_list`.
+        view_args = self._get_list_extra_args()
+        hosts = self.get_query()
+        if view_args.filters and self._filters:
+            for flt, _flt_name, value in view_args.filters:
+                flt_obj = self._filters[flt]
+                hosts = flt_obj.apply(hosts, flt_obj.clean(value))
+        if view_args.search:
+            hosts = self._search(hosts, view_args.search)
+        hosts = hosts.order_by('hostname')
 
         # Write host data
         for host in hosts:
