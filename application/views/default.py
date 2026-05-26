@@ -13,7 +13,7 @@ from flask_admin import expose
 from flask_admin.contrib.mongoengine import ModelView
 from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from flask_admin.model.template import EndpointLinkRowAction
-from flask_admin.helpers import get_redirect_target
+from flask_admin.helpers import get_redirect_target, is_safe_url
 from flask_admin.model.helpers import get_mdict_item_or_list
 
 from wtforms.validators import ValidationError
@@ -132,7 +132,18 @@ class DefaultModelView(ModelView):
         """
         if request.method == "GET":
             entry_id = get_mdict_item_or_list(request.args, 'id')
-            return_url = get_redirect_target() or self.get_url('.index_view')
+            # Flask-Admin's row action doesn't pass `?url=...`, so
+            # `get_redirect_target()` is almost always empty here.
+            # Falling back to the same-host `request.referrer` keeps the
+            # list filter, sort and page intact when the user returns
+            # from the clone confirmation. Issue #121.
+            referrer = request.referrer or ''
+            referrer_target = referrer if referrer and is_safe_url(referrer) else None
+            return_url = (
+                get_redirect_target()
+                or referrer_target
+                or self.get_url('.index_view')
+            )
             return self.render(
                 'admin/model/clone_confirm.html',
                 entry_id=entry_id,

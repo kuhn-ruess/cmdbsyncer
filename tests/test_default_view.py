@@ -69,7 +69,11 @@ class DefaultViewModelChangeTest(unittest.TestCase):
             "flask_admin.model.template",
             EndpointLinkRowAction=_EndpointLinkRowAction,
         )
-        _stub_module("flask_admin.helpers", get_redirect_target=lambda: "")
+        _stub_module(
+            "flask_admin.helpers",
+            get_redirect_target=lambda: "",
+            is_safe_url=lambda target: True,
+        )
         _stub_module(
             "flask_admin.model.helpers",
             get_mdict_item_or_list=lambda data, key: data.get(key),
