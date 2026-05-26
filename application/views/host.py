@@ -995,6 +995,20 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         'relations': "Relations",
     }
 
+    # Flask-Admin renders these as a "?" icon next to the column header
+    # with the text as its tooltip. Used here to explain the green
+    # "from-Checkmk-sync-cache" badges in the Labels column — customers
+    # were reading their disappearance after an edit as data loss.
+    column_descriptions = {
+        'labels': (
+            "Blue badges are stored on the host (from imports or manual "
+            "edits). Green badges with a cloud icon come from the "
+            "Checkmk sync cache and are repopulated on the next "
+            "Checkmk sync — they disappear briefly after an edit, this "
+            "is expected."
+        ),
+    }
+
     column_sortable_list = ('hostname',
                             'lifecycle_state',
                             'last_import_seen',

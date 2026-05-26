@@ -342,6 +342,15 @@ def _render_labels(_view, _context, model, _name):
             f'{escape(text)}</span>'
         )
 
+    # Labels coming from the Checkmk sync cache (the "green" badges).
+    # A leading cloud icon + an explanatory tooltip clarifies that these
+    # are a sync-time snapshot — they vanish after an edit (because
+    # `on_model_change` clears `model.cache`) and reappear on the next
+    # sync. Customers used to read the disappearance as data loss.
+    cache_tooltip = (
+        "From the Checkmk sync cache. Repopulates on the next Checkmk "
+        "sync; disappears briefly after editing this host."
+    )
     for key, value in checkmk_labels.items():
         if not value:
             continue
@@ -352,7 +361,8 @@ def _render_labels(_view, _context, model, _name):
             f'<span class="badge mr-1" '
             f'style="{_LABEL_BADGE_STYLE} '
             f'background-color: rgb(43, 181, 120);" '
-            f'title="{escape(text)}">'
+            f'title="{escape(text)} — {escape(cache_tooltip)}">'
+            f'<i class="fa fa-cloud mr-1" aria-hidden="true"></i>'
             f'{escape(text)}</span>'
         )
 
