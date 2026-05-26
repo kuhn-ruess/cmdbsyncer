@@ -2003,6 +2003,7 @@ Impact Chain.
             valid_ids = [hid for hid in host_ids if hid.strip()]
             hosts = list(Host.objects(id__in=valid_ids))
             updated_count = 0
+            actor_email = getattr(current_user, 'email', None)
             for host in hosts:
                 # Append template if not already in the list
                 existing_ids = [t.id for t in host.cmdb_templates]
@@ -2014,17 +2015,27 @@ Impact Chain.
                 host.last_import_seen = datetime.now()
                 host.cache = {}
                 host.source_account_name = "cmdb"
+                # Tag the label mutation so HostLabelChange rows show
+                # who triggered the bulk action.
+                host._label_change_source = 'manual'  # pylint: disable=protected-access
+                host._label_change_user = actor_email  # pylint: disable=protected-access
 
                 # Set Extra Fields from CMDB config
                 cmdb_fields = app.config['CMDB_MODELS'].get(host.object_type, {})
                 cmdb_fields.update(app.config['CMDB_MODELS']['all'])
 
-                # Create labels from existing cmdb_fields
+                # Start from any cmdb_fields the host already has, then
+                # MERGE the host's existing labels back in — `update_host`
+                # is a wholesale replacement and would otherwise drop
+                # every imported (non-CMDB) label on the host.
                 new_labels = {
                     x.field_name: x.field_value
                     for x in host.cmdb_fields
                     if x.field_value
                 }
+                for label_key, label_value in (host.labels or {}).items():
+                    if label_key not in new_labels:
+                        new_labels[label_key] = label_value
 
                 host.update_host(new_labels)
                 host.set_inventory_attributes('cmdb')
