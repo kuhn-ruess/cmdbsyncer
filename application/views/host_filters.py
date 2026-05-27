@@ -303,4 +303,17 @@ class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods
             return query.filter(hostname=None)
         if pipeline is None:
             return query
-        return query.filter(__raw__=pipeline)
+        filtered = query.filter(__raw__=pipeline)
+        # Eagerly run a tiny query so a regex that compiles in Python
+        # but trips MongoDB's PCRE engine (e.g. an unbalanced character
+        # class buried under a NOT, or a value Mongo refuses for other
+        # reasons) is surfaced as a flash message instead of a 500
+        # later in Flask-Admin's count/iterate loop. `.first()` is the
+        # cheapest probe — Mongo aborts the query on the bad regex
+        # before scanning, regardless of collection size.
+        try:
+            filtered.first()
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            flash(f"Search rejected by database: {error}", 'danger')
+            return query.filter(hostname=None)
+        return filtered
