@@ -98,14 +98,17 @@ a.editable-click.editable-disabled,
     color: #7c6f64 !important;
 }
 
-.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]),
-.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) {
+.model-list tbody tr.rule-disabled,
+.table tbody tr.rule-disabled,
+.model-list tbody tr.rule-disabled > *,
+.table tbody tr.rule-disabled > * {
     background-color: #ebdbb2 !important;
+    color: #7c6f64 !important;
     font-style: italic;
 }
-.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > *,
-.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > * {
-    color: #7c6f64 !important;
+.model-list tbody tr.rule-disabled td:nth-child(2),
+.table tbody tr.rule-disabled td:nth-child(2) {
+    border-left: 4px solid #9d0006 !important;
 }
 
 pre.syncer-code {

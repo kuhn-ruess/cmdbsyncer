@@ -165,14 +165,17 @@ a[data-role="x-editable-boolean"][data-value=""]:hover {
 a.editable-click.editable-disabled,
 .editable-click.editable-disabled { color: #6272a4 !important; }
 
-.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]),
-.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) {
+.model-list tbody tr.rule-disabled,
+.table tbody tr.rule-disabled,
+.model-list tbody tr.rule-disabled > *,
+.table tbody tr.rule-disabled > * {
     background-color: #21222c !important;
+    color: #6272a4 !important;
     font-style: italic;
 }
-.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > *,
-.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > * {
-    color: #6272a4 !important;
+.model-list tbody tr.rule-disabled td:nth-child(2),
+.table tbody tr.rule-disabled td:nth-child(2) {
+    border-left: 4px solid #ff5555 !important;
 }
 
 pre.syncer-code {

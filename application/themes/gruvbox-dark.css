@@ -175,17 +175,22 @@ a.editable-click.editable-disabled,
     color: #a89984 !important;
 }
 
-/* Dim entire rows whose `enabled` boolean is False. The `:has()`
-   selector picks the row that contains the False x-editable widget
-   without needing JS or a custom row-class hook. */
-.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]),
-.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) {
-    background-color: #2a2625 !important;
+/* Dim entire rows whose `enabled` boolean is False. master.html's
+   tail-block JS tags those rows with `.rule-disabled`; per-theme CSS
+   gives them a clearly distinct treatment instead of the legacy
+   inline `background:#f0f0f0; color:grey` which read as washed-out
+   white on every dark theme. */
+.model-list tbody tr.rule-disabled,
+.table tbody tr.rule-disabled,
+.model-list tbody tr.rule-disabled > *,
+.table tbody tr.rule-disabled > * {
+    background-color: #1d2021 !important;
+    color: #7c6f64 !important;
     font-style: italic;
 }
-.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > *,
-.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > * {
-    color: #928374 !important;
+.model-list tbody tr.rule-disabled td:nth-child(2),
+.table tbody tr.rule-disabled td:nth-child(2) {
+    border-left: 4px solid #cc241d !important;
 }
 
 /* Code-preview boxes in the rule list (`_render_jinja`,

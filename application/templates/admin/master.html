@@ -449,7 +449,12 @@
 
 
 
-        $("a#enabled>span.icon-minus-sign").parents('tr').css("background-color", "#f0f0f0").css("color", "grey");
+        // Mark rows whose `enabled` boolean is False so per-theme CSS can
+        // style them. The legacy version applied `background-color:#f0f0f0;
+        // color:grey` as inline styles, which beat every theme override and
+        // turned the row white-ish on Gruvbox / Dracula / Nord.
+        $('a[data-role="x-editable-boolean"][data-value=""]').closest('tr').addClass('rule-disabled');
+        $('a#enabled > span.icon-minus-sign').closest('tr').addClass('rule-disabled');
 
         // Gray out Commit Changes button when no changes pending
         function updateCommitButton() {
