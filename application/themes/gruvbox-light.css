@@ -81,6 +81,12 @@ a.editable-click,
     color: #3c3836 !important;
     border-bottom-color: #458588 !important;
 }
+a[data-role="x-editable-boolean"][data-value=""],
+a[data-role="x-editable-boolean"][data-value=""]:hover {
+    color: #9d0006 !important;
+    border-bottom-color: #9d0006 !important;
+    font-weight: 600 !important;
+}
 .editable-empty,
 .editable-empty:hover,
 .editable-empty:focus {
@@ -90,6 +96,23 @@ a.editable-click,
 a.editable-click.editable-disabled,
 .editable-click.editable-disabled {
     color: #7c6f64 !important;
+}
+
+.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]),
+.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) {
+    background-color: #ebdbb2 !important;
+    font-style: italic;
+}
+.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > *,
+.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > * {
+    color: #7c6f64 !important;
+}
+
+pre.syncer-code {
+    background-color: #fbf1c7 !important;
+    color: #3c3836 !important;
+    border-color: #d5c4a1 !important;
+    box-shadow: inset 0 0 0 1px #ebdbb2;
 }
 .navbar .dropdown-menu {
     background: #f9f5d7;

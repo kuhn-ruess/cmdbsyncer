@@ -151,12 +151,34 @@ a.editable-click,
     color: #d8dee9 !important;
     border-bottom-color: #81a1c1 !important;
 }
+a[data-role="x-editable-boolean"][data-value=""],
+a[data-role="x-editable-boolean"][data-value=""]:hover {
+    color: #bf616a !important;
+    border-bottom-color: #bf616a !important;
+    font-weight: 600 !important;
+}
 .editable-empty,
 .editable-empty:hover,
 .editable-empty:focus { color: #bf616a !important; }
 .editable-disabled,
 a.editable-click.editable-disabled,
 .editable-click.editable-disabled { color: #4c566a !important; }
+
+.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]),
+.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) {
+    background-color: #2a303d !important;
+    font-style: italic;
+}
+.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > *,
+.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > * {
+    color: #4c566a !important;
+}
+
+pre.syncer-code {
+    background-color: #2e3440 !important;
+    color: #eceff4 !important;
+    border-color: #434c5e !important;
+}
 
 .modal-content { background-color: #3b4252 !important; color: #d8dee9 !important; border-color: #434c5e !important; }
 .modal-header, .modal-footer { border-color: #434c5e !important; }

@@ -155,6 +155,15 @@ a.editable-click,
     color: #ebdbb2 !important;
     border-bottom-color: #83a598 !important;
 }
+/* x-editable's boolean widget renders `data-value="1"` for True and an
+   empty string for False. Mark the False cell with a red label so the
+   "off" state is unambiguous on a quick glance. */
+a[data-role="x-editable-boolean"][data-value=""],
+a[data-role="x-editable-boolean"][data-value=""]:hover {
+    color: #fb4934 !important;
+    border-bottom-color: #fb4934 !important;
+    font-weight: 600 !important;
+}
 .editable-empty,
 .editable-empty:hover,
 .editable-empty:focus {
@@ -164,6 +173,30 @@ a.editable-click,
 a.editable-click.editable-disabled,
 .editable-click.editable-disabled {
     color: #a89984 !important;
+}
+
+/* Dim entire rows whose `enabled` boolean is False. The `:has()`
+   selector picks the row that contains the False x-editable widget
+   without needing JS or a custom row-class hook. */
+.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]),
+.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) {
+    background-color: #2a2625 !important;
+    font-style: italic;
+}
+.model-list tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > *,
+.table tbody tr:has(a[data-role="x-editable-boolean"][data-value=""]) > * {
+    color: #928374 !important;
+}
+
+/* Code-preview boxes in the rule list (`_render_jinja`,
+   `_render_filter_outcomes`, `_render_attribute_rewrite`). Override
+   the base `--surface-subtle` colour so the pre block sits on a
+   darker shade than its surrounding `.card`, giving the value clear
+   contrast instead of blending into the card background. */
+pre.syncer-code {
+    background-color: #1d2021 !important;
+    color: #fbf1c7 !important;
+    border-color: #504945 !important;
 }
 
 .modal-content { background-color: #3c3836 !important; color: #ebdbb2 !important; border-color: #504945 !important; }
