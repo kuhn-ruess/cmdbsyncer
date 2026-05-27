@@ -70,8 +70,9 @@ h1, h2, h3, h4, h5, h6, label, legend, .form-text, p { color: #ebdbb2; }
 .model-list a:hover, .model-list a:hover > i {
     color: #fabd2f !important;
 }
-.icon-minus-sign, .fa-times, .fa-trash, .fa-remove { color: #fb4934 !important; }
-.icon-ok-circle, .fa-check, .fa-ok { color: #b8bb26 !important; }
+.icon-minus-sign, .fa-times, .fa-trash, .fa-remove,
+.fa-minus-circle, .fa-ban { color: #fb4934 !important; }
+.icon-ok-circle, .fa-check, .fa-ok, .fa-check-circle { color: #b8bb26 !important; }
 
 .app-card, .card, fieldset.inline-field, .well, .panel,
 .rule-section, .rule-section-body {
@@ -125,17 +126,45 @@ select option, .form-select option { background-color: #32302f; color: #ebdbb2; 
     color: #fabd2f !important;
 }
 
-.pagination .page-link {
-    background-color: #3c3836;
-    color: #ebdbb2;
-    border-color: #504945;
+.pagination .page-link,
+.pagination .page-item .page-link {
+    background-color: #3c3836 !important;
+    color: #ebdbb2 !important;
+    border-color: #504945 !important;
 }
 .pagination .page-item.active .page-link {
-    background-color: #d79921;
-    border-color: #d79921;
-    color: #282828;
+    background-color: #d79921 !important;
+    border-color: #d79921 !important;
+    color: #282828 !important;
 }
-.pagination .page-link:hover { background-color: #504945; color: #fabd2f; }
+.pagination .page-item.disabled .page-link {
+    background-color: #32302f !important;
+    color: #7c6f64 !important;
+    border-color: #504945 !important;
+}
+.pagination .page-link:hover { background-color: #504945 !important; color: #fabd2f !important; }
+
+/* x-editable inline boolean / text edits — Flask-Admin uses these for
+   columns in `column_editable_list` (e.g. `enabled` on rules). Without
+   theme overrides the dashed-underline link colour and the
+   "empty/false" red-italic stay at the library defaults (#0088cc /
+   #DD1144) which read as a washed-out light blue on the gruvbox
+   surface ("verbleached"). */
+a.editable-click,
+.editable-click {
+    color: #ebdbb2 !important;
+    border-bottom-color: #83a598 !important;
+}
+.editable-empty,
+.editable-empty:hover,
+.editable-empty:focus {
+    color: #fb4934 !important;
+}
+.editable-disabled,
+a.editable-click.editable-disabled,
+.editable-click.editable-disabled {
+    color: #a89984 !important;
+}
 
 .modal-content { background-color: #3c3836 !important; color: #ebdbb2 !important; border-color: #504945 !important; }
 .modal-header, .modal-footer { border-color: #504945 !important; }

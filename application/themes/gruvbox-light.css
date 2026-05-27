@@ -52,17 +52,45 @@ input[type=email], input[type=password], input[type=number] {
     color: #3c3836 !important;
     border-color: #d5c4a1 !important;
 }
-.pagination .page-link {
-    background: #f9f5d7;
-    color: #3c3836;
-    border-color: #d5c4a1;
+.pagination .page-link,
+.pagination .page-item .page-link {
+    background-color: #f9f5d7 !important;
+    color: #3c3836 !important;
+    border-color: #d5c4a1 !important;
 }
 .pagination .page-item.active .page-link {
-    background-color: #b57614;
-    border-color: #b57614;
-    color: #fbf1c7;
+    background-color: #b57614 !important;
+    border-color: #b57614 !important;
+    color: #fbf1c7 !important;
 }
-.pagination .page-link:hover { background: #ebdbb2; }
+.pagination .page-item.disabled .page-link {
+    background-color: #ebdbb2 !important;
+    color: #a89984 !important;
+    border-color: #d5c4a1 !important;
+}
+.pagination .page-link:hover { background-color: #ebdbb2 !important; color: #b57614 !important; }
+
+/* Same FA-icon / x-editable overrides as gruvbox-dark; the colours
+   come from the gruvbox-light palette. */
+.icon-minus-sign, .fa-times, .fa-trash, .fa-remove,
+.fa-minus-circle, .fa-ban { color: #cc241d !important; }
+.icon-ok-circle, .fa-check, .fa-ok, .fa-check-circle { color: #79740e !important; }
+
+a.editable-click,
+.editable-click {
+    color: #3c3836 !important;
+    border-bottom-color: #458588 !important;
+}
+.editable-empty,
+.editable-empty:hover,
+.editable-empty:focus {
+    color: #cc241d !important;
+}
+.editable-disabled,
+a.editable-click.editable-disabled,
+.editable-click.editable-disabled {
+    color: #7c6f64 !important;
+}
 .navbar .dropdown-menu {
     background: #f9f5d7;
     border-color: #d5c4a1;

@@ -125,17 +125,39 @@ select option, .form-select option { background-color: #21222c; color: #f8f8f2; 
     color: #f1fa8c !important;
 }
 
-.pagination .page-link {
-    background-color: #343746;
-    color: #f8f8f2;
-    border-color: #44475a;
+.pagination .page-link,
+.pagination .page-item .page-link {
+    background-color: #343746 !important;
+    color: #f8f8f2 !important;
+    border-color: #44475a !important;
 }
 .pagination .page-item.active .page-link {
-    background-color: #bd93f9;
-    border-color: #bd93f9;
-    color: #282a36;
+    background-color: #bd93f9 !important;
+    border-color: #bd93f9 !important;
+    color: #282a36 !important;
 }
-.pagination .page-link:hover { background-color: #44475a; color: #f1fa8c; }
+.pagination .page-item.disabled .page-link {
+    background-color: #282a36 !important;
+    color: #6272a4 !important;
+    border-color: #44475a !important;
+}
+.pagination .page-link:hover { background-color: #44475a !important; color: #f1fa8c !important; }
+
+/* FA-icon and x-editable colour overrides so deactivated rules and
+   inline-editable booleans don't render in the library defaults. */
+.fa-minus-circle, .fa-ban { color: #ff5555 !important; }
+.fa-check-circle { color: #50fa7b !important; }
+a.editable-click,
+.editable-click {
+    color: #f8f8f2 !important;
+    border-bottom-color: #8be9fd !important;
+}
+.editable-empty,
+.editable-empty:hover,
+.editable-empty:focus { color: #ff5555 !important; }
+.editable-disabled,
+a.editable-click.editable-disabled,
+.editable-click.editable-disabled { color: #6272a4 !important; }
 
 .modal-content { background-color: #343746 !important; color: #f8f8f2 !important; border-color: #44475a !important; }
 .modal-header, .modal-footer { border-color: #44475a !important; }

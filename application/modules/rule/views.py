@@ -8,9 +8,6 @@ from datetime import datetime
 from mongoengine.errors import NotUniqueError
 
 
-from pygments import highlight
-from pygments.formatters import HtmlFormatter
-from pygments.lexers import DjangoLexer
 from flask import flash
 
 from wtforms import HiddenField, StringField
@@ -182,11 +179,20 @@ form_subdocuments_template = {
 
 def _render_jinja(_view, _context, model, name):
     """
-    Render A field containing a Jinja Tempalte
+    Render a field containing a Jinja template as a plain code block.
+    The previous Pygments-based highlighter (1) had a typo in its
+    `style=` kwarg so the colour scheme silently fell back to the
+    default and (2) emitted CSS classes for which no stylesheet was
+    actually loaded, producing colourless tokens wrapped in markup
+    that picked up Pygments' built-in `<div class="highlight"><pre>`
+    light background. Render the value as theme-aware preformatted
+    text — readable in every theme — and skip the syntax highlight,
+    which the rule-list overview doesn't need.
     """
-    value = highlight(str(model[name]), DjangoLexer(),
-              HtmlFormatter(sytle='colorfull'))
-    return Markup(f'{value}')
+    value = str(model[name] or '')
+    return Markup(
+        f'<pre class="syncer-code">{escape(value)}</pre>'
+    )
 
 def _render_condition_typ(_view, _context, model, _name):
     """
@@ -212,16 +218,14 @@ def _render_filter_outcomes(_view, _context, model, _name):
         action = escape(dict(filter_actions)[entry.action])
         value = ""
         if entry.attribute_name:
-            value = \
-                highlight(str(entry.attribute_name), DjangoLexer(),
-                          HtmlFormatter(sytle='colorfull'))
+            value = f'<pre class="syncer-code">{escape(str(entry.attribute_name))}</pre>'
         html += f'''
             <div class="card">
               <div class="card-body">
                 <h6 class="card-subtitle mb-2 text-muted">{action}</h6>
-                <p class="card-text">
+                <div class="card-text">
                  {value}
-                </p>
+                </div>
               </div>
             </div>
             '''
@@ -622,8 +626,9 @@ def _render_attribute_rewrite(_view, _context, model, _name):
         old_attr_name = entry.old_attribute_name
         new_attr_name  = entry.new_attribute_name
 
-        value = \
-            highlight(str(entry.new_value), DjangoLexer(), HtmlFormatter(sytle='colorfull'))
+        value = (
+            f'<pre class="syncer-code">{escape(str(entry.new_value or ""))}</pre>'
+        )
 
         if old_attr_name and new_attr_name:
             attribute_name = f"Rewrite from {old_attr_name} to {new_attr_name}"

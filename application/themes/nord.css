@@ -125,17 +125,38 @@ select option, .form-select option { background-color: #2e3440; color: #d8dee9; 
     color: #ebcb8b !important;
 }
 
-.pagination .page-link {
-    background-color: #3b4252;
-    color: #d8dee9;
-    border-color: #434c5e;
+.pagination .page-link,
+.pagination .page-item .page-link {
+    background-color: #3b4252 !important;
+    color: #d8dee9 !important;
+    border-color: #434c5e !important;
 }
 .pagination .page-item.active .page-link {
-    background-color: #88c0d0;
-    border-color: #88c0d0;
-    color: #2e3440;
+    background-color: #88c0d0 !important;
+    border-color: #88c0d0 !important;
+    color: #2e3440 !important;
 }
-.pagination .page-link:hover { background-color: #434c5e; color: #ebcb8b; }
+.pagination .page-item.disabled .page-link {
+    background-color: #2e3440 !important;
+    color: #4c566a !important;
+    border-color: #434c5e !important;
+}
+.pagination .page-link:hover { background-color: #434c5e !important; color: #ebcb8b !important; }
+
+/* FA-icon and x-editable colour overrides. */
+.fa-minus-circle, .fa-ban { color: #bf616a !important; }
+.fa-check-circle { color: #a3be8c !important; }
+a.editable-click,
+.editable-click {
+    color: #d8dee9 !important;
+    border-bottom-color: #81a1c1 !important;
+}
+.editable-empty,
+.editable-empty:hover,
+.editable-empty:focus { color: #bf616a !important; }
+.editable-disabled,
+a.editable-click.editable-disabled,
+.editable-click.editable-disabled { color: #4c566a !important; }
 
 .modal-content { background-color: #3b4252 !important; color: #d8dee9 !important; border-color: #434c5e !important; }
 .modal-header, .modal-footer { border-color: #434c5e !important; }

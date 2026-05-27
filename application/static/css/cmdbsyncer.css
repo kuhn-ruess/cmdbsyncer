@@ -154,3 +154,21 @@ body { padding-top: 0; }
     white-space: nowrap;
     width: 1%;
 }
+
+/* Plain code preview used in rule list/overview renderers
+   (`_render_jinja`, `_render_filter_outcomes`, `_render_attribute_rewrite`).
+   Theme-aware via the --surface-* tokens; themes that don't define them
+   fall through to inherited colours instead of the Bootstrap-default
+   light-gray pre background. */
+pre.syncer-code {
+    background-color: var(--surface-subtle, transparent);
+    color: var(--surface-text, inherit);
+    border: 1px solid var(--surface-divider, rgba(0, 0, 0, 0.08));
+    border-radius: 4px;
+    padding: 6px 10px;
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.85em;
+}
