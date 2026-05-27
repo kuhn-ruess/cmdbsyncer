@@ -2219,6 +2219,7 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
 
     column_list = [
         'hostname',
+        'object_type',
         'lifecycle_state',
         'source_account_name',
         'deleted_at',
@@ -2226,14 +2227,17 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
         'last_import_seen',
     ]
     column_details_list = column_list + ['labels', 'inventory', 'log']
-    column_sortable_list = ('hostname', 'deleted_at', 'last_import_seen')
+    column_sortable_list = ('hostname', 'object_type', 'deleted_at',
+                            'last_import_seen')
 
     column_formatters = {
+        'object_type': _render_object_type_icon,
         'lifecycle_state': _render_lifecycle_state,
         'deleted_at': _render_datetime,
         'last_import_seen': _render_datetime,
     }
     column_formatters_detail = {
+        'object_type': _render_object_type_icon,
         'lifecycle_state': _render_lifecycle_state,
         'deleted_at': _render_datetime,
         'last_import_seen': _render_datetime,
@@ -2242,6 +2246,7 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
         'log': _render_log_grid,
     }
     column_labels = {
+        'object_type': 'Type',
         'source_account_name': 'Account',
         'lifecycle_state': 'Lifecycle',
         'deleted_at': 'Deleted At',
@@ -2251,10 +2256,16 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     column_filters = (
         FilterHostnameRegex(Host, 'Hostname'),
         FilterAccountRegex(Host, 'Account'),
+        FilterObjectType(Host, 'Type'),
     )
 
     def get_query(self):
-        return Host.objects(is_object__ne=True, deleted_at__exists=True)
+        # Previously this view filtered `is_object__ne=True`, which meant
+        # soft-deleted CMDB objects and templates were invisible — there's
+        # no other archive view for them, so they were unreachable. Drop
+        # the type restriction; the new `object_type` column + filter let
+        # users still narrow down to plain hosts when they want to.
+        return Host.objects(deleted_at__exists=True)
 
     @action('restore', 'Restore', 'Restore the selected hosts to active?')
     def action_restore(self, ids):
