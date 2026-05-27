@@ -13,9 +13,17 @@ from .rule_definitions import rules as enabled_rules
 
 def get_ruletype_by_filename(filename):
     """
-    Try to guess the rule_type using the filename
+    Try to guess the rule_type using the filename. Strips the
+    ``.syncer_json`` extension first so an export that has been
+    renamed from ``CustomAttributeRule_202604120815.syncer_json`` to
+    ``CustomAttributeRule.syncer_json`` (i.e. no timestamp suffix) is
+    still recognised — the previous split-on-underscore left the
+    extension glued to the model name and missed the lookup.
     """
-    model_name = filename.split('/')[-1].split('_')[0]
+    basename = filename.split('/')[-1]
+    if basename.endswith('.syncer_json'):
+        basename = basename[: -len('.syncer_json')]
+    model_name = basename.split('_')[0]
     for rule_type, model_data in enabled_rules.items():
         if model_data[1] == model_name:
             return rule_type
