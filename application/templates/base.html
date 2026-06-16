@@ -18,6 +18,11 @@
 
 {% endblock %}
 
+{% block metas %}
+   {{ super() }}
+   <link rel="icon" type="image/png" href="{{ config['BASE_PREFIX'] }}static/favicon.png">
+{% endblock %}
+
 {% block styles %}
    {{super()}}
 {% include '_theme.html' %}

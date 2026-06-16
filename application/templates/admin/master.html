@@ -1,6 +1,7 @@
 {% extends admin_base_template %}
 {% block head_css %}
     {{ super() }}
+    <link rel="icon" type="image/png" href="{{ config['BASE_PREFIX'] }}static/favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
     {% include '_theme.html' %}
     <link rel="stylesheet" href="{{ config['BASE_PREFIX'] }}static/css/cmdbsyncer.css">
