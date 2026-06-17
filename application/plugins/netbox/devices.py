@@ -2,6 +2,7 @@
 Create Devices in Netbox
 """
 # pylint: disable=duplicate-code
+from collections import defaultdict
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application.models.host import Host
@@ -26,8 +27,7 @@ class SyncDevices(SyncNetbox):
         return {
             'manufacturer': {
                 'type': 'dcim.manufacturers',
-                'has_slug' : True,
-                #'sub_fields' : ['manufacturer'],
+                'has_slug': True,
             },
             'site': {
                 'type': 'dcim.sites',
@@ -36,29 +36,28 @@ class SyncDevices(SyncNetbox):
             'device_type': {
                 'type': 'dcim.device-types',
                 'has_slug': True,
-                'sub_fields' : ['manufacturer', 'model'],
+                'sub_fields': ['manufacturer', 'model'],
             },
             'role': {
                 'type': 'dcim.device-roles',
-                 'has_slug' : True,
+                'has_slug': True,
             },
             'platform': {
                 'type': 'dcim.platforms',
-                 'has_slug' : True,
-                 'sub_fields' : ['manufacturer'],
+                'has_slug': True,
+                'sub_fields': ['manufacturer'],
             },
-            'primary_ip4' : {
+            'primary_ip4': {
                 'type': 'ipam.ip-addresses',
                 'has_slug': False,
                 'name_field': 'id',
             },
-            'primary_ip6' : {
+            'primary_ip6': {
                 'type': 'ipam.ip-addresses',
                 'has_slug': False,
                 'name_field': 'id',
             },
         }
-
 
     def get_ip_id(self, custom_rules, all_attributes, mode):
         """
@@ -67,7 +66,7 @@ class SyncDevices(SyncNetbox):
         if primary_ip_obj := custom_rules['fields'].get(mode):
             needed_ip = primary_ip_obj['value']
             attr_name = f"{self.config['name']}_ips"
-            if not attr_name in all_attributes['all']:
+            if attr_name not in all_attributes['all']:
                 del custom_rules['fields'][mode]
             else:
                 new_value = False
@@ -82,7 +81,6 @@ class SyncDevices(SyncNetbox):
         return custom_rules
 
 #   .--- Export Devices
-    # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements
     def export_hosts(self):
         """
         Update Devices Table in Netbox
@@ -119,9 +117,7 @@ class SyncDevices(SyncNetbox):
                     custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip4')
                     custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
 
-
                     if device := current_netbox_devices.get(name=hostname):
-                        # Update
                         if update_keys := self.get_update_keys(device, custom_rules,
                                                                ['primary_ip4', 'primary_ip6']):
                             self.console(f" * Update Device {hostname}: {update_keys}")
@@ -129,14 +125,11 @@ class SyncDevices(SyncNetbox):
                         else:
                             self.console(f" * Already up to date {hostname}")
                     else:
-                        ### Create
                         self.console(f" * Create Device {hostname}")
                         payload = self.get_update_keys(False, custom_rules)
                         payload['name'] = hostname
                         device = self.nb.dcim.devices.create(payload)
-                    # Mark as successfully synced only after create/update
-                    # returned without raising, so cleanup decommissions
-                    # devices whose API call failed.
+
                     found_hosts.append(hostname)
 
                 except Exception as error:  # pylint: disable=broad-exception-caught
@@ -158,40 +151,75 @@ class SyncDevices(SyncNetbox):
                     self.console(f"* Set Inactive for {device.name}")
                     device.update({"status": 'decommissioning'})
                     progress.advance(task2)
-#.
+
 #   .--- Import Devices
     def import_hosts(self):
         """
         Import Objects from Netbox to the Syncer
         """
         import_id = self.get_unique_id()
+
         device_filter = {}
+
         if import_filter := self.config.get('import_filter'):
-            device_filter = dict([x.strip().split(':') for x in import_filter.split(',') if x])
+            parsed_filter = defaultdict(list)
+
+            for x in import_filter.split(','):
+                x = x.strip()
+                if not x:
+                    continue
+
+                if ':' not in x:
+                    raise ValueError(
+                        f"Invalid import_filter format: '{x}'. Expected key:value"
+                    )
+
+                key, value = x.split(':', 1)
+                parsed_filter[key].append(value)
+
+            # normalize: single values bleiben string, mehrere werden Liste
+            device_filter = {
+                k: v if len(v) > 1 else v[0]
+                for k, v in parsed_filter.items()
+            }
+
+            if self.debug:
+                print(f"[DEBUG] Parsed device_filter: {device_filter}")
+
         for device in self.nb.dcim.devices.filter(**device_filter):
             try:
                 hostname = device.name
                 if not hostname:
                     continue
+
                 labels = device.__dict__
                 for what in ['has_details', 'api',
                              'default_ret', 'endpoint',
                              '_full_cache', '_init_cache']:
                     del labels[what]
+
                 if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                    hostname = Host.rewrite_hostname(hostname,
-                                                     self.config['rewrite_hostname'], labels)
+                    hostname = Host.rewrite_hostname(
+                        hostname,
+                        self.config['rewrite_hostname'],
+                        labels
+                    )
+
                 host_obj = Host.get_host(hostname)
+
                 print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
+
                 rendered_labels = self.handle_nb_attributes(labels)
                 host_obj.update_host(rendered_labels)
+
                 do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
                 if do_save:
                     host_obj.save()
+
             except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
                 self.log_details.append((f'import_error {hostname}', str(error)))
+
         if extra_filter := self.config.get('delete_host_if_not_found_on_import'):
             Host.delete_host_not_found_on_import(self.config['name'], import_id, extra_filter)
-#.
