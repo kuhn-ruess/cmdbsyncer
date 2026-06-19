@@ -75,6 +75,7 @@ from application.views.host_renderers import (
 from application.views.saved_search import SavedSearchRoutesMixin
 from application.models.host import (
     Host, CmdbField, HostLabelChange, LIFECYCLE_STATES,
+    CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME,
 )
 from application.models.config import Config
 # pylint: enable=import-error
@@ -257,8 +258,11 @@ def _process_copy_as_new(label):
     clone.object_type = source.object_type
     clone.is_object = source.is_object
     clone.no_autodelete = source.no_autodelete
-    clone.source_account_name = source.source_account_name or 'cmdb'
-    clone.source_account_id = ''
+    clone.source_account_name = source.source_account_name or CMDB_SOURCE_ACCOUNT_NAME
+    # A native clone gets the reserved CMDB sentinel id; clones of imported
+    # hosts keep the previous empty-id behavior.
+    clone.source_account_id = CMDB_SOURCE_ACCOUNT_ID \
+        if clone.source_account_name == CMDB_SOURCE_ACCOUNT_NAME else ''
     clone.labels = dict(source.labels or {})
     clone.cmdb_fields = [
         CmdbField(field_name=f.field_name, field_value=f.field_value)
@@ -711,8 +715,8 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         model.last_import_seen = datetime.now()
         model.cache = {}
         model.is_object = True
-        model.source_account_id = ""
-        model.source_account_name = "cmdb"
+        model.source_account_id = CMDB_SOURCE_ACCOUNT_ID
+        model.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
         model.no_autodelete = True
         if self._force_object_type is not None:
             model.object_type = self._force_object_type
@@ -1753,8 +1757,8 @@ Impact Chain.
         model.last_import_sync = datetime.now()
         model.last_import_seen = datetime.now()
         model.cache = {}
-        model.source_account_id = ""
-        model.source_account_name = "cmdb"
+        model.source_account_id = CMDB_SOURCE_ACCOUNT_ID
+        model.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
         model.no_autodelete = True
         # Tag this label mutation as a manual edit so HostLabelChange
         # rows carry the right origin + acting user in the Timeline.
@@ -2028,7 +2032,8 @@ Impact Chain.
                 host.last_import_sync = datetime.now()
                 host.last_import_seen = datetime.now()
                 host.cache = {}
-                host.source_account_name = "cmdb"
+                host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
+                host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
                 # Tag the label mutation so HostLabelChange rows show
                 # who triggered the bulk action.
                 host._label_change_source = 'manual'  # pylint: disable=protected-access

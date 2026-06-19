@@ -203,6 +203,9 @@ _models_host.HostLabelChange = _HostLabelChange
 # Tests don't exercise the lifecycle-state filter, so an empty option list
 # is enough to satisfy `from application.models.host import LIFECYCLE_STATES`.
 _models_host.LIFECYCLE_STATES = ()
+# Reserved sentinels for syncer-native ("CMDB Mode") objects.
+_models_host.CMDB_SOURCE_ACCOUNT_ID = 'cmdb'
+_models_host.CMDB_SOURCE_ACCOUNT_NAME = 'cmdb'
 _models_host.RELATION_TYPES = ()
 _models_host.RELATION_INVERSE_LABEL = {}
 

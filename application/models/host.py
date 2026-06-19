@@ -9,7 +9,8 @@ from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
-from application.models.account import object_types
+from application.models.account import (
+    object_types, CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
 
 LIFECYCLE_STATES = (
     ('planned', 'Planned'),
@@ -755,7 +756,9 @@ class Host(db.Document):
             status (bool): Should Object be saved or not
 
         """
-        if self.source_account_name == 'cmdb':
+        # Lock native objects: reserved id, or (legacy) "cmdb" name with empty id.
+        if self.source_account_id == CMDB_SOURCE_ACCOUNT_ID or \
+           (self.source_account_name == CMDB_SOURCE_ACCOUNT_NAME and not self.source_account_id):
             print("Host is locked since in CMDB Mode")
             return False
         if not account_id and not account_dict:

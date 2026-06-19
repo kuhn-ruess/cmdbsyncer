@@ -8,6 +8,12 @@ from application import db, plugin_register
 from application import app
 from application.helpers.plugins import discover_plugins
 
+# Reserved source identity stamped on objects managed natively inside the Syncer
+# ("CMDB Mode"). A real account id is always a Mongo ObjectId string, so this
+# literal can never collide with an account a user happens to name "cmdb".
+CMDB_SOURCE_ACCOUNT_ID = 'cmdb'
+CMDB_SOURCE_ACCOUNT_NAME = 'cmdb'
+
 
 def get_account_types():
     """Return the static base list plus dynamically-discovered plugin types."""
