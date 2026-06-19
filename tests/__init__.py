@@ -393,6 +393,20 @@ for _mod_name, _mod_path in [
     )
 
 
+# --- Netbox plugin modules ---------------------------------------------------
+# devices.py does `from .netbox import SyncNetbox`, so the base module has to be
+# loaded first. Loaded here (not in the plugin test __init__) for the same
+# reason as checkmk: unittest discover does not reliably run package __init__.py.
+_try_load_real_module(
+    "application.plugins.netbox.netbox",
+    os.path.join("plugins", "netbox", "netbox.py"),
+)
+_try_load_real_module(
+    "application.plugins.netbox.devices",
+    os.path.join("plugins", "netbox", "devices.py"),
+)
+
+
 # --- API modules under test -------------------------------------------------
 # Load the real api/__init__, api/syncer, api/objects files under their
 # canonical module names. They import User/Account/LogEntry/Host etc. from
