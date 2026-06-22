@@ -173,15 +173,24 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
         """
         Write each wanted custom attribute that differs from the VM's current
         value (skipped on dry_run) and return the list of applied changes.
+        With ``--debug`` every attribute is reported with the reason it is
+        written or skipped.
         """
         changes = []
         for attr_name, attr_value in wanted.items():
             # Only write when the value actually differs from what is already
             # on the VM. ``get`` returns None for attributes not yet set, which
             # never equals a rendered string, so genuinely new values are written.
-            if current_values.get(attr_name) == attr_value:
+            current = current_values.get(attr_name)
+            if current == attr_value:
+                if self.debug:
+                    self.console(f"   = {attr_name}: unchanged ({attr_value!r}), skipped")
                 continue
-            changes.append(f"{attr_name}: {current_values.get(attr_name)} to {attr_value}")
+            reason = "not set on VM yet" if current is None else f"differs from {current!r}"
+            changes.append(f"{attr_name}: {current} to {attr_value}")
+            if self.debug:
+                verb = "would write" if self.dry_run else "writing"
+                self.console(f"   * {attr_name}: {verb} {attr_value!r} — {reason}")
             if not self.dry_run:
                 vm_handle.SetCustomValue(key=attr_name, value=attr_value)
         return changes

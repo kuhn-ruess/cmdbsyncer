@@ -101,6 +101,7 @@ def custom_attributes_export(account, debug=False, dry_run=False):
         vm.rewrite = attribute_rewrite
         vm.actions = rules
         vm.dry_run = dry_run
+        vm.debug = debug
 
         vm.name = f"Export Attributes for {account}"
         vm.source = "vmware_attribute_export"
@@ -120,6 +121,7 @@ def custom_attributes_inventorize(account, debug=False, dry_run=False):
     try:
         vm = VMwareCustomAttributesPlugin(account)
         vm.dry_run = dry_run
+        vm.debug = debug
         vm.name = f"Inventorize data from {account}"
         vm.source = "vmware_attribute_inventorize"
         vm.inventorize_attributes()
@@ -136,6 +138,7 @@ def vm_hardware_inventorize(account, debug=False, dry_run=False):
     try:
         vm = VMwareCustomAttributesPlugin(account)
         vm.dry_run = dry_run
+        vm.debug = debug
         vm.name = f"Inventorize VM hardware from {account}"
         vm.source = "vmware_hardware_inventorize"
         vm.inventorize_hardware()
