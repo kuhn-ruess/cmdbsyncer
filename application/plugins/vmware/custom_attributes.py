@@ -81,17 +81,25 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
             'scsi_controllers': scsi_controllers,
         }
 
-    def get_vm_attributes(self, vm, content):
+    @staticmethod
+    def _core_attributes(vm):
         """
-        Prepare Attributes
+        Identifying fields present on every VM regardless of which command
+        collected it, so the ``inventory_filter`` always has something to
+        match against (e.g. ``power_state``, ``guest_os``).
         """
-        # Resolve a readable resource-pool name from the internal reference
-        res_pool_name = vm.resourcePool.name if vm.resourcePool else "Default"
-
-        attributes = {
+        return {
             "name": vm.name,
-            "resource_pool": res_pool_name,
+            "power_state": vm.runtime.powerState,
+            "guest_os": vm.config.guestFullName if vm.config else None,
+            # Readable ESXi host name instead of the internal MoRef
+            "runtime_host": vm.runtime.host.summary.config.name if vm.runtime.host else None,
         }
+
+    def get_vm_hardware(self, vm, _content):
+        """Collect the VM's virtual-hardware inventory"""
+        attributes = self._core_attributes(vm)
+        attributes['resource_pool'] = vm.resourcePool.name if vm.resourcePool else "Default"
 
         if vm.guest:
             attributes.update({
@@ -107,36 +115,24 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
                 "network_card_count": vm.summary.config.numEthernetCards,
                 "virtual_disk_count": vm.summary.config.numVirtualDisks,
                 "memory_mb": vm.config.hardware.memoryMB,
-                "guest_os": vm.config.guestFullName,
                 "uuid": vm.config.uuid,
                 "guest_id": vm.config.guestId,
                 "annotation": vm.config.annotation,
             })
-
         if vm.runtime:
-            attributes.update({
-                 "power_state": vm.runtime.powerState,
-                 # Readable ESXi host name instead of the internal MoRef
-                 "runtime_host": vm.runtime.host.summary.config.name \
-                                 if vm.runtime.host else None,
-                 "boot_time": vm.runtime.bootTime,
-            })
-
+            attributes['boot_time'] = vm.runtime.bootTime
         if vm.network:
-            networks = []
-            for network in vm.network:
-                networks.append({'name': network.name})
-            attributes['networks'] = networks
-
+            attributes['networks'] = [{'name': network.name} for network in vm.network]
         if vm.datastore:
-            datastores = []
-            for datastore in vm.datastore:
-                datastores.append({'name': datastore.info.name})
-            attributes['datastores'] = datastores
-
+            attributes['datastores'] = [{'name': ds.info.name} for ds in vm.datastore]
         if vm.config and vm.config.hardware.device:
             attributes.update(self._collect_hardware_devices(vm))
 
+        return attributes
+
+    def get_vm_custom_attributes(self, vm, content):
+        """Collect the VM's vCenter Custom Attributes (``vm.customValue``)"""
+        attributes = self._core_attributes(vm)
         if vm.customValue:
             for custom_field in vm.customValue:
                 field_key = custom_field.key
@@ -145,20 +141,13 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
                     f"custom_{field_key}"
                 )
                 attributes[field_name] = custom_field.value
+        return attributes
 
-        return_dict = {}
-        for key, value in attributes.items():
-            if not isinstance(value, str) and not isinstance(value, list):
-                value = str(value)
-            return_dict[key] = value
-
-        return return_dict
-
-
-    def get_current_attributes(self):
+    def _collect(self, reader):
         """
-        Return all VMs and their Attributes, limited to those matching the
-        ``inventory_filter`` account setting (``key:value,key:value``).
+        Run ``reader(vm, content)`` for every VM, normalise the result and
+        keep only those matching the ``inventory_filter`` account setting
+        (``key:value,key:value``; repeated key = OR, different keys = AND).
         """
         inventory_filter = defaultdict(list)
         for pair in (self.config.get('inventory_filter') or '').split(','):
@@ -172,20 +161,37 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
         self.container_view = container.view
         data = []
         for vm in self.container_view:
-            attributes = self.get_vm_attributes(vm, content)
+            attributes = {key: value if isinstance(value, (str, list)) else str(value)
+                          for key, value in reader(vm, content).items()}
             if all(str(attributes.get(key)) in values
                    for key, values in inventory_filter.items()):
                 data.append(attributes)
         return data
 
 
-    # pylint: disable-next=too-many-locals
+    def _write_custom_attributes(self, vm_handle, current_values, wanted):
+        """
+        Write each wanted custom attribute that differs from the VM's current
+        value (skipped on dry_run) and return the list of applied changes.
+        """
+        changes = []
+        for attr_name, attr_value in wanted.items():
+            # Only write when the value actually differs from what is already
+            # on the VM. ``get`` returns None for attributes not yet set, which
+            # never equals a rendered string, so genuinely new values are written.
+            if current_values.get(attr_name) == attr_value:
+                continue
+            changes.append(f"{attr_name}: {current_values.get(attr_name)} to {attr_value}")
+            if not self.dry_run:
+                vm_handle.SetCustomValue(key=attr_name, value=attr_value)
+        return changes
+
     def export_attributes(self):
         """
         Export Custom Attributes
         """
         self.connect()
-        current_attributes = {x['name']:x for x in self.get_current_attributes()}
+        current_attributes = {x['name']:x for x in self._collect(self.get_vm_custom_attributes)}
 
         # Keep the VM handles in step with the filtered attribute set above,
         # so the export only touches VMs that passed the inventory_filter.
@@ -216,25 +222,15 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
 
                     self.console(f" * Work on {hostname}")
                     logger.debug("%s: %s", hostname, custom_rules)
-                    changes = []
-                    if vm_host_data := current_attributes.get(hostname):
-                        for new_attr_name, new_attr_value in custom_rules['attributes'].items():
-                            old_value = vm_host_data.get(new_attr_name) or False
-                            if old_value != new_attr_value:
-                                # Reference old_value here — old_attr only
-                                # existed on the truthy branch of the walrus
-                                # and triggered UnboundLocalError when a
-                                # previous value was missing or falsy.
-                                changes.append(
-                                    f"{new_attr_name}: {old_value} to {new_attr_value}"
-                                )
-                                current_vms[hostname].SetCustomValue(key=new_attr_name,
-                                                                     value=new_attr_value)
-                        logger.debug(" Updated: %s", changes)
-                    else:
+                    if not (vm_host_data := current_attributes.get(hostname)):
                         logger.debug(" Not found in VMware Data")
                         progress.advance(task1)
                         continue
+                    changes = self._write_custom_attributes(
+                        current_vms[hostname], vm_host_data, custom_rules['attributes'])
+                    if changes and self.dry_run:
+                        self.console(f"   [dry-run] would update: {changes}")
+                    logger.debug(" Updated: %s", changes)
 
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     if self.debug:
@@ -246,7 +242,22 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
 
     def inventorize_attributes(self):
         """
-        Inventorize Custom Attributes
+        Inventorize the VMs' vCenter Custom Attributes
         """
         self.connect()
-        run_inventory(self.config, [(x['name'], x) for x in self.get_current_attributes()])
+        data = self._collect(self.get_vm_custom_attributes)
+        if self.dry_run:
+            logger.info("Dry-run: would inventorize %s VMs, nothing written", len(data))
+            return
+        run_inventory(self.config, [(x['name'], x) for x in data])
+
+    def inventorize_hardware(self):
+        """
+        Inventorize the VMs' virtual hardware under the ``_hardware`` sub-key
+        """
+        self.connect()
+        data = self._collect(self.get_vm_hardware)
+        if self.dry_run:
+            logger.info("Dry-run: would inventorize %s VMs, nothing written", len(data))
+            return
+        run_inventory(self.config, [(x['name'], x) for x in data], sub_key='hardware')

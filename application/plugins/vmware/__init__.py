@@ -83,7 +83,7 @@ def get_vmware_debug_data(hostname):
     return attributes, extra_attributes, rule_logs
 
 #   .-- Custom Attributes
-def custom_attributes_export(account, debug=False):
+def custom_attributes_export(account, debug=False, dry_run=False):
     """
     Custom Attributes Export
     """
@@ -100,6 +100,7 @@ def custom_attributes_export(account, debug=False):
         vm = VMwareCustomAttributesPlugin(account)
         vm.rewrite = attribute_rewrite
         vm.actions = rules
+        vm.dry_run = dry_run
 
         vm.name = f"Export Attributes for {account}"
         vm.source = "vmware_attribute_export"
@@ -112,12 +113,13 @@ def custom_attributes_export(account, debug=False):
             print(f"VMware export_custom_attributes failed: {error}")
         raise
 
-def custom_attributes_inventorize(account, debug=False):
+def custom_attributes_inventorize(account, debug=False, dry_run=False):
     """
     Custom Attribute Inventorize
     """
     try:
         vm = VMwareCustomAttributesPlugin(account)
+        vm.dry_run = dry_run
         vm.name = f"Inventorize data from {account}"
         vm.source = "vmware_attribute_inventorize"
         vm.inventorize_attributes()
@@ -127,21 +129,48 @@ def custom_attributes_inventorize(account, debug=False):
             print(f"VMware inventorize_custom_attributes failed: {error}")
         raise
 
+def vm_hardware_inventorize(account, debug=False, dry_run=False):
+    """
+    VM Hardware Inventorize
+    """
+    try:
+        vm = VMwareCustomAttributesPlugin(account)
+        vm.dry_run = dry_run
+        vm.name = f"Inventorize VM hardware from {account}"
+        vm.source = "vmware_hardware_inventorize"
+        vm.inventorize_hardware()
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        logger.exception("VMware inventorize_vm_hardware failed: %s", error)
+        if not debug:
+            print(f"VMware inventorize_vm_hardware failed: {error}")
+        raise
+
 @cli_vmware.command('export_custom_attributes')
 @click.option("--debug", is_flag=True)
+@click.option("--dry-run", is_flag=True)
 @click.argument('account')
-def cli_custom_attributes_export(account, debug):
+def cli_custom_attributes_export(account, debug, dry_run):
     """Export Custom Attributes"""
-    custom_attributes_export(account, debug)
+    custom_attributes_export(account, debug, dry_run)
 
 @cli_vmware.command('inventorize_custom_attributes')
 @click.option("--debug", is_flag=True)
+@click.option("--dry-run", is_flag=True)
 @click.argument('account')
-def cli_inventorize_custom_attributes(account, debug):
+def cli_inventorize_custom_attributes(account, debug, dry_run):
     """Inventorize Custom Attributes from VMware"""
-    custom_attributes_inventorize(account, debug)
+    custom_attributes_inventorize(account, debug, dry_run)
+
+@cli_vmware.command('inventorize_vm_hardware')
+@click.option("--debug", is_flag=True)
+@click.option("--dry-run", is_flag=True)
+@click.argument('account')
+def cli_inventorize_vm_hardware(account, debug, dry_run):
+    """Inventorize VM hardware from VMware"""
+    vm_hardware_inventorize(account, debug, dry_run)
 
 
 register_cronjob("VMware: Export Custom Attributes", custom_attributes_export)
 register_cronjob("VMware: Inventorize Custom Attributes", custom_attributes_inventorize)
+register_cronjob("VMware: Inventorize VM Hardware", vm_hardware_inventorize)
 #.
