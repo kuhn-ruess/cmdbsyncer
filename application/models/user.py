@@ -28,6 +28,7 @@ roles = [
   ('i-doit', "I-Doit"),
   ('netbox', "Netbox"),
   ('vmware', "VMware"),
+  ('jira', "Jira"),
 ]
 
 api_roles = [

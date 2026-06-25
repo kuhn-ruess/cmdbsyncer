@@ -31,6 +31,7 @@ from application.plugins.netbox import get_device_debug_data as netbox_host_debu
 from application.plugins.ansible import get_ansible_debug_data as ansible_host_debug
 from application.plugins.idoit import get_idoit_debug_data as idoit_host_debug
 from application.plugins.vmware import get_vmware_debug_data as vmware_host_debug
+from application.plugins.jira_cloud import get_jira_cloud_debug_data as jira_cloud_host_debug
 from application import app, logger
 from application.views.default import DefaultModelView
 from application.views.host_widgets import (
@@ -127,6 +128,7 @@ def get_debug(hostname, mode):
         'ansible_host': 'ansible',
         'idoit_host': 'idoit',
         'vmware_host': 'vmware',
+        'jira_cloud_host': 'jira',
     }
 
     required_role = mode_role_mapping.get(mode)
@@ -145,6 +147,7 @@ def get_debug(hostname, mode):
             'ansible_host': ansible_host_debug,
             'idoit_host': idoit_host_debug,
             'vmware_host': vmware_host_debug,
+            'jira_cloud_host': jira_cloud_host_debug,
         }
 
         attributes, actions, debug_log = debug_funcs[mode](hostname)
@@ -1510,6 +1513,11 @@ Impact Chain.
             'vmware_host': {
                 'rewrite': 'vmwarerewriteattributes',
                 'actions': 'vmwarecustomattributes',
+            },
+            'jira_cloud_host': {
+                'filter':  'jiracloudfilterrule',
+                'rewrite': 'jiracloudrewriteattributerule',
+                'actions': 'jiraexportrule',
             },
         }.get(mode, {})
         for group, endpoint in per_mode.items():

@@ -100,6 +100,9 @@ sys.modules["application.plugins.idoit"].get_idoit_debug_data = MagicMock(
 _stub_package("application.plugins.vmware", path=[])
 sys.modules["application.plugins.vmware"].get_vmware_debug_data = MagicMock(
     name="stub.get_vmware_debug_data")
+_stub_package("application.plugins.jira_cloud", path=[])
+sys.modules["application.plugins.jira_cloud"].get_jira_cloud_debug_data = MagicMock(
+    name="stub.get_jira_cloud_debug_data")
 _stub_package("application.modules.custom_attributes", path=[])
 _stub_package("application.helpers", path=[])
 

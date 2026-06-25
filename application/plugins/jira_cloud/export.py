@@ -17,6 +17,7 @@ import json
 from collections import defaultdict
 
 from rich.progress import Progress, SpinnerColumn, MofNCompleteColumn, TimeElapsedColumn
+from rich.text import Text
 
 from syncerapi.v1 import (
     Host,
@@ -217,7 +218,11 @@ class JiraCloudExport(JiraCloud):
         with Progress(SpinnerColumn(), MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
-            console = progress.console.print
+            # The status lines carry raw cc.* ANSI codes; rich's console
+            # would escape them and print a literal "[92m". Parse the ANSI
+            # so the colors render and the [type ...] brackets stay literal.
+            def console(message):
+                progress.console.print(Text.from_ansi(message))
             task = progress.add_task("Jira Cloud export", total=total)
             for db_host in db_objects:
                 progress.advance(task)
