@@ -4,6 +4,9 @@
     "name": "Vmware vCenter",
     "ident": "vmware_vcenter",
     "account_custom_field_presets": {
-        "inventory_filter": "power_state:poweredOn"
+        "inventory_filter": "power_state:poweredOn",
+        "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": ""
     }
 }

@@ -5,10 +5,9 @@ import ssl
 from syncerapi.v1.core import Plugin
 
 
-from application import logger, app
+from application import logger
 try:
-    from pyVmomi import vim
-    from pyVim.connect import SmartConnect, Disconnect
+    from pyVim.connect import SmartConnect
 except ImportError:
     logger.info("Info: VMware Plugin was not able to load required modules")
 
@@ -23,8 +22,14 @@ class VMWareVcenterPlugin(Plugin):
         """
         Connect to VMware
         """
-        if app.config.get('DISABLE_SSL_ERRORS'):
-            context = ssl._create_unverified_context()
+        # self.verify is resolved by the base Plugin from the account:
+        #   False/""  -> certificate validation disabled
+        #   str path  -> validate against this CA cert bundle
+        #   True      -> validate against the system trust store
+        if self.verify in ["", False]:
+            context = ssl._create_unverified_context()  # pylint: disable=protected-access
+        elif isinstance(self.verify, str):
+            context = ssl.create_default_context(cafile=self.verify)
         else:
             context = ssl.create_default_context()
 
@@ -35,4 +40,4 @@ class VMWareVcenterPlugin(Plugin):
 
 
         if not self.vcenter:
-            raise Exception("Cannot connect to vcenter")
+            raise Exception("Cannot connect to vcenter")  # pylint: disable=broad-exception-raised
