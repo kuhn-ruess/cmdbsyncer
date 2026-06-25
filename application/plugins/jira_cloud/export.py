@@ -180,6 +180,9 @@ class JiraCloudExport(JiraCloud):
 
     def export_objects(self):
         """Single-pass export: prepare types, iterate hosts once."""
+        if self.dry_run:
+            print(f"{cc.WARNING} == {cc.ENDC}Dry-run: no objects will be "
+                  f"created or updated in Jira")
         rules = list(JiraExportRule.objects(enabled=True).order_by('sort_field'))
         if not rules:
             print(f"{cc.WARNING} -- {cc.ENDC}No enabled JiraExportRule rows, "
@@ -288,21 +291,24 @@ class JiraCloudExport(JiraCloud):
                     counts[type_id]["unchanged"] += 1
                     continue
                 self._put_object(obj_id, type_id, changed)
+                verb = "would update" if self.dry_run else "updated"
                 console(f"{cc.OKGREEN}   ↻ {cc.ENDC}"
-                        f"{db_host.hostname} [type {type_id}] "
+                        f"{db_host.hostname} [type {type_id}] {verb} "
                         f"({len(changed)} field(s))")
                 counts[type_id]["updated"] += 1
             else:
                 if lookup_attr_id not in target_attrs:
                     target_attrs[lookup_attr_id] = lookup_value
                 self._post_object(type_id, target_attrs)
+                verb = "would create" if self.dry_run else "created"
                 console(f"{cc.OKBLUE}   + {cc.ENDC}"
-                        f"{db_host.hostname} [type {type_id}] (created)")
+                        f"{db_host.hostname} [type {type_id}] ({verb})")
                 counts[type_id]["created"] += 1
 
 
-def export_jira_cloud(account, debug=False):
+def export_jira_cloud(account, debug=False, dry_run=False):
     """Entry point for CLI / cronjob."""
     syncer = JiraCloudExport(account)
     syncer.debug = debug
+    syncer.dry_run = dry_run
     syncer.export_objects()

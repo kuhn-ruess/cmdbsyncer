@@ -40,12 +40,13 @@ def cmd_import_jira(account, debug):
 @jira_cli.command('export_cloud')
 @click.argument("account")
 @click.option("--debug", is_flag=True)
-def cmd_export_jira(account, debug):
+@click.option("--dry-run", is_flag=True)
+def cmd_export_jira(account, debug, dry_run):
     """
     Export Hosts/Fields to a Jira Cloud Assets Instance
     """
     try:
-        export_jira_cloud(account, debug)
+        export_jira_cloud(account, debug, dry_run)
     except Exception as error:  # pylint: disable=broad-exception-caught
         if debug:
             raise
