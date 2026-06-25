@@ -9,6 +9,7 @@
     "account_custom_field_presets": {
         "workspace_id": "00000000-0000-0000-0000-000000000000",
         "ql_query": "objectType = \"Server\"",
+        "update_only": "",
         "verify_cert": "True",
         "ca_cert_chain": "",
         "ca_root_cert": ""

@@ -52,6 +52,11 @@ class JiraCloudExport(JiraCloud):
         # type_id -> (type_entry, name_to_id, lookup_attr_id, existing_map)
         self._type_state = {}
 
+        # When the account's `update_only` setting is on, only existing
+        # objects are updated — hosts without a matching Jira object are
+        # skipped instead of created.
+        self.update_only = bool(self.config.get('update_only'))
+
         # Honour rewrite + filter rules the same way Checkmk does —
         # the Plugin base class calls them inside `get_attributes`, so
         # we don't have to invoke them anywhere in here.
@@ -183,6 +188,9 @@ class JiraCloudExport(JiraCloud):
         if self.dry_run:
             print(f"{cc.WARNING} == {cc.ENDC}Dry-run: no objects will be "
                   f"created or updated in Jira")
+        if self.update_only:
+            print(f"{cc.WARNING} == {cc.ENDC}Update-only: existing objects are "
+                  f"updated, missing ones are skipped (never created)")
         rules = list(JiraExportRule.objects(enabled=True).order_by('sort_field'))
         if not rules:
             print(f"{cc.WARNING} -- {cc.ENDC}No enabled JiraExportRule rows, "
@@ -296,6 +304,11 @@ class JiraCloudExport(JiraCloud):
                         f"{db_host.hostname} [type {type_id}] {verb} "
                         f"({len(changed)} field(s))")
                 counts[type_id]["updated"] += 1
+            elif self.update_only:
+                console(f"{cc.WARNING}   ⊘ {cc.ENDC}"
+                        f"{db_host.hostname} [type {type_id}] "
+                        f"(no existing object, skipped — update-only)")
+                counts[type_id]["skipped"] += 1
             else:
                 if lookup_attr_id not in target_attrs:
                     target_attrs[lookup_attr_id] = lookup_value
