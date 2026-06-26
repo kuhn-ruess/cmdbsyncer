@@ -22,22 +22,30 @@ class VMWareVcenterPlugin(Plugin):
         """
         Connect to VMware
         """
+        connect_args = {
+            'host': self.config['address'],
+            'user': self.config['username'],
+            'pwd': self.config['password'],
+        }
         # self.verify is resolved by the base Plugin from the account:
         #   False/""  -> certificate validation disabled
         #   str path  -> validate against this CA cert bundle
         #   True      -> validate against the system trust store
+        # pyVmomi only skips validation when its own disableSslCertValidation
+        # flag is set, so use that rather than relying on an unverified
+        # sslContext alone.
         if self.verify in ["", False]:
-            context = ssl._create_unverified_context()  # pylint: disable=protected-access
+            connect_args['disableSslCertValidation'] = True
         elif isinstance(self.verify, str):
-            context = ssl.create_default_context(cafile=self.verify)
-        else:
-            context = ssl.create_default_context()
+            connect_args['sslContext'] = ssl.create_default_context(cafile=self.verify)
 
-        self.vcenter = SmartConnect(host=self.config['address'],
-                                    user=self.config['username'],
-                                    pwd=self.config['password'],
-                                    sslContext=context)
+        if self.debug:
+            print(f"VMware connect: address={self.config['address']} "
+                  f"verify={self.verify!r} "
+                  f"disableSslCertValidation="
+                  f"{connect_args.get('disableSslCertValidation', False)}")
 
+        self.vcenter = SmartConnect(**connect_args)
 
         if not self.vcenter:
             raise Exception("Cannot connect to vcenter")  # pylint: disable=broad-exception-raised
