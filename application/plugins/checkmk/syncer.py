@@ -273,12 +273,21 @@ class SyncCMK2(CMK2):
         Uses either folder-based or global host fetching depending on
         configuration settings to populate the checkmk_hosts dictionary.
         """
-        extra_params = "?effective_attributes=false"
-        if not self.checkmk_version.startswith('2.2'):
-            extra_params += "&include_links=false"
         if app.config['CMK_GET_HOST_BY_FOLDER']:
-            self._fetch_checkmk_host_by_folder(extra_params=extra_params)
+            # The folder-hosts endpoint
+            # (objects/folder_config/<folder>/collections/hosts) does NOT
+            # accept include_links — it hardcodes it to False internally.
+            # Checkmk 2.4+ rejects the unknown query field with a Bad Request
+            # ("include_links: Unknown field"); 2.3 and older silently
+            # ignored it. So never send it on the per-folder fetch.
+            self._fetch_checkmk_host_by_folder(
+                extra_params="?effective_attributes=false")
         else:
+            # The host_config collection endpoint does accept include_links
+            # (2.3+); dropping the unused HATEOAS links shrinks the payload.
+            extra_params = "?effective_attributes=false"
+            if not self.checkmk_version.startswith('2.2'):
+                extra_params += "&include_links=false"
             self.fetch_all_checkmk_hosts(extra_params=extra_params)
 
 
