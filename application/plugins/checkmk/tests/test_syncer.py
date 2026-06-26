@@ -106,8 +106,10 @@ class TestSyncCMK2(unittest.TestCase):
 
         with patch.object(self.syncer, '_fetch_checkmk_host_by_folder') as mock_fetch_folder:
             self.syncer.fetch_checkmk_hosts()
+            # The folder-hosts endpoint rejects include_links on Checkmk 2.4+,
+            # so it must never be appended for the per-folder fetch.
             mock_fetch_folder.assert_called_once_with(
-                extra_params='?effective_attributes=false&include_links=false')
+                extra_params='?effective_attributes=false')
 
     @patch('application.plugins.checkmk.syncer.app')
     def test_fetch_checkmk_hosts_all(self, mock_app):
