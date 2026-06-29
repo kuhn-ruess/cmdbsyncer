@@ -215,6 +215,49 @@ class TestCheckmkRuleSync(unittest.TestCase):
         self.assertIn('host1', rules[0]['condition']['host_name']['match_on'])
         self.assertIn('host2', rules[0]['condition']['host_name']['match_on'])
 
+    @patch('application.plugins.checkmk.cmk_rules.get_list',
+           side_effect=lambda v: v if isinstance(v, list) else [v])
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_anyway_static_condition_host_not_duplicated(
+            self, mock_render, mock_get_list):
+        # Regression: a CheckmkRuleMngmt with condition_typ "anyway" and a
+        # hardcoded condition_host is evaluated for *every* host. The host
+        # whose HOSTNAME equals that condition_host takes the optimize path
+        # (dict carries optimize/optimize_rule_hash), every other host
+        # produces the plain optimize=False variant. Both describe the same
+        # Checkmk rule, but the differing bookkeeping keys defeat the
+        # `not in` dedup in calculate_rules_of_host, so Checkmk ended up
+        # with two identical rules per outcome.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        outcome = {
+            'value_template': "{'k': 'v'}",
+            'folder': '/server/windows',
+            'folder_index': 0,
+            'comment': '',
+            'loop_over_list': False,
+            'list_to_loop': '',
+            'condition_label_template': '',
+            'condition_host': 'fmg-host01',
+            'condition_service': '',
+            'condition_service_label': '',
+        }
+
+        # Owner host: HOSTNAME == condition_host → optimize path.
+        self.sync.calculate_rules_of_host(
+            {'agent_config:mrpe': [dict(outcome)]},
+            {'all': {'HOSTNAME': 'fmg-host01'}})
+        # Foreign host: HOSTNAME != condition_host → plain variant.
+        self.sync.calculate_rules_of_host(
+            {'agent_config:mrpe': [dict(outcome)]},
+            {'all': {'HOSTNAME': 'other-host'}})
+
+        self.sync.optimize_rules()
+
+        rules = self.sync.rulsets_by_type['agent_config:mrpe']
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(
+            rules[0]['condition']['host_name']['match_on'], ['fmg-host01'])
+
     def test_optimize_rules_keeps_non_optimizable(self):
         self.sync.rulsets_by_type = {
             'ruleset1': [
