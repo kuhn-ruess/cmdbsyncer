@@ -272,7 +272,7 @@ class Plugin():
 
 
     def inner_request(self, method, url, data=None, json=None,  # pylint: disable=too-many-branches,too-many-statements
-                      headers=None, auth=None, params=None, cert=None):
+                      headers=None, auth=None, params=None, cert=None, read_only=False):
         """
         Execute HTTP requests with built-in retry logic and logging.
         
@@ -289,7 +289,10 @@ class Plugin():
             auth (tuple, optional): Authentication tuple (username, password)
             params (dict, optional): URL parameters
             cert (str|tuple, optional): SSL client certificate
-            
+            read_only (bool, optional): Mark a non-GET request as read-only
+                (e.g. a search/query POST). Such requests still execute live
+                in dry_run mode because they don't mutate the target system.
+
         Returns:
             requests.Response: Response object from the HTTP request
             namedtuple: Mock response object if in dry_run mode
@@ -337,7 +340,11 @@ class Plugin():
             logger.info(f"Body: {pformat(data)}")
             Struct = namedtuple('response', ['status_code', 'headers', 'json'])
             json_obj = lambda: {}
-            if method != 'get':
+            # GET and explicitly read-only requests (e.g. a search/query POST)
+            # don't mutate the target, so let them run live even in dry_run —
+            # otherwise the caller gets an empty mock body and can't diff
+            # against the real state.
+            if method != 'get' and not read_only:
                 return Struct(status_code=200, headers={}, json=json_obj)
 
 

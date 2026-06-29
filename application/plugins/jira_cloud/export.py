@@ -163,25 +163,49 @@ class JiraCloudExport(JiraCloud):
         self._type_state[object_type_id] = state
         return state
 
+    @staticmethod
+    def _write_error(resp):
+        """
+        Return a short error string if a Jira write was unsuccessful, else
+        ``None``.
+
+        ``inner_request`` returns the raw response without checking the
+        status, so a missing write permission (HTTP 401/403) or a rejected
+        payload (HTTP 400) would otherwise be silently counted as a
+        successful update. The caller turns a non-None result into a logged
+        failure for that single object and carries on with the next one —
+        one rejected write must not abort the whole export run.
+        """
+        status = getattr(resp, 'status_code', None)
+        if status is None or 200 <= status < 300:
+            return None
+        try:
+            body = resp.text
+        except Exception:  # pylint: disable=broad-exception-caught
+            body = ''
+        return f"HTTP {status} {body[:300]}"
+
     def _put_object(self, object_id, object_type_id, attr_values):
-        """Update an existing Jira Assets object."""
+        """Update an existing Jira Assets object; return any write error."""
         payload = self._build_payload(object_type_id, attr_values)
-        self.inner_request(
+        resp = self.inner_request(
             method="PUT",
             url=f"{self.base_url}/v1/object/{object_id}",
             headers=self.headers, auth=self.auth,
             data=json.dumps(payload),
         )
+        return self._write_error(resp)
 
     def _post_object(self, object_type_id, attr_values):
-        """Create a new Jira Assets object."""
+        """Create a new Jira Assets object; return any write error."""
         payload = self._build_payload(object_type_id, attr_values)
-        self.inner_request(
+        resp = self.inner_request(
             method="POST",
             url=f"{self.base_url}/v1/object/create",
             headers=self.headers, auth=self.auth,
             data=json.dumps(payload),
         )
+        return self._write_error(resp)
 
     def export_objects(self):
         """Single-pass export: prepare types, iterate hosts once."""
@@ -224,7 +248,8 @@ class JiraCloudExport(JiraCloud):
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
         counts = defaultdict(lambda: {"updated": 0, "created": 0,
-                                      "unchanged": 0, "skipped": 0})
+                                      "unchanged": 0, "skipped": 0,
+                                      "failed": 0})
 
         with Progress(SpinnerColumn(), MofNCompleteColumn(),
                       *Progress.get_default_columns(),
@@ -250,7 +275,8 @@ class JiraCloudExport(JiraCloud):
         for type_id in all_type_ids:
             c = counts[type_id]
             summary = (f"updated={c['updated']} created={c['created']} "
-                       f"unchanged={c['unchanged']} skipped={c['skipped']}")
+                       f"unchanged={c['unchanged']} skipped={c['skipped']} "
+                       f"failed={c['failed']}")
             type_entry = self._get_type(type_id)
             label = type_entry.name if type_entry else f"type {type_id}"
             print(f"{cc.OKGREEN} == {cc.ENDC}{label} [type {type_id}]: {summary}")
@@ -298,7 +324,19 @@ class JiraCloudExport(JiraCloud):
                 if not changed:
                     counts[type_id]["unchanged"] += 1
                     continue
-                self._put_object(obj_id, type_id, changed)
+                error = self._put_object(obj_id, type_id, changed)
+                if error:
+                    console(f"{cc.FAIL}   ✗ {cc.ENDC}"
+                            f"{db_host.hostname} [type {type_id}] update "
+                            f"rejected by Jira: {error}")
+                    # 'error' in the key flags the whole run as errored in
+                    # the web log so the rejection is visible there and
+                    # error-only notifications fire.
+                    self.log_details.append(
+                        (f'export_error {db_host.hostname} [type {type_id}]',
+                         f'update rejected: {error}'))
+                    counts[type_id]["failed"] += 1
+                    continue
                 verb = "would update" if self.dry_run else "updated"
                 console(f"{cc.OKGREEN}   ↻ {cc.ENDC}"
                         f"{db_host.hostname} [type {type_id}] {verb} "
@@ -312,7 +350,16 @@ class JiraCloudExport(JiraCloud):
             else:
                 if lookup_attr_id not in target_attrs:
                     target_attrs[lookup_attr_id] = lookup_value
-                self._post_object(type_id, target_attrs)
+                error = self._post_object(type_id, target_attrs)
+                if error:
+                    console(f"{cc.FAIL}   ✗ {cc.ENDC}"
+                            f"{db_host.hostname} [type {type_id}] create "
+                            f"rejected by Jira: {error}")
+                    self.log_details.append(
+                        (f'export_error {db_host.hostname} [type {type_id}]',
+                         f'create rejected: {error}'))
+                    counts[type_id]["failed"] += 1
+                    continue
                 verb = "would create" if self.dry_run else "created"
                 console(f"{cc.OKBLUE}   + {cc.ENDC}"
                         f"{db_host.hostname} [type {type_id}] ({verb})")

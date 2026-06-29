@@ -50,10 +50,12 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
 
         for device in vm.config.hardware.device:
             if isinstance(device, vim.vm.device.VirtualDisk):
-                capacity = f"{device.capacityInKB / 1024 / 1024:.2f} GB"
+                # Store the raw capacity in its smallest native unit (KB) so
+                # export plugins can convert to whatever unit they need and
+                # Jinja can sum across disks. The unit lives in the key name.
                 virtual_disks.append({
                     'id': device.unitNumber,
-                    'capacity': capacity,
+                    'capacity_kb': device.capacityInKB,
                     'name': device.deviceInfo.label,
                     'filename': device.backing.fileName,
                     'controllerkey': device.controllerKey,

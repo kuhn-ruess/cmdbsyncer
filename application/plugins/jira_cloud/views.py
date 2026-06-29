@@ -25,13 +25,17 @@ from application.plugins.jira_cloud.models import JiraSchemaCache
 def _target_choices():
     """
     Every (object_type, attribute) pair the schema cache knows about,
-    as ``("<type_id>|<attr_name>", "Schema / Type / Attribute")``.
+    as ``("<type_id>|<attr_name>", "Account / Schema / Type / Attribute")``.
 
     Object type and attribute are stored as one combined ``target``
     string because in Jira Assets an attribute belongs to its type —
     "Name" on Hardware Server is a different attribute from "Name" on
     Laptop, with different ids — so the user picks them as a single
     target rather than two independent fields that could disagree.
+
+    The account name is prefixed to the label so that, once several
+    accounts' schemas are cached, you can tell which account/schema an
+    attribute originates from.
     """
     rows = [('', '-- run jira sync_schema first --')]
     seen = set()
@@ -39,7 +43,8 @@ def _target_choices():
         for otype in sorted(cache.object_types,
                             key=lambda x: ((x.schema_name or '').lower(),
                                            (x.name or '').lower())):
-            type_label = f"{otype.schema_name or '?'} / {otype.name}"
+            type_label = (f"{cache.account} / {otype.schema_name or '?'} / "
+                          f"{otype.name}")
             for attr in sorted(otype.attributes,
                                key=lambda a: (a.name or '').lower()):
                 if not attr.name:
@@ -192,17 +197,35 @@ class JiraCloudFilterView(FiltereModelView):
 
 
 def _render_schema_summary(_view, _context, model, _name):
-    """Compact list of cached types per account."""
+    """
+    List of cached types per account; each type is expandable to reveal
+    its synchronised attributes so you can confirm whether an (inherited)
+    attribute actually made it into the cache.
+    """
     rows = []
     for otype in sorted(model.object_types,
                         key=lambda x: ((x.schema_name or '').lower(),
                                        (x.name or '').lower())):
+        attr_rows = []
+        for attr in sorted(otype.attributes,
+                           key=lambda a: (a.name or '').lower()):
+            editable = "editable" if attr.editable else "read-only"
+            attr_rows.append(
+                f"<li>{escape(attr.name or '')} "
+                f"<small class='text-muted'>"
+                f"#{attr.attribute_id} · {escape(attr.type_name or '?')} · "
+                f"{editable}</small></li>"
+            )
+        attr_list = ("<ul>" + "".join(attr_rows) + "</ul>"
+                     if attr_rows else
+                     "<small class='text-muted'>no attributes cached</small>")
         rows.append(
-            f"<li><b>{escape(otype.schema_name or '?')}</b> / "
+            "<li><details>"
+            f"<summary><b>{escape(otype.schema_name or '?')}</b> / "
             f"{escape(otype.name)} "
             f"<small class='text-muted'>"
             f"#{otype.object_type_id} · {len(otype.attributes)} attrs"
-            f"</small></li>"
+            f"</small></summary>{attr_list}</details></li>"
         )
     return Markup("<ul>" + "".join(rows) + "</ul>")
 

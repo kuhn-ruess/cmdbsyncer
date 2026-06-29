@@ -79,6 +79,7 @@ class JiraCloud(Plugin):
             response = self.inner_request(
                 method="POST", url=url, params=query,
                 headers=self.headers, data=payload, auth=self.auth,
+                read_only=True,
             )
             body = response.json()
             if 'values' not in body:

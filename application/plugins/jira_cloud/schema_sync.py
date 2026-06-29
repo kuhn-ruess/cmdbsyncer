@@ -64,6 +64,12 @@ class JiraSchemaSync(JiraCloud):
                 ))
                 print(f"{cc.OKGREEN}  + {cc.ENDC}{schema_name} / "
                       f"{otype.get('name')} ({len(attributes)} attrs)")
+                if self.debug:
+                    for attr in attributes:
+                        editable = "editable" if attr.editable else "read-only"
+                        print(f"{cc.OKBLUE}      · {cc.ENDC}"
+                              f"{attr.name} [#{attr.attribute_id}, "
+                              f"{attr.type_name or '?'}, {editable}]")
 
         cache = JiraSchemaCache.objects(account=self.account_name).first()
         if not cache:

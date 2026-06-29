@@ -630,11 +630,16 @@ class Host(db.Document):
         Args:
            key (string): Identifier for Inventory Attributes
            new_data (dict): Key:Value of Attributes.
+
+        Returns:
+            bool|None: True if the inventory changed, False if it was
+            processed unchanged, None if the host was skipped because it
+            did not pass the inventory match filter.
         """
         validate_mongo_key(key, "inventory")
         validate_mongo_keys(new_data, "inventory")
         if config and not self._inventory_match_passes(new_data, config):
-            return
+            return None
 
         check_dict = {}
         # Prevent RuntimeError: dictionary changed size during iteration
@@ -660,7 +665,8 @@ class Host(db.Document):
 
         # If the inventory is changed, the cache
         # is not longer valid
-        if check_dict != update_dict:
+        changed = check_dict != update_dict
+        if changed:
             updates = [
                 f"{item_key} to {value}"
                 for item_key, value in update_dict.items()
@@ -668,6 +674,7 @@ class Host(db.Document):
             ]
             self.add_log(f"Inventory Change: {','.join(updates)}")
             self.cache = {}
+        return changed
 
     def get_inventory(self, key_filter=False):
         """
@@ -824,6 +831,22 @@ class Host(db.Document):
         self.last_import_sync = datetime.datetime.now()
         # Delete Cache if new Data is imported
         self.cache = {}
+
+    def mark_inventorized(self, changed=False):
+        """
+        Stamp the import-seen (and, when the inventory actually changed,
+        import-sync) timestamps for an inventorize run.
+
+        Unlike set_import_seen()/set_import_sync() this only touches the
+        timestamps and deliberately leaves lifecycle state untouched: an
+        inventorize source is secondary, so it must never resurrect a host
+        the primary import source archived or flip its stale flag. The
+        cache is already invalidated by update_inventory() on change.
+        """
+        now = datetime.datetime.now()
+        self.last_import_seen = now
+        if changed:
+            self.last_import_sync = now
 
     def set_import_seen(self):
         """

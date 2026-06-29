@@ -14,7 +14,11 @@ def inventorize_host(host_obj, labels, key, config):
     Add Inventorize Information to host
     """
     if host_obj:
-        host_obj.update_inventory(key, labels, config)
+        changed = host_obj.update_inventory(key, labels, config)
+        # changed is None when the host was skipped by the inventory match
+        # filter; only stamp seen/sync when it was actually inventorized.
+        if changed is not None:
+            host_obj.mark_inventorized(changed=changed)
         print(f" {CC.OKBLUE} * {CC.ENDC} {host_obj.hostname}: Updated Inventory")
         host_obj.save()
     else:
