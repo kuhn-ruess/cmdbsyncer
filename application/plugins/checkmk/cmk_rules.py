@@ -4,6 +4,7 @@ Export Checkmk Rules
 """
 # pylint: disable=too-many-lines
 import ast
+import json
 import re
 from pprint import pformat
 
@@ -586,7 +587,44 @@ class CheckmkRuleSync(CMK2):
                     # nothing to optimize, so just add
                     final_rules.append(rule)
             final_rules.extend(rule_by_hash.values())
-            self.rulsets_by_type[rule_type] = final_rules
+            self.rulsets_by_type[rule_type] = self._dedupe_identical_rules(
+                final_rules)
+
+    @staticmethod
+    def _dedupe_identical_rules(rules):
+        """
+        Drop rules that are identical in every field that actually reaches
+        Checkmk (folder, comment, condition, value).
+
+        The same logical rule can be generated twice when a
+        ``CheckmkRuleMngmt`` matches ``anyway`` but pins a static
+        ``condition_host``: the host whose ``HOSTNAME`` equals that name
+        takes the optimize path (its dict carries the transient
+        ``optimize`` / ``optimize_rule_hash`` bookkeeping keys), while every
+        other host produces the plain variant. Both describe one and the
+        same Checkmk rule, but the differing bookkeeping defeats the
+        ``not in`` guard in ``calculate_rules_of_host`` — so Checkmk ended
+        up with two identical rules. Keying on content alone removes the
+        duplicate while preserving genuinely distinct rules (e.g. a
+        coalesced multi-host condition vs. a single-host one).
+        """
+        seen = set()
+        deduped = []
+        for rule in rules:
+            signature = json.dumps(
+                {
+                    'folder': rule.get('folder', '/'),
+                    'comment': rule.get('comment', ''),
+                    'value': rule.get('value', ''),
+                    'condition': rule.get('condition', {}),
+                },
+                sort_keys=True, default=repr,
+            )
+            if signature in seen:
+                continue
+            seen.add(signature)
+            deduped.append(rule)
+        return deduped
 
 
 
