@@ -585,7 +585,7 @@ class CheckmkMngmtRuleView(RuleModelView):
                 rules.Field('name'),
                 rules.Field('documentation'),
                 div_open,
-                rules.NestedRule(('enabled', 'last_match')),
+                rules.NestedRule(('enabled', 'last_match', 'static_rule')),
                 div_close,
             ],
             condition_fields=[
@@ -615,6 +615,14 @@ class CheckmkMngmtRuleView(RuleModelView):
         self.column_labels.update({
             'render_cmk_rule_mngmt': "Create following Rules",
         })
+
+        self.form_descriptions = dict(getattr(self, 'form_descriptions', {}) or {})
+        self.form_descriptions['static_rule'] = (
+            "Host-independent rule: render once and always create it, "
+            "ignoring the host match conditions. Use only when the "
+            "outcome templates reference no host attributes — it skips "
+            "the per-host calculation entirely."
+        )
 
         base_config = dict(self.form_subdocuments)
         base_config.update({

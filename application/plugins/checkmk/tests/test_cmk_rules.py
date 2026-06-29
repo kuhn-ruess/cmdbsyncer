@@ -19,6 +19,16 @@ from application.plugins.checkmk.cmk_rules import (
 from tests import base_mock_init
 
 
+class _FakeMongo:  # pylint: disable=too-few-public-methods
+    """Stand-in for a MongoEngine EmbeddedDocument: exposes to_mongo()."""
+
+    def __init__(self, data):
+        self._data = data
+
+    def to_mongo(self):
+        return dict(self._data)
+
+
 class TestCleanPostprocessed(unittest.TestCase):
     """Tests for clean_postproccessed"""
 
@@ -257,6 +267,65 @@ class TestCheckmkRuleSync(unittest.TestCase):
         self.assertEqual(len(rules), 1)
         self.assertEqual(
             rules[0]['condition']['host_name']['match_on'], ['fmg-host01'])
+
+    @patch('application.plugins.checkmk.cmk_rules.get_list',
+           side_effect=lambda v: v if isinstance(v, list) else [v])
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_static_rules_calculated_once(self, mock_render, mock_get_list):
+        # A static rule is rendered once against an empty context, no
+        # matter how many hosts exist — one Checkmk rule per outcome, and
+        # never via the per-host optimize path.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+
+        def _outcome_doc(value):
+            return _FakeMongo({
+                'ruleset': 'agent_config:mrpe',
+                'value_template': value,
+                'folder': '/server/windows',
+                'folder_index': 0,
+                'comment': '',
+                'loop_over_list': False,
+                'list_to_loop': '',
+                'condition_label_template': '',
+                'condition_host': 'fmg-host01',
+                'condition_service': '',
+                'condition_service_label': '',
+            })
+
+        rule = SimpleNamespace(name='Static', outcomes=[
+            _outcome_doc("{'k': 'a'}"), _outcome_doc("{'k': 'b'}")])
+        self.sync.static_rules = [rule]
+
+        self.sync.calculate_static_rules()
+
+        rules = self.sync.rulsets_by_type['agent_config:mrpe']
+        self.assertEqual(len(rules), 2)
+        # Static rules must never take the optimize path.
+        self.assertTrue(all(not r['optimize'] for r in rules))
+
+        # optimize_rules + content dedup leave the two distinct outcomes.
+        self.sync.optimize_rules()
+        self.assertEqual(len(self.sync.rulsets_by_type['agent_config:mrpe']), 2)
+
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_static_rule_loop_over_list_skipped(self, mock_render):
+        # loop_over_list needs a host attribute list; on a static rule it
+        # is skipped (and logged) instead of crashing on missing data.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        rule = SimpleNamespace(name='Static', outcomes=[_FakeMongo({
+            'ruleset': 'agent_config:mrpe',
+            'value_template': "{'k': 'v'}",
+            'folder': '/',
+            'loop_over_list': True,
+            'list_to_loop': 'host_list',
+        })])
+        self.sync.static_rules = [rule]
+        self.sync.log_details = []
+
+        self.sync.calculate_static_rules()
+
+        self.assertEqual(self.sync.rulsets_by_type, {})
+        self.assertTrue(any('loop_over_list' in d[1] for d in self.sync.log_details))
 
     def test_optimize_rules_keeps_non_optimizable(self):
         self.sync.rulsets_by_type = {

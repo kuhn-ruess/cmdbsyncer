@@ -267,6 +267,12 @@ class CheckmkRuleMngmt(db.Document):
     primary_ruleset = db.StringField()
     render_cmk_rule_mngmt = db.StringField()
     last_match = db.BooleanField(default=False)
+    # Host-independent rule: its outcome templates and conditions never
+    # reference host data, so it resolves to the same Checkmk rule(s) for
+    # every host. The export renders it exactly once against an empty
+    # context (host match conditions are ignored) instead of recomputing
+    # it per host and de-duplicating the identical copies.
+    static_rule = db.BooleanField(default=False)
     enabled = db.BooleanField()
     meta = {
         'strict': False,

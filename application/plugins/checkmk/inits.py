@@ -314,8 +314,14 @@ def export_rules(account):
         # ordered. The Checkmk-side reorder step (``sort_rules``) then
         # only needs to chain ``after_specific_rule`` moves to lock the
         # order into Checkmk's ruleset.
-        actions.rules = CheckmkRuleMngmt.objects(enabled=True).order_by('sort_field')
+        # Static rules carry no host data — they are evaluated once
+        # (see CheckmkRuleSync.calculate_static_rules) instead of per
+        # host, so they are kept out of the per-host engine here.
+        actions.rules = CheckmkRuleMngmt.objects(
+            enabled=True, static_rule__ne=True).order_by('sort_field')
         syncer.actions = actions
+        syncer.static_rules = CheckmkRuleMngmt.objects(
+            enabled=True, static_rule=True).order_by('sort_field')
         syncer.name = 'Checkmk: Export Rules'
         syncer.source = "cmk_rule_sync"
         syncer.export_cmk_rules()

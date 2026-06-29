@@ -411,6 +411,9 @@ class CheckmkRuleSync(CMK2):
         # sort_rules to skip the move chain when CMK already lists the
         # rules in the desired order.
         self._cmk_order_by_ruleset = {}
+        # Host-independent rules, wired in by inits.export_rules. Evaluated
+        # once in calculate_static_rules instead of per host.
+        self.static_rules = []
 
     def build_rule_hash(self, rule_template, conditions):
         """
@@ -669,7 +672,7 @@ class CheckmkRuleSync(CMK2):
                     self.calculate_rules_of_host(host_actions, attributes)
                 progress.advance(task1)
 
-
+        self.calculate_static_rules()
         self.optimize_rules()
         self._sort_rulsets_by_intent()
         self.clean_rules()
@@ -708,6 +711,46 @@ class CheckmkRuleSync(CMK2):
                         self.rulsets_by_type[rule_type].append(updated_rule)
 
 
+
+    def calculate_static_rules(self):
+        """
+        Evaluate host-independent rules exactly once.
+
+        A rule flagged ``static_rule`` carries no host data: its outcome
+        templates and conditions never reference host attributes, so it
+        resolves to the same Checkmk rule(s) regardless of host. Rendering
+        it a single time against an empty attribute context — instead of
+        once per host, leaning on de-duplication to collapse the N
+        identical copies — skips the whole per-host Jinja/condition pass
+        for these rules on large inventories. The rule's match conditions
+        are intentionally ignored; a static rule is always emitted.
+        """
+        if not self.static_rules:
+            return
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Calculate static (host-independent) rules")
+        # HOSTNAME is explicitly None so the per-host "optimize" coalescing
+        # in build_condition_and_update_rule_params never triggers — a
+        # static rule targets whatever its condition_host literally names,
+        # not "this host".
+        attributes = {'all': {'HOSTNAME': None}}
+        for rule in self.static_rules:
+            host_actions = {}
+            for outcome in rule.outcomes:
+                outcome = dict(outcome.to_mongo())
+                if outcome.get('loop_over_list'):
+                    # loop_over_list iterates a *host* attribute list, which
+                    # a static rule by definition does not have. Skip it
+                    # rather than fail on the missing attribute.
+                    self.log_details.append((
+                        "ERROR",
+                        f"Static rule '{rule.name}' outcome for "
+                        f"{outcome.get('ruleset')} uses loop_over_list, "
+                        f"which needs host data — skipped",
+                    ))
+                    continue
+                host_actions.setdefault(outcome['ruleset'], []).append(outcome)
+            if host_actions:
+                self.calculate_rules_of_host(host_actions, attributes)
 
     def _sort_rulsets_by_intent(self):
         """
