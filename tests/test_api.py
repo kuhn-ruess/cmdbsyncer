@@ -398,6 +398,9 @@ class PluginViewFormattingTest(unittest.TestCase):
         checkmk_models_mod.action_outcome_types = [('create_rule', 'create_rule')]
         checkmk_models_mod.CheckmkSite = MagicMock()
         checkmk_models_mod.CheckmkSettings = MagicMock()
+        checkmk_models_mod.CheckmkRuleMngmt = MagicMock()
+        checkmk_models_mod.CheckmkRuleProject = MagicMock()
+        checkmk_models_mod.cmk_rule_project_status = []
 
         checkmk_module = _load_source_module(
             'application.plugins.checkmk.views',

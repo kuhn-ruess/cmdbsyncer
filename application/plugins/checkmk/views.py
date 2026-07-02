@@ -3,13 +3,15 @@ Checkmk Rule Views
 """
 # pylint: disable=too-many-lines
 # pylint: disable=duplicate-code
+import json
+from datetime import datetime
 from markupsafe import Markup, escape
 
 from pygments import highlight
 from pygments.formatters import HtmlFormatter  # pylint: disable=no-name-in-module
 from pygments.lexers import DjangoLexer  # pylint: disable=no-name-in-module
 
-from wtforms import HiddenField, StringField, PasswordField, SelectMultipleField
+from wtforms import HiddenField, StringField, PasswordField, SelectMultipleField, SelectField
 from wtforms.validators import ValidationError
 from flask_admin.form import rules
 from flask_admin.actions import action
@@ -19,10 +21,12 @@ from flask_admin.contrib.mongoengine.filters import (
     BooleanEqualFilter,
     FilterLike,
 )
-from flask import redirect, url_for, request, render_template, flash
+from flask import redirect, url_for, request, render_template, flash, Response
 
 from flask_login import current_user
 from application.views.default import DefaultModelView
+from application.views._form_fields import AccountSelectField
+from application.models.account import Account
 from application.docu_links import docu_links
 
 from application.modules.rule.views import (
@@ -34,7 +38,28 @@ from application.modules.rule.views import (
     _modern_rule_form,
 )
 from application.views._form_sections import modern_form, section
-from .models import action_outcome_types, CheckmkSite, CheckmkSettings
+from .models import (
+    action_outcome_types,
+    CheckmkSite,
+    CheckmkSettings,
+    CheckmkRuleMngmt,
+    CheckmkRuleProject,
+)
+
+
+def _project_choices():
+    """Blank + every existing rule project — feeds the rule's project picker."""
+    names = [p.name for p in CheckmkRuleProject.objects.order_by('name')]
+    return [('', '— none (global) —'), *((n, n) for n in names)]
+
+
+class ProjectSelectField(SelectField):
+    """SelectField populated from the CheckmkRuleProject collection."""
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('choices', _project_choices)
+        # Keep editing a rule whose project was renamed/removed working.
+        kwargs.setdefault('validate_choice', False)
+        super().__init__(*args, **kwargs)
 
 
 div_open = rules.HTML('<div class="form-check form-check-inline">')
@@ -503,7 +528,7 @@ class CheckmkMngmtRuleView(RuleModelView):
     column_exclude_list = list(RuleModelView.column_exclude_list) + ['primary_ruleset']
     form_excluded_columns = ('primary_ruleset',)
 
-    column_searchable_list = ('name', 'primary_ruleset')
+    column_searchable_list = ('name', 'primary_ruleset', 'project')
 
     def init_search(self):
         """
@@ -538,6 +563,7 @@ class CheckmkMngmtRuleView(RuleModelView):
                 {'name': regex},
                 {'primary_ruleset': regex},
                 {'outcomes.ruleset': regex},
+                {'project': regex},
             ],
         })
 
@@ -547,7 +573,6 @@ class CheckmkMngmtRuleView(RuleModelView):
         atomic update per row instead of `.save()` so the partial
         `only('id', 'outcomes')` fetch can't trip Document-level
         validation (e.g. the required `name` field)."""
-        from .models import CheckmkRuleMngmt  # pylint: disable=import-outside-toplevel
         legacy = CheckmkRuleMngmt.objects(
             primary_ruleset__exists=False,
         ).only('id', 'outcomes')
@@ -560,6 +585,7 @@ class CheckmkMngmtRuleView(RuleModelView):
 
     column_filters = (
         FilterLike("name", 'Name'),
+        FilterLike("project", 'Project'),
         BooleanEqualFilter("enabled", 'Enabled'),
         FilterRulesetContains("outcomes.ruleset", 'Ruleset'),
     )
@@ -568,7 +594,6 @@ class CheckmkMngmtRuleView(RuleModelView):
     def ruleset_choices(self):
         """JSON list of distinct rulesets currently in use — feeds the
         ruleset filter's <datalist> autocomplete on the list view."""
-        from .models import CheckmkRuleMngmt  # pylint: disable=import-outside-toplevel
         seen = set()
         for rule in CheckmkRuleMngmt.objects.only('outcomes.ruleset'):
             for outcome in rule.outcomes or []:
@@ -584,6 +609,7 @@ class CheckmkMngmtRuleView(RuleModelView):
             main_fields=[
                 rules.Field('name'),
                 rules.Field('documentation'),
+                rules.Field('project'),
                 div_open,
                 rules.NestedRule(('enabled', 'last_match', 'static_rule')),
                 div_close,
@@ -610,6 +636,7 @@ class CheckmkMngmtRuleView(RuleModelView):
 
         self.form_overrides.update({
             'render_cmk_rule_mngmt': HiddenField,
+            'project': ProjectSelectField,
         })
 
         self.column_labels.update({
@@ -622,6 +649,11 @@ class CheckmkMngmtRuleView(RuleModelView):
             "ignoring the host match conditions. Use only when the "
             "outcome templates reference no host attributes — it skips "
             "the per-host calculation entirely."
+        )
+        self.form_descriptions['project'] = (
+            "Assign this rule to a Rule Project. Project rules are staged and "
+            "pushed only through the project's test/prod workflow — they are "
+            "left out of the global 'export_rules'."
         )
 
         base_config = dict(self.form_subdocuments)
@@ -756,6 +788,219 @@ class CheckmkMngmtRuleView(RuleModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
+
+
+def _render_project_rule_count(_view, _context, model, _name):
+    """List-column formatter: how many rules are assigned to this project."""
+    return CheckmkRuleMngmt.objects(project=model.name).count()
+
+
+class CheckmkRuleProjectView(DefaultModelView):
+    """
+    Rule Projects group Checkmk Setup Rules so they can be staged on a test
+    instance, approved, and pushed to production as one unit. Projects are
+    im-/exportable as JSON to move them between separate syncer instances.
+    """
+    column_list = ('name', 'status', 'test_account', 'prod_account',
+                   'rule_count', 'last_test_export', 'last_prod_export',
+                   'approved_by', 'approved_at')
+    column_default_sort = 'name'
+    column_labels = {
+        'rule_count': 'Rules',
+        'test_account': 'Test Instance',
+        'prod_account': 'Prod Instance',
+    }
+    column_formatters = {
+        'rule_count': _render_project_rule_count,
+    }
+    column_filters = (
+        FilterLike('name', 'Name'),
+        FilterLike('status', 'Status'),
+    )
+
+    form_columns = ('name', 'documentation', 'status',
+                    'test_account', 'prod_account')
+    form_overrides = {
+        'test_account': AccountSelectField,
+        'prod_account': AccountSelectField,
+    }
+    form_descriptions = {
+        'status': "draft → in_test → approved → live. A production push is "
+                  "only allowed once the project is approved.",
+        'test_account': "Checkmk account used as the test target.",
+        'prod_account': "Checkmk account used as the production target.",
+    }
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    @action('push_test', 'Push to Test',
+            'Push the selected projects to their test Checkmk instance?')
+    def action_push_test(self, ids):
+        """Push each selected project's rules to its test instance."""
+        from .inits import export_project_rules  # pylint: disable=import-outside-toplevel
+        count = 0
+        for project in CheckmkRuleProject.objects(id__in=ids):
+            export_project_rules(project.name, 'test')
+            count += 1
+        flash(f'Pushed {count} project(s) to their test instance', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('push_prod', 'Push to Prod',
+            'Push the selected APPROVED projects to production?')
+    def action_push_prod(self, ids):
+        """Push approved projects to prod; skip any that are not approved."""
+        from .inits import export_project_rules  # pylint: disable=import-outside-toplevel
+        pushed, skipped = 0, 0
+        for project in CheckmkRuleProject.objects(id__in=ids):
+            if project.status not in ('approved', 'live'):
+                skipped += 1
+                continue
+            export_project_rules(project.name, 'prod')
+            pushed += 1
+        flash(f'Pushed {pushed} project(s) to production' +
+              (f', {skipped} skipped (not approved)' if skipped else ''),
+              'success' if pushed else 'warning')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('approve', 'Approve for Production',
+            'Mark the selected projects approved for production?')
+    def action_approve(self, ids):
+        """Move projects to 'approved' and record who/when."""
+        approved = 0
+        for project in CheckmkRuleProject.objects(id__in=ids):
+            project.status = 'approved'
+            project.approved_by = current_user.email
+            project.approved_at = datetime.now()
+            project.save()
+            approved += 1
+        flash(f'Approved {approved} project(s)', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('export', 'Export as JSON',
+            'Download the selected projects and their rules as JSON?')
+    def action_export(self, ids):
+        """Bundle each selected project plus its rules into one JSON file."""
+        payload = []
+        for project in CheckmkRuleProject.objects(id__in=ids):
+            project_rules = CheckmkRuleMngmt.objects(project=project.name)
+            payload.append({
+                'project': json.loads(project.to_json()),
+                'rules': [json.loads(rule.to_json()) for rule in project_rules],
+            })
+        body = json.dumps(payload, indent=2, default=str)
+        return Response(
+            body, mimetype='application/json',
+            headers={'Content-Disposition':
+                     'attachment; filename=cmk_rule_projects.json'})
+
+    @expose('/import', methods=['GET', 'POST'])
+    def import_view(self):
+        """Recreate a project and its rules from an exported JSON file."""
+        return_url = self.get_url('.index_view')
+        if request.method == 'GET':
+            return self.render('admin/checkmk_rule_project_import.html',
+                               return_url=return_url)
+
+        upload = request.files.get('import_file')
+        if not upload:
+            flash('No file uploaded', 'error')
+            return redirect(return_url)
+        try:
+            data = json.loads(upload.read().decode('utf-8'))
+        except (ValueError, UnicodeDecodeError) as error:
+            flash(f'Invalid JSON: {error}', 'error')
+            return redirect(return_url)
+
+        # Accept a single {project, rules} object or a list of them.
+        if isinstance(data, dict):
+            data = [data]
+
+        projects, imported_rules = 0, 0
+        for block in data:
+            proj_data = dict((block or {}).get('project') or {})
+            proj_data.pop('_id', None)
+            name = proj_data.get('name')
+            if not name:
+                continue
+            project = CheckmkRuleProject.objects(name=name).first() \
+                or CheckmkRuleProject(name=name)
+            project.documentation = proj_data.get('documentation')
+            project.test_account = proj_data.get('test_account')
+            project.prod_account = proj_data.get('prod_account')
+            # An imported project always starts fresh — never inherit an
+            # 'approved'/'live' status (or approver) from another instance.
+            project.status = 'draft'
+            project.approved_by = None
+            project.approved_at = None
+            project.save()
+            projects += 1
+
+            for rule_data in (block.get('rules') or []):
+                rule_data = dict(rule_data)
+                rule_data.pop('_id', None)
+                rule_name = rule_data.get('name')
+                if not rule_name:
+                    continue
+                existing = CheckmkRuleMngmt.objects(name=rule_name).first()
+                rule = CheckmkRuleMngmt.from_json(json.dumps(rule_data))
+                if existing:
+                    rule.id = existing.id
+                rule.project = name
+                rule.save()
+                imported_rules += 1
+
+        flash(f'Imported {projects} project(s) and {imported_rules} rule(s)',
+              'success')
+        return redirect(return_url)
+
+    @action('import_from_cmk', 'Import Rules from Checkmk Folder', None)
+    def action_import_from_cmk(self, ids):
+        """Row action: open the folder-import form for one selected project."""
+        if len(ids) != 1:
+            flash('Select exactly one project to import into', 'error')
+            return redirect(request.referrer or url_for('.index_view'))
+        return redirect(url_for('.import_from_cmk_view', id=ids[0]))
+
+    @expose('/import_from_cmk', methods=['GET', 'POST'])
+    def import_from_cmk_view(self):
+        """
+        Import every Checkmk Setup Rule of a chosen folder (on a chosen
+        Checkmk account) into this project as static rules.
+        """
+        return_url = self.get_url('.index_view')
+        project_id = request.args.get('id') or request.form.get('id')
+        project = self.get_one(project_id) if project_id else None
+        if project is None:
+            flash('Select a project first', 'error')
+            return redirect(return_url)
+
+        if request.method == 'GET':
+            accounts = [
+                account.name for account in
+                Account.objects(enabled=True, type='cmkv2').order_by('name')
+            ]
+            return self.render(
+                'admin/checkmk_rule_project_import_cmk.html',
+                project=project, project_id=project_id,
+                accounts=accounts, return_url=return_url)
+
+        account = request.form.get('account')
+        folder = (request.form.get('folder') or '/').strip() or '/'
+        recursive = bool(request.form.get('recursive'))
+        if not account:
+            flash('No Checkmk account selected', 'error')
+            return redirect(return_url)
+
+        from .inits import import_project_rules_from_folder  # pylint: disable=import-outside-toplevel
+        imported = import_project_rules_from_folder(
+            project.name, account, folder, recursive)
+        flash(
+            f"Imported {imported} rule(s) from folder '{folder}' "
+            f"(account {account})",
+            'success' if imported else 'warning')
+        return redirect(return_url)
 
 
 class CheckmkSiteView(DefaultModelView):

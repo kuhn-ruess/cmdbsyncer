@@ -465,7 +465,11 @@ _cmk_models = _stub_package("application.plugins.checkmk.models")
 for _name in (
     "CheckmkFolderPool", "CheckmkObjectCache", "CheckmkGroupRule",
     "CheckmkTagMngmt", "CheckmkUserMngmt", "CheckmkPassword",
-    "CheckmkInventorizeAttributes", "CheckmkRuleMngmt",
+    "CheckmkInventorizeAttributes", "CheckmkRuleMngmt", "CheckmkRuleProject",
+    "RuleMngmtOutcome",
+    "CheckmkBiRule", "CheckmkBiAggregation", "CheckmkDowntimeRule",
+    "CheckmkRewriteAttributeRule", "CheckmkFilterRule", "CheckmkDCDRule",
+    "CheckmkNotificationRule",
     "CheckmkSite", "CheckmkSettings",
 ):
     setattr(_cmk_models, _name, MagicMock(name=f"stub.{_name}"))
@@ -481,6 +485,15 @@ _application.init_db = MagicMock(name="stub.init_db")
 _try_load_real_module(
     "application.modules.rule.rule",
     os.path.join("modules", "rule", "rule.py"),
+)
+# checkmk/inits.py imports Filter and Rewrite at module import time.
+_try_load_real_module(
+    "application.modules.rule.filter",
+    os.path.join("modules", "rule", "filter.py"),
+)
+_try_load_real_module(
+    "application.modules.rule.rewrite",
+    os.path.join("modules", "rule", "rewrite.py"),
 )
 for _mod_name, _mod_path in [
     ("helpers", "helpers.py"),
@@ -499,6 +512,8 @@ for _mod_name, _mod_path in [
     ("import_v1", "import_v1.py"),
     ("import_v2", "import_v2.py"),
     ("notification_rules", "notification_rules.py"),
+    # inits imports the other checkmk submodules above, so it loads last.
+    ("inits", "inits.py"),
 ]:
     _try_load_real_module(
         f"application.plugins.checkmk.{_mod_name}",

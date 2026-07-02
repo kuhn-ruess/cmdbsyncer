@@ -21,6 +21,7 @@ from .models import (
     CheckmkRewriteAttributeRule,
     CheckmkRule,
     CheckmkRuleMngmt,
+    CheckmkRuleProject,
     CheckmkSettings,
     CheckmkSite,
     CheckmkTagMngmt,
@@ -36,6 +37,7 @@ from .views import (
     CheckmkFolderPoolView,
     CheckmkInventorizeAttributesView,
     CheckmkMngmtRuleView,
+    CheckmkRuleProjectView,
     CheckmkNotificationRuleView,
     CheckmkPasswordView,
     CheckmkRuleView,
@@ -94,6 +96,15 @@ def register_admin_views(admin):
             category="Checkmk",
             menu_icon_type='fa',
             menu_icon_value='fa-cogs',
+        )
+    )
+    admin.add_view(
+        CheckmkRuleProjectView(
+            CheckmkRuleProject,
+            name="Setup Rule Projects (Test/Prod)",
+            category="Checkmk",
+            menu_icon_type='fa',
+            menu_icon_value='fa-code-fork',
         )
     )
     admin.add_view(

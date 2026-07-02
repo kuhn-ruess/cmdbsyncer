@@ -1,0 +1,23 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Import Rule Project</h3>
+    <p>
+        Upload a JSON file previously exported from a Rule Project. The project
+        and all of its Setup Rules are (re)created on this instance. Existing
+        rules with the same name are overwritten; the imported project starts
+        in status <span class="badge badge-secondary">draft</span>.
+    </p>
+    <form method="POST" action="{{ url_for('.import_view') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="form-group">
+            <input type="file" name="import_file" accept=".json,application/json" required/>
+        </div>
+        <button type="submit" class="btn btn-primary">
+            <i class="fa fa-upload"></i> Import
+        </button>
+        <a href="{{ return_url }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

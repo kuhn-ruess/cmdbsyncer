@@ -31,6 +31,131 @@ def normalize_folder(folder):
     return folder
 
 
+def normalize_cmk_folder(folder):
+    """
+    Canonicalise a folder path coming back from the Checkmk REST API so it
+    can be compared against a user-entered folder.
+
+    Checkmk returns rule folders either slash-delimited ("/server/windows")
+    or tilde-delimited ("~server~windows", "~" for root). Both are collapsed
+    to the slash form ``normalize_folder`` already uses on the export side.
+    """
+    folder = (folder or '/').replace('~', '/')
+    return normalize_folder(folder)
+
+
+def folder_in_scope(rule_folder, target_folder, recursive=False):
+    """
+    True when ``rule_folder`` should be imported for ``target_folder``.
+
+    Without ``recursive`` only an exact folder match counts; with it every
+    folder at or below ``target_folder`` matches. Both sides are normalised
+    first so "/server/windows", "server/windows/" and "~server~windows" are
+    treated as equal.
+    """
+    rule_folder = normalize_cmk_folder(rule_folder)
+    target_folder = normalize_cmk_folder(target_folder)
+    if rule_folder == target_folder:
+        return True
+    if not recursive:
+        return False
+    if target_folder == '/':
+        return True
+    return rule_folder.startswith(target_folder + '/')
+
+
+def cmk_conditions_to_outcome(conditions):
+    """
+    Reverse of ``build_condition_and_update_rule_params``: turn a Checkmk
+    rule ``conditions`` object back into the ``RuleMngmtOutcome`` condition
+    fields (condition_host / _label_template / _service / _service_label).
+
+    Handles both the 2.2 (``host_labels``/``service_labels``) and the 2.3+
+    (``host_label_groups``/``service_label_groups``) shapes and tolerates
+    missing keys. Only the first host label is representable in the outcome
+    model, matching the export side which also emits a single label.
+    """
+    conditions = conditions or {}
+    result = {
+        'condition_host': '',
+        'condition_label_template': '',
+        'condition_service': '',
+        'condition_service_label': '',
+    }
+
+    host_name = conditions.get('host_name') or {}
+    if host_name.get('match_on'):
+        result['condition_host'] = ','.join(host_name['match_on'])
+
+    service = conditions.get('service_description') or {}
+    if service.get('match_on'):
+        result['condition_service'] = ','.join(service['match_on'])
+
+    # Host label: 2.3+ nested label_groups, else flat 2.2 host_labels.
+    label = _first_label_from_groups(conditions.get('host_label_groups'))
+    if not label:
+        host_labels = conditions.get('host_labels') or []
+        if host_labels:
+            first = host_labels[0]
+            if first.get('key') and first.get('value') is not None:
+                label = f"{first['key']}:{first['value']}"
+    result['condition_label_template'] = label or ''
+
+    # Service labels: collect every label across the groups.
+    svc_labels = _all_labels_from_groups(conditions.get('service_label_groups'))
+    if not svc_labels:
+        svc_labels = [
+            entry for entry in (conditions.get('service_labels') or [])
+            if isinstance(entry, str)
+        ]
+    result['condition_service_label'] = ','.join(svc_labels)
+
+    return result
+
+
+def _first_label_from_groups(label_groups):
+    """Return the first ``key:value`` label found in a *_label_groups list."""
+    for group in label_groups or []:
+        for entry in group.get('label_group') or []:
+            if entry.get('label'):
+                return entry['label']
+    return ''
+
+
+def _all_labels_from_groups(label_groups):
+    """Return every ``key:value`` label found across *_label_groups."""
+    labels = []
+    for group in label_groups or []:
+        for entry in group.get('label_group') or []:
+            if entry.get('label'):
+                labels.append(entry['label'])
+    return labels
+
+
+def cmk_rule_to_outcome(cmk_rule):
+    """
+    Convert one Checkmk rule object (as returned by the REST API under
+    ``value`` in a rule collection) into a ``RuleMngmtOutcome``-shaped dict.
+
+    The rule's literal ``value_raw`` becomes the outcome's value_template and
+    its conditions are reversed via ``cmk_conditions_to_outcome`` — so the
+    imported rule, exported as a static rule, reproduces the exact same
+    Checkmk rule.
+    """
+    extensions = cmk_rule.get('extensions', {}) or {}
+    outcome = {
+        'ruleset': extensions.get('ruleset', ''),
+        'folder': normalize_cmk_folder(extensions.get('folder', '/')),
+        'folder_index': extensions.get('folder_index', 0) or 0,
+        'comment': (extensions.get('properties', {}) or {}).get('comment', ''),
+        'value_template': extensions.get('value_raw', ''),
+        'loop_over_list': False,
+        'list_to_loop': '',
+    }
+    outcome.update(cmk_conditions_to_outcome(extensions.get('conditions')))
+    return outcome
+
+
 def render_jinja_in_value(value, context):
     """
     Walk a debug-output value (dict / list / string) and Jinja-render
@@ -414,6 +539,28 @@ class CheckmkRuleSync(CMK2):
         # Host-independent rules, wired in by inits.export_rules. Evaluated
         # once in calculate_static_rules instead of per host.
         self.static_rules = []
+        # Name of the CheckmkRuleProject this run belongs to (set by
+        # inits.export_project_rules). Scopes the ``rule_marker`` so a
+        # project push only ever manages/cleans its own rules — two projects
+        # can share the same Checkmk instance without clobbering each other.
+        self.project = None
+
+    @property
+    def rule_marker(self):
+        """
+        Description marker written onto every rule this run owns in Checkmk.
+
+        ``clean_rules``/``sort_rules`` only ever touch rules carrying this
+        exact marker, so it doubles as the ownership boundary. A per-project
+        export scopes the marker with the project name; the global export
+        keeps the historical ``cmdbsyncer_{account_id}`` unchanged for
+        backwards compatibility.
+        """
+        if self.project:
+            slug = "".join(
+                char if char.isalnum() else "_" for char in self.project)
+            return f"cmdbsyncer_{self.account_id}_{slug}"
+        return f"cmdbsyncer_{self.account_id}"
 
     def build_rule_hash(self, rule_template, conditions):
         """
@@ -459,6 +606,62 @@ class CheckmkRuleSync(CMK2):
             additional_header=additional,
         )
 
+
+    def list_used_rulesets(self):
+        """
+        Yield the name of every ruleset that currently holds at least one
+        rule. Checkmk has no "all rules in a folder" endpoint, so importing
+        a folder means enumerating the used rulesets and then pulling the
+        rules of each (see fetch_rules_in_folder).
+        """
+        response, _ = self.request(
+            "domain-types/ruleset/collections/all?used=true", method="GET")
+        for ruleset in response.get('value', []):
+            extensions = ruleset.get('extensions', {}) or {}
+            name = extensions.get('name') or ruleset.get('id')
+            if name and extensions.get('number_of_rules', 0):
+                yield name
+
+    def fetch_rules_in_folder(self, folder, recursive=False):
+        """
+        Return every Checkmk rule that lives in ``folder`` (optionally in its
+        subfolders), across all used rulesets, as a list of dicts:
+        ``{'cmk_id', 'ruleset', 'folder', 'disabled', 'outcome'}`` where
+        ``outcome`` is the RuleMngmtOutcome-shaped dict from
+        ``cmk_rule_to_outcome``.
+        """
+        collected = []
+        rulesets = list(self.list_used_rulesets())
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            task1 = progress.add_task(
+                f"Scan {len(rulesets)} rulesets for folder {folder}",
+                total=len(rulesets))
+            for ruleset_name in rulesets:
+                url = ("domain-types/rule/collections/all"
+                       f"?ruleset_name={ruleset_name}")
+                response, _ = self.request(url, method="GET")
+                for cmk_rule in response.get('value', []):
+                    extensions = cmk_rule.get('extensions', {}) or {}
+                    if not folder_in_scope(
+                            extensions.get('folder', '/'), folder, recursive):
+                        continue
+                    # Ensure the ruleset name is present for the converter
+                    # even if the per-rule payload omits it.
+                    extensions.setdefault('ruleset', ruleset_name)
+                    collected.append({
+                        'cmk_id': cmk_rule.get('id'),
+                        'ruleset': ruleset_name,
+                        'folder': normalize_cmk_folder(
+                            extensions.get('folder', '/')),
+                        'disabled': (extensions.get('properties', {}) or {})
+                                    .get('disabled', False),
+                        'outcome': cmk_rule_to_outcome(cmk_rule),
+                    })
+                progress.advance(task1)
+        return collected
 
     # pylint: disable=too-many-locals,too-many-branches
     def build_condition_and_update_rule_params(
@@ -912,7 +1115,7 @@ class CheckmkRuleSync(CMK2):
                         "folder": rule['folder'],
                         "properties": {
                             "disabled": False,
-                            "description": f"cmdbsyncer_{self.account_id}",
+                            "description": self.rule_marker,
                             "comment": rule['comment'],
                         },
                         'conditions' : rule['condition'],
@@ -977,11 +1180,11 @@ class CheckmkRuleSync(CMK2):
                 self._cmk_order_by_ruleset[ruleset_name] = [
                     cmk_rule['id'] for cmk_rule in rule_response['value']
                     if cmk_rule['extensions']['properties'].get('description', '')
-                    == f'cmdbsyncer_{self.account_id}'
+                    == self.rule_marker
                 ]
                 for cmk_rule in rule_response['value']:
                     if cmk_rule['extensions']['properties'].get('description', '') != \
-                        f'cmdbsyncer_{self.account_id}':
+                        self.rule_marker:
                         continue
 
 
@@ -1056,7 +1259,7 @@ class CheckmkRuleSync(CMK2):
                         update_payload = {
                             "properties": {
                                 "disabled": False,
-                                "description": f"cmdbsyncer_{self.account_id}",
+                                "description": self.rule_marker,
                                 "comment": our_rule['comment'],
                             },
                             "conditions": our_rule['condition'],

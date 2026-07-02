@@ -1,0 +1,51 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Import Rules from Checkmk Folder</h3>
+    <p>
+        Import every Checkmk Setup Rule of the given folder into project
+        <strong>{{ project.name }}</strong>. Imported rules are added as
+        <em>static</em> rules; re-running the import updates them in place
+        instead of creating duplicates.
+    </p>
+    {% if not accounts %}
+    <div class="alert alert-warning">
+        No enabled Checkmk (cmkv2) account found. Create one first.
+    </div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('.import_from_cmk_view') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="id" value="{{ project_id }}"/>
+        <div class="form-group">
+            <label for="account">Checkmk account</label>
+            <select class="form-control" id="account" name="account" required>
+                {% for account in accounts %}
+                <option value="{{ account }}"
+                        {% if account == project.test_account %}selected{% endif %}>
+                    {{ account }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="folder">Folder</label>
+            <input type="text" class="form-control" id="folder" name="folder"
+                   value="/" placeholder="/server/windows"/>
+            <small class="form-text text-muted">
+                Use / for the main folder. Slash or tilde notation both work.
+            </small>
+        </div>
+        <div class="form-check mb-3">
+            <input type="checkbox" class="form-check-input" id="recursive" name="recursive"/>
+            <label class="form-check-label" for="recursive">
+                Include subfolders
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary" {% if not accounts %}disabled{% endif %}>
+            <i class="fa fa-download"></i> Import
+        </button>
+        <a href="{{ return_url }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

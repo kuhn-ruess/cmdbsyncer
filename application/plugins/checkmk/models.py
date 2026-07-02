@@ -273,10 +273,54 @@ class CheckmkRuleMngmt(db.Document):
     # context (host match conditions are ignored) instead of recomputing
     # it per host and de-duplicating the identical copies.
     static_rule = db.BooleanField(default=False)
+    # Name of the CheckmkRuleProject this rule belongs to (or empty for a
+    # free/global rule). Referenced by name — not as a ReferenceField — so a
+    # project and its rules survive a JSON im-/export between separate syncer
+    # instances without ObjectId remapping. Project rules are excluded from
+    # the global ``export_rules`` and only pushed through the project workflow.
+    project = db.StringField()
     enabled = db.BooleanField()
     meta = {
         'strict': False,
-        'indexes': ['primary_ruleset'],
+        'indexes': ['primary_ruleset', 'project'],
+    }
+
+#.
+#   .-- Checkmk Rule Project
+
+cmk_rule_project_status = [
+    ('draft', "Draft (editing)"),
+    ('in_test', "In Test (pushed to test site)"),
+    ('approved', "Approved (ready for production)"),
+    ('live', "Live (pushed to production)"),
+]
+
+
+class CheckmkRuleProject(db.Document):
+    """
+    Groups Checkmk Setup Rules (CheckmkRuleMngmt) so they can be staged on a
+    test instance, approved, and then pushed to production as one unit. A
+    project carries its own test/prod target accounts and a status workflow.
+    """
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    status = db.StringField(choices=cmk_rule_project_status, default='draft')
+
+    # Names of the target Account records (Checkmk instances). Stored by name
+    # to stay compatible with the CLI/CheckmkRuleSync(account_name) signature
+    # and to survive im-/export between instances.
+    test_account = db.StringField()
+    prod_account = db.StringField()
+
+    # Workflow audit trail
+    approved_by = db.StringField()
+    approved_at = db.DateTimeField()
+    last_test_export = db.DateTimeField()
+    last_prod_export = db.DateTimeField()
+
+    meta = {
+        'strict': False,
     }
 
 #.

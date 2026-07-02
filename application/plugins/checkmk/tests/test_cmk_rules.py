@@ -3,7 +3,7 @@ Unit tests for checkmk cmk_rules module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from types import SimpleNamespace
 
@@ -14,8 +14,13 @@ from application.plugins.checkmk.cmk_rules import (
     preview_rule_for_attributes,
     preview_group_rule_for_attributes,
     render_jinja_in_value,
+    normalize_cmk_folder,
+    folder_in_scope,
+    cmk_conditions_to_outcome,
+    cmk_rule_to_outcome,
     CheckmkRuleSync,
 )
+import application.plugins.checkmk.inits as inits  # noqa: E402  pylint: disable=consider-using-from-import
 from tests import base_mock_init
 
 
@@ -165,6 +170,28 @@ class TestCheckmkRuleSync(unittest.TestCase):
         h1 = self.sync.build_rule_hash('tpl1', {})
         h2 = self.sync.build_rule_hash('tpl2', {})
         self.assertNotEqual(h1, h2)
+
+    def test_rule_marker_global(self):
+        # Without a project the marker keeps its historical, account-scoped
+        # shape so the global export stays backwards compatible.
+        self.sync.project = None
+        self.assertEqual(self.sync.rule_marker, 'cmdbsyncer_test_account')
+
+    def test_rule_marker_scoped_to_project(self):
+        # A project export scopes the marker so its cleanup never touches
+        # another project's (or the global) rules on the same instance.
+        self.sync.project = 'My Project'
+        self.assertEqual(
+            self.sync.rule_marker, 'cmdbsyncer_test_account_My_Project')
+        # Two different projects must never collide on one account.
+        self.sync.project = 'Other'
+        self.assertNotEqual(
+            self.sync.rule_marker, 'cmdbsyncer_test_account_My_Project')
+
+    def test_rule_marker_slugifies_non_alnum(self):
+        self.sync.project = 'proj/one-2'
+        self.assertEqual(
+            self.sync.rule_marker, 'cmdbsyncer_test_account_proj_one_2')
 
     @patch('application.plugins.checkmk.cmk_rules.render_jinja')
     def test_build_condition_v23(self, mock_render):
@@ -559,6 +586,310 @@ class TestPreviewGroupRule(unittest.TestCase):
             rule, {'HOSTNAME': 'srv01', 'environment': 'prod', 'role': 'web'})
         names = sorted(dict(o['rows'])['group_name'] for o in result)
         self.assertEqual(names, ['environment'])
+
+
+class TestCmkFolderHelpers(unittest.TestCase):
+    """normalize_cmk_folder + folder_in_scope."""
+
+    def test_normalize_root_variants(self):
+        self.assertEqual(normalize_cmk_folder('/'), '/')
+        self.assertEqual(normalize_cmk_folder('~'), '/')
+        self.assertEqual(normalize_cmk_folder(''), '/')
+        self.assertEqual(normalize_cmk_folder(None), '/')
+
+    def test_normalize_tilde_and_slash_equivalent(self):
+        self.assertEqual(normalize_cmk_folder('~server~windows'),
+                         '/server/windows')
+        self.assertEqual(normalize_cmk_folder('/server/windows/'),
+                         '/server/windows')
+        self.assertEqual(normalize_cmk_folder('//server//windows'),
+                         '/server/windows')
+
+    def test_scope_exact_match(self):
+        self.assertTrue(folder_in_scope('/server', '/server'))
+        self.assertTrue(folder_in_scope('~server', '/server'))
+
+    def test_scope_non_recursive_excludes_subfolder(self):
+        self.assertFalse(folder_in_scope('/server/windows', '/server'))
+
+    def test_scope_recursive_includes_subfolder(self):
+        self.assertTrue(
+            folder_in_scope('/server/windows', '/server', recursive=True))
+
+    def test_scope_recursive_root_matches_all(self):
+        self.assertTrue(folder_in_scope('/anything/deep', '/', recursive=True))
+
+    def test_scope_sibling_prefix_not_matched(self):
+        # /server must not match /server-old just because of a string prefix.
+        self.assertFalse(
+            folder_in_scope('/server-old', '/server', recursive=True))
+
+
+class TestCmkConditionReverse(unittest.TestCase):
+    """cmk_conditions_to_outcome + cmk_rule_to_outcome (reverse of export)."""
+
+    def test_empty_conditions(self):
+        result = cmk_conditions_to_outcome({})
+        self.assertEqual(result, {
+            'condition_host': '',
+            'condition_label_template': '',
+            'condition_service': '',
+            'condition_service_label': '',
+        })
+
+    def test_host_name_joined(self):
+        result = cmk_conditions_to_outcome(
+            {'host_name': {'match_on': ['h1', 'h2'], 'operator': 'one_of'}})
+        self.assertEqual(result['condition_host'], 'h1,h2')
+
+    def test_host_label_groups_23(self):
+        conditions = {'host_label_groups': [{
+            'operator': 'and',
+            'label_group': [{'operator': 'and', 'label': 'env:prod'}],
+        }]}
+        result = cmk_conditions_to_outcome(conditions)
+        self.assertEqual(result['condition_label_template'], 'env:prod')
+
+    def test_host_labels_22(self):
+        conditions = {'host_labels': [
+            {'key': 'env', 'operator': 'is', 'value': 'prod'}]}
+        result = cmk_conditions_to_outcome(conditions)
+        self.assertEqual(result['condition_label_template'], 'env:prod')
+
+    def test_service_conditions(self):
+        conditions = {
+            'service_description': {'match_on': ['CPU', 'Mem'],
+                                    'operator': 'one_of'},
+            'service_label_groups': [{
+                'operator': 'and',
+                'label_group': [
+                    {'operator': 'and', 'label': 'crit:yes'},
+                    {'operator': 'and', 'label': 'team:db'},
+                ],
+            }],
+        }
+        result = cmk_conditions_to_outcome(conditions)
+        self.assertEqual(result['condition_service'], 'CPU,Mem')
+        self.assertEqual(result['condition_service_label'], 'crit:yes,team:db')
+
+    def test_rule_to_outcome_full(self):
+        cmk_rule = {
+            'id': 'rule-123',
+            'extensions': {
+                'ruleset': 'agent_config:mrpe',
+                'folder': '~server~windows',
+                'folder_index': 2,
+                'properties': {'comment': 'hello', 'disabled': False},
+                'value_raw': "{'foo': 'bar'}",
+                'conditions': {
+                    'host_name': {'match_on': ['srv01'], 'operator': 'one_of'},
+                },
+            },
+        }
+        outcome = cmk_rule_to_outcome(cmk_rule)
+        self.assertEqual(outcome['ruleset'], 'agent_config:mrpe')
+        self.assertEqual(outcome['folder'], '/server/windows')
+        self.assertEqual(outcome['folder_index'], 2)
+        self.assertEqual(outcome['comment'], 'hello')
+        self.assertEqual(outcome['value_template'], "{'foo': 'bar'}")
+        self.assertEqual(outcome['condition_host'], 'srv01')
+        self.assertFalse(outcome['loop_over_list'])
+
+    @patch('application.plugins.checkmk.cmk_rules.get_list')
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_import_export_roundtrip_conditions(self, mock_render, mock_get_list):
+        # A rule imported from Checkmk, when rendered by the export side as a
+        # static rule, must reproduce the exact same Checkmk conditions.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        mock_get_list.side_effect = \
+            lambda value: value.split(',') if isinstance(value, str) else value
+        original_conditions = {
+            'host_tags': [],
+            'host_name': {'match_on': ['srv01', 'srv02'], 'operator': 'one_of'},
+            'host_label_groups': [{
+                'operator': 'and',
+                'label_group': [{'operator': 'and', 'label': 'env:prod'}],
+            }],
+            'service_description': {'match_on': ['CPU'], 'operator': 'one_of'},
+        }
+        cmk_rule = {
+            'id': 'r1',
+            'extensions': {
+                'ruleset': 'checkgroup_parameters:cpu',
+                'folder': '/server',
+                'value_raw': "{'levels': (80, 90)}",
+                'properties': {},
+                'conditions': original_conditions,
+            },
+        }
+        outcome = cmk_rule_to_outcome(cmk_rule)
+
+        sync = _make_sync()
+        sync.checkmk_version = '2.3.0'
+        rebuilt = sync.build_condition_and_update_rule_params(
+            dict(outcome), {'all': {'HOSTNAME': None}})
+
+        cond = rebuilt['condition']
+        self.assertEqual(cond['host_name']['match_on'], ['srv01', 'srv02'])
+        self.assertEqual(
+            cond['host_label_groups'][0]['label_group'][0]['label'],
+            'env:prod')
+        self.assertEqual(cond['service_description']['match_on'], ['CPU'])
+        self.assertEqual(rebuilt['value'], "{'levels': (80, 90)}")
+        self.assertEqual(rebuilt['folder'], '/server')
+
+
+def _make_sync():
+    """Build a CheckmkRuleSync with CMK2.__init__ stubbed out."""
+    with patch('application.plugins.checkmk.cmk_rules.CMK2.__init__',
+               lambda self_param, account=False: base_mock_init(
+                   self_param, rulsets_by_type={})):
+        return CheckmkRuleSync()
+
+
+class _FakeProgress:
+    """Stand-in for rich.Progress (its console is stubbed out in tests)."""
+    def __call__(self, *a, **k):
+        return self
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+    def add_task(self, *a, **k):
+        return 1
+    def advance(self, *a, **k):
+        pass
+    def update(self, *a, **k):
+        pass
+    def get_default_columns(self, *a, **k):
+        return ()
+
+
+class TestFetchRulesInFolder(unittest.TestCase):
+    """CheckmkRuleSync.list_used_rulesets + fetch_rules_in_folder."""
+
+    def setUp(self):
+        self.sync = _make_sync()
+        self.progress_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.Progress', _FakeProgress())
+        self.progress_patcher.start()
+
+    def tearDown(self):
+        self.progress_patcher.stop()
+
+    def _wire_requests(self, ruleset_payload, rules_by_ruleset):
+        def fake_request(url, method='GET', **_kw):
+            if url.startswith('domain-types/ruleset/collections/all'):
+                return ruleset_payload, {}
+            for name, payload in rules_by_ruleset.items():
+                if f'ruleset_name={name}' in url:
+                    return payload, {}
+            return {'value': []}, {}
+        self.sync.request = MagicMock(side_effect=fake_request)
+
+    def test_list_used_rulesets_skips_empty(self):
+        self.sync.request = MagicMock(return_value=({'value': [
+            {'id': 'a', 'extensions': {'name': 'a', 'number_of_rules': 3}},
+            {'id': 'b', 'extensions': {'name': 'b', 'number_of_rules': 0}},
+            {'id': 'c', 'extensions': {'number_of_rules': 1}},  # name via id
+        ]}, {}))
+        self.assertEqual(list(self.sync.list_used_rulesets()), ['a', 'c'])
+
+    def test_fetch_filters_by_folder_non_recursive(self):
+        self._wire_requests(
+            {'value': [{'id': 'rs1',
+                        'extensions': {'name': 'rs1', 'number_of_rules': 2}}]},
+            {'rs1': {'value': [
+                {'id': 'keep', 'extensions': {
+                    'ruleset': 'rs1', 'folder': '/server',
+                    'value_raw': '{}', 'properties': {}, 'conditions': {}}},
+                {'id': 'drop', 'extensions': {
+                    'ruleset': 'rs1', 'folder': '/server/win',
+                    'value_raw': '{}', 'properties': {}, 'conditions': {}}},
+            ]}})
+        result = self.sync.fetch_rules_in_folder('/server')
+        self.assertEqual([r['cmk_id'] for r in result], ['keep'])
+        self.assertEqual(result[0]['ruleset'], 'rs1')
+
+    def test_fetch_recursive_includes_subfolder(self):
+        self._wire_requests(
+            {'value': [{'id': 'rs1',
+                        'extensions': {'name': 'rs1', 'number_of_rules': 2}}]},
+            {'rs1': {'value': [
+                {'id': 'a', 'extensions': {
+                    'ruleset': 'rs1', 'folder': '/server',
+                    'value_raw': '{}', 'properties': {}, 'conditions': {}}},
+                {'id': 'b', 'extensions': {
+                    'ruleset': 'rs1', 'folder': '~server~win',
+                    'value_raw': '{}', 'properties': {'disabled': True},
+                    'conditions': {}}},
+            ]}})
+        result = self.sync.fetch_rules_in_folder('/server', recursive=True)
+        self.assertEqual({r['cmk_id'] for r in result}, {'a', 'b'})
+        disabled = [r for r in result if r['cmk_id'] == 'b'][0]
+        self.assertTrue(disabled['disabled'])
+
+    def test_fetch_no_rulesets_returns_empty(self):
+        self._wire_requests({'value': []}, {})
+        self.assertEqual(self.sync.fetch_rules_in_folder('/'), [])
+
+
+class TestImportProjectRules(unittest.TestCase):
+    """inits.import_project_rules_from_folder orchestration."""
+
+    def test_missing_project_returns_zero(self):
+        with patch.object(inits, 'CheckmkRuleProject') as proj, \
+                patch.object(inits, 'CheckmkRuleSync') as sync:
+            proj.objects.return_value.first.return_value = None
+            self.assertEqual(
+                inits.import_project_rules_from_folder('X', 'acc', '/'), 0)
+            sync.assert_not_called()
+
+    def test_counts_only_entries_with_id_and_passes_recursive(self):
+        with patch.object(inits, 'CheckmkRuleProject') as proj, \
+                patch.object(inits, 'CheckmkRuleSync') as sync, \
+                patch.object(inits, 'CheckmkRuleMngmt'), \
+                patch.object(inits, 'RuleMngmtOutcome'):
+            proj.objects.return_value.first.return_value = SimpleNamespace(name='P')
+            instance = sync.return_value
+            instance.fetch_rules_in_folder.return_value = [
+                {'cmk_id': 'a', 'outcome': {'ruleset': 'r'}},
+                {'cmk_id': None, 'outcome': {'ruleset': 'r'}},   # skipped
+                {'cmk_id': 'b', 'outcome': {'ruleset': 'r'}},
+            ]
+            imported = inits.import_project_rules_from_folder(
+                'P', 'acc', '/folder', recursive=True)
+            self.assertEqual(imported, 2)
+            instance.fetch_rules_in_folder.assert_called_once_with(
+                '/folder', recursive=True)
+
+
+class TestExportProjectRules(unittest.TestCase):
+    """Workflow guards around inits.export_project_rules."""
+
+    def test_prod_push_refused_when_not_approved(self):
+        # A prod push before approval must be refused — no syncer is built,
+        # so nothing reaches the production instance.
+        with patch.object(inits, 'CheckmkRuleSync') as mock_sync, \
+                patch.object(inits, 'CheckmkRuleProject') as mock_project:
+            mock_project.objects.return_value.first.return_value = SimpleNamespace(
+                name='P', status='in_test', prod_account='prod', test_account='test')
+            inits.export_project_rules('P', 'prod')
+            mock_sync.assert_not_called()
+
+    def test_prod_push_refused_without_prod_account(self):
+        with patch.object(inits, 'CheckmkRuleSync') as mock_sync, \
+                patch.object(inits, 'CheckmkRuleProject') as mock_project:
+            mock_project.objects.return_value.first.return_value = SimpleNamespace(
+                name='P', status='approved', prod_account='', test_account='test')
+            inits.export_project_rules('P', 'prod')
+            mock_sync.assert_not_called()
+
+    def test_missing_project_is_noop(self):
+        with patch.object(inits, 'CheckmkRuleProject') as mock_project:
+            mock_project.objects.return_value.first.return_value = None
+            # Must not raise even though the project does not exist.
+            inits.export_project_rules('Nope', 'test')
 
 
 if __name__ == '__main__':

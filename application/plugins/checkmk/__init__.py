@@ -26,6 +26,8 @@ from .inits import (
     export_bi_rules,
     export_bi_aggregations,
     export_rules,
+    export_project_rules,
+    import_project_rules_from_folder,
     export_groups,
     activate_changes,
     bake_and_sign_agents,
@@ -422,6 +424,59 @@ def cli_export_rules(account, debug):
     export_rules(account)
 
 #.
+#   .-- Command: Export Project Rules
+@cli_cmk.command('export_project_rules')
+@click.argument("project")
+@click.option("--stage", type=click.Choice(['test', 'prod']), default='test')
+@click.option("--debug", is_flag=True)
+def cli_export_project_rules(project, stage, debug):
+    """
+    Export the Setup Rules of one Rule Project to its test or prod Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_project_rules MYPROJECT --stage test_
+
+    Args:
+        project (string): Name of the Checkmk Rule Project
+        stage (string): 'test' or 'prod' target of the project
+    """
+    export_project_rules(project, stage, debug)
+
+
+def _export_project_rules_test(project):
+    """Cron entry: push a project's rules to its test instance. The cron
+    ``account`` slot carries the project name."""
+    export_project_rules(project, 'test')
+
+
+def _export_project_rules_prod(project):
+    """Cron entry: push a project's rules to its prod instance (only when
+    approved). The cron ``account`` slot carries the project name."""
+    export_project_rules(project, 'prod')
+
+#.
+#   .-- Command: Import Project Rules from Checkmk Folder
+@cli_cmk.command('import_project_rules')
+@click.argument("project")
+@click.argument("account")
+@click.argument("folder")
+@click.option("--recursive", is_flag=True)
+@click.option("--debug", is_flag=True)
+def cli_import_project_rules(project, account, folder, recursive, debug):
+    """
+    Import all Checkmk Setup Rules of a folder into a Rule Project
+
+    ### Example
+    _./cmdbsyncer checkmk import_project_rules MYPROJECT SITEACCOUNT /server_
+
+    Args:
+        project (string): Name of the target Checkmk Rule Project
+        account (string): Checkmk account to read the rules from
+        folder (string): Checkmk folder to import rules from
+    """
+    import_project_rules_from_folder(project, account, folder, recursive, debug)
+
+#.
 #   .-- Command: Export Group
 @cli_cmk.command('export_groups')
 @click.argument("account")
@@ -659,6 +714,8 @@ def get_cmk_data(account, debug=False):
 
 register_cronjob('Checkmk: Export Hosts', _inner_export_hosts)
 register_cronjob('Checkmk: Export Rules', export_rules)
+register_cronjob('Checkmk: Export Project Rules (Test)', _export_project_rules_test)
+register_cronjob('Checkmk: Export Project Rules (Prod)', _export_project_rules_prod)
 register_cronjob('Checkmk: Export Groups', export_groups)
 register_cronjob('Checkmk: Export BI Rules', export_bi_rules)
 register_cronjob('Checkmk: Export BI Aggregations', export_bi_aggregations)
