@@ -29,6 +29,7 @@ from application.plugins.checkmk import (
 from application.plugins.checkmk.cmk_rules import get_preview_providers
 from application.plugins.netbox import get_device_debug_data as netbox_host_debug
 from application.plugins.ansible import get_ansible_debug_data as ansible_host_debug
+from application.plugins.ansible.models import AnsibleProject
 from application.plugins.idoit import get_idoit_debug_data as idoit_host_debug
 from application.plugins.vmware import get_vmware_debug_data as vmware_host_debug
 from application.plugins.jira_cloud import get_jira_cloud_debug_data as jira_cloud_host_debug
@@ -116,22 +117,25 @@ def _strip_cmdb_form_rules(rule_list, drop_fields):
     return out
 
 
-def get_debug(hostname, mode):
+# Per debug-mode permission role, checked before running the mode's
+# debug function. Module-level so it stays a single source of truth.
+DEBUG_MODE_ROLES = {
+    'checkmk_host': 'checkmk',
+    'netbox_device': 'netbox',
+    'ansible_host': 'ansible',
+    'idoit_host': 'idoit',
+    'vmware_host': 'vmware',
+    'jira_cloud_host': 'jira',
+}
+
+
+def get_debug(hostname, mode, ansible_project=None):
     """
     Get Output for Host Debug Page
     """
 
     # Check permissions based on debug mode
-    mode_role_mapping = {
-        'checkmk_host': 'checkmk',
-        'netbox_device': 'netbox',
-        'ansible_host': 'ansible',
-        'idoit_host': 'idoit',
-        'vmware_host': 'vmware',
-        'jira_cloud_host': 'jira',
-    }
-
-    required_role = mode_role_mapping.get(mode)
+    required_role = DEBUG_MODE_ROLES.get(mode)
     if required_role and not current_user.has_right(required_role):
         return {'Error': f"You need the '{required_role}' role to access {mode} debug mode"}, {}
 
@@ -150,7 +154,12 @@ def get_debug(hostname, mode):
             'jira_cloud_host': jira_cloud_host_debug,
         }
 
-        attributes, actions, debug_log = debug_funcs[mode](hostname)
+        if mode == 'ansible_host':
+            # Ansible rules live inside projects; let the caller pick which
+            # project's rules to evaluate (defaults to the Default project).
+            attributes, actions, debug_log = ansible_host_debug(hostname, ansible_project)
+        else:
+            attributes, actions, debug_log = debug_funcs[mode](hostname)
 
         for type_name, data in debug_log.items():
             output_rules[type_name] = data
@@ -1472,6 +1481,7 @@ Impact Chain.
             if hostname:
                 host = Host.objects(hostname=hostname).first()
         mode = request.args.get('mode', 'checkmk_host')
+        ansible_project = request.args.get('ansible_project', '').strip()
 
 
 
@@ -1479,7 +1489,15 @@ Impact Chain.
         output_rules = {}
 
         if hostname:
-            output, output_rules = get_debug(hostname, mode)
+            output, output_rules = get_debug(hostname, mode, ansible_project=ansible_project)
+
+        # Project picker for the Ansible mode — rules now live inside
+        # projects, so the debug page must say which one it evaluated.
+        ansible_projects = []
+        if mode == 'ansible_host' and current_user.has_right('ansible'):
+            ansible_projects = [
+                p.name for p in AnsibleProject.objects().order_by('sort_field', 'name')
+            ]
 
         # Map each rule-group key (as set by the mode-specific debug
         # function) to the Flask-Admin model endpoint. Flask-Admin's
@@ -1576,7 +1594,9 @@ Impact Chain.
                            rule_preview=rule_preview,
                            rule_preview_error=rule_preview_error,
                            rule_preview_groups=rule_preview_groups,
-                           preview_rule_id=preview_rule_id)
+                           preview_rule_id=preview_rule_id,
+                           ansible_projects=ansible_projects,
+                           ansible_project=ansible_project)
 
 
     # Bulk actions that only make sense when the syncer is in CMDB mode

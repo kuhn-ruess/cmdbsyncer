@@ -179,16 +179,29 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     - raise: Raise Error if missing Variables
     - nullify: Nullify string in nase of missing Variables
     """
-    # Process ACCOUNT variables anywhere in the string
-    if isinstance(value, str) and '{{ACCOUNT:' in value:
-        value = re.sub(r'\{\{ACCOUNT:[^}]+\}\}', replace_account_variable, value)
+    # Process ACCOUNT variables anywhere in the string. Whitespace after
+    # `{{`, around the colons and before `}}` is tolerated so the natural
+    # Jinja spelling `{{ ACCOUNT:name:field }}` resolves like the compact
+    # `{{ACCOUNT:name:field}}`.
+    if isinstance(value, str) and 'ACCOUNT:' in value:
+        value = re.sub(r'\{\{\s*ACCOUNT:[^}]+\}\}', replace_account_variable, value)
 
     if replace_newlines and isinstance(value, str):
         value = value.replace('\n', '')
 
     source = str(value)
     strict = mode in ("raise", "nullify")
-    value_tpl = _compile_template(source, strict)
+    try:
+        value_tpl = _compile_template(source, strict)
+    except jinja2.exceptions.TemplateSyntaxError as exc:
+        # A malformed template — e.g. an {{ACCOUNT:...}} macro whose
+        # account no longer exists, so it survived substitution and reaches
+        # Jinja with its literal colons — must not 500 the caller (debug
+        # page, inventory export). Only explicit 'raise' mode propagates.
+        if mode == 'raise':
+            raise
+        logger.debug(f"Jinja Exception: Syntax error in {value!r}: {exc}")
+        return ""
 
     if mode == 'nullify':
         try:

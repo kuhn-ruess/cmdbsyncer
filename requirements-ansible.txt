@@ -3,4 +3,8 @@ pykerberos==1.2.4
 pywinrm==0.4.3
 ntlm-auth==1.5.0
 ansible==10.5.0
-cmdbsyncer-inventory==0.1.4
+# Unpinned so installs always pull the newest inventory plugin — the
+# `mode: local` / `provider` support the UI playbook runner relies on
+# landed in 0.2.0, and a hard pin previously stranded deployments on the
+# old HTTP-only 0.1.4. Use `pip install -U` to upgrade an existing env.
+cmdbsyncer-inventory

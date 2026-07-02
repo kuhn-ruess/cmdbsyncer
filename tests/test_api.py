@@ -223,6 +223,16 @@ class HostViewFormattingTest(unittest.TestCase):
             ModuleType('application.plugins.netbox'),
         )
         netbox_mod.get_device_debug_data = MagicMock()
+        ansible_mod = sys.modules.setdefault(
+            'application.plugins.ansible',
+            ModuleType('application.plugins.ansible'),
+        )
+        ansible_mod.get_ansible_debug_data = MagicMock()
+        ansible_models_mod = sys.modules.setdefault(
+            'application.plugins.ansible.models',
+            ModuleType('application.plugins.ansible.models'),
+        )
+        ansible_models_mod.AnsibleProject = MagicMock()
         host_models_mod = sys.modules['application.models.host']
         host_models_mod.CmdbField = MagicMock()
         config_mod = sys.modules.setdefault(

@@ -117,6 +117,16 @@
         <option value="jira_cloud_host" {% if mode == 'jira_cloud_host' %}selected{% endif %}>Jira Cloud Export</option>
       </select>
     </div>
+    {% if mode == 'ansible_host' and ansible_projects %}
+    <div class="form-group">
+      <label for="ansibleProject">Project</label>
+      <select id="ansibleProject" name="ansible_project" class="form-control">
+        {% for p in ansible_projects %}
+          <option value="{{ p }}" {% if ansible_project == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
     {% if rule_preview_groups %}
     <div class="form-group">
       <label for="previewRule">Preview Rule</label>

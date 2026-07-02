@@ -61,6 +61,29 @@ def _ansible_binary() -> str:
         or 'ansible-playbook'
 
 
+def _inventory_plugin_dir() -> str | None:
+    """
+    Directory that holds the `cmdbsyncer_inventory` Ansible inventory
+    plugin, so we can put it on ANSIBLE_INVENTORY_PLUGINS for the run.
+
+    The plugin ships in the `cmdbsyncer_inventory` pip package (the
+    `[ansible]` extra). Ansible only discovers inventory plugins on its
+    configured plugin path, so without this the spec fails to parse with
+    "unknown plugin 'cmdbsyncer_inventory'" — which is why UI runs never
+    produced an inventory while the CLI (a direct `cmdbsyncer ansible
+    inventory` call that bypasses Ansible plugin loading) worked. Returns
+    None when the package isn't installed.
+    """
+    try:
+        import cmdbsyncer_inventory  # pylint: disable=import-outside-toplevel
+    except ImportError:
+        return None
+    plugin_dir = os.path.join(
+        os.path.dirname(cmdbsyncer_inventory.__file__), 'inventory_plugins',
+    )
+    return plugin_dir if os.path.isdir(plugin_dir) else None
+
+
 def _load_manifest(path: Path) -> list[dict]:
     """Read and validate one manifest file. Missing file → empty list."""
     if not path.is_file():
@@ -130,18 +153,21 @@ def playbook_inventory_provider(playbook: str) -> str:
     return entry['inventory']
 
 
-def _build_command(playbook: str, target_host: str | None,
+def _build_command(playbook: str, inventory_path: str, target_host: str | None,
                    extra_vars: str | None, check_mode: bool) -> list[str]:
     """
-    Assemble the ansible-playbook argv. Inventory always points at the
-    cmdbsyncer-inventory plugin spec — the provider for this run is
-    selected via the CMDBSYNCER_INVENTORY_PROVIDER env var set by
-    `_execute`, so the same spec file works for every playbook.
+    Assemble the ansible-playbook argv against `inventory_path` — a
+    per-run cmdbsyncer-inventory spec that pins the provider for this run
+    (written by `_execute`). Using a per-run spec rather than the shared
+    `syncer.inventory.yml` guarantees the plugin serves the provider the
+    caller selected: the plugin reads the spec's `provider:` option, and
+    a shared spec with a pinned provider would otherwise ignore the
+    CMDBSYNCER_INVENTORY_PROVIDER env var.
     """
     base = _ansible_dir()
     cmd = [
         _ansible_binary(),
-        '-i', str(base / INVENTORY_SPEC_FILENAME),
+        '-i', inventory_path,
         str(base / playbook),
     ]
     if check_mode:
@@ -153,10 +179,34 @@ def _build_command(playbook: str, target_host: str | None,
     return cmd
 
 
-def _execute(stats_id, cmd: list[str], cwd: Path, provider: str):
+def _write_run_inventory_spec(directory: str, provider: str, mode: str) -> str:
+    """
+    Write a per-run cmdbsyncer-inventory spec into `directory` and return
+    its path. Keeping the canonical basename means the plugin's file
+    verification behaves exactly as for the shared spec; only the
+    `provider` differs per run.
+    """
+    spec_path = os.path.join(directory, INVENTORY_SPEC_FILENAME)
+    with open(spec_path, 'w', encoding='utf-8') as file_handle:
+        yaml.safe_dump(
+            {
+                'plugin': 'cmdbsyncer_inventory',
+                'mode': mode,
+                'provider': provider,
+            },
+            file_handle,
+            default_flow_style=False,
+        )
+    return spec_path
+
+
+def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
     """
     Run ansible-playbook to completion and update the stats row. Stdout
     and stderr are interleaved so the log reads in chronological order.
+
+    The per-run inventory spec is written into the run's temp dir so the
+    playbook is served by exactly the provider `provider` names.
     """
     with app.app_context():
         stats = AnsibleRunStats.objects(pk=stats_id).first()
@@ -165,6 +215,15 @@ def _execute(stats_id, cmd: list[str], cwd: Path, provider: str):
         env = os.environ.copy()
         env['CMDBSYNCER_INVENTORY_PROVIDER'] = provider
         env.setdefault('CMDBSYNCER_INVENTORY_MODE', 'local')
+        # Make Ansible find the cmdbsyncer_inventory plugin regardless of
+        # where the spec file lives (the run temp dir), prepending it to any
+        # path the operator already configured.
+        plugin_dir = _inventory_plugin_dir()
+        if plugin_dir:
+            configured = env.get('ANSIBLE_INVENTORY_PLUGINS')
+            env['ANSIBLE_INVENTORY_PLUGINS'] = (
+                f"{plugin_dir}{os.pathsep}{configured}" if configured else plugin_dir
+            )
         # Ansible writes scratch files under ``$HOME/.ansible/tmp`` and
         # respects ``ANSIBLE_LOCAL_TEMP`` for the same path. Under mod_wsgi
         # / gunicorn the process inherits the web user's $HOME (e.g.
@@ -176,6 +235,16 @@ def _execute(stats_id, cmd: list[str], cwd: Path, provider: str):
         run_tmp = tempfile.mkdtemp(prefix='cmdbsyncer-ansible-')
         env['ANSIBLE_LOCAL_TEMP'] = run_tmp
         env['HOME'] = run_tmp
+        inventory_path = _write_run_inventory_spec(
+            run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
+        )
+        cmd = _build_command(
+            run_params['playbook'],
+            inventory_path,
+            run_params['target_host'],
+            run_params['extra_vars'],
+            run_params['check_mode'],
+        )
         try:
             proc = subprocess.Popen(  # pylint: disable=consider-using-with
                 cmd,
@@ -241,10 +310,15 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
     )
     stats.save()
 
-    cmd = _build_command(playbook, target_host, extra_vars, check_mode)
+    run_params = {
+        'playbook': playbook,
+        'target_host': target_host,
+        'extra_vars': extra_vars,
+        'check_mode': check_mode,
+    }
     thread = threading.Thread(
         target=_execute,
-        args=(stats.pk, cmd, base, provider),
+        args=(stats.pk, run_params, base, provider),
         daemon=True,
         name=f'ansible-runner-{stats.pk}',
     )

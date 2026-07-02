@@ -47,15 +47,18 @@ def load_rules(project=None):
     """
     Cache the rules feeding one Ansible inventory pass.
 
-    `project=None` (default) selects rules without a project assignment
-    — that's the legacy / global behaviour, served by the `ansible`
-    provider. Pass an `AnsibleProject` to load only that project's
-    rules (strict isolation).
+    `project=None` (default) resolves to the Default project — the one
+    legacy project-less rules were migrated to and the one the static
+    `ansible` provider serves. Pass an `AnsibleProject` to load only that
+    project's rules (strict isolation). Resolving here means every caller
+    (inventory, debug page, cache rebuild) sees the same rule set instead
+    of the empty `project=None` slice that no rule lives in any more.
 
-    The cache_name is namespaced per project so a cached run for the
-    `ansible` provider cannot leak into a per-project run on the same
-    host record.
+    The cache_name is namespaced per project so a cached run for one
+    project cannot leak into another on the same host record.
     """
+    if project is None:
+        project = ensure_default_project()
     project_suffix = f'_{project.name}' if project else ''
     rule_filter = {'enabled': True, 'project': project}
 
@@ -79,15 +82,27 @@ def load_rules(project=None):
     }
 #.
 #   .-- Debug Host — shared backend for CLI + HTML debug page
-def get_ansible_debug_data(hostname):
+def _resolve_project(project_name):
+    """Resolve a project name to an AnsibleProject, falling back to the
+    Default project when the name is empty or unknown. Shared by the debug
+    page and the CLI so both agree on which rules a name maps to."""
+    if project_name:
+        project = AnsibleProject.objects(name=project_name).first()
+        if project:
+            return project
+    return ensure_default_project()
+
+
+def get_ansible_debug_data(hostname, project_name=None):
     """Return debug data (attributes, extra_attributes, rule_logs) for `hostname`.
 
     Mirrors `get_device_debug_data` (Netbox) and `get_host_debug_data`
     (Checkmk) so the HTML debug view can reuse the shared renderer. The
     CLI variant (`debug_ansible_rules`) uses the same data but prints
-    to stdout.
+    to stdout. `project_name` picks which project's rules to evaluate;
+    empty means the Default project (same as the `ansible` provider).
     """
-    rules = load_rules()
+    rules = load_rules(project=_resolve_project(project_name))
     rule_logs = {}
 
     syncer = AnsibleInventory()
@@ -117,11 +132,14 @@ def get_ansible_debug_data(hostname):
 
 @cli_ansible.command('debug_host')
 @click.argument("hostname")
-def debug_ansible_rules(hostname):
+@click.option('--project', 'project_name', default=None,
+              help='Project whose rules to evaluate (default: Default project)')
+@click.option('--debug', is_flag=True, default=False)
+def debug_ansible_rules(hostname, project_name, debug):  # pylint: disable=unused-argument
     """
     Print matching rules and Inventory Outcome for Host
     """
-    rules = load_rules()
+    rules = load_rules(project=_resolve_project(project_name))
 
     syncer = AnsibleInventory()
     apply_debug_rules(syncer, rules)
@@ -293,12 +311,10 @@ def _build_ansible_provider(project=None):
     Fully configured AnsibleInventory rendered through `project`'s rules.
 
     When called without an explicit project (the static `ansible`
-    provider's path) the Default project's rules are loaded — that is
-    what previously project-less rules were migrated to, and what the
+    provider's path) `load_rules` resolves to the Default project — that
+    is what previously project-less rules were migrated to, and what the
     bundled manifest's `inventory: ansible` entries continue to mean.
     """
-    if project is None:
-        project = ensure_default_project()
     rules = load_rules(project=project)
     syncer = AnsibleInventory()
     syncer.filter = rules['filter']
@@ -332,15 +348,19 @@ class _AnsibleProjectResolver:
         return lambda p=project: _build_ansible_provider(project=p)
 
     def list_names(self):
-        """Project names currently enabled — exposed via the registry's listing API.
+        """Enabled project names, exposed via the registry's listing API.
 
-        Includes the Default project so users discover it in
-        `cmdbsyncer inventory list-providers`. The static `ansible`
-        provider remains an alias for Default (so legacy manifest
-        entries with `inventory: ansible` keep working), but listing
-        both makes the relationship visible instead of hiding Default.
+        The Default project is deliberately omitted: it is already served
+        by the static `ansible` provider, so listing both `ansible` and
+        `Default` showed two entries for the same rule set and confused
+        users picking an inventory in the UI. `Default` still resolves if
+        named explicitly (via `__call__`); it is only hidden from the
+        listing. Custom projects are listed as their own providers.
         """
-        return [p.name for p in AnsibleProject.objects(enabled=True).only('name')]
+        return [
+            p.name for p in AnsibleProject.objects(enabled=True).only('name')
+            if p.name != DEFAULT_PROJECT_NAME
+        ]
 
 
 register_inventory_provider_resolver(_AnsibleProjectResolver())

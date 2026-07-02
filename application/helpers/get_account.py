@@ -123,11 +123,14 @@ def get_account_by_name(name, is_id=False):
 
 def get_account_variable(macro):
     """
-    Replaces the given Macro with the Account data
-    Example: {{ACCOUNT:mon:password}}
+    Replaces the given Macro with the Account data.
+
+    Tolerates whitespace so both `{{ACCOUNT:mon:password}}` and the
+    natural Jinja spelling `{{ ACCOUNT:mon:password }}` resolve.
     """
     try:
-        _, account, var = macro.split(':')
-        return get_account_by_name(account)[var.removesuffix('}}')]
+        inner = macro.strip().removeprefix('{{').removesuffix('}}')
+        _, account, var = (part.strip() for part in inner.split(':'))
+        return get_account_by_name(account)[var]
     except (ValueError, KeyError, AccountNotFoundError) as exc:
         raise ValueError("Account Variable not found") from exc
