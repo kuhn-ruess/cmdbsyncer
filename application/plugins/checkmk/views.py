@@ -795,6 +795,12 @@ def _render_project_rule_count(_view, _context, model, _name):
     return CheckmkRuleMngmt.objects(project=model.name).count()
 
 
+def _render_project_name_link(_view, _context, model, _name):
+    """Make the project name open its overview (rules + staging actions)."""
+    url = url_for('.overview_view', id=model.id)
+    return Markup(f'<a href="{escape(url)}">{escape(model.name)}</a>')
+
+
 class CheckmkRuleProjectView(DefaultModelView):
     """
     Rule Projects group Checkmk Setup Rules so they can be staged on a test
@@ -811,6 +817,7 @@ class CheckmkRuleProjectView(DefaultModelView):
         'prod_account': 'Prod Instance',
     }
     column_formatters = {
+        'name': _render_project_name_link,
         'rule_count': _render_project_rule_count,
     }
     column_filters = (
@@ -834,6 +841,27 @@ class CheckmkRuleProjectView(DefaultModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    @expose('/overview')
+    def overview_view(self):
+        """
+        Project detail page: list the Setup Rules assigned to this project
+        and surface the staging/import actions (push to test, approve, push
+        to prod, folder import, JSON export) on one page — the row actions in
+        the list are otherwise easy to miss.
+        """
+        project_id = request.args.get('id')
+        project = self.get_one(project_id) if project_id else None
+        if project is None:
+            flash('Project not found', 'error')
+            return redirect(self.get_url('.index_view'))
+        project_rules = CheckmkRuleMngmt.objects(
+            project=project.name).order_by('primary_ruleset', 'name')
+        return self.render(
+            'admin/checkmk_rule_project_overview.html',
+            project=project,
+            project_rules=project_rules,
+            return_url=self.get_url('.index_view'))
 
     @action('push_test', 'Push to Test',
             'Push the selected projects to their test Checkmk instance?')

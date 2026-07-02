@@ -1,0 +1,154 @@
+{% extends 'admin/master.html' %}
+
+{% set status_badge = {
+    'draft': 'secondary',
+    'in_test': 'info',
+    'approved': 'primary',
+    'live': 'success',
+} %}
+
+{% macro action_button(action, label, css, icon, confirm='') %}
+<form method="POST" action="{{ url_for('.action_view') }}"
+      style="display:inline;"
+      {% if confirm %}onsubmit="return confirm('{{ confirm }}');"{% endif %}>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="action" value="{{ action }}"/>
+    <input type="hidden" name="rowid" value="{{ project.id }}"/>
+    <button type="submit" class="btn {{ css }}">
+        <i class="fa {{ icon }}"></i> {{ label }}
+    </button>
+</form>
+{% endmacro %}
+
+{% block body %}
+<div class="container mt-4">
+
+    <div class="d-flex align-items-center mb-2" style="gap:10px;flex-wrap:wrap;">
+        <h3 class="mb-0">Rule Project: {{ project.name }}</h3>
+        <span class="badge badge-{{ status_badge.get(project.status, 'secondary') }}">
+            {{ project.status }}
+        </span>
+        <a href="{{ return_url }}" class="btn btn-sm btn-secondary ml-auto">
+            <i class="fa fa-arrow-left"></i> Back to projects
+        </a>
+    </div>
+
+    {% if project.documentation %}
+    <p class="text-muted">{{ project.documentation }}</p>
+    {% endif %}
+
+    <div class="card app-card mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Test Instance</dt>
+                        <dd class="col-sm-7">{{ project.test_account or '—' }}</dd>
+                        <dt class="col-sm-5">Prod Instance</dt>
+                        <dd class="col-sm-7">{{ project.prod_account or '—' }}</dd>
+                        <dt class="col-sm-5">Assigned Rules</dt>
+                        <dd class="col-sm-7">{{ project_rules.count() }}</dd>
+                    </dl>
+                </div>
+                <div class="col-md-6">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Approved by</dt>
+                        <dd class="col-sm-7">{{ project.approved_by or '—' }}</dd>
+                        <dt class="col-sm-5">Approved at</dt>
+                        <dd class="col-sm-7">{{ project.approved_at or '—' }}</dd>
+                        <dt class="col-sm-5">Last Test Push</dt>
+                        <dd class="col-sm-7">{{ project.last_test_export or '—' }}</dd>
+                        <dt class="col-sm-5">Last Prod Push</dt>
+                        <dd class="col-sm-7">{{ project.last_prod_export or '—' }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-4" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="{{ url_for('.import_from_cmk_view', id=project.id) }}"
+           class="btn btn-primary">
+            <i class="fa fa-download"></i> Import Rules from Checkmk Folder
+        </a>
+        {{ action_button('push_test', 'Push to Test', 'btn-info', 'fa-flask',
+            'Push this project to its test Checkmk instance?') }}
+        {{ action_button('approve', 'Approve for Production', 'btn-warning',
+            'fa-check', 'Mark this project approved for production?') }}
+        {{ action_button('push_prod', 'Push to Prod', 'btn-success', 'fa-rocket',
+            'Push this APPROVED project to production?') }}
+        {{ action_button('export', 'Export as JSON', 'btn-secondary', 'fa-file-code-o') }}
+    </div>
+
+    <div class="d-flex align-items-center mb-2" style="gap:10px;">
+        <h4 class="mb-0">Rules in this project</h4>
+        <a href="{{ url_for('checkmkrulemngmt.create_view') }}"
+           class="btn btn-sm btn-outline-primary">
+            <i class="fa fa-plus"></i> Add rule
+        </a>
+        <a href="{{ url_for('checkmkrulemngmt.index_view',
+                            search=project.name) }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-list"></i> Manage in rule list
+        </a>
+    </div>
+
+    {% if project_rules.count() == 0 %}
+    <div class="alert alert-info">
+        No rules assigned to this project yet. Create a rule and set its
+        <strong>Project</strong> to <em>{{ project.name }}</em>, or import
+        rules from a Checkmk folder above.
+    </div>
+    {% else %}
+    <div class="card app-card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Ruleset</th>
+                        <th>Static</th>
+                        <th>Enabled</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in project_rules %}
+                    <tr>
+                        <td>{{ rule.name }}</td>
+                        <td>
+                            <code>{{ rule.primary_ruleset
+                                     or (rule.outcomes[0].ruleset
+                                         if rule.outcomes else '') }}</code>
+                        </td>
+                        <td>
+                            {% if rule.static_rule %}
+                            <i class="fa fa-check-circle" title="Static"></i>
+                            {% else %}
+                            <i class="fa fa-minus-circle text-muted"></i>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if rule.enabled %}
+                            <i class="fa fa-check-circle text-success"></i>
+                            {% else %}
+                            <i class="fa fa-minus-circle text-muted"></i>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">
+                            <a href="{{ url_for('checkmkrulemngmt.edit_view',
+                                                id=rule.id, url=request.url) }}"
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="fa fa-pencil"></i> Edit
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
