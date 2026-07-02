@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
@@ -224,6 +225,26 @@ def _write_run_inventory_spec(directory: str, provider: str, mode: str,
     return spec_path
 
 
+def _stream_output(proc, stats) -> str:
+    """
+    Read the process output line by line and persist it into `stats.log`
+    at a throttled cadence, so the auto-refreshing run detail page shows
+    progress while the run is still 'running' instead of an empty log
+    until it finishes. Returns the full captured log.
+    """
+    captured = []
+    last_flush = time.monotonic()
+    for line in proc.stdout:
+        captured.append(line)
+        now = time.monotonic()
+        if now - last_flush >= 1.5:
+            stats.log = ''.join(captured)
+            stats.save()
+            last_flush = now
+    proc.wait()
+    return ''.join(captured)
+
+
 def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
     """
     Run ansible-playbook to completion and update the stats row. Stdout
@@ -294,8 +315,7 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
             )
             stats.pid = proc.pid
             stats.save()
-            output, _ = proc.communicate()
-            stats.log = output or ''
+            stats.log = _stream_output(proc, stats)
             stats.exit_code = proc.returncode
             stats.status = 'success' if proc.returncode == 0 else 'failure'
         except FileNotFoundError as exc:

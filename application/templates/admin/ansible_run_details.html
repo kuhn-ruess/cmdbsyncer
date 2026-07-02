@@ -6,6 +6,12 @@
    the run finishes. #}
 {% block tail %}
   {{ super() }}
+  <script {{ admin_csp_nonce_attribute }}>
+    // Keep the (scrollable) log scrolled to the newest output.
+    document.querySelectorAll('pre').forEach(function (p) {
+      p.scrollTop = p.scrollHeight;
+    });
+  </script>
   {% if model.status == 'running' %}
   <script {{ admin_csp_nonce_attribute }}>
     setTimeout(function () { window.location.reload(); }, 3000);
