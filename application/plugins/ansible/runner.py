@@ -215,6 +215,12 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         env = os.environ.copy()
         env['CMDBSYNCER_INVENTORY_PROVIDER'] = provider
         env.setdefault('CMDBSYNCER_INVENTORY_MODE', 'local')
+        # A failed inventory parse (broken/outdated inventory plugin, bad
+        # provider) otherwise leaves ansible-playbook running against an
+        # empty host list and exiting 0 — which we would record as a
+        # successful run. Make an unparsable inventory a fatal error so the
+        # process exits non-zero and the run is logged as a failure.
+        env.setdefault('ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED', 'True')
         # Make Ansible find the cmdbsyncer_inventory plugin regardless of
         # where the spec file lives (the run temp dir), prepending it to any
         # path the operator already configured.
