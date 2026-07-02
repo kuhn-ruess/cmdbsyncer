@@ -84,6 +84,28 @@ def _inventory_plugin_dir() -> str | None:
     return plugin_dir if os.path.isdir(plugin_dir) else None
 
 
+def _cmdbsyncer_bin() -> str:
+    """
+    Resolve the `cmdbsyncer` CLI the inventory plugin shells in local mode.
+
+    The plugin defaults to a bare `cmdbsyncer` and only looks on $PATH,
+    which fails when the app runs from a source checkout / container where
+    no `cmdbsyncer` console script is on PATH. Prefer an explicit config /
+    env override, then PATH, then the repo-root wrapper that sits next to
+    the `application` package (mirrors the legacy `ansible/inventory` shim).
+    """
+    override = app.config.get('CMDBSYNCER_BIN') or os.environ.get('CMDBSYNCER_BIN')
+    if override:
+        return override
+    on_path = shutil.which('cmdbsyncer')
+    if on_path:
+        return on_path
+    wrapper = Path(app.root_path).parent / 'cmdbsyncer'
+    if wrapper.is_file():
+        return str(wrapper)
+    return 'cmdbsyncer'
+
+
 def _load_manifest(path: Path) -> list[dict]:
     """Read and validate one manifest file. Missing file → empty list."""
     if not path.is_file():
@@ -179,24 +201,26 @@ def _build_command(playbook: str, inventory_path: str, target_host: str | None,
     return cmd
 
 
-def _write_run_inventory_spec(directory: str, provider: str, mode: str) -> str:
+def _write_run_inventory_spec(directory: str, provider: str, mode: str,
+                              cmdbsyncer_bin: str | None = None) -> str:
     """
     Write a per-run cmdbsyncer-inventory spec into `directory` and return
     its path. Keeping the canonical basename means the plugin's file
     verification behaves exactly as for the shared spec; only the
-    `provider` differs per run.
+    `provider` (and, in local mode, the `cmdbsyncer_bin`) differ per run.
     """
+    spec = {
+        'plugin': 'cmdbsyncer_inventory',
+        'mode': mode,
+        'provider': provider,
+    }
+    # In local mode the plugin shells the cmdbsyncer CLI; pin its path so
+    # it resolves even when no `cmdbsyncer` console script is on PATH.
+    if mode == 'local' and cmdbsyncer_bin:
+        spec['cmdbsyncer_bin'] = cmdbsyncer_bin
     spec_path = os.path.join(directory, INVENTORY_SPEC_FILENAME)
     with open(spec_path, 'w', encoding='utf-8') as file_handle:
-        yaml.safe_dump(
-            {
-                'plugin': 'cmdbsyncer_inventory',
-                'mode': mode,
-                'provider': provider,
-            },
-            file_handle,
-            default_flow_style=False,
-        )
+        yaml.safe_dump(spec, file_handle, default_flow_style=False)
     return spec_path
 
 
@@ -221,6 +245,12 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         # successful run. Make an unparsable inventory a fatal error so the
         # process exits non-zero and the run is logged as a failure.
         env.setdefault('ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED', 'True')
+        # In local mode the plugin shells the cmdbsyncer CLI, which resolves
+        # its config from $CMDBSYNCER_CONFIG_DIR / cwd. Point it at the
+        # deployment root (where local_config.py sits, next to ansible/) so
+        # the sub-process finds the same config as the web app — mirrors the
+        # legacy ansible/inventory shim.
+        env.setdefault('CMDBSYNCER_CONFIG_DIR', str(cwd.parent))
         # Make Ansible find the cmdbsyncer_inventory plugin regardless of
         # where the spec file lives (the run temp dir), prepending it to any
         # path the operator already configured.
@@ -243,6 +273,7 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         env['HOME'] = run_tmp
         inventory_path = _write_run_inventory_spec(
             run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
+            cmdbsyncer_bin=_cmdbsyncer_bin(),
         )
         cmd = _build_command(
             run_params['playbook'],
