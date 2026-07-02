@@ -36,7 +36,7 @@ from .models import (
     AnsibleProject,
     AnsibleRewriteAttributesRule,
 )
-from .seed import seed_cmk_agent_variables
+from .seed import SEED_TEMPLATES, seed_project
 from .runner import (
     _ansible_dir,
     available_playbooks,
@@ -291,26 +291,32 @@ class AnsibleProjectView(DefaultModelView):
             'admin/ansible_project_detail.html',
             project=project,
             sections=sections,
+            seed_templates=[
+                {'key': key, 'label': tpl['label']}
+                for key, tpl in SEED_TEMPLATES.items()
+            ],
         )
 
-    @expose('/seed-cmk-agent/<project_id>', methods=('POST',))
-    def seed_cmk_agent(self, project_id):
+    @expose('/seed/<project_id>/<seed_key>', methods=('POST',))
+    def seed_rules(self, project_id, seed_key):
         """
-        One-click seed: create the Checkmk agent-management rule set
-        (`cmk_agent_mngmt.yml`) inside this project — a base rule with the
-        static config plus one conditional rule per action (install, TLS,
-        bakery, discover). Idempotent — rules that already exist are left
-        untouched.
+        One-click seed: apply the seed template `seed_key` (from the
+        registry in seed.py) to this project. Idempotent — rules that
+        already exist are left untouched. The registry is generic, so new
+        seed templates become available here without touching this view.
         """
         project = AnsibleProject.objects(id=project_id).first()
         if project is None:
             abort(404)
-        created, skipped = seed_cmk_agent_variables(project)
+        result = seed_project(project, seed_key)
+        if result is None:
+            flash(f"Unknown seed template: {seed_key!r}", 'error')
+            return redirect(url_for('.project_detail', project_id=project_id))
+        created, skipped = result
         if created:
             flash(
-                f"Seeded {len(created)} Checkmk agent rule(s). Adapt the "
-                "server / credential values and the action conditions, then "
-                "enable the rules.",
+                f"Seeded {len(created)} rule(s). Adapt the server / credential "
+                "values and the conditions, then enable the rules.",
                 'success',
             )
         if skipped:
@@ -622,6 +628,9 @@ class AnsibleRunStatsView(DefaultModelView):
     }
 
     can_view_details = True
+    # Auto-reloads the detail page while the run is still 'running' so the
+    # log and final status appear without a manual refresh.
+    details_template = 'admin/ansible_run_details.html'
 
     def is_accessible(self):
         """Overwrite — same right gates the rules views."""

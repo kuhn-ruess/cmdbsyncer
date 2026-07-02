@@ -1,0 +1,14 @@
+{% extends 'admin/model/details.html' %}
+
+{# Auto-refresh the run detail page while the playbook is still running so
+   the captured log and final status appear on their own. The script is
+   only emitted while status == 'running', so reloading stops the moment
+   the run finishes. #}
+{% block tail %}
+  {{ super() }}
+  {% if model.status == 'running' %}
+  <script {{ admin_csp_nonce_attribute }}>
+    setTimeout(function () { window.location.reload(); }, 3000);
+  </script>
+  {% endif %}
+{% endblock %}

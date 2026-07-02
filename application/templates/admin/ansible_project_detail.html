@@ -128,20 +128,22 @@
   {% if project.description %}
   <div class="description">{{ project.description }}</div>
   {% endif %}
+  {% if seed_templates %}
   <div style="margin-top:12px;">
+    <span class="text-muted" style="font-size:12px; margin-right:6px;">Seed starter rules:</span>
+    {% for tpl in seed_templates %}
     <form method="POST"
-          action="{{ url_for('ansibleproject.seed_cmk_agent', project_id=project.pk) }}"
+          action="{{ url_for('ansibleproject.seed_rules', project_id=project.pk, seed_key=tpl.key) }}"
           style="display:inline;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-sm btn-outline-primary"
-              title="Create a ready-made cmk_agent_mngmt.yml rule set: base config plus one conditional rule per action">
-        <i class="fa fa-magic"></i> Seed Checkmk Agent variables
+              title="Create a ready-made set of rules (idempotent — existing rules are kept)">
+        <i class="fa fa-magic"></i> {{ tpl.label }}
       </button>
     </form>
-    <span class="text-muted" style="font-size:12px; margin-left:8px;">
-      Creates a base config rule + one conditional rule per action (install, TLS, bakery, discover).
-    </span>
+    {% endfor %}
   </div>
+  {% endif %}
 </div>
 
 {% set return_url = url_for('ansibleproject.project_detail', project_id=project.pk) %}
@@ -238,9 +240,20 @@
         <td style="text-align:right; white-space:nowrap;">
           <a class="btn btn-sm btn-outline-secondary"
              href="{{ url_for(section.endpoint ~ '.edit_view',
-                              id=rule.pk, url=return_url) }}">
+                              id=rule.pk, url=return_url) }}"
+             title="Edit rule">
             <i class="fa fa-pencil"></i>
           </a>
+          <form method="POST" style="display:inline;"
+                action="{{ url_for(section.endpoint ~ '.delete_view') }}"
+                onsubmit="return confirm('Delete rule &quot;{{ rule.name }}&quot;? This cannot be undone.');">
+            <input type="hidden" name="id" value="{{ rule.pk }}">
+            <input type="hidden" name="url" value="{{ return_url }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete rule">
+              <i class="fa fa-trash"></i>
+            </button>
+          </form>
         </td>
       </tr>
       {% endfor %}

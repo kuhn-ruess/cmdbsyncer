@@ -63,46 +63,80 @@ STATIC_VARIABLES = [
 ]
 
 # --- Conditional action rules ------------------------------------------
-# Each entry: (suffix, sort_field, documentation, condition, outcomes).
-# `condition` is (attribute_key, match, value): the attribute key is
-# matched exactly, its value is tested with `match` ('in' = contains).
-# The keys are the ones Checkmk inventorize writes (source `cmk_svc`, so
-# each service output is `cmk_svc__<service>_output`). The value strings
-# are examples from typical Checkmk output — verify them against
-# `./cmdbsyncer ansible debug_host HOST` and adapt to your environment.
+# Each entry is a dict: suffix, sort_field, condition_typ, documentation,
+# a list of conditions (attribute_key, match, value) and a list of
+# outcomes (name, value). A condition's attribute key is matched exactly
+# and its value tested with `match` ('in' = contains).
+#
+# The conditions mirror the maintainer's reference rule set: when a host's
+# agent is missing or unreachable, Checkmk's own "Check_MK" service reports
+# `[agent] Empty output` / `[agent] Communication failed`. That is the
+# signal to (re)install the agent and register TLS + bakery and run a
+# discovery — all together, since a broken agent needs the full cycle. The
+# service output is inventorized under `cmk_svc__check_mk_output` (run
+# `checkmk inventorize_hosts` with service collection enabled). Verify the
+# outcome for a host with `./cmdbsyncer ansible debug_host HOST`.
 ACTION_RULES = [
-    (
-        'Install Agent',
-        10,
-        "Install / update the Checkmk agent where the agent updater "
-        "reports a version mismatch. Adapt the condition to your setup.",
-        ('cmk_svc__check_mk_agent_output', 'in', 'is not the same as'),
-        [('cmk_install_agent', 'true')],
-    ),
-    (
-        'Register TLS',
-        20,
-        "Register agent TLS where the Check_MK service reports that TLS is "
-        "not activated on the monitored host.",
-        ('cmk_svc__check_mk_output', 'in', 'TLS is not activated'),
-        [('cmk_register_tls', 'true')],
-    ),
-    (
-        'Register Bakery',
-        30,
-        "Register with the bakery where the agent updater reports the host "
-        "is not registered for deployment.",
-        ('cmk_svc__check_mk_agent_output', 'in', 'not registered'),
-        [('cmk_register_bakery', 'true')],
-    ),
-    (
-        'Discover Services',
-        40,
-        "Run a service discovery where Check_MK Discovery reports "
-        "unmonitored services.",
-        ('cmk_svc__check_mk_discovery_output', 'in', 'unmonitored'),
-        [('cmk_discover', 'true')],
-    ),
+    {
+        'suffix': 'Install Agent',
+        'sort_field': 10,
+        'condition_typ': 'any',
+        'documentation': (
+            "(Re)install the Checkmk agent where it is missing or unreachable "
+            "— Checkmk's 'Check_MK' service then reports '[agent] Empty "
+            "output' or '[agent] Communication failed'. Once the agent is "
+            "back, the TLS / bakery / discovery rules below take over on the "
+            "next inventorize."
+        ),
+        'conditions': [
+            ('cmk_svc__check_mk_output', 'in', '[agent] Empty output'),
+            ('cmk_svc__check_mk_output', 'in', '[agent] Communication failed'),
+        ],
+        'outcomes': [('cmk_install_agent', 'true')],
+    },
+    {
+        'suffix': 'Register TLS',
+        'sort_field': 20,
+        'condition_typ': 'all',
+        'documentation': (
+            "Register agent TLS only where the agent is reachable but not "
+            "TLS-registered — Checkmk's 'Check_MK' service reports 'TLS is "
+            "not activated on monitored host'. Adjust the wording for your "
+            "Checkmk version if needed."
+        ),
+        'conditions': [
+            ('cmk_svc__check_mk_output', 'in', 'TLS is not activated on monitored host'),
+        ],
+        'outcomes': [('cmk_register_tls', 'true')],
+    },
+    {
+        'suffix': 'Register Bakery',
+        'sort_field': 30,
+        'condition_typ': 'all',
+        'documentation': (
+            "Register with the bakery only where the deployment registration "
+            "is missing — the agent updater service ('Check_MK Agent') "
+            "reports the host is not registered. Verify the exact wording "
+            "against your Checkmk version with `debug_host`."
+        ),
+        'conditions': [
+            ('cmk_svc__check_mk_agent_output', 'in', 'not registered'),
+        ],
+        'outcomes': [('cmk_register_bakery', 'true')],
+    },
+    {
+        'suffix': 'Run Discovery',
+        'sort_field': 40,
+        'condition_typ': 'all',
+        'documentation': (
+            "Run a service discovery only where Checkmk's 'Check_MK "
+            "Discovery' service reports unmonitored services."
+        ),
+        'conditions': [
+            ('cmk_svc__check_mk_discovery_output', 'in', 'unmonitored'),
+        ],
+        'outcomes': [('cmk_discover', 'true')],
+    },
 ]
 
 BASE_RULE_SUFFIX = 'Agent Base Config'
@@ -129,13 +163,15 @@ def _tag_condition(attribute_key, value_match, value):
     )
 
 
-def _build_rule_specs(project):
+def _build_cmk_agent_specs(project):
     """
-    Return the list of rule specs the seed creates, each a dict ready to
-    splat into AnsibleCustomVariablesRule(): the base rule first, then one
-    conditional rule per action.
+    Rule specs for the Checkmk agent-management template: one base rule
+    with the static config, then the conditional action rule(s). Each spec
+    is a dict ready to splat into its `model` constructor; `model` lets a
+    template seed any rule type, not just Custom Variables.
     """
     from application.modules.rule.models import CustomAttribute  # pylint: disable=import-outside-toplevel
+    from .models import AnsibleCustomVariablesRule  # pylint: disable=import-outside-toplevel
 
     def _outcomes(pairs):
         return [
@@ -144,6 +180,7 @@ def _build_rule_specs(project):
         ]
 
     specs = [{
+        'model': AnsibleCustomVariablesRule,
         'name': _rule_name(project, BASE_RULE_SUFFIX),
         'documentation': (
             "Static Checkmk config and credentials, applied to every host. "
@@ -157,39 +194,68 @@ def _build_rule_specs(project):
         'enabled': False,
         'sort_field': 0,
     }]
-    for suffix, sort_field, doc, condition, outcomes in ACTION_RULES:
-        key, value_match, value = condition
+    for rule in ACTION_RULES:
         specs.append({
-            'name': _rule_name(project, suffix),
-            'documentation': doc,
+            'model': AnsibleCustomVariablesRule,
+            'name': _rule_name(project, rule['suffix']),
+            'documentation': rule['documentation'],
             'project': project,
-            'condition_typ': 'all',
-            'conditions': [_tag_condition(key, value_match, value)],
-            'outcomes': _outcomes(outcomes),
+            'condition_typ': rule['condition_typ'],
+            'conditions': [
+                _tag_condition(key, value_match, value)
+                for key, value_match, value in rule['conditions']
+            ],
+            'outcomes': _outcomes(rule['outcomes']),
             'enabled': False,
-            'sort_field': sort_field,
+            'sort_field': rule['sort_field'],
         })
     return specs
 
 
-def seed_cmk_agent_variables(project):
+# Registry of seed templates. Each entry describes one "one-click" seed a
+# project can apply; the button on the project page renders one action per
+# registered template. Adding a future template (e.g. a Netbox or LDAP
+# starter set, or Filter/Rewrite rules) is just another
+# `register_seed_template(...)` call — the endpoint, button, and idempotent
+# create logic are all generic over this registry.
+SEED_TEMPLATES = {}
+
+
+def register_seed_template(key, label, builder):
     """
-    Create the Checkmk agent-management rule set for `project`: one base
-    rule with the static config and one conditional rule per action.
+    Register a seed template.
 
-    Idempotent — a rule whose name already exists is skipped, so
-    re-running only fills in what is missing. Every created rule is
-    disabled: adapt the values / conditions, then enable.
-
-    Returns (created_names, skipped_names).
+    key     — stable identifier used in the seed URL.
+    label   — button label shown on the project page.
+    builder — callable(project) -> list of rule spec dicts, each carrying a
+              `model` key plus the constructor kwargs for that model.
     """
-    from .models import AnsibleCustomVariablesRule  # pylint: disable=import-outside-toplevel
+    SEED_TEMPLATES[key] = {'label': label, 'builder': builder}
 
+
+register_seed_template('cmk_agent', 'Checkmk Agent rules', _build_cmk_agent_specs)
+
+
+def seed_project(project, key):
+    """
+    Apply the seed template `key` to `project`.
+
+    Idempotent — a rule whose name already exists (in its own model's
+    collection) is skipped, so re-running only fills in what is missing.
+    Every created rule is disabled: adapt the values / conditions, then
+    enable.
+
+    Returns (created_names, skipped_names), or None if `key` is unknown.
+    """
+    template = SEED_TEMPLATES.get(key)
+    if template is None:
+        return None
     created, skipped = [], []
-    for spec in _build_rule_specs(project):
-        if AnsibleCustomVariablesRule.objects(name=spec['name']).first():
+    for spec in template['builder'](project):
+        model = spec.pop('model')
+        if model.objects(name=spec['name']).first():
             skipped.append(spec['name'])
             continue
-        AnsibleCustomVariablesRule(**spec).save()
+        model(**spec).save()
         created.append(spec['name'])
     return created, skipped
