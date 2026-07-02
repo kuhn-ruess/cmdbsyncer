@@ -3,8 +3,10 @@ pykerberos==1.2.4
 pywinrm==0.4.3
 ntlm-auth==1.5.0
 ansible==10.5.0
-# Unpinned so installs always pull the newest inventory plugin — the
-# `mode: local` / `provider` support the UI playbook runner relies on
-# landed in 0.2.0, and a hard pin previously stranded deployments on the
-# old HTTP-only 0.1.4. Use `pip install -U` to upgrade an existing env.
-cmdbsyncer-inventory
+# The `mode: local` / `provider` support the UI playbook runner relies on
+# landed in 0.2.0; the old HTTP-only 0.1.4 breaks UI runs. Pinned with a
+# floor (not left bare) because a bare requirement never changes, so
+# Docker caches the `pip install` layer and a rebuild keeps the stale
+# version even after a new release. Bumping this floor busts that cache
+# and forces the new version in.
+cmdbsyncer-inventory>=0.2.0
