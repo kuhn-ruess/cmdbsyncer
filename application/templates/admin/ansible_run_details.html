@@ -4,6 +4,20 @@
    the captured log and final status appear on their own. The script is
    only emitted while status == 'running', so reloading stops the moment
    the run finishes. #}
+{% block navlinks %}
+  {{ super() }}
+  {% if model.status == 'running' %}
+  <form method="POST" style="display:inline; margin-left:12px;"
+        action="{{ url_for('ansiblerunstats.cancel', run_id=model.id) }}"
+        onsubmit="return confirm('Cancel this running playbook?');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-sm btn-danger">
+      <i class="fa fa-stop"></i> Cancel run
+    </button>
+  </form>
+  {% endif %}
+{% endblock %}
+
 {% block tail %}
   {{ super() }}
   <script {{ admin_csp_nonce_attribute }}>

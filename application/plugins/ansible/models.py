@@ -103,6 +103,7 @@ run_statuses = [
     ('running', 'Running'),
     ('success', 'Success'),
     ('failure', 'Failure'),
+    ('cancelled', 'Cancelled'),
 ]
 
 run_modes = [

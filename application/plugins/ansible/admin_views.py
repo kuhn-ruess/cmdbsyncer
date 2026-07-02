@@ -22,25 +22,33 @@ from .views import (
 
 
 def register_admin_views(admin):
-    """Register Flask-Admin views for the Ansible plugin."""
+    """
+    Register Flask-Admin views for the Ansible plugin.
+
+    Menu layout follows the workflow: the Projects hub first, then the two
+    run actions, then all four rule types grouped under one 'Rules'
+    sub-category (so no single rule type floats at the top level next to
+    the actions).
+
+      Ansible
+        ├─ Projects        (hub — rules grouped per project)
+        ├─ Run Playbook
+        ├─ Run History
+        └─ Rules
+             ├─ Filter
+             ├─ Rewrite Attributes
+             ├─ Ansible Attributes
+             └─ Playbook Fire Rules
+    """
     admin.add_sub_category(name="Ansible", parent_name="Modules")
 
     admin.add_view(
         AnsibleProjectView(
             AnsibleProject,
-            name="Rules by Project",
+            name="Projects",
             category="Ansible",
             menu_icon_type='fa',
             menu_icon_value='fa-folder',
-        )
-    )
-    admin.add_view(
-        AnsiblePlaybookFireRuleView(
-            AnsiblePlaybookFireRule,
-            name="Playbook Fire Rules",
-            category="Ansible",
-            menu_icon_type='fa',
-            menu_icon_value='fa-bolt',
         )
     )
     admin.add_view(
@@ -63,31 +71,40 @@ def register_admin_views(admin):
         )
     )
 
-    admin.add_sub_category(name="All Rules", parent_name="Ansible")
-    admin.add_view(
-        AnsibleRewriteRuleView(
-            AnsibleRewriteAttributesRule,
-            name="Rewrite Attributes",
-            category="All Rules",
-            menu_icon_type='fa',
-            menu_icon_value='fa-exchange',
-        )
-    )
+    admin.add_sub_category(name="Rules", parent_name="Ansible")
     admin.add_view(
         AnsibleFilterRuleView(
             AnsibleFilterRule,
             name="Filter",
-            category="All Rules",
+            category="Rules",
             menu_icon_type='fa',
             menu_icon_value='fa-filter',
+        )
+    )
+    admin.add_view(
+        AnsibleRewriteRuleView(
+            AnsibleRewriteAttributesRule,
+            name="Rewrite Attributes",
+            category="Rules",
+            menu_icon_type='fa',
+            menu_icon_value='fa-exchange',
         )
     )
     admin.add_view(
         AnsibleCustomVariablesView(
             AnsibleCustomVariablesRule,
             name="Ansible Attributes",
-            category="All Rules",
+            category="Rules",
             menu_icon_type='fa',
             menu_icon_value='fa-tags',
+        )
+    )
+    admin.add_view(
+        AnsiblePlaybookFireRuleView(
+            AnsiblePlaybookFireRule,
+            name="Playbook Fire Rules",
+            category="Rules",
+            menu_icon_type='fa',
+            menu_icon_value='fa-bolt',
         )
     )

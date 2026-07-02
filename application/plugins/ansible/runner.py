@@ -9,6 +9,7 @@ captured log.
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -225,6 +226,26 @@ def _write_run_inventory_spec(directory: str, provider: str, mode: str,
     return spec_path
 
 
+def cancel_run(stats) -> bool:
+    """
+    Stop a still-running playbook by signalling its process group.
+
+    The run started ansible-playbook in its own session (see `_execute`),
+    so SIGTERM to the group stops ansible-playbook and its children without
+    affecting the web worker. The `_execute` thread then observes the exit
+    and records the run as 'cancelled'. Returns True if a signal was sent,
+    False when there is nothing to cancel (no pid / already finished /
+    process already gone).
+    """
+    if stats.status != 'running' or not stats.pid:
+        return False
+    try:
+        os.killpg(os.getpgid(stats.pid), signal.SIGTERM)
+        return True
+    except (ProcessLookupError, PermissionError, OSError):
+        return False
+
+
 def _stream_output(proc, stats) -> str:
     """
     Read the process output line by line and persist it into `stats.log`
@@ -312,12 +333,24 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
                 text=True,
                 bufsize=1,
                 env=env,
+                # Own process group/session so a cancel can signal the whole
+                # ansible-playbook process tree without touching the web
+                # worker (see cancel_run()).
+                start_new_session=True,
             )
             stats.pid = proc.pid
             stats.save()
             stats.log = _stream_output(proc, stats)
             stats.exit_code = proc.returncode
-            stats.status = 'success' if proc.returncode == 0 else 'failure'
+            # A negative return code means the process was killed by a signal
+            # — that is how cancel_run() stops a run, so report it as
+            # 'cancelled' rather than a generic failure.
+            if proc.returncode == 0:
+                stats.status = 'success'
+            elif proc.returncode < 0:
+                stats.status = 'cancelled'
+            else:
+                stats.status = 'failure'
         except FileNotFoundError as exc:
             stats.log = f"ansible-playbook not found: {exc}"
             stats.exit_code = -1

@@ -35,11 +35,13 @@ from .models import (
     AnsiblePlaybookFireRule,
     AnsibleProject,
     AnsibleRewriteAttributesRule,
+    AnsibleRunStats,
 )
 from .seed import SEED_TEMPLATES, seed_project
 from .runner import (
     _ansible_dir,
     available_playbooks,
+    cancel_run,
     playbook_inventory_provider,
     run_playbook,
 )
@@ -549,6 +551,7 @@ def _format_status(_v, _c, m, _p):
         'running': '#888',
         'success': 'green',
         'failure': 'red',
+        'cancelled': '#d97706',
     }.get(m.status, '#888')
     label = (m.status or 'unknown').capitalize()
     return Markup(f'<span style="color:{color};font-weight:600;">{escape(label)}</span>')
@@ -621,6 +624,7 @@ class AnsibleRunStatsView(DefaultModelView):
             ('running', 'Running'),
             ('success', 'Success'),
             ('failure', 'Failure'),
+            ('cancelled', 'Cancelled'),
         ]),
         FilterEqual('mode', 'Mode', options=[
             ('run', 'Run'),
@@ -665,6 +669,18 @@ class AnsibleRunStatsView(DefaultModelView):
     # Auto-reloads the detail page while the run is still 'running' so the
     # log and final status appear without a manual refresh.
     details_template = 'admin/ansible_run_details.html'
+
+    @expose('/cancel/<run_id>', methods=('POST',))
+    def cancel(self, run_id):
+        """Stop a still-running playbook (the detail page's Cancel button)."""
+        stats = AnsibleRunStats.objects(id=run_id).first()
+        if stats is None:
+            abort(404)
+        if cancel_run(stats):
+            flash(f"Cancellation requested for '{stats.playbook}'.", 'success')
+        else:
+            flash('Run is not running — nothing to cancel.', 'info')
+        return redirect(url_for('.details_view', id=run_id))
 
     def is_accessible(self):
         """Overwrite — same right gates the rules views."""
