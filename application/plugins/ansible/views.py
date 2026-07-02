@@ -72,6 +72,16 @@ _CONDITION_TYP_CSS = {
 # How many outcome chips to show before collapsing into a "+N more" note.
 _MAX_OUTCOME_CHIPS = 12
 
+# Ansible rule kinds → (model, Flask-Admin list endpoint). Drives the
+# project overview sections and the inline enable/disable + delete actions,
+# so all four rule types stay in sync from one place.
+_RULE_KINDS = {
+    'filter': (AnsibleFilterRule, 'ansiblefilterrule'),
+    'rewrite': (AnsibleRewriteAttributesRule, 'ansiblerewriteattributesrule'),
+    'customvars': (AnsibleCustomVariablesRule, 'ansiblecustomvariablesrule'),
+    'playbook': (AnsiblePlaybookFireRule, 'ansibleplaybookfirerule'),
+}
+
 
 def _short_match(match_key):
     """Compact label for a condition match operator, falling back to the
@@ -251,25 +261,23 @@ class AnsibleProjectView(DefaultModelView):
         if project is None:
             abort(404)
 
-        # (title, description, icon, endpoint, model, outcome-kind). The
-        # kind drives how each rule's outcomes are summarised for the
-        # overview.
+        # (title, description, icon, kind). The kind resolves to the model
+        # and list endpoint via _RULE_KINDS and drives how each rule's
+        # outcomes are summarised for the overview.
         section_specs = [
             ('Filter Rules', 'Whitelist, blacklist, and ignored hosts.',
-             'fa-filter', 'ansiblefilterrule', AnsibleFilterRule, 'filter'),
+             'fa-filter', 'filter'),
             ('Rewrite Attributes', 'Rename or reformat host attributes.',
-             'fa-exchange', 'ansiblerewriteattributesrule',
-             AnsibleRewriteAttributesRule, 'rewrite'),
+             'fa-exchange', 'rewrite'),
             ('Ansible Attributes', 'Custom variables passed to playbooks.',
-             'fa-tags', 'ansiblecustomvariablesrule',
-             AnsibleCustomVariablesRule, 'customvars'),
+             'fa-tags', 'customvars'),
             ('Playbook Fire Rules', 'Auto-dispatch playbooks for matching hosts.',
-             'fa-bolt', 'ansibleplaybookfirerule', AnsiblePlaybookFireRule,
-             'playbook'),
+             'fa-bolt', 'playbook'),
         ]
 
         sections = []
-        for title, description, icon, endpoint, model, kind in section_specs:
+        for title, description, icon, kind in section_specs:
+            model, endpoint = _RULE_KINDS[kind]
             rules = []
             for rule in model.objects(project=project).order_by('sort_field', 'name'):
                 outcomes, outcomes_overflow = _summarize_outcomes(rule, kind)
@@ -284,6 +292,7 @@ class AnsibleProjectView(DefaultModelView):
                 'description': description,
                 'icon': icon,
                 'endpoint': endpoint,
+                'kind': kind,
                 'rules': rules,
             })
 
@@ -326,6 +335,31 @@ class AnsibleProjectView(DefaultModelView):
                 'info',
             )
         return redirect(url_for('.project_detail', project_id=project_id))
+
+    @expose('/toggle-rule/<kind>/<rule_id>', methods=('POST',))
+    def toggle_rule(self, kind, rule_id):
+        """
+        Flip a rule's `enabled` flag straight from the project overview
+        (the status badge posts here), so a rule can be activated /
+        deactivated without opening its editor.
+        """
+        entry = _RULE_KINDS.get(kind)
+        if entry is None:
+            abort(404)
+        model = entry[0]
+        rule = model.objects(id=rule_id).first()
+        if rule is None:
+            abort(404)
+        rule.enabled = not rule.enabled
+        rule.save()
+        flash(
+            f"Rule '{rule.name}' {'enabled' if rule.enabled else 'disabled'}.",
+            'success',
+        )
+        return_url = request.form.get('url') or url_for(
+            '.project_detail', project_id=str(rule.project.pk) if rule.project else '',
+        )
+        return redirect(return_url)
 
     def is_accessible(self):
         """Overwrite — same right gates all Ansible config."""

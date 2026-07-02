@@ -108,6 +108,9 @@
     align-self: center;
   }
   .rule-none { color: var(--surface-muted, #94a3b8); font-size: 12px; }
+  /* Status badge rendered as a toggle button. */
+  .rule-toggle { border: none; cursor: pointer; font-size: 100%; font-weight: normal; }
+  .rule-toggle:hover { filter: brightness(0.92); }
 </style>
 
 <div class="project-header">
@@ -230,11 +233,18 @@
           {% endif %}
         </td>
         <td>
-          {% if rule.enabled %}
-            <span class="badge badge-success">enabled</span>
-          {% else %}
-            <span class="badge badge-disabled">disabled</span>
-          {% endif %}
+          <form method="POST" style="display:inline;"
+                action="{{ url_for('ansibleproject.toggle_rule', kind=section.kind, rule_id=rule.pk) }}">
+            <input type="hidden" name="url" value="{{ return_url }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if rule.enabled %}
+            <button type="submit" class="badge badge-success rule-toggle"
+                    title="Click to disable this rule">enabled</button>
+            {% else %}
+            <button type="submit" class="badge badge-disabled rule-toggle"
+                    title="Click to enable this rule">disabled</button>
+            {% endif %}
+          </form>
           <div class="text-muted" style="font-size:11px; margin-top:2px;">order {{ rule.sort_field }}</div>
         </td>
         <td style="text-align:right; white-space:nowrap;">
