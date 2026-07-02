@@ -70,6 +70,7 @@
     letter-spacing: 0.04em;
   }
   .project-rules tr:last-child td { border-bottom: none; }
+  .project-rules td { vertical-align: top; }
   .project-rules .badge-disabled {
     background: #cbd5e1;
     color: #1e293b;
@@ -80,6 +81,33 @@
     font-style: italic;
     text-align: center;
   }
+  /* Condition / outcome chips — theme-aware via surface tokens. */
+  .rule-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .rule-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--surface-border, #e2e8f0);
+    background: var(--surface-subtle, #f8fafc);
+    color: var(--surface-text, #334155);
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rule-chip .k { font-family: monospace; font-weight: 600; }
+  .rule-chip .m { color: var(--surface-muted, #64748b); font-style: italic; }
+  .rule-chip .v { font-family: monospace; }
+  .rule-chip-more {
+    font-size: 11px;
+    color: var(--surface-muted, #94a3b8);
+    align-self: center;
+  }
+  .rule-none { color: var(--surface-muted, #94a3b8); font-size: 12px; }
 </style>
 
 <div class="project-header">
@@ -144,14 +172,16 @@
   <table class="project-rules">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Status</th>
-        <th>Order</th>
+        <th style="width:24%;">Name</th>
+        <th style="width:34%;">Conditions</th>
+        <th style="width:34%;">Outcomes</th>
+        <th style="width:8%;">Status</th>
         <th></th>
       </tr>
     </thead>
     <tbody>
-      {% for rule in section.rules %}
+      {% for row in section.rules %}
+      {% set rule = row.obj %}
       <tr>
         <td>
           <a href="{{ url_for(section.endpoint ~ '.edit_view',
@@ -166,13 +196,45 @@
           {% endif %}
         </td>
         <td>
+          <div style="margin-bottom:4px;">
+            <span class="badge badge-{{ row.conditions.typ_css }}">{{ row.conditions.typ }}</span>
+          </div>
+          {% if row.conditions.chips %}
+          <div class="rule-chips">
+            {% for cond in row.conditions.chips %}
+            <span class="rule-chip" title="{{ cond.key }} {{ cond.match }} {{ cond.value }}">
+              <span class="k">{{ cond.key }}</span>
+              <span class="m">{{ cond.match }}</span>
+              {% if cond.value %}<span class="v">{{ cond.value }}</span>{% endif %}
+            </span>
+            {% endfor %}
+          </div>
+          {% else %}
+          <span class="rule-none">matches every host</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if row.outcomes %}
+          <div class="rule-chips">
+            {% for outcome in row.outcomes %}
+            <span class="rule-chip" title="{{ outcome }}">{{ outcome }}</span>
+            {% endfor %}
+            {% if row.outcomes_overflow %}
+            <span class="rule-chip-more">+{{ row.outcomes_overflow }} more</span>
+            {% endif %}
+          </div>
+          {% else %}
+          <span class="rule-none">—</span>
+          {% endif %}
+        </td>
+        <td>
           {% if rule.enabled %}
             <span class="badge badge-success">enabled</span>
           {% else %}
             <span class="badge badge-disabled">disabled</span>
           {% endif %}
+          <div class="text-muted" style="font-size:11px; margin-top:2px;">order {{ rule.sort_field }}</div>
         </td>
-        <td>{{ rule.sort_field }}</td>
         <td style="text-align:right; white-space:nowrap;">
           <a class="btn btn-sm btn-outline-secondary"
              href="{{ url_for(section.endpoint ~ '.edit_view',

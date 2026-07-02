@@ -23,6 +23,12 @@ from application.modules.rule.views import (
 )
 from application.views.default import DefaultModelView
 
+from application.modules.rule.models import (
+    condition_types,
+    filter_actions,
+    rule_types,
+)
+
 from .models import (
     AnsibleCustomVariablesRule,
     AnsibleFilterRule,
@@ -37,6 +43,100 @@ from .runner import (
     playbook_inventory_provider,
     run_playbook,
 )
+
+
+# Compact match-operator labels for the project overview chips — the full
+# condition_types labels ("Contains - Is the given string…") are far too
+# long to sit inside a table cell.
+_SHORT_MATCH = {
+    'equal': '=',
+    'in': 'contains',
+    'not_in': 'not contains',
+    'in_list': 'in list',
+    'string_in_list': 'in list',
+    'ewith': 'ends with',
+    'swith': 'starts with',
+    'regex': 'regex',
+    'bool': 'is',
+    'ignore': 'any',
+}
+
+# Bootstrap badge colour per condition type, mirrored from the rule list
+# view so the project overview reads the same.
+_CONDITION_TYP_CSS = {
+    'all': 'success',
+    'any': 'warning',
+    'anyway': 'secondary',
+}
+
+# How many outcome chips to show before collapsing into a "+N more" note.
+_MAX_OUTCOME_CHIPS = 12
+
+
+def _short_match(match_key):
+    """Compact label for a condition match operator, falling back to the
+    full label then the raw key."""
+    return _SHORT_MATCH.get(match_key) or dict(condition_types).get(match_key, match_key)
+
+
+def _summarize_conditions(rule):
+    """
+    Build a compact, template-friendly view of a rule's conditions:
+    the condition-type badge plus one chip per condition
+    (`key`, `match`, `value`). Hostname conditions render with a
+    'Hostname' key so the overview reads uniformly.
+    """
+    chips = []
+    for cond in rule.conditions:
+        if cond.match_type == 'host':
+            negate = cond.hostname_match_negate
+            chips.append({
+                'key': 'Hostname',
+                'match': ('not ' if negate else '') + _short_match(cond.hostname_match),
+                'value': cond.hostname or '',
+            })
+        else:
+            negate = cond.value_match_negate
+            chips.append({
+                'key': cond.tag or '',
+                'match': ('not ' if negate else '') + _short_match(cond.value_match),
+                'value': cond.value or '',
+            })
+    # NB: key must not be 'items' — Jinja would resolve dict.items to the
+    # method, not this value.
+    return {
+        'typ': dict(rule_types).get(rule.condition_typ, rule.condition_typ or ''),
+        'typ_css': _CONDITION_TYP_CSS.get(rule.condition_typ, 'secondary'),
+        'chips': chips,
+    }
+
+
+def _summarize_outcomes(rule, kind):
+    """
+    Return a list of short outcome strings for `rule`, shaped per rule
+    `kind` (customvars / filter / rewrite / playbook), capped so a rule
+    with many outcomes (e.g. the seeded base-config rule) stays compact.
+    """
+    labels = []
+    if kind == 'customvars':
+        labels = [f"{o.attribute_name} = {o.attribute_value}" for o in rule.outcomes]
+    elif kind == 'filter':
+        action_labels = dict(filter_actions)
+        for out in rule.outcomes:
+            action = action_labels.get(out.action, out.action or '')
+            labels.append(f"{action}: {out.attribute_name}" if out.attribute_name else action)
+    elif kind == 'rewrite':
+        for out in rule.outcomes:
+            target = out.new_attribute_name or out.old_attribute_name or ''
+            value = out.new_value
+            labels.append(f"{target} → {value}" if value else (target or '(rewrite)'))
+    elif kind == 'playbook':
+        for out in rule.outcomes:
+            suffix = f" @ {out.inventory}" if out.inventory else ''
+            labels.append(f"{out.playbook}{suffix}")
+    labels = [label for label in labels if label]
+    overflow = max(0, len(labels) - _MAX_OUTCOME_CHIPS)
+    return labels[:_MAX_OUTCOME_CHIPS], overflow
 
 
 def _ansible_main_fields():
@@ -150,47 +250,47 @@ class AnsibleProjectView(DefaultModelView):
         project = AnsibleProject.objects(id=project_id).first()
         if project is None:
             abort(404)
+
+        # (title, description, icon, endpoint, model, outcome-kind). The
+        # kind drives how each rule's outcomes are summarised for the
+        # overview.
+        section_specs = [
+            ('Filter Rules', 'Whitelist, blacklist, and ignored hosts.',
+             'fa-filter', 'ansiblefilterrule', AnsibleFilterRule, 'filter'),
+            ('Rewrite Attributes', 'Rename or reformat host attributes.',
+             'fa-exchange', 'ansiblerewriteattributesrule',
+             AnsibleRewriteAttributesRule, 'rewrite'),
+            ('Ansible Attributes', 'Custom variables passed to playbooks.',
+             'fa-tags', 'ansiblecustomvariablesrule',
+             AnsibleCustomVariablesRule, 'customvars'),
+            ('Playbook Fire Rules', 'Auto-dispatch playbooks for matching hosts.',
+             'fa-bolt', 'ansibleplaybookfirerule', AnsiblePlaybookFireRule,
+             'playbook'),
+        ]
+
+        sections = []
+        for title, description, icon, endpoint, model, kind in section_specs:
+            rules = []
+            for rule in model.objects(project=project).order_by('sort_field', 'name'):
+                outcomes, outcomes_overflow = _summarize_outcomes(rule, kind)
+                rules.append({
+                    'obj': rule,
+                    'conditions': _summarize_conditions(rule),
+                    'outcomes': outcomes,
+                    'outcomes_overflow': outcomes_overflow,
+                })
+            sections.append({
+                'title': title,
+                'description': description,
+                'icon': icon,
+                'endpoint': endpoint,
+                'rules': rules,
+            })
+
         return self.render(
             'admin/ansible_project_detail.html',
             project=project,
-            sections=[
-                {
-                    'title': 'Filter Rules',
-                    'description': 'Whitelist, blacklist, and ignored hosts.',
-                    'icon': 'fa-filter',
-                    'endpoint': 'ansiblefilterrule',
-                    'rules': AnsibleFilterRule.objects(
-                        project=project,
-                    ).order_by('sort_field', 'name'),
-                },
-                {
-                    'title': 'Rewrite Attributes',
-                    'description': 'Rename or reformat host attributes.',
-                    'icon': 'fa-exchange',
-                    'endpoint': 'ansiblerewriteattributesrule',
-                    'rules': AnsibleRewriteAttributesRule.objects(
-                        project=project,
-                    ).order_by('sort_field', 'name'),
-                },
-                {
-                    'title': 'Ansible Attributes',
-                    'description': 'Custom variables passed to playbooks.',
-                    'icon': 'fa-tags',
-                    'endpoint': 'ansiblecustomvariablesrule',
-                    'rules': AnsibleCustomVariablesRule.objects(
-                        project=project,
-                    ).order_by('sort_field', 'name'),
-                },
-                {
-                    'title': 'Playbook Fire Rules',
-                    'description': 'Auto-dispatch playbooks for matching hosts.',
-                    'icon': 'fa-bolt',
-                    'endpoint': 'ansibleplaybookfirerule',
-                    'rules': AnsiblePlaybookFireRule.objects(
-                        project=project,
-                    ).order_by('sort_field', 'name'),
-                },
-            ],
+            sections=sections,
         )
 
     @expose('/seed-cmk-agent/<project_id>', methods=('POST',))
