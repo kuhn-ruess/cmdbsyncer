@@ -30,6 +30,7 @@ from .models import (
     AnsibleProject,
     AnsibleRewriteAttributesRule,
 )
+from .seed import seed_cmk_agent_variables
 from .runner import (
     _ansible_dir,
     available_playbooks,
@@ -191,6 +192,34 @@ class AnsibleProjectView(DefaultModelView):
                 },
             ],
         )
+
+    @expose('/seed-cmk-agent/<project_id>', methods=('POST',))
+    def seed_cmk_agent(self, project_id):
+        """
+        One-click seed: create the Checkmk agent-management rule set
+        (`cmk_agent_mngmt.yml`) inside this project — a base rule with the
+        static config plus one conditional rule per action (install, TLS,
+        bakery, discover). Idempotent — rules that already exist are left
+        untouched.
+        """
+        project = AnsibleProject.objects(id=project_id).first()
+        if project is None:
+            abort(404)
+        created, skipped = seed_cmk_agent_variables(project)
+        if created:
+            flash(
+                f"Seeded {len(created)} Checkmk agent rule(s). Adapt the "
+                "server / credential values and the action conditions, then "
+                "enable the rules.",
+                'success',
+            )
+        if skipped:
+            flash(
+                f"{len(skipped)} rule(s) already existed and were left "
+                "unchanged.",
+                'info',
+            )
+        return redirect(url_for('.project_detail', project_id=project_id))
 
     def is_accessible(self):
         """Overwrite — same right gates all Ansible config."""

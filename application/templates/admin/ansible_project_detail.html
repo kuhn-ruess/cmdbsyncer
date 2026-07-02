@@ -100,6 +100,20 @@
   {% if project.description %}
   <div class="description">{{ project.description }}</div>
   {% endif %}
+  <div style="margin-top:12px;">
+    <form method="POST"
+          action="{{ url_for('ansibleproject.seed_cmk_agent', project_id=project.pk) }}"
+          style="display:inline;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-outline-primary"
+              title="Create a ready-made cmk_agent_mngmt.yml rule set: base config plus one conditional rule per action">
+        <i class="fa fa-magic"></i> Seed Checkmk Agent variables
+      </button>
+    </form>
+    <span class="text-muted" style="font-size:12px; margin-left:8px;">
+      Creates a base config rule + one conditional rule per action (install, TLS, bakery, discover).
+    </span>
+  </div>
 </div>
 
 {% set return_url = url_for('ansibleproject.project_detail', project_id=project.pk) %}
