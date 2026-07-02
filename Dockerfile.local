@@ -20,7 +20,9 @@ RUN apk add --no-cache python3 \
     krb5 \
     openldap-dev \
     unixodbc-dev \
-    dcron
+    dcron \
+    openssh-client \
+    sshpass
 
 ENV TZ=Europe/Berlin
 RUN ln -sf /usr/share/zoneinfo/Europe/Berlin /etc/localtime

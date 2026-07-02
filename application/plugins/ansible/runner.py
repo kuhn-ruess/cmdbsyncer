@@ -177,8 +177,8 @@ def playbook_inventory_provider(playbook: str) -> str:
     return entry['inventory']
 
 
-def _build_command(playbook: str, inventory_path: str, target_host: str | None,
-                   extra_vars: str | None, check_mode: bool) -> list[str]:
+def _build_command(inventory_path: str, run_params: dict,
+                   vars_file: str | None = None) -> list[str]:
     """
     Assemble the ansible-playbook argv against `inventory_path` — a
     per-run cmdbsyncer-inventory spec that pins the provider for this run
@@ -187,20 +187,47 @@ def _build_command(playbook: str, inventory_path: str, target_host: str | None,
     caller selected: the plugin reads the spec's `provider:` option, and
     a shared spec with a pinned provider would otherwise ignore the
     CMDBSYNCER_INVENTORY_PROVIDER env var.
+
+    The SSH user maps to `--user`, but only when no `vars_file` is given —
+    with a password the user goes into that file too. `vars_file` is added
+    as `-e @<file>` and carries the SSH login credentials, kept in a file
+    rather than on the argv so the password never shows up in `ps` output.
     """
     base = _ansible_dir()
     cmd = [
         _ansible_binary(),
         '-i', inventory_path,
-        str(base / playbook),
+        str(base / run_params['playbook']),
     ]
-    if check_mode:
+    if run_params['check_mode']:
         cmd += ['--check', '--diff']
-    if target_host:
-        cmd += ['--limit', target_host]
-    if extra_vars:
-        cmd += ['-e', extra_vars]
+    if run_params['target_host']:
+        cmd += ['--limit', run_params['target_host']]
+    if not vars_file and run_params.get('ssh_user'):
+        cmd += ['--user', run_params['ssh_user']]
+    if run_params['extra_vars']:
+        cmd += ['-e', run_params['extra_vars']]
+    if vars_file:
+        cmd += ['-e', f'@{vars_file}']
     return cmd
+
+
+def _write_credentials_file(directory: str, ssh_user: str | None,
+                            ssh_password: str) -> str:
+    """
+    Write the SSH login credentials as an ansible vars file (mode 0600) in
+    the run's temp dir and return its path. Passing the password via a file
+    (`-e @file`) instead of the command line keeps it out of the process
+    list; `ansible_ssh_pass` needs `sshpass` installed on the host.
+    """
+    data = {'ansible_ssh_pass': ssh_password}
+    if ssh_user:
+        data['ansible_user'] = ssh_user
+    path = os.path.join(directory, 'credentials.yml')
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as file_handle:
+        yaml.safe_dump(data, file_handle, default_flow_style=False)
+    return path
 
 
 def _write_run_inventory_spec(directory: str, provider: str, mode: str,
@@ -317,13 +344,12 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
             run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
             cmdbsyncer_bin=_cmdbsyncer_bin(),
         )
-        cmd = _build_command(
-            run_params['playbook'],
-            inventory_path,
-            run_params['target_host'],
-            run_params['extra_vars'],
-            run_params['check_mode'],
-        )
+        vars_file = None
+        if run_params.get('ssh_password'):
+            vars_file = _write_credentials_file(
+                run_tmp, run_params.get('ssh_user'), run_params['ssh_password'],
+            )
+        cmd = _build_command(inventory_path, run_params, vars_file=vars_file)
         try:
             proc = subprocess.Popen(  # pylint: disable=consider-using-with
                 cmd,
@@ -370,6 +396,8 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
                  extra_vars: str | None = None,
                  check_mode: bool = False,
                  provider: str | None = None,
+                 ssh_user: str | None = None,
+                 ssh_password: str | None = None,
                  source: str = 'ui',
                  triggered_by: str | None = None) -> AnsibleRunStats:
     """
@@ -379,6 +407,11 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
     changes applied; diff rendered into the log). `provider` overrides
     the manifest's `inventory:` field for this run; pass None to use the
     manifest default.
+
+    `ssh_user` / `ssh_password` set the SSH login for the connection.
+    The password is written to a mode-0600 vars file for the run (never
+    the command line) and is not stored on the run record; password auth
+    needs `sshpass` on the host.
 
     Caller responsibility: validate `playbook` against available_playbooks()
     before invoking — this function does no whitelist check, so passing
@@ -405,6 +438,8 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
         'target_host': target_host,
         'extra_vars': extra_vars,
         'check_mode': check_mode,
+        'ssh_user': ssh_user,
+        'ssh_password': ssh_password,
     }
     thread = threading.Thread(
         target=_execute,

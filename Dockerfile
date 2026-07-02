@@ -22,6 +22,8 @@ RUN apk add --no-cache python3 \
     openldap-dev \
     unixodbc-dev \
     dcron \
+    openssh-client \
+    sshpass \
     su-exec
 
 ENV TZ=Etc/Universal

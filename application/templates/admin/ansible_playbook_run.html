@@ -16,7 +16,7 @@
   }
   .ansible-runner-card form {
     display: grid;
-    grid-template-columns: 200px 160px 1fr 1fr auto auto;
+    grid-template-columns: 180px 140px repeat(4, 1fr) auto auto;
     gap: 8px;
     align-items: end;
   }
@@ -97,6 +97,18 @@
         <input class="form-control" id="extra-{{ loop.index }}"
                type="text" name="extra_vars"
                placeholder="key=value key2=value2">
+      </div>
+      <div>
+        <label for="ssh-user-{{ loop.index }}">SSH User (optional)</label>
+        <input class="form-control" id="ssh-user-{{ loop.index }}"
+               type="text" name="ssh_user" autocomplete="off"
+               placeholder="login user">
+      </div>
+      <div>
+        <label for="ssh-pass-{{ loop.index }}">SSH Password (optional)</label>
+        <input class="form-control" id="ssh-pass-{{ loop.index }}"
+               type="password" name="ssh_password" autocomplete="new-password"
+               placeholder="needs sshpass">
       </div>
       <div>
         <button type="submit" name="mode" value="check" class="btn btn-secondary"

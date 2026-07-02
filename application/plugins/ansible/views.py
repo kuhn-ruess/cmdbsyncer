@@ -721,6 +721,10 @@ class AnsiblePlaybookRunView(BaseView):
         target_host = (request.form.get('target_host') or '').strip() or None
         extra_vars = (request.form.get('extra_vars') or '').strip() or None
         provider = (request.form.get('provider') or '').strip() or None
+        ssh_user = (request.form.get('ssh_user') or '').strip() or None
+        # Password intentionally not stripped — trailing spaces could be
+        # meaningful; only an all-empty field is treated as "not set".
+        ssh_password = request.form.get('ssh_password') or None
         mode = (request.form.get('mode') or 'run').strip()
         check_mode = mode == 'check'
 
@@ -737,6 +741,8 @@ class AnsiblePlaybookRunView(BaseView):
             extra_vars=extra_vars,
             check_mode=check_mode,
             provider=provider,
+            ssh_user=ssh_user,
+            ssh_password=ssh_password,
             source='ui',
             triggered_by=current_user.email if current_user.is_authenticated else None,
         )
