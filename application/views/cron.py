@@ -42,7 +42,7 @@ def _render_interval(_view, _context, model, _name):
 _CRONJOB_TABLE_STYLE = (
     '<style>'
     '.cron-jobs-table{width:100%;border-collapse:collapse;'
-    'background-color:var(--surface-bg,transparent)!important;'
+    'background-color:transparent!important;'
     'color:var(--surface-text,inherit)!important;}'
     '.cron-jobs-table td{padding:2px 8px;border-bottom:1px solid '
     'var(--surface-border,#e9ecef);vertical-align:top;'

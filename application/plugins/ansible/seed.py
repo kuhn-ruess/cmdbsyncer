@@ -105,7 +105,7 @@ ACTION_RULES = [
             "Checkmk version if needed."
         ),
         'conditions': [
-            ('cmk_svc__check_mk_output', 'in', 'TLS is not activated on monitored host'),
+            ('cmk_svc__check_mk_agent_output', 'in', 'TLS is not activated on monitored host'),
         ],
         'outcomes': [('cmk_register_tls', 'true')],
     },
