@@ -49,10 +49,13 @@ def _target_choices():
                                key=lambda a: (a.name or '').lower()):
                 if not attr.name:
                     continue
-                value = f"{otype.object_type_id}|{attr.name}"
-                if value in seen:
+                # Dedup per account so shared/inherited attributes keep a
+                # row for every account they belong to.
+                dedup_key = (cache.account, otype.object_type_id, attr.name)
+                if dedup_key in seen:
                     continue
-                seen.add(value)
+                seen.add(dedup_key)
+                value = f"{otype.object_type_id}|{attr.name}"
                 rows.append((value, f"{type_label} / {attr.name}"))
     return rows
 
