@@ -23,10 +23,12 @@
 #   --syncer-only             Bundle ONLY the cmdbsyncer package (no
 #                             dependencies) and install it with --no-deps, so
 #                             the dependencies already present on the target are
-#                             kept. Needs a syncer source (--syncer-from-git or
-#                             --include-syncer); ignores the --with-* flags.
-#                             Ideal for updating the syncer on a locked-down
-#                             host that can't fetch dependencies.
+#                             kept. Defaults to downloading the released wheel
+#                             from PyPI (add --syncer-from-git to build the local
+#                             checkout instead); ignores the --with-* flags.
+#                             Ideal for updating the syncer on a locked-down host
+#                             that can't fetch dependencies (build the bundle on
+#                             a host with PyPI access, then transfer it).
 #   --with-extras             Also bundle the optional extras
 #                             (requirements-extras.txt: LDAP / SQL / MCP /
 #                             vmware). Not needed for normal operation.
@@ -139,13 +141,15 @@ if [[ $SYNCER_FROM_GIT -eq 1 && ( $INCLUDE_SYNCER -eq 1 || -n "$SYNCER_VERSION" 
     exit 2
 fi
 
-# --syncer-only ships just the cmdbsyncer package (no dependencies), so it needs
-# a syncer source and ignores the dependency-bundling flags.
+# --syncer-only ships just the cmdbsyncer package (no dependencies) and ignores
+# the dependency-bundling flags. Without an explicit source it defaults to
+# downloading the released cmdbsyncer wheel from PyPI (no build tools needed);
+# pass --syncer-from-git to build the current checkout instead.
 if [[ $SYNCER_ONLY -eq 1 ]]; then
     if [[ $SYNCER_FROM_GIT -eq 0 && $INCLUDE_SYNCER -eq 0 ]]; then
-        echo "--syncer-only needs a syncer source: add --syncer-from-git or " \
-             "--include-syncer." >&2
-        exit 2
+        INCLUDE_SYNCER=1
+        echo "Note: --syncer-only with no source — downloading cmdbsyncer from PyPI" \
+             "(pass --syncer-from-git to build the local checkout instead)."
     fi
     if [[ $WITH_EXTRAS -eq 1 || $WITH_ANSIBLE -eq 1 || $WITH_ANSIBLE_WINDOWS -eq 1 ]]; then
         echo "Note: --syncer-only bundles no dependencies; ignoring --with-* flags."
@@ -230,10 +234,17 @@ fi
 download_from_pypi() {
     local spec="$1"     # e.g. "cmdbsyncer==4.1.0.dev1" or just "cmdbsyncer"
     local pkg_name="$2" # bare package name for the resolved-line glob
-    echo "Downloading $spec and its dependencies from PyPI ..."
     local args=(download --no-cache-dir --dest "$OUTPUT_DIR/packages")
     [[ -n "$PLATFORM" ]]       && args+=(--platform "$PLATFORM" --only-binary=:all:)
     [[ -n "$PYTHON_VERSION" ]] && args+=(--python-version "$PYTHON_VERSION")
+    # --syncer-only ships just the package itself, so don't drag its
+    # dependencies into the bundle.
+    if [[ $SYNCER_ONLY -eq 1 ]]; then
+        args+=(--no-deps)
+        echo "Downloading $spec from PyPI (no dependencies) ..."
+    else
+        echo "Downloading $spec and its dependencies from PyPI ..."
+    fi
     args+=("$spec")
     python3 -m pip "${args[@]}"
     # Print the resolved version so the build log shows what actually
