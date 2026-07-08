@@ -5,7 +5,6 @@ Checkmk Rule Views
 # pylint: disable=duplicate-code
 import json
 import re
-from datetime import datetime
 from markupsafe import Markup, escape
 
 from pygments import highlight
@@ -27,7 +26,6 @@ from flask import redirect, url_for, request, render_template, flash, Response
 
 from flask_login import current_user
 from application.views.default import DefaultModelView
-from application.views._form_fields import AccountSelectField
 from application.models.account import Account, CustomEntry
 from application.docu_links import docu_links
 
@@ -60,6 +58,21 @@ class ProjectSelectField(SelectField):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('choices', _project_choices)
         # Keep editing a rule whose project was renamed/removed working.
+        kwargs.setdefault('validate_choice', False)
+        super().__init__(*args, **kwargs)
+
+
+def _cmk_account_choices():
+    """Every enabled Checkmk (cmkv2) account — feeds the project account filter."""
+    return [(a.name, a.name)
+            for a in Account.objects(enabled=True, type='cmkv2').order_by('name')]
+
+
+class CheckmkAccountsMultiSelectField(SelectMultipleField):
+    """Multi-select of Checkmk accounts, stored as a list of account names."""
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('choices', _cmk_account_choices)
+        # Tolerate a saved name whose account was since disabled/removed.
         kwargs.setdefault('validate_choice', False)
         super().__init__(*args, **kwargs)
 
@@ -798,48 +811,50 @@ def _render_project_rule_count(_view, _context, model, _name):
 
 
 def _render_project_name_link(_view, _context, model, _name):
-    """Make the project name open its overview (rules + staging actions)."""
+    """Make the project name open its overview (rules + import/export)."""
     url = url_for('.overview_view', id=model.id)
     return Markup(f'<a href="{escape(url)}">{escape(model.name)}</a>')
 
 
+def _render_project_accounts(_view, _context, model, _name):
+    """List-column formatter: the accounts a project's rules are exported to."""
+    if model.limit_by_accounts:
+        return ', '.join(model.limit_by_accounts)
+    return Markup('<em>all accounts</em>')
+
+
 class CheckmkRuleProjectView(DefaultModelView):
     """
-    Rule Projects group Checkmk Setup Rules so they can be staged on a test
-    instance, approved, and pushed to production as one unit. Projects are
+    Rule Projects group Checkmk Setup Rules and limit where they are exported.
+    ``limit_by_accounts`` restricts a project's rules to the listed Checkmk
+    accounts during the normal rule export (empty = all accounts). Projects are
     im-/exportable as JSON to move them between separate syncer instances.
     """
     # Adds a direct link from the edit form to the Setup Rules of this project.
     edit_template = 'admin/checkmk_rule_project_edit.html'
-    column_list = ('name', 'status', 'test_account', 'prod_account',
-                   'rule_count', 'last_test_export', 'last_prod_export',
-                   'approved_by', 'approved_at')
+    column_list = ('name', 'limit_by_accounts', 'rule_count')
     column_default_sort = 'name'
     column_labels = {
         'rule_count': 'Rules',
-        'test_account': 'Test Instance',
-        'prod_account': 'Prod Instance',
+        'limit_by_accounts': 'Exported to Accounts',
     }
     column_formatters = {
         'name': _render_project_name_link,
         'rule_count': _render_project_rule_count,
+        'limit_by_accounts': _render_project_accounts,
     }
     column_filters = (
         FilterLike('name', 'Name'),
-        FilterLike('status', 'Status'),
     )
 
-    form_columns = ('name', 'documentation', 'status',
-                    'test_account', 'prod_account')
+    form_columns = ('name', 'documentation', 'limit_by_accounts')
     form_overrides = {
-        'test_account': AccountSelectField,
-        'prod_account': AccountSelectField,
+        'limit_by_accounts': CheckmkAccountsMultiSelectField,
     }
     form_descriptions = {
-        'status': "draft → in_test → approved → live. A production push is "
-                  "only allowed once the project is approved.",
-        'test_account': "Checkmk account used as the test target.",
-        'prod_account': "Checkmk account used as the production target.",
+        'limit_by_accounts': "Export this project's rules only to these Checkmk "
+                             "accounts. Leave empty to export them to every "
+                             "account like ordinary rules.",
     }
 
     def is_accessible(self):
@@ -849,10 +864,9 @@ class CheckmkRuleProjectView(DefaultModelView):
     @expose('/overview')
     def overview_view(self):
         """
-        Project detail page: list the Setup Rules assigned to this project
-        and surface the staging/import actions (push to test, approve, push
-        to prod, folder import, JSON export) on one page — the row actions in
-        the list are otherwise easy to miss.
+        Project detail page: list the Setup Rules assigned to this project and
+        surface the folder import and JSON export on one page — the row actions
+        in the list are otherwise easy to miss.
         """
         project_id = request.args.get('id')
         project = self.get_one(project_id) if project_id else None
@@ -866,49 +880,6 @@ class CheckmkRuleProjectView(DefaultModelView):
             project=project,
             project_rules=project_rules,
             return_url=self.get_url('.index_view'))
-
-    @action('push_test', 'Push to Test',
-            'Push the selected projects to their test Checkmk instance?')
-    def action_push_test(self, ids):
-        """Push each selected project's rules to its test instance."""
-        from .inits import export_project_rules  # pylint: disable=import-outside-toplevel
-        count = 0
-        for project in CheckmkRuleProject.objects(id__in=ids):
-            export_project_rules(project.name, 'test')
-            count += 1
-        flash(f'Pushed {count} project(s) to their test instance', 'success')
-        return redirect(request.referrer or url_for('.index_view'))
-
-    @action('push_prod', 'Push to Prod',
-            'Push the selected APPROVED projects to production?')
-    def action_push_prod(self, ids):
-        """Push approved projects to prod; skip any that are not approved."""
-        from .inits import export_project_rules  # pylint: disable=import-outside-toplevel
-        pushed, skipped = 0, 0
-        for project in CheckmkRuleProject.objects(id__in=ids):
-            if project.status not in ('approved', 'live'):
-                skipped += 1
-                continue
-            export_project_rules(project.name, 'prod')
-            pushed += 1
-        flash(f'Pushed {pushed} project(s) to production' +
-              (f', {skipped} skipped (not approved)' if skipped else ''),
-              'success' if pushed else 'warning')
-        return redirect(request.referrer or url_for('.index_view'))
-
-    @action('approve', 'Approve for Production',
-            'Mark the selected projects approved for production?')
-    def action_approve(self, ids):
-        """Move projects to 'approved' and record who/when."""
-        approved = 0
-        for project in CheckmkRuleProject.objects(id__in=ids):
-            project.status = 'approved'
-            project.approved_by = current_user.email
-            project.approved_at = datetime.now()
-            project.save()
-            approved += 1
-        flash(f'Approved {approved} project(s)', 'success')
-        return redirect(request.referrer or url_for('.index_view'))
 
     @action('export', 'Export as JSON',
             'Download the selected projects and their rules as JSON?')

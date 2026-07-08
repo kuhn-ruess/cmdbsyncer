@@ -1,12 +1,5 @@
 {% extends 'admin/master.html' %}
 
-{% set status_badge = {
-    'draft': 'secondary',
-    'in_test': 'info',
-    'approved': 'primary',
-    'live': 'success',
-} %}
-
 {% macro action_button(action, label, css, icon, confirm='') %}
 <form method="POST" action="{{ url_for('.action_view') }}"
       style="display:inline;"
@@ -37,9 +30,6 @@
 
     <div class="d-flex align-items-center mb-2" style="gap:10px;flex-wrap:wrap;">
         <h3 class="mb-0">Rule Project: {{ project.name }}</h3>
-        <span class="badge badge-{{ status_badge.get(project.status, 'secondary') }}">
-            {{ project.status }}
-        </span>
         <a href="{{ return_url }}" class="btn btn-sm btn-secondary ml-auto">
             <i class="fa fa-arrow-left"></i> Back to projects
         </a>
@@ -51,30 +41,18 @@
 
     <div class="card app-card mb-3">
         <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <dl class="row mb-0">
-                        <dt class="col-sm-5">Test Instance</dt>
-                        <dd class="col-sm-7">{{ project.test_account or '—' }}</dd>
-                        <dt class="col-sm-5">Prod Instance</dt>
-                        <dd class="col-sm-7">{{ project.prod_account or '—' }}</dd>
-                        <dt class="col-sm-5">Assigned Rules</dt>
-                        <dd class="col-sm-7">{{ project_rules.count() }}</dd>
-                    </dl>
-                </div>
-                <div class="col-md-6">
-                    <dl class="row mb-0">
-                        <dt class="col-sm-5">Approved by</dt>
-                        <dd class="col-sm-7">{{ project.approved_by or '—' }}</dd>
-                        <dt class="col-sm-5">Approved at</dt>
-                        <dd class="col-sm-7">{{ project.approved_at or '—' }}</dd>
-                        <dt class="col-sm-5">Last Test Push</dt>
-                        <dd class="col-sm-7">{{ project.last_test_export or '—' }}</dd>
-                        <dt class="col-sm-5">Last Prod Push</dt>
-                        <dd class="col-sm-7">{{ project.last_prod_export or '—' }}</dd>
-                    </dl>
-                </div>
-            </div>
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Exported to accounts</dt>
+                <dd class="col-sm-9">
+                    {% if project.limit_by_accounts %}
+                        {{ project.limit_by_accounts | join(', ') }}
+                    {% else %}
+                        <em>all accounts</em> (no account filter set)
+                    {% endif %}
+                </dd>
+                <dt class="col-sm-3">Assigned Rules</dt>
+                <dd class="col-sm-9">{{ project_rules.count() }}</dd>
+            </dl>
         </div>
     </div>
 
@@ -83,12 +61,6 @@
            class="btn btn-primary">
             <i class="fa fa-download"></i> Import Rules from Checkmk Folder
         </a>
-        {{ action_button('push_test', 'Push to Test', 'btn-info', 'fa-flask',
-            'Push this project to its test Checkmk instance?') }}
-        {{ action_button('approve', 'Approve for Production', 'btn-warning',
-            'fa-check', 'Mark this project approved for production?') }}
-        {{ action_button('push_prod', 'Push to Prod', 'btn-success', 'fa-rocket',
-            'Push this APPROVED project to production?') }}
         {{ action_button('export', 'Export as JSON', 'btn-secondary', 'fa-file-code-o') }}
     </div>
 

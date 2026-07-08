@@ -203,11 +203,16 @@ def _render_condition_typ(_view, _context, model, _name):
             'any': 'warning',
             'anyway': 'danger',
     }
-    badge = badges[model.condition_typ]
+    typ = model.condition_typ
+    if typ not in badges:
+        # Unset / unknown condition type (e.g. rules imported from a Checkmk
+        # folder without an explicit type) — render a neutral marker instead
+        # of crashing the whole list with a KeyError.
+        return Markup('<span class="text-muted">—</span>')
 
     rule_names = dict(rule_types)
-    translation = rule_names[model.condition_typ]
-    return Markup(f'<span class="badge badge-{escape(badge)}">{escape(translation)}</span>')
+    return Markup(f'<span class="badge badge-{escape(badges[typ])}">'
+                  f'{escape(rule_names[typ])}</span>')
 
 def _render_filter_outcomes(_view, _context, model, _name):
     """

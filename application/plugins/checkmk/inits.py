@@ -1,7 +1,6 @@
 """
 Inits for the Plugins
 """
-from datetime import datetime
 from application import log
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
@@ -300,6 +299,21 @@ def export_groups(account, test_run=False, debug=False):
                     details=[('error', str(error_obj))])
 #.
 #   .-- Export Rules
+def projects_for_account(account):
+    """
+    Names of the CheckmkRuleProjects whose rules may be exported to ``account``.
+
+    A project applies when its ``limit_by_accounts`` is empty (no restriction —
+    exported everywhere) or explicitly lists this account.
+    """
+    names = []
+    for project in CheckmkRuleProject.objects():
+        allowed = [name for name in (project.limit_by_accounts or []) if name]
+        if not allowed or account in allowed:
+            names.append(project.name)
+    return names
+
+
 def export_rules(account):
     """
     Create Rules in Checkmk
@@ -320,17 +334,17 @@ def export_rules(account):
         # Static rules carry no host data — they are evaluated once
         # (see CheckmkRuleSync.calculate_static_rules) instead of per
         # host, so they are kept out of the per-host engine here.
-        # Rules assigned to a CheckmkRuleProject are staged/pushed only
-        # through the project workflow (see export_project_rules) — keep
-        # them out of the global export so test rules never reach a target
-        # before they are approved.
+        # Include global rules (no project) plus the rules of every project
+        # whose account filter allows this account — a project restricts its
+        # rules to its ``limit_by_accounts`` (empty = all accounts).
+        allowed_projects = [None, ''] + projects_for_account(account)
         actions.rules = CheckmkRuleMngmt.objects(
             enabled=True, static_rule__ne=True,
-            project__in=[None, '']).order_by('sort_field')
+            project__in=allowed_projects).order_by('sort_field')
         syncer.actions = actions
         syncer.static_rules = CheckmkRuleMngmt.objects(
             enabled=True, static_rule=True,
-            project__in=[None, '']).order_by('sort_field')
+            project__in=allowed_projects).order_by('sort_field')
         syncer.name = 'Checkmk: Export Rules'
         syncer.source = "cmk_rule_sync"
         syncer.export_cmk_rules()
@@ -341,87 +355,6 @@ def export_rules(account):
         else:
             log.log(f"Export Rules to Account {account} not started",
                     source="cmk_rule_sync",
-                    details=[('error', str(error_obj))])
-#.
-#   .-- Export Project Rules
-def export_project_rules(project_name, stage='test', debug=False):
-    """
-    Push the Setup Rules of a single CheckmkRuleProject to its test or prod
-    Checkmk instance and advance the project's workflow status.
-
-    stage='test'  -> push to project.test_account, status -> in_test
-    stage='prod'  -> push to project.prod_account, only allowed once the
-                     project is approved, status -> live
-    """
-    syncer = None
-    project = CheckmkRuleProject.objects(name=project_name).first()
-    if not project:
-        message = f"Checkmk Rule Project '{project_name}' not found"
-        print(f'{ColorCodes.FAIL}{message}{ColorCodes.ENDC}')
-        log.log(message, source="cmk_project_rule_sync",
-                details=[('error', message)])
-        return
-
-    if stage == 'prod':
-        account = project.prod_account
-        if project.status not in ('approved', 'live'):
-            message = (f"Project '{project_name}' is not approved "
-                       f"(status: {project.status}) — refusing prod push")
-            print(f'{ColorCodes.FAIL}{message}{ColorCodes.ENDC}')
-            log.log(message, source="cmk_project_rule_sync",
-                    details=[('error', message)])
-            return
-    else:
-        account = project.test_account
-
-    if not account:
-        message = (f"Project '{project_name}' has no {stage}_account "
-                   f"configured")
-        print(f'{ColorCodes.FAIL}{message}{ColorCodes.ENDC}')
-        log.log(message, source="cmk_project_rule_sync",
-                details=[('error', message)])
-        return
-
-    try:
-        rules = _load_rules()
-        syncer = CheckmkRuleSync(account)
-        syncer.debug = debug
-        syncer.filter = rules['filter']
-        syncer.rewrite = rules['rewrite']
-        # Scope the Checkmk-side ownership marker to this project so a push
-        # only ever manages/cleans its own rules — two projects can share the
-        # same instance without deleting each other's rules.
-        syncer.project = project_name
-
-        actions = CheckmkRulesetRule()
-        actions.rules = CheckmkRuleMngmt.objects(
-            enabled=True, static_rule__ne=True,
-            project=project_name).order_by('sort_field')
-        syncer.actions = actions
-        syncer.static_rules = CheckmkRuleMngmt.objects(
-            enabled=True, static_rule=True,
-            project=project_name).order_by('sort_field')
-        syncer.name = f'Checkmk: Export Project Rules ({stage})'
-        syncer.source = "cmk_project_rule_sync"
-        syncer.export_cmk_rules()
-
-        # Advance the workflow only after a successful push.
-        if stage == 'prod':
-            project.status = 'live'
-            project.last_prod_export = datetime.now()
-        else:
-            if project.status == 'draft':
-                project.status = 'in_test'
-            project.last_test_export = datetime.now()
-        project.save()
-    except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            log.log(f"Export Project Rules '{project_name}' to Account "
-                    f"{account} not started",
-                    source="cmk_project_rule_sync",
                     details=[('error', str(error_obj))])
 #.
 #   .-- Import Project Rules from Checkmk Folder
@@ -461,6 +394,10 @@ def import_project_rules_from_folder(project_name, account, folder,  # pylint: d
             rule.project = project_name
             rule.static_rule = True
             rule.enabled = True
+            # Imported rules are host-independent — give them an explicit
+            # "match anyway" condition type so rule lists and the engine don't
+            # trip over an unset condition_typ.
+            rule.condition_typ = 'anyway'
             rule.documentation = (
                 f"Imported from Checkmk account '{account}', "
                 f"folder '{folder}' (rule {cmk_id})")

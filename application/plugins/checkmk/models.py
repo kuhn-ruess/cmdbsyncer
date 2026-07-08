@@ -288,36 +288,20 @@ class CheckmkRuleMngmt(db.Document):
 #.
 #   .-- Checkmk Rule Project
 
-cmk_rule_project_status = [
-    ('draft', "Draft (editing)"),
-    ('in_test', "In Test (pushed to test site)"),
-    ('approved', "Approved (ready for production)"),
-    ('live', "Live (pushed to production)"),
-]
-
-
 class CheckmkRuleProject(db.Document):
     """
-    Groups Checkmk Setup Rules (CheckmkRuleMngmt) so they can be staged on a
-    test instance, approved, and then pushed to production as one unit. A
-    project carries its own test/prod target accounts and a status workflow.
+    Groups Checkmk Setup Rules (CheckmkRuleMngmt) and limits where they are
+    exported. ``limit_by_accounts`` restricts the project's rules to the listed
+    Checkmk accounts during the normal ``export_rules`` run; an empty list means
+    the rules are exported to every account like ordinary rules.
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
 
-    status = db.StringField(choices=cmk_rule_project_status, default='draft')
-
-    # Names of the target Account records (Checkmk instances). Stored by name
-    # to stay compatible with the CLI/CheckmkRuleSync(account_name) signature
-    # and to survive im-/export between instances.
-    test_account = db.StringField()
-    prod_account = db.StringField()
-
-    # Workflow audit trail
-    approved_by = db.StringField()
-    approved_at = db.DateTimeField()
-    last_test_export = db.DateTimeField()
-    last_prod_export = db.DateTimeField()
+    # Names of the Checkmk accounts this project's rules may be exported to.
+    # Empty = no restriction (all accounts). Stored by name to survive JSON
+    # im-/export between separate syncer instances.
+    limit_by_accounts = db.ListField(field=db.StringField())
 
     meta = {
         'strict': False,

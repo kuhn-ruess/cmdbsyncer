@@ -189,14 +189,14 @@ def register_admin_views(admin):
     _ttp_category = admin.get_category_menu_item("Test to Prod workflows")
     if _ttp_category is not None:
         _ttp_category.icon_type = 'fa'
-        _ttp_category.icon_value = 'fa-rocket'
+        _ttp_category.icon_value = 'fa-filter'
     admin.add_view(
         CheckmkRuleProjectView(
             CheckmkRuleProject,
-            name="Setup Rule Test and Prod",
+            name="Setup Rule Projects",
             category="Test to Prod workflows",
             menu_icon_type='fa',
-            menu_icon_value='fa-code-fork',
+            menu_icon_value='fa-cubes',
         )
     )
     admin.add_view(

@@ -864,32 +864,23 @@ class TestImportProjectRules(unittest.TestCase):
                 '/folder', recursive=True)
 
 
-class TestExportProjectRules(unittest.TestCase):
-    """Workflow guards around inits.export_project_rules."""
+class TestProjectsForAccount(unittest.TestCase):
+    """inits.projects_for_account account-filter selection."""
 
-    def test_prod_push_refused_when_not_approved(self):
-        # A prod push before approval must be refused — no syncer is built,
-        # so nothing reaches the production instance.
-        with patch.object(inits, 'CheckmkRuleSync') as mock_sync, \
-                patch.object(inits, 'CheckmkRuleProject') as mock_project:
-            mock_project.objects.return_value.first.return_value = SimpleNamespace(
-                name='P', status='in_test', prod_account='prod', test_account='test')
-            inits.export_project_rules('P', 'prod')
-            mock_sync.assert_not_called()
-
-    def test_prod_push_refused_without_prod_account(self):
-        with patch.object(inits, 'CheckmkRuleSync') as mock_sync, \
-                patch.object(inits, 'CheckmkRuleProject') as mock_project:
-            mock_project.objects.return_value.first.return_value = SimpleNamespace(
-                name='P', status='approved', prod_account='', test_account='test')
-            inits.export_project_rules('P', 'prod')
-            mock_sync.assert_not_called()
-
-    def test_missing_project_is_noop(self):
+    def test_account_filter_selection(self):
+        projects = [
+            SimpleNamespace(name='all', limit_by_accounts=[]),
+            SimpleNamespace(name='only_a', limit_by_accounts=['acc_a']),
+            SimpleNamespace(name='a_and_b', limit_by_accounts=['acc_a', 'acc_b']),
+            SimpleNamespace(name='only_b', limit_by_accounts=['acc_b']),
+        ]
         with patch.object(inits, 'CheckmkRuleProject') as mock_project:
-            mock_project.objects.return_value.first.return_value = None
-            # Must not raise even though the project does not exist.
-            inits.export_project_rules('Nope', 'test')
+            mock_project.objects.return_value = projects
+            for_a = inits.projects_for_account('acc_a')
+            for_b = inits.projects_for_account('acc_b')
+        # Empty filter applies everywhere; account-specific filters only match.
+        self.assertEqual(for_a, ['all', 'only_a', 'a_and_b'])
+        self.assertEqual(for_b, ['all', 'a_and_b', 'only_b'])
 
 
 if __name__ == '__main__':
