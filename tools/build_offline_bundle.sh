@@ -266,10 +266,21 @@ fi
 # --platform / --python-version flags don't apply here) and drops it in the
 # same packages/ dir. install.sh then installs it from there via
 # --no-index --find-links, exactly like a PyPI-sourced wheel.
+#
+# --no-build-isolation is deliberate: PEP 517 build isolation would otherwise
+# download setuptools/wheel into a fresh build env every time — which fails on a
+# host without PyPI access (the whole point of --syncer-only). Instead we build
+# with the setuptools/wheel already installed in the current environment.
 GIT_SYNCER_VERSION=""
 if [[ $SYNCER_FROM_GIT -eq 1 ]]; then
+    if ! python3 -c "import setuptools, wheel" >/dev/null 2>&1; then
+        echo "Building cmdbsyncer from git needs 'setuptools' and 'wheel' in the" \
+             "current Python environment (build isolation is disabled to avoid" \
+             "PyPI downloads). Install them once with: pip install setuptools wheel" >&2
+        exit 1
+    fi
     echo "Building cmdbsyncer wheel from local git checkout ($REPO_ROOT) ..."
-    python3 -m pip wheel --no-deps --no-cache-dir \
+    python3 -m pip wheel --no-deps --no-build-isolation --no-cache-dir \
         --wheel-dir "$OUTPUT_DIR/packages" "$REPO_ROOT"
     GIT_SYNCER_WHEEL=$(ls "$OUTPUT_DIR/packages/" \
         | grep -iE '^cmdbsyncer-[0-9]' | head -1 || true)
