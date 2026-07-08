@@ -44,6 +44,7 @@ from .views import (
     CheckmkSettingsView,
     CheckmkSiteView,
     CheckmkTagMngmtView,
+    CheckmkTestFolderScopeView,
     CheckmkUserMngmtView,
     CheckmkGroupRuleView,
 )
@@ -96,15 +97,6 @@ def register_admin_views(admin):
             category="Checkmk",
             menu_icon_type='fa',
             menu_icon_value='fa-cogs',
-        )
-    )
-    admin.add_view(
-        CheckmkRuleProjectView(
-            CheckmkRuleProject,
-            name="Setup Rule Projects (Test/Prod)",
-            category="Checkmk",
-            menu_icon_type='fa',
-            menu_icon_value='fa-code-fork',
         )
     )
     admin.add_view(
@@ -191,6 +183,32 @@ def register_admin_views(admin):
             menu_icon_value='fa-folder-open',
         )
     )
+    admin.add_sub_category(name="Test to Prod workflows", parent_name="Checkmk")
+    # add_sub_category does not apply category_icon_classes to sub-categories,
+    # so set the menu icon directly on the created SubMenuCategory.
+    _ttp_category = admin.get_category_menu_item("Test to Prod workflows")
+    if _ttp_category is not None:
+        _ttp_category.icon_type = 'fa'
+        _ttp_category.icon_value = 'fa-rocket'
+    admin.add_view(
+        CheckmkRuleProjectView(
+            CheckmkRuleProject,
+            name="Setup Rule Test and Prod",
+            category="Test to Prod workflows",
+            menu_icon_type='fa',
+            menu_icon_value='fa-code-fork',
+        )
+    )
+    admin.add_view(
+        CheckmkTestFolderScopeView(
+            name="Limit Host Export to Folders",
+            category="Test to Prod workflows",
+            endpoint="checkmk_test_folder_scope",
+            menu_icon_type='fa',
+            menu_icon_value='fa-folder-open',
+        )
+    )
+
     admin.add_view(
         CheckmkInventorizeAttributesView(
             CheckmkInventorizeAttributes,

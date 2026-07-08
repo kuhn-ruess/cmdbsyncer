@@ -146,6 +146,43 @@ class TestSyncCMK2(unittest.TestCase):
         result = self.syncer.use_host('hostname', 'account3')
         self.assertFalse(result)
 
+    def test_host_folder_in_scope_no_limit(self):
+        """Without limit_by_folders every host is in scope."""
+        self.syncer.config = {}
+        self.assertTrue(self.syncer.host_folder_in_scope({'move_folder': '/prod/db'}))
+        self.syncer.config = {'limit_by_folders': ''}
+        self.assertTrue(self.syncer.host_folder_in_scope({'move_folder': '/prod/db'}))
+
+    def test_host_folder_in_scope_recursive(self):
+        """A selected folder includes its subfolders, others are excluded."""
+        self.syncer.config = {'limit_by_folders': '/test, /stage'}
+
+        # Exact folder and subfolder are in scope
+        self.assertTrue(self.syncer.host_folder_in_scope({'move_folder': '/test'}))
+        self.assertTrue(
+            self.syncer.host_folder_in_scope({'move_folder': '/test/linux/web01'}))
+        self.assertTrue(self.syncer.host_folder_in_scope({'move_folder': '/stage/win'}))
+
+        # Out-of-scope folder is excluded
+        self.assertFalse(self.syncer.host_folder_in_scope({'move_folder': '/prod/db01'}))
+
+    def test_host_folder_in_scope_missing_leading_slash(self):
+        """A folder typed without a leading slash still matches."""
+        self.syncer.config = {'limit_by_folders': 'test/linux, stage'}
+        self.assertTrue(
+            self.syncer.host_folder_in_scope({'move_folder': '/test/linux/web01'}))
+        self.assertTrue(self.syncer.host_folder_in_scope({'move_folder': '/stage'}))
+        self.assertFalse(
+            self.syncer.host_folder_in_scope({'move_folder': '/prod/db01'}))
+
+    def test_host_folder_in_scope_default_root(self):
+        """A host without move_folder lands in '/' and is only in scope for '/'."""
+        self.syncer.config = {'limit_by_folders': '/test'}
+        self.assertFalse(self.syncer.host_folder_in_scope({}))
+
+        self.syncer.config = {'limit_by_folders': '/'}
+        self.assertTrue(self.syncer.host_folder_in_scope({}))
+
     def test_use_host_deprecated_account_filter(self):
         """Test use_host with deprecated account_filter raises ValueError"""
         self.syncer.config = {'account_filter': 'some_filter'}

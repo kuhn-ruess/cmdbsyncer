@@ -64,6 +64,50 @@ def folder_in_scope(rule_folder, target_folder, recursive=False):
     return rule_folder.startswith(target_folder + '/')
 
 
+def iter_rule_folders():
+    """
+    Collect the literal folders that the configured rules can place objects
+    in, so a UI can offer them for selection (the ``limit_by_folders`` scope
+    used to populate a Checkmk test instance).
+
+    Sources:
+      * ``CheckmkRuleMngmt`` outcome folders — where Setup rules are placed,
+      * ``CheckmkRule`` outcomes with action ``move_folder`` / ``create_folder``
+        — where hosts are moved/created (literal params only; Jinja-templated
+        folders, i.e. those containing ``{{``, can't be resolved statically and
+        are skipped — they still match at export time via the recursive scope),
+      * ``CheckmkFolderPool.folder_name`` — pool folders.
+
+    Returns a sorted list of unique, normalised folder paths.
+    """
+    from .models import (  # pylint: disable=import-outside-toplevel
+        CheckmkRuleMngmt,
+        CheckmkRule,
+        CheckmkFolderPool,
+    )
+    folders = set()
+
+    for rule in CheckmkRuleMngmt.objects():
+        for outcome in rule.outcomes:
+            if outcome.folder and '{{' not in outcome.folder:
+                folders.add(normalize_cmk_folder(outcome.folder))
+
+    for rule in CheckmkRule.objects(enabled=True):
+        for outcome in rule.outcomes:
+            if outcome.action not in ('move_folder', 'create_folder'):
+                continue
+            param = (outcome.action_param or '').strip()
+            if not param or '{{' in param:
+                continue
+            folders.add(normalize_cmk_folder(param))
+
+    for pool in CheckmkFolderPool.objects():
+        if pool.folder_name:
+            folders.add(normalize_cmk_folder(pool.folder_name))
+
+    return sorted(folders)
+
+
 def cmk_conditions_to_outcome(conditions):
     """
     Reverse of ``build_condition_and_update_rule_params``: turn a Checkmk

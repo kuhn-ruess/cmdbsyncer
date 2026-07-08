@@ -9,6 +9,7 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 from application import app, logger, log, init_db
 from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
+from application.plugins.checkmk.cmk_rules import folder_in_scope
 from application.modules.debug import ColorCodes as CC
 
 
@@ -327,6 +328,46 @@ class SyncCMK2(CMK2):
                 return False
 
         return True
+
+    def host_folder_in_scope(self, next_actions):
+        """
+        Decide whether a host's target folder is within the account's
+        allowed folder scope (``limit_by_folders``).
+
+        The scope is used to populate a Checkmk *test* instance with only the
+        hosts of approved folders. Without ``limit_by_folders`` configured this
+        always returns True, so normal (unscoped) exports are unaffected. The
+        match is recursive: selecting ``/test`` also includes ``/test/linux``.
+
+        The host's target folder is only known after the rule engine ran, so
+        this runs on the calculated actions — not in ``use_host`` (which only
+        sees hostname and source account).
+
+        Args:
+            next_actions (dict): Calculated rule outcomes for the host.
+
+        Returns:
+            bool: True if the host should be exported to this account.
+        """
+        limits = self.config.get('limit_by_folders')
+        if not limits:
+            return True
+        # A folder entered without a leading slash (e.g. "test/linux" instead of
+        # "/test/linux") would otherwise never match the slash-prefixed folder a
+        # rule produces — normalise it so the scope works regardless of how it
+        # was typed, on this page or directly in the account's custom fields.
+        allowed = []
+        for entry in limits.split(','):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if not entry.startswith('/'):
+                entry = '/' + entry
+            allowed.append(entry)
+        if not allowed:
+            return True
+        folder = next_actions.get('move_folder') or '/'
+        return any(folder_in_scope(folder, scope, recursive=True) for scope in allowed)
 
     def handle_clusters(self):
         """
@@ -669,7 +710,11 @@ class SyncCMK2(CMK2):
                         progress.console.print(f"- ERROR: Timeout error for object ({error})")
                     else:
                         progress.advance(task1)
-                        if enabled:
+                        if enabled and not self.host_folder_in_scope(data[0]):
+                            # Host's target folder is outside this account's
+                            # limit_by_folders scope — ignore it for this export.
+                            disabled_hosts.append(hostname)
+                        elif enabled:
                             host_actions[hostname] = data
                         else:
                             disabled_hosts.append(hostname)

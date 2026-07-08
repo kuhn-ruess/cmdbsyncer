@@ -482,9 +482,13 @@ class AnsibleRewriteRuleView(_ProjectAwareRuleView, RewriteAttributeView):  # py
 
     def __init__(self, *args, **kwargs):
         """Append the project column formatter on top of the parent's
-        runtime-built formatter map."""
+        runtime-built formatter map. Assign a fresh per-instance dict instead
+        of mutating in place — the parent's ``column_formatters`` is the shared
+        RuleModelView class dict, and mutating it leaks this Ansible-only
+        ``project`` formatter onto every other rule list (e.g. the Checkmk
+        Setup Rules list, whose ``project`` is a plain string → crash)."""
         super().__init__(*args, **kwargs)
-        self.column_formatters['project'] = _format_project
+        self.column_formatters = {**self.column_formatters, 'project': _format_project}
 
     def is_accessible(self):
         return current_user.is_authenticated and current_user.has_right('ansible')

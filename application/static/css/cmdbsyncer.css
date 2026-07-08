@@ -140,6 +140,14 @@ body { padding-top: 0; }
     color: inherit;
     border-collapse: collapse;
 }
+/* Keep the nested rows transparent too: this key/value table lives inside the
+   outer `.table-striped` model list, whose descendant zebra rule
+   (`.table-striped tbody tr:nth-of-type(odd)`) would otherwise paint every
+   second kv row with the light stripe colour — glaringly white on dark themes. */
+.cmdb-inline-kv tr,
+.cmdb-inline-kv tbody tr {
+    background-color: transparent !important;
+}
 .cmdb-inline-kv td,
 .cmdb-inline-kv th {
     background-color: transparent !important;

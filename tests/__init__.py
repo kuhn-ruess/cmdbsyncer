@@ -325,7 +325,14 @@ class _Account:  # pylint: disable=too-few-public-methods
     objects = MagicMock()
 
 
+class _CustomEntry:  # pylint: disable=too-few-public-methods
+    """Stub Account.custom_fields embedded document."""
+    name = None
+    value = None
+
+
 _models_account.Account = _Account
+_models_account.CustomEntry = _CustomEntry
 _models_account.object_types = []
 
 _models_cron = _stub_package("application.models.cron")
@@ -438,6 +445,12 @@ _try_load_real_module(
     "application.plugins.checkmk.cmk2",
     os.path.join("plugins", "checkmk", "cmk2.py"),
 )
+# cmk_rules provides folder_in_scope, imported by syncer at module load, so it
+# must be registered before the syncer module is loaded below.
+_try_load_real_module(
+    "application.plugins.checkmk.cmk_rules",
+    os.path.join("plugins", "checkmk", "cmk_rules.py"),
+)
 _try_load_real_module(
     "application.plugins.checkmk.syncer",
     os.path.join("plugins", "checkmk", "syncer.py"),
@@ -500,7 +513,7 @@ for _mod_name, _mod_path in [
     ("poolfolder", "poolfolder.py"),
     ("rules", "rules.py"),
     ("bi", "bi.py"),
-    ("cmk_rules", "cmk_rules.py"),
+    # cmk_rules is loaded earlier (before syncer) — see above.
     ("dcd", "dcd.py"),
     ("downtimes", "downtimes.py"),
     ("groups", "groups.py"),

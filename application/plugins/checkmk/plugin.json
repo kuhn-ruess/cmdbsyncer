@@ -10,6 +10,7 @@
     "account_custom_field_presets": {
         "limit_by_accounts": "",
         "limit_by_hostnames": "",
+        "limit_by_folders": "",
         "list_disabled_hosts": "",
         "bakery_key_id": "",
         "bakery_passphrase": "",

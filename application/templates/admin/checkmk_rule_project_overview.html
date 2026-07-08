@@ -20,6 +20,18 @@
 </form>
 {% endmacro %}
 
+{# Render one host-selection condition (FullCondition) as readable text. #}
+{% macro render_cond(c) %}
+    {% if c.match_type == 'host' %}
+        Hostname {{ 'NOT ' if c.hostname_match_negate }}<code>{{ c.hostname_match }}</code>
+        &ldquo;{{ c.hostname }}&rdquo;
+    {% else %}
+        Attribute &ldquo;<code>{{ c.tag }}</code>&rdquo;
+        {{ 'NOT ' if c.value_match_negate }}<code>{{ c.value_match }}</code>
+        &ldquo;{{ c.value }}&rdquo;
+    {% endif %}
+{% endmacro %}
+
 {% block body %}
 <div class="container mt-4">
 
@@ -86,8 +98,7 @@
            class="btn btn-sm btn-outline-primary">
             <i class="fa fa-plus"></i> Add rule
         </a>
-        <a href="{{ url_for('checkmkrulemngmt.index_view',
-                            search=project.name) }}"
+        <a href="{{ url_for('checkmkrulemngmt.index_view') }}?flt0_1={{ project.name|urlencode }}"
            class="btn btn-sm btn-outline-secondary">
             <i class="fa fa-list"></i> Manage in rule list
         </a>
@@ -100,54 +111,73 @@
         rules from a Checkmk folder above.
     </div>
     {% else %}
-    <div class="card app-card">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Ruleset</th>
-                        <th>Static</th>
-                        <th>Enabled</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for rule in project_rules %}
-                    <tr>
-                        <td>{{ rule.name }}</td>
-                        <td>
-                            <code>{{ rule.primary_ruleset
-                                     or (rule.outcomes[0].ruleset
-                                         if rule.outcomes else '') }}</code>
-                        </td>
-                        <td>
-                            {% if rule.static_rule %}
-                            <i class="fa fa-check-circle" title="Static"></i>
-                            {% else %}
-                            <i class="fa fa-minus-circle text-muted"></i>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if rule.enabled %}
-                            <i class="fa fa-check-circle text-success"></i>
-                            {% else %}
-                            <i class="fa fa-minus-circle text-muted"></i>
-                            {% endif %}
-                        </td>
-                        <td class="text-right">
-                            <a href="{{ url_for('checkmkrulemngmt.edit_view',
-                                                id=rule.id, url=request.url) }}"
-                               class="btn btn-sm btn-outline-secondary">
-                                <i class="fa fa-pencil"></i> Edit
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    {% for rule in project_rules %}
+    <div class="card app-card mb-2">
+        <div class="card-header d-flex align-items-center" style="gap:8px;flex-wrap:wrap;">
+            <strong>{{ rule.name }}</strong>
+            {% if rule.static_rule %}
+            <span class="badge badge-secondary" title="Host-independent, rendered once">static</span>
+            {% endif %}
+            {% if rule.enabled %}
+            <span class="badge badge-success">enabled</span>
+            {% else %}
+            <span class="badge badge-secondary">disabled</span>
+            {% endif %}
+            <a href="{{ url_for('checkmkrulemngmt.edit_view', id=rule.id, url=request.url) }}"
+               class="btn btn-sm btn-outline-secondary ml-auto">
+                <i class="fa fa-pencil"></i> Edit
+            </a>
+        </div>
+        <div class="card-body">
+            <!-- Which hosts this rule is rendered for (syncer-side match) -->
+            <div class="mb-2">
+                <span class="text-muted">Applies to:</span>
+                {% if rule.static_rule %}
+                    <em>host-independent (rendered once)</em>
+                {% elif rule.condition_typ == 'anyway' or not rule.conditions %}
+                    <em>all hosts</em>
+                {% else %}
+                    <span class="text-muted">
+                        ({{ 'all' if rule.condition_typ == 'all' else 'any' }} of)
+                    </span>
+                    <ul class="mb-0">
+                        {% for c in rule.conditions %}
+                        <li>{{ render_cond(c) }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+
+            <!-- The actual Checkmk rule(s) this produces -->
+            {% for o in rule.outcomes %}
+            <div class="{{ 'border-top pt-2 mt-2' if not loop.first }}">
+                <div style="display:flex;gap:14px;flex-wrap:wrap;">
+                    <span><span class="text-muted">Ruleset:</span>
+                        <code>{{ o.ruleset or '—' }}</code></span>
+                    <span><span class="text-muted">Folder:</span>
+                        <code>{{ o.folder or '/' }}</code></span>
+                    {% if o.condition_host %}
+                    <span><span class="text-muted">Host cond:</span>
+                        <code>{{ o.condition_host }}</code></span>
+                    {% endif %}
+                    {% if o.condition_label_template %}
+                    <span><span class="text-muted">Label cond:</span>
+                        <code>{{ o.condition_label_template }}</code></span>
+                    {% endif %}
+                    {% if o.condition_service %}
+                    <span><span class="text-muted">Service:</span>
+                        <code>{{ o.condition_service }}</code></span>
+                    {% endif %}
+                </div>
+                <div class="mt-1">
+                    <span class="text-muted">Rule value:</span>
+                    <pre class="syncer-code mb-0 p-2" style="max-height:220px;overflow:auto;"><code>{{ o.value_template or '—' }}</code></pre>
+                </div>
+            </div>
+            {% endfor %}
         </div>
     </div>
+    {% endfor %}
     {% endif %}
 
 </div>

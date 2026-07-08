@@ -1,0 +1,101 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Limit Host Export to Folders</h3>
+    <p>
+        Limit the host export of a single Checkmk account to selected folders
+        (subfolders included). Only that account is affected — its export then
+        pushes only the hosts whose target folder is in the selection. Accounts
+        without a scope keep exporting every host.
+    </p>
+
+    {% if not accounts %}
+    <div class="alert alert-warning">
+        No enabled Checkmk (cmkv2) account found. Create one first.
+    </div>
+    {% endif %}
+
+    <form method="GET" action="{{ url_for('.index') }}" class="mb-4">
+        <div class="form-group">
+            <label for="account">Checkmk account</label>
+            <select class="form-control" id="account" name="account"
+                    onchange="this.form.submit()">
+                <option value="">— select account —</option>
+                {% for account in accounts %}
+                <option value="{{ account.name }}"
+                        {% if account.name == selected_account %}selected{% endif %}>
+                    {{ account.name }}
+                    {% if account.scoped %}— folder scope active{% else %}— no scope (all hosts){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if selected_account %}
+    <form method="POST" action="{{ url_for('.index') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="account" value="{{ selected_account }}"/>
+
+        {% if scope_enabled %}
+        <div class="alert alert-success">
+            <i class="fa fa-check-circle"></i>
+            <strong>Folder scope active.</strong> Only hosts in the selected
+            folders below are exported to <strong>{{ selected_account }}</strong>.
+        </div>
+        {% else %}
+        <div class="alert alert-warning">
+            <i class="fa fa-ban"></i>
+            <strong>Folder scope disabled for {{ selected_account }}.</strong>
+            This account currently exports <strong>all</strong> hosts. Select
+            folders (or add custom ones) and save to enable the limit.
+        </div>
+        {% endif %}
+
+        <div class="card app-card mb-3">
+            <div class="card-header">
+                Folders for <strong>{{ selected_account }}</strong>
+            </div>
+            <div class="card-body">
+                {% if not rule_folders %}
+                <div class="alert alert-info">
+                    No literal folders found in the current rules — add the
+                    folders manually below. Jinja-templated folders can't be
+                    listed here but still match at export time.
+                </div>
+                {% else %}
+                <p class="text-muted mb-2">From your rules:</p>
+                {% for folder in rule_folders %}
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input"
+                           id="folder_{{ loop.index }}" name="folders"
+                           value="{{ folder }}"
+                           {% if folder in chosen %}checked{% endif %}/>
+                    <label class="form-check-label" for="folder_{{ loop.index }}">
+                        {{ folder }}
+                    </label>
+                </div>
+                {% endfor %}
+                {% endif %}
+
+                <div class="form-group mt-3 mb-0">
+                    <label for="custom_folders">Custom folders</label>
+                    <input type="text" class="form-control" id="custom_folders"
+                           name="custom_folders" value="{{ custom_folders }}"
+                           placeholder="/extra/folder, /another/one"/>
+                    <small class="form-text text-muted">
+                        Additional folders not produced by a rule — comma
+                        separated. Subfolders are included automatically.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            <i class="fa fa-save"></i> Save folder scope
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

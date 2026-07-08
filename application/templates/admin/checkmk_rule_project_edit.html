@@ -1,0 +1,19 @@
+{% extends 'admin/model/edit.html' %}
+
+{# Direct links from the project edit form to the Setup Rules that belong to
+   this project (filtered list) and to the project overview page. #}
+{% block edit_form %}
+  {% if form.name.data %}
+  <div class="mb-3 d-flex" style="gap:.5rem;">
+    <a class="btn btn-info"
+       href="{{ url_for('checkmkrulemngmt.index_view') }}?flt0_1={{ form.name.data|urlencode }}">
+      <i class="fa fa-cogs"></i> Setup Rules of this project
+    </a>
+    <a class="btn btn-secondary"
+       href="{{ url_for('checkmkruleproject.overview_view', id=request.args.get('id')) }}">
+      <i class="fa fa-list"></i> Project overview
+    </a>
+  </div>
+  {% endif %}
+  {{ super() }}
+{% endblock %}

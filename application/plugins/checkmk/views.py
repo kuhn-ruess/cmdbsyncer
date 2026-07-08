@@ -4,6 +4,7 @@ Checkmk Rule Views
 # pylint: disable=too-many-lines
 # pylint: disable=duplicate-code
 import json
+import re
 from datetime import datetime
 from markupsafe import Markup, escape
 
@@ -13,6 +14,7 @@ from pygments.lexers import DjangoLexer  # pylint: disable=no-name-in-module
 
 from wtforms import HiddenField, StringField, PasswordField, SelectMultipleField, SelectField
 from wtforms.validators import ValidationError
+from flask_admin import BaseView
 from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
@@ -26,7 +28,7 @@ from flask import redirect, url_for, request, render_template, flash, Response
 from flask_login import current_user
 from application.views.default import DefaultModelView
 from application.views._form_fields import AccountSelectField
-from application.models.account import Account
+from application.models.account import Account, CustomEntry
 from application.docu_links import docu_links
 
 from application.modules.rule.views import (
@@ -807,6 +809,8 @@ class CheckmkRuleProjectView(DefaultModelView):
     instance, approved, and pushed to production as one unit. Projects are
     im-/exportable as JSON to move them between separate syncer instances.
     """
+    # Adds a direct link from the edit form to the Setup Rules of this project.
+    edit_template = 'admin/checkmk_rule_project_edit.html'
     column_list = ('name', 'status', 'test_account', 'prod_account',
                    'rule_count', 'last_test_export', 'last_prod_export',
                    'approved_by', 'approved_at')
@@ -1921,3 +1925,107 @@ class CheckmkPasswordView(DefaultModelView):
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
+
+
+def _get_custom_field(account, name):
+    """Read a custom_fields value off an Account (empty string if unset)."""
+    for entry in account.custom_fields:
+        if entry.name == name:
+            return entry.value or ''
+    return ''
+
+
+def _set_custom_field(account, name, value):
+    """Set (or create) a custom_fields entry on an Account in place."""
+    for entry in account.custom_fields:
+        if entry.name == name:
+            entry.value = value
+            return
+    entry = CustomEntry()
+    entry.name = name
+    entry.value = value
+    account.custom_fields.append(entry)
+
+
+class CheckmkTestFolderScopeView(BaseView):
+    """
+    Limit a single Checkmk account's host export to selected folders.
+
+    The host export reads ``limit_by_folders`` off the exported account, so the
+    account only receives the hosts of the chosen folders (subfolders included).
+    This only ever touches the one account selected here — no other account
+    (production or otherwise) is affected. Accounts without a folder scope keep
+    exporting every host as before. Folders can be picked from those the
+    configured rules produce, and additional custom folders can be typed in.
+    """
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    def _render(self, selected_account):
+        """Render the picker for the (optionally) chosen account."""
+        from .cmk_rules import iter_rule_folders  # pylint: disable=import-outside-toplevel
+        # Carry each account's scope state so the dropdown makes clear which
+        # accounts have the folder limit active and which export every host.
+        accounts = []
+        for account in Account.objects(enabled=True, type='cmkv2').order_by('name'):
+            raw = _get_custom_field(account, 'limit_by_folders')
+            accounts.append({
+                'name': account.name,
+                'scoped': bool([x for x in raw.split(',') if x.strip()]),
+            })
+        account = None
+        chosen = []
+        rule_folders = iter_rule_folders()
+        if selected_account:
+            account = Account.objects(name=selected_account, type='cmkv2').first()
+        if account:
+            raw = _get_custom_field(account, 'limit_by_folders')
+            chosen = [x.strip() for x in raw.split(',') if x.strip()]
+        # Folders in the scope that no rule produces (manually added) are shown
+        # in the custom-folders text box so they survive a save.
+        custom = [f for f in chosen if f not in rule_folders]
+        return self.render(
+            'admin/checkmk_test_folder_scope.html',
+            accounts=accounts,
+            selected_account=account.name if account else '',
+            scope_enabled=bool(chosen),
+            rule_folders=rule_folders,
+            chosen=chosen,
+            custom_folders=', '.join(custom))
+
+    @expose('/', methods=['GET', 'POST'])
+    def index(self):
+        """Show the picker and save the folder scope of the chosen account."""
+        if request.method == 'GET':
+            return self._render(request.args.get('account'))
+
+        from .cmk_rules import normalize_cmk_folder  # pylint: disable=import-outside-toplevel
+        account_name = request.form.get('account')
+        account = Account.objects(name=account_name, type='cmkv2').first() \
+            if account_name else None
+        if account is None:
+            flash('Select a Checkmk account first', 'error')
+            return redirect(self.get_url('.index'))
+
+        # Checked rule folders + any typed-in custom folders (comma/newline).
+        raw = list(request.form.getlist('folders'))
+        for chunk in re.split(r'[,\n]', request.form.get('custom_folders', '')):
+            raw.append(chunk)
+        folders = []
+        for entry in raw:
+            entry = entry.strip()
+            if not entry:
+                continue
+            if not entry.startswith('/'):
+                entry = '/' + entry
+            folder = normalize_cmk_folder(entry)
+            if folder not in folders:
+                folders.append(folder)
+
+        _set_custom_field(account, 'limit_by_folders', ','.join(folders))
+        account.save()
+        flash(f"Saved {len(folders)} folder(s) for account '{account.name}'. "
+              f"Its host export is now limited to these folders.", 'success')
+        return redirect(self.get_url('.index', account=account.name))
