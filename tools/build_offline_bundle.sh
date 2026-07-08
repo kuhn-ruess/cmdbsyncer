@@ -6,7 +6,8 @@
 # without internet access.
 #
 # Usage:
-#   ./tools/build_offline_bundle.sh [--include-syncer] [--include-enterprise]
+#   ./tools/build_offline_bundle.sh [--include-syncer | --syncer-from-git]
+#                             [--include-enterprise]
 #                             [--python-version 3.11]
 #                             [--platform manylinux2014_x86_64]
 #                             [--output-dir offline_bundle]
@@ -15,6 +16,12 @@
 # Options:
 #   --include-syncer          Also download cmdbsyncer from PyPI into the
 #                             bundle.
+#   --syncer-from-git         Build the cmdbsyncer wheel from THIS local git
+#                             checkout instead of downloading it from PyPI —
+#                             use when you want to ship your current tree (an
+#                             unreleased state) rather than a published
+#                             release. Mutually exclusive with --include-syncer
+#                             / --syncer-version.
 #   --include-enterprise      Also download cmdbsyncer-enterprise from PyPI.
 #   --syncer-version VER      Pin cmdbsyncer to exactly this version (e.g.
 #                             4.1.0.dev3). Without this flag, pip picks the
@@ -37,6 +44,10 @@
 #       --include-syncer    --syncer-version 4.1.0.dev3 \
 #       --include-enterprise --enterprise-version 0.3.9.dev1
 #
+# Example (ship the current local checkout instead of a PyPI release):
+#   ./tools/build_offline_bundle.sh --syncer-from-git \
+#       --python-version 3.11 --platform manylinux2014_x86_64
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,6 +56,7 @@ cd "$REPO_ROOT"
 
 # --- Defaults ---------------------------------------------------------------
 INCLUDE_SYNCER=0
+SYNCER_FROM_GIT=0
 INCLUDE_ENTERPRISE=0
 SYNCER_VERSION=""
 ENTERPRISE_VERSION=""
@@ -57,6 +69,7 @@ CREATE_ARCHIVE=1
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --include-syncer)        INCLUDE_SYNCER=1; shift ;;
+        --syncer-from-git)       SYNCER_FROM_GIT=1; shift ;;
         --include-enterprise)    INCLUDE_ENTERPRISE=1; shift ;;
         --syncer-version)        SYNCER_VERSION="$2"; shift 2 ;;
         --enterprise-version)    ENTERPRISE_VERSION="$2"; shift 2 ;;
@@ -65,11 +78,21 @@ while [[ $# -gt 0 ]]; do
         --output-dir)            OUTPUT_DIR="$2"; shift 2 ;;
         --no-archive)            CREATE_ARCHIVE=0; shift ;;
         -h|--help)
-            sed -n '2,35p' "$0"; exit 0 ;;
+            sed -n '2,49p' "$0"; exit 0 ;;
         *)
             echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
+
+# --- Validate mutually exclusive syncer sources -----------------------------
+# cmdbsyncer can come from PyPI (--include-syncer) OR the local git checkout
+# (--syncer-from-git), never both — otherwise two cmdbsyncer wheels would land
+# in the bundle and pip's pick would be ambiguous.
+if [[ $SYNCER_FROM_GIT -eq 1 && ( $INCLUDE_SYNCER -eq 1 || -n "$SYNCER_VERSION" ) ]]; then
+    echo "Choose either --include-syncer / --syncer-version (PyPI) or " \
+         "--syncer-from-git (local checkout), not both." >&2
+    exit 2
+fi
 
 # --- Collect requirements ---------------------------------------------------
 # Always bundle base + extras + ansible. An offline bundle is meant to be a
@@ -165,6 +188,26 @@ if [[ $INCLUDE_ENTERPRISE -eq 1 ]]; then
     fi
 fi
 
+# --- Optional: build cmdbsyncer from the local git checkout -----------------
+# Builds a wheel from THIS repo (pure-python → platform independent, so the
+# --platform / --python-version flags don't apply here) and drops it in the
+# same packages/ dir. install.sh then installs it from there via
+# --no-index --find-links, exactly like a PyPI-sourced wheel.
+GIT_SYNCER_VERSION=""
+if [[ $SYNCER_FROM_GIT -eq 1 ]]; then
+    echo "Building cmdbsyncer wheel from local git checkout ($REPO_ROOT) ..."
+    python3 -m pip wheel --no-deps --no-cache-dir \
+        --wheel-dir "$OUTPUT_DIR/packages" "$REPO_ROOT"
+    GIT_SYNCER_WHEEL=$(ls "$OUTPUT_DIR/packages/" \
+        | grep -iE '^cmdbsyncer-[0-9]' | head -1 || true)
+    if [[ -z "$GIT_SYNCER_WHEEL" ]]; then
+        echo "Failed to build cmdbsyncer wheel from the checkout." >&2
+        exit 1
+    fi
+    GIT_SYNCER_VERSION=$(echo "$GIT_SYNCER_WHEEL" | sed -E 's/^cmdbsyncer-([^-]+)-.*/\1/')
+    echo "  -> built: $GIT_SYNCER_WHEEL (version $GIT_SYNCER_VERSION)"
+fi
+
 # --- Convert any remaining source distributions to wheels -------------------
 # pip install --no-index refuses to build sdists on the target because the
 # isolated build environment cannot fetch setuptools/wheel. Build every
@@ -199,6 +242,10 @@ if [[ $INCLUDE_SYNCER -eq 1 ]]; then
     else
         EXTRA_PACKAGES+=" cmdbsyncer"
     fi
+elif [[ $SYNCER_FROM_GIT -eq 1 ]]; then
+    # Pin to the exact version we just built from the checkout so pip installs
+    # that wheel from packages/ and not some other cmdbsyncer artifact.
+    EXTRA_PACKAGES+=" cmdbsyncer==$GIT_SYNCER_VERSION"
 fi
 if [[ $INCLUDE_ENTERPRISE -eq 1 ]]; then
     if [[ -n "$ENTERPRISE_VERSION" ]]; then
@@ -279,6 +326,14 @@ EOS
 chmod +x "$OUTPUT_DIR/install.sh"
 
 # --- README -----------------------------------------------------------------
+if [[ $SYNCER_FROM_GIT -eq 1 ]]; then
+    SYNCER_SOURCE="local git checkout (version $GIT_SYNCER_VERSION)"
+elif [[ $INCLUDE_SYNCER -eq 1 ]]; then
+    SYNCER_SOURCE="PyPI${SYNCER_VERSION:+ ==$SYNCER_VERSION}"
+else
+    SYNCER_SOURCE="not bundled (install separately)"
+fi
+
 cat > "$OUTPUT_DIR/README.txt" <<EOS
 Offline installation bundle
 ===========================
@@ -287,6 +342,7 @@ Built on       : $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 Python version : ${PYTHON_VERSION:-build host default}
 Platform       : ${PLATFORM:-build host default}
 Included files : ${REQ_FILES[*]}
+cmdbsyncer     : ${SYNCER_SOURCE}
 Ansible        : ansible/ (default install target /opt/cmdbsyncer/ansible)
 
 Installation
