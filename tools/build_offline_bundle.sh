@@ -76,6 +76,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Absolute path to this script — the --help handler reads it with sed, and the
+# script cd's into REPO_ROOT below, which would break a relative "$0".
+SCRIPT_PATH="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
@@ -115,7 +118,7 @@ while [[ $# -gt 0 ]]; do
         --output-dir)            OUTPUT_DIR="$2"; shift 2 ;;
         --no-archive)            CREATE_ARCHIVE=0; shift ;;
         -h|--help)
-            sed -n '2,75p' "$0"; exit 0 ;;
+            sed -n '2,75p' "$SCRIPT_PATH"; exit 0 ;;
         *)
             echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
