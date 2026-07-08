@@ -39,7 +39,17 @@ class CheckmkGroupSync(CMK2):
         """
         collection_keys = {}
         collection_values = {}
-        for db_host in Host.get_export_hosts():
+        # Default stays host-only (is_object=True documents, e.g. shadow
+        # hosts, are excluded). If the account — or a child account — defines
+        # an object filter for this export, honor it so the configured
+        # object types (shadow hosts, CMDB objects, …) feed the groups too,
+        # consistent with the rules/tags export.
+        object_filter = self.config['settings'].get(self.name, {}).get('filter')
+        if object_filter:
+            db_hosts = Host.objects_by_filter(object_filter)
+        else:
+            db_hosts = Host.get_export_hosts()
+        for db_host in db_hosts:
             if attributes := self.get_attributes(db_host, 'cmk_conf'):
                 for key, value in attributes['all'].items():
                     key, value = str(key), str(value)
