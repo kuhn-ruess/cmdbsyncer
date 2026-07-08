@@ -1,7 +1,9 @@
-kerberos==1.3.1
-pykerberos==1.2.4
-pywinrm==0.4.3
-ntlm-auth==1.5.0
+# Ansible integration for Linux / SSH targets.
+#
+# Windows targets (WinRM + Kerberos/NTLM auth) need extra dependencies that
+# require system Kerberos libraries to build — those are split out into
+# requirements-ansible-windows.txt so a Linux-only deployment does not have to
+# install them.
 ansible==10.5.0
 # The `mode: local` / `provider` support the UI playbook runner relies on
 # landed in 0.2.0; the old HTTP-only 0.1.4 breaks UI runs. Pinned with a

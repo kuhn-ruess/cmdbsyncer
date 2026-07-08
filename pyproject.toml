@@ -61,11 +61,15 @@ Changelog = "https://github.com/kuhn-ruess/cmdbsyncer/tree/main/changelog"
 dependencies = {file = "requirements.txt"}
 
 [tool.setuptools.dynamic.optional-dependencies]
-# ``pip install cmdbsyncer[extras]`` for LDAP / SQL / MCP / vmware /
-# ``pip install cmdbsyncer[ansible]`` for the Ansible inventory pieces.
-# ``pip install cmdbsyncer[extras,ansible]`` to get both.
+# ``pip install cmdbsyncer[extras]`` for LDAP / SQL / MCP / vmware.
+# ``pip install cmdbsyncer[ansible]`` for the Ansible inventory pieces
+#   (Linux / SSH targets).
+# ``pip install cmdbsyncer[ansible-windows]`` adds WinRM + Kerberos/NTLM for
+#   Ansible Windows targets (needs system Kerberos libraries).
+# Combine as needed, e.g. ``cmdbsyncer[extras,ansible,ansible-windows]``.
 extras = {file = "requirements-extras.txt"}
 ansible = {file = "requirements-ansible.txt"}
+ansible-windows = {file = "requirements-ansible-windows.txt"}
 
 [tool.setuptools.packages.find]
 where = ["."]

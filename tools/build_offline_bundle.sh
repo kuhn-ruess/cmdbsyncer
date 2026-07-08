@@ -7,13 +7,35 @@
 #
 # Usage:
 #   ./tools/build_offline_bundle.sh [--include-syncer | --syncer-from-git]
-#                             [--include-enterprise]
+#                             [--syncer-only] [--include-enterprise]
+#                             [--with-extras] [--with-ansible]
+#                             [--with-ansible-windows]
 #                             [--python-version 3.11]
 #                             [--platform manylinux2014_x86_64]
 #                             [--output-dir offline_bundle]
 #                             [--no-archive]
 #
+# The bundle always ships the base Python dependencies (requirements.txt). The
+# optional requirement sets are opt-in via the --with-* flags below, so a
+# bundle only carries what the target deployment actually needs.
+#
 # Options:
+#   --syncer-only             Bundle ONLY the cmdbsyncer package (no
+#                             dependencies) and install it with --no-deps, so
+#                             the dependencies already present on the target are
+#                             kept. Needs a syncer source (--syncer-from-git or
+#                             --include-syncer); ignores the --with-* flags.
+#                             Ideal for updating the syncer on a locked-down
+#                             host that can't fetch dependencies.
+#   --with-extras             Also bundle the optional extras
+#                             (requirements-extras.txt: LDAP / SQL / MCP /
+#                             vmware). Not needed for normal operation.
+#   --with-ansible            Also bundle Ansible for Linux/SSH targets
+#                             (requirements-ansible.txt) and the playbook
+#                             collection.
+#   --with-ansible-windows    Also bundle the Ansible Windows deps (WinRM +
+#                             Kerberos/NTLM, requirements-ansible-windows.txt);
+#                             implies --with-ansible.
 #   --include-syncer          Also download cmdbsyncer from PyPI into the
 #                             bundle.
 #   --syncer-from-git         Build the cmdbsyncer wheel from THIS local git
@@ -48,6 +70,9 @@
 #   ./tools/build_offline_bundle.sh --syncer-from-git \
 #       --python-version 3.11 --platform manylinux2014_x86_64
 #
+# Example (update ONLY the syncer from the checkout, keep installed deps):
+#   ./tools/build_offline_bundle.sh --syncer-from-git --syncer-only
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -64,25 +89,42 @@ PYTHON_VERSION=""
 PLATFORM=""
 OUTPUT_DIR="offline_bundle"
 CREATE_ARCHIVE=1
+# Optional requirement sets — base (requirements.txt) is always bundled; the
+# rest are opt-in so a bundle only carries what a deployment actually needs.
+WITH_EXTRAS=0
+WITH_ANSIBLE=0
+WITH_ANSIBLE_WINDOWS=0
+# Ship ONLY the cmdbsyncer package, no dependencies — for updating a syncer
+# whose dependencies are already installed on the target.
+SYNCER_ONLY=0
 
 # --- Arguments --------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --include-syncer)        INCLUDE_SYNCER=1; shift ;;
         --syncer-from-git)       SYNCER_FROM_GIT=1; shift ;;
+        --syncer-only)           SYNCER_ONLY=1; shift ;;
         --include-enterprise)    INCLUDE_ENTERPRISE=1; shift ;;
         --syncer-version)        SYNCER_VERSION="$2"; shift 2 ;;
         --enterprise-version)    ENTERPRISE_VERSION="$2"; shift 2 ;;
+        --with-extras)           WITH_EXTRAS=1; shift ;;
+        --with-ansible)          WITH_ANSIBLE=1; shift ;;
+        --with-ansible-windows)  WITH_ANSIBLE_WINDOWS=1; shift ;;
         --python-version)        PYTHON_VERSION="$2"; shift 2 ;;
         --platform)              PLATFORM="$2"; shift 2 ;;
         --output-dir)            OUTPUT_DIR="$2"; shift 2 ;;
         --no-archive)            CREATE_ARCHIVE=0; shift ;;
         -h|--help)
-            sed -n '2,49p' "$0"; exit 0 ;;
+            sed -n '2,75p' "$0"; exit 0 ;;
         *)
             echo "Unknown argument: $1" >&2; exit 2 ;;
     esac
 done
+
+# Windows Ansible deps are useless without the Ansible base, so imply it.
+if [[ $WITH_ANSIBLE_WINDOWS -eq 1 ]]; then
+    WITH_ANSIBLE=1
+fi
 
 # --- Validate mutually exclusive syncer sources -----------------------------
 # cmdbsyncer can come from PyPI (--include-syncer) OR the local git checkout
@@ -94,17 +136,40 @@ if [[ $SYNCER_FROM_GIT -eq 1 && ( $INCLUDE_SYNCER -eq 1 || -n "$SYNCER_VERSION" 
     exit 2
 fi
 
-# --- Collect requirements ---------------------------------------------------
-# Always bundle base + extras + ansible. An offline bundle is meant to be a
-# complete installable artifact; cherry-picking sub-requirement-files just
-# leaves the customer guessing which optional features they have.
-REQ_FILES=(requirements.txt requirements-extras.txt requirements-ansible.txt)
+# --syncer-only ships just the cmdbsyncer package (no dependencies), so it needs
+# a syncer source and ignores the dependency-bundling flags.
+if [[ $SYNCER_ONLY -eq 1 ]]; then
+    if [[ $SYNCER_FROM_GIT -eq 0 && $INCLUDE_SYNCER -eq 0 ]]; then
+        echo "--syncer-only needs a syncer source: add --syncer-from-git or " \
+             "--include-syncer." >&2
+        exit 2
+    fi
+    if [[ $WITH_EXTRAS -eq 1 || $WITH_ANSIBLE -eq 1 || $WITH_ANSIBLE_WINDOWS -eq 1 ]]; then
+        echo "Note: --syncer-only bundles no dependencies; ignoring --with-* flags."
+    fi
+    WITH_EXTRAS=0; WITH_ANSIBLE=0; WITH_ANSIBLE_WINDOWS=0
+fi
 
-for f in "${REQ_FILES[@]}"; do
+# --- Collect requirements ---------------------------------------------------
+# Base is always bundled; extras / ansible / ansible-windows are opt-in via the
+# --with-* flags so a bundle only carries what the target deployment needs.
+# --syncer-only skips dependencies entirely (empty REQ_FILES).
+REQ_FILES=()
+if [[ $SYNCER_ONLY -eq 0 ]]; then
+    REQ_FILES=(requirements.txt)
+    [[ $WITH_EXTRAS -eq 1 ]]          && REQ_FILES+=(requirements-extras.txt)
+    [[ $WITH_ANSIBLE -eq 1 ]]         && REQ_FILES+=(requirements-ansible.txt)
+    [[ $WITH_ANSIBLE_WINDOWS -eq 1 ]] && REQ_FILES+=(requirements-ansible-windows.txt)
+fi
+
+# ${arr[@]+"${arr[@]}"} keeps an empty REQ_FILES (syncer-only) from tripping
+# `set -u` on older bash (e.g. macOS 3.2).
+for f in ${REQ_FILES[@]+"${REQ_FILES[@]}"}; do
     [[ -f "$f" ]] || { echo "Missing file: $f" >&2; exit 1; }
 done
 
-if [[ ! -d ansible ]]; then
+# The Ansible playbook collection is only shipped when Ansible is bundled.
+if [[ $WITH_ANSIBLE -eq 1 && ! -d ansible ]]; then
     echo "Missing ansible/ directory in repo root — cannot bundle playbooks." >&2
     exit 1
 fi
@@ -131,13 +196,18 @@ if [[ -n "$PYTHON_VERSION" ]]; then
     PIP_ARGS+=(--python-version "$PYTHON_VERSION")
 fi
 
-for f in "${REQ_FILES[@]}"; do
+for f in ${REQ_FILES[@]+"${REQ_FILES[@]}"}; do
     PIP_ARGS+=(-r "$f")
     cp "$f" "$OUTPUT_DIR/"
 done
 
-echo "Downloading packages into $OUTPUT_DIR/packages ..."
-python3 -m pip "${PIP_ARGS[@]}"
+# Skip the dependency download entirely for --syncer-only (no requirements).
+if [[ ${#REQ_FILES[@]} -gt 0 ]]; then
+    echo "Downloading packages into $OUTPUT_DIR/packages ..."
+    python3 -m pip "${PIP_ARGS[@]}"
+else
+    echo "Skipping dependency download (--syncer-only)."
+fi
 
 # --- Optional: ship cmdbsyncer and cmdbsyncer-enterprise from PyPI ----------
 # Resolution for both packages is explicit:
@@ -227,9 +297,12 @@ fi
 # The pip-installed cmdbsyncer package does not contain the ansible/ tree;
 # operators normally fetch it via `cmdbsyncer sys install_playbooks`, which
 # git-clones from GitHub. That is unreachable in an air-gapped install, so
-# ship a copy here and let install.sh place it in $ANSIBLE_TARGET.
-echo "Bundling Ansible playbook collection ..."
-cp -R ansible "$OUTPUT_DIR/ansible"
+# ship a copy here and let install.sh place it in $ANSIBLE_TARGET. Only when
+# Ansible support is bundled (--with-ansible).
+if [[ $WITH_ANSIBLE -eq 1 ]]; then
+    echo "Bundling Ansible playbook collection ..."
+    cp -R ansible "$OUTPUT_DIR/ansible"
+fi
 
 # --- Customer-facing install script -----------------------------------------
 # Mirror the same pinning into install.sh so the customer's pip lands on
@@ -261,8 +334,8 @@ fi
 
 cat > "$OUTPUT_DIR/install.sh" <<'EOS'
 #!/usr/bin/env bash
-# Offline installer: installs every bundled Python package and copies the
-# Ansible playbook collection into ANSIBLE_TARGET (default
+# Offline installer: installs the bundled Python package(s) and, when present,
+# copies the Ansible playbook collection into ANSIBLE_TARGET (default
 # /opt/cmdbsyncer/ansible). Override by exporting ANSIBLE_TARGET=/path
 # before running this script. Set SKIP_ANSIBLE=1 to skip the playbook
 # copy entirely. Both steps run independently — a failure in one is
@@ -271,16 +344,30 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANSIBLE_TARGET="${ANSIBLE_TARGET:-/opt/cmdbsyncer/ansible}"
 
+EOS
+
+# The pip invocation differs for a syncer-only bundle: no requirement files are
+# shipped, and cmdbsyncer is installed with --no-deps so the dependencies
+# already present on the target are kept untouched.
+if [[ $SYNCER_ONLY -eq 1 ]]; then
+    cat >> "$OUTPUT_DIR/install.sh" <<'EOS'
+PIP_ARGS=(install --no-index --find-links "$HERE/packages" --no-deps --upgrade)
+EOS
+else
+    cat >> "$OUTPUT_DIR/install.sh" <<'EOS'
 REQ_FILES=(requirements.txt)
-[[ -f "$HERE/requirements-extras.txt"  ]] && REQ_FILES+=(requirements-extras.txt)
-[[ -f "$HERE/requirements-ansible.txt" ]] && REQ_FILES+=(requirements-ansible.txt)
+[[ -f "$HERE/requirements-extras.txt"          ]] && REQ_FILES+=(requirements-extras.txt)
+[[ -f "$HERE/requirements-ansible.txt"         ]] && REQ_FILES+=(requirements-ansible.txt)
+[[ -f "$HERE/requirements-ansible-windows.txt" ]] && REQ_FILES+=(requirements-ansible-windows.txt)
 
 PIP_ARGS=(install --no-index --find-links "$HERE/packages" --upgrade)
 for f in "${REQ_FILES[@]}"; do PIP_ARGS+=(-r "$HERE/$f"); done
 EOS
+fi
 
 # Inject the optional extra-packages line (cmdbsyncer / cmdbsyncer-enterprise
-# wheels), produced earlier from --include-syncer / --include-enterprise.
+# wheels), produced earlier from --include-syncer / --syncer-from-git /
+# --include-enterprise.
 if [[ -n "$INSTALL_EXTRA_LINE" ]]; then
     echo "$INSTALL_EXTRA_LINE" >> "$OUTPUT_DIR/install.sh"
 fi
@@ -333,6 +420,16 @@ elif [[ $INCLUDE_SYNCER -eq 1 ]]; then
 else
     SYNCER_SOURCE="not bundled (install separately)"
 fi
+if [[ $WITH_ANSIBLE -eq 1 ]]; then
+    ANSIBLE_SOURCE="ansible/ (default install target /opt/cmdbsyncer/ansible)"
+else
+    ANSIBLE_SOURCE="not bundled (build with --with-ansible)"
+fi
+if [[ $SYNCER_ONLY -eq 1 ]]; then
+    REQ_SUMMARY="none — syncer only, installed with --no-deps (existing dependencies kept)"
+else
+    REQ_SUMMARY="${REQ_FILES[*]}"
+fi
 
 cat > "$OUTPUT_DIR/README.txt" <<EOS
 Offline installation bundle
@@ -341,9 +438,9 @@ Offline installation bundle
 Built on       : $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 Python version : ${PYTHON_VERSION:-build host default}
 Platform       : ${PLATFORM:-build host default}
-Included files : ${REQ_FILES[*]}
+Included files : ${REQ_SUMMARY}
 cmdbsyncer     : ${SYNCER_SOURCE}
-Ansible        : ansible/ (default install target /opt/cmdbsyncer/ansible)
+Ansible        : ${ANSIBLE_SOURCE}
 
 Installation
 ------------

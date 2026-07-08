@@ -32,11 +32,13 @@ RUN ln -sf /usr/share/zoneinfo/Ect/Universal /etc/localtime
 COPY requirements.txt ./
 COPY requirements-extras.txt ./
 COPY requirements-ansible.txt ./
+COPY requirements-ansible-windows.txt ./
 
 RUN pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir -r requirements.txt
 RUN pip3 install --no-cache-dir -r requirements-extras.txt
 RUN pip3 install --no-cache-dir -r requirements-ansible.txt
+RUN pip3 install --no-cache-dir -r requirements-ansible-windows.txt
 RUN pip3 install --no-cache-dir gunicorn
 
 COPY ./deploy_configs/run_cron.sh /etc/periodic/15min/

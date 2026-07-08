@@ -1,0 +1,10 @@
+# Ansible Windows targets (WinRM + Kerberos / NTLM authentication).
+#
+# Optional — only needed to run playbooks against Windows hosts. Building
+# kerberos / pykerberos requires system Kerberos development headers
+# (e.g. krb5-dev / libkrb5-dev, libsasl2-dev). Install alongside
+# requirements-ansible.txt.
+kerberos==1.3.1
+pykerberos==1.2.4
+pywinrm==0.4.3
+ntlm-auth==1.5.0
