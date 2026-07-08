@@ -863,6 +863,21 @@ class TestImportProjectRules(unittest.TestCase):
             instance.fetch_rules_in_folder.assert_called_once_with(
                 '/folder', recursive=True)
 
+    def test_cmk_error_propagates_and_is_recorded(self):
+        """A Checkmk error (e.g. wrong credentials -> 401) must NOT be
+        swallowed into a "0 imported" result — it has to reach the caller so
+        the CLI/web UI can surface it instead of showing an empty import."""
+        from application.plugins.checkmk.cmk2 import CmkException  # noqa: E402  pylint: disable=import-outside-toplevel
+        with patch.object(inits, 'CheckmkRuleProject') as proj, \
+                patch.object(inits, 'CheckmkRuleSync') as sync:
+            proj.objects.return_value.first.return_value = SimpleNamespace(name='P')
+            instance = sync.return_value
+            instance.fetch_rules_in_folder.side_effect = \
+                CmkException('Unauthorized Wrong credentials (Bearer header)')
+            with self.assertRaises(CmkException):
+                inits.import_project_rules_from_folder('P', 'acc', '/folder')
+            instance.record_exception.assert_called_once()
+
 
 class TestProjectsForAccount(unittest.TestCase):
     """inits.projects_for_account account-filter selection."""

@@ -996,9 +996,16 @@ class CheckmkRuleProjectView(DefaultModelView):
             flash('No Checkmk account selected', 'error')
             return redirect(return_url)
 
-        from .inits import import_project_rules_from_folder  # pylint: disable=import-outside-toplevel
-        imported = import_project_rules_from_folder(
-            project.name, account, folder, recursive)
+        # pylint: disable=import-outside-toplevel
+        from .inits import import_project_rules_from_folder
+        from .cmk2 import CmkException
+        try:
+            imported = import_project_rules_from_folder(
+                project.name, account, folder, recursive)
+        except CmkException as error_obj:
+            flash(f"Checkmk import failed (account {account}): {error_obj}",
+                  'error')
+            return redirect(return_url)
         flash(
             f"Imported {imported} rule(s) from folder '{folder}' "
             f"(account {account})",
