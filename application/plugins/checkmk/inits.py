@@ -416,7 +416,9 @@ def import_project_rules_from_folder(project_name, account, folder,  # pylint: d
                          ('imported', str(imported))])
         return imported
     except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        # Record the failure, then re-raise so callers can surface it.
+        # Swallowing it into "return 0" made a wrong-credentials error
+        # (401) look identical to an empty folder in the web UI.
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
@@ -424,7 +426,7 @@ def import_project_rules_from_folder(project_name, account, folder,  # pylint: d
                     f"{account} not started",
                     source="cmk_project_rule_import",
                     details=[('error', str(error_obj))])
-        return 0
+        raise
 #.
 #   .-- Export Notification Rules
 def export_notifications(account, debug=False):

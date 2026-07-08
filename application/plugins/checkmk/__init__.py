@@ -442,7 +442,10 @@ def cli_import_project_rules(project, account, folder, recursive, debug):
         account (string): Checkmk account to read the rules from
         folder (string): Checkmk folder to import rules from
     """
-    import_project_rules_from_folder(project, account, folder, recursive, debug)
+    try:
+        import_project_rules_from_folder(project, account, folder, recursive, debug)
+    except CmkException as error_obj:
+        print(f'{ColorCodes.FAIL}Checkmk Error: {error_obj}{ColorCodes.ENDC}')
 
 #.
 #   .-- Command: Export Group
