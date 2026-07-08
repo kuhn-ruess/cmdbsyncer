@@ -154,6 +154,34 @@ class TestCheckmkGroupSync(unittest.TestCase):
         self.assertEqual(keys, {})
         self.assertEqual(values, {})
 
+    @patch('application.plugins.checkmk.groups.Host')
+    def test_parse_attributes_default_is_host_only(self, mock_host):
+        """Without an account object filter the default stays host-only."""
+        self.sync.name = 'Checkmk: Export Groups'
+        self.sync.config['settings'] = {}
+        mock_host.get_export_hosts.return_value = []
+
+        self.sync.parse_attributes()
+
+        mock_host.get_export_hosts.assert_called_once()
+        mock_host.objects_by_filter.assert_not_called()
+
+    @patch('application.plugins.checkmk.groups.Host')
+    def test_parse_attributes_uses_account_object_filter(self, mock_host):
+        """An account (or child account) object filter opts objects/shadow
+        hosts into the group calculation instead of the host-only default."""
+        self.sync.name = 'Checkmk: Export Groups'
+        self.sync.config['settings'] = {
+            'Checkmk: Export Groups': {'filter': ['host', 'shadow_host']},
+        }
+        mock_host.objects_by_filter.return_value = []
+
+        self.sync.parse_attributes()
+
+        mock_host.objects_by_filter.assert_called_once_with(
+            ['host', 'shadow_host'])
+        mock_host.get_export_hosts.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
