@@ -11,7 +11,7 @@ services:
     depends_on:
       - mongo
     environment:
-      config: base
+      config: compose
 
 volumes:
   data_db:
