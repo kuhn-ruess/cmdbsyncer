@@ -350,6 +350,17 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         run_tmp = tempfile.mkdtemp(prefix='cmdbsyncer-ansible-')
         env['ANSIBLE_LOCAL_TEMP'] = run_tmp
         env['HOME'] = run_tmp
+        # ANSIBLE_LOCAL_TEMP / $HOME only cover the controller-side scratch
+        # dir. A task delegated to localhost (delegate_to: localhost) runs
+        # over the *local* connection, whose remote_tmp still defaults to
+        # ``~/.ansible/tmp`` — and that ``~`` is expanded via the passwd
+        # database (the web user's non-writable home, e.g.
+        # ``/usr/share/httpd``), ignoring $HOME. That makes such tasks abort
+        # "Failed to create temporary directory". Pin remote_tmp to the
+        # writable per-run dir (a literal /tmp path, no ``~`` to expand) so
+        # local-delegated tasks work; real SSH hosts just create this path
+        # under their own /tmp.
+        env['ANSIBLE_REMOTE_TEMP'] = run_tmp
         inventory_path = _write_run_inventory_spec(
             run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
             cmdbsyncer_bin=_cmdbsyncer_bin(),
