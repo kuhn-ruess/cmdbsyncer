@@ -1,31 +1,35 @@
 
+# The installer is staged on the controller in `installation_staging_path`
+# (from the Checkmk Settings, served via the inventory), falling back to
+# /tmp when it is unset. Set the path to something other than /tmp whenever
+# the executing user can't reliably use /tmp — e.g. permission problems or
+# private-tmp isolation, where a /tmp staged file is not visible to the
+# copy step. The install target below stays /tmp on the remote host.
+- name: "Determine the local staging directory for the installer"
+  ansible.builtin.set_fact:
+    cmk_local_staging: "{{ installation_staging_path | default('/tmp', true) }}"
+
+- name: "Ensure the local staging directory exists"
+  ansible.builtin.file:
+    path: "{{ cmk_local_staging }}"
+    state: directory
+  delegate_to: localhost
+
 - name: "Check if we have the Installation File local"
   ansible.builtin.stat:
-    path: /tmp/{{ cmk_version_filename }}
+    path: "{{ cmk_local_staging }}/{{ cmk_version_filename }}"
   register: installation_file
   delegate_to: localhost
 
 - name: "Download Installation File from Checkmk Server"
   ansible.builtin.uri:
     url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_version_filename}}"
-    dest: "/tmp/{{ cmk_version_filename }}"
+    dest: "{{ cmk_local_staging }}/{{ cmk_version_filename }}"
     method: GET
     user: "{{ subscription_username }}"
     password: "{{ subscription_password }}"
     force_basic_auth: True
-  when: installation_file.stat.exists != True
-  delegate_to: localhost
-
-- name: "Fail if the file does not belong to executing user"
-  ansible.builtin.fail:
-    msg: "File does not belong to executing user"
-  when: installation_file.stat.uid != ansible_user_uid or installation_file.stat.gid != ansible_user_gid
-  delegate_to: localhost
-
-- name: "Fail if the file is not writeable"
-  ansible.builtin.fail:
-    msg: "File is not writeable"
-  when: installation_file.stat.writeable == False
+  when: not installation_file.stat.exists
   delegate_to: localhost
 
 - name: "Check if Version is already installed on the Servers"
@@ -40,7 +44,7 @@
 
 - name: "Copy Installation File to Servers"
   ansible.builtin.copy:
-    src: "/tmp/{{ cmk_version_filename }}"
+    src: "{{ cmk_local_staging }}/{{ cmk_version_filename }}"
     dest: "/tmp/{{ cmk_version_filename }}"
   when: checkmk_version_installed.stdout != cmk_version
 

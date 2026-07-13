@@ -505,6 +505,7 @@ class CheckmkSettings(db.Document):
     cmk_version = db.StringField()
     cmk_edition = db.StringField(choices=editions)
     cmk_version_filename = db.StringField()
+    installation_staging_path = db.StringField()
     inital_password = db.StringField()
 
     subscription_username = db.StringField()
