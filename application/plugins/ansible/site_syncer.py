@@ -47,6 +47,7 @@ class SyncSites(Plugin):
             'cmk_edition': site.settings_master.cmk_edition,
             'cmk_version': site.settings_master.cmk_version,
             'cmk_version_filename': filename,
+            'installation_staging_path': site.settings_master.installation_staging_path or '',
             'subscription_username': site.settings_master.subscription_username,
             'subscription_password': site.settings_master.subscription_password,
             'cmk_user': cmk_user,

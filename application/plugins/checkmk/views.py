@@ -1226,6 +1226,13 @@ class CheckmkSettingsView(DefaultModelView):
         'cmk_version': {
             'placeholder': "Target Checkmk Version Number",
         },
+        'installation_staging_path': {
+            'placeholder': (
+                "Directory to stage the downloaded installer in (default "
+                "/tmp). Set a custom path if the executing user can't use "
+                "/tmp — e.g. permission or private-tmp isolation issues."
+            ),
+        },
         'server_user': {
             'placeholder': "User to connect to server where the site is running",
         },
@@ -1278,6 +1285,7 @@ class CheckmkSettingsView(DefaultModelView):
                 [rules.Field('cmk_edition'),
                  rules.Field('cmk_version'),
                  rules.Field('cmk_version_filename'),
+                 rules.Field('installation_staging_path'),
                  rules.Field('inital_password')]),
         section('3', 'out', 'Checkmk API',
                 'Optional: credentials + API address for automated '
