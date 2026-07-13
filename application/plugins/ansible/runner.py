@@ -92,13 +92,23 @@ def _cmdbsyncer_bin() -> str:
 
     The plugin defaults to a bare `cmdbsyncer` and only looks on $PATH,
     which fails when the app runs from a source checkout / container where
-    no `cmdbsyncer` console script is on PATH. Prefer an explicit config /
-    env override, then PATH, then the repo-root wrapper that sits next to
-    the `application` package (mirrors the legacy `ansible/inventory` shim).
+    no `cmdbsyncer` console script is on PATH. Resolution order: explicit
+    config / env override, then the console script inside the running
+    interpreter's venv, then PATH, then the repo-root wrapper that sits next
+    to the `application` package (mirrors the legacy `ansible/inventory` shim).
     """
     override = app.config.get('CMDBSYNCER_BIN') or os.environ.get('CMDBSYNCER_BIN')
     if override:
         return override
+    # Console script installed alongside the running interpreter (e.g.
+    # `/opt/cmdbsyncer/venv/bin/cmdbsyncer`). Checked before $PATH because a
+    # mod_wsgi / gunicorn worker typically runs with a PATH that omits the
+    # venv's bin dir, so shutil.which() finds nothing and we would fall
+    # through to the bare name — which the inventory plugin then fails to
+    # spawn with "cmdbsyncer binary not found ('cmdbsyncer')".
+    venv_bin = Path(sys.prefix) / 'bin' / 'cmdbsyncer'
+    if venv_bin.is_file():
+        return str(venv_bin)
     on_path = shutil.which('cmdbsyncer')
     if on_path:
         return on_path
