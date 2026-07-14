@@ -11,7 +11,7 @@ from pprint import pformat
 
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
-from application import logger
+from application import app, logger
 from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
@@ -42,6 +42,25 @@ def normalize_cmk_folder(folder):
     """
     folder = (folder or '/').replace('~', '/')
     return normalize_folder(folder)
+
+
+def scope_folder(folder):
+    """
+    Normalise a folder for a folder-scope selection.
+
+    Like :func:`normalize_cmk_folder`, but also prefixes a leading ``/`` and
+    lowercases the path when ``CMK_LOWERCASE_FOLDERNAMES`` is on. Checkmk's API
+    folder names are always lowercase, and the export side (``rules.py``) writes
+    them that way, so a picked or typed folder compares equal to the folder a
+    host actually lands in.
+    """
+    folder = (folder or '').strip()
+    if folder and not folder.startswith('/'):
+        folder = '/' + folder
+    folder = normalize_cmk_folder(folder)
+    if app.config['CMK_LOWERCASE_FOLDERNAMES']:
+        folder = folder.lower()
+    return folder
 
 
 def folder_in_scope(rule_folder, target_folder, recursive=False):
@@ -90,7 +109,7 @@ def iter_rule_folders():
     for rule in CheckmkRuleMngmt.objects():
         for outcome in rule.outcomes:
             if outcome.folder and '{{' not in outcome.folder:
-                folders.add(normalize_cmk_folder(outcome.folder))
+                folders.add(scope_folder(outcome.folder))
 
     for rule in CheckmkRule.objects(enabled=True):
         for outcome in rule.outcomes:
@@ -99,11 +118,11 @@ def iter_rule_folders():
             param = (outcome.action_param or '').strip()
             if not param or '{{' in param:
                 continue
-            folders.add(normalize_cmk_folder(param))
+            folders.add(scope_folder(param))
 
     for pool in CheckmkFolderPool.objects():
         if pool.folder_name:
-            folders.add(normalize_cmk_folder(pool.folder_name))
+            folders.add(scope_folder(pool.folder_name))
 
     return sorted(folders)
 
