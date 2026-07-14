@@ -14,6 +14,11 @@ from application.plugins.checkmk.rules import CheckmkRulesetRule, DefaultRule
 from application.plugins.checkmk.inventorize import InventorizeHosts
 from application.plugins.checkmk.dcd import CheckmkDCDRuleSync
 from application.plugins.checkmk.passwords import CheckmkPasswordSync
+from application.plugins.checkmk.rule_passwords import (
+    rewrite_explicit_passwords,
+    preserve_password_macros,
+    referenced_password_names,
+)
 from application.plugins.checkmk.groups import CheckmkGroupSync
 from application.plugins.checkmk.users import CheckmkUserSync
 from application.plugins.checkmk.bi import BI
@@ -384,6 +389,7 @@ def import_project_rules_from_folder(project_name, account, folder,  # pylint: d
         found = syncer.fetch_rules_in_folder(folder, recursive=recursive)
 
         imported = 0
+        password_hints = set()
         for entry in found:
             cmk_id = entry.get('cmk_id')
             if not cmk_id:
@@ -402,18 +408,42 @@ def import_project_rules_from_folder(project_name, account, folder,  # pylint: d
                 f"Imported from Checkmk account '{account}', "
                 f"folder '{folder}' (rule {cmk_id})")
             outcome = entry['outcome']
+            # Checkmk masks explicit passwords as '******' on read, so a rule
+            # imported here can't carry a usable secret. Rewrite each into a
+            # syncer password-store reference (a cmk_password macro); on a
+            # re-import keep the macro already on the rule so a renamed one is
+            # not reverted to its default hint.
+            new_value, hints = rewrite_explicit_passwords(
+                outcome.get('value_template', ''))
+            if hints:
+                old_outcome = rule.outcomes[0] if rule.outcomes else None
+                if old_outcome is not None:
+                    new_value = preserve_password_macros(
+                        old_outcome.value_template, new_value)
+                outcome['value_template'] = new_value
+                password_hints.update(referenced_password_names(new_value))
             rule.outcomes = [RuleMngmtOutcome(**outcome)]
             rule.primary_ruleset = outcome.get('ruleset', '')
             rule.save()
             imported += 1
 
+        if password_hints:
+            hint_list = ', '.join(sorted(password_hints))
+            print(f"{ColorCodes.WARNING} * Rules reference password store "
+                  f"entries: {hint_list}. Create matching Checkmk Passwords in "
+                  f"the syncer and run 'checkmk export_passwords <account>' so "
+                  f"the reference resolves in the target Checkmk.{ColorCodes.ENDC}")
+
         message = (f"Imported {imported} rule(s) from Checkmk folder "
                    f"'{folder}' into project '{project_name}'")
         print(f'{ColorCodes.OKGREEN}{message}{ColorCodes.ENDC}')
-        log.log(message, source="cmk_project_rule_import",
-                details=[('account', account), ('folder', folder),
-                         ('recursive', str(recursive)),
-                         ('imported', str(imported))])
+        details = [('account', account), ('folder', folder),
+                   ('recursive', str(recursive)),
+                   ('imported', str(imported))]
+        if password_hints:
+            details.append(('password_store_entries',
+                            ', '.join(sorted(password_hints))))
+        log.log(message, source="cmk_project_rule_import", details=details)
         return imported
     except CmkException as error_obj:
         # Record the failure, then re-raise so callers can surface it.

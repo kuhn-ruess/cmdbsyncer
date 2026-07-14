@@ -455,6 +455,12 @@ _try_load_real_module(
     "application.plugins.checkmk.syncer",
     os.path.join("plugins", "checkmk", "syncer.py"),
 )
+# rule_passwords has no heavy imports (models are imported lazily), so it can be
+# loaded directly for its own unit tests.
+_try_load_real_module(
+    "application.plugins.checkmk.rule_passwords",
+    os.path.join("plugins", "checkmk", "rule_passwords.py"),
+)
 
 
 # --- Checkmk plugin modules --------------------------------------------------
