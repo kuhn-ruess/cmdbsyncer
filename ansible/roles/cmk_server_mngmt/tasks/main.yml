@@ -101,7 +101,7 @@
       downtime_type: "host"
       host_name: "{{ inventory_hostname }}"
 
-  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed and cmk_user is defined and cmk_secret is defined
+  when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed and (cmk_user | default('') | trim) != '' and (cmk_secret | default('') | trim) != ''
   ignore_errors: yes
   delegate_to: localhost
   register: downtime_result
