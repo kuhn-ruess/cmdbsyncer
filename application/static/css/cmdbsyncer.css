@@ -180,3 +180,31 @@ pre.syncer-code {
     font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     font-size: 0.85em;
 }
+
+/* Card + hero layout shared by public (base.html) and admin
+   (admin/master.html) pages. base.html carries its own copy in a later
+   <style> block so public pages are unaffected; admin pages — which extend
+   admin_base_template, not base.html — previously got only the theme's
+   .app-card colours with no padding/radius, and an .app-hero whose -1.5rem
+   full-bleed margins (set inline by the templates) had no card padding to
+   bleed against, leaving the header text hanging ~1.5rem left of the form
+   body. Colours come from the active theme's .app-card rule; only layout
+   plus a theme-token separator live here so all four themes stay consistent. */
+.app-card {
+    border: 1px solid var(--surface-divider, rgba(0, 0, 0, 0.1));
+    border-radius: 12px;
+    padding: 1.5rem 1.5rem 1.25rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.app-hero {
+    color: inherit;
+    /* Side padding matches .app-card's so the templates' -1.5rem full-bleed
+       margin lines the header back up with the card body. */
+    padding: 0.25rem 1.5rem 1rem;
+    border-bottom: 1px solid var(--surface-divider, rgba(128, 128, 128, 0.28));
+}
+.app-hero h1, .app-hero h2 { margin: 0; font-weight: 700; letter-spacing: 0.3px; }
+.app-hero h1 { font-size: 1.9rem; }
+.app-hero h2 { font-size: 1.5rem; }
+.app-hero p { margin: 0.4rem 0 0; font-size: 0.95rem; opacity: 0.82; }
