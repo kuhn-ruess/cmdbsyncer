@@ -14,7 +14,8 @@
         No enabled Checkmk (cmkv2) account found. Create one first.
     </div>
     {% endif %}
-    <form method="POST" action="{{ url_for('.import_from_cmk_view') }}">
+    <form method="POST" action="{{ url_for('.import_from_cmk_view') }}"
+          id="cmk_import_form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <input type="hidden" name="id" value="{{ project_id }}"/>
         <div class="form-group">
@@ -42,10 +43,45 @@
                 Include subfolders
             </label>
         </div>
-        <button type="submit" class="btn btn-primary" {% if not accounts %}disabled{% endif %}>
+        <button type="submit" id="cmk_import_submit" class="btn btn-primary"
+                {% if not accounts %}disabled{% endif %}>
             <i class="fa fa-download"></i> Import
         </button>
         <a href="{{ return_url }}" class="btn btn-secondary">Cancel</a>
+
+        <div id="cmk_import_progress" class="mt-3" style="display: none;">
+            <div class="progress mb-2">
+                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                     role="progressbar" style="width: 100%;"
+                     aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <small id="cmk_import_status" class="text-muted">
+                <i class="fa fa-spinner fa-spin"></i> Working…
+            </small>
+        </div>
     </form>
 </div>
+
+<script>
+    (function () {
+        var form = document.getElementById('cmk_import_form');
+        if (!form) { return; }
+        form.addEventListener('submit', function () {
+            var button = document.getElementById('cmk_import_submit');
+            var progress = document.getElementById('cmk_import_progress');
+            var status = document.getElementById('cmk_import_status');
+            var account = document.getElementById('account').value || 'Checkmk';
+            var folder = document.getElementById('folder').value || '/';
+            var recursive = document.getElementById('recursive').checked;
+            button.disabled = true;
+            button.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Importing…';
+            status.innerHTML =
+                '<i class="fa fa-spinner fa-spin"></i> Contacting ' + account +
+                ', importing Setup Rules from folder ' + folder +
+                (recursive ? ' (including subfolders)' : '') +
+                '. This can take a moment for large folders…';
+            progress.style.display = '';
+        });
+    })();
+</script>
 {% endblock %}

@@ -58,37 +58,49 @@
                 Folders for <strong>{{ selected_account }}</strong>
             </div>
             <div class="card-body">
-                {% if not rule_folders %}
+                {% if rule_folders %}
+                <p class="text-muted mb-2">From your rules — click to add:</p>
+                <div class="mb-3">
+                    {% for folder in rule_folders %}
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary mr-1 mb-1 js-rule-folder"
+                            data-folder="{{ folder }}">
+                        <i class="fa fa-plus"></i> {{ folder }}
+                    </button>
+                    {% endfor %}
+                </div>
+                {% else %}
                 <div class="alert alert-info">
                     No literal folders found in the current rules — add the
                     folders manually below. Jinja-templated folders can't be
                     listed here but still match at export time.
                 </div>
-                {% else %}
-                <p class="text-muted mb-2">From your rules:</p>
-                {% for folder in rule_folders %}
-                <div class="form-check">
-                    <input type="checkbox" class="form-check-input"
-                           id="folder_{{ loop.index }}" name="folders"
-                           value="{{ folder }}"
-                           {% if folder in chosen %}checked{% endif %}/>
-                    <label class="form-check-label" for="folder_{{ loop.index }}">
-                        {{ folder }}
-                    </label>
-                </div>
-                {% endfor %}
                 {% endif %}
 
-                <div class="form-group mt-3 mb-0">
-                    <label for="custom_folders">Custom folders</label>
-                    <input type="text" class="form-control" id="custom_folders"
-                           name="custom_folders" value="{{ custom_folders }}"
-                           placeholder="/extra/folder, /another/one"/>
+                <div class="form-group">
+                    <label for="custom_folder_input">Add a folder</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="custom_folder_input"
+                               placeholder="/extra/folder"/>
+                        <div class="input-group-append">
+                            <button type="button" class="btn btn-secondary"
+                                    id="custom_folder_add">
+                                <i class="fa fa-plus"></i> Add
+                            </button>
+                        </div>
+                    </div>
                     <small class="form-text text-muted">
-                        Additional folders not produced by a rule — comma
-                        separated. Subfolders are included automatically.
+                        Type a folder path and press Enter or Add. Subfolders are
+                        included automatically.
                     </small>
                 </div>
+
+                <label class="d-block mb-1">Selected folders</label>
+                <div id="selected_folders" class="mb-1"></div>
+                <div id="no_folders_hint" class="text-muted mb-1">
+                    No folders selected — this account exports every host.
+                </div>
+                <div id="folders_inputs"></div>
             </div>
         </div>
 
@@ -96,6 +108,112 @@
             <i class="fa fa-save"></i> Save folder scope
         </button>
     </form>
+
+    <style>
+        .folder-chip {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.95em;
+            padding: 0.4em 0.7em;
+            margin: 0 0.35em 0.35em 0;
+        }
+        .folder-chip-remove {
+            cursor: pointer;
+            margin-left: 0.5em;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .folder-chip-remove:hover { opacity: 0.7; }
+    </style>
+    <script>
+        (function () {
+            var lowercase = {{ 'true' if lowercase_folders else 'false' }};
+            var selected = {{ chosen | tojson }};
+
+            function normalize(value) {
+                value = (value || '').trim();
+                if (!value) { return ''; }
+                if (value.charAt(0) !== '/') { value = '/' + value; }
+                value = value.replace(/\/+/g, '/');
+                if (value.length > 1 && value.charAt(value.length - 1) === '/') {
+                    value = value.slice(0, -1);
+                }
+                if (lowercase) { value = value.toLowerCase(); }
+                return value;
+            }
+
+            var list = document.getElementById('selected_folders');
+            var inputs = document.getElementById('folders_inputs');
+            var hint = document.getElementById('no_folders_hint');
+
+            function render() {
+                list.innerHTML = '';
+                inputs.innerHTML = '';
+                selected.forEach(function (folder) {
+                    var chip = document.createElement('span');
+                    chip.className = 'badge badge-info folder-chip';
+                    chip.appendChild(document.createTextNode(folder));
+
+                    var remove = document.createElement('span');
+                    remove.className = 'folder-chip-remove';
+                    remove.setAttribute('title', 'Remove');
+                    remove.setAttribute('role', 'button');
+                    remove.textContent = '×';
+                    remove.addEventListener('click', function () {
+                        removeFolder(folder);
+                    });
+                    chip.appendChild(remove);
+                    list.appendChild(chip);
+
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'folders';
+                    input.value = folder;
+                    inputs.appendChild(input);
+                });
+                hint.style.display = selected.length ? 'none' : '';
+            }
+
+            function addFolder(value) {
+                var folder = normalize(value);
+                if (folder && selected.indexOf(folder) === -1) {
+                    selected.push(folder);
+                    render();
+                }
+            }
+
+            function removeFolder(folder) {
+                selected = selected.filter(function (item) { return item !== folder; });
+                render();
+            }
+
+            Array.prototype.forEach.call(
+                document.querySelectorAll('.js-rule-folder'),
+                function (btn) {
+                    btn.addEventListener('click', function () {
+                        addFolder(btn.getAttribute('data-folder'));
+                    });
+                }
+            );
+
+            var input = document.getElementById('custom_folder_input');
+            var addBtn = document.getElementById('custom_folder_add');
+            function addFromInput() {
+                addFolder(input.value);
+                input.value = '';
+                input.focus();
+            }
+            addBtn.addEventListener('click', addFromInput);
+            input.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addFromInput();
+                }
+            });
+
+            render();
+        })();
+    </script>
     {% endif %}
 </div>
 {% endblock %}

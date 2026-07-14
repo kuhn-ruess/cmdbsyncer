@@ -4,7 +4,6 @@ Checkmk Rule Views
 # pylint: disable=too-many-lines
 # pylint: disable=duplicate-code
 import json
-import re
 from markupsafe import Markup, escape
 
 from pygments import highlight
@@ -25,6 +24,7 @@ from flask_admin.contrib.mongoengine.filters import (
 from flask import redirect, url_for, request, render_template, flash, Response
 
 from flask_login import current_user
+from application import app
 from application.views.default import DefaultModelView
 from application.models.account import Account, CustomEntry
 from application.docu_links import docu_links
@@ -1951,7 +1951,8 @@ class CheckmkTestFolderScopeView(BaseView):
 
     def _render(self, selected_account):
         """Render the picker for the (optionally) chosen account."""
-        from .cmk_rules import iter_rule_folders  # pylint: disable=import-outside-toplevel
+        # pylint: disable=import-outside-toplevel
+        from .cmk_rules import iter_rule_folders, scope_folder
         # Carry each account's scope state so the dropdown makes clear which
         # accounts have the folder limit active and which export every host.
         accounts = []
@@ -1968,10 +1969,16 @@ class CheckmkTestFolderScopeView(BaseView):
             account = Account.objects(name=selected_account, type='cmkv2').first()
         if account:
             raw = _get_custom_field(account, 'limit_by_folders')
-            chosen = [x.strip() for x in raw.split(',') if x.strip()]
-        # Folders in the scope that no rule produces (manually added) are shown
-        # in the custom-folders text box so they survive a save.
-        custom = [f for f in chosen if f not in rule_folders]
+            # Normalise the saved scope the same way as the rule folders so old
+            # mixed-case entries line up with the (lowercase) rule folders in the
+            # UI and stay de-duplicated.
+            chosen = []
+            for entry in raw.split(','):
+                if not entry.strip():
+                    continue
+                folder = scope_folder(entry)
+                if folder not in chosen:
+                    chosen.append(folder)
         return self.render(
             'admin/checkmk_test_folder_scope.html',
             accounts=accounts,
@@ -1979,7 +1986,7 @@ class CheckmkTestFolderScopeView(BaseView):
             scope_enabled=bool(chosen),
             rule_folders=rule_folders,
             chosen=chosen,
-            custom_folders=', '.join(custom))
+            lowercase_folders=app.config['CMK_LOWERCASE_FOLDERNAMES'])
 
     @expose('/', methods=['GET', 'POST'])
     def index(self):
@@ -1987,7 +1994,7 @@ class CheckmkTestFolderScopeView(BaseView):
         if request.method == 'GET':
             return self._render(request.args.get('account'))
 
-        from .cmk_rules import normalize_cmk_folder  # pylint: disable=import-outside-toplevel
+        from .cmk_rules import scope_folder  # pylint: disable=import-outside-toplevel
         account_name = request.form.get('account')
         account = Account.objects(name=account_name, type='cmkv2').first() \
             if account_name else None
@@ -1995,18 +2002,13 @@ class CheckmkTestFolderScopeView(BaseView):
             flash('Select a Checkmk account first', 'error')
             return redirect(self.get_url('.index'))
 
-        # Checked rule folders + any typed-in custom folders (comma/newline).
-        raw = list(request.form.getlist('folders'))
-        for chunk in re.split(r'[,\n]', request.form.get('custom_folders', '')):
-            raw.append(chunk)
+        # The form submits the whole selection (rule folders + typed-in ones) as
+        # a single ``folders`` list; normalise, lowercase and de-duplicate it.
         folders = []
-        for entry in raw:
-            entry = entry.strip()
-            if not entry:
+        for entry in request.form.getlist('folders'):
+            if not entry.strip():
                 continue
-            if not entry.startswith('/'):
-                entry = '/' + entry
-            folder = normalize_cmk_folder(entry)
+            folder = scope_folder(entry)
             if folder not in folders:
                 folders.append(folder)
 
