@@ -999,6 +999,7 @@ class CheckmkRuleProjectView(DefaultModelView):
         # pylint: disable=import-outside-toplevel
         from .inits import import_project_rules_from_folder
         from .cmk2 import CmkException
+        from .rule_passwords import referenced_password_names
         try:
             imported = import_project_rules_from_folder(
                 project.name, account, folder, recursive)
@@ -1010,6 +1011,21 @@ class CheckmkRuleProjectView(DefaultModelView):
             f"Imported {imported} rule(s) from folder '{folder}' "
             f"(account {account})",
             'success' if imported else 'warning')
+        # Rules that carried an explicit password were rewritten to reference
+        # the syncer password store — tell the user which entries to create so
+        # they deploy with the project.
+        referenced = set().union(*(
+            referenced_password_names(outcome.value_template)
+            for rule in CheckmkRuleMngmt.objects(project=project.name)
+            for outcome in rule.outcomes))
+        if referenced:
+            flash(
+                "These rules reference password store entries: "
+                f"{', '.join(sorted(referenced))}. Create a Checkmk Password "
+                "in the syncer with each name (real secret), then run the "
+                "password export so the reference resolves in the target "
+                "Checkmk.",
+                'warning')
         return redirect(return_url)
 
 

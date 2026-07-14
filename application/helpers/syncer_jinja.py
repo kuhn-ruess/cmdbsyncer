@@ -48,6 +48,17 @@ def _cmk_cleanup_hostname(value):
     return _cleanup(value)
 
 
+def _cmk_password(name):
+    """
+    Resolve a syncer Checkmk Password name to its password-store ident
+    (``cmdbsyncer_<id>``) so rules can reference a stored secret instead of an
+    inlined one. Lazily imported to avoid circular imports.
+    """
+    from application.plugins.checkmk.rule_passwords import password_ident
+
+    return password_ident(name)
+
+
 def syncer_eval(string, default=None):
     """
     Evals given object
@@ -139,6 +150,7 @@ _GLOBALS = {
     'merge_list_of_dicts': merge_list_of_dicts,
     'cmk_cleanup_tag_id': _cmk_cleanup_tag_id,
     'cmk_cleanup_hostname': _cmk_cleanup_hostname,
+    'cmk_password': _cmk_password,
     'get_ip_network': get_ip_network,
     'get_ip4_interface': get_ip_interface,
     'get_ip_interface': get_ip_interface,
