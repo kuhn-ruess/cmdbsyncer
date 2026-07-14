@@ -13,6 +13,7 @@ from application.plugins.checkmk.rule_passwords import (
     referenced_password_names,
     password_ident,
 )
+from application.plugins.checkmk.cmk_rules import deep_compare, clean_postproccessed
 
 # The Azure special-agent value the user reported: one explicit_password
 # ('secret') plus an explicit_proxy that must be left untouched.
@@ -154,6 +155,53 @@ class TestPasswordIdent(unittest.TestCase):
     def test_missing_returns_sentinel(self):
         with self._patch_model(None):
             self.assertEqual(password_ident('nope'), 'cmdbsyncer_missing_nope')
+
+
+class TestStoredPasswordIdempotency(unittest.TestCase):
+    """
+    A stored_password reference must round-trip through the rule comparison
+    without churn, so repeated rule exports don't endlessly update the rule.
+    Values here are already resolved (post-Jinja), matching what reaches
+    ``clean_rules`` as ``rule['value']`` vs Checkmk's ``value_raw``.
+    """
+
+    def _stored(self):
+        return {
+            'user': 'svc',
+            'password': ('cmk_postprocessed', 'stored_password',
+                         ('cmdbsyncer_deadbeef', '')),
+            'port': 443,
+        }
+
+    def test_repeat_export_no_churn(self):
+        # Checkmk stored exactly what we sent → next export is a full match.
+        self.assertTrue(deep_compare(self._stored(), self._stored()))
+
+    def test_tolerates_checkmk_schema_defaults(self):
+        # Checkmk enriches the stored value with defaults we didn't set.
+        cmk = self._stored()
+        cmk['tls'] = True
+        self.assertTrue(deep_compare(self._stored(), cmk))
+
+    def test_clean_postprocessed_leaves_stored_password(self):
+        # Unlike explicit_password, a stored_password tuple is not nulled out,
+        # so the ident stays comparable across reads.
+        cleaned = clean_postproccessed(self._stored())
+        self.assertEqual(
+            cleaned['password'],
+            ('cmk_postprocessed', 'stored_password', ('cmdbsyncer_deadbeef', '')))
+
+    def test_explicit_to_stored_is_one_update_then_stable(self):
+        # First export after converting an explicit rule differs (one PUT),
+        # afterwards Checkmk holds the stored form and it matches.
+        cmk_explicit = {
+            'user': 'svc',
+            'password': ('cmk_postprocessed', 'explicit_password',
+                         ('cmdbsyncer_deadbeef', '******')),
+            'port': 443,
+        }
+        self.assertFalse(deep_compare(self._stored(), cmk_explicit))
+        self.assertTrue(deep_compare(self._stored(), self._stored()))
 
 
 if __name__ == '__main__':
