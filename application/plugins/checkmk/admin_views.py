@@ -73,6 +73,15 @@ def register_admin_views(admin):
         )
     )
     admin.add_view(
+        CheckmkTestFolderScopeView(
+            name="Limit Host Export to Folders",
+            category="Checkmk",
+            endpoint="checkmk_test_folder_scope",
+            menu_icon_type='fa',
+            menu_icon_value='fa-folder-open',
+        )
+    )
+    admin.add_view(
         CheckmkRuleView(
             CheckmkRule,
             name="Set Folder and  Attributes of Host",
@@ -97,6 +106,15 @@ def register_admin_views(admin):
             category="Checkmk",
             menu_icon_type='fa',
             menu_icon_value='fa-cogs',
+        )
+    )
+    admin.add_view(
+        CheckmkRuleProjectView(
+            CheckmkRuleProject,
+            name="Setup Rule Projects",
+            category="Checkmk",
+            menu_icon_type='fa',
+            menu_icon_value='fa-cubes',
         )
     )
     admin.add_view(
@@ -183,32 +201,6 @@ def register_admin_views(admin):
             menu_icon_value='fa-folder-open',
         )
     )
-    admin.add_sub_category(name="Export Scoping", parent_name="Checkmk")
-    # add_sub_category does not apply category_icon_classes to sub-categories,
-    # so set the menu icon directly on the created SubMenuCategory.
-    _ttp_category = admin.get_category_menu_item("Export Scoping")
-    if _ttp_category is not None:
-        _ttp_category.icon_type = 'fa'
-        _ttp_category.icon_value = 'fa-filter'
-    admin.add_view(
-        CheckmkRuleProjectView(
-            CheckmkRuleProject,
-            name="Setup Rule Projects",
-            category="Export Scoping",
-            menu_icon_type='fa',
-            menu_icon_value='fa-cubes',
-        )
-    )
-    admin.add_view(
-        CheckmkTestFolderScopeView(
-            name="Limit Host Export to Folders",
-            category="Export Scoping",
-            endpoint="checkmk_test_folder_scope",
-            menu_icon_type='fa',
-            menu_icon_value='fa-folder-open',
-        )
-    )
-
     admin.add_view(
         CheckmkInventorizeAttributesView(
             CheckmkInventorizeAttributes,
