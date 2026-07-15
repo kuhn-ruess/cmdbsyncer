@@ -1896,6 +1896,23 @@ class CheckmkDCDView(RuleModelView):
             "reference no host attributes."
         )
 
+        # Hint the {{ cmk_site }} macro in the outcome's Site field so users see
+        # they can target the exporting account's own Checkmk site (test/prod).
+        base_subdocs = dict(getattr(self, 'form_subdocuments', None) or {})
+        base_subdocs['outcomes'] = {
+            'form_subdocuments': {
+                '': {
+                    'form_widget_args': {
+                        'site': {
+                            'placeholder':
+                                '{{ cmk_site }} — the exporting account\'s site',
+                        },
+                    },
+                },
+            },
+        }
+        self.form_subdocuments = base_subdocs
+
         super().__init__(model, **kwargs)
 
     def is_accessible(self):

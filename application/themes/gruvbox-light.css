@@ -41,7 +41,8 @@ h1, h2, h3, h4, h5, h6, label, legend, .form-text, p { color: #3c3836; }
     border-color: #d5c4a1;
     box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
-.app-card, .card, fieldset.inline-field, .well, .panel {
+.app-card, .card, fieldset.inline-field, .well, .panel,
+.bg-light, .bg-white {
     background: #f9f5d7 !important;
     border-color: #d5c4a1 !important;
     color: #3c3836 !important;
