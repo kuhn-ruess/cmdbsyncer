@@ -16,6 +16,7 @@ from application.plugins.checkmk.cmk_rules import (
     render_jinja_in_value,
     normalize_cmk_folder,
     folder_in_scope,
+    folder_within_scope,
     cmk_conditions_to_outcome,
     cmk_rule_to_outcome,
     CheckmkRuleSync,
@@ -209,6 +210,43 @@ class TestCheckmkRuleSync(unittest.TestCase):
         self.assertIn('condition', result)
         self.assertIn('host_label_groups', result['condition'])
         self.assertNotIn('service_labels', result['condition'])
+
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_folder_scope_skips_out_of_scope_rule(self, mock_render):
+        # A scoped account (limit_by_folders) drops a rule whose folder is not
+        # in scope — build returns None so the caller skips it.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        self.sync.config = {'limit_by_folders': '/test'}
+        rule_params = {
+            'value_template': "{'k': 'v'}", 'folder': '/prod', 'comment': 'c',
+        }
+        result = self.sync.build_condition_and_update_rule_params(
+            rule_params, {'all': {'HOSTNAME': 'h'}})
+        self.assertIsNone(result)
+
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_folder_scope_keeps_in_scope_rule(self, mock_render):
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        self.sync.config = {'limit_by_folders': '/test'}
+        rule_params = {
+            'value_template': "{'k': 'v'}", 'folder': '/test/linux',
+            'comment': 'c',
+        }
+        result = self.sync.build_condition_and_update_rule_params(
+            rule_params, {'all': {'HOSTNAME': 'h'}})
+        self.assertIsNotNone(result)
+        self.assertEqual(result['folder'], '/test/linux')
+
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_no_folder_scope_keeps_rule(self, mock_render):
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        # config without limit_by_folders (the setUp default) — no restriction.
+        rule_params = {
+            'value_template': "{'k': 'v'}", 'folder': '/prod', 'comment': 'c',
+        }
+        result = self.sync.build_condition_and_update_rule_params(
+            rule_params, {'all': {'HOSTNAME': 'h'}})
+        self.assertIsNotNone(result)
 
     @patch('application.plugins.checkmk.cmk_rules.render_jinja')
     def test_build_condition_v22(self, mock_render):
@@ -623,6 +661,19 @@ class TestCmkFolderHelpers(unittest.TestCase):
         # /server must not match /server-old just because of a string prefix.
         self.assertFalse(
             folder_in_scope('/server-old', '/server', recursive=True))
+
+    def test_within_scope_no_limit_allows_all(self):
+        self.assertTrue(folder_within_scope('/anything', ''))
+        self.assertTrue(folder_within_scope('/anything', None))
+
+    def test_within_scope_recursive_and_leading_slash_tolerant(self):
+        # scope typed without a leading slash still matches, recursively.
+        self.assertTrue(folder_within_scope('/test/linux', 'test'))
+        self.assertTrue(folder_within_scope('/test', '/test,/other'))
+
+    def test_within_scope_out_of_scope_folder(self):
+        self.assertFalse(folder_within_scope('/prod', '/test'))
+        self.assertFalse(folder_within_scope('/', '/test'))
 
 
 class TestCmkConditionReverse(unittest.TestCase):
