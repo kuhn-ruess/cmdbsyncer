@@ -691,9 +691,10 @@ class CheckmkDCDRule(db.Document):
     last_match = db.BooleanField(default=False)
 
     # Name of the CheckmkRuleProject this DCD rule belongs to (or empty).
-    # Referenced by name to match CheckmkRuleMngmt.project. For DCD rules this
-    # is purely organisational — it groups the rule under a project for the
-    # overview and does not change how the rule is exported.
+    # Referenced by name to match CheckmkRuleMngmt.project. A DCD rule assigned
+    # to a project follows that project's account filter (limit_by_accounts) on
+    # export, just like a Setup rule — it is only exported to the accounts the
+    # project allows. A rule without a project stays global.
     project = db.StringField()
 
     enabled = db.BooleanField()

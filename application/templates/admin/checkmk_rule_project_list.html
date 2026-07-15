@@ -1,0 +1,12 @@
+{% extends 'admin/model/list.html' %}
+
+{# Adds an "Import project from JSON" button above the project list — the
+   import route (import_view) otherwise has no entry point in the UI. #}
+{% block body %}
+<div class="mb-2">
+    <a href="{{ url_for('.import_view') }}" class="btn btn-sm btn-outline-primary">
+        <i class="fa fa-upload"></i> Import project from JSON
+    </a>
+</div>
+{{ super() }}
+{% endblock %}

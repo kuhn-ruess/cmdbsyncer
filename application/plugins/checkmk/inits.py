@@ -540,7 +540,13 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
             Name overwrite
             """
         actions = ExportDCD(account)
-        actions.rules = CheckmkDCDRule.objects(enabled=True)
+        # Honour each project's account filter (limit_by_accounts): a DCD rule
+        # assigned to a project is only exported to the accounts that project
+        # allows. Rules without a project stay global (exported everywhere),
+        # matching the Setup-rule export.
+        allowed_projects = [None, ''] + projects_for_account(account)
+        actions.rules = CheckmkDCDRule.objects(
+            enabled=True, project__in=allowed_projects)
 
         if not debug_rules:
             syncer = CheckmkDCDRuleSync(account)

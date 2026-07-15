@@ -824,6 +824,30 @@ def _render_project_accounts(_view, _context, model, _name):
     return Markup('<em>all accounts</em>')
 
 
+def _import_project_rules(model, rule_dicts, project_name):
+    """
+    (Re)create rules of one model from exported JSON dicts and assign them to
+    ``project_name``. Existing rules with the same name are overwritten. Shared
+    by the project JSON import for both Setup rules and DCD rules. Returns the
+    number of rules imported.
+    """
+    count = 0
+    for rule_data in rule_dicts or []:
+        rule_data = dict(rule_data)
+        rule_data.pop('_id', None)
+        rule_name = rule_data.get('name')
+        if not rule_name:
+            continue
+        existing = model.objects(name=rule_name).first()
+        rule = model.from_json(json.dumps(rule_data))
+        if existing:
+            rule.id = existing.id
+        rule.project = project_name
+        rule.save()
+        count += 1
+    return count
+
+
 class CheckmkRuleProjectView(DefaultModelView):
     """
     Rule Projects group Checkmk Setup Rules and limit where they are exported.
@@ -833,6 +857,8 @@ class CheckmkRuleProjectView(DefaultModelView):
     """
     # Adds a direct link from the edit form to the Setup Rules of this project.
     edit_template = 'admin/checkmk_rule_project_edit.html'
+    # Adds an "Import project from JSON" button to the list toolbar.
+    list_template = 'admin/checkmk_rule_project_list.html'
     column_list = ('name', 'limit_by_accounts', 'rule_count')
     column_default_sort = 'name'
     column_labels = {
@@ -894,9 +920,12 @@ class CheckmkRuleProjectView(DefaultModelView):
         payload = []
         for project in CheckmkRuleProject.objects(id__in=ids):
             project_rules = CheckmkRuleMngmt.objects(project=project.name)
+            project_dcd_rules = CheckmkDCDRule.objects(project=project.name)
             payload.append({
                 'project': json.loads(project.to_json()),
                 'rules': [json.loads(rule.to_json()) for rule in project_rules],
+                'dcd_rules': [json.loads(rule.to_json())
+                              for rule in project_dcd_rules],
             })
         body = json.dumps(payload, indent=2, default=str)
         return Response(
@@ -926,7 +955,7 @@ class CheckmkRuleProjectView(DefaultModelView):
         if isinstance(data, dict):
             data = [data]
 
-        projects, imported_rules = 0, 0
+        projects, imported_rules, imported_dcd_rules = 0, 0, 0
         for block in data:
             proj_data = dict((block or {}).get('project') or {})
             proj_data.pop('_id', None)
@@ -946,22 +975,13 @@ class CheckmkRuleProjectView(DefaultModelView):
             project.save()
             projects += 1
 
-            for rule_data in (block.get('rules') or []):
-                rule_data = dict(rule_data)
-                rule_data.pop('_id', None)
-                rule_name = rule_data.get('name')
-                if not rule_name:
-                    continue
-                existing = CheckmkRuleMngmt.objects(name=rule_name).first()
-                rule = CheckmkRuleMngmt.from_json(json.dumps(rule_data))
-                if existing:
-                    rule.id = existing.id
-                rule.project = name
-                rule.save()
-                imported_rules += 1
+            imported_rules += _import_project_rules(
+                CheckmkRuleMngmt, block.get('rules'), name)
+            imported_dcd_rules += _import_project_rules(
+                CheckmkDCDRule, block.get('dcd_rules'), name)
 
-        flash(f'Imported {projects} project(s) and {imported_rules} rule(s)',
-              'success')
+        flash(f'Imported {projects} project(s), {imported_rules} rule(s) and '
+              f'{imported_dcd_rules} DCD rule(s)', 'success')
         return redirect(return_url)
 
     @action('import_from_cmk', 'Import Rules from Checkmk Folder', None)
@@ -1852,9 +1872,10 @@ class CheckmkDCDView(RuleModelView):
 
         self.form_descriptions = dict(getattr(self, 'form_descriptions', {}) or {})
         self.form_descriptions['project'] = (
-            "Assign this DCD rule to a Rule Project so it shows up on the "
-            "project overview. For DCD rules this is only a grouping label — "
-            "it does not change how or where the rule is exported."
+            "Assign this DCD rule to a Rule Project. It then shows up on the "
+            "project overview and follows the project's account filter — the "
+            "rule is exported only to the accounts the project allows (a "
+            "project without an account filter still exports everywhere)."
         )
 
         super().__init__(model, **kwargs)

@@ -169,8 +169,8 @@
     {% if dcd_rules.count() == 0 %}
     <div class="alert alert-info">
         No DCD rules assigned to this project yet. Open a DCD rule and set its
-        <strong>Project</strong> to <em>{{ project.name }}</em> to group it here.
-        This is for overview only — it does not change how the DCD rule is exported.
+        <strong>Project</strong> to <em>{{ project.name }}</em> to add it here.
+        Assigned DCD rules also follow this project's account filter on export.
     </div>
     {% else %}
     {% for rule in dcd_rules %}
