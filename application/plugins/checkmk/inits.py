@@ -545,13 +545,19 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
         # allows. Rules without a project stay global (exported everywhere),
         # matching the Setup-rule export.
         allowed_projects = [None, ''] + projects_for_account(account)
+        # Static rules carry no host data — they are rendered once (see
+        # CheckmkDCDRuleSync.export_rules) instead of per host, so they are kept
+        # out of the per-host engine here.
         actions.rules = CheckmkDCDRule.objects(
-            enabled=True, project__in=allowed_projects)
+            enabled=True, static_rule__ne=True, project__in=allowed_projects)
+        static_rules = CheckmkDCDRule.objects(
+            enabled=True, static_rule=True, project__in=allowed_projects)
 
         if not debug_rules:
             syncer = CheckmkDCDRuleSync(account)
             syncer.debug = debug
             syncer.actions = actions
+            syncer.static_rules = static_rules
             syncer.rewrite = rules['rewrite']
             syncer.filter = rules['filter']
             syncer.name = 'Checkmk: Export DCD Rules'
@@ -560,6 +566,7 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
         else:
             syncer = CheckmkDCDRuleSync(False)
             syncer.actions = actions
+            syncer.static_rules = static_rules
             syncer.rewrite = rules['rewrite']
             syncer.filter = rules['filter']
             syncer.debug_rules(debug_rules, "Checkmk")

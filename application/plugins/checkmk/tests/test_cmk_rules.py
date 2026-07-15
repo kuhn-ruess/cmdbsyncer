@@ -975,9 +975,12 @@ class TestExportDcdRulesProjectFilter(unittest.TestCase):
                 patch.object(inits, 'CheckmkDCDRule') as mock_dcd:
             mock_dcd.objects.return_value = ['rule']
             inits.export_dcd_rules('acc_a')
-        # Global (no project) rules plus the projects this account is allowed.
-        mock_dcd.objects.assert_called_once_with(
-            enabled=True, project__in=[None, '', 'proj_a'])
+        # Global (no project) rules plus the projects this account is allowed,
+        # split into the per-host (non-static) and static-rule querysets.
+        mock_dcd.objects.assert_any_call(
+            enabled=True, static_rule__ne=True, project__in=[None, '', 'proj_a'])
+        mock_dcd.objects.assert_any_call(
+            enabled=True, static_rule=True, project__in=[None, '', 'proj_a'])
 
 
 if __name__ == '__main__':

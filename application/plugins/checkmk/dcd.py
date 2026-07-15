@@ -17,12 +17,26 @@ class CheckmkDCDRuleSync(CMK2):
     """
     console = None
 
+    # Host-independent DCD rules, rendered once instead of per host. Injected
+    # by inits.export_dcd_rules; defaults to empty so other callers still work.
+    static_rules = []
+
     def __init__(self, account=False):
         super().__init__(account)
         # Per-instance run state. Class-level defaults would accumulate
         # across accounts/runs in the same process and leak stale rules
         # into later exports.
         self.all_rules = []
+
+    def _account_site(self):
+        """
+        Checkmk site name of the exporting account — the last path segment of
+        its address (which ends in ``/<site>``). Exposed to DCD rules as
+        ``{{ cmk_site }}`` so one rule can target the correct site on each
+        Checkmk (e.g. a test and a prod instance with different site names).
+        """
+        address = (self.config.get('address') or '').rstrip('/')
+        return address.rsplit('/', 1)[-1] if '/' in address else ''
 
     def does_rule_exist(self, rule_id):
         """
@@ -97,24 +111,33 @@ class CheckmkDCDRuleSync(CMK2):
             exclude_time_ranges = self.build_timeranges(rule)
 
 
+            # Checkmk's DCD REST API nests the connector settings under a
+            # "connector" object (all three supported versions). Checkmk 2.4
+            # dropped the "activate_changes_interval" and "exclude_time_ranges"
+            # connector fields — only 2.3 and older still accept them.
+            connector = {
+                  "connector_type": render_jinja(rule['connector_type'], mode='raise',**attributes),
+                  "restrict_source_hosts": restricted_hosts,
+                  "interval": render_jinja(rule['interval'], mode='raise', **attributes),
+                  "creation_rules": creation_rules,
+                  "discover_on_creation": rule['discover_on_creation'],
+                  "no_deletion_time_after_init": render_jinja(rule['no_deletion_time_after_init'],\
+                                                                                    **attributes),
+                  "max_cache_age": render_jinja(rule['max_cache_age'], **attributes),
+                  "validity_period": render_jinja(rule['validity_period'], **attributes),
+            }
+            if not self.version_at_least(2, 4):
+                connector["activate_changes_interval"] = \
+                        render_jinja(rule['activate_changes_interval'], **attributes)
+                connector["exclude_time_ranges"] = exclude_time_ranges
+
             payload =  {
                   "dcd_id": render_jinja(rule['dcd_id'], mode='raise', **attributes),
                   "title": render_jinja(rule['title'], mode='raise', **attributes),
                   "comment": render_jinja(rule['comment'], mode='raise',**attributes),
                   "disabled": rule['disabled'],
                   "site": render_jinja(rule['site'], mode='raise',**attributes),
-                  "connector_type": render_jinja(rule['connector_type'], mode='raise',**attributes),
-                  "restrict_source_hosts": restricted_hosts,
-                  "interval": render_jinja(rule['interval'], mode='raise', **attributes),
-                  "creation_rules": creation_rules,
-                  "activate_changes_interval": render_jinja(rule['activate_changes_interval'], \
-                                                                                    **attributes),
-                  "discover_on_creation": rule['discover_on_creation'],
-                  "exclude_time_ranges": exclude_time_ranges,
-                  "no_deletion_time_after_init": render_jinja(rule['no_deletion_time_after_init'],\
-                                                                                    **attributes),
-                  "max_cache_age": render_jinja(rule['max_cache_age'], **attributes),
-                  "validity_period": render_jinja(rule['validity_period'], **attributes),
+                  "connector": connector,
             }
             if rule['documentation_url']:
                 payload['documentation_url']= rule['documentation_url']
@@ -151,6 +174,10 @@ class CheckmkDCDRuleSync(CMK2):
         Export DCD Rules
         """
 
+        # The exporting account's Checkmk site, exposed to every DCD rule as
+        # {{ cmk_site }} so a single rule targets the right site per Checkmk —
+        # e.g. a test and a prod instance with different site names.
+        site = self._account_site()
         db_objects = Host.active_non_template()
         total = db_objects.count()
         with Progress(SpinnerColumn(),
@@ -168,12 +195,23 @@ class CheckmkDCDRuleSync(CMK2):
                     logger.debug(' -- Skiped no attributes')
                     progress.advance(task1)
                     continue
+                attributes['all']['cmk_site'] = site
                 # pylint: disable-next=no-member
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:
                     logger.debug(' -- Got Actions')
                     self.calculate_rules_of_host(db_host.hostname, host_actions, attributes['all'])
                 progress.advance(task1)
+
+            # Static rules carry no host data: render each once against an empty
+            # host context instead of per host (their match conditions are
+            # ignored — a static rule is always emitted).
+            for rule in self.static_rules:
+                host_actions = {'dcd': [dict(outcome.to_mongo())
+                                        for outcome in rule.outcomes]}
+                self.calculate_rules_of_host(
+                    f"static:{rule.name}", host_actions, {'cmk_site': site})
+
             task2 = progress.add_task("Send Rules to Checkmk", total=len(self.all_rules))
             count_new = 0
             count_existing = 0

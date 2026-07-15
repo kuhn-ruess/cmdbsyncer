@@ -171,6 +171,48 @@ class TestCheckmkDCDRuleSync(unittest.TestCase):
         result = self.sync.build_rule_payload(rule, {})
         self.assertEqual(result, {})
 
+    def _payload_rule(self):
+        return {
+            'dcd_id': 'dcd1', 'title': 'T', 'comment': '', 'disabled': False,
+            'site': 'site1', 'connector_type': 'piggyback',
+            'restricted_source_hosts': [], 'interval': '60',
+            'creation_rules': [], 'activate_changes_interval': '300',
+            'discover_on_creation': True, 'exclude_time_ranges': [],
+            'no_deletion_time_after_init': '120', 'max_cache_age': '3600',
+            'validity_period': '60', 'documentation_url': '',
+        }
+
+    @patch('application.plugins.checkmk.dcd.render_jinja')
+    def test_payload_nests_connector_on_24plus(self, mock_render):
+        # Checkmk 2.4+ wants the connector settings nested under "connector"
+        # and no longer accepts the two 2.3-only fields.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        self.sync.checkmk_version = '2.4.0p19.cee'
+        result = self.sync.build_rule_payload(self._payload_rule(), {})
+        self.assertIn('connector', result)
+        self.assertNotIn('connector_type', result)  # not at top level
+        conn = result['connector']
+        self.assertEqual(conn['connector_type'], 'piggyback')
+        self.assertIn('interval', conn)
+        self.assertNotIn('activate_changes_interval', conn)
+        self.assertNotIn('exclude_time_ranges', conn)
+
+    @patch('application.plugins.checkmk.dcd.render_jinja')
+    def test_payload_connector_keeps_23_fields(self, mock_render):
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        self.sync.checkmk_version = '2.3.0p48.cce'
+        conn = self.sync.build_rule_payload(self._payload_rule(), {})['connector']
+        self.assertIn('activate_changes_interval', conn)
+        self.assertIn('exclude_time_ranges', conn)
+
+    def test_account_site(self):
+        self.sync.config = {'address': 'http://host:8080/cmk/'}
+        self.assertEqual(self.sync._account_site(), 'cmk')
+        self.sync.config = {'address': 'https://mon.example.com/prod'}
+        self.assertEqual(self.sync._account_site(), 'prod')
+        self.sync.config = {'address': ''}
+        self.assertEqual(self.sync._account_site(), '')
+
     def test_create_rule_in_cmk(self):
         with patch.object(self.sync, 'request') as mock_req:
             mock_req.return_value = (None, {})

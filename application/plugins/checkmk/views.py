@@ -1854,7 +1854,7 @@ class CheckmkDCDView(RuleModelView):
             rules.Field('documentation'),
             rules.Field('project'),
             div_open,
-            rules.NestedRule(('enabled', 'last_match')),
+            rules.NestedRule(('enabled', 'last_match', 'static_rule')),
             div_close,
             rules.Field('sort_field'),
         ],
@@ -1887,6 +1887,13 @@ class CheckmkDCDView(RuleModelView):
             "project overview and follows the project's account filter — the "
             "rule is exported only to the accounts the project allows (a "
             "project without an account filter still exports everywhere)."
+        )
+        self.form_descriptions['static_rule'] = (
+            "Host-independent rule: render it once and always create it, "
+            "ignoring the match conditions. A DCD connection rarely depends on "
+            "host data, so this skips the per-host calculation and is much "
+            "faster on large inventories. Use only when the outcome templates "
+            "reference no host attributes."
         )
 
         super().__init__(model, **kwargs)

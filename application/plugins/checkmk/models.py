@@ -690,6 +690,12 @@ class CheckmkDCDRule(db.Document):
     render_cmk_dcd_rule = db.StringField()
     last_match = db.BooleanField(default=False)
 
+    # Host-independent DCD rule: a DCD connection rarely depends on host data, so
+    # a static rule is rendered once (against an empty host context, ignoring the
+    # match conditions) instead of once per host and de-duplicated — the same
+    # optimisation CheckmkRuleMngmt.static_rule provides for Setup rules.
+    static_rule = db.BooleanField(default=False)
+
     # Name of the CheckmkRuleProject this DCD rule belongs to (or empty).
     # Referenced by name to match CheckmkRuleMngmt.project. A DCD rule assigned
     # to a project follows that project's account filter (limit_by_accounts) on
