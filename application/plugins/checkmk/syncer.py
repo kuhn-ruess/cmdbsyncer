@@ -9,7 +9,7 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 from application import app, logger, log, init_db
 from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
-from application.plugins.checkmk.cmk_rules import folder_in_scope
+from application.plugins.checkmk.cmk_rules import folder_within_scope
 from application.modules.debug import ColorCodes as CC
 
 
@@ -349,25 +349,8 @@ class SyncCMK2(CMK2):
         Returns:
             bool: True if the host should be exported to this account.
         """
-        limits = self.config.get('limit_by_folders')
-        if not limits:
-            return True
-        # A folder entered without a leading slash (e.g. "test/linux" instead of
-        # "/test/linux") would otherwise never match the slash-prefixed folder a
-        # rule produces — normalise it so the scope works regardless of how it
-        # was typed, on this page or directly in the account's custom fields.
-        allowed = []
-        for entry in limits.split(','):
-            entry = entry.strip()
-            if not entry:
-                continue
-            if not entry.startswith('/'):
-                entry = '/' + entry
-            allowed.append(entry)
-        if not allowed:
-            return True
         folder = next_actions.get('move_folder') or '/'
-        return any(folder_in_scope(folder, scope, recursive=True) for scope in allowed)
+        return folder_within_scope(folder, self.config.get('limit_by_folders'))
 
     def handle_clusters(self):
         """

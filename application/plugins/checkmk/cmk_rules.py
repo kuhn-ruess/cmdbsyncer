@@ -83,6 +83,31 @@ def folder_in_scope(rule_folder, target_folder, recursive=False):
     return rule_folder.startswith(target_folder + '/')
 
 
+def folder_within_scope(folder, limits):
+    """
+    True when ``folder`` falls within an account's ``limit_by_folders`` scope.
+
+    ``limits`` is the raw comma-separated ``limit_by_folders`` value off the
+    account. An empty or missing scope means no restriction (always True).
+    Folders typed without a leading slash are tolerated, and the match is
+    recursive so selecting ``/test`` also covers ``/test/linux``. Shared by the
+    host export (which folder a host lands in) and the rule export (which folder
+    a Setup rule is placed in) so both honour the same scope.
+    """
+    allowed = []
+    for entry in (limits or '').split(','):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if not entry.startswith('/'):
+            entry = '/' + entry
+        allowed.append(entry)
+    if not allowed:
+        return True
+    folder = folder or '/'
+    return any(folder_in_scope(folder, scope, recursive=True) for scope in allowed)
+
+
 def iter_rule_folders():
     """
     Collect the literal folders that the configured rules can place objects
@@ -758,6 +783,12 @@ class CheckmkRuleSync(CMK2):
         value = render_jinja(rule_params['value_template'], **context)
         rule_params['folder'] = normalize_folder(
             render_jinja(rule_params['folder'], **context))
+        # Respect the account's folder scope (limit_by_folders): a scoped
+        # account only receives rules whose target folder is in scope, just
+        # like the host export only pushes hosts of those folders.
+        if not folder_within_scope(
+                rule_params['folder'], self.config.get('limit_by_folders')):
+            return None
         rule_params['value'] = value
         del rule_params['value_template']
         rule_params['optimize'] = False
