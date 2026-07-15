@@ -223,9 +223,11 @@ class CheckmkDowntimeSync(CMK2):
             print(f"\n{cc.WARNING} *{cc.ENDC} Downtime failed: "\
                   f"{error}")
 
-    def do_hosts_downtimes(self, hostname, host_actions, attributes):
+    def do_hosts_downtimes(self, hostname, host_actions, attributes, current_downtimes):
         """
-        Calls for one Hosts Downtime
+        Set the configured downtimes for one host that are not already
+        present in Checkmk. ``current_downtimes`` is this host's slice of the
+        downtimes ``run()`` read once up front in a single bulk query.
         """
         try:
             configured_downtimes = []
@@ -234,9 +236,6 @@ class CheckmkDowntimeSync(CMK2):
                     configured_downtimes += \
                             list(self.calculate_configured_downtimes(rule, attributes['all']))
 
-            current_downtimes = list(
-                        self.get_current_cmk_downtimes(hostname)
-                    )
             for downtime in configured_downtimes:
                 if downtime not in current_downtimes:
                     self.set_downtime(hostname, downtime)
@@ -248,6 +247,13 @@ class CheckmkDowntimeSync(CMK2):
         """
         Export Downtimes
         """
+        # Read every current host downtime in a single bulk query up front
+        # instead of one query per host inside the loop. On large inventories
+        # that turns hundreds of serial livestatus round-trips (one per host
+        # matching a downtime rule) into a single call — the previous
+        # per-host reads were what made the export appear to hang.
+        current_by_host = self.get_all_cmk_downtimes()
+
         # Collect Rules
         total = Host.active_non_template().count()
         with Progress(SpinnerColumn(),
@@ -270,7 +276,8 @@ class CheckmkDowntimeSync(CMK2):
                 if not host_actions:
                     progress.advance(task1)
                     continue
-                self.do_hosts_downtimes(hostname, host_actions, attributes)
+                self.do_hosts_downtimes(hostname, host_actions, attributes,
+                                        current_by_host.get(hostname, []))
                 progress.advance(task1)
 
     def run_async(self):
@@ -308,25 +315,32 @@ class CheckmkDowntimeSync(CMK2):
         #        pool.close()
         #        pool.join()
 
-    def get_current_cmk_downtimes(self, hostname):
+    def get_all_cmk_downtimes(self):
         """
-        Read Downtimes from Checkmk
-        """
+        Read all host downtimes from Checkmk in one query, grouped by
+        hostname (``{hostname: [downtime, ...]}``).
 
-        url = f"domain-types/downtime/collections/all?"\
-              f"host_name={hostname}&downtime_type=host"
+        Used by ``run()`` so the whole export does a single downtime read
+        instead of one per host — the per-host reads were the reason the
+        export appeared to hang on large inventories.
+        """
+        url = "domain-types/downtime/collections/all?downtime_type=host"
         response = self.request(url, method="GET")
         # request() returns an empty ``{}`` body on error responses
         # (404, non-200, no content). Guard the lookup so a failed
         # downtime read yields "no current downtimes" instead of a bare
         # KeyError that would escape as a detail-less run failure.
         downtimes = response[0].get('value', []) if response[0] else []
+        by_host = {}
         for downtime in downtimes:
-            yield {
-                "start" : datetime.datetime.fromisoformat(
-                        downtime["extensions"]["start_time"]),
-                "end" : datetime.datetime.fromisoformat(
-                        downtime["extensions"]["end_time"]),
-                "comment" : downtime["extensions"]["comment"],
-                "duration" : downtime["extensions"].get("duration", False),
-            }
+            extensions = downtime.get('extensions', {})
+            hostname = extensions.get('host_name')
+            if not hostname:
+                continue
+            by_host.setdefault(hostname, []).append({
+                "start": datetime.datetime.fromisoformat(extensions["start_time"]),
+                "end": datetime.datetime.fromisoformat(extensions["end_time"]),
+                "comment": extensions["comment"],
+                "duration": extensions.get("duration", False),
+            })
+        return by_host

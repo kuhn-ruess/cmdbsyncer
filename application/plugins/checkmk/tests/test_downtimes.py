@@ -115,33 +115,65 @@ class TestCheckMkDowntimeSync(unittest.TestCase):
 
         self.assertEqual(self.sync.log_details[0][0], 'error')
 
-    def test_get_current_cmk_downtimes(self):
-        response = ({
-            'value': [
-                {
-                    'extensions': {
-                        'start_time': '2025-01-01T10:00:00+00:00',
-                        'end_time': '2025-01-01T12:00:00+00:00',
-                        'comment': 'test',
-                        'duration': 0,
-                    }
-                }
-            ]
-        }, {})
-
-        with patch.object(self.sync, 'request', return_value=response):
-            downtimes = list(self.sync.get_current_cmk_downtimes('host1'))
-
-        self.assertEqual(len(downtimes), 1)
-        self.assertEqual(downtimes[0]['comment'], 'test')
-
     def test_do_hosts_downtimes_exception_logged(self):
         with patch.object(self.sync, 'calculate_configured_downtimes',
                           side_effect=Exception("boom")), \
              patch('builtins.print'):
-            self.sync.do_hosts_downtimes('host1', {'rule': [{}]}, {'all': {}})
+            self.sync.do_hosts_downtimes('host1', {'rule': [{}]}, {'all': {}}, [])
 
         self.assertEqual(self.sync.log_details[0][0], 'error')
+
+    def test_get_all_cmk_downtimes_groups_by_host_in_one_request(self):
+        # Bulk read returns downtimes for several hosts in a single call;
+        # they must come back grouped by hostname (this is what lets run()
+        # replace the per-host reads that made the export hang).
+        response = ({
+            'value': [
+                {'extensions': {'host_name': 'h1',
+                                'start_time': '2025-01-01T10:00:00+00:00',
+                                'end_time': '2025-01-01T12:00:00+00:00',
+                                'comment': 'a', 'duration': 0}},
+                {'extensions': {'host_name': 'h1',
+                                'start_time': '2025-01-02T10:00:00+00:00',
+                                'end_time': '2025-01-02T12:00:00+00:00',
+                                'comment': 'b', 'duration': 0}},
+                {'extensions': {'host_name': 'h2',
+                                'start_time': '2025-01-03T10:00:00+00:00',
+                                'end_time': '2025-01-03T12:00:00+00:00',
+                                'comment': 'c', 'duration': 0}},
+                {'extensions': {}},  # no host_name -> skipped, no crash
+            ]
+        }, {})
+
+        with patch.object(self.sync, 'request', return_value=response) as mock_req:
+            by_host = self.sync.get_all_cmk_downtimes()
+
+        mock_req.assert_called_once()
+        self.assertEqual(sorted(by_host), ['h1', 'h2'])
+        self.assertEqual(len(by_host['h1']), 2)
+        self.assertEqual(len(by_host['h2']), 1)
+        self.assertIsInstance(by_host['h1'][0]['start'], datetime.datetime)
+
+    def test_do_hosts_downtimes_uses_prefetched_and_skips_existing(self):
+        existing = {
+            'comment': 'exists',
+            'start': datetime.datetime(2025, 1, 1, 10, 0, tzinfo=datetime.timezone.utc),
+            'end': datetime.datetime(2025, 1, 1, 12, 0, tzinfo=datetime.timezone.utc),
+            'duration': False,
+        }
+        fresh = dict(existing, comment='new',
+                     start=datetime.datetime(2025, 2, 1, 10, 0, tzinfo=datetime.timezone.utc),
+                     end=datetime.datetime(2025, 2, 1, 12, 0, tzinfo=datetime.timezone.utc))
+
+        with patch.object(self.sync, 'calculate_configured_downtimes',
+                          return_value=[existing, fresh]), \
+             patch.object(self.sync, 'set_downtime') as mock_set, \
+             patch('builtins.print'):
+            # only the downtime that is not already present gets created
+            self.sync.do_hosts_downtimes('h1', {'rule': [{}]}, {'all': {}},
+                                         [existing])
+
+        mock_set.assert_called_once_with('h1', fresh)
 
 
 if __name__ == '__main__':
