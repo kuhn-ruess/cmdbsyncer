@@ -807,8 +807,17 @@ class CheckmkMngmtRuleView(RuleModelView):
 
 
 def _render_project_rule_count(_view, _context, model, _name):
-    """List-column formatter: how many rules are assigned to this project."""
-    return CheckmkRuleMngmt.objects(project=model.name).count()
+    """Assigned Setup-rule count, linking to the filtered Setup-rule list."""
+    count = CheckmkRuleMngmt.objects(project=model.name).count()
+    url = url_for('checkmkrulemngmt.index_view', flt0_1=model.name)
+    return Markup(f'<a href="{escape(url)}">{count}</a>')
+
+
+def _render_project_dcd_count(_view, _context, model, _name):
+    """Assigned DCD-rule count, linking to the filtered DCD-rule list."""
+    count = CheckmkDCDRule.objects(project=model.name).count()
+    url = url_for('checkmkdcdrule.index_view', flt0_0=model.name)
+    return Markup(f'<a href="{escape(url)}">{count}</a>')
 
 
 def _render_project_name_link(_view, _context, model, _name):
@@ -859,15 +868,17 @@ class CheckmkRuleProjectView(DefaultModelView):
     edit_template = 'admin/checkmk_rule_project_edit.html'
     # Adds an "Import project from JSON" button to the list toolbar.
     list_template = 'admin/checkmk_rule_project_list.html'
-    column_list = ('name', 'limit_by_accounts', 'rule_count')
+    column_list = ('name', 'limit_by_accounts', 'rule_count', 'dcd_rule_count')
     column_default_sort = 'name'
     column_labels = {
         'rule_count': 'Rules',
+        'dcd_rule_count': 'DCD Rules',
         'limit_by_accounts': 'Exported to Accounts',
     }
     column_formatters = {
         'name': _render_project_name_link,
         'rule_count': _render_project_rule_count,
+        'dcd_rule_count': _render_project_dcd_count,
         'limit_by_accounts': _render_project_accounts,
     }
     column_filters = (
