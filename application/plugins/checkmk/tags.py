@@ -334,11 +334,7 @@ class CheckmkTagSync(CMK2):
         it from ``ident`` to ``id`` in 2.4, so 2.4+ use ``id`` and 2.3 and older
         use ``ident`` (verified against 2.3.0p48, 2.4.0p19 and 2.5.0p8).
         """
-        try:
-            release = tuple(int(p) for p in self.checkmk_version.split('.')[:2])
-        except (AttributeError, ValueError):
-            return 'id'
-        return 'id' if release >= (2, 4) else 'ident'
+        return 'id' if self.version_at_least(2, 4) else 'ident'
 
     def sync_to_checkmk(self, groups, tag_group_list):
         """

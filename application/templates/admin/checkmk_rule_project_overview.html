@@ -177,6 +177,9 @@
     <div class="card app-card mb-2">
         <div class="card-header d-flex align-items-center" style="gap:8px;flex-wrap:wrap;">
             <strong>{{ rule.name }}</strong>
+            {% if rule.static_rule %}
+            <span class="badge badge-secondary" title="Host-independent, rendered once">static</span>
+            {% endif %}
             {% if rule.enabled %}
             <span class="badge badge-success">enabled</span>
             {% else %}

@@ -69,6 +69,21 @@ class CMK2(Plugin):
         self._init_complete = True
 
 
+    def version_at_least(self, major, minor):
+        """
+        True when the probed Checkmk version is at least ``major.minor``.
+
+        Central helper for version switches in the export code (the Checkmk REST
+        API changes field shapes between releases). ``checkmk_version`` looks
+        like ``2.4.0p19.cee`` or ``2.5.0.pro``; an unreadable value is treated
+        as the newest release so new installs get the current behaviour.
+        """
+        try:
+            release = tuple(int(p) for p in str(self.checkmk_version).split('.')[:2])
+        except (AttributeError, ValueError, TypeError):
+            return True
+        return release >= (major, minor)
+
     def _probe_checkmk_version(self):
         """
         Ask Checkmk for its version and return the bare version string.
