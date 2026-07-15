@@ -74,6 +74,7 @@ h1, h2, h3, h4, h5, h6, label, legend, .form-text, p { color: #f8f8f2; }
 .icon-ok-circle, .fa-check, .fa-ok { color: #50fa7b !important; }
 
 .app-card, .card, fieldset.inline-field, .well, .panel,
+.bg-light, .bg-white,
 .rule-section, .rule-section-body {
     background-color: #343746 !important;
     border-color: #44475a !important;
