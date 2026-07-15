@@ -111,8 +111,9 @@ MODERN_FORM_CSS = '''
 [id^="rewrite_attributes-"] > a.btn,
 [id^="custom_fields-"] > a.btn,
 [id^="plugin_settings-"] > a.btn {
-    background: #f8f9fa !important; border: 1px solid #ced4da !important;
-    color: #2c3e50 !important; font-size: 0.88rem !important;
+    background: var(--surface-subtle, #f8f9fa) !important;
+    border: 1px solid var(--surface-border, #ced4da) !important;
+    color: var(--surface-text, #2c3e50) !important; font-size: 0.88rem !important;
     padding: 4px 12px !important;
 }
 </style>
