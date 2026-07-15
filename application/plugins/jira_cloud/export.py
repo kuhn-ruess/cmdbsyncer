@@ -324,6 +324,14 @@ class JiraCloudExport(JiraCloud):
                 if not changed:
                     counts[type_id]["unchanged"] += 1
                     continue
+                if self.debug:
+                    id_to_name = {i: n for n, i in name_to_id.items()}
+                    for attr_id, new_value in changed.items():
+                        old_value = current.get(attr_id, '<unset>')
+                        console(f"{cc.OKBLUE}     · {cc.ENDC}"
+                                f"{db_host.hostname} [type {type_id}] "
+                                f"{id_to_name.get(attr_id, attr_id)}: "
+                                f"{old_value!r} -> {new_value!r}")
                 error = self._put_object(obj_id, type_id, changed)
                 if error:
                     console(f"{cc.FAIL}   ✗ {cc.ENDC}"
