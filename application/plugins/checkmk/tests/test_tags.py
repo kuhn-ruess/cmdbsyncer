@@ -236,5 +236,46 @@ class TestCheckmkTagSync(unittest.TestCase):
         self.assertEqual(result['grp1'], ('pre_id', 'Pre Title'))
 
 
+class TestTagIdFieldSwitch(unittest.TestCase):
+    """The host tag group id field switch (ident vs id) by Checkmk version."""
+
+    def setUp(self):
+        def mock_init(self_param, account=False):
+            base_mock_init(self_param, groups={})
+
+        self.init_patcher = patch(
+            'application.plugins.checkmk.tags.CMK2.__init__', mock_init)
+        self.init_patcher.start()
+        self.sync = CheckmkTagSync()
+
+    def tearDown(self):
+        self.init_patcher.stop()
+
+    def test_tag_id_field_by_version(self):
+        cases = {
+            '2.2.0p1': 'ident',
+            '2.3.0p48.cre': 'ident',
+            '2.4.0p19.cee': 'id',
+            '2.5.0p8.pro': 'id',
+            '3.0.0': 'id',
+            '': 'id',            # unknown -> assume modern
+            'garbage': 'id',
+        }
+        for version, expected in cases.items():
+            self.sync.checkmk_version = version
+            self.assertEqual(self.sync._tag_id_field(), expected,
+                             f"version {version!r}")
+
+    def test_prepare_tags_uses_ident_on_23(self):
+        self.sync.checkmk_version = '2.3.0p48.cre'
+        tags = self.sync.prepare_tags_for_checkmk([('v1', 'Val1')])
+        self.assertEqual(tags, [{'ident': 'v1', 'title': 'Val1'}])
+
+    def test_prepare_tags_uses_id_on_24plus(self):
+        self.sync.checkmk_version = '2.4.0p19.cee'
+        tags = self.sync.prepare_tags_for_checkmk([('v1', 'Val1')])
+        self.assertEqual(tags, [{'id': 'v1', 'title': 'Val1'}])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

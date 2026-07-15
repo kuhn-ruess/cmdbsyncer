@@ -310,6 +310,7 @@ class CheckmkTagSync(CMK2):
         config_tags.sort(key=lambda tup: tup[1])
         if len(config_tags) > 1:
             config_tags.insert(0, (None, "Not set"))
+        id_field = self._tag_id_field()
         found_ids = []
         tags = []
         for x, y in config_tags:
@@ -319,13 +320,25 @@ class CheckmkTagSync(CMK2):
             if not y:
                 continue
             if x not in found_ids:
-                tags.append({'ident':x, 'title': y})
+                tags.append({id_field: x, 'title': y})
                 found_ids.append(x)
 
         if not tags or len(tags) == 0:
             logger.debug(f"{CC.WARNING} *{CC.ENDC} Group has no tags")
             return False
         return tags
+
+    def _tag_id_field(self):
+        """
+        Field name for a host tag group id and its tag choices. Checkmk renamed
+        it from ``ident`` to ``id`` in 2.4, so 2.4+ use ``id`` and 2.3 and older
+        use ``ident`` (verified against 2.3.0p48, 2.4.0p19 and 2.5.0p8).
+        """
+        try:
+            release = tuple(int(p) for p in self.checkmk_version.split('.')[:2])
+        except (AttributeError, ValueError):
+            return 'id'
+        return 'id' if release >= (2, 4) else 'ident'
 
     def sync_to_checkmk(self, groups, tag_group_list):
         """
@@ -341,12 +354,17 @@ class CheckmkTagSync(CMK2):
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
             task1 = progress.add_task("Sending to Checkmk", total=len(groups))
+            # Checkmk renamed the tag group id field 'ident' -> 'id' in 2.4.
+            id_field = self._tag_id_field()
             for syncer_group_id, syncer_group_data in groups.items():
                 payload = syncer_group_data.copy()
                 for what in ['object_filter', 'rw_id', 'is_template',
                              'rw_title', 'multiply_list']:
                     if what in payload:
                         del payload[what]
+                # The group is built with an 'ident' key internally; send it
+                # under the field name this Checkmk version expects.
+                payload[id_field] = payload.pop('ident')
 
                 tag_list = [(x[1], x[2]) for x in tag_group_list if x[0] == syncer_group_id]
                 if tags := self.prepare_tags_for_checkmk(tag_list):
@@ -362,7 +380,7 @@ class CheckmkTagSync(CMK2):
                     # Check if we need to update it
                     checkmk_tags = checkmk_ids[syncer_group_id]
                     checkmk_tags_flat = \
-                            [{'ident': x['id'], 'title': x['title']} \
+                            [{id_field: x['id'], 'title': x['title']} \
                             for x in checkmk_tags if x['title'].strip()]
 
                     if app.config['CMK_DONT_DELETE_TAGS']:
@@ -370,10 +388,10 @@ class CheckmkTagSync(CMK2):
                         found = set()
                         new_tags = []
                         for tag in payload['tags'] + checkmk_tags_flat:
-                            if tag['ident'] not in found:
-                                found.add(tag['ident'])
+                            if tag[id_field] not in found:
+                                found.add(tag[id_field])
                                 new_tags.append(tag)
-                        payload['tags'] = sorted(new_tags, key=lambda x: str(x['ident']))
+                        payload['tags'] = sorted(new_tags, key=lambda x: str(x[id_field]))
                     checkmk_tags_frozen = {frozenset(d.items()) for d in checkmk_tags_flat}
                     syncer_tags_frozen = {frozenset(d.items()) for d in payload['tags']}
                     if checkmk_tags_frozen == syncer_tags_frozen:
@@ -386,12 +404,11 @@ class CheckmkTagSync(CMK2):
                         update_headers = {
                             'if-match': etag
                         }
-                        del payload['ident']
+                        del payload[id_field]
                         payload['repair'] = False
                         try:
-                            self.request(url,
-                                method="PUT",
-                                data=payload,
+                            self.request(
+                                url, method="PUT", data=payload,
                                 additional_header=update_headers)
                         except Exception as error:
                             progress.console.print(f" ! Group {syncer_group_id} can't be updated.")
