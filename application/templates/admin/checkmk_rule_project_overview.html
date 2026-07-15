@@ -52,6 +52,8 @@
                 </dd>
                 <dt class="col-sm-3">Assigned Rules</dt>
                 <dd class="col-sm-9">{{ project_rules.count() }}</dd>
+                <dt class="col-sm-3">Assigned DCD Rules</dt>
+                <dd class="col-sm-9">{{ dcd_rules.count() }}</dd>
             </dl>
         </div>
     </div>
@@ -145,6 +147,73 @@
                     <span class="text-muted">Rule value:</span>
                     <pre class="syncer-code mb-0 p-2" style="max-height:220px;overflow:auto;"><code>{{ o.value_template or '—' }}</code></pre>
                 </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <div class="d-flex align-items-center mb-2 mt-4" style="gap:10px;">
+        <h4 class="mb-0">DCD rules in this project</h4>
+        <a href="{{ url_for('checkmkdcdrule.create_view') }}"
+           class="btn btn-sm btn-outline-primary">
+            <i class="fa fa-plus"></i> Add DCD rule
+        </a>
+        <a href="{{ url_for('checkmkdcdrule.index_view') }}?flt0_0={{ project.name|urlencode }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="fa fa-list"></i> Manage in DCD list
+        </a>
+    </div>
+
+    {% if dcd_rules.count() == 0 %}
+    <div class="alert alert-info">
+        No DCD rules assigned to this project yet. Open a DCD rule and set its
+        <strong>Project</strong> to <em>{{ project.name }}</em> to group it here.
+        This is for overview only — it does not change how the DCD rule is exported.
+    </div>
+    {% else %}
+    {% for rule in dcd_rules %}
+    <div class="card app-card mb-2">
+        <div class="card-header d-flex align-items-center" style="gap:8px;flex-wrap:wrap;">
+            <strong>{{ rule.name }}</strong>
+            {% if rule.enabled %}
+            <span class="badge badge-success">enabled</span>
+            {% else %}
+            <span class="badge badge-secondary">disabled</span>
+            {% endif %}
+            <a href="{{ url_for('checkmkdcdrule.edit_view', id=rule.id, url=request.url) }}"
+               class="btn btn-sm btn-outline-secondary ml-auto">
+                <i class="fa fa-pencil"></i> Edit
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="mb-2">
+                <span class="text-muted">Applies to:</span>
+                {% if rule.condition_typ == 'anyway' or not rule.conditions %}
+                    <em>all hosts</em>
+                {% else %}
+                    <span class="text-muted">
+                        ({{ 'all' if rule.condition_typ == 'all' else 'any' }} of)
+                    </span>
+                    <ul class="mb-0">
+                        {% for c in rule.conditions %}
+                        <li>{{ render_cond(c) }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+            {% for o in rule.outcomes %}
+            <div class="{{ 'border-top pt-2 mt-2' if not loop.first }}"
+                 style="display:flex;gap:14px;flex-wrap:wrap;">
+                <span><span class="text-muted">Connection:</span>
+                    <code>{{ o.dcd_id or '—' }}</code></span>
+                <span><span class="text-muted">Title:</span>
+                    <code>{{ o.title or '—' }}</code></span>
+                <span><span class="text-muted">Site:</span>
+                    <code>{{ o.site or '—' }}</code></span>
+                <span><span class="text-muted">Connector:</span>
+                    <code>{{ o.connector_type or '—' }}</code></span>
             </div>
             {% endfor %}
         </div>

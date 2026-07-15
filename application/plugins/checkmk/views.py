@@ -44,6 +44,7 @@ from .models import (
     CheckmkSettings,
     CheckmkRuleMngmt,
     CheckmkRuleProject,
+    CheckmkDCDRule,
 )
 
 
@@ -875,10 +876,15 @@ class CheckmkRuleProjectView(DefaultModelView):
             return redirect(self.get_url('.index_view'))
         project_rules = CheckmkRuleMngmt.objects(
             project=project.name).order_by('primary_ruleset', 'name')
+        # DCD rules assigned to the project are shown for overview only — they
+        # are not part of the Setup-rule export/import workflow.
+        dcd_rules = CheckmkDCDRule.objects(
+            project=project.name).order_by('name')
         return self.render(
             'admin/checkmk_rule_project_overview.html',
             project=project,
             project_rules=project_rules,
+            dcd_rules=dcd_rules,
             return_url=self.get_url('.index_view'))
 
     @action('export', 'Export as JSON',
@@ -1807,6 +1813,28 @@ class CheckmkDCDView(RuleModelView):
         'render_full_conditions': "Conditions",
     }
 
+    column_filters = (
+        FilterLike('project', 'Project'),
+    )
+
+    form_rules = _modern_rule_form(
+        main_fields=[
+            rules.Field('name'),
+            rules.Field('documentation'),
+            rules.Field('project'),
+            div_open,
+            rules.NestedRule(('enabled', 'last_match')),
+            div_close,
+            rules.Field('sort_field'),
+        ],
+        condition_fields=[
+            rules.Field('condition_typ'),
+            rules.Field('conditions'),
+        ],
+        outcome_fields=[rules.Field('outcomes')],
+        outcome_title='DCD Rule',
+        outcome_desc='The DCD connection(s) to create in Checkmk.',
+    )
 
     def __init__(self, model, **kwargs):
         """
@@ -1819,7 +1847,15 @@ class CheckmkDCDView(RuleModelView):
 
         self.form_overrides.update({
             'render_cmk_dcd_rule': HiddenField,
+            'project': ProjectSelectField,
         })
+
+        self.form_descriptions = dict(getattr(self, 'form_descriptions', {}) or {})
+        self.form_descriptions['project'] = (
+            "Assign this DCD rule to a Rule Project so it shows up on the "
+            "project overview. For DCD rules this is only a grouping label — "
+            "it does not change how or where the rule is exported."
+        )
 
         super().__init__(model, **kwargs)
 

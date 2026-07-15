@@ -690,12 +690,18 @@ class CheckmkDCDRule(db.Document):
     render_cmk_dcd_rule = db.StringField()
     last_match = db.BooleanField(default=False)
 
+    # Name of the CheckmkRuleProject this DCD rule belongs to (or empty).
+    # Referenced by name to match CheckmkRuleMngmt.project. For DCD rules this
+    # is purely organisational — it groups the rule under a project for the
+    # overview and does not change how the rule is exported.
+    project = db.StringField()
 
     enabled = db.BooleanField()
     sort_field = db.IntField(default=0)
 
     meta = {
-        'strict': False
+        'strict': False,
+        'indexes': ['project'],
     }
 
 #.
