@@ -80,6 +80,13 @@ h1, h2, h3, h4, h5, h6, label, legend, .form-text, p { color: #f8f8f2; }
     border-color: #44475a !important;
     color: #f8f8f2 !important;
 }
+/* Nested inline-field cards: higher specificity so no Bootstrap utility wins. */
+.inline-field-list > .inline-field,
+.inline-field.card, .inline-field.card-body {
+    background-color: #343746 !important;
+    border-color: #44475a !important;
+    color: #f8f8f2 !important;
+}
 .rule-section-head {
     background-color: #2e303e !important;
     border-bottom-color: #44475a !important;
