@@ -949,5 +949,36 @@ class TestProjectsForAccount(unittest.TestCase):
         self.assertEqual(for_b, ['all', 'a_and_b', 'only_b'])
 
 
+class TestExportDcdRulesProjectFilter(unittest.TestCase):
+    """export_dcd_rules restricts DCD rules by their project's account filter."""
+
+    def test_dcd_export_filters_by_project(self):
+        # DefaultRule stand-in (must be subclassable)
+        class _StubRule:  # pylint: disable=too-few-public-methods
+            def __init__(self, account=None):
+                self.rules = None
+
+        # CheckmkDCDRuleSync stand-in
+        class _StubSync:  # pylint: disable=too-few-public-methods
+            def __init__(self, account=False):
+                pass
+
+            def export_rules(self):
+                pass
+
+        with patch.object(inits, '_load_rules',
+                          return_value={'rewrite': [], 'filter': []}), \
+                patch.object(inits, 'projects_for_account',
+                             return_value=['proj_a']), \
+                patch.object(inits, 'DefaultRule', _StubRule), \
+                patch.object(inits, 'CheckmkDCDRuleSync', _StubSync), \
+                patch.object(inits, 'CheckmkDCDRule') as mock_dcd:
+            mock_dcd.objects.return_value = ['rule']
+            inits.export_dcd_rules('acc_a')
+        # Global (no project) rules plus the projects this account is allowed.
+        mock_dcd.objects.assert_called_once_with(
+            enabled=True, project__in=[None, '', 'proj_a'])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
