@@ -1,12 +1,25 @@
 {% extends 'admin/model/list.html' %}
 
-{# Adds an "Import project from JSON" button above the project list — the
-   import route (import_view) otherwise has no entry point in the UI. #}
+{# Heading + one-line intro above the default list. #}
 {% block body %}
-<div class="mb-2">
-    <a href="{{ url_for('.import_view') }}" class="btn btn-sm btn-outline-primary">
-        <i class="fa fa-upload"></i> Import project from JSON
-    </a>
+<div class="d-flex align-items-center mb-1" style="gap:10px;flex-wrap:wrap;">
+    <h4 class="mb-0">Rule Projects</h4>
 </div>
+<p class="text-muted mb-2">
+    Group Checkmk Setup &amp; DCD rules and limit their export to selected
+    accounts. Click a project name for its overview; click a rule count to
+    jump to the filtered rule list.
+</p>
 {{ super() }}
+{% endblock %}
+
+{# Add "Import project from JSON" to the list toolbar, next to Create/Export.
+   The import route otherwise has no entry point in the UI. #}
+{% block model_menu_bar_before_filters %}
+<li class="nav-item">
+    <a href="{{ url_for('.import_view') }}" class="nav-link"
+       title="Import a Rule Project (with its Setup and DCD rules) from a JSON file">
+        <i class="fa fa-upload"></i> {{ _gettext('Import JSON') }}
+    </a>
+</li>
 {% endblock %}
