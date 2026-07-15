@@ -47,6 +47,14 @@ h1, h2, h3, h4, h5, h6, label, legend, .form-text, p { color: #3c3836; }
     border-color: #d5c4a1 !important;
     color: #3c3836 !important;
 }
+/* Nested inline-field cards: higher specificity so no Bootstrap utility (pure
+   white) leaks through over the theme's cream surface. */
+.inline-field-list > .inline-field,
+.inline-field.card, .inline-field.card-body {
+    background: #f9f5d7 !important;
+    border-color: #d5c4a1 !important;
+    color: #3c3836 !important;
+}
 .form-control, .form-control:focus, select, textarea, input[type=text],
 input[type=email], input[type=password], input[type=number] {
     background: #f9f5d7 !important;
