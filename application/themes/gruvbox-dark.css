@@ -81,10 +81,9 @@ h1, h2, h3, h4, h5, h6, label, legend, .form-text, p { color: #ebdbb2; }
     border-color: #504945 !important;
     color: #ebdbb2 !important;
 }
-/* Nested inline-field cards (rule outcomes/conditions): higher specificity so
-   no Bootstrap utility (.bg-light/.card) can leave them light. */
-.inline-field-list > .inline-field,
-.inline-field.card, .inline-field.card-body {
+/* The nested inline-field group and its list container (rule outcomes /
+   conditions) — plain <div>s Bootstrap leaves white on dark themes. */
+.inline-field, .inline-field-list {
     background-color: #3c3836 !important;
     border-color: #504945 !important;
     color: #ebdbb2 !important;
