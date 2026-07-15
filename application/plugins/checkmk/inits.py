@@ -516,10 +516,16 @@ def export_downtimes(account, debug=False, debug_rules=False):
             syncer.actions = actions
             syncer.debug_rules(debug_rules, "Checkmk")
 
-    except CmkException as error_obj:
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
+        # Catch every error, not just CmkException: the downtime export
+        # talks to Checkmk's livestatus (e.g. reading current downtimes),
+        # which can raise a plain requests timeout/connection error. With
+        # the old CmkException-only catch those escaped uncaught, so the
+        # run left only a detail-less "Checkmk: Export Downtimes" log entry
+        # and `--debug` never surfaced the real cause.
         if debug:
             raise
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:

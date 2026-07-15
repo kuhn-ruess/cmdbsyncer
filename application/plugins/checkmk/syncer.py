@@ -1022,10 +1022,10 @@ class SyncCMK2(CMK2):
             try:
                 self.request(url, method="POST", data=body)
                 self.num_created += 1
+                self.console(f" * Created Host {hostname}")
             except CmkException as error:
                 self.log_details.append(('error', f"Host Create Error: {error}"))
                 self.console(f" * CMK API ERROR {error}")
-            self.console(f" * Created Host {hostname}")
 
 
 
