@@ -544,6 +544,12 @@ for _mod_name, _mod_path in [
 # devices.py does `from .netbox import SyncNetbox`, so the base module has to be
 # loaded first. Loaded here (not in the plugin test __init__) for the same
 # reason as checkmk: unittest discover does not reliably run package __init__.py.
+# utils.py holds the shared parse_import_filter helper that devices.py imports,
+# so it has to be registered before devices.
+_try_load_real_module(
+    "application.plugins.netbox.utils",
+    os.path.join("plugins", "netbox", "utils.py"),
+)
 _try_load_real_module(
     "application.plugins.netbox.netbox",
     os.path.join("plugins", "netbox", "netbox.py"),

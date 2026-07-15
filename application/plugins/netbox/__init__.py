@@ -277,6 +277,46 @@ def cli_netbox_vm_import(account, debug=False):
     netbox_vm_import(account, debug)
 register_cronjob("Netbox: Import VMs", netbox_vm_import)
 #.
+#   .-- Command: Import DCIM Interfaces
+def netbox_interface_import(account, debug=False):
+    """Import DCIM Interfaces from Netbox"""
+    try:
+        syncer = SyncInterfaces(account)
+        syncer.debug = debug
+        syncer.import_interfaces()
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
+        if debug:
+            raise
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('import_dcim_interfaces')
+@click.argument("account")
+@click.option("--debug", is_flag=True)
+def cli_netbox_interface_import(account, debug=False):
+    """Import Interfaces of Devices from Netbox"""
+    netbox_interface_import(account, debug)
+register_cronjob("Netbox: Import DCIM Interfaces", netbox_interface_import)
+#.
+#   .-- Command: Import Virtualization Interfaces
+def netbox_virt_interface_import(account, debug=False):
+    """Import Virtualization Interfaces from Netbox"""
+    try:
+        syncer = SyncVirtInterfaces(account)
+        syncer.debug = debug
+        syncer.import_interfaces(mode='virtualization')
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
+        if debug:
+            raise
+        print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
+
+@cli_netbox.command('import_virt_interfaces')
+@click.argument("account")
+@click.option("--debug", is_flag=True)
+def cli_netbox_virt_interface_import(account, debug=False):
+    """Import Interfaces of Virtual Machines from Netbox"""
+    netbox_virt_interface_import(account, debug)
+register_cronjob("Netbox: Import Virtualization Interfaces", netbox_virt_interface_import)
+#.
 #   .-- Command: Export IPs
 def netbox_ip_sync(account, debug=False, debug_rules=False):
     """Import Devices from Netbox"""
