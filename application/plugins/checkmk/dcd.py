@@ -28,6 +28,13 @@ class CheckmkDCDRuleSync(CMK2):
         # into later exports.
         self.all_rules = []
 
+    # Account config keys withheld from the rule template context — secrets and
+    # internal ids that must never end up in a rendered rule.
+    _ACCOUNT_HIDDEN_KEYS = frozenset({
+        'password', 'bakery_passphrase', 'ca_cert_chain', 'ca_root_cert',
+        '_id', 'id', 'ref',
+    })
+
     def _account_site(self):
         """
         Checkmk site name of the exporting account — the last path segment of
@@ -37,6 +44,16 @@ class CheckmkDCDRuleSync(CMK2):
         """
         address = (self.config.get('address') or '').rstrip('/')
         return address.rsplit('/', 1)[-1] if '/' in address else ''
+
+    def _account_context(self):
+        """
+        The exporting account's attributes exposed to DCD rules as
+        ``{{ account.<field> }}`` — its standard fields plus any per-account
+        custom field (flattened into the account config). Lets one rule use a
+        value configured per account (test vs prod). Secrets are withheld.
+        """
+        return {key: value for key, value in (self.config or {}).items()
+                if key not in self._ACCOUNT_HIDDEN_KEYS}
 
     def does_rule_exist(self, rule_id):
         """
@@ -174,10 +191,11 @@ class CheckmkDCDRuleSync(CMK2):
         Export DCD Rules
         """
 
-        # The exporting account's Checkmk site, exposed to every DCD rule as
-        # {{ cmk_site }} so a single rule targets the right site per Checkmk —
-        # e.g. a test and a prod instance with different site names.
+        # Exposed to every DCD rule: {{ cmk_site }} = the account's Checkmk site,
+        # and {{ account.<field> }} = any (non-secret) account attribute, so one
+        # rule can use values configured per account (test vs prod).
         site = self._account_site()
+        account_ctx = self._account_context()
         db_objects = Host.active_non_template()
         total = db_objects.count()
         with Progress(SpinnerColumn(),
@@ -196,6 +214,7 @@ class CheckmkDCDRuleSync(CMK2):
                     progress.advance(task1)
                     continue
                 attributes['all']['cmk_site'] = site
+                attributes['all']['account'] = account_ctx
                 # pylint: disable-next=no-member
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:
@@ -210,7 +229,8 @@ class CheckmkDCDRuleSync(CMK2):
                 host_actions = {'dcd': [dict(outcome.to_mongo())
                                         for outcome in rule.outcomes]}
                 self.calculate_rules_of_host(
-                    f"static:{rule.name}", host_actions, {'cmk_site': site})
+                    f"static:{rule.name}", host_actions,
+                    {'cmk_site': site, 'account': account_ctx})
 
             task2 = progress.add_task("Send Rules to Checkmk", total=len(self.all_rules))
             count_new = 0

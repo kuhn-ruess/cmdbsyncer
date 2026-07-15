@@ -213,6 +213,20 @@ class TestCheckmkDCDRuleSync(unittest.TestCase):
         self.sync.config = {'address': ''}
         self.assertEqual(self.sync._account_site(), '')
 
+    def test_account_context_exposes_fields_without_secrets(self):
+        self.sync.config = {
+            'name': 'prod', 'address': 'http://h/cmk', 'username': 'auto',
+            'my_field': 'x', 'password': 'secret',
+            'bakery_passphrase': 'p', '_id': 1,
+        }
+        ctx = self.sync._account_context()
+        # custom + standard fields are exposed
+        self.assertEqual(ctx['name'], 'prod')
+        self.assertEqual(ctx['my_field'], 'x')
+        # secrets / internal ids are withheld
+        for hidden in ('password', 'bakery_passphrase', '_id'):
+            self.assertNotIn(hidden, ctx)
+
     def test_create_rule_in_cmk(self):
         with patch.object(self.sync, 'request') as mock_req:
             mock_req.return_value = (None, {})
