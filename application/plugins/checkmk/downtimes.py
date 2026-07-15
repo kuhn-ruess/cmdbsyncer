@@ -316,7 +316,11 @@ class CheckmkDowntimeSync(CMK2):
         url = f"domain-types/downtime/collections/all?"\
               f"host_name={hostname}&downtime_type=host"
         response = self.request(url, method="GET")
-        downtimes = response[0]['value']
+        # request() returns an empty ``{}`` body on error responses
+        # (404, non-200, no content). Guard the lookup so a failed
+        # downtime read yields "no current downtimes" instead of a bare
+        # KeyError that would escape as a detail-less run failure.
+        downtimes = response[0].get('value', []) if response[0] else []
         for downtime in downtimes:
             yield {
                 "start" : datetime.datetime.fromisoformat(
