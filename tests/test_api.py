@@ -409,8 +409,11 @@ class PluginViewFormattingTest(unittest.TestCase):
         checkmk_models_mod.CheckmkSite = MagicMock()
         checkmk_models_mod.CheckmkSettings = MagicMock()
         checkmk_models_mod.CheckmkRuleMngmt = MagicMock()
-        checkmk_models_mod.CheckmkRuleProject = MagicMock()
-        checkmk_models_mod.cmk_rule_project_status = []
+        project_mod = sys.modules.setdefault(
+            'application.models.project',
+            ModuleType('application.models.project'),
+        )
+        project_mod.Project = MagicMock()
 
         checkmk_module = _load_source_module(
             'application.plugins.checkmk.views',

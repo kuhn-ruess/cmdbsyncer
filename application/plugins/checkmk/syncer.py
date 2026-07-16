@@ -66,6 +66,9 @@ class SyncCMK2(CMK2):
         self.num_created = 0
         self.num_updated = 0
         self.num_deleted = 0
+        # Lazy per-run map of Project name -> allows this
+        # account (see project_denied_for_account).
+        self._project_allows_account = None
 
     def __getstate__(self):
         # multiprocessing pickles ``self`` for every task dispatched via
@@ -328,6 +331,30 @@ class SyncCMK2(CMK2):
                 return False
 
         return True
+
+    def project_denied_for_account(self, project_name):
+        """
+        True when the host's assigned Project exists and its
+        account filter disallows this export account — the host is then
+        skipped like any other filtered host. Hosts without a project (or
+        pointing at a since-deleted project) are unaffected: silently
+        dropping a host over a dangling reference would be worse than
+        exporting it.
+
+        The project decisions are cached per run — one query for the
+        first host, dict lookups for the rest.
+        """
+        if not project_name:
+            return False
+        if self._project_allows_account is None:
+            # pylint: disable=import-outside-toplevel
+            from .helpers import project_allows_account
+            from application.models.project import Project
+            self._project_allows_account = {
+                project.name: project_allows_account(project, self.account_name)
+                for project in Project.objects()
+            }
+        return not self._project_allows_account.get(project_name, True)
 
     def host_folder_in_scope(self, next_actions):
         """
@@ -675,7 +702,12 @@ class SyncCMK2(CMK2):
             with multiprocessing.Pool(initializer=init_db) as pool:
                 tasks = []
                 for db_host in db_objects:
-                    if not self.use_host(db_host.hostname, db_host.source_account_name):
+                    # project_denied_for_account: the host is assigned to a
+                    # Project whose account filter excludes this account —
+                    # treat it like any other filtered host (not exported,
+                    # cleaned up if it already exists in this Checkmk).
+                    if not self.use_host(db_host.hostname, db_host.source_account_name) \
+                            or self.project_denied_for_account(db_host.project):
                         progress.advance(task1)
                         continue
                     task = pool.apply_async(self.calculate_host_actions, args=(db_host,))

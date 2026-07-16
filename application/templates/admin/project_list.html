@@ -3,7 +3,7 @@
 {# Heading + one-line intro above the default list. #}
 {% block body %}
 <div class="d-flex align-items-center mb-1" style="gap:10px;flex-wrap:wrap;">
-    <h4 class="mb-0">Rule Projects</h4>
+    <h4 class="mb-0">Projects</h4>
 </div>
 <p class="text-muted mb-2">
     Group Checkmk Setup &amp; DCD rules and limit their export to selected
@@ -18,7 +18,7 @@
 {% block model_menu_bar_before_filters %}
 <li class="nav-item">
     <a href="{{ url_for('.import_view') }}" class="nav-link"
-       title="Import a Rule Project (with its Setup and DCD rules) from a JSON file">
+       title="Import a Project (with its Setup and DCD rules) from a JSON file">
         <i class="fa fa-upload"></i> {{ _gettext('Import JSON') }}
     </a>
 </li>

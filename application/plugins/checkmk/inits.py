@@ -31,9 +31,10 @@ from application.plugins.checkmk.notification_rules import (
 
 
 from application.modules.rule.rewrite import Rewrite
+from application.plugins.checkmk.helpers import project_allows_account
+from application.models.project import Project
 from application.plugins.checkmk.models import (
    CheckmkRuleMngmt,
-   CheckmkRuleProject,
    RuleMngmtOutcome,
    CheckmkBiRule,
    CheckmkBiAggregation,
@@ -306,17 +307,16 @@ def export_groups(account, test_run=False, debug=False):
 #   .-- Export Rules
 def projects_for_account(account):
     """
-    Names of the CheckmkRuleProjects whose rules may be exported to ``account``.
+    Names of the Projects whose rules may be exported to ``account``.
 
     A project applies when its ``limit_by_accounts`` is empty (no restriction —
-    exported everywhere) or explicitly lists this account.
+    exported everywhere) or explicitly lists this account, and the account is
+    not on the project's ``deny_by_accounts`` list (deny wins).
     """
-    names = []
-    for project in CheckmkRuleProject.objects():
-        allowed = [name for name in (project.limit_by_accounts or []) if name]
-        if not allowed or account in allowed:
-            names.append(project.name)
-    return names
+    return [
+        project.name for project in Project.objects()
+        if project_allows_account(project, account)
+    ]
 
 
 def export_rules(account):
@@ -381,9 +381,9 @@ def import_project_rules_from_folder(project_name, account, folder,  # pylint: d
     rules.
     """
     syncer = None
-    project = CheckmkRuleProject.objects(name=project_name).first()
+    project = Project.objects(name=project_name).first()
     if not project:
-        message = f"Checkmk Rule Project '{project_name}' not found"
+        message = f"Project '{project_name}' not found"
         print(f'{ColorCodes.FAIL}{message}{ColorCodes.ENDC}')
         log.log(message, source="cmk_project_rule_import",
                 details=[('error', message)])

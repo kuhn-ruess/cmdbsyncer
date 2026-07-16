@@ -627,7 +627,7 @@ class CheckmkRuleSync(CMK2):
         # Host-independent rules, wired in by inits.export_rules. Evaluated
         # once in calculate_static_rules instead of per host.
         self.static_rules = []
-        # Optional CheckmkRuleProject name scoping the ``rule_marker``.
+        # Optional Project name scoping the ``rule_marker``.
         # The current export runs are account-wide (all allowed projects in
         # one pass), so this stays None there — it is kept for callers that
         # manage a single project's rules in isolation.

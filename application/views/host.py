@@ -15,13 +15,14 @@ from flask_admin.model.template import EndpointLinkRowAction, LinkRowAction
 from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
-from wtforms import HiddenField, StringField, BooleanField
+from wtforms import HiddenField, StringField, BooleanField, SelectField
 from wtforms.validators import Optional
 from markupsafe import escape
 from mongoengine.errors import DoesNotExist
 
 # pylint: disable=import-error
 from application.plugins.checkmk.models import CheckmkFolderPool
+from application.models.project import Project
 from application.plugins.checkmk import (
     get_host_debug_data as cmk_host_debug,
     get_rule_preview as cmk_rule_preview,
@@ -361,6 +362,21 @@ def _build_tree_view(tree):
             tree.previous_update and (added_keys or removed_keys or changed_keys)
         ),
     }
+
+
+def _project_choices():
+    """Blank + every Project — feeds the host's project picker."""
+    names = [p.name for p in Project.objects().order_by('name')]
+    return [('', '— none (export to all accounts) —'), *((n, n) for n in names)]
+
+
+class HostProjectSelectField(SelectField):
+    """SelectField populated from the Project collection."""
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('choices', _project_choices)
+        # Tolerate a saved name whose project was since deleted.
+        kwargs.setdefault('validate_choice', False)
+        super().__init__(*args, **kwargs)
 
 
 class _SoftDeleteHostMixin:
@@ -1050,6 +1066,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         # field in the form as hidden so its value round-trips cleanly,
         # then pin it to 'host' in on_model_change.
         'object_type': HiddenField,
+        'project': HostProjectSelectField,
     }
 
     form_args = {
@@ -1063,6 +1080,13 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         'cmdb_fields': {
             'label': 'Manual Labels',
         },
+        'project': {
+            'label': 'Project',
+            'description': "Exports that honour projects (currently the "
+                           "Checkmk host export) only push this host to the "
+                           "accounts the project's account filter allows. "
+                           "Leave empty to export it everywhere.",
+        },
     }
 
     form_rules = [
@@ -1070,6 +1094,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
             (
                 rules.Field('hostname'),
                 rules.Field('lifecycle_state'),
+                rules.Field('project'),
             ),
             "Object",
         ),
@@ -1796,6 +1821,8 @@ Impact Chain.
         # Hosts created/edited here are always of type 'host' — the form
         # field is hidden so the choice can't be accidentally changed.
         model.object_type = 'host'
+        # Normalise the blank "no project" choice to an unset field.
+        model.project = model.project or None
         model.cmdb_templates = form.cmdb_templates.data or []
         # Set Extra Fields
         cmdb_fields = app.config['CMDB_MODELS'].get(model.object_type, {})
@@ -1884,6 +1911,54 @@ Impact Chain.
         url = url_for('.set_template_form', ids=','.join(ids),
                       return_to=request.referrer or '')
         return redirect(url)
+
+    @action('assign_project', 'Assign Project', None)
+    def action_assign_project(self, ids):
+        """
+        Assign (or clear) the Project of the selected hosts. This is a
+        plain field update — the hosts stay untouched otherwise (no CMDB
+        conversion). Exports that honour projects (currently the Checkmk
+        host export) only push a project-assigned host to the accounts
+        the project's account filter allows.
+        """
+        return redirect(url_for('.assign_project_form', ids=','.join(ids),
+                                return_to=request.referrer or ''))
+
+    @expose('/assign_project_form')
+    def assign_project_form(self):
+        """Render the project picker for the ids passed in the URL."""
+        ids = [str(escape(i)) for i in request.args.get('ids', '').split(',') if i]
+        projects = [p.name for p in Project.objects().order_by('name')]
+        return render_template('admin/assign_project_form.html', ids=ids,
+                               projects=projects,
+                               return_to=request.args.get('return_to', ''))
+
+    @expose('/process_project_assignment', methods=['POST'])
+    def process_project_assignment(self):
+        """
+        Apply the picked project (or none) to every selected host.
+        Deliberately a raw queryset update: assigning a project must not
+        convert an imported host into a CMDB object (no source_account,
+        no_autodelete or label side effects).
+        """
+        host_ids = [x for x in request.form.get('host_ids', '').split(',') if x.strip()]
+        project_name = (request.form.get('project') or '').strip()
+        return_to = _safe_return_to(request.form.get('return_to'))
+
+        if project_name and \
+                not Project.objects(name=project_name).first():
+            flash(f"Project '{project_name}' not found", 'error')
+            return redirect(return_to)
+
+        updated = Host.objects(id__in=host_ids).update(
+            project=project_name or None)
+        if project_name:
+            flash(f"Assigned project '{project_name}' to {updated} host(s)",
+                  'success')
+        else:
+            flash(f"Removed the project assignment from {updated} host(s)",
+                  'success')
+        return redirect(return_to)
 
     @action('bulk_label_edit', 'Bulk Edit Labels', None)
     def action_bulk_label_edit(self, ids):

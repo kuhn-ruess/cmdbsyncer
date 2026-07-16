@@ -273,7 +273,7 @@ class CheckmkRuleMngmt(db.Document):
     # context (host match conditions are ignored) instead of recomputing
     # it per host and de-duplicating the identical copies.
     static_rule = db.BooleanField(default=False)
-    # Name of the CheckmkRuleProject this rule belongs to (or empty for a
+    # Name of the Project this rule belongs to (or empty for a
     # free/global rule). Referenced by name — not as a ReferenceField — so a
     # project and its rules survive a JSON im-/export between separate syncer
     # instances without ObjectId remapping. Project rules are excluded from
@@ -286,26 +286,7 @@ class CheckmkRuleMngmt(db.Document):
     }
 
 #.
-#   .-- Checkmk Rule Project
 
-class CheckmkRuleProject(db.Document):
-    """
-    Groups Checkmk Setup Rules (CheckmkRuleMngmt) and limits where they are
-    exported. ``limit_by_accounts`` restricts the project's rules to the listed
-    Checkmk accounts during the normal ``export_rules`` run; an empty list means
-    the rules are exported to every account like ordinary rules.
-    """
-    name = db.StringField(required=True, unique=True)
-    documentation = db.StringField()
-
-    # Names of the Checkmk accounts this project's rules may be exported to.
-    # Empty = no restriction (all accounts). Stored by name to survive JSON
-    # im-/export between separate syncer instances.
-    limit_by_accounts = db.ListField(field=db.StringField())
-
-    meta = {
-        'strict': False,
-    }
 
 #.
 #   .-- Checkmk Notification Rules
@@ -696,7 +677,7 @@ class CheckmkDCDRule(db.Document):
     # optimisation CheckmkRuleMngmt.static_rule provides for Setup rules.
     static_rule = db.BooleanField(default=False)
 
-    # Name of the CheckmkRuleProject this DCD rule belongs to (or empty).
+    # Name of the Project this DCD rule belongs to (or empty).
     # Referenced by name to match CheckmkRuleMngmt.project. A DCD rule assigned
     # to a project follows that project's account filter (limit_by_accounts) on
     # export, just like a Setup rule — it is only exported to the accounts the

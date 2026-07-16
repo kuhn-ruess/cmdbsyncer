@@ -436,13 +436,13 @@ def cli_export_rules(account, debug):
 @click.option("--debug", is_flag=True)
 def cli_import_project_rules(project, account, folder, recursive, debug):
     """
-    Import all Checkmk Setup Rules of a folder into a Rule Project
+    Import all Checkmk Setup Rules of a folder into a Project
 
     ### Example
     _./cmdbsyncer checkmk import_project_rules MYPROJECT SITEACCOUNT /server_
 
     Args:
-        project (string): Name of the target Checkmk Rule Project
+        project (string): Name of the target Project
         account (string): Checkmk account to read the rules from
         folder (string): Checkmk folder to import rules from
     """

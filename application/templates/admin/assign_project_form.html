@@ -1,0 +1,33 @@
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+        <div class="app-card" style="margin-top: 1.5rem;">
+            <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
+                <h2>Assign Project</h2>
+                <p>Assign a Project to {{ ids|length }} host(s). Exports that honour
+                   projects (currently the Checkmk host export) only push these hosts
+                   to the accounts the project's account filter allows. The hosts are
+                   not modified otherwise.</p>
+            </div>
+            <form method="POST" action="{{ url_for('.process_project_assignment') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="host_ids" value="{{ ids|join(',') }}">
+                <input type="hidden" name="return_to" value="{{ return_to or '' }}">
+
+                <div class="form-group">
+                    <label for="project">Select project</label>
+                    <select class="form-control" id="project" name="project">
+                        <option value="">— none (export to all accounts) —</option>
+                        {% for project in projects %}
+                        <option value="{{ project }}">{{ project }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group mb-0">
+                    <button type="submit" class="btn btn-primary">Assign Project</button>
+                    <a href="{{ return_to or url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

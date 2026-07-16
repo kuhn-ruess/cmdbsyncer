@@ -231,6 +231,11 @@ _models_host_inv_tree.HostInventoryTreePath = _HostInventoryTreePath
 _models_host_inv_tree.HostInventoryTree = _HostInventoryTree
 
 
+# --- application.models.project ----------------------------------------------
+
+_models_project = _stub_package("application.models.project")
+_models_project.Project = MagicMock(name="stub.Project")
+
 # --- application.models.saved_search ---------------------------------------
 
 _models_saved_search = _stub_package("application.models.saved_search")
@@ -484,7 +489,7 @@ _cmk_models = _stub_package("application.plugins.checkmk.models")
 for _name in (
     "CheckmkFolderPool", "CheckmkObjectCache", "CheckmkGroupRule",
     "CheckmkTagMngmt", "CheckmkUserMngmt", "CheckmkPassword",
-    "CheckmkInventorizeAttributes", "CheckmkRuleMngmt", "CheckmkRuleProject",
+    "CheckmkInventorizeAttributes", "CheckmkRuleMngmt",
     "RuleMngmtOutcome",
     "CheckmkBiRule", "CheckmkBiAggregation", "CheckmkDowntimeRule",
     "CheckmkRewriteAttributeRule", "CheckmkFilterRule", "CheckmkDCDRule",
