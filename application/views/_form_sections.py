@@ -35,18 +35,27 @@ MODERN_FORM_CSS = '''
 <style>
 .rule-form-sections { display: flex; flex-direction: column; gap: 14px;
     margin: 8px 0 16px; }
-.rule-section { border: 1px solid #e2e6ea; border-radius: 10px;
-    background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+/* Theme-aware: the themes define --surface-* tokens, the fallbacks keep
+   the light look on plain Bootstrap. Hardcoded light values here beat the
+   theme overrides (inline <style> + !important below), which left light
+   bars / cards with unreadable text on the dark themes. */
+.rule-section { border: 1px solid var(--surface-border, #e2e6ea);
+    border-radius: 10px;
+    background: var(--surface-bg, #fff);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
     overflow: hidden; }
 .rule-section-head { display: flex; align-items: center; gap: 12px;
-    padding: 10px 14px; border-bottom: 1px solid #eef0f3;
-    background: #f8f9fa; }
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--surface-divider, #eef0f3);
+    background: var(--surface-subtle, #f8f9fa); }
 .rule-section-head .rule-step { flex: 0 0 auto; display: inline-flex;
     align-items: center; justify-content: center; width: 28px; height: 28px;
     border-radius: 50%; font-weight: bold; color: #fff; font-size: 0.9rem;
     font-family: ui-monospace, monospace; }
-.rule-section-head h4 { margin: 0; font-size: 1.05rem; color: #2c3e50; }
-.rule-section-head p { margin: 0; font-size: 0.82rem; color: #6c757d; }
+.rule-section-head h4 { margin: 0; font-size: 1.05rem;
+    color: var(--surface-text, #2c3e50); }
+.rule-section-head p { margin: 0; font-size: 0.82rem;
+    color: var(--surface-muted, #6c757d); }
 .rule-section-body { padding: 12px 14px; }
 .rule-section-body > .form-group:last-child { margin-bottom: 0; }
 
@@ -84,8 +93,12 @@ MODERN_FORM_CSS = '''
 [id^="rewrite_attributes-"] .inline-field.card,
 [id^="custom_fields-"] .inline-field.card,
 [id^="plugin_settings-"] .inline-field.card {
-    border: 1px solid #e6e9ec !important;
-    background: #fbfcfd !important;
+    /* Tokens, not hardcoded light values: this !important rule outranks
+       the themes' .inline-field.card override (attribute selector adds
+       specificity), so it must resolve to the theme surface itself. */
+    border: 1px solid var(--surface-border, #e6e9ec) !important;
+    background: var(--surface-subtle, #fbfcfd) !important;
+    color: var(--surface-text, inherit) !important;
     border-radius: 8px !important;
     box-shadow: none !important;
     padding: 10px 12px !important;
