@@ -983,7 +983,12 @@ class CheckmkRuleSync(CMK2):
         """
         for rule_type, rules in host_actions.items():
             for rule_params in rules:
-                if rule_params.get('loop_over_list'):
+                # loop_over_list without a list attribute name is a
+                # meaningless toggle (e.g. accidentally ticked in the
+                # form) — treat it like a plain rule instead of failing
+                # on the empty attribute lookup.
+                if rule_params.get('loop_over_list') and \
+                        rule_params.get('list_to_loop'):
                     loop_list = get_list(attributes['all'][rule_params['list_to_loop']])
                     for loop_idx, loop_value in enumerate(loop_list):
                         loop_rule_params = dict(rule_params)
@@ -1034,16 +1039,21 @@ class CheckmkRuleSync(CMK2):
             host_actions = {}
             for outcome in rule.outcomes:
                 outcome = dict(outcome.to_mongo())
-                if outcome.get('loop_over_list'):
+                if outcome.get('loop_over_list') and \
+                        outcome.get('list_to_loop'):
                     # loop_over_list iterates a *host* attribute list, which
                     # a static rule by definition does not have. Skip it
-                    # rather than fail on the missing attribute.
-                    self.log_details.append((
-                        "ERROR",
+                    # rather than fail on the missing attribute. The bare
+                    # flag without a list name (accidentally ticked in the
+                    # form) is meaningless — such outcomes are exported as
+                    # plain rules instead of silently vanishing.
+                    # log_error: recorded in the run's log entry AND printed
+                    # on the CLI — buried only in the web log it reads like
+                    # the rule silently never exports.
+                    self.log_error(
                         f"Static rule '{rule.name}' outcome for "
                         f"{outcome.get('ruleset')} uses loop_over_list, "
-                        f"which needs host data — skipped",
-                    ))
+                        f"which needs host data — skipped")
                     continue
                 host_actions.setdefault(outcome['ruleset'], []).append(outcome)
             if host_actions:
@@ -1132,8 +1142,7 @@ class CheckmkRuleSync(CMK2):
                             f"Could not reorder rule {desired_ids[i]} in "
                             f"{ruleset_name}: {error}"
                         )
-                        self.log_details.append(("ERROR", message))
-                        print(f"{CC.FAIL} {message} {CC.ENDC}")
+                        self.log_error(message)
                     except Exception as error:  # pylint: disable=broad-except
                         # A non-CmkException (timeout, network reset, JSON
                         # decode, …) used to bubble out of sort_rules and
@@ -1144,8 +1153,7 @@ class CheckmkRuleSync(CMK2):
                             f"Unexpected error reordering rule {desired_ids[i]} in "
                             f"{ruleset_name}: {type(error).__name__}: {error}"
                         )
-                        self.log_details.append(("ERROR", message))
-                        print(f"{CC.FAIL} {message} {CC.ENDC}")
+                        self.log_error(message)
                 progress.advance(task1)
 
     def _desired_cmk_id_chain(self, rules):
@@ -1241,10 +1249,13 @@ class CheckmkRuleSync(CMK2):
                         self.log_details.append(("INFO",
                                               f"Created Rule in {ruleset_name}: {rule['value']}"))
                     except CmkException as error:
-                        self.log_details.append(("ERROR",
-                                             "Could not create Rules: "\
-                                             f"{template}, Response: {error}"))
-                        print(f"{CC.FAIL} Failue: {error} {CC.ENDC}")
+                        # log_error prints the reason on the CLI; the full
+                        # request template only goes into the log detail to
+                        # keep the terminal output readable.
+                        self.log_error(
+                            f"Could not create Rule in {ruleset_name}: {error}")
+                        self.log_details.append(
+                            ("ERROR_DETAIL", f"Failed template: {template}"))
                 progress.advance(task1)
 
 
@@ -1372,12 +1383,9 @@ class CheckmkRuleSync(CMK2):
                                 f"{our_rule['value']}",
                             ))
                         except CmkException as error:
-                            self.log_details.append((
-                                "ERROR",
+                            self.log_error(
                                 f"Could not update Rule {rule_id} in "
-                                f"{ruleset_name}: {error}",
-                            ))
-                            print(f"{CC.FAIL} Update failed: {error} {CC.ENDC}")
+                                f"{ruleset_name}: {error}")
 
                     # Only warn about flapping when there really are multiple
                     # conflicting matches — a single value drift is handled

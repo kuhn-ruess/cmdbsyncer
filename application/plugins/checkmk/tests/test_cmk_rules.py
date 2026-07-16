@@ -393,6 +393,41 @@ class TestCheckmkRuleSync(unittest.TestCase):
         self.assertEqual(self.sync.rulsets_by_type, {})
         self.assertTrue(any('loop_over_list' in d[1] for d in self.sync.log_details))
 
+    @patch('application.plugins.checkmk.cmk_rules.get_list',
+           side_effect=lambda v: v if isinstance(v, list) else [v])
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_static_rule_bare_loop_flag_still_exported(
+            self, mock_render, mock_get_list):
+        # loop_over_list without a list attribute name is a meaningless
+        # toggle (accidentally ticked in the form) — the outcome must be
+        # exported as a plain rule instead of silently vanishing
+        # (field report: a project's static rule never reached Checkmk).
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        rule = SimpleNamespace(name='Static', outcomes=[_FakeMongo({
+            'ruleset': 'special_agents:icinga',
+            'value_template': "{'k': 'v'}",
+            'folder': '/infrastructure/icwp',
+            'folder_index': 0,
+            'comment': '',
+            'loop_over_list': True,
+            'list_to_loop': '',
+            'condition_label_template': '',
+            'condition_host': 'icwp',
+            'condition_service': '',
+            'condition_service_label': '',
+        })])
+        self.sync.static_rules = [rule]
+        self.sync.log_details = []
+
+        self.sync.calculate_static_rules()
+
+        rules = self.sync.rulsets_by_type['special_agents:icinga']
+        self.assertEqual(len(rules), 1)
+        self.assertEqual(rules[0]['folder'], '/infrastructure/icwp')
+        self.assertEqual(
+            rules[0]['condition']['host_name']['match_on'], ['icwp'])
+        self.assertEqual(self.sync.log_details, [])
+
     def test_optimize_rules_keeps_non_optimizable(self):
         self.sync.rulsets_by_type = {
             'ruleset1': [

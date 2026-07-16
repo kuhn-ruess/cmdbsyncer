@@ -17,6 +17,7 @@ from mongoengine.errors import DoesNotExist
 import requests
 from application import logger, app, log
 from application.helpers.syncer_jinja import render_jinja
+from application.modules.debug import ColorCodes
 from application.modules.custom_attributes.models import CustomAttributeRule as \
     CustomAttributeRuleModel
 from application.modules.custom_attributes.rules import CustomAttributeRule
@@ -216,6 +217,17 @@ class Plugin():
         instead, so the event is reported in exactly one place.
         """
         self.log_details.append(('error', f'{error_obj}'))
+
+    def log_error(self, message):
+        """
+        Record an ERROR detail for the run's log entry AND print it on
+        the CLI. Errors buried only in the web log read like the export
+        silently dropped something (field report: a skipped static rule
+        was only visible in the log entry) — every error a run records
+        must also be visible in the terminal.
+        """
+        print(f"{ColorCodes.FAIL} !! {message}{ColorCodes.ENDC}")
+        self.log_details.append(('ERROR', message))
 
     def save_log(self):
         """
