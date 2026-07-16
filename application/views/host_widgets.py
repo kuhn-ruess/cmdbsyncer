@@ -74,8 +74,13 @@ class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
             html += (
                 f'<div class="card" style="margin-bottom:4px; '
                 f'border-left: 3px solid #3498db;">'
+                # Theme-aware header: the themes define --surface-* tokens,
+                # the fallback keeps the light look on plain Bootstrap. A
+                # hardcoded light background made the header unreadable on
+                # the dark themes.
                 f'<div class="card-header p-1" '
-                f'style="background-color:#eef6fc;">'
+                f'style="background-color:var(--surface-subtle, #eef6fc); '
+                f'color:var(--surface-text, inherit);">'
                 f'<i class="fa fa-clone"></i> '
                 f'<strong>{escape(template.hostname)}</strong>'
                 f'</div>'
