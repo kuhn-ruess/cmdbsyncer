@@ -32,6 +32,7 @@ from application.docu_links import docu_links
 from application.modules.rule.views import (
     RuleModelView,
     form_subdocuments_template,
+    invalidate_host_rule_caches,
     _render_full_conditions,
     get_rule_json,
     _render_jinja,
@@ -667,9 +668,9 @@ class CheckmkMngmtRuleView(RuleModelView):
             "the per-host calculation entirely."
         )
         self.form_descriptions['project'] = (
-            "Assign this rule to a Rule Project. Project rules are staged and "
-            "pushed only through the project's test/prod workflow — they are "
-            "left out of the global 'export_rules'."
+            "Assign this rule to a Rule Project. Project rules are exported "
+            "by the normal 'export_rules' run, but only to the accounts the "
+            "project's account filter allows (empty filter = all accounts)."
         )
 
         base_config = dict(self.form_subdocuments)
@@ -899,6 +900,32 @@ class CheckmkRuleProjectView(DefaultModelView):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
 
+    def on_model_change(self, form, model, is_created):
+        """
+        A project decides which rules reach which account, so edits must
+        refresh the per-host rule outcome caches. On a rename, re-point the
+        assigned rules first — they reference the project by name and would
+        otherwise be silently dropped from every export.
+        """
+        if not is_created:
+            stored = CheckmkRuleProject.objects(
+                id=model.id).only('name').first()
+            if stored and stored.name != model.name:
+                CheckmkRuleMngmt.objects(project=stored.name).update(
+                    project=model.name)
+                CheckmkDCDRule.objects(project=stored.name).update(
+                    project=model.name)
+        invalidate_host_rule_caches()
+        return super().on_model_change(form, model, is_created)
+
+    def on_model_delete(self, model):
+        """
+        Deleting a project changes which rules are exported — drop the
+        per-host rule outcome caches.
+        """
+        invalidate_host_rule_caches()
+        return super().on_model_delete(model)
+
     @expose('/overview')
     def overview_view(self):
         """
@@ -976,13 +1003,11 @@ class CheckmkRuleProjectView(DefaultModelView):
             project = CheckmkRuleProject.objects(name=name).first() \
                 or CheckmkRuleProject(name=name)
             project.documentation = proj_data.get('documentation')
-            project.test_account = proj_data.get('test_account')
-            project.prod_account = proj_data.get('prod_account')
-            # An imported project always starts fresh — never inherit an
-            # 'approved'/'live' status (or approver) from another instance.
-            project.status = 'draft'
-            project.approved_by = None
-            project.approved_at = None
+            # Keep the account filter — without it an imported project
+            # silently falls back to "all accounts".
+            project.limit_by_accounts = [
+                str(entry) for entry in
+                (proj_data.get('limit_by_accounts') or []) if entry]
             project.save()
             projects += 1
 
@@ -991,6 +1016,10 @@ class CheckmkRuleProjectView(DefaultModelView):
             imported_dcd_rules += _import_project_rules(
                 CheckmkDCDRule, block.get('dcd_rules'), name)
 
+        if projects:
+            # Imported rules are saved directly (not through the rule views),
+            # so the per-host rule outcome caches must be dropped here.
+            invalidate_host_rule_caches()
         flash(f'Imported {projects} project(s), {imported_rules} rule(s) and '
               f'{imported_dcd_rules} DCD rule(s)', 'success')
         return redirect(return_url)

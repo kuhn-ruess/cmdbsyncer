@@ -331,6 +331,12 @@ def export_rules(account):
         syncer.rewrite = rules['rewrite']
 
         actions = CheckmkRulesetRule()
+        # The applied rule set depends on the account (each project's
+        # ``limit_by_accounts`` filter), so the per-host outcome cache must
+        # be account-scoped — with the class-level default key, whichever
+        # account exports first would decide which project rules every
+        # other account gets served from the cache.
+        actions.cache_name = f'CheckmkRulesetRule_{account}'
         # Process rules in their configured ``sort_field`` order so the
         # resulting outcomes feed into ``rulsets_by_type`` already
         # ordered. The Checkmk-side reorder step (``sort_rules``) then
@@ -546,6 +552,10 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
             Name overwrite
             """
         actions = ExportDCD(account)
+        # Account-scoped cache key: the DCD rule set below is filtered by
+        # each project's account filter, so cached outcomes are only valid
+        # for the account they were computed for (see export_rules).
+        actions.cache_name = f'CheckmkDCDRule_{account}'
         # Honour each project's account filter (limit_by_accounts): a DCD rule
         # assigned to a project is only exported to the accounts that project
         # allows. Rules without a project stay global (exported everywhere),

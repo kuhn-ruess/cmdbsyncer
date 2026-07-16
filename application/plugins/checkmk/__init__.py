@@ -192,7 +192,12 @@ def _debug_extra_engine(title, engine, rules_queryset, db_host, attributes):
     try:
         engine.debug = True
         engine.rules = rules_queryset
-        engine.get_outcomes(db_host, attributes['all'])
+        # use_cache=False: the debug run evaluates a different rule set
+        # than the exports (all rules instead of the account's project
+        # scope) and must neither poison the export's cache slot nor
+        # short-circuit on a cached result (which would leave the debug
+        # table empty).
+        engine.get_outcomes(db_host, attributes['all'], use_cache=False)
         return engine.debug_lines
     except Exception as exp:  # pylint: disable=broad-exception-caught
         return [{
@@ -274,9 +279,6 @@ def get_host_debug_data(hostname):
         from .models import CheckmkDowntimeRule
         from .rules import DefaultRule as CheckmkDefaultRule
         downtime_rules = CheckmkDefaultRule()
-        # Explicit cache key: the default would be the class qualname
-        # ('DefaultRule'), which is too generic to own a cache slot.
-        downtime_rules.cache_name = 'checkmk_downtime_rules'
         rule_logs['Downtime Rules'] = _debug_extra_engine(
             'Downtime Rules', downtime_rules,
             CheckmkDowntimeRule.objects(enabled=True),
