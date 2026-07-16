@@ -9,6 +9,7 @@ from flask import request, flash, redirect, url_for, Response
 from flask_admin.actions import action
 from flask_admin.base import expose
 from flask_admin.contrib.mongoengine.filters import FilterLike
+from flask_admin.form.widgets import Select2Widget
 from flask_login import current_user
 from wtforms import SelectMultipleField
 
@@ -31,6 +32,11 @@ def _account_choices():
 
 class AccountsMultiSelectField(SelectMultipleField):
     """Multi-select of accounts, stored as a list of account names."""
+    # Select2 chips instead of the native multi-select listbox: the native
+    # widget needs Ctrl/Cmd-click and barely highlights the selection on
+    # the dark themes — with chips the picked accounts are always visible.
+    widget = Select2Widget(multiple=True)
+
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('choices', _account_choices)
         # Tolerate a saved name whose account was since disabled/removed.
