@@ -318,3 +318,29 @@ pre.syncer-code {
 .select2-dropdown-open .select2-choice {
     background: var(--surface-bg) !important;
 }
+
+/* Breadcrumbs (e.g. the Files admin path bar): Bootstrap's default light
+   background ignores the theme. Identical block in every theme — the
+   values resolve through the --surface-* tokens defined above. */
+.breadcrumb {
+    background-color: var(--surface-subtle) !important;
+    border: 1px solid var(--surface-border) !important;
+    color: var(--surface-text) !important;
+}
+.breadcrumb .breadcrumb-item a { color: var(--surface-text) !important; }
+.breadcrumb-item.active { color: var(--surface-muted) !important; }
+.breadcrumb-item + .breadcrumb-item::before {
+    color: var(--surface-muted) !important;
+}
+
+/* Pygments-rendered outcome previews in the rule lists (e.g. "Checkmk
+   Outcomes", DCD rules): Bootstrap's reboot paints <pre> dark (#212529)
+   and .text-muted a light-theme gray — unreadable on dark surfaces.
+   Resolve both through the --surface-* tokens. */
+.card .highlight pre {
+    color: var(--surface-text) !important;
+    background: transparent !important;
+}
+.card .text-muted, .card .card-subtitle {
+    color: var(--surface-muted) !important;
+}
