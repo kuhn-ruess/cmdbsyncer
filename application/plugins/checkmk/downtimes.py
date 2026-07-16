@@ -18,6 +18,13 @@ class CheckmkDowntimeSync(CMK2):
     # Reset Log Details
     #log_details = []
 
+    def __init__(self, account=False):
+        super().__init__(account)
+        # Run statistics for the final status line: without it a run where
+        # every configured downtime already exists in Checkmk ends silently
+        # and looks broken to the operator.
+        self.dt_stats = {'created': 0, 'existing': 0, 'failed': 0}
+
 
     def ahead_days(self, offset):
         """
@@ -216,9 +223,11 @@ class CheckmkDowntimeSync(CMK2):
             data['duration'] = int(downtime['duration'])
         try:
             self.request(url, method="POST", data=data)
+            self.dt_stats['created'] += 1
             print(f"\n{cc.OKGREEN} *{cc.ENDC} Set Downtime for "\
                   f"{data['start_time']} ({data['comment']})")
         except CmkException as error:
+            self.dt_stats['failed'] += 1
             self.log_details.append(("error", f"Downtime failed {error}"))
             print(f"\n{cc.WARNING} *{cc.ENDC} Downtime failed: "\
                   f"{error}")
@@ -239,6 +248,8 @@ class CheckmkDowntimeSync(CMK2):
             for downtime in configured_downtimes:
                 if downtime not in current_downtimes:
                     self.set_downtime(hostname, downtime)
+                else:
+                    self.dt_stats['existing'] += 1
         except Exception as exp:  # pylint: disable=broad-exception-caught
             self.log_details.append(('error', f'Exception {exp}'))
             print(f"Exception: {exp}")
@@ -279,6 +290,14 @@ class CheckmkDowntimeSync(CMK2):
                 self.do_hosts_downtimes(hostname, host_actions, attributes,
                                         current_by_host.get(hostname, []))
                 progress.advance(task1)
+
+        # Final status line: a fully deduplicated run creates nothing and
+        # would otherwise end without any output, which reads like a failure.
+        print(f"{cc.OKGREEN} -- {cc.ENDC}Downtimes: {self.dt_stats['created']} created, "
+              f"{self.dt_stats['existing']} already present in Checkmk, "
+              f"{self.dt_stats['failed']} failed")
+        for key, value in self.dt_stats.items():
+            self.log_details.append((f'downtimes_{key}', value))
 
     def run_async(self):
         """
