@@ -84,6 +84,7 @@ class TestCheckMkDowntimeSync(unittest.TestCase):
         call_data = mock_req.call_args[1]['data']
         self.assertEqual(call_data['host_name'], 'host1')
         self.assertNotIn('duration', call_data)
+        self.assertEqual(self.sync.dt_stats['created'], 1)
 
     def test_set_downtime_with_duration(self):
         downtime = {
@@ -114,6 +115,7 @@ class TestCheckMkDowntimeSync(unittest.TestCase):
             self.sync.set_downtime('host1', downtime)
 
         self.assertEqual(self.sync.log_details[0][0], 'error')
+        self.assertEqual(self.sync.dt_stats['failed'], 1)
 
     def test_do_hosts_downtimes_exception_logged(self):
         with patch.object(self.sync, 'calculate_configured_downtimes',
@@ -174,6 +176,8 @@ class TestCheckMkDowntimeSync(unittest.TestCase):
                                          [existing])
 
         mock_set.assert_called_once_with('h1', fresh)
+        # the skipped downtime is counted for the final status line
+        self.assertEqual(self.sync.dt_stats['existing'], 1)
 
 
 if __name__ == '__main__':
