@@ -142,6 +142,45 @@ class TestPlugin(unittest.TestCase):
         self.assertEqual(call_args['json'], json_data)
 
     @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.requests')
+    @patch('application.modules.plugin.logger')
+    def test_inner_request_account_timeout_override(self, _logger, mock_requests, mock_app):
+        mock_app.config = self.mock_app_config
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'success'}
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
+
+        plugin = Plugin()
+        plugin.config = {'name': 'test_account', 'request_timeout': '300'}
+        plugin.inner_request('GET', 'http://example.com')
+
+        call_args = mock_session.request.call_args[1]
+        self.assertEqual(call_args['timeout'], 300.0)
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.requests')
+    @patch('application.modules.plugin.logger')
+    def test_inner_request_invalid_account_timeout_falls_back(
+        self, mock_logger, mock_requests, mock_app
+    ):
+        mock_app.config = self.mock_app_config
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'success'}
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
+
+        plugin = Plugin()
+        plugin.config = {'name': 'test_account', 'request_timeout': 'soon'}
+        plugin.inner_request('GET', 'http://example.com')
+
+        call_args = mock_session.request.call_args[1]
+        self.assertEqual(call_args['timeout'], 30)
+        mock_logger.warning.assert_called_once()
+
+    @patch('application.modules.plugin.app')
     @patch('application.modules.plugin.logger')
     @patch('application.modules.plugin.time')
     @patch('builtins.print')

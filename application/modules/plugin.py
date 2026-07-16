@@ -305,9 +305,22 @@ class Plugin():
         logger.debug(f"Request ({method.upper()}) to {url}")
 
         method = method.lower()
+        timeout = app.config['HTTP_REQUEST_TIMEOUT']
+        # Per-account override: a `request_timeout` custom field on the
+        # account wins over the global HTTP_REQUEST_TIMEOUT. Slow target
+        # systems (e.g. large distributed Checkmk setups, where every
+        # downtime read/write fans out to all sites) need more than the
+        # default 30 seconds without raising it deployment-wide.
+        if account_timeout := self.config.get('request_timeout'):
+            try:
+                timeout = float(account_timeout)
+            except (TypeError, ValueError):
+                logger.warning(
+                    f"Ignoring invalid request_timeout {account_timeout!r} "
+                    f"on account {self.config.get('name')!r}")
         payload = {
             'verify': self.verify,
-            'timeout': app.config['HTTP_REQUEST_TIMEOUT'],
+            'timeout': timeout,
         }
 
         if headers:
