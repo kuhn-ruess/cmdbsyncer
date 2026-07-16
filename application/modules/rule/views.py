@@ -18,6 +18,7 @@ from application.views.default import DefaultModelView
 from application.modules.rule.models import filter_actions, rule_types, condition_types
 from application.docu_links import docu_links
 from application.helpers.sates import add_changes
+from application.models.host import Host
 from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 
 
@@ -258,10 +259,28 @@ def _render_attribute_outcomes(_view, _context, model, _name):
     return Markup(html)
 
 
+def invalidate_host_rule_caches():
+    """
+    Drop the per-host rule outcome caches after a rule was changed.
+
+    ``db_host.cache`` is only reset when the host's own labels or inventory
+    change — a rule edit alone never touches it. Exports would keep using
+    the outcomes cached before the edit until every host happens to be
+    re-imported (reported from the field: a corrected downtime rule
+    exported nothing for most hosts). Outcome cache keys are heterogeneous
+    (e.g. 'ExportDowntimes', qualname-based keys), so a prefix-scoped clear
+    is not possible — drop the whole cache, the next run recomputes it.
+    """
+    Host.objects(cache__ne={}).update(set__cache={})
+
+
 def _render_full_conditions(_view, _context, model, _name):
     """
     Render full condition set which contains host or labels
     """
+    # Rules created programmatically or via JSON import may carry None in
+    # the negate booleans or match-type fields — render them like their
+    # defaults instead of raising a KeyError that breaks the whole list view.
     negate = {
         True: 'not ',
         False: ' ',
@@ -275,9 +294,9 @@ def _render_full_conditions(_view, _context, model, _name):
                     <h6 class="card-subtitle mb-2 text-muted">Hostname</h6>
                     <p class="card-text">
                      <span class="badge badge-primary">
-                     {escape(negate[entry.hostname_match_negate])}
-                     {escape(condition_types[entry.hostname_match])}</span>
-                    <span class="badge badge-info">{escape(entry.hostname)}</span>
+                     {escape(negate[bool(entry.hostname_match_negate)])}
+                     {escape(condition_types.get(entry.hostname_match, ''))}</span>
+                    <span class="badge badge-info">{escape(entry.hostname or '')}</span>
                     </p>
                   </div>
                 </div>
@@ -289,16 +308,18 @@ def _render_full_conditions(_view, _context, model, _name):
                     <h6 class="card-subtitle mb-2 text-muted">Key</h6>
                     <p class="card-text">
                      <span class="badge badge-primary">
-                        {escape(negate[entry.tag_match_negate])}{escape(condition_types[entry.tag_match])}
+                        {escape(negate[bool(entry.tag_match_negate)])}{escape(
+                            condition_types.get(entry.tag_match, ''))}
                      </span>
-                     <span class="badge badge-info">{escape(entry.tag)}</span>
+                     <span class="badge badge-info">{escape(entry.tag or '')}</span>
                     </p>
                     <h6 class="card-subtitle mb-2 text-muted">Value</h6>
                     <p class="card-text">
                     <span class="badge badge-primary">
-                        {escape(negate[entry.value_match_negate])} {escape(condition_types[entry.value_match])}
+                        {escape(negate[bool(entry.value_match_negate)])} {escape(
+                            condition_types.get(entry.value_match, ''))}
                     </span>
-                    <span class="badge badge-info">{escape(entry.value)}</span>
+                    <span class="badge badge-info">{escape(entry.value or '')}</span>
                     </p>
                   </div>
                 </div>
@@ -448,6 +469,7 @@ class RuleModelView(DefaultModelView):
         Overwrite Actions on Model Change
         """
         add_changes()
+        invalidate_host_rule_caches()
 
         try:
             super().on_model_change(form, model, is_created)
@@ -460,6 +482,7 @@ class RuleModelView(DefaultModelView):
         Overwrite Actions on Model Delete
         """
         add_changes()
+        invalidate_host_rule_caches()
 
         return super().on_model_delete(model)
 
@@ -586,6 +609,7 @@ class FiltereModelView(DefaultModelView):
         Overwrite Actions on Model Change
         """
         add_changes()
+        invalidate_host_rule_caches()
 
         try:
             super().on_model_change(form, model, is_created)
@@ -598,6 +622,7 @@ class FiltereModelView(DefaultModelView):
         Overwrite Actions on Model Delete
         """
         add_changes()
+        invalidate_host_rule_caches()
 
         return super().on_model_delete(model)
 
