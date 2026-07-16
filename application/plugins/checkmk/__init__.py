@@ -183,6 +183,31 @@ def export_hosts(account, limit, debug, dry_run, save_requests):
 #.
 #   .-- Command: Host Debug
 
+def _debug_extra_engine(title, engine, rules_queryset, db_host, attributes):
+    """
+    Evaluate one additional rule engine for the host debug page and
+    return its debug lines. Error-tolerant: a single bad rule must not
+    tank the whole debug page.
+    """
+    try:
+        engine.debug = True
+        engine.rules = rules_queryset
+        # use_cache=False: the debug run evaluates a different rule set
+        # than the exports (all rules instead of the account's project
+        # scope) and must neither poison the export's cache slot nor
+        # short-circuit on a cached result (which would leave the debug
+        # table empty).
+        engine.get_outcomes(db_host, attributes['all'], use_cache=False)
+        return engine.debug_lines
+    except Exception as exp:  # pylint: disable=broad-exception-caught
+        return [{
+            'name': f'ERROR evaluating {title}',
+            'hit': False, 'last_match': '',
+            'condition_type': '', 'no_match_reason': None,
+            'error': str(exp),
+        }]
+
+
 def get_host_debug_data(hostname):
     """
     Returns Debug Data
@@ -239,28 +264,25 @@ def get_host_debug_data(hostname):
     rule_logs['rewrite'] = rules['rewrite'].debug_lines
     rule_logs['actions'] = rules['actions'].debug_lines
 
-    # Also exercise the Setup-Rules engine (CheckmkRuleMngmt → creates
-    # Checkmk rules per ruleset) so admins can see *why* a host does or
-    # does not end up with a given ruleset push. Kept inside a try/except
-    # because a single bad rule shouldn't tank the whole debug page.
     if attributes:
-        try:
-            setup_rules = CheckmkRulesetRule()
-            setup_rules.debug = True
-            setup_rules.rules = CheckmkRuleMngmt.objects(enabled=True).order_by('sort_field')
-            # use_cache=False: the debug run evaluates all Setup Rules
-            # instead of the account's project scope and must neither
-            # poison the export's cache slot nor short-circuit on a
-            # cached result (which would leave the debug table empty).
-            setup_rules.get_outcomes(db_host, attributes['all'], use_cache=False)
-            rule_logs['Setup Rules'] = setup_rules.debug_lines
-        except Exception as exp:  # pylint: disable=broad-exception-caught
-            rule_logs['Setup Rules'] = [{
-                'name': 'ERROR evaluating Setup Rules',
-                'hit': False, 'last_match': '',
-                'condition_type': '', 'no_match_reason': None,
-                'error': str(exp),
-            }]
+        # Also exercise the Setup-Rules engine (CheckmkRuleMngmt → creates
+        # Checkmk rules per ruleset) so admins can see *why* a host does or
+        # does not end up with a given ruleset push.
+        rule_logs['Setup Rules'] = _debug_extra_engine(
+            'Setup Rules', CheckmkRulesetRule(),
+            CheckmkRuleMngmt.objects(enabled=True).order_by('sort_field'),
+            db_host, attributes)
+
+        # Same for the Downtime rules, so a downtime that unexpectedly is
+        # not exported can be debugged in the GUI — including which
+        # condition failed (requested from the field).
+        from .models import CheckmkDowntimeRule
+        from .rules import DefaultRule as CheckmkDefaultRule
+        downtime_rules = CheckmkDefaultRule()
+        rule_logs['Downtime Rules'] = _debug_extra_engine(
+            'Downtime Rules', downtime_rules,
+            CheckmkDowntimeRule.objects(enabled=True),
+            db_host, attributes)
 
     # We need to save the host,
     # Otherwise, if a rule with folder pools is executed at first time here,
