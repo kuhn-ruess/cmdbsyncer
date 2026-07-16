@@ -347,6 +347,13 @@ class IndexView(AdminIndexView):
         """
         Index view with changelog
         """
+        # A fresh installation lands on the First Steps wizard until the
+        # setup checklist is complete or an admin dismissed it.
+        # pylint: disable=import-outside-toplevel
+        from application.views.first_steps import first_steps_pending
+        if first_steps_pending():
+            return redirect(url_for('first_steps.index'))
+
         changelog_html = None
         try:
             changelog_html = self._markdown_to_html(

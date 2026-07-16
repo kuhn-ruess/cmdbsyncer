@@ -406,6 +406,9 @@
                         <li class="dropdown-header">{{ current_user.email }}</li>
                         {% endif %}
                         <li><a class="dropdown-item"
+                               href="{{ url_for('first_steps.index') }}">
+                          <i class="fa fa-rocket"></i> First Steps</a></li>
+                        <li><a class="dropdown-item"
                                href="{{ config['BASE_PREFIX'] }}change-password">
                           <i class="fa fa-key"></i> Change Password</a></li>
                         <li><a class="dropdown-item"

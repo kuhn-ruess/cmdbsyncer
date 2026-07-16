@@ -489,6 +489,12 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
                       'VMware': 'fa fa-server'
                   })
 
+    #   .-- First Steps (not in the main menu — linked from the profile
+    #   icon dropdown and used as the landing page while setup is open)
+    from application.views.first_steps import FirstStepsView
+    admin.add_view(FirstStepsView(name="First Steps", endpoint="first_steps",
+                                  menu_icon_type='fa', menu_icon_value='fa-rocket'))
+    #.
     #   .-- Host
     from application.models.host import Host
     from application.views.host import (
