@@ -23,6 +23,25 @@ _RULE_DESCRIPTIONS = {
     'anyway': "ALWAYS match",
 }
 
+
+def format_condition(condition):
+    """
+    Compact one-line rendering of a FullCondition dict for debug output,
+    so the deciding condition of a rule match/miss is readable in a table.
+    """
+    if not condition:
+        return ''
+    if condition.get('match_type') == 'tag':
+        tag_negate = ' negated' if condition.get('tag_match_negate') else ''
+        value_negate = ' negated' if condition.get('value_match_negate') else ''
+        return (f"tag {condition.get('tag_match')}{tag_negate} "
+                f"'{condition.get('tag')}', "
+                f"value {condition.get('value_match')}{value_negate} "
+                f"'{condition.get('value', '')}'")
+    hostname_negate = ' negated' if condition.get('hostname_match_negate') else ''
+    return (f"hostname {condition.get('hostname_match')}{hostname_negate} "
+            f"'{condition.get('hostname', '')}'")
+
 class Rule():
     """
     Base Rule Class
@@ -233,12 +252,13 @@ class Rule():
 
             table = Table(title=title, box=box.ASCII_DOUBLE_HEAD,\
                         header_style="bold blue", title_style="yellow", \
-                        title_justify="left", width=90)
+                        title_justify="left", width=130)
             table.add_column("Hit")
             table.add_column("Description")
             table.add_column("Rule Name")
             table.add_column("Rule ID")
             table.add_column("Last Match")
+            table.add_column("Deciding Condition")
 
         outcomes = {}
         rule_objs, prepared_rules = self._iter_rule_docs()
@@ -293,8 +313,20 @@ class Rule():
                     "last_match": str(rule['last_match']),
                 }
                 self.debug_lines.append(debug_data)
+                # Show WHY the rule hit or missed: for 'all' rules the first
+                # failing condition, for 'any' rules the matching one (on a
+                # miss, the last condition checked — all of them failed).
+                if rule_hit:
+                    deciding = format_condition(match_reason)
+                    if deciding:
+                        deciding = f"matched: {deciding}"
+                else:
+                    deciding = format_condition(no_match_reason)
+                    if deciding:
+                        deciding = f"failed: {deciding}"
                 table.add_row(str(rule_hit), _RULE_DESCRIPTIONS[condition_typ],\
-                              rule['name'][:30], str(rule['_id']), str(rule['last_match']))
+                              rule['name'][:30], str(rule['_id']), str(rule['last_match']),
+                              deciding)
             if rule_hit:
                 # outcomes were pre-converted to plain dicts in
                 # _iter_rule_docs so we don't rebuild them per host.

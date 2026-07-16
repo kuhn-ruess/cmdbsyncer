@@ -537,21 +537,21 @@ class Plugin():
         return self.actions.get_outcomes(db_host, attributes)
 #.
 
-    def debug_rules(self, hostname, model):
+    def debug_rules(self, hostname, _model=None):
         """
         Debug mode for inspecting rule outcomes on a specific host.
-        
+
         This method is used with the --debug-rules command line switch to
-        analyze how rules are applied to a specific host. It clears relevant
-        caches and shows detailed rule processing information.
-        
+        analyze how rules are applied to a specific host. It clears the
+        host's cache and shows detailed rule processing information.
+
         Args:
             hostname (str): Hostname to debug
-            model (str): Model/plugin type for cache key filtering
-            
+            _model (str): Unused, kept for caller compatibility
+
         Returns:
             None: Prints debug information to console
-            
+
         Note:
             This method prints directly to console and is intended for
             interactive debugging sessions.
@@ -564,11 +564,13 @@ class Plugin():
         }
         try:
             db_host = Host.objects.get(hostname=hostname)
-            for key in list(db_host.cache.keys()):
-                if key.lower().startswith(model):
-                    del db_host.cache[key]
-            if "CustomAttributeRule" in db_host.cache:
-                del db_host.cache['CustomAttributeRule']
+            # Clear the host's whole cache. Outcome caches use heterogeneous
+            # keys (e.g. 'ExportDowntimes', qualname-based keys), so the old
+            # model-prefix filter missed them (and compared a lowercased key
+            # against a capitalized prefix). get_outcomes() then returned the
+            # cached result before any debug table was rendered — the debug
+            # run silently printed nothing.
+            db_host.cache = {}
             db_host.save()
         except DoesNotExist:
             print(f"{cc.FAIL}Host not Found{cc.ENDC}")
