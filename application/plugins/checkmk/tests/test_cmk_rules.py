@@ -22,6 +22,7 @@ from application.plugins.checkmk.cmk_rules import (
     CheckmkRuleSync,
 )
 import application.plugins.checkmk.inits as inits  # noqa: E402  pylint: disable=consider-using-from-import
+from application.plugins.checkmk.helpers import project_allows_account
 from tests import base_mock_init
 
 
@@ -889,7 +890,7 @@ class TestImportProjectRules(unittest.TestCase):
     """inits.import_project_rules_from_folder orchestration."""
 
     def test_missing_project_returns_zero(self):
-        with patch.object(inits, 'CheckmkRuleProject') as proj, \
+        with patch.object(inits, 'Project') as proj, \
                 patch.object(inits, 'CheckmkRuleSync') as sync:
             proj.objects.return_value.first.return_value = None
             self.assertEqual(
@@ -897,7 +898,7 @@ class TestImportProjectRules(unittest.TestCase):
             sync.assert_not_called()
 
     def test_counts_only_entries_with_id_and_passes_recursive(self):
-        with patch.object(inits, 'CheckmkRuleProject') as proj, \
+        with patch.object(inits, 'Project') as proj, \
                 patch.object(inits, 'CheckmkRuleSync') as sync, \
                 patch.object(inits, 'CheckmkRuleMngmt'), \
                 patch.object(inits, 'RuleMngmtOutcome'):
@@ -919,7 +920,7 @@ class TestImportProjectRules(unittest.TestCase):
         swallowed into a "0 imported" result — it has to reach the caller so
         the CLI/web UI can surface it instead of showing an empty import."""
         from application.plugins.checkmk.cmk2 import CmkException  # noqa: E402  pylint: disable=import-outside-toplevel
-        with patch.object(inits, 'CheckmkRuleProject') as proj, \
+        with patch.object(inits, 'Project') as proj, \
                 patch.object(inits, 'CheckmkRuleSync') as sync:
             proj.objects.return_value.first.return_value = SimpleNamespace(name='P')
             instance = sync.return_value
@@ -933,20 +934,70 @@ class TestImportProjectRules(unittest.TestCase):
 class TestProjectsForAccount(unittest.TestCase):
     """inits.projects_for_account account-filter selection."""
 
+    @staticmethod
+    def _project(name, limit=None, deny=None):
+        return SimpleNamespace(name=name,
+                               limit_by_accounts=limit or [],
+                               deny_by_accounts=deny or [])
+
     def test_account_filter_selection(self):
         projects = [
-            SimpleNamespace(name='all', limit_by_accounts=[]),
-            SimpleNamespace(name='only_a', limit_by_accounts=['acc_a']),
-            SimpleNamespace(name='a_and_b', limit_by_accounts=['acc_a', 'acc_b']),
-            SimpleNamespace(name='only_b', limit_by_accounts=['acc_b']),
+            self._project('all'),
+            self._project('only_a', limit=['acc_a']),
+            self._project('a_and_b', limit=['acc_a', 'acc_b']),
+            self._project('only_b', limit=['acc_b']),
         ]
-        with patch.object(inits, 'CheckmkRuleProject') as mock_project:
+        with patch.object(inits, 'Project') as mock_project:
             mock_project.objects.return_value = projects
             for_a = inits.projects_for_account('acc_a')
             for_b = inits.projects_for_account('acc_b')
         # Empty filter applies everywhere; account-specific filters only match.
         self.assertEqual(for_a, ['all', 'only_a', 'a_and_b'])
         self.assertEqual(for_b, ['all', 'a_and_b', 'only_b'])
+
+    def test_deny_list_wins_over_allow_list(self):
+        projects = [
+            self._project('all_but_a', deny=['acc_a']),
+            self._project('a_despite_deny_b', limit=['acc_a', 'acc_b'],
+                          deny=['acc_b']),
+        ]
+        with patch.object(inits, 'Project') as mock_project:
+            mock_project.objects.return_value = projects
+            for_a = inits.projects_for_account('acc_a')
+            for_b = inits.projects_for_account('acc_b')
+        # acc_a is denied on the first project; acc_b is on the allow list of
+        # the second but the deny list wins.
+        self.assertEqual(for_a, ['a_despite_deny_b'])
+        self.assertEqual(for_b, ['all_but_a'])
+
+
+class TestProjectAllowsAccount(unittest.TestCase):
+    """helpers.project_allows_account allow/deny evaluation."""
+
+    @staticmethod
+    def _allows(account, limit=None, deny=None):
+        project = SimpleNamespace(limit_by_accounts=limit or [],
+                                  deny_by_accounts=deny or [])
+        return project_allows_account(project, account)
+
+    def test_no_filters_allows_everyone(self):
+        self.assertTrue(self._allows('any'))
+
+    def test_allow_list_restricts(self):
+        self.assertTrue(self._allows('acc_a', limit=['acc_a']))
+        self.assertFalse(self._allows('acc_b', limit=['acc_a']))
+
+    def test_deny_list_excludes(self):
+        self.assertFalse(self._allows('acc_a', deny=['acc_a']))
+        self.assertTrue(self._allows('acc_b', deny=['acc_a']))
+
+    def test_deny_wins_over_allow(self):
+        self.assertFalse(self._allows('acc_a', limit=['acc_a'], deny=['acc_a']))
+
+    def test_missing_fields_tolerated(self):
+        # Older project documents (or stubs) may lack deny_by_accounts.
+        project = SimpleNamespace(limit_by_accounts=None)
+        self.assertTrue(project_allows_account(project, 'any'))
 
 
 class TestExportDcdRulesProjectFilter(unittest.TestCase):

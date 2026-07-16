@@ -522,6 +522,12 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
                                        category="Modules",
                                        menu_icon_type='fa', menu_icon_value='fa-cog'))
     #.
+    #   .-- Projects
+    from application.models.project import Project
+    from application.views.project import ProjectView
+    admin.add_view(ProjectView(Project, name="Projects",
+                               menu_icon_type='fa', menu_icon_value='fa-cubes'))
+    #.
 
     _register_all_plugin_admin_views(admin)
 

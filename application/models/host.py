@@ -142,6 +142,12 @@ class Host(db.Document):
 
     folder = db.StringField() # Is just Checkmk related, better solution needed
 
+    # Name of the Project this host belongs to (optional). Exports that
+    # honour projects (currently the Checkmk host export) only push the
+    # host to accounts the project's account filter allows — same scope
+    # as the project's rules.
+    project = db.StringField()
+
     log = db.ListField(field=db.StringField())
 
     cache = db.DictField()

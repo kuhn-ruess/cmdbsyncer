@@ -445,6 +445,33 @@ def _ensure_app_wsgi():
     print(" -> Created new app.wsgi")
 
 
+def _migrate_project_collection():
+    """
+    Move documents from the legacy ``checkmk_rule_project`` collection into
+    the generic ``project`` collection (the CheckmkRuleProject model became
+    the plain Project model). Idempotent: existing targets (matched by name)
+    are never overwritten, and the legacy collection is dropped once every
+    document has been carried over.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.project import Project
+    print("Check for legacy checkmk_rule_project collection")
+    database = Project._get_collection().database  # pylint: disable=protected-access
+    if 'checkmk_rule_project' not in database.list_collection_names():
+        print(" -> Nothing to migrate")
+        return
+    legacy = database['checkmk_rule_project']
+    target = database['project']
+    moved = 0
+    for doc in legacy.find():
+        if target.find_one({'name': doc.get('name')}):
+            continue
+        target.insert_one(doc)
+        moved += 1
+    legacy.drop()
+    print(f" -> Migrated {moved} project(s), removed legacy collection")
+
+
 @_cli_sys.command('self_configure')
 def self_configure():
     """
@@ -490,6 +517,9 @@ def self_configure():
     # Migrate Users
     print("Migrate users")
     User.migrate_missing_names()
+
+    # Rule Projects became generic Projects
+    _migrate_project_collection()
 
 #.
 #   .-- Command: Install default Ansible playbooks

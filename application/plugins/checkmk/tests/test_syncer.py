@@ -1176,6 +1176,31 @@ class TestSyncCMK2Misc(unittest.TestCase):
             self.syncer.create_host('h', '/f', {})
         self.assertEqual(self.syncer.log_details[0][0], 'error')
 
+    # ---- project_denied_for_account ----
+    def test_project_denied_for_account(self):
+        self.syncer.account_name = 'acc_a'
+
+        def _project(name, deny=None):
+            project = Mock()
+            project.name = name
+            project.limit_by_accounts = []
+            project.deny_by_accounts = deny or []
+            return project
+
+        projects = [_project('open'), _project('closed', deny=['acc_a'])]
+        with patch('application.models.project.Project') \
+                as mock_project:
+            mock_project.objects.return_value = projects
+            # Unassigned hosts are never project-filtered.
+            self.assertFalse(self.syncer.project_denied_for_account(None))
+            self.assertFalse(self.syncer.project_denied_for_account(''))
+            self.assertFalse(self.syncer.project_denied_for_account('open'))
+            self.assertTrue(self.syncer.project_denied_for_account('closed'))
+            # A dangling reference (project deleted) must not drop the host.
+            self.assertFalse(self.syncer.project_denied_for_account('ghost'))
+            # The project map is cached per run — one query only.
+            mock_project.objects.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
