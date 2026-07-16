@@ -440,12 +440,20 @@ class Rule():
         return self.check_rules(db_host.hostname)
 
 
-    def get_outcomes(self, db_host, attributes, persist_cache=True):
+    def get_outcomes(self, db_host, attributes, persist_cache=True,
+                     use_cache=True):
         """
         Handle Return of outcomes.
+
+        ``use_cache=False`` bypasses the per-host outcome cache entirely
+        (neither read nor written). Debug evaluations need this: they run
+        with a different rule set than the exports (e.g. all Setup Rules
+        instead of the account's project scope) and must not poison the
+        export's cache slot — nor return a stale cached result instead of
+        producing debug lines.
         """
         cache = self.cache_name or self._default_cache_key
-        if cache in db_host.cache:
+        if use_cache and cache in db_host.cache:
             logger.debug("Using Rule Cache for %s", db_host.hostname)
             return db_host.cache[cache]
 
@@ -453,9 +461,10 @@ class Rule():
         self.hostname = db_host.hostname
         self.db_host = db_host
         rules = self.check_rule_match(db_host)
-        db_host.cache[cache] = rules
-        if persist_cache:
-            db_host.save()
-        else:
-            setattr(db_host, '_cache_dirty', True)
+        if use_cache:
+            db_host.cache[cache] = rules
+            if persist_cache:
+                db_host.save()
+            else:
+                setattr(db_host, '_cache_dirty', True)
         return rules

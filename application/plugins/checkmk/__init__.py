@@ -248,7 +248,11 @@ def get_host_debug_data(hostname):
             setup_rules = CheckmkRulesetRule()
             setup_rules.debug = True
             setup_rules.rules = CheckmkRuleMngmt.objects(enabled=True).order_by('sort_field')
-            setup_rules.get_outcomes(db_host, attributes['all'])
+            # use_cache=False: the debug run evaluates all Setup Rules
+            # instead of the account's project scope and must neither
+            # poison the export's cache slot nor short-circuit on a
+            # cached result (which would leave the debug table empty).
+            setup_rules.get_outcomes(db_host, attributes['all'], use_cache=False)
             rule_logs['Setup Rules'] = setup_rules.debug_lines
         except Exception as exp:  # pylint: disable=broad-exception-caught
             rule_logs['Setup Rules'] = [{
