@@ -30,33 +30,42 @@
            margin: 0.35rem 0.25rem;
        }
 
-       /* Changes Badge Styling */
-       #changes {
-           margin-left: 1px;
+       /* Commit button with the pending-changes count inside it. */
+       #commit-button {
            display: flex;
            align-items: center;
        }
-       #changes .badge {
-           font-size: 0.8rem;
-           padding: 0.4rem 0.6rem;
-           border-radius: 50px;
+       #commit-button .btn {
+           display: inline-flex;
+           align-items: center;
+           gap: 0.4rem;
            white-space: nowrap;
+       }
+       #commit-button .commit-count {
+           font-size: 0.82rem;
+           font-weight: 700;
+           padding: 0.15rem 0.55rem;
+           border-radius: 50px;
+           background: #ffc107;
+           color: #1a1a1a;
            max-width: 60px;
            overflow: hidden;
            text-overflow: ellipsis;
-           box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.5);
+           box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6);
            animation: cmdb-nav-pulse 2.2s infinite;
        }
        @keyframes cmdb-nav-pulse {
-           0%   { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.5); }
-           70%  { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+           0%   { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6); }
+           70%  { box-shadow: 0 0 0 8px rgba(255, 193, 7, 0); }
            100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
        }
 
        .navbar-nav.navbar-right {
            margin-right: 15px !important;
            max-width: calc(100vw - 300px);
-           overflow: hidden;
+           /* No overflow:hidden here — it clipped the profile dropdown
+              (the ul is only as tall as the navbar). The width clamp is
+              kept; the badges inside carry their own ellipsis rules. */
        }
 
        @media (max-width: 576px) {
@@ -64,9 +73,8 @@
                margin-right: 5px !important;
                max-width: calc(100vw - 200px);
            }
-           #changes .badge {
+           #commit-button .commit-count {
                font-size: 0.7rem;
-               padding: 0.3rem 0.5rem;
                max-width: 50px;
            }
        }
@@ -371,7 +379,47 @@
                       </a>
                     </li>
                     {% endif %}
-                    {% if config['CHANGES'] %} <li id='changes'><span class="badge badge-warning">{{config['CHANGES']}}</span></li>{% endif %}
+                    {# Commit button with the pending-changes count inside
+                       it — no separate floating badge. #}
+                    <li id="commit-button" class="nav-item">
+                      <a href="#activate_changes"
+                         class="toggle_activate_modal btn btn-primary commit-changes-btn"
+                         title="Commit pending changes">
+                        <i class="fa fa-check-circle"></i> Commit
+                        {% if config['CHANGES'] %}
+                        <span id="changes" class="commit-count">{{ config['CHANGES'] }}</span>
+                        {% endif %}
+                      </a>
+                    </li>
+                    {# Profile: per-user actions as an icon-only dropdown on
+                       the far right — the usual webapp pattern. Same markup
+                       as Flask-Admin's own navbar dropdowns, so the dropdown
+                       JS and the theme CSS apply unchanged. #}
+                    <li class="dropdown" id="profile-menu">
+                      <a class="dropdown-toggle nav-link" data-toggle="dropdown"
+                         href="javascript:void(0)" title="Profile"
+                         aria-label="Profile">
+                        <i class="fa fa-user-circle fa-lg"></i>
+                      </a>
+                      <ul class="dropdown-menu dropdown-menu-right">
+                        {% if current_user and current_user.is_authenticated %}
+                        <li class="dropdown-header">{{ current_user.email }}</li>
+                        {% endif %}
+                        <li><a class="dropdown-item"
+                               href="{{ config['BASE_PREFIX'] }}change-password">
+                          <i class="fa fa-key"></i> Change Password</a></li>
+                        <li><a class="dropdown-item"
+                               href="{{ config['BASE_PREFIX'] }}set-2fa">
+                          <i class="fa fa-shield"></i> Set 2FA Code</a></li>
+                        <li><a class="dropdown-item"
+                               href="{{ config['BASE_PREFIX'] }}set-theme">
+                          <i class="fa fa-paint-brush"></i> Theme</a></li>
+                        <li class="dropdown-divider"></li>
+                        <li><a class="dropdown-item"
+                               href="{{ config['BASE_PREFIX'] }}logout">
+                          <i class="fa fa-sign-out"></i> Logout</a></li>
+                      </ul>
+                    </li>
                 </ul>
                 {% endblock %}
             {% block access_control %}
@@ -454,7 +502,10 @@
         // style them. The legacy version applied `background-color:#f0f0f0;
         // color:grey` as inline styles, which beat every theme override and
         // turned the row white-ish on Gruvbox / Dracula / Nord.
-        $('a[data-role="x-editable-boolean"][data-value=""]').closest('tr').addClass('rule-disabled');
+        // Scoped to the `enabled` field: matching ANY empty boolean cell
+        // also hit e.g. the user list's `disabled` column and grayed out
+        // every active user.
+        $('a#enabled[data-role="x-editable-boolean"][data-value=""]').closest('tr').addClass('rule-disabled');
         $('a#enabled > span.icon-minus-sign').closest('tr').addClass('rule-disabled');
 
         // Gray out Commit Changes button when no changes pending

@@ -531,25 +531,15 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
 
     _register_all_plugin_admin_views(admin)
 
-    from application.views.account import AccountModelView, ChildAccountModelView
-    admin.add_category(name="Accounts", icon_type='fa', icon_value='fa-users')
-    admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts",
-                                    menu_icon_type='fa', menu_icon_value='fa-user-circle'))
-    admin.add_view(ChildAccountModelView(Account, name="Config Childs",
-                                         endpoint='account_childs', category="Accounts",
-                                         menu_icon_type='fa', menu_icon_value='fa-users'))
-
-    from application.models.cron import CronGroup, CronStats
-    from application.views.cron import CronStatsView, CronGroupView
-    admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs",
-                                 menu_icon_type='fa', menu_icon_value='fa-calendar'))
-    admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs",
-                                 menu_icon_type='fa', menu_icon_value='fa-table'))
+    from application.modules.log.models import LogEntry
+    from application.modules.log.views import LogView
+    admin.add_view(LogView(LogEntry, name="Log",
+                           menu_icon_type='fa', menu_icon_value='fa-file-text-o'))
 
     from application.views.fileadmin import FileAdminView
     if os.path.exists(app.config['FILEADMIN_PATH']):
         file_admin_view = FileAdminView(
-            app.config['FILEADMIN_PATH'], name="Filemanager",
+            app.config['FILEADMIN_PATH'], name="Files",
             menu_icon_type='fa', menu_icon_value='fa-folder-open',
         )
         admin.add_view(file_admin_view)
@@ -557,6 +547,27 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     #.
     #   .-- Settings (admin-facing tools, distinct from per-user actions)
     admin.add_category(name="Settings", icon_type='fa', icon_value='fa-cog')
+    # Accounts and Cronjobs live under Settings — they are configuration,
+    # not day-to-day working views, and keep the top bar compact. The
+    # account entries sit flat at the top, separated by a divider.
+    from application.views.account import AccountModelView, ChildAccountModelView
+    admin.add_view(AccountModelView(Account, name="Accounts", category="Settings",
+                                    menu_icon_type='fa', menu_icon_value='fa-user-circle'))
+    admin.add_view(ChildAccountModelView(Account, name="Account Overrides",
+                                         endpoint='account_childs', category="Settings",
+                                         menu_icon_type='fa', menu_icon_value='fa-users'))
+    admin.add_link(MenuLink(name='divider-accounts', category='Settings',
+                            url='#', class_name='dropdown-divider'))
+
+    from application.models.cron import CronGroup, CronStats
+    from application.views.cron import CronStatsView, CronGroupView
+    admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Settings",
+                                 menu_icon_type='fa', menu_icon_value='fa-calendar'))
+    admin.add_view(CronStatsView(CronStats, name="State Table", category="Settings",
+                                 menu_icon_type='fa', menu_icon_value='fa-table'))
+    admin.add_link(MenuLink(name='divider-cronjobs', category='Settings',
+                            url='#', class_name='dropdown-divider'))
+
     # Pre-declare enterprise sub-categories so their views land in the
     # right place when register_admin_views runs. Flask-Admin creates
     # them lazily on first reference otherwise, but referenced as sub-
@@ -572,11 +583,6 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
                                      category="Settings",
                                      menu_icon_type='fa',
                                      menu_icon_value='fa-hourglass-half'))
-
-    from application.modules.log.models import LogEntry
-    from application.modules.log.views import LogView
-    admin.add_view(LogView(LogEntry, name="Log", category="Settings",
-                           menu_icon_type='fa', menu_icon_value='fa-file-text-o'))
 
     from application.models.user import User
     from application.views.user import UserView
@@ -624,29 +630,15 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     enterprise_hook('register_admin_views', admin)
     #.
 
-    # Per-user actions as their own Flask-Admin category. Using the native
-    # category + MenuLink mechanism means Flask-Admin's own dropdown JS
-    # and CSS applies — no custom widget, no click-handling quirks.
-    admin.add_category(name='Account', icon_type='fa', icon_value='fa-user-circle')
-    admin.add_link(MenuLink(name='Change Password', category='Account',
-                            url=f"{app.config['BASE_PREFIX']}change-password",
-                            icon_type='fa', icon_value='fa-key'))
-    admin.add_link(MenuLink(name='Set 2FA Code', category='Account',
-                            url=f"{app.config['BASE_PREFIX']}set-2fa",
-                            icon_type='fa', icon_value='fa-shield'))
-    admin.add_link(MenuLink(name='Theme', category='Account',
-                            url=f"{app.config['BASE_PREFIX']}set-theme",
-                            icon_type='fa', icon_value='fa-paint-brush'))
-    admin.add_link(MenuLink(name='Logout', category='Account',
-                            url=f"{app.config['BASE_PREFIX']}logout",
-                            icon_type='fa', icon_value='fa-sign-out'))
+    # The per-user actions (password, 2FA, theme, logout) render as an
+    # icon-only profile dropdown on the right side of the navbar — see the
+    # menu_links block in templates/admin/master.html. Keeping them out of
+    # the category menu avoids the naming clash with the Accounts view.
 
     #.
-    admin.add_link(MenuLink(name='Commit Changes',
-                            url="#activate_changes",
-                            class_name="toggle_activate_modal btn btn-primary"
-                                       " commit-changes-btn",
-                            icon_type='fa', icon_value='fa-check-circle'))
+    # The Commit button (with its pending-changes counter) is rendered
+    # directly in templates/admin/master.html so the count can sit inside
+    # the button instead of floating next to it as a separate badge.
 
 
 # Plugin imports register Click CLI groups + sync hooks. Always run, even
