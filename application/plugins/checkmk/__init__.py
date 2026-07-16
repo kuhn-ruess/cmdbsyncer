@@ -209,11 +209,11 @@ def get_host_debug_data(hostname):
 
     try:
         db_host = Host.objects.get(hostname=hostname)
-        for key in list(db_host.cache.keys()):
-            if key.lower().startswith('checkmk'):
-                del db_host.cache[key]
-        if 'CustomAttributeRule' in db_host.cache:
-            del db_host.cache['CustomAttributeRule']
+        # Clear the host's whole cache: outcome caches use heterogeneous
+        # keys (e.g. 'ExportDowntimes', 'cmk_tags_tag_choices', qualname
+        # based keys), so the old 'checkmk' prefix filter missed them and
+        # the debug run showed stale cached results for those engines.
+        db_host.cache = {}
         db_host.save()
     except DoesNotExist:
         print(f"{ColorCodes.FAIL}Host not Found{ColorCodes.ENDC}")
