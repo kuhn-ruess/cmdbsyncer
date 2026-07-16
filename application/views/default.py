@@ -367,11 +367,22 @@ class IndexView(AdminIndexView):
         notices = self._load_notices()
         older_changelogs = _list_other_changelogs()
 
+        # Latest log entries that reported errors — surfaced on the start
+        # page so failing sync jobs are visible without opening the Log.
+        # pylint: disable=import-outside-toplevel
+        from application.modules.log.models import LogEntry
+        try:
+            error_logs = list(
+                LogEntry.objects(has_error=True).order_by('-datetime')[:5])
+        except Exception:  # pylint: disable=broad-exception-caught
+            error_logs = []
+
         return self.render(
             'admin/index.html',
             changelog_html=changelog_html,
             notices=notices,
             older_changelogs=older_changelogs,
+            error_logs=error_logs,
         )
 
     @expose('/changelog/<filename>')

@@ -59,6 +59,46 @@
   margin-bottom: 0.5rem;
 }
 
+/* Recent Errors card — theme-aware via the --surface-* tokens. */
+#recent-errors { border-left: 4px solid #e74c3c; }
+.error-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.error-log-list li {
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+}
+.error-log-list li:last-child { border-bottom: none; }
+.error-log-list a {
+  display: block;
+  padding: 0.45rem 0.2rem;
+  text-decoration: none;
+  color: var(--surface-text, #2c3e50);
+}
+.error-log-time {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--surface-muted, #6c757d);
+  font-family: ui-monospace, monospace;
+}
+.error-log-message {
+  display: block;
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.error-log-all {
+  display: inline-block;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+}
+.error-log-empty {
+  margin: 0;
+  color: var(--surface-muted, #6c757d);
+}
+
 .links-list {
   list-style: none;
   padding: 0;
@@ -374,6 +414,29 @@ function toggleAllFilters() {
         <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">⚙️ Source Code</a></li>
         <li><a href="https://kuhn-ruess.de">🏢 Kuhn &amp; Rue&szlig; GmbH</a></li>
       </ul>
+    </div>
+
+    <div class="home-card" id="recent-errors">
+      <h2>Recent Errors</h2>
+      {% if error_logs %}
+      <ul class="error-log-list">
+        {% for entry in error_logs %}
+        <li>
+          <a href="{{ url_for('logentry.details_view', id=entry.id) }}">
+            <span class="error-log-time">
+              {{ entry.datetime.strftime('%Y-%m-%d %H:%M') if entry.datetime else '—' }}
+            </span>
+            <span class="error-log-message">{{ entry.message }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      <a class="error-log-all" href="{{ url_for('logentry.index_view') }}">
+        Open the full log →
+      </a>
+      {% else %}
+      <p class="error-log-empty">✅ No errors in the recent log entries.</p>
+      {% endif %}
     </div>
 
     {% if notices %}
