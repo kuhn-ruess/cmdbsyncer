@@ -347,11 +347,13 @@ class Host(db.Document):
 
     def get_cmdb_template(self):
         """
-        Find and assign ALL matching CMDB templates based on label matching.
+        Find and merge ALL matching CMDB templates based on label matching.
 
         Searches template objects (object_type='template') whose cmdb_match pattern
         matches against the labels of this host. ALL matching templates are collected
-        and assigned to self.cmdb_templates.
+        and merged into self.cmdb_templates — already assigned templates are kept,
+        newly matching ones are added (deduplicated), so an existing assignment is
+        never dropped by a re-run.
 
         For performance with many hosts, call Host.prefetch_templates() once before
         processing a batch — the template list is then reused without further DB queries.
@@ -386,7 +388,13 @@ class Host(db.Document):
                 matched.append(template)
 
         if matched:
-            self.cmdb_templates = matched
+            existing = list(self.cmdb_templates or [])
+            existing_ids = {template.id for template in existing}
+            for template in matched:
+                if template.id not in existing_ids:
+                    existing.append(template)
+                    existing_ids.add(template.id)
+            self.cmdb_templates = existing
             return True
         return False
 
