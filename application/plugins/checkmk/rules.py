@@ -204,6 +204,32 @@ class CheckmkRule(Rule):
             return new_path[:-1]
         return new_path
 
+    def _apply_folder_outcome(self, action_param, outcomes, folder_key, options_key):
+        """
+        Render a move_folder/create_folder value and store the folder path plus
+        its embedded ``|{options}`` dict.
+
+        Rendering uses ``nullify`` so an undefined *folder* variable still skips
+        the rule (documented behaviour). But when the value nullifies only
+        because a variable inside the folder OPTIONS is undefined (e.g. a
+        contact group), the folder PATH is salvaged from a tolerant render and
+        the options are dropped. Otherwise a single missing option variable
+        would empty the whole value and dump every affected host into the root
+        folder.
+        """
+        rendered = _maybe_render(action_param, **self.attributes)
+        if rendered:
+            outcomes[options_key] += self.format_foldername(rendered)
+            outcomes[folder_key] += self.fix_and_format_foldername(rendered)
+            return
+        # Nullified — keep the folder path if it still resolves without the
+        # (unresolved) options, so the host stays in its folder.
+        folder_only = self.fix_and_format_foldername(
+            render_jinja(action_param, mode="ignore", **self.attributes))
+        if folder_only and folder_only != '/':
+            outcomes[folder_key] += folder_only
+            outcomes[options_key] += folder_only
+
     def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """ Handle the Outcomes """
 
@@ -240,11 +266,9 @@ class CheckmkRule(Rule):
 
             action_param = outcome['action_param']
             if outcome['action'] == 'move_folder':
-                new_value = action_param
-                new_value = _maybe_render(new_value, **self.attributes)
-
-                outcomes['extra_folder_options'] += self.format_foldername(new_value)
-                outcomes['move_folder'] += self.fix_and_format_foldername(new_value)
+                self._apply_folder_outcome(
+                    action_param, outcomes,
+                    'move_folder', 'extra_folder_options')
 
 
             if outcome['action'] == 'dont_move':
@@ -267,11 +291,9 @@ class CheckmkRule(Rule):
                     outcomes['dont_update_prefixed_labels'].append(action_param)
 
             if outcome['action'] == 'create_folder':
-                new_value = action_param
-                new_value = _maybe_render(new_value, **self.attributes)
-
-                outcomes['create_folder_extra_folder_options'] += self.format_foldername(new_value)
-                outcomes['create_folder'] += self.fix_and_format_foldername(new_value)
+                self._apply_folder_outcome(
+                    action_param, outcomes,
+                    'create_folder', 'create_folder_extra_folder_options')
 
             if outcome['action'] == 'folder_pool':
                 self.found_poolfolder_rule = True

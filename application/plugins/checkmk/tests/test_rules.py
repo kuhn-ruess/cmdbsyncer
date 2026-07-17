@@ -174,6 +174,48 @@ class TestCheckmkRule(unittest.TestCase):
 
         self.assertEqual(result['move_folder'], '/target')
 
+    def test_folder_outcome_keeps_path_when_options_nullify(self):
+        # An undefined *option* variable nullifies the rendered value; the
+        # folder path must still survive (host stays in its folder) while the
+        # unresolved options are dropped.
+        outcomes = {'move_folder': '', 'extra_folder_options': ''}
+        with patch('application.plugins.checkmk.rules._maybe_render',
+                   return_value=''), \
+             patch('application.plugins.checkmk.rules.render_jinja',
+                   return_value='/berlin/web'), \
+             patch.object(self.rule, 'fix_and_format_foldername',
+                          side_effect=lambda x, **kw: x):
+            self.rule._apply_folder_outcome(
+                'P', outcomes, 'move_folder', 'extra_folder_options')
+        self.assertEqual(outcomes['move_folder'], '/berlin/web')
+        self.assertEqual(outcomes['extra_folder_options'], '/berlin/web')
+
+    def test_folder_outcome_skips_when_path_empty(self):
+        # The whole folder path is unresolvable -> rule is still skipped.
+        outcomes = {'move_folder': '', 'extra_folder_options': ''}
+        with patch('application.plugins.checkmk.rules._maybe_render',
+                   return_value=''), \
+             patch('application.plugins.checkmk.rules.render_jinja',
+                   return_value=''), \
+             patch.object(self.rule, 'fix_and_format_foldername',
+                          side_effect=lambda x, **kw: x):
+            self.rule._apply_folder_outcome(
+                'P', outcomes, 'move_folder', 'extra_folder_options')
+        self.assertEqual(outcomes['move_folder'], '')
+
+    def test_folder_outcome_normal_keeps_options(self):
+        outcomes = {'move_folder': '', 'extra_folder_options': ''}
+        with patch('application.plugins.checkmk.rules._maybe_render',
+                   return_value="/berlin/web|{'title': 'X'}"), \
+             patch.object(self.rule, 'format_foldername',
+                          return_value="/berlin/web|OPT"), \
+             patch.object(self.rule, 'fix_and_format_foldername',
+                          return_value='/berlin/web'):
+            self.rule._apply_folder_outcome(
+                'P', outcomes, 'move_folder', 'extra_folder_options')
+        self.assertEqual(outcomes['move_folder'], '/berlin/web')
+        self.assertEqual(outcomes['extra_folder_options'], '/berlin/web|OPT')
+
     def test_add_outcomes_dont_move(self):
         outcomes = {}
         rule_outcomes = [{'action': 'dont_move', 'action_param': ''}]
