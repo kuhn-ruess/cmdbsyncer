@@ -753,6 +753,30 @@ class TestSyncCMK2(unittest.TestCase):
             self.assertIn('num_updated', log_entries)
             self.assertIn('num_deleted', log_entries)
 
+    @patch('application.plugins.checkmk.syncer.Progress')
+    @patch('application.plugins.checkmk.syncer.print')
+    @patch('application.plugins.checkmk.syncer.log')
+    def test_run_applies_folders_in_limit_mode(self, mock_log, mock_print,
+                                               mock_progress):
+        """Folder attributes must still be applied when the run is limited to
+        single hosts — otherwise already-existing folders never get updated."""
+        self.syncer.limit = ['somehost']
+        with patch.object(self.syncer, 'fetch_checkmk_folders'), \
+             patch.object(self.syncer, 'fetch_checkmk_hosts'), \
+             patch.object(self.syncer, 'calculate_attributes_and_rules',
+                          return_value={}), \
+             patch.object(self.syncer, 'handle_clusters') as mock_clusters, \
+             patch.object(self.syncer, 'cleanup_hosts') as mock_cleanup, \
+             patch.object(self.syncer, 'handle_folders') as mock_folders:
+
+            self.syncer.run()
+
+            # Folders applied for the processed hosts ...
+            mock_folders.assert_called_once()
+            # ... but cluster/cleanup passes are skipped in limit mode.
+            mock_clusters.assert_not_called()
+            mock_cleanup.assert_not_called()
+
 
 class TestSyncCMK2UpdateHost(unittest.TestCase):
     """Tests for the refactored update_host and its helpers."""

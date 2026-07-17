@@ -196,7 +196,7 @@ class SyncCMK2(CMK2):
         config_path = ""
         for current_path in full_path.split('/'):
             splitted = current_path.split('|')
-            folder = splitted[0]
+            folder = splitted[0].strip()
             if folder:
                 config_path += "/" + folder
                 if len(splitted) == 2:
@@ -931,6 +931,13 @@ class SyncCMK2(CMK2):
             self.send_bulk_update_host(self.bulk_updates)
             self.bulk_updates = []
 
+        # Folder attributes for the hosts we just processed must always be
+        # applied — including in limit mode. Existing folders only get their
+        # attributes (contact groups, title, tags, ...) through handle_folders;
+        # skipping it left every already-existing folder unchanged whenever a
+        # run was limited to single hosts (the usual way to test folder rules).
+        self.handle_folders()
+
         if self.limit:
             log.log(f"Finished Sync to Checkmk Account: {self.account_name} because LIMIT",
                     source="checkmk_host_export", details=self.log_details)
@@ -939,7 +946,6 @@ class SyncCMK2(CMK2):
 
         self.handle_clusters()
         self.cleanup_hosts()
-        self.handle_folders()
 
 
         self.log_details.append(('num_total', str(total)))

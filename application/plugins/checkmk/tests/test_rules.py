@@ -2,6 +2,7 @@
 Unit tests for checkmk rules module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
+# pylint: disable=too-many-public-methods
 import unittest
 from unittest.mock import Mock, patch
 
@@ -128,6 +129,32 @@ class TestCheckmkRule(unittest.TestCase):
                 "/folder1|{'title': 'F1'}/folder2")
 
         self.assertIn("|{'title': 'F1'}", result)
+
+    @patch('application.plugins.checkmk.rules.app')
+    def test_fix_and_format_foldername_strips_space_around_pipe(self, mock_app):
+        # A space before the pipe (as shown in our own docs, "folder | {..}")
+        # must not leak into the folder name — otherwise REPLACERS turns it
+        # into a trailing "_" and the syncer targets a different folder.
+        mock_app.config = {'CMK_LOWERCASE_FOLDERNAMES': False}
+
+        with patch.object(self.rule, 'replace',
+                          side_effect=lambda x, **kw: x):
+            result = self.rule.fix_and_format_foldername(
+                "/my_folder | {'title': 'X'}")
+
+        self.assertEqual(result, '/my_folder')
+
+    @patch('application.plugins.checkmk.rules.app')
+    def test_format_foldername_strips_space_around_pipe(self, mock_app):
+        mock_app.config = {'CMK_LOWERCASE_FOLDERNAMES': False}
+
+        with patch.object(self.rule, 'replace',
+                          side_effect=lambda x, **kw: x):
+            result = self.rule.format_foldername(
+                "/my_folder | {'title': 'X'}")
+
+        # Clean name, and the option suffix is trimmed of its leading space.
+        self.assertEqual(result, "/my_folder|{'title': 'X'}")
 
     @patch('application.plugins.checkmk.rules.render_jinja')
     @patch('application.plugins.checkmk.rules.app')

@@ -85,8 +85,13 @@ class CheckmkRule(Rule):
         parts = []
         for folder_part in folder.split('/'):
             splitted = folder_part.split('|')
-            if splitted[0]:
-                parts.append(splitted[0])
+            # Strip whitespace around the pipe boundary — admins (and our own
+            # docs) write "folder | {options}" with spaces, and (' ', '_') in
+            # REPLACERS would otherwise turn the trailing space into a "_" and
+            # create a different folder than the one that already exists.
+            folder_name = splitted[0].strip()
+            if folder_name:
+                parts.append(folder_name)
         new_folder = "/" + "/".join(parts)
 
         new_folder = self.replace(new_folder, exceptions=['/'])
@@ -104,13 +109,15 @@ class CheckmkRule(Rule):
         parts = []
         for folder_part in folder.split('/'):
             splitted = folder_part.split('|')
-            path = splitted[0]
+            # Strip whitespace around the pipe boundary so "folder | {options}"
+            # keeps the clean folder name — see fix_and_format_foldername.
+            path = splitted[0].strip()
             if app.config['CMK_LOWERCASE_FOLDERNAMES']:
                 path = path.lower()
             folder_name = self.replace(self.replace(path, exceptions=['/']),
                                        regex='[^a-z A-Z 0-9/_-]')
             if len(splitted) == 2:
-                folder_name += "|" + splitted[1]
+                folder_name += "|" + splitted[1].strip()
             if folder_name:
                 parts.append(folder_name)
         new_path = "/" + "/".join(parts)
