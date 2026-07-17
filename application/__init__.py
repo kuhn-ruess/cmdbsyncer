@@ -101,20 +101,6 @@ if config_name not in CONFIG_MAP:
 app.config.from_object(CONFIG_MAP[config_name])
 if config_name == "base":
     app.jinja_env.auto_reload = True
-_trusted_proxies = int(app.config.get('TRUSTED_PROXIES', 0))
-if _trusted_proxies > 0:
-    # Apache/nginx reverse-proxy in front of the app. ProxyFix rewrites
-    # request.scheme / request.remote_addr / request.host from the
-    # X-Forwarded-* headers so request.is_secure reflects the real client
-    # connection. Only enable when the app sits behind a trusted proxy —
-    # leave at 0 for mod_wsgi or direct deployments, otherwise a client
-    # can spoof X-Forwarded-Proto and bypass the HTTPS API-auth gate.
-    app.wsgi_app = ProxyFix(
-        app.wsgi_app,
-        x_for=_trusted_proxies,
-        x_proto=_trusted_proxies,
-        x_host=_trusted_proxies,
-    )
 
 csrf = None
 limiter = None
@@ -181,6 +167,27 @@ except ModuleNotFoundError:
 # SESSION_COOKIE_SECURE off so HTTP logins work and suppresses the banner.
 if not app.config.get('REQUIRE_HTTPS'):
     app.config['SESSION_COOKIE_SECURE'] = False
+
+
+# ProxyFix must be wired up AFTER local_config.py is loaded — TRUSTED_PROXIES
+# is a deployment setting and is almost always set there, not in the base
+# config. Installing it earlier read the default (0) and silently ignored the
+# admin's value, so request.is_secure stayed False behind a reverse proxy
+# (login HTTPS banner never cleared, API HTTPS gate never satisfied).
+_trusted_proxies = int(app.config.get('TRUSTED_PROXIES', 0))
+if _trusted_proxies > 0:
+    # Apache/nginx reverse-proxy in front of the app. ProxyFix rewrites
+    # request.scheme / request.remote_addr / request.host from the
+    # X-Forwarded-* headers so request.is_secure reflects the real client
+    # connection. Only enable when the app sits behind a trusted proxy —
+    # leave at 0 for mod_wsgi or direct deployments, otherwise a client
+    # can spoof X-Forwarded-Proto and bypass the HTTPS API-auth gate.
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=_trusted_proxies,
+        x_proto=_trusted_proxies,
+        x_host=_trusted_proxies,
+    )
 
 
 if '--debug' in sys.argv:
