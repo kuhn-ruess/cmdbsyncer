@@ -190,6 +190,23 @@ class TestCheckmkRule(unittest.TestCase):
         self.assertEqual(outcomes['move_folder'], '/berlin/web')
         self.assertEqual(outcomes['extra_folder_options'], '/berlin/web')
 
+    def test_folder_outcome_reports_dropped_options(self):
+        # Options carried a variable that did not resolve: the folder path is
+        # salvaged, but the drop must be reported (log + console), not silent.
+        outcomes = {'move_folder': '', 'extra_folder_options': ''}
+        with patch('application.plugins.checkmk.rules._maybe_render',
+                   return_value=''), \
+             patch('application.plugins.checkmk.rules.render_jinja',
+                   return_value='/berlin/web'), \
+             patch('application.plugins.checkmk.rules.log') as mock_log, \
+             patch.object(self.rule, 'fix_and_format_foldername',
+                          side_effect=lambda x, **kw: x):
+            self.rule._apply_folder_outcome(
+                "/berlin/web|{'contactgroups': {'groups': J}}",
+                outcomes, 'move_folder', 'extra_folder_options')
+        self.assertEqual(outcomes['move_folder'], '/berlin/web')
+        mock_log.log.assert_called_once()
+
     def test_folder_outcome_skips_when_path_empty(self):
         # The whole folder path is unresolvable -> rule is still skipped.
         outcomes = {'move_folder': '', 'extra_folder_options': ''}
@@ -330,6 +347,21 @@ class TestFolderOptionValidation(unittest.TestCase):
         error = validate_folder_option_param("/x|{'contactgroups': ['all']}")
         self.assertIsNotNone(error)
         self.assertIn('contactgroups', error)
+
+    def test_contactgroups_as_jinja_expression_rejected(self):
+        # A bare Jinja expression as the contactgroups value renders to a list
+        # and must be caught, not slip through as "unjudgeable".
+        param = ("/{{ folder|lower }}|{'contactgroups': "
+                 "{{ groups.split(',') }}, 'use': True}")
+        error = validate_folder_option_param(param)
+        self.assertIsNotNone(error)
+        self.assertIn('contactgroups', error)
+
+    def test_contactgroups_dict_with_jinja_groups_passes(self):
+        # The correct shape must stay valid even when 'groups' is Jinja.
+        param = ("/{{ folder|lower }}|{'contactgroups': {'groups': "
+                 "{{ groups.split(',') }}, 'use': True, 'recurse_perms': True}}")
+        self.assertIsNone(validate_folder_option_param(param))
 
     def test_no_options_passes(self):
         self.assertIsNone(validate_folder_option_param('/{{site}}/berlin'))

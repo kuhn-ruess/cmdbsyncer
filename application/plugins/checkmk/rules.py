@@ -40,19 +40,24 @@ def validate_folder_option_param(param):
     silently dropped at export time and hard to spot:
 
     * an unbalanced brace (``...True}}``) — the dict no longer parses,
-    * ``contactgroups`` written as a bare list ``['grp']`` instead of the
-      Checkmk shape ``{'groups': ['grp'], 'use': True}`` — Checkmk rejects it
-      with "Not a string, but a list".
+    * ``contactgroups`` written as a bare list ``['grp']`` — or as a bare Jinja
+      expression ``{{ groups.split(',') }}`` that renders to a list — instead of
+      the Checkmk shape ``{'groups': ['grp'], 'use': True}``. Checkmk rejects the
+      bare list with "Not a string, but a list".
 
     Host attributes are unknown at save time, so every Jinja construct is
-    replaced with a harmless token and only the literal structure is checked.
+    replaced with ``None`` — a valid literal that is quote-neutral (so it never
+    corrupts a surrounding string) and lets ``ast.literal_eval`` parse the dict
+    even when a value comes from a ``{{ ... }}`` expression. That way a
+    ``contactgroups`` written directly as an expression still gets checked
+    instead of silently slipping through.
 
     Returns a human-readable error string, or ``None`` when the options look
     valid (or there are none).
     """
     if not param or '|' not in param:
         return None
-    literal = _JINJA_BLOCK_RE.sub('J', param)
+    literal = _JINJA_BLOCK_RE.sub('None', param)
     for segment in literal.split('/'):
         parts = segment.split('|')
         if len(parts) != 2:
@@ -66,12 +71,15 @@ def validate_folder_option_param(param):
             return (f"Folder options after '|' are not valid: {exc}. "
                     "Check for a stray or missing brace (e.g. a doubled '}}').")
         except ValueError:
-            # A non-literal value (e.g. an unquoted Jinja expression) cannot be
-            # judged at save time — leave it to the export.
+            # Still not a literal (e.g. a Jinja block glued to a bareword) —
+            # cannot be judged at save time, leave it to the export.
             continue
-        if isinstance(parsed, dict) and isinstance(parsed.get('contactgroups'), list):
+        if isinstance(parsed, dict) and 'contactgroups' in parsed \
+                and not isinstance(parsed['contactgroups'], dict):
             return ("Folder option 'contactgroups' must be a dict like "
-                    "{'groups': [...], 'use': True}, not a bare list.")
+                    "{'groups': [...], 'use': True}, not a bare list or "
+                    "expression. Keep the {'groups': ..., 'use': True} wrapper "
+                    "even when 'groups' comes from Jinja.")
     return None
 
 
@@ -229,6 +237,19 @@ class CheckmkRule(Rule):
         if folder_only and folder_only != '/':
             outcomes[folder_key] += folder_only
             outcomes[options_key] += folder_only
+            if '|' in action_param:
+                # The folder path is salvaged above, but a variable inside the
+                # |{options} did not resolve, so the options are gone. Report it
+                # instead of dropping them silently.
+                hostname = getattr(self.db_host, 'hostname', '') or ''
+                print(f"{ColorCodes.WARNING} !! {ColorCodes.ENDC}Checkmk folder "
+                      f"options for {folder_only} dropped: a variable inside "
+                      f"{action_param!r} did not resolve")
+                log.log("Checkmk folder options dropped (unresolved variable)",
+                        affected_hosts=[hostname] if hostname else [],
+                        source="Checkmk Export",
+                        details=[("folder", folder_only),
+                                 ("action_param", action_param)])
 
     def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """ Handle the Outcomes """
