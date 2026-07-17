@@ -251,6 +251,36 @@ class CheckmkRuleView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def validate_form(self, form):
+        """
+        Reject saves whose move_folder/create_folder outcome carries malformed
+        folder options (unbalanced braces, or ``contactgroups`` as a bare list).
+        Doing it here keeps Flask-Admin's flow intact — the user sees a flash
+        and stays on the edit form with their inputs preserved — instead of the
+        options being silently dropped at export time.
+        """
+        if not super().validate_form(form):
+            return False
+        # pylint: disable-next=import-outside-toplevel
+        from .rules import validate_folder_option_param
+        outcomes = getattr(form, 'outcomes', None)
+        if outcomes is not None and getattr(outcomes, 'entries', None):
+            for entry in outcomes.entries:
+                entry_form = getattr(entry, 'form', None)
+                if entry_form is None:
+                    continue
+                action_field = getattr(entry_form, 'action', None)
+                param_field = getattr(entry_form, 'action_param', None)
+                outcome_action = action_field.data if action_field is not None else None
+                if outcome_action not in ('move_folder', 'create_folder'):
+                    continue
+                param = param_field.data if param_field is not None else ''
+                error = validate_folder_option_param(param)
+                if error:
+                    flash(error, 'danger')
+                    return False
+        return True
+
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')

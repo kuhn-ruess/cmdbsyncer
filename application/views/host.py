@@ -185,6 +185,23 @@ def get_debug(hostname, mode, ansible_project=None):
         return {'Error': "Host not found in Database"}, {}
 
 
+def _checkmk_folder_options_debug(actions):
+    """
+    Return ``{'parsed': {folder: attrs}, 'error': msg|None}`` for the Checkmk
+    debug page, or ``None`` when the host has no folder options at all.
+    """
+    if not isinstance(actions, dict):
+        return None
+    # pylint: disable-next=import-outside-toplevel
+    from application.plugins.checkmk.rules import parse_folder_options_debug
+    source = (actions.get('extra_folder_options')
+              or actions.get('create_folder_extra_folder_options'))
+    parsed, error = parse_folder_options_debug(source)
+    if error or parsed:
+        return {'parsed': parsed, 'error': error}
+    return None
+
+
 def _find_rule_match(rules_by_group, raw_id):
     """
     Look up a rule's hit/no-match info from the per-group rules dict
@@ -1577,6 +1594,14 @@ Impact Chain.
                     rule['rule_url'] = ''
                 new_rules[rule_group].append(rule)
 
+        # Folder options (contact groups, title, tags) are packed into the
+        # move_folder/create_folder outcome as a Python dict after a '|'. Show
+        # the resolved per-folder attributes on the debug page — or a clear
+        # error when the dict is malformed (what the export skips silently).
+        folder_options = None
+        if mode == 'checkmk_host' and isinstance(output, dict):
+            folder_options = _checkmk_folder_options_debug(output.get("Outcomes"))
+
         if "Error" in output:
             output = f"Error: {output['Error']}"
 
@@ -1614,6 +1639,7 @@ Impact Chain.
 
         return self.render('debug_host.html', hostname=hostname, output=output,
                            host=host,
+                           folder_options=folder_options,
                            cmdb_mode=app.config.get('CMDB_MODE', False),
                            rules=new_rules, mode=mode,
                            rule_preview=rule_preview,

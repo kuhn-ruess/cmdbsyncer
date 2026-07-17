@@ -5,6 +5,7 @@ Checkmk Rules
 # pylint: disable=too-many-locals,too-many-branches,too-many-statements
 # pylint: disable=too-many-nested-blocks,logging-fstring-interpolation
 import ast
+import re
 from application import app
 from application.helpers.syncer_jinja import render_jinja
 from application import logger, log
@@ -25,6 +26,84 @@ def _maybe_render(value, **context):
             and '{%' not in value):
         return value
     return render_jinja(value, mode="nullify", **context)
+
+
+_JINJA_BLOCK_RE = re.compile(r'\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}')
+
+
+def validate_folder_option_param(param):
+    """
+    Validate the ``folder|{options}`` suffix of a move_folder/create_folder
+    action parameter without rendering Jinja.
+
+    Folder options are a Python dict literal after a ``|``. Two mistakes are
+    silently dropped at export time and hard to spot:
+
+    * an unbalanced brace (``...True}}``) — the dict no longer parses,
+    * ``contactgroups`` written as a bare list ``['grp']`` instead of the
+      Checkmk shape ``{'groups': ['grp'], 'use': True}`` — Checkmk rejects it
+      with "Not a string, but a list".
+
+    Host attributes are unknown at save time, so every Jinja construct is
+    replaced with a harmless token and only the literal structure is checked.
+
+    Returns a human-readable error string, or ``None`` when the options look
+    valid (or there are none).
+    """
+    if not param or '|' not in param:
+        return None
+    literal = _JINJA_BLOCK_RE.sub('J', param)
+    for segment in literal.split('/'):
+        parts = segment.split('|')
+        if len(parts) != 2:
+            continue
+        suffix = parts[1].strip()
+        if not suffix:
+            continue
+        try:
+            parsed = ast.literal_eval(suffix)
+        except SyntaxError as exc:
+            return (f"Folder options after '|' are not valid: {exc}. "
+                    "Check for a stray or missing brace (e.g. a doubled '}}').")
+        except ValueError:
+            # A non-literal value (e.g. an unquoted Jinja expression) cannot be
+            # judged at save time — leave it to the export.
+            continue
+        if isinstance(parsed, dict) and isinstance(parsed.get('contactgroups'), list):
+            return ("Folder option 'contactgroups' must be a dict like "
+                    "{'groups': [...], 'use': True}, not a bare list.")
+    return None
+
+
+def parse_folder_options_debug(extra_folder_options):
+    """
+    Parse an already-rendered ``folder|{options}`` string for the debug view.
+
+    ``extra_folder_options`` is the outcome value the export would feed to the
+    folder handler (Jinja already resolved). Returns ``(mapping, error)`` where
+    ``mapping`` is ``{folder_path: attributes}`` for every option that parses,
+    and ``error`` is a human-readable message for the first suffix that does
+    not (else ``None``) — the same failure the export would silently skip.
+    """
+    mapping = {}
+    if not extra_folder_options:
+        return mapping, None
+    config_path = ""
+    for current_path in extra_folder_options.split('/'):
+        parts = current_path.split('|')
+        folder = parts[0].strip()
+        if not folder:
+            continue
+        config_path += "/" + folder
+        if len(parts) == 2 and parts[1].strip():
+            suffix = parts[1].strip()
+            try:
+                mapping[config_path] = ast.literal_eval(suffix)
+            except (ValueError, SyntaxError) as exc:
+                return mapping, (f"{config_path}: {suffix} — {exc} "
+                                 "(check for a stray or missing brace)")
+    return mapping, None
+
 
 class CheckmkRulesetRule(Rule):
     """

@@ -10,6 +10,8 @@ from application.plugins.checkmk.rules import (
     CheckmkRulesetRule,
     DefaultRule,
     CheckmkRule,
+    validate_folder_option_param,
+    parse_folder_options_debug,
 )
 
 
@@ -265,6 +267,52 @@ class TestCheckmkRule(unittest.TestCase):
 
             db_host.lock_to_folder.assert_called_once_with(False)
             mock_poolfolder.remove_seat.assert_called_once_with('/old_folder')
+
+
+class TestFolderOptionValidation(unittest.TestCase):
+    """Tests for validate_folder_option_param / parse_folder_options_debug."""
+
+    def test_valid_dict_passes(self):
+        param = ("/{{folder}}/{{u}}|{'contactgroups': "
+                 "{'groups': ['{{grp}}'], 'use': True}}")
+        self.assertIsNone(validate_folder_option_param(param))
+
+    def test_unbalanced_brace_rejected(self):
+        # A doubled '}}' (the classic mistake) must be caught at save time.
+        param = "/x|{'contactgroups': ['{{grp}}'], 'recurse_perms': True}}"
+        error = validate_folder_option_param(param)
+        self.assertIsNotNone(error)
+        self.assertIn('brace', error)
+
+    def test_contactgroups_as_list_rejected(self):
+        error = validate_folder_option_param("/x|{'contactgroups': ['all']}")
+        self.assertIsNotNone(error)
+        self.assertIn('contactgroups', error)
+
+    def test_no_options_passes(self):
+        self.assertIsNone(validate_folder_option_param('/{{site}}/berlin'))
+        self.assertIsNone(validate_folder_option_param(''))
+
+    def test_plain_title_passes(self):
+        self.assertIsNone(
+            validate_folder_option_param("/prod|{'title': 'Prod'}"))
+
+    def test_parse_debug_valid(self):
+        mapping, error = parse_folder_options_debug(
+            "/berlin/web|{'contactgroups': {'groups': ['all'], 'use': True}}")
+        self.assertIsNone(error)
+        self.assertEqual(
+            mapping,
+            {'/berlin/web': {'contactgroups': {'groups': ['all'], 'use': True}}})
+
+    def test_parse_debug_malformed_returns_error(self):
+        mapping, error = parse_folder_options_debug(
+            "/berlin/web|{'contactgroups': ['all']}}")
+        self.assertEqual(mapping, {})
+        self.assertIn('brace', error)
+
+    def test_parse_debug_no_options(self):
+        self.assertEqual(parse_folder_options_debug('/berlin/web'), ({}, None))
 
 
 if __name__ == '__main__':

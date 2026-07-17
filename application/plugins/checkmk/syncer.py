@@ -210,6 +210,15 @@ class SyncCMK2(CMK2):
                             "Skipping malformed folder option at %r: %r (%s)",
                             config_path, splitted[1], exc,
                         )
+                        # Loud on the console — a malformed dict (e.g. a doubled
+                        # '}}') was silently swallowed before, so the folder just
+                        # never got its attributes with no visible reason.
+                        print(f"{CC.FAIL} !! {CC.ENDC}Ignoring malformed folder "
+                              f"option for {config_path}: {splitted[1]!r} "
+                              f"({exc}) - check for a stray/missing brace")
+                        self.log_details.append(
+                            ('error', f'Malformed folder option for {config_path}: '
+                                      f'{splitted[1]} ({exc})'))
                         log.log(
                             "Skipping malformed folder option",
                             details=[
@@ -267,7 +276,6 @@ class SyncCMK2(CMK2):
             if 'title' in update_attributes and \
                 curren_folder.get('title') != update_attributes['title']:
                 new_title = update_attributes['title']
-                print(f"{CC.OKGREEN} *{CC.ENDC} Update Title: {folder_name} to '{new_title}'")
                 payload = {
                     'title' : new_title,
                 }
@@ -279,13 +287,12 @@ class SyncCMK2(CMK2):
                                  data=payload,
                                  additional_header=update_headers)
                 except CmkException as exp:
-                    self.log_details.append(('error', f'Create Folder Exception: {exp}'))
+                    self._log_folder_error(folder_name, 'set title', exp)
                     continue
+                print(f"{CC.OKGREEN} *{CC.ENDC} Update Title: {folder_name} to '{new_title}'")
                 del update_attributes['title']
                 etag = headers['etag']
             if add_attributes:
-                print(f"{CC.OKGREEN} *{CC.ENDC} Add Attributes to Folder: "\
-                      f"{folder_name} ({add_attributes})")
                 payload = {
                     'attributes' : add_attributes
                 }
@@ -297,8 +304,10 @@ class SyncCMK2(CMK2):
                                  data=payload,
                                  additional_header=update_headers)
                 except CmkException as exp:
-                    self.log_details.append(('error', f'Create Folder Exception: {exp}'))
+                    self._log_folder_error(folder_name, 'add attributes', exp)
                     continue
+                print(f"{CC.OKGREEN} *{CC.ENDC} Added Attributes to Folder: "\
+                      f"{folder_name} ({add_attributes})")
                 etag = headers['etag']
             if update_attributes:
                 payload = {
@@ -312,10 +321,26 @@ class SyncCMK2(CMK2):
                              data=payload,
                              additional_header=update_headers)
                 except CmkException as exp:
-                    self.log_details.append(('error', f'Update Folder Exception: {exp}'))
+                    self._log_folder_error(folder_name, 'update attributes', exp)
                     continue
-                print(f"{CC.OKGREEN} *{CC.ENDC} Update Attributes on Folder: {folder_name} "\
+                print(f"{CC.OKGREEN} *{CC.ENDC} Updated Attributes on Folder: {folder_name} "\
                       f"({update_attributes})")
+
+    def _log_folder_error(self, folder_name, action, exp):
+        """
+        Surface a folder-attribute API failure loudly.
+
+        Checkmk rejects folder attributes it cannot resolve — most commonly a
+        contact group that does not exist yet (``Group missing: '...'``). Such
+        failures used to be swallowed into a log detail with a misleading
+        "Create Folder Exception" label while the optimistic "Add Attributes"
+        line had already been printed, so a run looked fine but the folder
+        never changed. Now the failure is printed in red on the console and
+        recorded with a clear, correctly-labelled log entry.
+        """
+        message = f"Folder {folder_name}: could not {action} - {exp}"
+        print(f"{CC.FAIL} !! {CC.ENDC}{message}")
+        self.log_details.append(('error', message))
 
 
 

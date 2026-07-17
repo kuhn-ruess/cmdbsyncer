@@ -278,6 +278,36 @@
 
     </div>
 
+    {# --- Folder Options: parsed folder attributes, or a loud error --- #}
+    {% if folder_options %}
+      <div class="debug-card accent-outcomes" style="margin-bottom: 1rem;">
+        <div class="debug-card-head">
+          <span><i class="fa fa-folder"></i> Folder Options</span>
+          <span class="muted">Checkmk attributes applied to this host's folder</span>
+        </div>
+        <div class="debug-card-body">
+          {% if folder_options.error %}
+            <div class="alert alert-danger mb-2">
+              <strong>Malformed folder option — silently skipped on export:</strong><br>
+              <code>{{ folder_options.error }}</code>
+            </div>
+          {% endif %}
+          {% if folder_options.parsed %}
+            <div class="debug-kv">
+              {% for folder, attrs in folder_options.parsed.items() %}
+                <div class="debug-kv-row">
+                  <span class="k">{{ folder }}</span>
+                  <span class="v">{{ attrs }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% elif not folder_options.error %}
+            <div class="debug-empty">No folder options for this host.</div>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
     {# --- Custom Attributes, only when present --- #}
     {% if custom %}
       <div class="debug-card accent-custom" style="margin-bottom: 1rem;">
