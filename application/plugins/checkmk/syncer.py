@@ -13,6 +13,47 @@ from application.plugins.checkmk.cmk_rules import folder_within_scope
 from application.modules.debug import ColorCodes as CC
 
 
+def merge_folder_attributes(existing, new):
+    """
+    Deep-merge two Checkmk folder attribute dicts.
+
+    Several hosts can land in the same folder while each contributes its own
+    folder options (see ``handle_extra_folder_options``). The most common case
+    is WATO permissions: every host adds its own contact groups via
+    ``folder|{'contactgroups': {'groups': ['team_a'], 'use': True}}``. Without
+    merging the first host to touch the folder would win and every following
+    host's groups would be silently dropped.
+
+    Merge rules:
+      * nested dicts are merged recursively (so ``contactgroups`` accumulates),
+      * lists are unioned keeping first-seen order and dropping duplicates
+        (so ``contactgroups.groups`` becomes the union of every host's groups),
+      * scalars keep the first value seen — two hosts cannot pick one title,
+        ``site`` or ``use`` flag, so the deterministic choice is first-wins.
+
+    Args:
+        existing (dict): attributes recorded so far for the folder.
+        new (dict): attributes contributed by the current host.
+
+    Returns:
+        dict: the merged attributes (a fresh dict; inputs are not mutated).
+    """
+    if not isinstance(existing, dict) or not isinstance(new, dict):
+        return existing
+    merged = dict(existing)
+    for key, new_value in new.items():
+        if key not in merged:
+            merged[key] = new_value
+            continue
+        cur_value = merged[key]
+        if isinstance(cur_value, dict) and isinstance(new_value, dict):
+            merged[key] = merge_folder_attributes(cur_value, new_value)
+        elif isinstance(cur_value, list) and isinstance(new_value, list):
+            merged[key] = cur_value + [x for x in new_value if x not in cur_value]
+        # else: scalar or type mismatch -> keep the first value (deterministic)
+    return merged
+
+
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
 class SyncCMK2(CMK2):
     """
@@ -143,6 +184,11 @@ class SyncCMK2(CMK2):
         Processes folder paths that contain embedded configuration options
         (separated by |) and adds them to the custom folder attributes.
 
+        Multiple hosts can feed the same folder with different options. Their
+        attributes are merged (see ``merge_folder_attributes``) instead of
+        first-host-wins, so e.g. contact groups from every host accumulate on
+        the folder for WATO permissions.
+
         Args:
             full_path (str): Folder path potentially containing extra options
                            Format: "folder|{option1: value1, option2: value2}"
@@ -154,28 +200,32 @@ class SyncCMK2(CMK2):
             if folder:
                 config_path += "/" + folder
                 if len(splitted) == 2:
-                    if config_path not in self.custom_folder_attributes:
-                        # Admin-editable move_folder / create_folder values —
-                        # a malformed suffix would otherwise abort the host
-                        # export for every host that touches this rule.
-                        try:
-                            parsed = ast.literal_eval(splitted[1])
-                        except (ValueError, SyntaxError) as exc:
-                            logger.error(
-                                "Skipping malformed folder option at %r: %r (%s)",
-                                config_path, splitted[1], exc,
-                            )
-                            log.log(
-                                "Skipping malformed folder option",
-                                details=[
-                                    ('path', config_path),
-                                    ('value', splitted[1]),
-                                    ('error', str(exc)),
-                                ],
-                                source="Checkmk Export",
-                            )
-                            continue
+                    # Admin-editable move_folder / create_folder values —
+                    # a malformed suffix would otherwise abort the host
+                    # export for every host that touches this rule.
+                    try:
+                        parsed = ast.literal_eval(splitted[1])
+                    except (ValueError, SyntaxError) as exc:
+                        logger.error(
+                            "Skipping malformed folder option at %r: %r (%s)",
+                            config_path, splitted[1], exc,
+                        )
+                        log.log(
+                            "Skipping malformed folder option",
+                            details=[
+                                ('path', config_path),
+                                ('value', splitted[1]),
+                                ('error', str(exc)),
+                            ],
+                            source="Checkmk Export",
+                        )
+                        continue
+                    existing = self.custom_folder_attributes.get(config_path)
+                    if existing is None:
                         self.custom_folder_attributes[config_path] = parsed
+                    else:
+                        self.custom_folder_attributes[config_path] = \
+                            merge_folder_attributes(existing, parsed)
 
 
     # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements

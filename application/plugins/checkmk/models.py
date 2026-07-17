@@ -98,7 +98,46 @@ action_outcome_types = [
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
     """
-    Checkmk Rule Outcome
+    ## Checkmk Rule Outcome
+
+    Pick an **action** and its **parameter**. Most parameters support Jinja,
+    so you can reference host attributes like `{{hostname}}` or `{{os}}`.
+
+    ### Folder Options (Attributes & WATO permissions)
+
+    The `Move to Folder` and `Create Folder` actions accept **folder options**:
+    append `|{...}` (a Python dict) to any folder segment to set that folder's
+    Checkmk attributes. Every key is a normal Checkmk folder attribute.
+
+    Examples (parameter of a `Move to Folder` action):
+
+    ```
+    linux|{'title': 'Linux Servers'}
+    linux/prod|{'tag_criticality': 'prod', 'site': 'remote_1'}
+    ```
+
+    #### Contact groups / WATO permissions
+
+    Contact groups are the folder attribute `contactgroups`. Its value is a
+    dict; `groups` is the list of contact groups, `use` grants those groups
+    permission on the folder:
+
+    ```
+    linux/{{customer}}|{'contactgroups': {'groups': ['team_{{customer}}'], 'use': True}}
+    ```
+
+    Optional flags inside `contactgroups`: `recurse_use` (also add the groups
+    as contacts to hosts in all sub-folders) and `recurse_perms` (also grant
+    permission on sub-folders).
+
+    #### Merging across hosts
+
+    When several hosts land in the **same folder** but define **different**
+    contact groups, the syncer **unions** their `groups` (duplicates removed)
+    so the folder ends up with the contact groups of all its hosts. Scalar
+    options like `title` or `site` keep the first host's value. The syncer is
+    the source of truth: the merged group list replaces whatever is set on the
+    folder in Checkmk.
     """
     action = db.StringField(choices=action_outcome_types)
     action_param = db.StringField()

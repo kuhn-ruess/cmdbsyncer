@@ -6,7 +6,7 @@ Unit tests for the SyncCMK2 class
 import unittest
 from unittest.mock import Mock, patch, call
 
-from application.plugins.checkmk.syncer import SyncCMK2
+from application.plugins.checkmk.syncer import SyncCMK2, merge_folder_attributes
 from application.plugins.checkmk.cmk2 import CmkException
 
 
@@ -97,6 +97,41 @@ class TestSyncCMK2(unittest.TestCase):
         self.assertEqual(
             self.syncer.custom_folder_attributes,
             {'/prod/web': {'site': 'w'}},
+        )
+
+    def test_handle_extra_folder_options_merges_contact_groups(self):
+        """Multiple hosts landing in the same folder must union their contact
+        groups instead of first-host-wins, so WATO permissions of every host
+        accumulate on the folder."""
+        # Host A brings team_a, host B brings team_b, both for /prod.
+        self.syncer.handle_extra_folder_options(
+            "/prod|{'contactgroups': {'groups': ['team_a'], 'use': True}}"
+        )
+        self.syncer.handle_extra_folder_options(
+            "/prod|{'contactgroups': {'groups': ['team_b'], 'use': True}}"
+        )
+
+        self.assertEqual(
+            self.syncer.custom_folder_attributes,
+            {'/prod': {'contactgroups': {'groups': ['team_a', 'team_b'],
+                                         'use': True}}},
+        )
+
+    def test_handle_extra_folder_options_merge_dedups_and_keeps_scalars(self):
+        """A repeated group is not duplicated and scalar options (title/site)
+        keep the first host's value."""
+        self.syncer.handle_extra_folder_options(
+            "/prod|{'title': 'Prod', 'contactgroups': {'groups': ['team_a']}}"
+        )
+        self.syncer.handle_extra_folder_options(
+            "/prod|{'title': 'Ignored', 'contactgroups': "
+            "{'groups': ['team_a', 'team_c']}}"
+        )
+
+        self.assertEqual(
+            self.syncer.custom_folder_attributes,
+            {'/prod': {'title': 'Prod',
+                       'contactgroups': {'groups': ['team_a', 'team_c']}}},
         )
 
     @patch('application.plugins.checkmk.syncer.app')
@@ -1200,6 +1235,34 @@ class TestSyncCMK2Misc(unittest.TestCase):
             self.assertFalse(self.syncer.project_denied_for_account('ghost'))
             # The project map is cached per run — one query only.
             mock_project.objects.assert_called_once()
+
+
+class TestMergeFolderAttributes(unittest.TestCase):
+    """Test cases for the merge_folder_attributes helper"""
+
+    def test_union_lists(self):
+        merged = merge_folder_attributes(
+            {'contactgroups': {'groups': ['a', 'b']}},
+            {'contactgroups': {'groups': ['b', 'c']}},
+        )
+        self.assertEqual(merged['contactgroups']['groups'], ['a', 'b', 'c'])
+
+    def test_scalars_keep_first(self):
+        merged = merge_folder_attributes({'title': 'First'}, {'title': 'Second'})
+        self.assertEqual(merged['title'], 'First')
+
+    def test_new_keys_added(self):
+        merged = merge_folder_attributes({'title': 'X'}, {'site': 'remote'})
+        self.assertEqual(merged, {'title': 'X', 'site': 'remote'})
+
+    def test_inputs_not_mutated(self):
+        existing = {'contactgroups': {'groups': ['a']}}
+        merge_folder_attributes(existing, {'contactgroups': {'groups': ['b']}})
+        self.assertEqual(existing, {'contactgroups': {'groups': ['a']}})
+
+    def test_type_mismatch_keeps_existing(self):
+        merged = merge_folder_attributes({'x': ['a']}, {'x': 'scalar'})
+        self.assertEqual(merged['x'], ['a'])
 
 
 if __name__ == '__main__':
