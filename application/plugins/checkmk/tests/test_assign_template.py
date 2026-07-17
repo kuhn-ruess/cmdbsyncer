@@ -41,8 +41,9 @@ class TestAssignTemplateFromFolder(unittest.TestCase):
 
         self.assertEqual(assigned, 1)
         cmk_inst.get_hosts_of_folder.assert_called_once_with('/f', '')
-        # host_a merged and saved
+        # host_a merged, cache dropped and saved
         self.assertIn(template, host_a.cmdb_templates)
+        self.assertEqual(host_a.cache, {})
         host_a.save.assert_called_once()
         # host_b already had it -> untouched
         host_b.save.assert_not_called()

@@ -390,11 +390,17 @@ class Host(db.Document):
         if matched:
             existing = list(self.cmdb_templates or [])
             existing_ids = {template.id for template in existing}
+            added = False
             for template in matched:
                 if template.id not in existing_ids:
                     existing.append(template)
                     existing_ids.add(template.id)
-            self.cmdb_templates = existing
+                    added = True
+            if added:
+                self.cmdb_templates = existing
+                # Templates feed into the cached host attributes — drop the
+                # cache so the next export recomputes with the new templates.
+                self.cache = {}
             return True
         return False
 

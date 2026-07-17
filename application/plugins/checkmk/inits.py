@@ -509,6 +509,9 @@ def assign_cmdb_template_from_folder(account, folder, template_name,  # pylint: 
                 continue
             if not dry_run:
                 db_host.cmdb_templates = existing + [template]
+                # Templates feed into the cached host attributes, so drop the
+                # object's cache to force a recompute on the next export.
+                db_host.cache = {}
                 db_host.save()
             assigned += 1
             print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} {hostname}: "
