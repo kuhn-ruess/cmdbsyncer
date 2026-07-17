@@ -6,6 +6,8 @@ Checkmk Rules
 # pylint: disable=too-many-nested-blocks,logging-fstring-interpolation
 import ast
 import re
+from jinja2.exceptions import TemplateSyntaxError
+from jinja2.sandbox import SandboxedEnvironment
 from application import app
 from application.helpers.syncer_jinja import render_jinja
 from application import logger, log
@@ -29,33 +31,51 @@ def _maybe_render(value, **context):
 
 
 _JINJA_BLOCK_RE = re.compile(r'\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}')
+# {{ACCOUNT:name:field}} macros are resolved before Jinja compiles; their bare
+# colons are not valid Jinja, so neutralise them before the syntax check.
+_ACCOUNT_MACRO_RE = re.compile(r'\{\{\s*ACCOUNT:[^}]+\}\}')
+# Own environment for the compile-only syntax check — mirrors syncer_jinja's
+# SandboxedEnvironment so parsing matches the real render, without importing it
+# (keeps the validator free of any render-time/DB dependency).
+_SYNTAX_CHECK_ENV = SandboxedEnvironment(autoescape=False)
 
 
 def validate_folder_option_param(param):
     """
-    Validate the ``folder|{options}`` suffix of a move_folder/create_folder
-    action parameter without rendering Jinja.
+    Validate a move_folder/create_folder action parameter at save time, without
+    host data.
 
-    Folder options are a Python dict literal after a ``|``. Two mistakes are
-    silently dropped at export time and hard to spot:
+    Two classes of mistake are silently swallowed at export time and hard to
+    spot, because a failed render just yields an empty string and the host
+    quietly loses its target folder:
 
-    * an unbalanced brace (``...True}}``) — the dict no longer parses,
-    * ``contactgroups`` written as a bare list ``['grp']`` — or as a bare Jinja
-      expression ``{{ groups.split(',') }}`` that renders to a list — instead of
-      the Checkmk shape ``{'groups': ['grp'], 'use': True}``. Checkmk rejects the
-      bare list with "Not a string, but a list".
+    * broken Jinja — e.g. chaining ``.replace(...)`` after a ``|join(...)``
+      filter — which raises a ``TemplateSyntaxError`` and nullifies the whole
+      value. The template is compiled here (syntax only) to catch it.
+    * malformed ``|{options}`` after a valid render: an unbalanced brace
+      (``...True}}``), or ``contactgroups`` written as a bare list ``['grp']`` /
+      a bare Jinja expression ``{{ groups.split(',') }}`` instead of the Checkmk
+      shape ``{'groups': ['grp'], 'use': True}``.
 
     Host attributes are unknown at save time, so every Jinja construct is
     replaced with ``None`` — a valid literal that is quote-neutral (so it never
     corrupts a surrounding string) and lets ``ast.literal_eval`` parse the dict
-    even when a value comes from a ``{{ ... }}`` expression. That way a
-    ``contactgroups`` written directly as an expression still gets checked
-    instead of silently slipping through.
+    even when a value comes from a ``{{ ... }}`` expression.
 
-    Returns a human-readable error string, or ``None`` when the options look
-    valid (or there are none).
+    Returns a human-readable error string, or ``None`` when it looks valid (or
+    there is nothing to check).
     """
-    if not param or '|' not in param:
+    if not param:
+        return None
+    # 1. The Jinja must at least compile. A syntax error otherwise renders to
+    #    an empty string at export and drops the entire folder path silently.
+    try:
+        _SYNTAX_CHECK_ENV.from_string(_ACCOUNT_MACRO_RE.sub('x', param))
+    except TemplateSyntaxError as exc:
+        return (f"The Jinja in the folder value is not valid: {exc.message}. "
+                "Check filters and method calls — e.g. you cannot chain "
+                "'.replace(...)' directly after a '|join(...)' filter.")
+    if '|' not in param:
         return None
     literal = _JINJA_BLOCK_RE.sub('None', param)
     for segment in literal.split('/'):
@@ -250,6 +270,22 @@ class CheckmkRule(Rule):
                         source="Checkmk Export",
                         details=[("folder", folder_only),
                                  ("action_param", action_param)])
+            return
+        # Nothing salvageable. A broken template (e.g. a Jinja syntax error)
+        # renders to '' in every mode, so the host would silently lose its
+        # folder. Tell the two apart without host data: a real defect trips the
+        # validator, a merely-undefined folder variable does not (documented
+        # skip) and stays quiet.
+        defect = validate_folder_option_param(action_param)
+        if defect:
+            hostname = getattr(self.db_host, 'hostname', '') or ''
+            print(f"{ColorCodes.FAIL} !! {ColorCodes.ENDC}Checkmk folder value "
+                  f"{action_param!r} is broken and was skipped: {defect}")
+            log.log("Checkmk folder value broken (skipped)",
+                    affected_hosts=[hostname] if hostname else [],
+                    source="Checkmk Export",
+                    details=[("action_param", action_param),
+                             ("error", defect)])
 
     def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """ Handle the Outcomes """

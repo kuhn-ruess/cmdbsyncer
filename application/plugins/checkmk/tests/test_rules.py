@@ -207,6 +207,24 @@ class TestCheckmkRule(unittest.TestCase):
         self.assertEqual(outcomes['move_folder'], '/berlin/web')
         mock_log.log.assert_called_once()
 
+    def test_folder_outcome_reports_broken_template(self):
+        # A syntactically broken template renders to '' everywhere: nothing is
+        # salvageable, so the host would lose its folder. It must be reported.
+        outcomes = {'move_folder': '', 'extra_folder_options': ''}
+        broken = ("/{{ x | join(',').replace(' ','') }}"
+                  "|{'contactgroups': {'groups': ['a']}}")
+        with patch('application.plugins.checkmk.rules._maybe_render',
+                   return_value=''), \
+             patch('application.plugins.checkmk.rules.render_jinja',
+                   return_value=''), \
+             patch('application.plugins.checkmk.rules.log') as mock_log, \
+             patch.object(self.rule, 'fix_and_format_foldername',
+                          side_effect=lambda x, **kw: x):
+            self.rule._apply_folder_outcome(
+                broken, outcomes, 'move_folder', 'extra_folder_options')
+        self.assertEqual(outcomes['move_folder'], '')
+        mock_log.log.assert_called_once()
+
     def test_folder_outcome_skips_when_path_empty(self):
         # The whole folder path is unresolvable -> rule is still skipped.
         outcomes = {'move_folder': '', 'extra_folder_options': ''}
@@ -361,6 +379,28 @@ class TestFolderOptionValidation(unittest.TestCase):
         # The correct shape must stay valid even when 'groups' is Jinja.
         param = ("/{{ folder|lower }}|{'contactgroups': {'groups': "
                  "{{ groups.split(',') }}, 'use': True, 'recurse_perms': True}}")
+        self.assertIsNone(validate_folder_option_param(param))
+
+    def test_broken_jinja_syntax_rejected(self):
+        # Chaining .replace() after a |join() filter is invalid Jinja; it would
+        # nullify the whole value at export and silently drop the folder path.
+        param = ("/{{folder|lower()}}|{'contactgroups': {'groups': "
+                 "{{ [a|default('')] | join(',').replace(' ','').split(',') }}}}")
+        error = validate_folder_option_param(param)
+        self.assertIsNotNone(error)
+        self.assertIn('Jinja', error)
+
+    def test_broken_jinja_without_options_rejected(self):
+        # A syntax error in the folder part (no |{options}) must be caught too.
+        error = validate_folder_option_param(
+            '/{{ site|join(",").replace("a","b") }}/berlin')
+        self.assertIsNotNone(error)
+        self.assertIn('Jinja', error)
+
+    def test_account_macro_does_not_false_positive(self):
+        # {{ACCOUNT:...}} macros are resolved before Jinja compiles; their bare
+        # colons must not be mistaken for a syntax error.
+        param = "/{{ACCOUNT:my_acc:folder}}|{'title': 'X'}"
         self.assertIsNone(validate_folder_option_param(param))
 
     def test_no_options_passes(self):
