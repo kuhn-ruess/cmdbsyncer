@@ -27,6 +27,7 @@ from .inits import (
     export_bi_aggregations,
     export_rules,
     import_project_rules_from_folder,
+    assign_cmdb_template_from_folder,
     export_groups,
     activate_changes,
     bake_and_sign_agents,
@@ -470,6 +471,34 @@ def cli_import_project_rules(project, account, folder, recursive, debug):
     """
     try:
         import_project_rules_from_folder(project, account, folder, recursive, debug)
+    except CmkException as error_obj:
+        print(f'{ColorCodes.FAIL}Checkmk Error: {error_obj}{ColorCodes.ENDC}')
+
+#.
+#   .-- Command: Assign CMDB Template to Checkmk Folder Hosts
+@cli_cmk.command('assign_template')
+@click.argument("account")
+@click.argument("folder")
+@click.argument("template")
+@click.option("--dry-run", is_flag=True)
+@click.option("--debug", is_flag=True)
+def cli_assign_template(account, folder, template, dry_run, debug):
+    """
+    Assign a CMDB template to all syncer hosts in a Checkmk folder
+
+    Reads the hosts directly in the given Checkmk folder and appends the
+    named CMDB template to each host that exists in the syncer.
+
+    ### Example
+    _./cmdbsyncer checkmk assign_template SITEACCOUNT /server/linux LINUX_BASE_
+
+    Args:
+        account (string): Checkmk account to read the folder hosts from
+        folder (string): Checkmk folder, e.g. /server/linux
+        template (string): Name of the CMDB template to assign
+    """
+    try:
+        assign_cmdb_template_from_folder(account, folder, template, dry_run, debug)
     except CmkException as error_obj:
         print(f'{ColorCodes.FAIL}Checkmk Error: {error_obj}{ColorCodes.ENDC}')
 
