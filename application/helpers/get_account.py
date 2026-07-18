@@ -2,12 +2,44 @@
 Helper to get Account
 """
 import copy
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from mongoengine import signals
 from mongoengine.errors import DoesNotExist
 
 from application.enterprise import has_feature, run_hook
 from application.models.account import Account
+
+
+# Account fields that hold a secret. The {{ACCOUNT:...}} macro must keep
+# resolving them during a sync — outbound plugins legitimately build
+# credentials that way — but anything that renders rule outcomes back to
+# a browser has to mask them, see `mask_account_secrets`.
+SECRET_ACCOUNT_FIELDS = ('password', 'password_crypted')
+
+SECRET_PLACEHOLDER = '********'
+
+_mask_secrets = ContextVar('mask_account_secrets', default=False)
+
+
+@contextmanager
+def mask_account_secrets():
+    """
+    Resolve {{ACCOUNT:<name>:password}} to a placeholder instead of the
+    real secret for the duration of the block.
+
+    The host debug page renders every matching rule's outcome and shows
+    the result. Without this, a user holding only a plugin role (e.g.
+    `checkmk`) could add a rule whose outcome is the macro, open the
+    debug page and read the password of *any* account — bypassing the
+    `account` role that guards the account views.
+    """
+    token = _mask_secrets.set(True)
+    try:
+        yield
+    finally:
+        _mask_secrets.reset(token)
 
 
 # String values in custom_fields that should round-trip as real booleans.
@@ -131,6 +163,9 @@ def get_account_variable(macro):
     try:
         inner = macro.strip().removeprefix('{{').removesuffix('}}')
         _, account, var = (part.strip() for part in inner.split(':'))
-        return get_account_by_name(account)[var]
+        value = get_account_by_name(account)[var]
+        if var in SECRET_ACCOUNT_FIELDS and _mask_secrets.get():
+            return SECRET_PLACEHOLDER
+        return value
     except (ValueError, KeyError, AccountNotFoundError) as exc:
         raise ValueError("Account Variable not found") from exc
