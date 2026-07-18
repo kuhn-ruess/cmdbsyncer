@@ -469,6 +469,11 @@ class Plugin():
                     return False
                 return db_host.cache[cache]['attributes']
         attributes = {}
+        # The account which imported the host is a field of the host document,
+        # not a label, so rules had no way to match on it. Seed it as an
+        # attribute before any rule runs, so custom attribute, rewrite, filter
+        # and action/export rules can all condition on the host's origin.
+        attributes['SOURCE_ACCOUNT'] = db_host.source_account_name or ''
         attributes.update(db_host.labels.items())
         attributes.update(db_host.inventory.items())
         for tmpl in (db_host.cmdb_templates or []):
