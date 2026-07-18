@@ -389,6 +389,60 @@ class TestPlugin(unittest.TestCase):
         )
         self.assertEqual(plugin.filter.get_outcomes.call_args.kwargs['persist_cache'], False)
 
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_exposes_source_account(self, mock_app):
+        """The importing account must be matchable by every rule type."""
+        mock_app.config = self.mock_app_config
+
+        mock_host = Mock()
+        mock_host.hostname = 'test-host'
+        mock_host.source_account_name = 'jira-prod-vms'
+        mock_host.cache = {}
+        mock_host.labels = {'label1': 'value1'}
+        mock_host.inventory = {}
+        mock_host.cmdb_templates = []
+
+        plugin = Plugin()
+        plugin.custom_attributes = Mock()
+        plugin.custom_attributes.get_outcomes.return_value = {}
+        plugin.init_custom_attributes = Mock()
+        plugin.rewrite = Mock()
+        plugin.rewrite.get_outcomes.return_value = {}
+        plugin.filter = Mock()
+        plugin.filter.get_outcomes.return_value = {}
+
+        result = plugin.get_attributes(mock_host, False)
+
+        self.assertEqual(result['all']['SOURCE_ACCOUNT'], 'jira-prod-vms')
+        # Rules running before the final attribute set is built must see it too
+        for rule in (plugin.custom_attributes, plugin.rewrite, plugin.filter):
+            seen = rule.get_outcomes.call_args.args[1]
+            self.assertEqual(seen['SOURCE_ACCOUNT'], 'jira-prod-vms')
+
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_source_account_unset(self, mock_app):
+        """Hosts without an import account get an empty string, not None."""
+        mock_app.config = self.mock_app_config
+
+        mock_host = Mock()
+        mock_host.hostname = 'test-host'
+        mock_host.source_account_name = None
+        mock_host.cache = {}
+        mock_host.labels = {}
+        mock_host.inventory = {}
+        mock_host.cmdb_templates = []
+
+        plugin = Plugin()
+        plugin.custom_attributes = Mock()
+        plugin.custom_attributes.get_outcomes.return_value = {}
+        plugin.init_custom_attributes = Mock()
+        plugin.rewrite = None
+        plugin.filter = None
+
+        result = plugin.get_attributes(mock_host, False)
+
+        self.assertEqual(result['all']['SOURCE_ACCOUNT'], '')
+
     @patch('application.modules.plugin.render_jinja')
     @patch('application.modules.plugin.app')
     def test_get_attributes_renders_jinja_in_template_values(
