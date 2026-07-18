@@ -47,6 +47,12 @@ def validate_custom_query(query, allow_ddl=False):
     EXEC, GRANT, REVOKE, REPLACE, MERGE) stay blocked so a typo can't
     wipe the schema, and the statement must still contain a SELECT so
     the importer has rows to iterate.
+
+    Returns the comment-stripped statement, not the original — the
+    keyword checks run on the stripped form, and MySQL executes
+    conditional comments (``/*!50000 DROP TABLE x*/``) as real SQL, so
+    returning the raw input would execute something the validation
+    never saw.
     """
     stripped = _COMMENT_RE.sub('', query).strip()
     if allow_ddl:
@@ -60,12 +66,12 @@ def validate_custom_query(query, allow_ddl=False):
             raise ValueError(
                 "custom_query must include a SELECT the importer can read from"
             )
-        return query
+        return stripped
     if not re.match(r'^\s*(SELECT|WITH)\b', stripped, re.IGNORECASE):
         raise ValueError("custom_query must start with SELECT or WITH")
     if _WRITE_KEYWORDS_RE.search(stripped):
         raise ValueError("custom_query must not contain write or DDL statements")
-    return query
+    return stripped
 
 
 def custom_query_allow_ddl(config):

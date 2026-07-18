@@ -513,7 +513,7 @@ def format_log(_v, _c, m, _p):
             f'<div class="modal-header">'
             f'<h5 class="modal-title" '
             f'id="{modal_id}Label">'
-            f'Full Logs for: {m.hostname}</h5>'
+            f'Full Logs for: {escape(m.hostname)}</h5>'
             f'<button type="button" class="close" '
             f'data-dismiss="modal" aria-label="Close">'
             f'<span aria-hidden="true">&times;</span>'

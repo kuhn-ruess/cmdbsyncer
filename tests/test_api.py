@@ -276,6 +276,33 @@ class HostViewFormattingTest(unittest.TestCase):
         self.assertIn('&lt;img src=x onerror=alert(1)&gt;', rendered)
         self.assertNotIn('<li>Inventory Change: key to <img src=x onerror=alert(1)></li>', rendered)
 
+    def test_format_log_escapes_hostname_in_modal_title(self):
+        # The modal title was the one interpolation in `format_log` that
+        # was not escaped. `hostname` is attacker-controlled (API,
+        # CSV/CMDB import), so a host name alone could inject script into
+        # every admin's host list.
+        self._import_host_module()
+        renderers_module = _load_source_module(
+            'application.views.host_renderers',
+            os.path.join('application', 'views', 'host_renderers.py'),
+        )
+
+        log_cls = MagicMock()
+        chain = MagicMock()
+        chain.order_by.return_value = []
+        log_cls.objects.return_value = chain
+        model = SimpleNamespace(
+            id='host1',
+            hostname='srv<img src=x onerror=alert(1)>',
+            log=['some log line'],
+        )
+
+        with patch.object(renderers_module, 'LogEntry', log_cls):
+            rendered = str(renderers_module.format_log(None, None, model, None))
+
+        self.assertIn('Full Logs for: srv&lt;img src=x onerror=alert(1)&gt;', rendered)
+        self.assertNotIn('<img src=x onerror=alert(1)>', rendered)
+
     def test_format_cache_escapes_cache_keys_and_values(self):
         host_module = self._import_host_module()
         model = SimpleNamespace(

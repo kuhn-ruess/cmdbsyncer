@@ -21,6 +21,7 @@ roles = [
   ('account', "Account Management"),
   ('log', "Log View"),
   ('global_attributes', "Global Attributes"),
+  ('rule', "Generic Rules (Filter, Rewrite, Custom Attributes)"),
   ('fileadmin', "File Management"),
   ('user', "User Management"),
   ('ansible', "Ansible"),
