@@ -52,9 +52,10 @@
 
                 <p class="text-muted">
                     Preview of the first {{ preview_rows|length }} of {{ row_count }} row(s).
-                    Columns named <code>label_&lt;name&gt;</code> /
-                    <code>inventory_&lt;name&gt;</code> map back onto labels/inventory;
-                    <code>folder</code> and <code>lifecycle_state</code> pass through.
+                    Every column except the hostname, <code>folder</code>,
+                    <code>lifecycle_state</code> and <code>inventory_&lt;name&gt;</code>
+                    becomes a host label (an <code>label_&lt;name&gt;</code> prefix is
+                    stripped for the Export CSV round-trip).
                 </p>
 
                 <div class="table-responsive" style="max-height: 22rem; overflow: auto;">

@@ -1924,6 +1924,8 @@ Impact Chain.
         """
         if template.endswith('host_list.html') or template.endswith('list.html'):
             kwargs.setdefault('set_template_choices', self.get_template_list())
+            kwargs.setdefault('assign_project_choices',
+                              [p.name for p in Project.objects().order_by('name')])
             kwargs.setdefault('cmdb_mode', app.config.get('CMDB_MODE', False))
             # pylint: disable=import-outside-toplevel
             from application.views.saved_search import list_for_path
@@ -2346,17 +2348,17 @@ Impact Chain.
         except csv.Error:
             return csv.excel
 
-    @classmethod
-    def _csv_rows_from_text(cls, text):
+    @staticmethod
+    def _looks_like_csv(text):
         """
-        Parse CSV text into a list of row dicts (header row supplies the
-        keys). Header keys are stripped of surrounding whitespace.
+        A pasted blob is treated as CSV when its first non-empty line
+        carries a delimiter (comma/semicolon/tab); otherwise it is a plain
+        list of hostnames, one per line.
         """
-        reader = csv.DictReader(io.StringIO(text), dialect=cls._sniff_csv_dialect(text))
-        return [
-            {(key or '').strip(): value for key, value in row.items()}
-            for row in reader
-        ]
+        for line in text.splitlines():
+            if line.strip():
+                return any(sep in line for sep in (',', ';', '\t'))
+        return False
 
     @classmethod
     def _csv_columns_and_rows(cls, text, has_header=True):
@@ -2393,21 +2395,64 @@ Impact Chain.
             for row in data_rows
         ]
 
-    @classmethod
-    def _parse_bulk_host_text(cls, text):
+    def _render_csv_preview(self, text, has_header, template_id, return_to):
         """
-        Turn a pasted blob into row dicts. If the first non-empty line
-        looks like a CSV header (mentions `hostname` and carries a
-        delimiter) the whole blob is parsed as CSV; otherwise every
-        non-empty line is treated as a single hostname.
+        Render the CSV import preview: parse the text into columns + sample
+        rows and let the user pick which column holds the hostname before
+        anything is created. Shared by the file upload and by a pasted CSV
+        in "Bulk add hosts". Flashes and redirects when the text is empty.
         """
-        non_empty = [line for line in text.splitlines() if line.strip()]
-        if not non_empty:
-            return []
-        header = non_empty[0].lower()
-        if 'hostname' in header and any(sep in non_empty[0] for sep in (',', ';', '\t')):
-            return cls._csv_rows_from_text(text)
-        return [{'hostname': line.strip()} for line in non_empty]
+        columns, data_rows = self._csv_columns_and_rows(text, has_header)
+        if not columns:
+            flash('The CSV is empty.', 'error')
+            return redirect(return_to)
+        # Preselect a column literally named "hostname", else the first.
+        hostname_column = next(
+            (col for col in columns if col.strip().lower() == 'hostname'),
+            columns[0],
+        )
+        return render_template(
+            'admin/host_csv_import_preview.html',
+            columns=columns,
+            preview_rows=self._rows_as_dicts(columns, data_rows[:10]),
+            row_count=len(data_rows),
+            hostname_column=hostname_column,
+            has_header=has_header,
+            csv_text=text,
+            templates=self.get_template_list(),
+            template_id=template_id,
+            return_to=return_to,
+        )
+
+    @staticmethod
+    def _row_overlays(row, hostname_key):
+        """
+        Split a CSV/list row into ``(label_overlay, inventory_overlay)``.
+
+        Every column that is not the hostname, ``folder``,
+        ``lifecycle_state`` or an ``inventory_<name>`` column becomes a
+        label: a ``label_<name>`` prefix is stripped (Export-CSV
+        round-trip), any other header (``os``, ``env``, ...) keeps its own
+        name so extra fields land as host labels. ``inventory_<name>``
+        columns feed the inventory (``syncer_`` keys are protected).
+        """
+        reserved = {hostname_key.lower(), 'folder', 'lifecycle_state'}
+        labels, inventory = {}, {}
+        for col, value in row.items():
+            if not col or value in (None, ''):
+                continue
+            low = col.lower()
+            if low.startswith('inventory_'):
+                key = col[len('inventory_'):]
+                if not key.startswith('syncer_'):
+                    inventory[key] = value
+            elif low in reserved:
+                continue
+            elif low.startswith('label_'):
+                labels[col[len('label_'):]] = value
+            else:
+                labels[col] = value
+        return labels, inventory
 
     def _bulk_upsert_host(self, row, template, actor_email,  # pylint: disable=too-many-locals
                           hostname_key='hostname'):
@@ -2452,7 +2497,7 @@ Impact Chain.
             host.lifecycle_state = state
 
         # Merge existing cmdb_fields + labels, then overlay the row's
-        # label_ columns — update_host is a wholesale replacement.
+        # columns — update_host is a wholesale replacement.
         new_labels = {
             field.field_name: field.field_value
             for field in (host.cmdb_fields or [])
@@ -2460,18 +2505,12 @@ Impact Chain.
         }
         for label_key, label_value in (host.labels or {}).items():
             new_labels.setdefault(label_key, label_value)
-        for col, value in row.items():
-            if col and col.lower().startswith('label_') and value not in (None, ''):
-                new_labels[col[len('label_'):]] = value
+        label_overlay, inventory_overlay = self._row_overlays(row, hostname_key)
+        new_labels.update(label_overlay)
 
         host.update_host(new_labels)
         host.set_inventory_attributes('cmdb')
-
-        for col, value in row.items():
-            if col and col.lower().startswith('inventory_') and value not in (None, ''):
-                key = col[len('inventory_'):]
-                if not key.startswith('syncer_'):
-                    host.inventory[key] = value
+        host.inventory.update(inventory_overlay)
 
         # Mirror labels into editable cmdb_fields + add configured defaults,
         # matching on_model_change so the host stays fully editable.
@@ -2551,7 +2590,13 @@ Impact Chain.
             flash('Please paste at least one hostname.', 'error')
             return redirect(return_to)
 
-        rows = self._parse_bulk_host_text(raw)
+        # A pasted CSV goes through the same preview as an uploaded file, so
+        # the user picks the hostname column instead of it being guessed.
+        if self._looks_like_csv(raw):
+            return self._render_csv_preview(
+                raw, True, request.form.get('template_id', ''), return_to)
+
+        rows = [{'hostname': line.strip()} for line in raw.splitlines() if line.strip()]
         self._run_bulk_host_create(rows, request.form.get('template_id') or None)
         return redirect(return_to)
 
@@ -2587,28 +2632,8 @@ Impact Chain.
         else:
             has_header = request.form.get('has_header') == '1'
 
-        columns, data_rows = self._csv_columns_and_rows(text, has_header)
-        if not columns:
-            flash('The CSV file is empty.', 'error')
-            return redirect(return_to)
-
-        # Preselect a column literally named "hostname", else the first.
-        hostname_column = next(
-            (col for col in columns if col.strip().lower() == 'hostname'),
-            columns[0],
-        )
-        return render_template(
-            'admin/host_csv_import_preview.html',
-            columns=columns,
-            preview_rows=self._rows_as_dicts(columns, data_rows[:10]),
-            row_count=len(data_rows),
-            hostname_column=hostname_column,
-            has_header=has_header,
-            csv_text=text,
-            templates=self.get_template_list(),
-            template_id=request.form.get('template_id', ''),
-            return_to=return_to,
-        )
+        return self._render_csv_preview(
+            text, has_header, request.form.get('template_id', ''), return_to)
 
     @expose('/csv_import_run', methods=['POST'])
     def csv_import_run(self):

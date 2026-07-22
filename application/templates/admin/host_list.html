@@ -137,6 +137,46 @@
   </div>
 </div>
 
+<div class="modal fade" id="assignProjectModal" tabindex="-1" role="dialog"
+     aria-labelledby="assignProjectModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('.process_project_assignment') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="host_ids" id="assignProjectHostIds" value="">
+        <input type="hidden" name="return_to" value="{{ request.full_path }}">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="assignProjectModalLabel">Assign Project</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <p class="text-muted" style="font-size: 0.9rem;">
+            <span id="assignProjectHostCount">0</span> host(s) will be updated.
+          </p>
+          <div class="form-group mb-0">
+            <label for="assignProjectName">Select project</label>
+            <select class="form-control" id="assignProjectName" name="project">
+              <option value="">No project (clear assignment)</option>
+              {% for project in assign_project_choices or [] %}
+                <option value="{{ project }}">{{ project }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Assign Project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="bulkLabelModal" tabindex="-1" role="dialog"
      aria-labelledby="bulkLabelModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
@@ -276,10 +316,10 @@
                       rows="10" required
                       placeholder="One hostname per line, e.g.&#10;web01.example.com&#10;web02.example.com&#10;&#10;— or paste CSV with a header row:&#10;hostname,label_env,inventory_os&#10;db01,production,linux"></textarea>
             <small class="form-text text-muted">
-              A plain list creates one host per line. If the first line is a
-              header containing <code>hostname</code>, the whole text is parsed
-              as CSV — <code>label_&lt;name&gt;</code> and
-              <code>inventory_&lt;name&gt;</code> columns are written to the host.
+              A plain list creates one host per line. Paste CSV (any line with a
+              delimiter) and you get a preview to pick the hostname column first.
+              Every extra column becomes a host label;
+              <code>inventory_&lt;name&gt;</code> columns go to the inventory.
             </small>
           </div>
 
@@ -326,9 +366,8 @@
                    name="csv_file" accept=".csv,text/csv" required>
             <small class="form-text text-muted">
               After upload you pick the hostname column and assign an optional
-              template. The <code>label_&lt;name&gt;</code> /
-              <code>inventory_&lt;name&gt;</code> columns produced by Export CSV
-              are imported back.
+              template. Every other column becomes a host label;
+              <code>inventory_&lt;name&gt;</code> columns go to the inventory.
             </small>
           </div>
         </div>
@@ -395,6 +434,18 @@
       $('#setTemplateHostIds').val(ids.join(','));
       $('#setTemplateHostCount').text(ids.length);
       $('#setTemplateModal').modal('show');
+      return false;
+    }
+
+    if (name === 'assign_project') {
+      ids = collectIds();
+      if (ids.length === 0) {
+        alert('Please select at least one host.');
+        return false;
+      }
+      $('#assignProjectHostIds').val(ids.join(','));
+      $('#assignProjectHostCount').text(ids.length);
+      $('#assignProjectModal').modal('show');
       return false;
     }
 
