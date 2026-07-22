@@ -1140,6 +1140,38 @@ class TestSyncCMK2Misc(unittest.TestCase):
             self.syncer.handle_folders()
         self.assertEqual(mock_req.call_count, 2)
 
+    def test_handle_folders_uses_update_attributes_not_replace(self):
+        # Adding an attribute to an existing folder must never send the
+        # 'attributes' key (which replaces the whole set and wipes tags/SNMP);
+        # it must merge via 'update_attributes'.
+        self.syncer.custom_folder_attributes = {'/f': {'new_attr': 'v'}}
+        self.syncer.existing_folders_attributes = {'/f': {'other': 'keep'}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = [
+                ({'title': 'F'}, {'etag': 'e1'}),  # GET current
+                (None, {'etag': 'e2'}),             # PUT
+            ]
+            self.syncer.handle_folders()
+        put_call = mock_req.call_args_list[1]
+        payload = put_call.kwargs['data']
+        self.assertNotIn('attributes', payload)
+        self.assertEqual(payload['update_attributes'], {'new_attr': 'v'})
+
+    def test_handle_folders_merges_add_and_update_in_one_call(self):
+        self.syncer.custom_folder_attributes = {
+            '/f': {'new_attr': 'v', 'changed': 'new'}}
+        self.syncer.existing_folders_attributes = {'/f': {'changed': 'old'}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = [
+                ({'title': 'F'}, {'etag': 'e1'}),  # GET current
+                (None, {'etag': 'e2'}),             # single PUT
+            ]
+            self.syncer.handle_folders()
+        self.assertEqual(mock_req.call_count, 2)
+        payload = mock_req.call_args_list[1].kwargs['data']
+        self.assertEqual(payload['update_attributes'],
+                         {'new_attr': 'v', 'changed': 'new'})
+
     def test_handle_folders_get_exception_logged(self):
         self.syncer.custom_folder_attributes = {'/f': {'a': 'v'}}
         self.syncer.existing_folders_attributes = {'/f': {}}

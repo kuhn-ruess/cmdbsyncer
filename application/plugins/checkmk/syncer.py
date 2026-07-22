@@ -233,26 +233,14 @@ class SyncCMK2(CMK2):
                     continue
                 del update_attributes['title']
                 etag = headers['etag']
-            if add_attributes:
-                print(f"{CC.OKGREEN} *{CC.ENDC} Add Attributes to Folder: "\
-                      f"{folder_name} ({add_attributes})")
+            # Both new and changed attributes go through update_attributes
+            # (merge semantics). Never send 'attributes' to an existing folder:
+            # that key REPLACES the whole set, wiping attributes the syncer does
+            # not know about (tags, SNMP settings, ...).
+            changed_attributes = {**add_attributes, **update_attributes}
+            if changed_attributes:
                 payload = {
-                    'attributes' : add_attributes
-                }
-                update_headers = {
-                    'if-match': etag,
-                }
-                try:
-                    _, headers = self.request(url, method="PUT",
-                                 data=payload,
-                                 additional_header=update_headers)
-                except CmkException as exp:
-                    self.log_details.append(('error', f'Create Folder Exception: {exp}'))
-                    continue
-                etag = headers['etag']
-            if update_attributes:
-                payload = {
-                    'update_attributes' : update_attributes
+                    'update_attributes' : changed_attributes
                 }
                 update_headers = {
                     'if-match': etag,
@@ -265,7 +253,7 @@ class SyncCMK2(CMK2):
                     self.log_details.append(('error', f'Update Folder Exception: {exp}'))
                     continue
                 print(f"{CC.OKGREEN} *{CC.ENDC} Update Attributes on Folder: {folder_name} "\
-                      f"({update_attributes})")
+                      f"({changed_attributes})")
 
 
 
