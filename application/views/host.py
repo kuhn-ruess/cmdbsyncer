@@ -2336,20 +2336,61 @@ Impact Chain.
         return response
 
     @staticmethod
-    def _csv_rows_from_text(text):
+    def _sniff_csv_dialect(text):
         """
-        Parse CSV text into a list of row dicts. Sniffs the delimiter so
-        comma/semicolon/tab exports all work; falls back to comma. Header
-        keys are stripped of surrounding whitespace.
+        Guess the CSV delimiter (comma/semicolon/tab) from the first 4 KB
+        so the various Export CSV flavours all parse; falls back to comma.
         """
         try:
-            dialect = csv.Sniffer().sniff(text[:4096], delimiters=',;\t')
+            return csv.Sniffer().sniff(text[:4096], delimiters=',;\t')
         except csv.Error:
-            dialect = csv.excel
-        reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+            return csv.excel
+
+    @classmethod
+    def _csv_rows_from_text(cls, text):
+        """
+        Parse CSV text into a list of row dicts (header row supplies the
+        keys). Header keys are stripped of surrounding whitespace.
+        """
+        reader = csv.DictReader(io.StringIO(text), dialect=cls._sniff_csv_dialect(text))
         return [
             {(key or '').strip(): value for key, value in row.items()}
             for row in reader
+        ]
+
+    @classmethod
+    def _csv_columns_and_rows(cls, text, has_header=True):
+        """
+        Parse CSV text into ``(columns, data_rows)`` where ``data_rows`` is
+        a list of raw value lists. With ``has_header`` the first non-empty
+        row supplies the column names; without it synthetic ``Column N``
+        names are generated and every row counts as data — this is the
+        "I forgot the header" escape hatch, so the first host is not eaten
+        as column names.
+        """
+        dialect = cls._sniff_csv_dialect(text)
+        raw_rows = [
+            row for row in csv.reader(io.StringIO(text), dialect=dialect)
+            if any((cell or '').strip() for cell in row)
+        ]
+        if not raw_rows:
+            return [], []
+        if has_header:
+            columns = [(cell or '').strip() for cell in raw_rows[0]]
+            data_rows = raw_rows[1:]
+        else:
+            width = max(len(row) for row in raw_rows)
+            columns = [f'Column {i + 1}' for i in range(width)]
+            data_rows = raw_rows
+        return columns, data_rows
+
+    @staticmethod
+    def _rows_as_dicts(columns, data_rows):
+        """Zip each raw value row against ``columns`` into a row dict."""
+        return [
+            {columns[i]: (row[i] if i < len(row) else '')
+             for i in range(len(columns))}
+            for row in data_rows
         ]
 
     @classmethod
@@ -2368,17 +2409,20 @@ Impact Chain.
             return cls._csv_rows_from_text(text)
         return [{'hostname': line.strip()} for line in non_empty]
 
-    def _bulk_upsert_host(self, row, template, actor_email):  # pylint: disable=too-many-locals
+    def _bulk_upsert_host(self, row, template, actor_email,  # pylint: disable=too-many-locals
+                          hostname_key='hostname'):
         """
         Create (or update) a single host from a CSV/list row using the
         same CMDB recipe as `on_model_change`. Returns True if a new host
         was created, False if an existing one was updated, None if the row
-        carried no hostname. `label_<x>` / `inventory_<x>` columns map back
-        onto labels/inventory; `folder` and a valid `lifecycle_state` pass
-        through. Raises on a bad hostname/label key — the caller counts it.
+        carried no hostname. `hostname_key` names the column that holds the
+        hostname (the user picks it on the CSV import preview). `label_<x>`
+        / `inventory_<x>` columns map back onto labels/inventory; `folder`
+        and a valid `lifecycle_state` pass through. Raises on a bad
+        hostname/label key — the caller counts it.
         """
         lower = {key.lower(): value for key, value in row.items() if key}
-        hostname = (lower.get('hostname') or '').strip()
+        hostname = (lower.get(hostname_key.lower()) or '').strip()
         if not hostname:
             return None
 
@@ -2451,10 +2495,11 @@ Impact Chain.
         host.save()
         return is_new
 
-    def _run_bulk_host_create(self, rows, template_id):
+    def _run_bulk_host_create(self, rows, template_id, hostname_key='hostname'):
         """
         Apply `_bulk_upsert_host` to every row and flash a summary. A bad
         row is counted as skipped instead of aborting the whole batch.
+        `hostname_key` names the column carrying the hostname.
         """
         template = None
         if template_id:
@@ -2468,7 +2513,7 @@ Impact Chain.
         actor_email = getattr(current_user, 'email', None)
         for row in rows:
             try:
-                result = self._bulk_upsert_host(row, template, actor_email)
+                result = self._bulk_upsert_host(row, template, actor_email, hostname_key)
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 skipped += 1
                 if len(errors) < 5:
@@ -2513,8 +2558,10 @@ Impact Chain.
     @expose('/csv_import', methods=['POST'])
     def csv_import(self):
         """
-        Create hosts from an uploaded CSV file (round-trips the Export CSV
-        format), optionally assigning a CMDB template. CMDB mode only.
+        Step 1 of CSV import: read the uploaded file (or a re-submitted
+        preview when the header toggle changed), then render a preview
+        where the user picks which column holds the hostname before any
+        host is created. Nothing is written here. CMDB mode only.
         """
         return_to = _safe_return_to(request.form.get('return_to'))
         if not app.config.get('CMDB_MODE'):
@@ -2523,18 +2570,72 @@ Impact Chain.
         if not current_user.is_authenticated or not current_user.has_right('host'):
             return Response("Unauthorized", status=401)
 
-        upload = request.files.get('csv_file')
-        if not upload or not upload.filename:
-            flash('Please choose a CSV file to import.', 'error')
-            return redirect(return_to)
-        try:
-            text = upload.read().decode('utf-8-sig')
-        except UnicodeDecodeError:
-            flash('Could not read the file — expected a UTF-8 encoded CSV.', 'error')
+        # A fresh upload carries the file; a re-preview (header toggle)
+        # re-submits the already-read text in a hidden field.
+        text = request.form.get('csv_text')
+        if text is None:
+            upload = request.files.get('csv_file')
+            if not upload or not upload.filename:
+                flash('Please choose a CSV file to import.', 'error')
+                return redirect(return_to)
+            try:
+                text = upload.read().decode('utf-8-sig')
+            except UnicodeDecodeError:
+                flash('Could not read the file — expected a UTF-8 encoded CSV.', 'error')
+                return redirect(return_to)
+            has_header = True
+        else:
+            has_header = request.form.get('has_header') == '1'
+
+        columns, data_rows = self._csv_columns_and_rows(text, has_header)
+        if not columns:
+            flash('The CSV file is empty.', 'error')
             return redirect(return_to)
 
-        rows = self._csv_rows_from_text(text)
-        self._run_bulk_host_create(rows, request.form.get('template_id') or None)
+        # Preselect a column literally named "hostname", else the first.
+        hostname_column = next(
+            (col for col in columns if col.strip().lower() == 'hostname'),
+            columns[0],
+        )
+        return render_template(
+            'admin/host_csv_import_preview.html',
+            columns=columns,
+            preview_rows=self._rows_as_dicts(columns, data_rows[:10]),
+            row_count=len(data_rows),
+            hostname_column=hostname_column,
+            has_header=has_header,
+            csv_text=text,
+            templates=self.get_template_list(),
+            template_id=request.form.get('template_id', ''),
+            return_to=return_to,
+        )
+
+    @expose('/csv_import_run', methods=['POST'])
+    def csv_import_run(self):
+        """
+        Step 2 of CSV import: create/update hosts from the previewed CSV,
+        using the hostname column the user picked. CMDB mode only.
+        """
+        return_to = _safe_return_to(request.form.get('return_to'))
+        if not app.config.get('CMDB_MODE'):
+            flash('CSV import is only available in CMDB mode.', 'error')
+            return redirect(return_to)
+        if not current_user.is_authenticated or not current_user.has_right('host'):
+            return Response("Unauthorized", status=401)
+
+        text = request.form.get('csv_text') or ''
+        has_header = request.form.get('has_header') == '1'
+        hostname_column = request.form.get('hostname_column') or ''
+        columns, data_rows = self._csv_columns_and_rows(text, has_header)
+        if not hostname_column or hostname_column not in columns:
+            flash('Please choose which column holds the hostname.', 'error')
+            return redirect(return_to)
+
+        rows = self._rows_as_dicts(columns, data_rows)
+        self._run_bulk_host_create(
+            rows, request.form.get('template_id') or None,
+            hostname_key=hostname_column,
+        )
         return redirect(return_to)
 
 
