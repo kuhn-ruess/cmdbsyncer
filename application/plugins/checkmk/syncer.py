@@ -237,6 +237,28 @@ class SyncCMK2(CMK2):
                             merge_folder_attributes(existing, parsed)
 
 
+    @staticmethod
+    def _folder_attr_satisfied(target, current):
+        """
+        True when ``target`` is already reflected by ``current`` (the value
+        Checkmk returns for the folder), so no update is needed.
+
+        Checkmk fills dict-valued attributes with extra default keys it was
+        never sent — e.g. ``contactgroups={'groups': [...], 'use': True}``
+        comes back as ``{..., 'use_for_services': False, 'recurse_use':
+        False, 'recurse_perms': False}``. A plain ``==`` then reports a
+        change on every export and re-PUTs the folder each run. For dicts
+        we therefore only require the keys we actually set to match;
+        Checkmk's own additions are ignored.
+        """
+        if isinstance(target, dict) and isinstance(current, dict):
+            return all(
+                key in current
+                and SyncCMK2._folder_attr_satisfied(value, current[key])
+                for key, value in target.items()
+            )
+        return target == current
+
     # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements
     def handle_folders(self):
         """
@@ -257,7 +279,7 @@ class SyncCMK2(CMK2):
                     add_attributes[attr_name] = attr_value
                 else:
                     cmk_attr_value = cmk_attributes[attr_name]
-                    if cmk_attr_value !=  attr_value:
+                    if not self._folder_attr_satisfied(attr_value, cmk_attr_value):
                         update_attributes[attr_name] = attr_value
             folder_name_url = folder_name.replace('/', '~')
             url = f'/objects/folder_config/{folder_name_url}'

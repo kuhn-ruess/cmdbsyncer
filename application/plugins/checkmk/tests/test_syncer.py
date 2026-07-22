@@ -1188,6 +1188,46 @@ class TestSyncCMK2Misc(unittest.TestCase):
             self.syncer.handle_folders()
             mock_req.assert_not_called()
 
+    def test_handle_folders_no_update_when_checkmk_adds_defaults(self):
+        # Checkmk fills contactgroups with extra default keys it was never
+        # sent. That must NOT count as a change, or every export re-PUTs the
+        # folder (reported bug).
+        self.syncer.custom_folder_attributes = {
+            '/f': {'contactgroups': {'groups': ['all'], 'use': True}}}
+        self.syncer.existing_folders_attributes = {
+            '/f': {'contactgroups': {'groups': ['all'], 'use': True,
+                                     'use_for_services': False,
+                                     'recurse_use': False,
+                                     'recurse_perms': False}}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            self.syncer.handle_folders()
+            mock_req.assert_not_called()
+
+    def test_handle_folders_updates_when_set_value_changes(self):
+        # A real change to a key we set still triggers an update.
+        self.syncer.custom_folder_attributes = {
+            '/f': {'contactgroups': {'groups': ['ops'], 'use': True}}}
+        self.syncer.existing_folders_attributes = {
+            '/f': {'contactgroups': {'groups': ['all'], 'use': True,
+                                     'use_for_services': False}}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = [
+                ({'title': 'F'}, {'etag': 'e1'}),  # GET current
+                (None, {'etag': 'e2'}),             # PUT
+            ]
+            self.syncer.handle_folders()
+        payload = mock_req.call_args_list[1].kwargs['data']
+        self.assertEqual(payload['update_attributes']['contactgroups'],
+                         {'groups': ['ops'], 'use': True})
+
+    def test_folder_attr_satisfied_subset_semantics(self):
+        f = SyncCMK2._folder_attr_satisfied
+        self.assertTrue(f({'use': True}, {'use': True, 'extra': False}))
+        self.assertTrue(f('prod', 'prod'))
+        self.assertFalse(f('prod', 'test'))
+        self.assertFalse(f({'use': True}, {'use': False}))
+        self.assertFalse(f({'groups': ['a']}, {'groups': ['b']}))
+
     def test_handle_folders_adds_missing_attribute(self):
         self.syncer.custom_folder_attributes = {'/f': {'new_attr': 'v'}}
         self.syncer.existing_folders_attributes = {'/f': {}}
