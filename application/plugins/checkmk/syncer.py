@@ -292,26 +292,14 @@ class SyncCMK2(CMK2):
                 print(f"{CC.OKGREEN} *{CC.ENDC} Update Title: {folder_name} to '{new_title}'")
                 del update_attributes['title']
                 etag = headers['etag']
-            if add_attributes:
+            # Both new and changed attributes go through update_attributes
+            # (merge semantics). Never send 'attributes' to an existing folder:
+            # that key REPLACES the whole set, wiping attributes the syncer does
+            # not know about (tags, SNMP settings, ...).
+            changed_attributes = {**add_attributes, **update_attributes}
+            if changed_attributes:
                 payload = {
-                    'attributes' : add_attributes
-                }
-                update_headers = {
-                    'if-match': etag,
-                }
-                try:
-                    _, headers = self.request(url, method="PUT",
-                                 data=payload,
-                                 additional_header=update_headers)
-                except CmkException as exp:
-                    self._log_folder_error(folder_name, 'add attributes', exp)
-                    continue
-                print(f"{CC.OKGREEN} *{CC.ENDC} Added Attributes to Folder: "\
-                      f"{folder_name} ({add_attributes})")
-                etag = headers['etag']
-            if update_attributes:
-                payload = {
-                    'update_attributes' : update_attributes
+                    'update_attributes' : changed_attributes
                 }
                 update_headers = {
                     'if-match': etag,
@@ -324,7 +312,7 @@ class SyncCMK2(CMK2):
                     self._log_folder_error(folder_name, 'update attributes', exp)
                     continue
                 print(f"{CC.OKGREEN} *{CC.ENDC} Updated Attributes on Folder: {folder_name} "\
-                      f"({update_attributes})")
+                      f"({changed_attributes})")
 
     def _log_folder_error(self, folder_name, action, exp):
         """
