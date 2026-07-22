@@ -1,109 +1,91 @@
-<div class="row justify-content-center">
-    <div class="col-md-11 col-lg-10">
-        <div class="app-card" style="margin-top: 1.5rem;">
-            <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
-                <h2>Import hosts from CSV</h2>
-                <p>Check the preview and pick which column holds the hostname before importing.</p>
-            </div>
+{# Modal-body fragment: loaded via AJAX into #csvPreviewBody (see
+   host_list.html). Do NOT wrap it in page chrome — the modal is the frame. #}
+<form method="POST" id="csvPreviewForm"
+      action="{{ url_for('.csv_import_run') }}"
+      data-preview-url="{{ url_for('.csv_import') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="return_to" value="{{ return_to or '' }}">
+    {# Multi-line CSV rides in a hidden textarea so the import (and the
+       header re-preview) work without server state. #}
+    <textarea name="csv_text" style="display:none;">{{ csv_text }}</textarea>
 
-            <form method="POST">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="return_to" value="{{ return_to or '' }}">
-                {# Multi-line CSV rides in a hidden textarea so the step-2
-                   import (and the header re-preview) work without server state. #}
-                <textarea name="csv_text" style="display:none;">{{ csv_text }}</textarea>
-
-                <div class="form-group form-check">
-                    <input type="checkbox" class="form-check-input" id="hasHeader"
-                           name="has_header" value="1" {% if has_header %}checked{% endif %}
-                           onchange="this.form.requestSubmit(document.getElementById('csvRefreshBtn'));">
-                    <label class="form-check-label" for="hasHeader">
-                        First row contains column names (header)
-                    </label>
-                    <small class="form-text text-muted">
-                        Forgot the header? Uncheck this — the first row is then kept
-                        as data and columns are numbered instead.
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label for="hostnameColumn"><strong>Hostname column</strong></label>
-                    <select class="form-control" id="hostnameColumn" name="hostname_column" required>
-                        {% for col in columns %}
-                        <option value="{{ col }}" {% if col == hostname_column %}selected{% endif %}>
-                            {{ col if col else '(empty column name)' }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="csvTemplateId">Assign template (optional)</label>
-                    <select class="form-control" id="csvTemplateId" name="template_id">
-                        <option value="">No template</option>
-                        {% for template in templates %}
-                        <option value="{{ template.id }}"
-                                {% if template.id|string == template_id %}selected{% endif %}>
-                            {{ template.hostname }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <p class="text-muted">
-                    Preview of the first {{ preview_rows|length }} of {{ row_count }} row(s).
-                    Every column except the hostname, <code>folder</code>,
-                    <code>lifecycle_state</code> and <code>inventory_&lt;name&gt;</code>
-                    becomes a host label (an <code>label_&lt;name&gt;</code> prefix is
-                    stripped for the Export CSV round-trip).
-                </p>
-
-                <div class="table-responsive" style="max-height: 22rem; overflow: auto;">
-                    <table class="table table-sm table-bordered">
-                        <thead>
-                            <tr>
-                                {% for col in columns %}
-                                <th style="white-space: nowrap;">
-                                    {{ col if col else '(empty)' }}
-                                    {% if col == hostname_column %}
-                                        <span class="badge badge-primary">hostname</span>
-                                    {% endif %}
-                                </th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in preview_rows %}
-                            <tr>
-                                {% for col in columns %}
-                                <td>{{ row[col] }}</td>
-                                {% endfor %}
-                            </tr>
-                            {% endfor %}
-                            {% if not preview_rows %}
-                            <tr><td colspan="{{ columns|length }}" class="text-muted">
-                                No data rows found.
-                            </td></tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="form-group mb-0">
-                    <button type="submit" class="btn btn-primary"
-                            formaction="{{ url_for('.csv_import_run') }}">
-                        Start import
-                    </button>
-                    {# Re-render the preview server-side when the header toggle changes. #}
-                    <button type="submit" id="csvRefreshBtn" class="btn btn-outline-secondary"
-                            formaction="{{ url_for('.csv_import') }}">
-                        Refresh preview
-                    </button>
-                    <a href="{{ return_to or url_for('.index_view') }}" class="btn btn-secondary">
-                        Back
-                    </a>
-                </div>
-            </form>
-        </div>
+    <div class="form-group form-check">
+        <input type="checkbox" class="form-check-input csv-preview-refresh" id="hasHeader"
+               name="has_header" value="1" {% if has_header %}checked{% endif %}>
+        <label class="form-check-label" for="hasHeader">
+            First row contains column names (header)
+        </label>
+        <small class="form-text text-muted">
+            Forgot the header? Uncheck this — the first row is then kept as
+            data and columns are numbered instead.
+        </small>
     </div>
-</div>
+
+    <div class="form-group">
+        <label for="hostnameColumn"><strong>Hostname column</strong></label>
+        <select class="form-control" id="hostnameColumn" name="hostname_column" required>
+            {% for col in columns %}
+            <option value="{{ col }}" {% if col == hostname_column %}selected{% endif %}>
+                {{ col if col else '(empty column name)' }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="csvTemplateId">Assign template (optional)</label>
+        <select class="form-control" id="csvTemplateId" name="template_id">
+            <option value="">No template</option>
+            {% for template in templates %}
+            <option value="{{ template.id }}"
+                    {% if template.id|string == template_id %}selected{% endif %}>
+                {{ template.hostname }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <p class="text-muted">
+        Preview of the first {{ preview_rows|length }} of {{ row_count }} row(s).
+        Every column except the hostname, <code>folder</code>,
+        <code>lifecycle_state</code> and <code>inventory_&lt;name&gt;</code>
+        becomes a host label (an <code>label_&lt;name&gt;</code> prefix is
+        stripped for the Export CSV round-trip).
+    </p>
+
+    <div class="table-responsive" style="max-height: 22rem; overflow: auto;">
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    {% for col in columns %}
+                    <th style="white-space: nowrap;">
+                        {{ col if col else '(empty)' }}
+                        {% if col == hostname_column %}
+                            <span class="badge badge-primary">hostname</span>
+                        {% endif %}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in preview_rows %}
+                <tr>
+                    {% for col in columns %}
+                    <td>{{ row[col] }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                {% if not preview_rows %}
+                <tr><td colspan="{{ columns|length }}" class="text-muted">
+                    No data rows found.
+                </td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="form-group mb-0 text-right">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Back</button>
+        <button type="submit" class="btn btn-primary">Start import</button>
+    </div>
+</form>

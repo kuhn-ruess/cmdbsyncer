@@ -298,7 +298,7 @@
      aria-labelledby="bulkAddModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
-      <form method="POST" action="{{ url_for('.bulk_add_process') }}">
+      <form method="POST" id="bulkAddForm" action="{{ url_for('.bulk_add_process') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="return_to" value="{{ request.full_path }}">
 
@@ -347,7 +347,7 @@
      aria-labelledby="csvImportModalLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
-      <form method="POST" action="{{ url_for('.csv_import') }}"
+      <form method="POST" id="csvImportForm" action="{{ url_for('.csv_import') }}"
             enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="return_to" value="{{ request.full_path }}">
@@ -377,6 +377,23 @@
           <button type="submit" class="btn btn-primary">Continue</button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="csvPreviewModal" tabindex="-1" role="dialog"
+     aria-labelledby="csvPreviewModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="csvPreviewModalLabel">Import hosts from CSV — preview</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body" id="csvPreviewBody">
+        <!-- filled via AJAX from .csv_import -->
+      </div>
     </div>
   </div>
 </div>
@@ -500,6 +517,69 @@
     var rowName = $(this).closest('tr').find('td').eq(1).text().trim();
     $('#copyAsNewHostname').val(rowName ? rowName + '-copy' : '');
     $('#copyAsNewModal').modal('show');
+  });
+
+  // CSV import preview: keep everything in a modal instead of navigating
+  // to a full page. The upload/paste is POSTed via AJAX; the server
+  // returns the preview fragment which we drop into the preview modal.
+  function loadCsvPreview(form) {
+    var fd = new FormData(form);
+    fetch(form.getAttribute('action'), {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function(resp) {
+      if (!resp.ok) { throw new Error('Upload failed (' + resp.status + ')'); }
+      return resp.text();
+    }).then(function(html) {
+      $('#csvPreviewBody').html(html);
+      $('#bulkAddModal').modal('hide');
+      $('#csvImportModal').modal('hide');
+      $('#csvPreviewModal').modal('show');
+    }).catch(function(err) {
+      alert('Could not build the CSV preview: ' + err.message);
+    });
+  }
+
+  // File upload is always a CSV -> always go through the preview modal.
+  $(document).on('submit', '#csvImportForm', function(ev) {
+    ev.preventDefault();
+    loadCsvPreview(this);
+  });
+
+  // Bulk add: a pasted CSV (any line carrying a delimiter) goes through
+  // the preview modal; a plain hostname list submits normally.
+  $(document).on('submit', '#bulkAddForm', function(ev) {
+    var text = $('#bulkAddText').val() || '';
+    var firstLine = '';
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].trim()) { firstLine = lines[i]; break; }
+    }
+    if (/[,;\t]/.test(firstLine)) {
+      ev.preventDefault();
+      loadCsvPreview(this);
+    }
+    // else: plain list -> normal submit, imports and redirects back.
+  });
+
+  // Toggling "first row is a header" re-parses server-side and swaps the
+  // preview body in place (columns/sample rows change).
+  $(document).on('change', '.csv-preview-refresh', function() {
+    var form = document.getElementById('csvPreviewForm');
+    if (!form) { return; }
+    var fd = new FormData(form);
+    fetch(form.getAttribute('data-preview-url'), {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function(resp) { return resp.text(); })
+      .then(function(html) { $('#csvPreviewBody').html(html); })
+      .catch(function(err) {
+        alert('Could not refresh the preview: ' + err.message);
+      });
   });
 })();
 </script>
