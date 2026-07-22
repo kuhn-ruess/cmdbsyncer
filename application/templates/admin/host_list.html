@@ -31,10 +31,23 @@
   {% else %}
     <span class="text-muted" style="font-size: 0.9rem;">none yet</span>
   {% endif %}
+  {% if cmdb_mode %}
+  <button type="button" class="btn btn-sm btn-outline-primary"
+          data-toggle="modal" data-target="#bulkAddModal"
+          title="Add multiple hosts at once by pasting a CSV or a plain hostname list"
+          style="margin-left: auto;">
+    <i class="fa fa-plus-square"></i> Bulk add hosts
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-secondary"
+          data-toggle="modal" data-target="#csvImportModal"
+          title="Import hosts from a CSV file (round-trips the Export CSV format)">
+    <i class="fa fa-upload"></i> Import CSV
+  </button>
+  {% endif %}
   <a href="{{ url_for('.export_csv') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}"
      class="btn btn-sm btn-outline-secondary"
      title="Download the currently filtered hosts as CSV (uses the configured export label/inventory fields)"
-     style="margin-left: auto;">
+     {% if not cmdb_mode %}style="margin-left: auto;"{% endif %}>
     <i class="fa fa-download"></i> Export CSV
   </a>
   <button type="button" class="btn btn-sm btn-outline-secondary"
@@ -239,6 +252,105 @@
     </div>
   </div>
 </div>
+
+{% if cmdb_mode %}
+<div class="modal fade" id="bulkAddModal" tabindex="-1" role="dialog"
+     aria-labelledby="bulkAddModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('.bulk_add_process') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_to" value="{{ request.full_path }}">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="bulkAddModalLabel">Bulk add hosts</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="bulkAddText">Hostnames or CSV</label>
+            <textarea class="form-control" id="bulkAddText" name="hosts_text"
+                      rows="10" required
+                      placeholder="One hostname per line, e.g.&#10;web01.example.com&#10;web02.example.com&#10;&#10;— or paste CSV with a header row:&#10;hostname,label_env,inventory_os&#10;db01,production,linux"></textarea>
+            <small class="form-text text-muted">
+              A plain list creates one host per line. If the first line is a
+              header containing <code>hostname</code>, the whole text is parsed
+              as CSV — <code>label_&lt;name&gt;</code> and
+              <code>inventory_&lt;name&gt;</code> columns are written to the host.
+            </small>
+          </div>
+
+          <div class="form-group mb-0">
+            <label for="bulkAddTemplateId">Assign template (optional)</label>
+            <select class="form-control" id="bulkAddTemplateId" name="template_id">
+              <option value="">No template</option>
+              {% for template in set_template_choices or [] %}
+                <option value="{{ template.id }}">{{ template.hostname }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add hosts</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="csvImportModal" tabindex="-1" role="dialog"
+     aria-labelledby="csvImportModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('.csv_import') }}"
+            enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_to" value="{{ request.full_path }}">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="csvImportModalLabel">Import hosts from CSV</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="csvImportFile">CSV file</label>
+            <input type="file" class="form-control-file" id="csvImportFile"
+                   name="csv_file" accept=".csv,text/csv" required>
+            <small class="form-text text-muted">
+              Expects an <code>hostname</code> column; the same
+              <code>label_&lt;name&gt;</code> / <code>inventory_&lt;name&gt;</code>
+              columns produced by Export CSV are imported back.
+            </small>
+          </div>
+
+          <div class="form-group mb-0">
+            <label for="csvImportTemplateId">Assign template (optional)</label>
+            <select class="form-control" id="csvImportTemplateId" name="template_id">
+              <option value="">No template</option>
+              {% for template in set_template_choices or [] %}
+                <option value="{{ template.id }}">{{ template.hostname }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block tail %}

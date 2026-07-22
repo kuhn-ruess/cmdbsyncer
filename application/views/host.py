@@ -1924,6 +1924,7 @@ Impact Chain.
         """
         if template.endswith('host_list.html') or template.endswith('list.html'):
             kwargs.setdefault('set_template_choices', self.get_template_list())
+            kwargs.setdefault('cmdb_mode', app.config.get('CMDB_MODE', False))
             # pylint: disable=import-outside-toplevel
             from application.views.saved_search import list_for_path
             kwargs.setdefault(
@@ -2333,6 +2334,208 @@ Impact Chain.
         )
 
         return response
+
+    @staticmethod
+    def _csv_rows_from_text(text):
+        """
+        Parse CSV text into a list of row dicts. Sniffs the delimiter so
+        comma/semicolon/tab exports all work; falls back to comma. Header
+        keys are stripped of surrounding whitespace.
+        """
+        try:
+            dialect = csv.Sniffer().sniff(text[:4096], delimiters=',;\t')
+        except csv.Error:
+            dialect = csv.excel
+        reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+        return [
+            {(key or '').strip(): value for key, value in row.items()}
+            for row in reader
+        ]
+
+    @classmethod
+    def _parse_bulk_host_text(cls, text):
+        """
+        Turn a pasted blob into row dicts. If the first non-empty line
+        looks like a CSV header (mentions `hostname` and carries a
+        delimiter) the whole blob is parsed as CSV; otherwise every
+        non-empty line is treated as a single hostname.
+        """
+        non_empty = [line for line in text.splitlines() if line.strip()]
+        if not non_empty:
+            return []
+        header = non_empty[0].lower()
+        if 'hostname' in header and any(sep in non_empty[0] for sep in (',', ';', '\t')):
+            return cls._csv_rows_from_text(text)
+        return [{'hostname': line.strip()} for line in non_empty]
+
+    def _bulk_upsert_host(self, row, template, actor_email):  # pylint: disable=too-many-locals
+        """
+        Create (or update) a single host from a CSV/list row using the
+        same CMDB recipe as `on_model_change`. Returns True if a new host
+        was created, False if an existing one was updated, None if the row
+        carried no hostname. `label_<x>` / `inventory_<x>` columns map back
+        onto labels/inventory; `folder` and a valid `lifecycle_state` pass
+        through. Raises on a bad hostname/label key — the caller counts it.
+        """
+        lower = {key.lower(): value for key, value in row.items() if key}
+        hostname = (lower.get('hostname') or '').strip()
+        if not hostname:
+            return None
+
+        host = Host.get_host(hostname)
+        is_new = host.id is None
+
+        host.object_type = 'host'
+        host.is_object = False
+        host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
+        host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
+        host.no_autodelete = True
+        host.cache = {}
+        host.last_import_sync = datetime.now()
+        host.last_import_seen = datetime.now()
+        # Tag the label mutation so the Timeline shows who ran the import.
+        host._label_change_source = 'manual'  # pylint: disable=protected-access
+        host._label_change_user = actor_email  # pylint: disable=protected-access
+
+        if template is not None and template.id not in [t.id for t in host.cmdb_templates]:
+            host.cmdb_templates.append(template)
+
+        folder = (lower.get('folder') or '').strip()
+        if folder:
+            host.folder = folder
+        state = (lower.get('lifecycle_state') or '').strip()
+        if state in {choice[0] for choice in LIFECYCLE_STATES}:
+            host.lifecycle_state = state
+
+        # Merge existing cmdb_fields + labels, then overlay the row's
+        # label_ columns — update_host is a wholesale replacement.
+        new_labels = {
+            field.field_name: field.field_value
+            for field in (host.cmdb_fields or [])
+            if field.field_value
+        }
+        for label_key, label_value in (host.labels or {}).items():
+            new_labels.setdefault(label_key, label_value)
+        for col, value in row.items():
+            if col and col.lower().startswith('label_') and value not in (None, ''):
+                new_labels[col[len('label_'):]] = value
+
+        host.update_host(new_labels)
+        host.set_inventory_attributes('cmdb')
+
+        for col, value in row.items():
+            if col and col.lower().startswith('inventory_') and value not in (None, ''):
+                key = col[len('inventory_'):]
+                if not key.startswith('syncer_'):
+                    host.inventory[key] = value
+
+        # Mirror labels into editable cmdb_fields + add configured defaults,
+        # matching on_model_change so the host stays fully editable.
+        existing_field_names = {
+            field.field_name for field in (host.cmdb_fields or [])
+            if getattr(field, 'field_name', None)
+        }
+        for label_key, label_value in new_labels.items():
+            if label_key not in existing_field_names:
+                new_field = CmdbField()
+                new_field.field_name = label_key
+                new_field.field_value = str(label_value) if label_value is not None else ''
+                host.cmdb_fields.append(new_field)
+                existing_field_names.add(label_key)
+        host.ensure_cmdb_default_fields()
+        host.cmdb_fields = sorted(
+            host.cmdb_fields or [],
+            key=lambda f: (getattr(f, 'field_name', '') or '').lower(),
+        )
+
+        host.save()
+        return is_new
+
+    def _run_bulk_host_create(self, rows, template_id):
+        """
+        Apply `_bulk_upsert_host` to every row and flash a summary. A bad
+        row is counted as skipped instead of aborting the whole batch.
+        """
+        template = None
+        if template_id:
+            template = Host.objects(id=template_id).first()
+            if not template:
+                flash('Selected template not found — hosts created without a template.',
+                      'warning')
+
+        created = updated = skipped = 0
+        errors = []
+        actor_email = getattr(current_user, 'email', None)
+        for row in rows:
+            try:
+                result = self._bulk_upsert_host(row, template, actor_email)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                skipped += 1
+                if len(errors) < 5:
+                    errors.append(str(exc))
+                continue
+            if result is None:
+                skipped += 1
+            elif result:
+                created += 1
+            else:
+                updated += 1
+
+        summary = f'Bulk add: {created} created, {updated} updated'
+        if skipped:
+            summary += f', {skipped} skipped'
+        flash(summary, 'success' if (created or updated) else 'warning')
+        for err in errors:
+            flash(f'Row error: {err}', 'error')
+
+    @expose('/bulk_add', methods=['POST'])
+    def bulk_add_process(self):
+        """
+        Create hosts from a pasted CSV or plain hostname list, optionally
+        assigning a CMDB template. CMDB mode only.
+        """
+        return_to = _safe_return_to(request.form.get('return_to'))
+        if not app.config.get('CMDB_MODE'):
+            flash('Bulk add is only available in CMDB mode.', 'error')
+            return redirect(return_to)
+        if not current_user.is_authenticated or not current_user.has_right('host'):
+            return Response("Unauthorized", status=401)
+
+        raw = request.form.get('hosts_text', '') or ''
+        if not raw.strip():
+            flash('Please paste at least one hostname.', 'error')
+            return redirect(return_to)
+
+        rows = self._parse_bulk_host_text(raw)
+        self._run_bulk_host_create(rows, request.form.get('template_id') or None)
+        return redirect(return_to)
+
+    @expose('/csv_import', methods=['POST'])
+    def csv_import(self):
+        """
+        Create hosts from an uploaded CSV file (round-trips the Export CSV
+        format), optionally assigning a CMDB template. CMDB mode only.
+        """
+        return_to = _safe_return_to(request.form.get('return_to'))
+        if not app.config.get('CMDB_MODE'):
+            flash('CSV import is only available in CMDB mode.', 'error')
+            return redirect(return_to)
+        if not current_user.is_authenticated or not current_user.has_right('host'):
+            return Response("Unauthorized", status=401)
+
+        upload = request.files.get('csv_file')
+        if not upload or not upload.filename:
+            flash('Please choose a CSV file to import.', 'error')
+            return redirect(return_to)
+        try:
+            text = upload.read().decode('utf-8-sig')
+        except UnicodeDecodeError:
+            flash('Could not read the file — expected a UTF-8 encoded CSV.', 'error')
+            return redirect(return_to)
+
+        rows = self._csv_rows_from_text(text)
+        self._run_bulk_host_create(rows, request.form.get('template_id') or None)
+        return redirect(return_to)
 
 
 class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
