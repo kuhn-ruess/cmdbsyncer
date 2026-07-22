@@ -317,10 +317,24 @@ def _render_labels_with_origin(_view, _context, model, _name):
 
 
 def _render_labels(_view, _context, model, _name):
+    # pylint: disable=too-many-branches
     """
     Render Labels
     """
-    if not model.labels:
+    cmdb_mode = bool(app.config.get('CMDB_MODE'))
+    # Labels contributed by assigned CMDB templates are merged into the
+    # host only at export time, so the list column used to hide them and
+    # admins could not see what a template adds. Show them here as their
+    # own badges (CMDB mode only), skipping keys the host already sets
+    # manually — a manual label wins.
+    template_labels = {}
+    if cmdb_mode:
+        for tmpl in (model.cmdb_templates or []):
+            for key, value in (getattr(tmpl, 'labels', None) or {}).items():
+                if value and key not in (model.labels or {}):
+                    template_labels.setdefault(key, (value, tmpl.hostname))
+
+    if not model.labels and not template_labels:
         return Markup("")
     # Truncation + `title` tooltip keeps customer hosts with very long
     # label values from stretching the row off-screen; the full value
@@ -330,7 +344,7 @@ def _render_labels(_view, _context, model, _name):
         .get('attributes', {}).get('all', {})
     )
     html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
-    for key, value in model.labels.items():
+    for key, value in (model.labels or {}).items():
         if not value:
             continue
         if checkmk_labels.get(key) == value:
@@ -339,6 +353,17 @@ def _render_labels(_view, _context, model, _name):
         html += (
             f'<span class="badge badge-primary mr-1" '
             f'style="{_LABEL_BADGE_STYLE}" title="{escape(text)}">'
+            f'{escape(text)}</span>'
+        )
+
+    # Labels coming from an assigned template (the "clone" badges).
+    for key, (value, tmpl_name) in template_labels.items():
+        text = f"{key}:{value}"
+        html += (
+            f'<span class="badge badge-info mr-1" '
+            f'style="{_LABEL_BADGE_STYLE}" '
+            f'title="{escape(text)} — from template {escape(tmpl_name)}">'
+            f'<i class="fa fa-clone mr-1" aria-hidden="true"></i>'
             f'{escape(text)}</span>'
         )
 
