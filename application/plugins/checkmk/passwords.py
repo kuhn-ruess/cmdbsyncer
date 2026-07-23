@@ -3,6 +3,9 @@ Checkmk DCD Manager
 """
 # pylint: disable=duplicate-code
 
+import hashlib
+import json
+
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application.plugins.checkmk.models import CheckmkPassword
@@ -51,21 +54,37 @@ class CheckmkPasswordSync(CMK2):
             payload['documentation_url'] = password['documentation_url']
         return payload
 
-    def create_password(self, password):
+    @staticmethod
+    def payload_hash(payload):
+        """
+        Stable hash of the payload we send to Checkmk. Used to skip
+        re-exporting passwords that haven't changed since the last run.
+        Checkmk never returns the stored secret, so we can't diff against
+        Checkmk itself; hashing the desired payload also catches secret
+        rotations locally.
+        """
+        raw = json.dumps(payload, sort_keys=True).encode('utf-8')
+        return hashlib.sha256(raw).hexdigest()
+
+    def create_password(self, password, payload=None):
         """
         Create not existing Password in checkmk
         """
         self.console(f" * Create Password {password['name']}")
         url = "/domain-types/password/collections/all"
-        payload = self.build_payload(password)
+        if payload is None:
+            payload = self.build_payload(password)
         self.request(url, method="POST", data=payload)
 
-    def update_password(self, password):
+    def update_password(self, password, payload=None):
         """
-        (Always) Update Password in Checkmk
+        Update Password in Checkmk
         """
         self.console(f" * Update Password {password['name']}")
-        payload = self.build_payload(password)
+        if payload is None:
+            payload = self.build_payload(password)
+        else:
+            payload = dict(payload)
         url = f"/objects/password/{payload['ident']}"
         del payload['ident']
         self.request(url, method="PUT", data=payload)
@@ -91,8 +110,16 @@ class CheckmkPasswordSync(CMK2):
 
             for password in CheckmkPassword.objects(enabled=True):
                 password_id = f"cmdbsyncer_{password['id']}"
+                payload = self.build_payload(password)
+                payload_hash = self.payload_hash(payload)
                 if password_id not in self.current_password_ids:
-                    self.create_password(password)
+                    self.create_password(password, payload)
+                elif password.last_export_hash != payload_hash:
+                    self.update_password(password, payload)
                 else:
-                    self.update_password(password)
+                    # Nothing changed since the last export, skip the PUT.
+                    progress.advance(task2)
+                    continue
+                password.last_export_hash = payload_hash
+                password.save()
                 progress.advance(task2)
