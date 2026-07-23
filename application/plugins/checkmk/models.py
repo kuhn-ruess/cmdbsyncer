@@ -587,6 +587,7 @@ class CheckmkPassword(db.Document):
     password_crypted = db.StringField()
     owner = db.StringField(default="admin", required=True)
     shared = db.ListField(field=db.StringField())
+    last_export_hash = db.StringField()
 
     def set_password(self, password):
         """
