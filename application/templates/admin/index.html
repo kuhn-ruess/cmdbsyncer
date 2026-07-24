@@ -460,6 +460,7 @@ function toggleAllFilters() {
       </ul>
     </div>
 
+    {% if can_see_log %}
     <div class="home-card" id="recent-errors">
       <h2>Recent Errors</h2>
       {% if error_logs %}
@@ -482,6 +483,7 @@ function toggleAllFilters() {
       <p class="error-log-empty">✅ No errors in the recent log entries.</p>
       {% endif %}
     </div>
+    {% endif %}
 
     {% if can_trigger_cron %}
     <div class="home-card" id="cron-status">

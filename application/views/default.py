@@ -369,13 +369,20 @@ class IndexView(AdminIndexView):
 
         # Latest log entries that reported errors — surfaced on the start
         # page so failing sync jobs are visible without opening the Log.
+        # Only for users who may see the Log: the card exposes log
+        # timestamps and messages and links into the (log-gated) Log
+        # views, so gate it on the same 'log' right.
         # pylint: disable=import-outside-toplevel
-        from application.modules.log.models import LogEntry
-        try:
-            error_logs = list(
-                LogEntry.objects(has_error=True).order_by('-datetime')[:5])
-        except Exception:  # pylint: disable=broad-exception-caught
-            error_logs = []
+        error_logs = []
+        can_see_log = current_user.is_authenticated and (
+            current_user.global_admin or current_user.has_right('log'))
+        if can_see_log:
+            from application.modules.log.models import LogEntry
+            try:
+                error_logs = list(
+                    LogEntry.objects(has_error=True).order_by('-datetime')[:5])
+            except Exception:  # pylint: disable=broad-exception-caught
+                error_logs = []
 
         # Cron status + one-click trigger, shown only to users who may see
         # cron (same gate as the Cron views).
@@ -391,6 +398,7 @@ class IndexView(AdminIndexView):
             notices=notices,
             older_changelogs=older_changelogs,
             error_logs=error_logs,
+            can_see_log=can_see_log,
             cron_status=cron_status,
             can_trigger_cron=can_trigger_cron,
         )
