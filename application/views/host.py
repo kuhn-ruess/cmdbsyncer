@@ -1647,7 +1647,9 @@ Impact Chain.
         if not app.config['CMDB_MODE']:
             self.can_edit = False
             self.can_create = False
-            self.can_delete = False
+            # can_delete stays on: the host list's delete is a soft-delete
+            # (archive via _SoftDeleteHostMixin), which is safe to allow
+            # even for import-only installs.
             self.column_exclude_list = list(self.column_exclude_list) + [
                 'cmdb_fields', 'cmdb_templates',
             ]
@@ -2322,13 +2324,9 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     can_export = False
     can_view_details = True
     can_set_page_size = True
-
-    def is_accessible(self):
-        # The Archive only exists in CMDB mode (soft-delete is a
-        # CMDB-only flow). Returning False here also hides the menu link.
-        if not app.config.get('CMDB_MODE'):
-            return False
-        return super().is_accessible()
+    # Reachable in every mode: the host list's delete is a soft-delete
+    # regardless of CMDB mode, so users always need the Archive to
+    # restore or hard-delete what they removed.
 
     page_size = app.config['HOST_PAGESIZE']
 
