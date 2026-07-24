@@ -225,7 +225,7 @@ def _host_in_scope(host, scope):
 class HostDetailApi(Resource):
     """Single-host CRUD."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Resolved host attributes + inventory.', HOST_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
     @API.response(404, 'No host with that name exists.', ERROR)
@@ -240,7 +240,7 @@ class HostDetailApi(Resource):
         except DoesNotExist:
             return {'error': "Host not found"}, 404
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(HOST, validate=True)
     @API.response(200, 'Host saved.', STATUS)
     @API.response(400, 'Account unknown or label payload invalid.', ERROR)
@@ -282,7 +282,7 @@ class HostDetailApi(Resource):
         host_obj.save()
         return {'status': 'saved'}, 200
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Host deleted.', STATUS)
     @API.response(401, 'Authentication failed', ERROR)
     @API.response(404, 'No host with that name exists.', STATUS)
@@ -313,7 +313,7 @@ class HostDetailApi(Resource):
 class HostDetailBulkApi(Resource):
     """Batched host create/update."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(HOST_BULK, validate=True)
     @API.response(200, 'Per-host save outcome. Hostnames that conflicted '
                        'with another account are listed in ``not-saved``.',
@@ -374,7 +374,7 @@ class HostDetailBulkApi(Resource):
 class HostDetailInventoryApi(Resource):
     """Per-host inventory write."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(HOST_INVENTORY, validate=True)
     @API.response(200, 'Inventory saved.', STATUS)
     @API.response(400, 'Inventory key or payload rejected by Mongo-key rules.',
@@ -409,7 +409,7 @@ class HostDetailInventoryApi(Resource):
 class HostDetailInventoryBulkApi(Resource):
     """Batched inventory write."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(HOST_INVENTORY_BULK, validate=True)
     @API.response(200, 'Per-host outcome. Unknown hostnames are returned in '
                        '``not-found``; the rest are saved.',
@@ -476,7 +476,7 @@ MAX_PAGE_LIMIT = 10000
 class HostDetailListApi(Resource):
     """Paginated listing of every host."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'A page of host objects plus pagination links.',
                   LIST_RESPONSE)
     @API.response(400, 'Pagination params not numeric, negative, or limit '
@@ -572,7 +572,7 @@ class HostRelationsApi(Resource):
                     })
         return out
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Outgoing and inbound edges for this host.',
                   RELATIONS_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
@@ -602,7 +602,7 @@ class HostRelationsApi(Resource):
             'inbound': inbound,
         }
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(RELATION_INPUT, validate=True)
     @API.response(200, 'Relation added (or no-op if it already existed).',
                   STATUS)
@@ -636,7 +636,7 @@ class HostRelationsApi(Resource):
             return {'status': 'added'}, 200
         return {'status': 'unchanged'}, 200
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(RELATION_INPUT, validate=True)
     @API.response(200, 'Relation removed (or no-op if it never existed).',
                   STATUS)

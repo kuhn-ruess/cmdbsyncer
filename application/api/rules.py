@@ -128,7 +128,7 @@ def _decode_rule_lines(rules):
 class RuleTypes(Resource):
     """Discoverable list of supported rule types."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Sorted list of rule_type idents.', RULE_TYPES_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
     @require_token
@@ -143,7 +143,7 @@ class RuleTypes(Resource):
 class RulesByType(Resource):
     """Read or create rules of one type."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Every rule of this type as a JSON list.',
                   RULES_BY_TYPE_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
@@ -158,7 +158,7 @@ class RulesByType(Resource):
             'rules': list(_decode_rule_lines(iter_rules_of_type(rule_type))),
         }
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(201, 'At least one rule was newly persisted.',
                   RULE_BY_TYPE_POST_RESPONSE)
     @API.response(200, 'Body parsed but every item was a duplicate '
@@ -201,7 +201,7 @@ class RulesByType(Resource):
 class RulesExport(Resource):
     """Bulk export of every known rule type."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.param('include_hosts',
                'Set to ``1`` to also export the ``host_objects`` collection. '
                'Skipped by default — usually not what you want in a rule '
@@ -231,7 +231,7 @@ class RulesExport(Resource):
 class RulesImport(Resource):
     """Bulk import that matches the on-disk JSONL format."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(RULE_IMPORT_REQUEST, validate=False)
     @API.response(200, 'Imported counts keyed by rule_type, plus the total.',
                   RULE_IMPORT_RESPONSE)
@@ -267,7 +267,7 @@ class RulesImport(Resource):
 class Autorules(Resource):
     """Trigger the rule-automation pass that builds rules from host data."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(AUTORULES_REQUEST, validate=False)
     @API.response(200, 'Autorules run completed successfully.',
                   AUTORULES_RESPONSE)

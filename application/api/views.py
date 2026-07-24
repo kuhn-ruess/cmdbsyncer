@@ -33,7 +33,14 @@ AUTHORIZATIONS = {
     'basicAuth' : {
         'type': 'basic',
         'description': 'API authentication over HTTPS (username / password)'
-    }
+    },
+    'apiToken': {
+        'type': 'apiKey',
+        'in': 'header',
+        'name': 'Authorization',
+        'description': 'Personal API token (Profile → API Tokens). Paste the '
+                       'token here — with or without a leading "Bearer ".',
+    },
 }
 
 PARAMS = {
@@ -44,7 +51,7 @@ if not SWAGGER_ENABLED:
     PARAMS['doc'] = False
 
 API = Api(API_BP, authorizations=AUTHORIZATIONS,
-          security=['basicAuth'], **PARAMS)
+          security=['basicAuth', 'apiToken'], **PARAMS)
 
 
 API.add_namespace(syncer, path='/syncer')

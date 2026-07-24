@@ -116,7 +116,7 @@ STATUS = API.model('status', {
 class SyncerLogsApi(Resource):
     """Latest entries from the syncer log."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Last 100 log entries, newest first.', LOG_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
     @require_token
@@ -145,7 +145,7 @@ class SyncerLogsApi(Resource):
 class SyncerServiceApi(Resource):
     """Most recent log entry for a single source component."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Latest log entry for the source.', LOG_SINGLE_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
     @API.response(404, 'No log entry exists for this service yet.', ERROR)
@@ -178,7 +178,7 @@ class SyncerServiceApi(Resource):
 class SyncerCronApi(Resource):
     """Status of every CronGroup, plus the run-once-next trigger."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Status for every CronGroup.', CRON_LIST_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
     @require_token
@@ -209,7 +209,7 @@ class SyncerCronApi(Resource):
                 'error': "No Status for CronGroup Found",
             }, 404
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(CRON_UPDATE, validate=True)
     @API.response(200, 'Cron group updated.', STATUS)
     @API.response(401, 'Authentication failed', ERROR)
@@ -255,7 +255,7 @@ class SyncerCronTriggerApi(Resource):
     credential.
     """
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.doc(params={'X-Webhook-Token': {
         'in': 'header',
         'description': ('Per-CronGroup webhook token. When set on the '
@@ -365,7 +365,7 @@ class SyncerCronTriggerApi(Resource):
 class SyncerHostsApi(Resource):
     """Aggregate counters over the host collection."""
 
-    @API.doc(security=['basicAuth'])
+    @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'Aggregate host stats.', HOSTS_STATS)
     @API.response(401, 'Authentication failed', ERROR)
     @require_token

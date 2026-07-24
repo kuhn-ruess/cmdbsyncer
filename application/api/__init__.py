@@ -8,7 +8,7 @@ from flask import abort, request, current_app, g
 from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 from application.helpers.audit import audit
 from application.models.account import Account
-from application.models.user import User, find_user_by_api_token
+from application.models.user import User, find_user_by_api_token, API_TOKEN_PREFIX
 from application import log
 
 
@@ -47,12 +47,18 @@ def _extract_bearer_token():
 
     Accepts ``Authorization: Bearer <token>`` (the standard form) and the
     ``x-login-token`` header for clients that cannot set an Authorization
-    header. Basic-auth requests return None here and fall through to the
-    username/password path.
+    header. As a convenience — and because the Swagger UI sends the raw
+    value of its apiKey field — a bare personal API token in the
+    Authorization header (no ``Bearer`` prefix) is also accepted. Basic-auth
+    requests return None here and fall through to the username/password path.
     """
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
         return auth_header[len('Bearer '):].strip() or None
+    # Tolerate a token pasted without the "Bearer " prefix (e.g. Swagger's
+    # apiKey field), but never mistake a Basic-auth header for a token.
+    if auth_header.startswith(API_TOKEN_PREFIX):
+        return auth_header.strip()
     return request.headers.get('x-login-token') or None
 
 

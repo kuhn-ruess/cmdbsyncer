@@ -1353,6 +1353,23 @@ class ApiTokenAuthTest(unittest.TestCase):
     @patch('application.api.syncer.Host')
     @patch('application.api.User')
     @patch('application.api.find_user_by_api_token')
+    def test_bare_token_without_bearer_prefix_authenticates(self, find_token,
+                                                            _user_cls, host_cls):
+        # Swagger's apiKey field sends the raw value — a token pasted without
+        # a "Bearer " prefix must still authenticate (regression: users got
+        # "No credentials provided" otherwise).
+        find_token.return_value = (_FakeUser(api_roles=['all']),
+                                   MagicMock(last_used_at=datetime.utcnow()))
+        host_cls.objects.return_value.count.return_value = 0
+        resp = self.client.get(
+            '/api/v1/syncer/hosts',
+            headers={'Authorization': 'cmdb_pat_rawtokenvalue'})
+        self.assertEqual(resp.status_code, 200)
+        find_token.assert_called_once_with('cmdb_pat_rawtokenvalue')
+
+    @patch('application.api.syncer.Host')
+    @patch('application.api.User')
+    @patch('application.api.find_user_by_api_token')
     def test_x_login_token_header_authenticates(self, find_token, _user_cls, host_cls):
         find_token.return_value = (_FakeUser(api_roles=['all']),
                                    MagicMock(last_used_at=datetime.utcnow()))
