@@ -377,13 +377,68 @@ class IndexView(AdminIndexView):
         except Exception:  # pylint: disable=broad-exception-caught
             error_logs = []
 
+        # Cron status + one-click trigger, shown only to users who may see
+        # cron (same gate as the Cron views).
+        cron_status = []
+        can_trigger_cron = current_user.is_authenticated and (
+            current_user.global_admin or current_user.has_right('cron'))
+        if can_trigger_cron:
+            cron_status = self._collect_cron_status()
+
         return self.render(
             'admin/index.html',
             changelog_html=changelog_html,
             notices=notices,
             older_changelogs=older_changelogs,
             error_logs=error_logs,
+            cron_status=cron_status,
+            can_trigger_cron=can_trigger_cron,
         )
+
+    @staticmethod
+    def _collect_cron_status():
+        """Per-group cron status for the dashboard widget."""
+        # pylint: disable=import-outside-toplevel
+        from application.models.cron import CronGroup, CronStats
+        try:
+            stats = {s.group: s for s in CronStats.objects()}
+            rows = []
+            for group in CronGroup.objects().order_by('name'):
+                st = stats.get(group.name)
+                rows.append({
+                    'name': group.name,
+                    'enabled': group.enabled,
+                    'run_once_next': group.run_once_next,
+                    'is_running': st.is_running if st else False,
+                    'last_start': st.last_start if st else None,
+                    'next_run': st.next_run if st else None,
+                    'last_message': (st.last_message if st else '') or '',
+                    'failure': st.failure if st else False,
+                })
+            return rows
+        except Exception:  # pylint: disable=broad-exception-caught
+            return []
+
+    @expose('/trigger_cron', methods=['POST'])
+    def trigger_cron(self):
+        """Schedule a cron group to run on the next pass (dashboard button)."""
+        # pylint: disable=import-outside-toplevel
+        from application.models.cron import CronGroup
+        if not (current_user.is_authenticated and (
+                current_user.global_admin or current_user.has_right('cron'))):
+            abort(403)
+        group_name = request.form.get('group', '')
+        group = CronGroup.objects(name=group_name).first()
+        if not group:
+            flash("Cron group not found.", 'error')
+        elif not group.enabled:
+            flash(f"Cron group '{group_name}' is disabled.", 'error')
+        else:
+            group.run_once_next = True
+            group.save()
+            flash(f"Scheduled '{group_name}' to run on the next cron pass.",
+                  'success')
+        return redirect(url_for('.index'))
 
     @expose('/changelog/<filename>')
     def changelog_archive(self, filename):

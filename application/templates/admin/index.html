@@ -99,6 +99,50 @@
   color: var(--surface-muted, #6c757d);
 }
 
+/* Cron status card — theme-aware via --surface-* tokens; badge pills use
+   white text on a semantic accent so they read in light and dark themes. */
+#cron-status { border-left: 4px solid #3498db; }
+.cron-status-table { width: 100%; border-collapse: collapse; }
+.cron-status-table td {
+  padding: 0.4rem 0.3rem;
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+.cron-status-table tr:last-child td { border-bottom: none; }
+.cron-name { font-weight: 600; color: var(--surface-text, #2c3e50); }
+.cron-time {
+  color: var(--surface-muted, #6c757d);
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.cron-trigger-cell { text-align: right; }
+.cron-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+}
+.cron-badge-ok { background: #27ae60; }
+.cron-badge-err { background: #e74c3c; }
+.cron-badge-run { background: #2980b9; }
+.cron-badge-off { background: #95a5a6; }
+.cron-badge-queued { background: #8e44ad; }
+.cron-trigger-btn {
+  border: 1px solid var(--surface-divider, #ccd2d8);
+  background: transparent;
+  color: var(--surface-text, #2c3e50);
+  border-radius: 6px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.cron-trigger-btn:hover:not(:disabled) { border-color: #2980b9; color: #2980b9; }
+.cron-trigger-btn:disabled { opacity: 0.5; cursor: default; }
+
 .links-list {
   list-style: none;
   padding: 0;
@@ -438,6 +482,54 @@ function toggleAllFilters() {
       <p class="error-log-empty">✅ No errors in the recent log entries.</p>
       {% endif %}
     </div>
+
+    {% if can_trigger_cron %}
+    <div class="home-card" id="cron-status">
+      <h2>Cron Jobs</h2>
+      {% if cron_status %}
+      <table class="cron-status-table">
+        <tbody>
+        {% for job in cron_status %}
+          <tr>
+            <td class="cron-name">{{ job.name }}</td>
+            <td class="cron-badge-cell">
+              {% if not job.enabled %}
+                <span class="cron-badge cron-badge-off">disabled</span>
+              {% elif job.is_running %}
+                <span class="cron-badge cron-badge-run">running</span>
+              {% elif job.failure %}
+                <span class="cron-badge cron-badge-err">error</span>
+              {% else %}
+                <span class="cron-badge cron-badge-ok">ok</span>
+              {% endif %}
+              {% if job.run_once_next %}
+                <span class="cron-badge cron-badge-queued">queued</span>
+              {% endif %}
+            </td>
+            <td class="cron-time" title="Last start">
+              {{ job.last_start.strftime('%Y-%m-%d %H:%M') if job.last_start else '—' }}
+            </td>
+            <td class="cron-trigger-cell">
+              <form method="POST" action="{{ url_for('admin.trigger_cron') }}"
+                    style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="group" value="{{ job.name }}">
+                <button type="submit" class="cron-trigger-btn"
+                        {% if not job.enabled or job.run_once_next %}disabled{% endif %}
+                        title="Run on next cron pass">
+                  <i class="fa fa-play"></i> Run
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="error-log-empty">No cron groups configured yet.</p>
+      {% endif %}
+    </div>
+    {% endif %}
 
     {% if notices %}
     <div id="notices-section" class="home-card">
