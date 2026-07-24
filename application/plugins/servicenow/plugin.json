@@ -1,0 +1,21 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "ServiceNow",
+    "ident": "servicenow",
+    "account_presets": {
+        "address": "https://instance.service-now.com"
+    },
+    "account_custom_field_presets": {
+        "tables": "cmdb_ci_server",
+        "hostname_field": "name",
+        "rewrite_hostname": "",
+        "sysparm_query": "",
+        "sysparm_fields": "",
+        "sysparm_display_value": "true",
+        "sysparm_limit": "1000",
+        "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": ""
+    }
+}

@@ -168,6 +168,9 @@ This runs a development version that you can use to test everything.
 #### **JDISC** - Network discovery
 - 🔍 **Discovery Import** - Import discovered objects
 
+#### **ServiceNow** - IT Service Management
+- 📥 **CMDB Import** - Import hosts from the ServiceNow Table API (e.g. cmdb_ci_server)
+
 #### **VMware** - Virtualization
 - 📊 **Attribute Management** - Import and export VM attributes
 - 🔄 **Bidirectional** - Full import/export to VMware VMs
