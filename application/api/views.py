@@ -30,15 +30,9 @@ def custom401(error):
 
 
 AUTHORIZATIONS = {
-    'x-login-user': {
-        'type': 'apiKey',
-        'in': 'header',
-        'name': 'x-login-user',
-        'description': 'Token fallback. Prefer HTTPS with Authorization: Basic'
-    },
     'basicAuth' : {
         'type': 'basic',
-        'description': 'Preferred API authentication over HTTPS'
+        'description': 'API authentication over HTTPS (username / password)'
     }
 }
 
@@ -50,7 +44,7 @@ if not SWAGGER_ENABLED:
     PARAMS['doc'] = False
 
 API = Api(API_BP, authorizations=AUTHORIZATIONS,
-          security=['x-login-user', 'basicAuth'], **PARAMS)
+          security=['basicAuth'], **PARAMS)
 
 
 API.add_namespace(syncer, path='/syncer')
