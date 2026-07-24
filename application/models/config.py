@@ -14,3 +14,7 @@ class Config(db.Document):  # pylint: disable=too-few-public-methods
     # the admin start page then stops redirecting to the wizard even
     # while setup steps are still open.
     first_steps_dismissed = db.BooleanField(default=False)
+
+    # Tolerate fields written by a newer version (e.g. a build on the same
+    # database) so a downgrade doesn't fail loading the Config document.
+    meta = {'strict': False}
