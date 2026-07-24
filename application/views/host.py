@@ -35,6 +35,7 @@ from application.plugins.idoit import get_idoit_debug_data as idoit_host_debug
 from application.plugins.vmware import get_vmware_debug_data as vmware_host_debug
 from application.plugins.jira_cloud import get_jira_cloud_debug_data as jira_cloud_host_debug
 from application import app, logger
+from application.models.account import Account
 from application.helpers.get_account import mask_account_secrets
 from application.views.default import DefaultModelView
 from application.views.host_widgets import (
@@ -101,6 +102,19 @@ def _scope_hosts_to_user(queryset):
     if scope is not None:
         return queryset.filter(source_account_name__in=list(scope))
     return queryset
+
+
+def _allowed_account_names():
+    """
+    Account names the current user may assign to hosts. Restricted users
+    (``restrict_to_accounts`` set) can only pick from their own accounts —
+    the same scope that governs which hosts they can see.
+    """
+    scope = current_user.account_scope() if current_user.is_authenticated else None
+    names = [a.name for a in Account.objects(enabled=True).order_by('name')]
+    if scope is not None:
+        names = [n for n in names if n in scope]
+    return names
 
 
 # Fields that only make sense when the syncer is in CMDB mode. Stripped
@@ -1945,6 +1959,7 @@ Impact Chain.
             kwargs.setdefault('set_template_choices', self.get_template_list())
             kwargs.setdefault('assign_project_choices',
                               [p.name for p in Project.objects().order_by('name')])
+            kwargs.setdefault('set_account_choices', _allowed_account_names())
             kwargs.setdefault('cmdb_mode', app.config.get('CMDB_MODE', False))
             # pylint: disable=import-outside-toplevel
             from application.views.saved_search import list_for_path
@@ -2013,6 +2028,59 @@ Impact Chain.
         else:
             flash(f"Removed the project assignment from {updated} host(s)",
                   'success')
+        return redirect(return_to)
+
+    @action('set_account', 'Set Account', None)
+    def action_set_account(self, ids):
+        """
+        Bulk-set the source account of the selected hosts. Users with a
+        restricted account scope can only assign one of their own accounts.
+        """
+        return redirect(url_for('.set_account_form', ids=','.join(ids),
+                                return_to=request.referrer or ''))
+
+    @expose('/set_account_form')
+    def set_account_form(self):
+        """Render the account picker (scoped to the user's allowed accounts)."""
+        ids = [str(escape(i)) for i in request.args.get('ids', '').split(',') if i]
+        return render_template('admin/set_account_form.html', ids=ids,
+                               accounts=_allowed_account_names(),
+                               return_to=request.args.get('return_to', ''))
+
+    @expose('/process_set_account', methods=['POST'])
+    def process_set_account(self):
+        """
+        Apply the picked account to every selected host. The chosen account
+        must be within the user's allowed accounts, and — defence in depth —
+        only hosts inside the user's scope are updated.
+        """
+        host_ids = [x for x in request.form.get('host_ids', '').split(',') if x.strip()]
+        account_name = (request.form.get('account') or '').strip()
+        return_to = _safe_return_to(request.form.get('return_to'))
+
+        if not account_name:
+            flash("No account selected", 'error')
+            return redirect(return_to)
+        if account_name not in _allowed_account_names():
+            flash(f"Account '{account_name}' is not available to you", 'error')
+            return redirect(return_to)
+        # Look the account up directly — we only need its id and name, so we
+        # must NOT go through get_account_by_name(), which also decrypts the
+        # account password (and would blow up on an account whose secret was
+        # encrypted with a different key).
+        account = Account.objects(name=account_name, enabled=True).first()
+        if not account:
+            flash(f"Account '{account_name}' not found", 'error')
+            return redirect(return_to)
+
+        query = Host.objects(id__in=host_ids)
+        scope = current_user.account_scope() if current_user.is_authenticated else None
+        if scope is not None:
+            query = query.filter(source_account_name__in=list(scope))
+        updated = query.update(
+            set__source_account_name=account.name,
+            set__source_account_id=str(account.id))
+        flash(f"Set account '{account_name}' on {updated} host(s)", 'success')
         return redirect(return_to)
 
     @action('bulk_label_edit', 'Bulk Edit Labels', None)

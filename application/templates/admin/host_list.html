@@ -177,6 +177,45 @@
   </div>
 </div>
 
+<div class="modal fade" id="setAccountModal" tabindex="-1" role="dialog"
+     aria-labelledby="setAccountModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('.process_set_account') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="host_ids" id="setAccountHostIds" value="">
+        <input type="hidden" name="return_to" value="{{ request.full_path }}">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="setAccountModalLabel">Set Account</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <p class="text-muted" style="font-size: 0.9rem;">
+            <span id="setAccountHostCount">0</span> host(s) will be updated.
+          </p>
+          <div class="form-group mb-0">
+            <label for="setAccountName">Select account</label>
+            <select class="form-control" id="setAccountName" name="account" required>
+              {% for account in set_account_choices or [] %}
+                <option value="{{ account }}">{{ account }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Set Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="bulkLabelModal" tabindex="-1" role="dialog"
      aria-labelledby="bulkLabelModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
@@ -463,6 +502,18 @@
       $('#assignProjectHostIds').val(ids.join(','));
       $('#assignProjectHostCount').text(ids.length);
       $('#assignProjectModal').modal('show');
+      return false;
+    }
+
+    if (name === 'set_account') {
+      ids = collectIds();
+      if (ids.length === 0) {
+        alert('Please select at least one host.');
+        return false;
+      }
+      $('#setAccountHostIds').val(ids.join(','));
+      $('#setAccountHostCount').text(ids.length);
+      $('#setAccountModal').modal('show');
       return false;
     }
 
