@@ -34,6 +34,8 @@ roles = [
   ('approval', "Approve or reject pending critical-label changes"),
   ('approval_bypass', "Skip the approval queue when editing critical labels"),
   ('account', "Account Management"),
+  ('project', "Projects"),
+  ('cron', "Cron Groups & Status"),
   ('log', "Log View"),
   ('global_attributes', "Global Attributes"),
   ('rule', "Generic Rules (Filter, Rewrite, Custom Attributes)"),
@@ -62,7 +64,7 @@ class ApiToken(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     A personal API access token belonging to a User. Only the hash is
     stored; the plaintext is shown once on creation. Tokens authenticate
     as their owner and therefore carry exactly the owner's api_roles and
-    api_accounts.
+    account scope.
     """
     # Public identifier used to display/revoke the token — never secret.
     token_id = db.StringField(required=True)
@@ -94,12 +96,12 @@ class User(db.Document, UserMixin):
     roles = db.ListField(field=db.StringField(choices=roles))
     api_roles = db.ListField(field=db.StringField(choices=api_roles, default="all"))
 
-    # Optional account allowlist for API access. Empty = unrestricted (the
-    # user's API operations see and touch every host, as before). When set,
-    # every host-facing API call is limited to hosts bound to one of these
-    # accounts — create/update may only name these accounts, lists and bulk
-    # operations only return them, and delete only reaches them.
-    api_accounts = db.ListField(field=db.StringField())
+    # Optional account allowlist limiting what this user may see and touch.
+    # Empty = unrestricted (everything, as before). When set it applies to
+    # BOTH the REST API (every host-facing call is limited to hosts of these
+    # accounts — create/update may only name them, lists/bulk only return
+    # them, delete only reaches them) AND the web UI Host and Objects lists.
+    restrict_to_accounts = db.ListField(field=db.StringField())
 
     # Personal API access tokens (hashed). See ApiToken.
     api_tokens = db.ListField(field=db.EmbeddedDocumentField(document_type='ApiToken'))
@@ -135,6 +137,15 @@ class User(db.Document, UserMixin):
         Password checker
         """
         return check_password_hash(self.pwdhash, password)
+
+    def account_scope(self):
+        """
+        Account-name allowlist limiting what this user may see and touch,
+        or ``None`` when the user is unrestricted. Shared by the REST API
+        and the web-UI Host/Objects lists so both honour the same rule.
+        """
+        accounts = {name for name in (self.restrict_to_accounts or []) if name}
+        return accounts or None
 
     def create_api_token(self, label=None, expires_at=None):
         """

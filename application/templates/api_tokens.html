@@ -6,8 +6,8 @@
 <div class="app-hero">
     <h2>API Tokens</h2>
     <p>Personal access tokens for the REST API. A token authenticates as you
-       and carries your API roles{% if current_user.api_accounts %} and account
-       scope{% endif %}. Use it as a Bearer token:
+       and carries your API roles{% if current_user.restrict_to_accounts %} and
+       account scope{% endif %}. Use it as a Bearer token:
        <code>Authorization: Bearer &lt;token&gt;</code>.</p>
 </div>
 

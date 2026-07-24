@@ -88,6 +88,21 @@ div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
 
 
+def _scope_hosts_to_user(queryset):
+    """
+    Restrict a Host queryset to the current user's account scope.
+
+    When the logged-in user has ``restrict_to_accounts`` set, the Host and
+    Objects lists only show hosts bound to one of those accounts — the same
+    rule the REST API enforces. Unrestricted users (and unauthenticated
+    contexts) get the queryset unchanged.
+    """
+    scope = current_user.account_scope() if current_user.is_authenticated else None
+    if scope is not None:
+        return queryset.filter(source_account_name__in=list(scope))
+    return queryset
+
+
 # Fields that only make sense when the syncer is in CMDB mode. Stripped
 # from list/detail/filter/form when CMDB_MODE is off so the syncer-only
 # install gets a clean, minimal Host UI.
@@ -752,8 +767,9 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         """
         Limit Objects
         """
-        return Host.objects(is_object=True, object_type__ne='template',
-                            deleted_at__exists=False)
+        return _scope_hosts_to_user(
+            Host.objects(is_object=True, object_type__ne='template',
+                         deleted_at__exists=False))
 
     # Subclasses (e.g. TemplateModelView) set this so on_model_change
     # stamps the right object_type. None = "leave whatever the form had".
@@ -1754,7 +1770,8 @@ Impact Chain.
         """
         Limit Objects
         """
-        return Host.objects(is_object__ne=True, deleted_at__exists=False)
+        return _scope_hosts_to_user(
+            Host.objects(is_object__ne=True, deleted_at__exists=False))
 
     def scaffold_form(self):
         """Scaffold form with extra CMDB fields."""
@@ -2733,7 +2750,7 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
         # no other archive view for them, so they were unreachable. Drop
         # the type restriction; the new `object_type` column + filter let
         # users still narrow down to plain hosts when they want to.
-        return Host.objects(deleted_at__exists=True)
+        return _scope_hosts_to_user(Host.objects(deleted_at__exists=True))
 
     @action('restore', 'Restore', 'Restore the selected hosts to active?')
     def action_restore(self, ids):

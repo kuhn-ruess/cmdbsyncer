@@ -137,7 +137,7 @@ class ProjectView(DefaultModelView):
 
     def is_accessible(self):
         """ Overwrite """
-        return current_user.is_authenticated and current_user.has_right('checkmk')
+        return current_user.is_authenticated and current_user.has_right('project')
 
     def on_model_change(self, form, model, is_created):
         """

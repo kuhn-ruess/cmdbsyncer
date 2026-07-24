@@ -72,9 +72,9 @@ class _FakeUser:  # pylint: disable=too-few-public-methods
     """Minimal stand-in for application.models.user.User instances."""
 
     def __init__(self, api_roles=None, password_ok=True, disabled=False,
-                 api_accounts=None):
+                 restrict_to_accounts=None):
         self.api_roles = api_roles if api_roles is not None else ['all']
-        self.api_accounts = api_accounts or []
+        self.restrict_to_accounts = restrict_to_accounts or []
         self.disabled = disabled
         self._password_ok = password_ok
         _FAKE_USER_COUNTER[0] += 1
@@ -83,6 +83,10 @@ class _FakeUser:  # pylint: disable=too-few-public-methods
 
     def check_password(self, _password):
         return self._password_ok
+
+    def account_scope(self):
+        accounts = {a for a in (self.restrict_to_accounts or []) if a}
+        return accounts or None
 
 
 class APIAuthTest(unittest.TestCase):
@@ -1180,12 +1184,12 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
 
 def _scoped_auth_patches(accounts):
-    """Decorator: inject a valid user restricted to *accounts* (api_accounts)."""
+    """Decorator: inject a valid user restricted to *accounts* (account scope)."""
     def deco(test_fn):
         @patch('application.api.User')
         def wrapper(self, user_cls, *args, **kwargs):
             user_cls.objects.get.return_value = _FakeUser(
-                api_roles=['all'], api_accounts=accounts)
+                api_roles=['all'], restrict_to_accounts=accounts)
             return test_fn(self, *args, **kwargs)
         wrapper.__name__ = test_fn.__name__
         return wrapper
@@ -1193,7 +1197,7 @@ def _scoped_auth_patches(accounts):
 
 
 class ObjectsAPIScopingTest(unittest.TestCase):
-    """Account-scoping (User.api_accounts) for /api/v1/objects/*."""
+    """Account-scoping (User.restrict_to_accounts) for /api/v1/objects/*."""
 
     def setUp(self):
         self.app = _build_app()
@@ -1300,7 +1304,7 @@ class ObjectsAPIScopingTest(unittest.TestCase):
     @_scoped_auth_patches([])
     @patch('application.api.objects.Host')
     def test_empty_scope_means_unrestricted(self, host_cls):
-        # No api_accounts configured → every host visible, no filter added.
+        # No account scope configured → every host visible, no filter added.
         host_cls.objects.get.return_value = self._host('any-account')
         resp = self.client.get('/api/v1/objects/web01', headers=self.headers)
         self.assertEqual(resp.status_code, 200)
@@ -1380,7 +1384,7 @@ class ApiTokenAuthTest(unittest.TestCase):
     @patch('application.api.find_user_by_api_token')
     def test_token_carries_account_scope(self, find_token, _user_cls, host_cls):
         # Token owner is restricted to acct-a → out-of-scope host hidden.
-        user = _FakeUser(api_roles=['all'], api_accounts=['acct-a'])
+        user = _FakeUser(api_roles=['all'], restrict_to_accounts=['acct-a'])
         find_token.return_value = (user, MagicMock(last_used_at=datetime.utcnow()))
         host = MagicMock()
         host.source_account_name = 'acct-b'

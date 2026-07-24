@@ -80,14 +80,15 @@ class UserView(DefaultModelView):
                  rules.Field('email')]),
         section('2', 'cond', 'Access',
                 'Role grants for the admin UI and API. Global admin '
-                'overrides every per-section role. Leave "API accounts" '
-                'empty for full API access, or pick accounts to limit '
-                'this user\'s API to hosts of those accounts.',
+                'overrides every per-section role. Leave "Restrict to '
+                'accounts" empty for full access, or pick accounts to '
+                'limit this user to hosts of those accounts — both in the '
+                'REST API and in the Host and Objects lists.',
                 [rules.Field('global_admin'),
                  rules.Field('disabled'),
                  rules.Field('roles'),
                  rules.Field('api_roles'),
-                 rules.Field('api_accounts')]),
+                 rules.Field('restrict_to_accounts')]),
         section('3', 'out', 'Credentials',
                 'Password (leave blank to keep), 2FA secret and the '
                 'force-change flag. Timestamps are read-only.',
@@ -105,7 +106,7 @@ class UserView(DefaultModelView):
     )
 
     form_overrides = {
-        'api_accounts': AccountsMultiSelectField,
+        'restrict_to_accounts': AccountsMultiSelectField,
     }
 
     form_widget_args = {
@@ -113,6 +114,12 @@ class UserView(DefaultModelView):
         'date_changed': {'disabled': True},
         'date_password': {'disabled': True},
         'last_login': {'disabled': True},
+        # Render the role pickers as Select2 chip multiselects. The default
+        # scaffolded ``<select multiple>`` needs Ctrl/Cmd-click and is barely
+        # usable (and near-invisible on the dark themes); ``data-role=select2``
+        # lets Flask-Admin's bundled JS enhance them like the account picker.
+        'roles': {'data-role': 'select2'},
+        'api_roles': {'data-role': 'select2'},
     }
 
     def scaffold_form(self):

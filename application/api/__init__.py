@@ -89,7 +89,7 @@ def _authenticate_user():
     """
     # Personal API token (Bearer / x-login-token) takes precedence over the
     # username/password path. A token authenticates as its owner, so it
-    # carries exactly the owner's api_roles and api_accounts.
+    # carries exactly the owner's api_roles and account scope.
     token = _extract_bearer_token()
     if token:
         if not _is_secure_api_request():
@@ -214,15 +214,14 @@ def get_api_account_scope():
     when the user is unrestricted.
 
     Returns a set of account names the current API user is limited to, or
-    ``None`` if the user has no ``api_accounts`` configured (in which case
-    every host operation behaves exactly as before). Only meaningful after
+    ``None`` if the user is unrestricted (in which case every host
+    operation behaves exactly as before). Only meaningful after
     ``require_token`` has run and stored the user on ``flask.g``.
     """
     user = getattr(g, 'api_user', None)
     if user is None:
         return None
-    accounts = {name for name in (getattr(user, 'api_accounts', None) or []) if name}
-    return accounts or None
+    return user.account_scope()
 
 
 def hostnames_in_scope(hostnames, scope):
