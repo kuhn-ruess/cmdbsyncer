@@ -14,7 +14,7 @@ from flask import request
 from flask_restx import Namespace, Resource, fields
 
 from application import log
-from application.api import require_token
+from application.api import require_token, get_api_account_scope
 from application.enterprise import run_hook as _ent_run_hook
 from application.helpers.audit import audit
 from application.modules.log.models import LogEntry
@@ -372,12 +372,18 @@ class SyncerHostsApi(Resource):
     def get(self):
         """Return totals plus a 24-hour staleness counter."""
         ago_24h = datetime.now() - timedelta(hours=24)
+        # Restricted API users only see counters for their own accounts.
+        scope = get_api_account_scope()
+        scope_q = {}
+        if scope is not None:
+            scope_q['source_account_name__in'] = list(scope)
         return {
             '24h_checkpoint': str(ago_24h),
-            'num_hosts': Host.objects(is_object=False).count(),
-            'num_objects': Host.objects(is_object=True).count(),
+            'num_hosts': Host.objects(is_object=False, **scope_q).count(),
+            'num_objects': Host.objects(is_object=True, **scope_q).count(),
             'not_updated_last_24h': Host.objects(
                 is_object=False,
                 last_import_seen__lt=ago_24h,
+                **scope_q,
             ).count(),
         }, 200

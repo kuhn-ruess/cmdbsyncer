@@ -9,39 +9,18 @@ from flask import request, flash, redirect, url_for, Response
 from flask_admin.actions import action
 from flask_admin.base import expose
 from flask_admin.contrib.mongoengine.filters import FilterLike
-from flask_admin.form.widgets import Select2Widget
 from flask_login import current_user
-from wtforms import SelectMultipleField
 
 from application.models.account import Account
 from application.models.project import Project
 from application.views.default import DefaultModelView
+from application.views.account_select import AccountsMultiSelectField
 from application.modules.rule.views import invalidate_host_rule_caches
 
 # Projects currently scope the Checkmk exports (Setup rules, DCD rules and
 # hosts) — the members shown and re-pointed here are those documents. When
 # other plugins adopt projects, extend these imports and the counters below.
 from application.plugins.checkmk.models import CheckmkRuleMngmt, CheckmkDCDRule
-
-
-def _account_choices():
-    """All enabled accounts — the export targets a project can be scoped to."""
-    return [(a.name, f"{a.name} ({a.type})")
-            for a in Account.objects(enabled=True).order_by('name')]
-
-
-class AccountsMultiSelectField(SelectMultipleField):
-    """Multi-select of accounts, stored as a list of account names."""
-    # Select2 chips instead of the native multi-select listbox: the native
-    # widget needs Ctrl/Cmd-click and barely highlights the selection on
-    # the dark themes — with chips the picked accounts are always visible.
-    widget = Select2Widget(multiple=True)
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault('choices', _account_choices)
-        # Tolerate a saved name whose account was since disabled/removed.
-        kwargs.setdefault('validate_choice', False)
-        super().__init__(*args, **kwargs)
 
 
 def _render_project_rule_count(_view, _context, model, _name):

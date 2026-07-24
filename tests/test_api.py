@@ -71,8 +71,10 @@ _FAKE_USER_COUNTER = [0]
 class _FakeUser:  # pylint: disable=too-few-public-methods
     """Minimal stand-in for application.models.user.User instances."""
 
-    def __init__(self, api_roles=None, password_ok=True, disabled=False):
+    def __init__(self, api_roles=None, password_ok=True, disabled=False,
+                 api_accounts=None):
         self.api_roles = api_roles if api_roles is not None else ['all']
+        self.api_accounts = api_accounts or []
         self.disabled = disabled
         self._password_ok = password_ok
         _FAKE_USER_COUNTER[0] += 1
@@ -854,6 +856,7 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
     def test_delete_host_removes_and_decrements_folder(self, host_cls, pool_cls):
         host = MagicMock()
         host.folder = 'web'
+        host.soft_delete.return_value = True
         host_cls.get_host.return_value = host
         pool = MagicMock()
         pool.folder_seats_taken = 5
@@ -863,7 +866,10 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.get_json(), {'status': 'deleted'})
-        host.delete.assert_called_once()
+        # API delete is a soft-delete (archive), not a hard document removal.
+        host.soft_delete.assert_called_once()
+        host.delete.assert_not_called()
+        host.save.assert_called_once()
         self.assertEqual(pool.folder_seats_taken, 4)
         pool.save.assert_called_once()
 
@@ -874,6 +880,7 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         # Pentest finding 2026-04-20: orphaned folder references raised 500.
         host = MagicMock()
         host.folder = 'gone-pool'
+        host.soft_delete.return_value = True
         host_cls.get_host.return_value = host
         pool_cls.objects.get.side_effect = DoesNotExist
 
@@ -881,7 +888,8 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.get_json(), {'status': 'deleted'})
-        host.delete.assert_called_once()
+        host.soft_delete.assert_called_once()
+        host.save.assert_called_once()
 
     @_auth_patches
     @patch('application.api.objects.Host')
@@ -1168,6 +1176,152 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         )
         self.assertEqual(resp.status_code, 200)
         self.assertNotIn('next', resp.get_json()['_links'])
+
+
+def _scoped_auth_patches(accounts):
+    """Decorator: inject a valid user restricted to *accounts* (api_accounts)."""
+    def deco(test_fn):
+        @patch('application.api.User')
+        def wrapper(self, user_cls, *args, **kwargs):
+            user_cls.objects.get.return_value = _FakeUser(
+                api_roles=['all'], api_accounts=accounts)
+            return test_fn(self, *args, **kwargs)
+        wrapper.__name__ = test_fn.__name__
+        return wrapper
+    return deco
+
+
+class ObjectsAPIScopingTest(unittest.TestCase):
+    """Account-scoping (User.api_accounts) for /api/v1/objects/*."""
+
+    def setUp(self):
+        self.app = _build_app()
+        self.client = self.app.test_client()
+        self.headers = _basic_auth()
+
+    @staticmethod
+    def _host(account_name, hostname='web01'):
+        host = MagicMock()
+        host.hostname = hostname
+        host.source_account_name = account_name
+        host.get_labels.return_value = {}
+        host.get_inventory.return_value = {}
+        host.last_import_seen = None
+        host.last_import_sync = None
+        return host
+
+    @_scoped_auth_patches(['acct-a'])
+    @patch('application.api.objects.Host')
+    def test_get_in_scope_host_visible(self, host_cls):
+        host_cls.objects.get.return_value = self._host('acct-a')
+        resp = self.client.get('/api/v1/objects/web01', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+    @_scoped_auth_patches(['acct-a'])
+    @patch('application.api.objects.Host')
+    def test_get_out_of_scope_host_hidden(self, host_cls):
+        host_cls.objects.get.return_value = self._host('acct-b')
+        resp = self.client.get('/api/v1/objects/web01', headers=self.headers)
+        self.assertEqual(resp.status_code, 404)
+
+    @_scoped_auth_patches(['acct-a'])
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    def test_post_rejects_account_outside_scope(self, host_cls, get_account):
+        get_account.return_value = {'name': 'acct-b', 'id': 'id-b'}
+        host_cls.get_host.return_value = self._host(None)
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct-b', 'labels': {}},
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    @_scoped_auth_patches(['acct-a'])
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    def test_post_rejects_existing_host_of_other_account(self, host_cls, get_account):
+        # Account requested is allowed, but the existing host belongs to
+        # an out-of-scope account → must not be re-bound/edited.
+        get_account.return_value = {'name': 'acct-a', 'id': 'id-a'}
+        host_cls.get_host.return_value = self._host('acct-b')
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct-a', 'labels': {}},
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.get_json(), {'status': 'account_conflict'})
+
+    @_scoped_auth_patches(['acct-a'])
+    @patch('application.api.objects.CheckmkFolderPool')
+    @patch('application.api.objects.Host')
+    def test_delete_out_of_scope_host_hidden(self, host_cls, _pool_cls):
+        host_cls.get_host.return_value = self._host('acct-b')
+        resp = self.client.delete('/api/v1/objects/web01', headers=self.headers)
+        self.assertEqual(resp.status_code, 404)
+
+    @_scoped_auth_patches(['acct-a'])
+    @patch('application.api.objects.Host')
+    def test_inventory_out_of_scope_host_hidden(self, host_cls):
+        host_cls.get_host.return_value = self._host('acct-b')
+        resp = self.client.post(
+            '/api/v1/objects/web01/inventory',
+            headers=self.headers,
+            json={'key': 'checkmk', 'inventory': {'a': 1}},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    @_scoped_auth_patches(['acct-a'])
+    @patch('application.api.objects.Host')
+    def test_list_all_filters_by_scope(self, host_cls):
+        captured = {}
+
+        class _Queryset:  # pylint: disable=too-few-public-methods
+            def __init__(self, items):
+                self._items = items
+
+            def filter(self, **kwargs):
+                captured.update(kwargs)
+                return self
+
+            def count(self):
+                return len(self._items)
+
+            def __getitem__(self, item):
+                return self._items[item]
+
+        host_cls.objects.return_value = _Queryset([])
+        resp = self.client.get('/api/v1/objects/all', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(captured.get('source_account_name__in'), ['acct-a'])
+
+    @_scoped_auth_patches([])
+    @patch('application.api.objects.Host')
+    def test_empty_scope_means_unrestricted(self, host_cls):
+        # No api_accounts configured → every host visible, no filter added.
+        host_cls.objects.get.return_value = self._host('any-account')
+        resp = self.client.get('/api/v1/objects/web01', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+
+class SyncerAPIScopingTest(unittest.TestCase):
+    """Account-scoping for /api/v1/syncer/hosts counters."""
+
+    def setUp(self):
+        self.app = _build_app()
+        self.client = self.app.test_client()
+        self.headers = _basic_auth()
+
+    @_scoped_auth_patches(['acct-a'])
+    @patch('application.api.syncer.Host')
+    def test_hosts_counters_scoped(self, host_cls):
+        host_cls.objects.return_value.count.return_value = 0
+        resp = self.client.get('/api/v1/syncer/hosts', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        # Every counter query must carry the account filter.
+        for call in host_cls.objects.call_args_list:
+            self.assertEqual(call.kwargs.get('source_account_name__in'), ['acct-a'])
 
 
 if __name__ == '__main__':

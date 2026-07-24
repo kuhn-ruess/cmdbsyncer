@@ -3,7 +3,7 @@ API
 """
 # pylint: disable=line-too-long
 from functools import wraps
-from flask import abort, request, current_app
+from flask import abort, request, current_app, g
 from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 from application.helpers.audit import audit
 from application.models.account import Account
@@ -122,6 +122,7 @@ def require_token(fn):
     @wraps(fn)
     def decorated_view(*args, **kwargs):
         user_result, username = _authenticate_user()
+        g.api_user = user_result
         roles = user_result.api_roles or []
         current_path = request.path.replace('/api/v1/', '')
         allowed = any(
@@ -146,6 +147,7 @@ def require_api_role(role_name):
         @wraps(fn)
         def decorated_view(*args, **kwargs):
             user_result, username = _authenticate_user()
+            g.api_user = user_result
             roles = user_result.api_roles or []
             if 'all' not in roles and role_name not in roles:
                 _abort_unauthorized(
@@ -154,3 +156,38 @@ def require_api_role(role_name):
             return fn(*args, **kwargs)
         return decorated_view
     return decorator
+
+
+def get_api_account_scope():
+    """
+    Account-name allowlist for the authenticated API user, or ``None``
+    when the user is unrestricted.
+
+    Returns a set of account names the current API user is limited to, or
+    ``None`` if the user has no ``api_accounts`` configured (in which case
+    every host operation behaves exactly as before). Only meaningful after
+    ``require_token`` has run and stored the user on ``flask.g``.
+    """
+    user = getattr(g, 'api_user', None)
+    if user is None:
+        return None
+    accounts = {name for name in (getattr(user, 'api_accounts', None) or []) if name}
+    return accounts or None
+
+
+def hostnames_in_scope(hostnames, scope):
+    """Subset of *hostnames* whose host is inside the account scope.
+
+    ``scope`` is ``None`` (unrestricted → every name passes) or a set of
+    allowed account names. Resolves the whole batch in a single query so
+    callers never fan out into one lookup per host.
+    """
+    if scope is None:
+        return set(hostnames)
+    if not hostnames:
+        return set()
+    # Imported here to avoid a heavy model import at API-package load time.
+    from application.models.host import Host  # pylint: disable=import-outside-toplevel
+    allowed = Host.objects(hostname__in=list(hostnames),
+                           source_account_name__in=list(scope)).only('hostname')
+    return {h.hostname for h in allowed}

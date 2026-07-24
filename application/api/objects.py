@@ -12,7 +12,9 @@ from mongoengine.errors import DoesNotExist
 from flask import request, abort
 from flask_restx import Namespace, Resource, reqparse, fields
 from application import app
-from application.api import require_token
+from application.api import (
+    require_token, get_api_account_scope, hostnames_in_scope,
+)
 from application.models.host import (
     Host, HostError, RELATION_TYPES, RELATION_INVERSE_LABEL,
 )
@@ -203,6 +205,16 @@ def _require_cmdb_mode():
         abort(404, 'CMDB_MODE is disabled on this install.')
 
 
+def _host_in_scope(host, scope):
+    """True if *host* belongs to the API user's account scope.
+
+    ``scope`` is ``None`` for unrestricted users (everything visible) or a
+    set of allowed account names — then the host's ``source_account_name``
+    must be one of them.
+    """
+    return scope is None or host.source_account_name in scope
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -222,6 +234,8 @@ class HostDetailApi(Resource):
         """Return the labels, inventory and last-seen timestamps for *hostname*."""
         try:
             host = Host.objects.get(hostname=hostname)
+            if not _host_in_scope(host, get_api_account_scope()):
+                return {'error': "Host not found"}, 404
             return build_host_dict(host)
         except DoesNotExist:
             return {'error': "Host not found"}, 404
@@ -241,12 +255,21 @@ class HostDetailApi(Resource):
         """
         req_json = request.json
         account = req_json['account']
+        scope = get_api_account_scope()
+        if scope is not None and account not in scope:
+            abort(403, "Account not permitted for this API user")
         try:
             account_dict = get_account_by_name(account)
         except AccountNotFoundError:
             abort(400, "Account not found")
         labels = req_json['labels']
         host_obj = Host.get_host(hostname)
+        # An existing host bound to an account outside the scope must not be
+        # re-bound or edited by a restricted user, even if its own account is
+        # a master (which set_account would otherwise let win).
+        if scope is not None and host_obj.source_account_name \
+                and host_obj.source_account_name not in scope:
+            return {'status': 'account_conflict'}, 403
         try:
             host_obj.update_host(labels)
         except ValueError as exc:
@@ -265,25 +288,25 @@ class HostDetailApi(Resource):
     @API.response(404, 'No host with that name exists.', STATUS)
     @require_token
     def delete(self, hostname):
-        """Delete the host. If it occupied a Checkmk folder pool seat, the
-        seat is freed."""
+        """Soft-delete the host (archive it, keeping it restorable). If it
+        newly leaves an occupied Checkmk folder pool seat, the seat is freed."""
         host_obj = Host.get_host(hostname, create=False)
-        status = "not found"
-        status_code = 404
-        if host_obj:
-            if folder := host_obj.folder:
-                try:
-                    pool = CheckmkFolderPool.objects.get(folder_name__iexact=folder)
-                except DoesNotExist:
-                    pool = None
-                if pool and pool.folder_seats_taken > 0:
-                    pool.folder_seats_taken -= 1
-                    pool.save()
-            status = "deleted"
-            status_code = 200
-            host_obj.delete()
+        scope = get_api_account_scope()
+        if not host_obj or not _host_in_scope(host_obj, scope):
+            return {'status': "not found"}, 404
 
-        return {'status': status}, status_code
+        newly_archived = host_obj.soft_delete(reason='Deleted via API')
+        if newly_archived and (folder := host_obj.folder):
+            try:
+                pool = CheckmkFolderPool.objects.get(folder_name__iexact=folder)
+            except DoesNotExist:
+                pool = None
+            if pool and pool.folder_seats_taken > 0:
+                pool.folder_seats_taken -= 1
+                pool.save()
+        host_obj.save()
+
+        return {'status': "deleted"}, 200
 
 
 @API.route('/bulk')
@@ -309,6 +332,9 @@ class HostDetailBulkApi(Resource):
         req_json = request.json
         count = 0
         account = req_json['account']
+        scope = get_api_account_scope()
+        if scope is not None and account not in scope:
+            abort(403, "Account not permitted for this API user")
         try:
             account_dict = get_account_by_name(account)
         except AccountNotFoundError:
@@ -318,6 +344,12 @@ class HostDetailBulkApi(Resource):
             hostname = api_host['hostname']
             labels = api_host['labels']
             host_obj = Host.get_host(hostname)
+            # Skip hosts already owned by an out-of-scope account (see the
+            # single-host POST for why the master-account path is blocked).
+            if scope is not None and host_obj.source_account_name \
+                    and host_obj.source_account_name not in scope:
+                not_save.append(hostname)
+                continue
             try:
                 host_obj.update_host(labels)
             except ValueError as exc:
@@ -360,7 +392,7 @@ class HostDetailInventoryApi(Resource):
         # binding or hostname validation. Host creation goes through the
         # primary /<hostname> endpoint which requires an account.
         host_obj = Host.get_host(hostname, create=False)
-        if not host_obj:
+        if not host_obj or not _host_in_scope(host_obj, get_api_account_scope()):
             return {'status': 'not found'}, 404
         try:
             host_obj.update_inventory(key, inventory)
@@ -408,13 +440,15 @@ class HostDetailInventoryBulkApi(Resource):
                 abort(400, str(exc))
         count = 0
         not_found = []
+        scope = get_api_account_scope()
         for inv in req_json['inventories']:
             hostname = inv['hostname']
             key = inv['key']
             inventory = inv['inventory']
             # See single-host variant: no implicit host creation here.
+            # Out-of-scope hosts are reported as not-found, never revealed.
             host_obj = Host.get_host(hostname, create=False)
-            if not host_obj:
+            if not host_obj or not _host_in_scope(host_obj, scope):
                 not_found.append(hostname)
                 continue
             host_obj.update_inventory(key, inventory)
@@ -468,6 +502,9 @@ class HostDetailListApi(Resource):
         end = start+limit
 
         db_objecs = Host.objects(is_object__ne=True)
+        scope = get_api_account_scope()
+        if scope is not None:
+            db_objecs = db_objecs.filter(source_account_name__in=list(scope))
         total = db_objecs.count()
         for host in db_objecs[start:end]:
             results.append(build_host_dict(host))
@@ -544,14 +581,25 @@ class HostRelationsApi(Resource):
     def get(self, hostname):
         """List outgoing + inbound relations for *hostname*."""
         _require_cmdb_mode()
+        scope = get_api_account_scope()
         try:
             host = Host.objects.get(hostname=hostname)
         except DoesNotExist:
             return {'error': 'Host not found'}, 404
+        if not _host_in_scope(host, scope):
+            return {'error': 'Host not found'}, 404
+        outgoing = self._serialize_outgoing(host)
+        inbound = self._serialize_inbound(host)
+        if scope is not None:
+            # Never surface related hosts the user is not allowed to see.
+            referenced = {r['target'] for r in outgoing} | {r['target'] for r in inbound}
+            visible = hostnames_in_scope(referenced, scope)
+            outgoing = [r for r in outgoing if r['target'] in visible]
+            inbound = [r for r in inbound if r['target'] in visible]
         return {
             'hostname': hostname,
-            'outgoing': self._serialize_outgoing(host),
-            'inbound': self._serialize_inbound(host),
+            'outgoing': outgoing,
+            'inbound': inbound,
         }
 
     @API.doc(security=['basicAuth'])
@@ -566,6 +614,7 @@ class HostRelationsApi(Resource):
     def post(self, hostname):
         """Add a relation from *hostname* to ``target``."""
         _require_cmdb_mode()
+        scope = get_api_account_scope()
         body = request.json or {}
         target_name = body.get('target')
         rtype = body.get('type')
@@ -574,6 +623,9 @@ class HostRelationsApi(Resource):
             host = Host.objects.get(hostname=hostname)
             target = Host.objects.get(hostname=target_name)
         except DoesNotExist:
+            return {'error': 'Host or target not found'}, 404
+        # Both endpoints of the edge must be inside the user's scope.
+        if not _host_in_scope(host, scope) or not _host_in_scope(target, scope):
             return {'error': 'Host or target not found'}, 404
         try:
             added = host.add_relation(target, rtype, source=rsource)
@@ -595,6 +647,7 @@ class HostRelationsApi(Resource):
     def delete(self, hostname):
         """Remove the relation ``(type, target)`` from *hostname*."""
         _require_cmdb_mode()
+        scope = get_api_account_scope()
         body = request.json or {}
         target_name = body.get('target')
         rtype = body.get('type')
@@ -602,6 +655,8 @@ class HostRelationsApi(Resource):
             host = Host.objects.get(hostname=hostname)
             target = Host.objects.get(hostname=target_name)
         except DoesNotExist:
+            return {'error': 'Host or target not found'}, 404
+        if not _host_in_scope(host, scope) or not _host_in_scope(target, scope):
             return {'error': 'Host or target not found'}, 404
         if host.remove_relation(target, rtype):
             host.save()

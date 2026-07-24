@@ -7,6 +7,7 @@ from flask_admin.form import rules
 from flask_login import current_user
 
 from application.views.default import DefaultModelView
+from application.views.account_select import AccountsMultiSelectField
 from application.views._form_sections import modern_form, section
 
 
@@ -43,11 +44,14 @@ class UserView(DefaultModelView):
                  rules.Field('email')]),
         section('2', 'cond', 'Access',
                 'Role grants for the admin UI and API. Global admin '
-                'overrides every per-section role.',
+                'overrides every per-section role. Leave "API accounts" '
+                'empty for full API access, or pick accounts to limit '
+                'this user\'s API to hosts of those accounts.',
                 [rules.Field('global_admin'),
                  rules.Field('disabled'),
                  rules.Field('roles'),
-                 rules.Field('api_roles')]),
+                 rules.Field('api_roles'),
+                 rules.Field('api_accounts')]),
         section('3', 'out', 'Credentials',
                 'Password (leave blank to keep), 2FA secret and the '
                 'force-change flag. Timestamps are read-only.',
@@ -63,6 +67,10 @@ class UserView(DefaultModelView):
                 'own theme under Account → Theme.',
                 [rules.Field('theme')]),
     )
+
+    form_overrides = {
+        'api_accounts': AccountsMultiSelectField,
+    }
 
     form_widget_args = {
         'date_added': {'disabled': True},

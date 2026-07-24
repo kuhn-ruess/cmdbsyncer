@@ -55,6 +55,13 @@ class User(db.Document, UserMixin):
     roles = db.ListField(field=db.StringField(choices=roles))
     api_roles = db.ListField(field=db.StringField(choices=api_roles, default="all"))
 
+    # Optional account allowlist for API access. Empty = unrestricted (the
+    # user's API operations see and touch every host, as before). When set,
+    # every host-facing API call is limited to hosts bound to one of these
+    # accounts — create/update may only name these accounts, lists and bulk
+    # operations only return them, and delete only reaches them.
+    api_accounts = db.ListField(field=db.StringField())
+
     theme = db.StringField(default='default')
 
     tfa_secret = db.StringField()
