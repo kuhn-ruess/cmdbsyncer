@@ -117,6 +117,30 @@ def _allowed_account_names():
     return names
 
 
+class HostAccountSelectField(SelectField):  # pylint: disable=too-few-public-methods
+    """Single-select account picker for the host form. Ships an empty choice
+    list so the form scaffolds; create_form/edit_form fill the real,
+    per-user-scoped choices before the field is rendered or validated."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('choices', [])
+        super().__init__(*args, **kwargs)
+
+
+def _account_field_choices(current=None):
+    """
+    (value, label) choices for the host form's account dropdown: the user's
+    allowed accounts, plus the host's current account when editing (so an
+    existing value round-trips and passes SelectField validation even if it
+    is out of the normal list, e.g. a native CMDB host).
+    """
+    choices = [(n, n) for n in _allowed_account_names()]
+    known = {c[0] for c in choices}
+    if current and current not in known:
+        choices.insert(0, (current, current))
+    return choices
+
+
 # Fields that only make sense when the syncer is in CMDB mode. Stripped
 # from list/detail/filter/form when CMDB_MODE is off so the syncer-only
 # install gets a clean, minimal Host UI.
@@ -1111,7 +1135,10 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         'folder': HiddenField,
         'sync_id': HiddenField,
         'cache': HiddenField,
-        'source_account_name': HiddenField,
+        # Account is a restricted dropdown (choices filled per-request in
+        # create_form/edit_form, scoped to the user's accounts). The id is
+        # derived from the chosen name in on_model_change.
+        'source_account_name': HostAccountSelectField,
         'source_account_id': HiddenField,
         'inventory': StaticLabelField,
         'log': StaticLogField,
@@ -1147,6 +1174,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         rules.FieldSet(
             (
                 rules.Field('hostname'),
+                rules.Field('source_account_name'),
                 rules.Field('lifecycle_state'),
                 rules.Field('project'),
             ),
@@ -1830,6 +1858,10 @@ Impact Chain.
         if hasattr(form, 'cmdb_templates'):
             form.cmdb_templates.queryset = Host.objects(object_type='template')
 
+        if hasattr(form, 'source_account_name'):
+            form.source_account_name.choices = _account_field_choices(
+                getattr(obj, 'source_account_name', None) if obj else None)
+
         return form
 
     def get_form_field_type(self, field_name):
@@ -1851,6 +1883,8 @@ Impact Chain.
             form.labels_from_template.object_data = obj
         if hasattr(form, 'cmdb_templates'):
             form.cmdb_templates.queryset = Host.objects(object_type='template')
+        if hasattr(form, 'source_account_name'):
+            form.source_account_name.choices = _account_field_choices()
         return form
 
     def is_accessible(self):
@@ -1876,8 +1910,17 @@ Impact Chain.
         model.last_import_sync = datetime.now()
         model.last_import_seen = datetime.now()
         model.cache = {}
-        model.source_account_id = CMDB_SOURCE_ACCOUNT_ID
-        model.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
+        # Account comes from the form's dropdown now (no longer forced to the
+        # CMDB sentinel). Derive the id from the chosen name; keep the CMDB
+        # sentinel id only when the CMDB account itself was picked.
+        chosen_account = (model.source_account_name or '').strip()
+        if chosen_account == CMDB_SOURCE_ACCOUNT_NAME:
+            model.source_account_id = CMDB_SOURCE_ACCOUNT_ID
+        elif chosen_account:
+            account = Account.objects(name=chosen_account).first()
+            model.source_account_id = str(account.id) if account else ''
+        else:
+            model.source_account_id = ''
         model.no_autodelete = True
         # Tag this label mutation as a manual edit so HostLabelChange
         # rows carry the right origin + acting user in the Timeline.
@@ -2764,10 +2807,12 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     can_export = False
     can_view_details = True
     can_set_page_size = True
-    # Drop the inherited "Clone" row action — cloning a soft-deleted host
-    # from the archive makes no sense (Restore / Hard-Delete are the only
-    # actions here).
-    column_extra_row_actions = []
+    # Drop the inherited "Clone" row action (cloning a soft-deleted host
+    # makes no sense) and offer a per-row Restore instead. Hard-Delete stays
+    # a bulk action.
+    column_extra_row_actions = [
+        EndpointLinkRowAction("fa fa-undo", ".restore_row", title="Restore"),
+    ]
     # Reachable in every mode: the host list's delete is a soft-delete
     # regardless of CMDB mode, so users always need the Archive to
     # restore or hard-delete what they removed.
@@ -2823,6 +2868,21 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
         # the type restriction; the new `object_type` column + filter let
         # users still narrow down to plain hosts when they want to.
         return _scope_hosts_to_user(Host.objects(deleted_at__exists=True))
+
+    @expose('/restore_row')
+    def restore_row(self):
+        """Restore a single archived host back to active (per-row action)."""
+        host_id = request.args.get('id')
+        host = _scope_hosts_to_user(
+            Host.objects(id=host_id, deleted_at__exists=True)).first()
+        if host and host.restore():
+            host.save()
+            flash(f"Restored {host.hostname} to active.", 'success')
+        elif host:
+            flash("Host was not archived.", 'error')
+        else:
+            flash("Host not found.", 'error')
+        return redirect(url_for('.index_view'))
 
     @action('restore', 'Restore', 'Restore the selected hosts to active?')
     def action_restore(self, ids):
