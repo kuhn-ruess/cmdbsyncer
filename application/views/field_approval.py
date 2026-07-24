@@ -50,7 +50,6 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
         return current_user.is_authenticated and (
             current_user.global_admin
             or current_user.has_right('approval')
-            or current_user.has_right('host')
         )
 
     def _can_decide(self):

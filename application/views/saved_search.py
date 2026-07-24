@@ -34,7 +34,14 @@ class SavedSearchView(ModelView):  # pylint: disable=too-many-public-methods,too
     form_excluded_columns = ('owner_email', 'created_at', 'path', 'query_string')
 
     def is_accessible(self):
+        # Personal, per-user feature (get_query filters to the owner). Any
+        # logged-in user manages their own saved searches.
         return current_user.is_authenticated
+
+    def is_visible(self):
+        # Reached from the personal Profile menu, not the admin category
+        # tree — keep it out of the left/category menu entirely.
+        return False
 
     def get_query(self):
         if not current_user.is_authenticated:

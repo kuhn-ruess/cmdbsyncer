@@ -564,13 +564,17 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     # not day-to-day working views, and keep the top bar compact. The
     # account entries sit flat at the top, separated by a divider.
     from application.views.account import AccountModelView, ChildAccountModelView
+    from application.views.menu_links import AccessMenuLink
+    from flask_login import current_user as _menu_user
     admin.add_view(AccountModelView(Account, name="Accounts", category="Settings",
                                     menu_icon_type='fa', menu_icon_value='fa-user-circle'))
     admin.add_view(ChildAccountModelView(Account, name="Account Overrides",
                                          endpoint='account_childs', category="Settings",
                                          menu_icon_type='fa', menu_icon_value='fa-users'))
-    admin.add_link(MenuLink(name='divider-accounts', category='Settings',
-                            url='#', class_name='dropdown-divider'))
+    admin.add_link(AccessMenuLink(name='divider-accounts', category='Settings',
+                                  url='#', class_name='dropdown-divider',
+                                  access=lambda: _menu_user.is_authenticated
+                                  and _menu_user.has_right('account')))
 
     from application.models.cron import CronGroup, CronStats
     from application.views.cron import CronStatsView, CronGroupView
@@ -578,8 +582,10 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
                                  menu_icon_type='fa', menu_icon_value='fa-calendar'))
     admin.add_view(CronStatsView(CronStats, name="State Table", category="Settings",
                                  menu_icon_type='fa', menu_icon_value='fa-table'))
-    admin.add_link(MenuLink(name='divider-cronjobs', category='Settings',
-                            url='#', class_name='dropdown-divider'))
+    admin.add_link(AccessMenuLink(name='divider-cronjobs', category='Settings',
+                                  url='#', class_name='dropdown-divider',
+                                  access=lambda: _menu_user.is_authenticated
+                                  and _menu_user.has_right('cron')))
 
     # Pre-declare enterprise sub-categories so their views land in the
     # right place when register_admin_views runs. Flask-Admin creates
@@ -608,14 +614,18 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_view(ConfigModelView(Config, name="System Config",
                                    endpoint='config', category="Settings",
                                    menu_icon_type='fa', menu_icon_value='fa-cogs'))
-    admin.add_link(MenuLink(name='Edit local_config.py', category='Settings',
-                            endpoint='config.local_config_editor',
-                            icon_type='fa', icon_value='fa-file-code-o'))
+    admin.add_link(AccessMenuLink(name='Edit local_config.py', category='Settings',
+                                  endpoint='config.local_config_editor',
+                                  icon_type='fa', icon_value='fa-file-code-o',
+                                  access=lambda: _menu_user.is_authenticated
+                                  and _menu_user.global_admin))
 
     from application.models.saved_search import SavedSearch
     from application.views.saved_search import SavedSearchView
+    # Reached from the personal Profile menu (see admin/master.html); the
+    # view hides itself from the category tree via is_visible().
     admin.add_view(SavedSearchView(SavedSearch, name="Saved Searches",
-                                   category="Settings",
+                                   endpoint='saved_searches',
                                    menu_icon_type='fa',
                                    menu_icon_value='fa-bookmark'))
 

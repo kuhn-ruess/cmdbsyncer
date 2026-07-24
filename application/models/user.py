@@ -36,6 +36,7 @@ roles = [
   ('account', "Account Management"),
   ('project', "Projects"),
   ('cron', "Cron Groups & Status"),
+  ('data_quality', "Data Quality Dashboard"),
   ('log', "Log View"),
   ('global_attributes', "Global Attributes"),
   ('rule', "Generic Rules (Filter, Rewrite, Custom Attributes)"),
