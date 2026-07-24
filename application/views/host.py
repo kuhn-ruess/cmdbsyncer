@@ -2764,6 +2764,10 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     can_export = False
     can_view_details = True
     can_set_page_size = True
+    # Drop the inherited "Clone" row action — cloning a soft-deleted host
+    # from the archive makes no sense (Restore / Hard-Delete are the only
+    # actions here).
+    column_extra_row_actions = []
     # Reachable in every mode: the host list's delete is a soft-delete
     # regardless of CMDB mode, so users always need the Archive to
     # restore or hard-delete what they removed.
