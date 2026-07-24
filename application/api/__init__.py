@@ -76,8 +76,10 @@ def _touch_api_token(user, token_obj):
 
 
 def _abort_unauthorized(reason="Unauthorized"):
+    # Use an 'error'-level detail so the entry counts as an error and shows
+    # up in the dashboard's Recent Errors widget (LogEntry.has_error).
     details = [
-        ('reason', reason),
+        ('error', reason),
         ('user', f"{request.authorization.username if request.authorization else 'unknown'}"),
         ('ip', request.remote_addr),
     ]
@@ -100,7 +102,7 @@ def _authenticate_user():
     if token:
         if not _is_secure_api_request():
             log.log("API Login failed",
-                    details=[('reason', 'HTTPS required'),
+                    details=[('error', 'HTTPS required'),
                              ('user', 'api-token'),
                              ('ip', request.remote_addr)],
                     source="API")
@@ -116,7 +118,7 @@ def _authenticate_user():
         _abort_unauthorized("No credentials provided")
     if not _is_secure_api_request():
         details = [
-            ('reason', 'HTTPS required'),
+            ('error', 'HTTPS required'),
             ('user', username),
             ('ip', request.remote_addr),
         ]
