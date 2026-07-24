@@ -2,13 +2,43 @@
 Models for flask_admin
 """
 from datetime import datetime
+from markupsafe import Markup, escape
 from wtforms import PasswordField
+from flask import flash, redirect, request, abort, url_for
 from flask_admin.form import rules
+from flask_admin.base import expose
+from flask_wtf.csrf import generate_csrf
 from flask_login import current_user
+from mongoengine.errors import DoesNotExist, ValidationError
 
+from application.models.user import User
 from application.views.default import DefaultModelView
 from application.views.account_select import AccountsMultiSelectField
 from application.views._form_sections import modern_form, section
+
+
+def _render_user_tokens(_view, _context, model, _name):
+    """List a user's API tokens with a per-token revoke button (admin)."""
+    if not model.api_tokens:
+        return Markup('<em>none</em>')
+    rows = []
+    csrf = generate_csrf()
+    for token in model.api_tokens:
+        revoke_url = url_for('user.revoke_token_view',
+                             user_id=model.id, token_id=token.token_id)
+        expired = ' <span class="label label-danger">expired</span>' \
+            if token.is_expired() else ''
+        meta = escape(f"{token.label or 'API token'} ({token.prefix or ''}…)")
+        form = (
+            f'<form method="POST" action="{escape(revoke_url)}" '
+            f'style="display:inline;margin-left:.4rem" '
+            f"onsubmit=\"return confirm('Revoke this token?');\">"
+            f'<input type="hidden" name="csrf_token" value="{escape(csrf)}">'
+            f'<button class="btn btn-danger btn-xs" type="submit">Revoke</button>'
+            f'</form>'
+        )
+        rows.append(f'<div>{meta}{expired}{form}</div>')
+    return Markup(''.join(rows))
 
 
 class UserView(DefaultModelView):
@@ -18,7 +48,13 @@ class UserView(DefaultModelView):
     column_sortable_list = ("email", "global_admin")
     column_exclude_list = ("pwdhash", 'tfa_secret',
                            'force_password_change', 'date_changed', 'date_password')
-    form_excluded_columns = ("pwdhash", )
+    # api_tokens are managed self-service (plaintext is only ever shown to the
+    # owner); admins may list and revoke but never edit them in the form.
+    form_excluded_columns = ("pwdhash", "api_tokens")
+
+    column_formatters = {
+        'api_tokens': _render_user_tokens,
+    }
     page_size = 100
     can_set_page_size = True
     column_filters = (
@@ -102,3 +138,20 @@ class UserView(DefaultModelView):
 
     def is_accessible(self):
         return current_user.is_authenticated and current_user.has_right('user')
+
+    @expose('/revoke-token/<user_id>/<token_id>', methods=['POST'])
+    def revoke_token_view(self, user_id, token_id):
+        """Revoke another user's API token (admins only)."""
+        if not self.is_accessible():
+            abort(403)
+        try:
+            user = User.objects.get(id=user_id)
+        except (DoesNotExist, ValidationError):
+            flash('User not found', 'danger')
+            return redirect(self.get_url('.index_view'))
+        if user.revoke_api_token(token_id):
+            user.save()
+            flash('API token revoked.', 'success')
+        else:
+            flash('Token not found.', 'danger')
+        return redirect(request.referrer or self.get_url('.index_view'))

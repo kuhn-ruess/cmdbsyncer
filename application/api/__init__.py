@@ -3,12 +3,18 @@ API
 """
 # pylint: disable=line-too-long
 from functools import wraps
+from datetime import datetime, timedelta
 from flask import abort, request, current_app, g
 from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 from application.helpers.audit import audit
 from application.models.account import Account
-from application.models.user import User
+from application.models.user import User, find_user_by_api_token
 from application import log
+
+
+# Only refresh a token's last_used stamp at most this often, so a high-rate
+# polling client does not trigger a database write on every single request.
+_API_TOKEN_TOUCH_INTERVAL = timedelta(seconds=60)
 
 
 def _is_secure_api_request():
@@ -35,6 +41,34 @@ def _extract_login_credentials():
         return login_user.split(':', 1)
     return None, None
 
+def _extract_bearer_token():
+    """
+    Return a personal API token from the request, or None.
+
+    Accepts ``Authorization: Bearer <token>`` (the standard form) and the
+    ``x-login-token`` header for clients that cannot set an Authorization
+    header. Basic-auth requests return None here and fall through to the
+    username/password path.
+    """
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        return auth_header[len('Bearer '):].strip() or None
+    return request.headers.get('x-login-token') or None
+
+
+def _touch_api_token(user, token_obj):
+    """
+    Stamp ``last_used_at`` on the used token, throttled so busy clients do
+    not write on every call. Uses a positional update so it never races
+    with a concurrent token change and never rewrites the whole user.
+    """
+    now = datetime.utcnow()
+    if token_obj.last_used_at and now - token_obj.last_used_at < _API_TOKEN_TOUCH_INTERVAL:
+        return
+    User.objects(id=user.id, api_tokens__token_id=token_obj.token_id).update(
+        set__api_tokens__S__last_used_at=now)
+
+
 def _abort_unauthorized(reason="Unauthorized"):
     details = [
         ('reason', reason),
@@ -53,10 +87,26 @@ def _authenticate_user():
     handling historical duplicate names. Returns the User on success or
     aborts with 401. Role checks are the caller's responsibility.
     """
+    # Personal API token (Bearer / x-login-token) takes precedence over the
+    # username/password path. A token authenticates as its owner, so it
+    # carries exactly the owner's api_roles and api_accounts.
+    token = _extract_bearer_token()
+    if token:
+        if not _is_secure_api_request():
+            log.log("API Login failed",
+                    details=[('reason', 'HTTPS required'),
+                             ('user', 'api-token'),
+                             ('ip', request.remote_addr)],
+                    source="API")
+            abort(401, "HTTPS is required for API authentication")
+        user_result, token_obj = find_user_by_api_token(token)
+        if not user_result:
+            _abort_unauthorized("Invalid or expired API token")
+        _touch_api_token(user_result, token_obj)
+        return user_result, user_result.name
+
     username, user_password = _extract_login_credentials()
     if not username:
-        if request.headers.get('x-login-token'):
-            _abort_unauthorized("Invalid or removed login token")
         _abort_unauthorized("No credentials provided")
     if not _is_secure_api_request():
         details = [

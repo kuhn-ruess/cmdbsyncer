@@ -321,6 +321,9 @@ class _User:  # pylint: disable=too-few-public-methods
 
 
 _models_user.User = _User
+# application.api imports this at module load; auth tests patch it per-test.
+_models_user.find_user_by_api_token = MagicMock(
+    name="stub.find_user_by_api_token", return_value=(None, None))
 
 _models_account = _stub_package("application.models.account")
 

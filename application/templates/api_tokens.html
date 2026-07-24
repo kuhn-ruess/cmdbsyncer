@@ -1,0 +1,129 @@
+{# Rendered through ``admin.index_view.render`` so the admin navbar stays
+   present. Theme-aware: only .app-card / bootstrap classes, no hardcoded
+   colours, so all four themes render correctly. #}
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="app-hero">
+    <h2>API Tokens</h2>
+    <p>Personal access tokens for the REST API. A token authenticates as you
+       and carries your API roles{% if current_user.api_accounts %} and account
+       scope{% endif %}. Use it as a Bearer token:
+       <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="app-card">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" role="alert">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            {% if new_token %}
+            <div class="alert alert-success" role="alert">
+                <strong>Your new token</strong> — copy it now, it will not be
+                shown again:
+                <div class="input-group" style="margin-top:.5rem;">
+                    <input type="text" class="form-control" id="new-token"
+                           value="{{ new_token }}" readonly
+                           onclick="this.select()">
+                    <span class="input-group-btn">
+                        <button class="btn btn-secondary" type="button"
+                                onclick="copyToken()">
+                            <i class="fa fa-copy"></i> Copy
+                        </button>
+                    </span>
+                </div>
+            </div>
+            <script>
+              function copyToken() {
+                var el = document.getElementById('new-token');
+                el.select();
+                el.setSelectionRange(0, 99999);
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(el.value);
+                } else {
+                  document.execCommand('copy');
+                }
+              }
+            </script>
+            {% endif %}
+
+            <h4>Create a token</h4>
+            <form method="POST" action="{{ url_for('auth.api_tokens') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="label">Label</label>
+                    <input type="text" class="form-control" name="label" id="label"
+                           maxlength="120" placeholder="e.g. monitoring, laptop, CI">
+                </div>
+                <div class="form-group">
+                    <label for="expires_days">Expires in (days, optional)</label>
+                    <input type="number" class="form-control" name="expires_days"
+                           id="expires_days" min="1" placeholder="never">
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-plus"></i> Generate token
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="app-card">
+            <h4>Your tokens</h4>
+            {% if tokens %}
+            <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Label</th>
+                        <th>Prefix</th>
+                        <th>Created</th>
+                        <th>Last used</th>
+                        <th>Expires</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for token in tokens %}
+                    <tr>
+                        <td>{{ token.label }}</td>
+                        <td><code>{{ token.prefix }}…</code></td>
+                        <td>{{ token.created_at.strftime('%Y-%m-%d %H:%M') if token.created_at else '—' }}</td>
+                        <td>{{ token.last_used_at.strftime('%Y-%m-%d %H:%M') if token.last_used_at else 'never' }}</td>
+                        <td>
+                            {% if token.expires_at %}
+                                {{ token.expires_at.strftime('%Y-%m-%d') }}
+                                {% if token.is_expired() %}
+                                    <span class="label label-danger">expired</span>
+                                {% endif %}
+                            {% else %}never{% endif %}
+                        </td>
+                        <td>
+                            <form method="POST"
+                                  action="{{ url_for('auth.revoke_api_token', token_id=token.token_id) }}"
+                                  onsubmit="return confirm('Revoke this token? Clients using it will stop working.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="fa fa-trash"></i> Revoke
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <p>You have no API tokens yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

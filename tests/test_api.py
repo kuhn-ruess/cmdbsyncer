@@ -79,6 +79,7 @@ class _FakeUser:  # pylint: disable=too-few-public-methods
         self._password_ok = password_ok
         _FAKE_USER_COUNTER[0] += 1
         self.id = f'fake-user-{_FAKE_USER_COUNTER[0]}'
+        self.name = 'tester'
 
     def check_password(self, _password):
         return self._password_ok
@@ -1322,6 +1323,72 @@ class SyncerAPIScopingTest(unittest.TestCase):
         # Every counter query must carry the account filter.
         for call in host_cls.objects.call_args_list:
             self.assertEqual(call.kwargs.get('source_account_name__in'), ['acct-a'])
+
+
+class ApiTokenAuthTest(unittest.TestCase):
+    """Bearer / x-login-token authentication in require_token."""
+
+    def setUp(self):
+        self.app = _build_app()
+        self.client = self.app.test_client()
+
+    @patch('application.api.syncer.Host')
+    @patch('application.api.User')
+    @patch('application.api.find_user_by_api_token')
+    def test_bearer_token_authenticates(self, find_token, _user_cls, host_cls):
+        user = _FakeUser(api_roles=['all'])
+        token_obj = MagicMock(token_id='t1', last_used_at=datetime.utcnow())
+        find_token.return_value = (user, token_obj)
+        host_cls.objects.return_value.count.return_value = 0
+        resp = self.client.get(
+            '/api/v1/syncer/hosts',
+            headers={'Authorization': 'Bearer cmdb_pat_secret'})
+        self.assertEqual(resp.status_code, 200)
+        find_token.assert_called_once_with('cmdb_pat_secret')
+
+    @patch('application.api.syncer.Host')
+    @patch('application.api.User')
+    @patch('application.api.find_user_by_api_token')
+    def test_x_login_token_header_authenticates(self, find_token, _user_cls, host_cls):
+        find_token.return_value = (_FakeUser(api_roles=['all']),
+                                   MagicMock(last_used_at=datetime.utcnow()))
+        host_cls.objects.return_value.count.return_value = 0
+        resp = self.client.get('/api/v1/syncer/hosts',
+                               headers={'x-login-token': 'cmdb_pat_secret'})
+        self.assertEqual(resp.status_code, 200)
+
+    @patch('application.api.find_user_by_api_token')
+    def test_invalid_token_returns_401(self, find_token):
+        find_token.return_value = (None, None)
+        resp = self.client.get(
+            '/api/v1/syncer/hosts',
+            headers={'Authorization': 'Bearer cmdb_pat_bad'})
+        self.assertEqual(resp.status_code, 401)
+
+    @patch('application.api.find_user_by_api_token')
+    def test_token_respects_api_roles(self, find_token):
+        # A token whose owner lacks the syncer role must not reach /syncer.
+        find_token.return_value = (_FakeUser(api_roles=['objects']),
+                                   MagicMock(last_used_at=datetime.utcnow()))
+        resp = self.client.get(
+            '/api/v1/syncer/hosts',
+            headers={'Authorization': 'Bearer cmdb_pat_secret'})
+        self.assertEqual(resp.status_code, 401)
+
+    @patch('application.api.objects.Host')
+    @patch('application.api.User')
+    @patch('application.api.find_user_by_api_token')
+    def test_token_carries_account_scope(self, find_token, _user_cls, host_cls):
+        # Token owner is restricted to acct-a → out-of-scope host hidden.
+        user = _FakeUser(api_roles=['all'], api_accounts=['acct-a'])
+        find_token.return_value = (user, MagicMock(last_used_at=datetime.utcnow()))
+        host = MagicMock()
+        host.source_account_name = 'acct-b'
+        host_cls.objects.get.return_value = host
+        resp = self.client.get(
+            '/api/v1/objects/web01',
+            headers={'Authorization': 'Bearer cmdb_pat_secret'})
+        self.assertEqual(resp.status_code, 404)
 
 
 if __name__ == '__main__':

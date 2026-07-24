@@ -267,6 +267,58 @@ def set_theme():
                                    current=current_user.theme or 'default')
 
 
+@AUTH.route('/api-tokens', methods=['GET', 'POST'])
+@login_required
+def api_tokens():
+    """
+    Self-service personal API tokens. A user can create named tokens (the
+    plaintext is shown exactly once), see the ones they have, and revoke
+    them. A token authenticates as its owner, so it carries the owner's
+    API roles and account scope.
+    """
+    new_token = None
+    if request.method == 'POST':
+        label = request.form.get('label', '')
+        expires_days = request.form.get('expires_days', '').strip()
+        expires_at = None
+        if expires_days:
+            try:
+                days = int(expires_days)
+            except ValueError:
+                days = 0
+            if days > 0:
+                expires_at = datetime.utcnow() + timedelta(days=days)
+        new_token = current_user.create_api_token(label=label, expires_at=expires_at)
+        current_user.save()
+        audit('user.api_token.create', actor_type='user',
+              actor_id=str(current_user.id), actor_name=current_user.email,
+              metadata={'label': label})
+        flash('API token created — copy it now, it will not be shown again.',
+              'success')
+
+    tokens = sorted(current_user.api_tokens,
+                    key=lambda t: t.created_at or datetime.min, reverse=True)
+    # pylint: disable=import-outside-toplevel
+    from application import admin
+    return admin.index_view.render('api_tokens.html',
+                                   tokens=tokens, new_token=new_token)
+
+
+@AUTH.route('/api-tokens/<token_id>/revoke', methods=['POST'])
+@login_required
+def revoke_api_token(token_id):
+    """Revoke one of the current user's own API tokens."""
+    if current_user.revoke_api_token(token_id):
+        current_user.save()
+        audit('user.api_token.revoke', actor_type='user',
+              actor_id=str(current_user.id), actor_name=current_user.email,
+              metadata={'token_id': token_id})
+        flash('API token revoked.', 'success')
+    else:
+        flash('Token not found.', 'danger')
+    return redirect(url_for('auth.api_tokens'))
+
+
 @AUTH.route('/logout', methods=['GET', 'POST'])
 @login_required
 def logout():
