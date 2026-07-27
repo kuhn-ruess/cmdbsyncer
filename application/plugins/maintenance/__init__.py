@@ -273,6 +273,134 @@ def update_cmdb():
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
 #.
+#   .-- Command: Delete Empty Labels
+
+def _label_is_empty(value):
+    """
+    A label counts as empty when it carries no usable value: None, an
+    empty/whitespace-only string, or an empty container.
+    """
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip() == ''
+    if isinstance(value, (dict, list, tuple, set)):
+        return len(value) == 0
+    return False
+
+
+def _persist_labels(host, new_labels):
+    """
+    Write a cleaned label set back to the host without running the
+    import side effects. Labels feed the attribute cache, so drop it too.
+    """
+    host.update(set__labels=new_labels, set__cache={})
+
+
+@_cli_sys.command('delete_empty_labels')
+@click.option('--apply', 'do_apply', is_flag=True,
+              help="Actually delete. Without this flag it is a dry run.")
+@click.option('--debug', is_flag=True)
+def delete_empty_labels(do_apply, debug):  # pylint: disable=unused-argument
+    """
+    Delete labels with an empty value from all hosts.
+
+    Cleans up hosts whose labels carry no value (None, empty string or
+    empty container). Runs as a dry run by default and only reports what
+    it would remove; pass --apply to write the changes.
+    """
+    mode = "APPLY" if do_apply else "DRY-RUN"
+    print(f"{CC.HEADER} ***** Delete Empty Labels ({mode}) ***** {CC.ENDC}")
+    hosts_changed = 0
+    labels_removed = 0
+    for host in Host.objects(object_type__ne='template'):
+        empty_keys = [key for key, value in (host.labels or {}).items()
+                      if _label_is_empty(value)]
+        if not empty_keys:
+            continue
+        hosts_changed += 1
+        labels_removed += len(empty_keys)
+        for key in empty_keys:
+            print(f"{CC.WARNING}  ** {CC.ENDC}{host.hostname}: "
+                  f"remove '{key}' (empty value: {host.labels[key]!r})")
+        if do_apply:
+            new_labels = {key: value for key, value in host.labels.items()
+                          if key not in empty_keys}
+            _persist_labels(host, new_labels)
+    verb = "Removed" if do_apply else "Would remove"
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}{verb} {labels_removed} label(s) "
+          f"on {hosts_changed} host(s)")
+    if not do_apply and labels_removed:
+        print(f"{CC.OKCYAN}  ** {CC.ENDC}Re-run with --apply to delete them")
+
+#.
+#   .-- Command: Delete Template Labels
+
+def _first_template_value(templates, key):
+    """
+    Return (found, value) for the first assigned template (in order) that
+    provides `key`. That first template is the one whose value the host
+    would fall back to once its own label is removed.
+    """
+    for template in templates:
+        labels = template.labels or {}
+        if key in labels:
+            return True, labels[key]
+    return False, None
+
+
+@_cli_sys.command('delete_template_labels')
+@click.option('--apply', 'do_apply', is_flag=True,
+              help="Actually delete. Without this flag it is a dry run.")
+@click.option('--debug', is_flag=True)
+def delete_template_labels(do_apply, debug):  # pylint: disable=unused-argument
+    """
+    Delete host labels that duplicate an assigned CMDB template label.
+
+    A host label is redundant when an assigned template provides the same
+    key with the same value: the template supplies it virtually anyway, so
+    the host copy is noise. Only removed when the first template providing
+    the key holds a plain (non-Jinja) value equal to the host's — so the
+    effective attribute never changes. Dry run by default; --apply writes.
+    """
+    mode = "APPLY" if do_apply else "DRY-RUN"
+    print(f"{CC.HEADER} ***** Delete Redundant Template Labels ({mode}) ***** {CC.ENDC}")
+    hosts_changed = 0
+    labels_removed = 0
+    for host in Host.objects(object_type__ne='template', cmdb_templates__ne=[]):
+        templates = list(host.cmdb_templates or [])
+        if not templates or not host.labels:
+            continue
+        redundant_keys = []
+        for key, value in host.labels.items():
+            found, tmpl_value = _first_template_value(templates, key)
+            if not found:
+                continue
+            # Skip Jinja values — their rendered result may differ from the
+            # host value, so removing the host label would change attributes.
+            if isinstance(tmpl_value, str) and '{{' in tmpl_value:
+                continue
+            if tmpl_value == value:
+                redundant_keys.append(key)
+        if not redundant_keys:
+            continue
+        hosts_changed += 1
+        labels_removed += len(redundant_keys)
+        for key in redundant_keys:
+            print(f"{CC.WARNING}  ** {CC.ENDC}{host.hostname}: "
+                  f"remove '{key}={host.labels[key]!r}' "
+                  f"(already provided by an assigned template)")
+        if do_apply:
+            new_labels = {key: value for key, value in host.labels.items()
+                          if key not in redundant_keys}
+            _persist_labels(host, new_labels)
+    verb = "Removed" if do_apply else "Would remove"
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}{verb} {labels_removed} label(s) "
+          f"on {hosts_changed} host(s)")
+    if not do_apply and labels_removed:
+        print(f"{CC.OKCYAN}  ** {CC.ENDC}Re-run with --apply to delete them")
+
+#.
 #   .-- Command: Delete all Hosts
 @_cli_sys.command('delete_all_hosts')
 @click.argument("account", default="")
