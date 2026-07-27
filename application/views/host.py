@@ -1836,6 +1836,11 @@ Impact Chain.
         # Set Extra Fields
         cmdb_fields = app.config['CMDB_MODELS'].get(model.object_type, {})
         cmdb_fields.update(app.config['CMDB_MODELS']['all'])
+        # The edit form renders every existing label (own + imported) into
+        # cmdb_fields, so the submitted rows are the complete, authoritative
+        # label set. Whatever the operator removed from the form is meant to
+        # be deleted — do NOT merge the old labels back in here, or removed
+        # rows would resurrect and labels could never be deleted in the UI.
         new_labels = {
             entry['field_name']: entry['field_value']
             for entry in form.cmdb_fields.data
@@ -1843,9 +1848,6 @@ Impact Chain.
         }
 
         existing_labels = model.labels or {}
-        for label_key, label_value in existing_labels.items():
-            if label_key not in new_labels:
-                new_labels[label_key] = label_value
 
         # Hold back changes to APPROVAL_REQUIRED_LABELS until a second
         # operator approves them. enqueue_critical_label_changes() rolls
