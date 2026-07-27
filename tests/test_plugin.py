@@ -443,6 +443,40 @@ class TestPlugin(unittest.TestCase):
 
         self.assertEqual(result['all']['SOURCE_ACCOUNT'], '')
 
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_host_data_wins_over_template(self, mock_app):
+        """Host labels/inventory override template labels on key collisions."""
+        mock_app.config = self.mock_app_config
+
+        tmpl = Mock()
+        tmpl.hostname = 'web-template'
+        tmpl.labels = {
+            'environment': 'template-env',  # collides with host label
+            'tier': 'template-tier',        # collides with host inventory
+            'owner': 'from-template',        # only the template provides this
+        }
+
+        mock_host = Mock()
+        mock_host.hostname = 'web01'
+        mock_host.cache = {}
+        mock_host.labels = {'environment': 'prod'}
+        mock_host.inventory = {'tier': 'frontend'}
+        mock_host.cmdb_templates = [tmpl]
+
+        plugin = Plugin()
+        plugin.custom_attributes = Mock()
+        plugin.custom_attributes.get_outcomes.return_value = {}
+        plugin.init_custom_attributes = Mock()
+        plugin.rewrite = None
+        plugin.filter = None
+
+        result = plugin.get_attributes(mock_host, False)
+
+        # Host's own label and inventory win; the template only fills the gap.
+        self.assertEqual(result['all']['environment'], 'prod')
+        self.assertEqual(result['all']['tier'], 'frontend')
+        self.assertEqual(result['all']['owner'], 'from-template')
+
     @patch('application.modules.plugin.render_jinja')
     @patch('application.modules.plugin.app')
     def test_get_attributes_renders_jinja_in_template_values(

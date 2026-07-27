@@ -476,8 +476,15 @@ class Plugin():
         attributes['SOURCE_ACCOUNT'] = db_host.source_account_name or ''
         attributes.update(db_host.labels.items())
         attributes.update(db_host.inventory.items())
+        # Template labels are merged in virtually here and never persisted
+        # onto the host document. The host's own data (labels + inventory,
+        # already applied above) always wins: a template only contributes
+        # keys the host does not provide itself. A template also never
+        # overrides a value an earlier template already supplied.
         for tmpl in (db_host.cmdb_templates or []):
             for key, value in (tmpl.labels or {}).items():
+                if key in attributes:
+                    continue
                 if isinstance(value, str) and '{{' in value:
                     try:
                         value = render_jinja(
