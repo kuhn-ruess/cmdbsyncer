@@ -499,6 +499,7 @@ for _name in (
     "CheckmkRewriteAttributeRule", "CheckmkFilterRule", "CheckmkDCDRule",
     "CheckmkNotificationRule",
     "CheckmkSite", "CheckmkSettings",
+    "CheckmkSitePool", "CheckmkSitePoolMember",
 ):
     setattr(_cmk_models, _name, MagicMock(name=f"stub.{_name}"))
 
@@ -540,6 +541,7 @@ _try_load_real_module(
 for _mod_name, _mod_path in [
     ("helpers", "helpers.py"),
     ("poolfolder", "poolfolder.py"),
+    ("sitepool", "sitepool.py"),
     ("rules", "rules.py"),
     ("bi", "bi.py"),
     # cmk_rules is loaded earlier (before syncer) — see above.

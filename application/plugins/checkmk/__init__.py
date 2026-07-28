@@ -41,6 +41,7 @@ from .inits import (
     export_notifications,
     import_sites,
     sync_folderpools,
+    sync_sitepools,
 )
 
 def _load_rules():
@@ -709,6 +710,19 @@ def cli_cmk_sync_folderpools():
     """
     sync_folderpools()
 #.
+#   .-- Command: Sync Site Pools
+@cli_cmk.command('sync_sitepools')
+@click.option("--debug", default=False, is_flag=True)
+def cli_cmk_sync_sitepools(debug=False):
+    """
+    Recount hosts_taken on every Checkmk Site Pool from current host counts
+
+    ### Example
+    _./cmdbsyncer checkmk sync_sitepools
+
+    """
+    sync_sitepools(_debug=debug)
+#.
 #   .-- Import Checkmk V1
 from .import_v1 import ImportCheckmk1
 @cli_cmk.command('import_v1')
@@ -754,3 +768,4 @@ register_cronjob('Checkmk: Export Passwords', export_passwords)
 register_cronjob('Checkmk: Import Hosts (V2)', import_hosts)
 register_cronjob('Checkmk: Import Sites', import_sites)
 register_cronjob('Checkmk: Sync Folder Pools', sync_folderpools)
+register_cronjob('Checkmk: Sync Site Pools', sync_sitepools)

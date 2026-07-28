@@ -147,11 +147,37 @@ select.action-native-hidden + .select2-container { display: none !important; }
   background: rgba(26, 205, 182, 0.15);
   font-weight: 700;
 }
+
+/* Pool actions (Pool Folder / Site Pool): suggest the pools already defined,
+   or warn when none exist yet so the operator knows to create one first. */
+.action-pool-suggest {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--surface-muted, #6c757d);
+}
+.action-pool-suggest-label {
+  display: block;
+  margin-bottom: 4px;
+}
+.action-pool-suggest.is-warning {
+  padding: 6px 10px;
+  border-left: 3px solid #e67e22;
+  border-radius: 4px;
+  background: var(--surface-subtle, #fdf3e7);
+  color: var(--surface-text, #8a5a1a);
+}
 </style>
 <script>
 (function() {
   var CATALOG = {{ action_catalog|tojson }};
   var WARNING = {{ deprecation_warning|tojson }};
+  // action value -> pool names already defined (for Pool Folder / Site Pool).
+  var POOL_SUGGESTIONS = {{ pool_suggestions|default({})|tojson }};
+  var POOL_LABELS = { folder_pool: 'folder pools', site_pool: 'site pools' };
+  var POOL_MENU = {
+    folder_pool: 'Checkmk → Pools → Folder Pools',
+    site_pool: 'Checkmk → Pools → Site Pools'
+  };
 
   // value -> catalog entry, and the set of all known action values.
   var BY_VALUE = {};
@@ -208,6 +234,55 @@ select.action-native-hidden + .select2-container { display: none !important; }
       row.appendChild(chip);
     });
     input.insertAdjacentElement('afterend', row);
+  }
+
+  // For a pool action, show the pools already defined as click-to-fill chips,
+  // or a warning to create one first when none exist yet.
+  function renderPoolHelp(sel) {
+    var input = paramInput(sel);
+    if (!input) { return; }
+    var existing = input.parentNode.querySelector('.action-pool-suggest');
+    if (existing) { existing.remove(); }
+    if (!(sel.value in POOL_SUGGESTIONS)) { return; }
+    var names = POOL_SUGGESTIONS[sel.value] || [];
+
+    var box = document.createElement('div');
+    box.className = 'action-pool-suggest';
+    if (!names.length) {
+      box.classList.add('is-warning');
+      box.textContent = 'No ' + (POOL_LABELS[sel.value] || 'pools')
+        + ' defined yet — create one under '
+        + (POOL_MENU[sel.value] || 'Checkmk → Pools') + ' first.';
+      input.insertAdjacentElement('afterend', box);
+      return;
+    }
+
+    var label = document.createElement('span');
+    label.className = 'action-pool-suggest-label';
+    label.textContent = 'Available ' + (POOL_LABELS[sel.value] || 'pools')
+      + ' (click to use):';
+    box.appendChild(label);
+
+    var chips = document.createElement('div');
+    chips.className = 'action-value-chips';
+    names.forEach(function(name) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'action-value-chip';
+      chip.textContent = name;
+      if (input.value === name) { chip.classList.add('is-selected'); }
+      chip.addEventListener('click', function() {
+        input.value = name;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        chips.querySelectorAll('.action-value-chip.is-selected')
+          .forEach(function(c) { c.classList.remove('is-selected'); });
+        chip.classList.add('is-selected');
+      });
+      chips.appendChild(chip);
+    });
+    box.appendChild(chips);
+    input.insertAdjacentElement('afterend', box);
   }
 
   // Render one card. `interactive` cards live in the full grid and switch the
@@ -274,6 +349,7 @@ select.action-native-hidden + .select2-container { display: none !important; }
       sel.dispatchEvent(new Event('change', { bubbles: true }));
       applyParamHint(sel);
       renderValueChips(sel);
+      renderPoolHelp(sel);
       renderCollapsed();
       collapse();
     }
@@ -319,6 +395,7 @@ select.action-native-hidden + .select2-container { display: none !important; }
     sel.dataset.actionPicker = '1';
     applyParamHint(sel);
     renderValueChips(sel);
+    renderPoolHelp(sel);
     renderCollapsed();
     collapse();
   }

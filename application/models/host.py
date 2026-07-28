@@ -142,6 +142,8 @@ class Host(db.Document):
 
     folder = db.StringField() # Is just Checkmk related, better solution needed
 
+    pool_site = db.StringField() # Checkmk site pool assignment (sticky), just Checkmk related
+
     # Name of the Project this host belongs to (optional). Exports that
     # honour projects (currently the Checkmk host export) only push the
     # host to accounts the project's account filter allows — same scope
@@ -420,6 +422,20 @@ class Host(db.Document):
         #@TODO make this CMK specific
         if self.folder:
             return self.folder
+        return False
+
+    def lock_to_pool_site(self, site_id):
+        """
+        Lock System to a Checkmk site from a Site Pool
+        Or remove it if site_id is False
+        """
+        self.pool_site = site_id or None
+        self.save()
+
+    def get_pool_site(self):
+        """ Returns the Site Pool site if System is locked to one, else False """
+        if self.pool_site:
+            return self.pool_site
         return False
 
     def replace_label(self, key, value):

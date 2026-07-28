@@ -15,6 +15,7 @@ from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
 from . import poolfolder
+from . import sitepool
 from .models import BUILTIN_ATTRIBUTE_ACTIONS
 
 
@@ -184,6 +185,7 @@ class CheckmkRule(Rule):
     name = "Checkmk -> Export Rules"
 
     found_poolfolder_rule = False # Spcific Helper for this kind of action
+    found_sitepool_rule = False # Specific Helper for the site_pool action
     db_host = False
 
     def fix_and_format_foldername(self, folder):
@@ -390,6 +392,26 @@ class CheckmkRule(Rule):
                     outcomes['extra_folder_options'] += self.format_foldername(folder_w_ops)
                     outcomes['move_folder'] += self.fix_and_format_foldername(folder_w_ops)
 
+            if outcome['action'] == 'site_pool':
+                self.found_sitepool_rule = True
+                # Sticky: keep the site the host was assigned before.
+                if self.db_host.get_pool_site():
+                    outcomes['custom_attributes']['site'] = self.db_host.get_pool_site()
+                else:
+                    # Assign a new, least-loaded site from the pool.
+                    pool_name = _maybe_render(action_param, **self.attributes).strip()
+                    site_id = sitepool.get_site(pool_name)
+                    if not site_id:
+                        log.log("No Site Pool site left",
+                                affected_hosts=[self.db_host.hostname],
+                                source="site_pool",
+                                details=[("error", f"No site available for "\
+                                          f"{self.db_host.hostname} (pool: {pool_name})")])
+                        raise ValueError(f"No Site Pool site left for "\
+                                         f"{self.db_host.hostname}")
+                    self.db_host.lock_to_pool_site(site_id)
+                    outcomes['custom_attributes']['site'] = site_id
+
             if outcome['action'] == 'attribute':
                 outcomes['attributes'].append(action_param)
 
@@ -510,6 +532,7 @@ class CheckmkRule(Rule):
         # self.check_rules() will check the add_outcomes method.
         # @Todo something simpler to understand would be better.
         self.found_poolfolder_rule = False
+        self.found_sitepool_rule = False
 
         self.db_host = db_host
         outcomes = self.check_rules(hostname)
@@ -519,4 +542,10 @@ class CheckmkRule(Rule):
                 old_folder = db_host.get_folder()
                 db_host.lock_to_folder(False)
                 poolfolder.remove_seat(old_folder)
+        # This Host does not match a site pool rule anymore, free its site
+        if not self.found_sitepool_rule:
+            if db_host.get_pool_site():
+                old_site = db_host.get_pool_site()
+                db_host.lock_to_pool_site(False)
+                sitepool.release_site_for_site_id(old_site)
         return outcomes

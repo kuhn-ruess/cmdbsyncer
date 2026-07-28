@@ -88,9 +88,19 @@ ACTION_CATALOG = [
              "desc": "Create an empty folder by attribute without moving the host "
                      "in. Does not work with objects.",
              "param": "Attribute name"},
+        ],
+    },
+    {
+        "group": "Pools",
+        "actions": [
             {"value": "folder_pool", "name": "Pool Folder",
              "desc": "Use a pool folder (make sure this matches a host only once).",
              "param": ""},
+            {"value": "site_pool", "name": "Site Pool",
+             "desc": "Spread the host across the sites of a site pool for load "
+                     "balancing. Picks the least-loaded site and stays sticky: the "
+                     "host keeps its site once assigned.",
+             "param": "Site pool name (Jinja allowed)"},
         ],
     },
     {
@@ -618,6 +628,37 @@ class CheckmkFolderPool(db.Document):
         if self.folder_seats_taken < self.folder_seats:
             return True
         return False
+#.
+#   .-- Site Pools
+class CheckmkSitePoolMember(db.EmbeddedDocument):
+    """
+    One Checkmk site inside a Site Pool
+    """
+    site_id = db.StringField(required=True) # Checkmk site id, e.g. berlin_1
+    hosts_taken = db.IntField(default=0) # Managed by the engine, read-only in the form
+
+    meta = {
+        'strict': False,
+    }
+
+class CheckmkSitePool(db.Document):
+    """
+    Site Pool
+
+    A named group of Checkmk sites hosts are spread across for load balancing.
+    Used via the ``site_pool`` rule action. Assignment is least-loaded (the
+    site with the fewest hosts wins) and sticky (a host keeps its site until
+    the rule stops matching).
+    """
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+    member_sites = db.ListField(
+        field=db.EmbeddedDocumentField(document_type="CheckmkSitePoolMember"))
+    enabled = db.BooleanField()
+
+    meta = {
+        'strict': False,
+    }
 #.
 #   .-- Rewrite Attributes
 class CheckmkRewriteAttributeRule(db.Document):

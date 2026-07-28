@@ -43,6 +43,7 @@ from application.plugins.checkmk.models import (
    CheckmkFilterRule,
    CheckmkDCDRule,
    CheckmkFolderPool,
+   CheckmkSitePool,
    CheckmkNotificationRule,
 )
 
@@ -743,4 +744,28 @@ def sync_folderpools(_account=False, _debug=False):
             folder.save()
         else:
             print(" - Is already up to date")
+#.
+#   . Sync Site Pools
+def sync_sitepools(_account=False, _debug=False):
+    """Refresh ``hosts_taken`` on every CheckmkSitePool from current host counts."""
+    site_usage = {}
+    # Only hosts that ship to Checkmk take a site pool seat on the next sync.
+    for host in Host.get_export_hosts():
+        if host.pool_site:
+            site_usage.setdefault(host.pool_site, 0)
+            site_usage[host.pool_site] += 1
+
+    for pool in CheckmkSitePool.objects():
+        changed = False
+        for member in pool.member_sites:
+            usage = site_usage.get(member.site_id, 0)
+            print(f"Site {member.site_id} (pool {pool.name}) uses {usage} seats")
+            if member.hosts_taken != usage:
+                print(f" - Changed seats from {member.hosts_taken} to {usage}")
+                member.hosts_taken = usage
+                changed = True
+            else:
+                print(" - Is already up to date")
+        if changed:
+            pool.save()
 #.

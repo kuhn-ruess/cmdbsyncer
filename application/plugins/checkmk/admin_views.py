@@ -23,6 +23,7 @@ from .models import (
     CheckmkRuleMngmt,
     CheckmkSettings,
     CheckmkSite,
+    CheckmkSitePool,
     CheckmkTagMngmt,
     CheckmkUserMngmt,
     CheckmkGroupRule,
@@ -41,6 +42,7 @@ from .views import (
     CheckmkRuleView,
     CheckmkSettingsView,
     CheckmkSiteView,
+    CheckmkSitePoolView,
     CheckmkTagMngmtView,
     CheckmkTestFolderScopeView,
     CheckmkUserMngmtView,
@@ -181,13 +183,23 @@ def register_admin_views(admin):
         )
     )
 
+    admin.add_sub_category(name="Pools", parent_name="Checkmk")
     admin.add_view(
         CheckmkFolderPoolView(
             CheckmkFolderPool,
             name="Folder Pools",
-            category="Checkmk",
+            category="Pools",
             menu_icon_type='fa',
             menu_icon_value='fa-folder-open',
+        )
+    )
+    admin.add_view(
+        CheckmkSitePoolView(
+            CheckmkSitePool,
+            name="Site Pools",
+            category="Pools",
+            menu_icon_type='fa',
+            menu_icon_value='fa-server',
         )
     )
     admin.add_view(

@@ -46,6 +46,8 @@ from .models import (
     CheckmkSite,
     CheckmkSettings,
     CheckmkRuleMngmt,
+    CheckmkFolderPool,
+    CheckmkSitePool,
 )
 
 
@@ -230,6 +232,20 @@ class CheckmkRuleView(RuleModelView):
         kwargs.setdefault('action_catalog', ACTION_CATALOG)
         kwargs.setdefault('deprecated_actions', sorted(DEPRECATED_ACTIONS))
         kwargs.setdefault('deprecation_warning', DEPRECATION_WARNING)
+        # Pool actions get live suggestions (the pools already defined) or a
+        # "no pools yet" warning, so the operator knows what to type/create.
+        kwargs.setdefault('pool_suggestions', {
+            'folder_pool': [
+                p.folder_name for p in
+                CheckmkFolderPool.objects(enabled=True)
+                .only('folder_name').order_by('folder_name')
+            ],
+            'site_pool': [
+                p.name for p in
+                CheckmkSitePool.objects(enabled=True)
+                .only('name').order_by('name')
+            ],
+        })
         return super().render(template, **kwargs)
 
     def __init__(self, model, **kwargs):
@@ -1253,6 +1269,47 @@ class CheckmkFolderPoolView(DefaultModelView):
             model.folder_name = "/" + model.folder_name
 
         return super().on_model_change(form, model, is_created)
+
+class CheckmkSitePoolView(DefaultModelView):
+    """
+    Site Pool Model
+    """
+    column_default_sort = "name"
+
+    column_list = ('name', 'member_sites', 'enabled', 'documentation')
+
+    column_editable_list = [
+        'enabled',
+    ]
+
+    column_filters = (
+        FilterLike(
+            "name",
+            'Name'
+        ),
+        BooleanEqualFilter(
+            "enabled",
+            'Enabled'
+        )
+    )
+
+    form_subdocuments = {
+        'member_sites': {
+            'form_subdocuments': {
+                '': {
+                    # hosts_taken is maintained by the engine, not the operator.
+                    'form_widget_args': {
+                        'hosts_taken': {'disabled': True},
+                    },
+                },
+            }
+        }
+    }
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
 
 class CheckmkDowntimeView(RuleModelView):
     """
