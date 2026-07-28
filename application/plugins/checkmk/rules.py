@@ -15,6 +15,7 @@ from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
 from application.modules.debug import ColorCodes
 from . import poolfolder
+from .models import BUILTIN_ATTRIBUTE_ACTIONS
 
 
 def _maybe_render(value, **context):
@@ -338,14 +339,16 @@ class CheckmkRule(Rule):
                 outcomes['dont_update'] = True
 
             if outcome['action'] == 'prefix_labels':
-                outcomes['label_prefix'] = action_param
+                outcomes['label_prefix'] = _maybe_render(action_param, **self.attributes)
 
             if outcome['action'] == 'only_update_prefixed_labels':
-                outcomes['only_update_prefixed_labels'] = action_param
+                outcomes['only_update_prefixed_labels'] = \
+                    _maybe_render(action_param, **self.attributes)
 
             if outcome['action'] == 'dont_update_prefixed_labels':
-                if action_param not in outcomes['dont_update_prefixed_labels']:
-                    outcomes['dont_update_prefixed_labels'].append(action_param)
+                rendered = _maybe_render(action_param, **self.attributes)
+                if rendered not in outcomes['dont_update_prefixed_labels']:
+                    outcomes['dont_update_prefixed_labels'].append(rendered)
 
             if outcome['action'] == 'create_folder':
                 self._apply_folder_outcome(
@@ -428,6 +431,14 @@ class CheckmkRule(Rule):
                         except ValueError:
                             logger.debug(f"Cant split '{attr_pair}'")
 
+            if outcome['action'] in BUILTIN_ATTRIBUTE_ACTIONS:
+                # Convenience actions (IP, address family, agent, SNMP) map to a
+                # known Checkmk host attribute; the param is just the value.
+                attr_key = BUILTIN_ATTRIBUTE_ACTIONS[outcome['action']]
+                attr_value = _maybe_render(action_param, **self.attributes).strip()
+                if attr_value:
+                    outcomes['custom_attributes'][attr_key] = attr_value
+
             if outcome['action'] == "set_parent":
                 value = action_param
                 new_value = _maybe_render(value, **self.attributes)
@@ -453,7 +464,7 @@ class CheckmkRule(Rule):
                                 f"----- {ColorCodes.OKGREEN}Found tag but content null")
 
             if outcome['action'] == 'tag_as_folder':
-                search_value = action_param
+                search_value = _maybe_render(action_param, **self.attributes)
                 print_debug(self.debug,
                             f"---- tag_as_folder matched, search value '{search_value}'")
                 for tag, value in self.attributes.items():
@@ -468,7 +479,8 @@ class CheckmkRule(Rule):
                                 f"----- {ColorCodes.OKGREEN}Found value but content null")
 
             if outcome['action'] == 'create_cluster':
-                params = [x.strip() for x in action_param.split(',')]
+                rendered = _maybe_render(action_param, **self.attributes)
+                params = [x.strip() for x in rendered.split(',')]
                 for node_tag in params:
                     if node_tag.endswith('*'):
                         for tag, value in self.attributes.items():

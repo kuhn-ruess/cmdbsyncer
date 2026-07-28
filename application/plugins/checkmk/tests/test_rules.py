@@ -287,6 +287,62 @@ class TestCheckmkRule(unittest.TestCase):
         result = self.rule.add_outcomes(None, rule_outcomes, outcomes)
         self.assertEqual(result['attributes'], ['ipaddress', 'snmp_community'])
 
+    def test_add_outcomes_builtin_attribute_actions(self):
+        """Built-in convenience actions map to the right Checkmk attribute."""
+        outcomes = {}
+        rule_outcomes = [
+            {'action': 'set_ip_address_family', 'action_param': 'no-ip'},
+            {'action': 'set_ipaddress', 'action_param': '192.168.10.5'},
+            {'action': 'set_agent', 'action_param': 'no-agent'},
+            {'action': 'set_snmp', 'action_param': 'snmp-v2'},
+            {'action': 'set_piggyback', 'action_param': 'no-piggyback'},
+            {'action': 'set_criticality', 'action_param': 'prod'},
+            {'action': 'set_networking', 'action_param': 'dmz'},
+            {'action': 'set_alias', 'action_param': 'My Host'},
+            {'action': 'set_site', 'action_param': 'cmk'},
+        ]
+        result = self.rule.add_outcomes(None, rule_outcomes, outcomes)
+        self.assertEqual(result['custom_attributes'], {
+            'tag_address_family': 'no-ip',
+            'ipaddress': '192.168.10.5',
+            'tag_agent': 'no-agent',
+            'tag_snmp_ds': 'snmp-v2',
+            'tag_piggyback': 'no-piggyback',
+            'tag_criticality': 'prod',
+            'tag_networking': 'dmz',
+            'alias': 'My Host',
+            'site': 'cmk',
+        })
+
+    @patch('application.plugins.checkmk.rules.render_jinja')
+    def test_add_outcomes_builtin_attribute_jinja(self, mock_render):
+        """Built-in actions render Jinja params via the shared pipeline."""
+        mock_render.return_value = '10.0.0.9'
+        self.rule.attributes = {'ip': '10.0.0.9'}
+        outcomes = {}
+        rule_outcomes = [{'action': 'set_ipaddress', 'action_param': '{{ ip }}'}]
+        result = self.rule.add_outcomes(None, rule_outcomes, outcomes)
+        mock_render.assert_called_once()
+        self.assertEqual(result['custom_attributes'], {'ipaddress': '10.0.0.9'})
+
+    def test_add_outcomes_builtin_attribute_empty_value_ignored(self):
+        """An empty parameter does not write an attribute (empty key dropped)."""
+        outcomes = {}
+        rule_outcomes = [{'action': 'set_ipaddress', 'action_param': ''}]
+        result = self.rule.add_outcomes(None, rule_outcomes, outcomes)
+        self.assertNotIn('custom_attributes', result)
+
+    @patch('application.plugins.checkmk.rules.render_jinja')
+    def test_add_outcomes_prefix_labels_jinja(self, mock_render):
+        """Label-prefix actions render Jinja params like every other action."""
+        mock_render.return_value = 'cust_'
+        self.rule.attributes = {'customer': 'cust'}
+        outcomes = {}
+        rule_outcomes = [{'action': 'prefix_labels', 'action_param': '{{ customer }}_'}]
+        result = self.rule.add_outcomes(None, rule_outcomes, outcomes)
+        mock_render.assert_called_once()
+        self.assertEqual(result['label_prefix'], 'cust_')
+
     def test_add_outcomes_create_cluster(self):
         self.rule.attributes = {'node1': 'host-a', 'node2': 'host-b'}
         outcomes = {}

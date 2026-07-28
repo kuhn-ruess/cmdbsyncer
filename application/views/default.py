@@ -392,6 +392,15 @@ class IndexView(AdminIndexView):
         if can_trigger_cron:
             cron_status = self._collect_cron_status()
 
+        # Warn users who can edit Checkmk rules about deprecated actions still
+        # in use — those actions will be removed with 4.4 and rules carrying
+        # them can no longer be saved until migrated.
+        deprecated_rules = []
+        deprecation_warning = ''
+        if current_user.is_authenticated and (
+                current_user.global_admin or current_user.has_right('checkmk')):
+            deprecated_rules, deprecation_warning = self._collect_deprecated_rules()
+
         return self.render(
             'admin/index.html',
             changelog_html=changelog_html,
@@ -401,7 +410,35 @@ class IndexView(AdminIndexView):
             can_see_log=can_see_log,
             cron_status=cron_status,
             can_trigger_cron=can_trigger_cron,
+            deprecated_rules=deprecated_rules,
+            deprecation_warning=deprecation_warning,
         )
+
+    @staticmethod
+    def _collect_deprecated_rules():
+        """Checkmk rules whose outcomes still use a soon-to-be-removed action."""
+        # pylint: disable=import-outside-toplevel
+        try:
+            from application.plugins.checkmk.models import (
+                CheckmkRule, DEPRECATED_ACTIONS, DEPRECATION_WARNING)
+        except Exception:  # pylint: disable=broad-exception-caught
+            return [], ''
+        rules = []
+        try:
+            for rule in CheckmkRule.objects(
+                    outcomes__action__in=list(DEPRECATED_ACTIONS)):
+                actions = sorted({
+                    o.action for o in rule.outcomes
+                    if o.action in DEPRECATED_ACTIONS})
+                if actions:
+                    rules.append({
+                        'name': rule.name,
+                        'id': str(rule.id),
+                        'actions': actions,
+                    })
+        except Exception:  # pylint: disable=broad-exception-caught
+            return [], DEPRECATION_WARNING
+        return rules, DEPRECATION_WARNING
 
     @staticmethod
     def _collect_cron_status():

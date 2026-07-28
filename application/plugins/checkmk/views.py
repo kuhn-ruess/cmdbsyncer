@@ -40,6 +40,9 @@ from application.views._form_sections import modern_form, section
 from application.models.project import Project
 from .models import (
     action_outcome_types,
+    ACTION_CATALOG,
+    DEPRECATED_ACTIONS,
+    DEPRECATION_WARNING,
     CheckmkSite,
     CheckmkSettings,
     CheckmkRuleMngmt,
@@ -166,7 +169,7 @@ def _render_checkmk_outcome(_view, _context, model, _name):
     """
     html = ""
     for entry in model.outcomes:
-        name = escape(dict(action_outcome_types)[entry.action].split('_',1)[0])
+        name = escape(dict(action_outcome_types).get(entry.action, entry.action))
         highlighted_param = ""
         if entry.action_param:
             highlighted_param = highlight(
@@ -218,6 +221,16 @@ class CheckmkRuleView(RuleModelView):
     """
     Custom Rule Model View
     """
+
+    edit_template = 'admin/model/checkmk_rule_edit.html'
+    create_template = 'admin/model/checkmk_rule_create.html'
+
+    def render(self, template, **kwargs):
+        """Feed the action catalog + deprecation info to the edit/create forms."""
+        kwargs.setdefault('action_catalog', ACTION_CATALOG)
+        kwargs.setdefault('deprecated_actions', sorted(DEPRECATED_ACTIONS))
+        kwargs.setdefault('deprecation_warning', DEPRECATION_WARNING)
+        return super().render(template, **kwargs)
 
     def __init__(self, model, **kwargs):
         """
@@ -272,6 +285,14 @@ class CheckmkRuleView(RuleModelView):
                 action_field = getattr(entry_form, 'action', None)
                 param_field = getattr(entry_form, 'action_param', None)
                 outcome_action = action_field.data if action_field is not None else None
+                # Block saving rules that still use a deprecated action. This
+                # forces a migration before the action is removed with 4.4.
+                if outcome_action in DEPRECATED_ACTIONS:
+                    flash(
+                        f"Action '{outcome_action}' is deprecated and {DEPRECATION_WARNING}. "
+                        "Please migrate this rule to a supported action before saving.",
+                        'danger')
+                    return False
                 if outcome_action not in ('move_folder', 'create_folder'):
                     continue
                 param = param_field.data if param_field is not None else ''

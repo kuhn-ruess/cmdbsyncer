@@ -61,40 +61,172 @@ class CheckmkFilterRule(db.Document):
 
 #.
 #   .-- Checkmk Actions
-action_outcome_types = [
-    ("move_folder", "Move to Folder: __ Move Host to specified Folder, Jinja Support"),
-    ('value_as_folder', "Deprecated: Use move_folder with Jinja"), # 2024-04-08
-    ("tag_as_folder",
-     "Folder by Attribute  Name: __ Use Attribute Name of given Attribute Value as Folder"),
-    ("create_folder",
-    "Create a Empty Folder by Attribute: __ Do not Move the a Host in. Will not work with Objects"),
-    ("folder_pool",
-     "Pool Folder: __ Use Pool Folder (please make sure this matches just once to a host)"),
-    ("attribute",
-     "Deprecated: Migrate to Custom CMK Attribute: key:{{yourattribute}}"),
-    ("custom_attribute",
-     "Custom CMK Attribute. Custom: __ "\
-     "Create Custom Checkmk Attribute: "\
-     "Set key:value, Placeholders: {{HOSTNAME}} and all Host Attributes in Jinja Syntax"),
-    ("remove_attr_if_not_set", "Remove given Attributes from Host, if not explicitly assigned"),
-    ("multiple_custom_attribute","Deprecated: Just switch to normal Custom Attribute"),
-    ("create_cluster",
-     "Cluster: __ Create Cluster. Specify Tags with Nodes as Wildcard (*) and or Comma separated"),
-    ("set_parent",
-     "Parents: __ Comma Seperated list for parents, with Jinja Syntax"),
-    ("dont_move",
-     "Move Optout: __ Don't Move host to another Folder after inital creation"),
-    ("dont_update",
-     "Update Optout: __ Don't update host Attributes after initial creation"),
-    ("dont_create",
-     "Create Optout: __ Don't create Host if missing, but still Update it"),
-    ("prefix_labels",
-     "Prefix Labels: __ Prefix all labels with given String"),
-    ("only_update_prefixed_labels",
-     "Update only Prefixed Labels: __ Only Update Labels with given prefix"),
-    ("dont_update_prefixed_labels",
-     "Dont update Prefixed Labels: __ Dont Update Labels with given prefix"),
+# Warning shown for actions that are on their way out.
+DEPRECATION_WARNING = "will removed with 4.4"
+
+# Single source of truth for the outcome actions, grouped into categories and
+# carrying a short name, a human description and an optional parameter hint.
+# The card picker on the rule form (see admin/model/_action_picker.html) renders
+# from this; ``action_outcome_types`` and ``DEPRECATED_ACTIONS`` are derived
+# from it so there is only one list to maintain.
+#   value      - stored on the outcome
+#   name       - short label shown on the card and in the outcome summary
+#   desc       - one-line explanation of what the action does
+#   param      - placeholder/hint for the action's parameter field ('' = none)
+#   deprecated - True keeps the action for legacy rules but blocks new use
+ACTION_CATALOG = [
+    {
+        "group": "Folder placement",
+        "actions": [
+            {"value": "move_folder", "name": "Move to Folder",
+             "desc": "Move the host into the folder you specify.",
+             "param": "Folder path, e.g. linux/{{os}}"},
+            {"value": "tag_as_folder", "name": "Folder by Attribute Name",
+             "desc": "Use the attribute name of the given attribute value as folder.",
+             "param": "Attribute name"},
+            {"value": "create_folder", "name": "Create Empty Folder",
+             "desc": "Create an empty folder by attribute without moving the host "
+                     "in. Does not work with objects.",
+             "param": "Attribute name"},
+            {"value": "folder_pool", "name": "Pool Folder",
+             "desc": "Use a pool folder (make sure this matches a host only once).",
+             "param": ""},
+        ],
+    },
+    {
+        "group": "Attributes",
+        "actions": [
+            {"value": "custom_attribute", "name": "Custom Checkmk Attribute",
+             "desc": "Create a custom Checkmk attribute in key:value form.",
+             "param": "key:value"},
+            {"value": "remove_attr_if_not_set", "name": "Remove Attribute if unset",
+             "desc": "Remove the given attributes from the host if not explicitly set.",
+             "param": "Attribute name(s)"},
+        ],
+    },
+    {
+        "group": "Built-in Attributes",
+        "actions": [
+            {"value": "set_ip_address_family", "name": "IP Address Family",
+             "desc": "Set the host's IP address family — e.g. no-ip for a host "
+                     "monitored without an IP.",
+             "param": "Pick a value", "attr": "tag_address_family",
+             "values": ["ip-v4-only", "ip-v6-only", "ip-v4v6", "no-ip"]},
+            {"value": "set_ipaddress", "name": "IPv4 Address",
+             "desc": "Set the host's IPv4 address.",
+             "param": "e.g. 192.168.10.5 or {{ip}}", "attr": "ipaddress"},
+            {"value": "set_ipv6address", "name": "IPv6 Address",
+             "desc": "Set the host's IPv6 address.",
+             "param": "e.g. 2001:db8::5 or {{ipv6}}", "attr": "ipv6address"},
+            {"value": "set_agent", "name": "Checkmk Agent",
+             "desc": "Set how the host is monitored — Checkmk agent, API "
+                     "integrations, both, or none.",
+             "param": "Pick a value", "attr": "tag_agent",
+             "values": ["cmk-agent", "all-agents", "special-agents", "no-agent"]},
+            {"value": "set_snmp", "name": "SNMP",
+             "desc": "Set the host's SNMP monitoring.",
+             "param": "Pick a value", "attr": "tag_snmp_ds",
+             "values": ["no-snmp", "snmp-v1", "snmp-v2"]},
+            {"value": "set_piggyback", "name": "Piggyback",
+             "desc": "Set the host's piggyback behaviour.",
+             "param": "Pick a value", "attr": "tag_piggyback",
+             "values": ["auto-piggyback", "piggyback", "no-piggyback"]},
+            {"value": "set_criticality", "name": "Criticality",
+             "desc": "Set the host's criticality (Checkmk default tag group; "
+                     "values may differ if customized).",
+             "param": "Pick or type a value", "attr": "tag_criticality",
+             "values": ["prod", "critical", "test", "offline"]},
+            {"value": "set_networking", "name": "Networking Segment",
+             "desc": "Set the host's networking segment (Checkmk default tag "
+                     "group; values may differ if customized).",
+             "param": "Pick or type a value", "attr": "tag_networking",
+             "values": ["lan", "wan", "dmz"]},
+            {"value": "set_alias", "name": "Alias",
+             "desc": "Set the host's alias.",
+             "param": "e.g. {{description}}", "attr": "alias"},
+            {"value": "set_site", "name": "Monitored on Site",
+             "desc": "Set which Checkmk site monitors the host.",
+             "param": "Checkmk site id, e.g. cmk", "attr": "site"},
+        ],
+    },
+    {
+        "group": "Cluster & Parents",
+        "actions": [
+            {"value": "create_cluster", "name": "Create Cluster",
+             "desc": "Create a cluster. Specify nodes as wildcard (*) and/or "
+                     "comma separated.",
+             "param": "Node tags, e.g. node-*"},
+            {"value": "set_parent", "name": "Set Parents",
+             "desc": "Comma separated list of parents.",
+             "param": "parent1,parent2"},
+        ],
+    },
+    {
+        "group": "Labels",
+        "actions": [
+            {"value": "prefix_labels", "name": "Prefix Labels",
+             "desc": "Prefix all labels with the given string.",
+             "param": "Prefix"},
+            {"value": "only_update_prefixed_labels", "name": "Update only Prefixed Labels",
+             "desc": "Only update labels that carry the given prefix.",
+             "param": "Prefix"},
+            {"value": "dont_update_prefixed_labels", "name": "Don't update Prefixed Labels",
+             "desc": "Do not update labels that carry the given prefix.",
+             "param": "Prefix"},
+        ],
+    },
+    {
+        "group": "Opt-outs",
+        "actions": [
+            {"value": "dont_move", "name": "Don't Move",
+             "desc": "Don't move the host to another folder after initial creation.",
+             "param": ""},
+            {"value": "dont_update", "name": "Don't Update",
+             "desc": "Don't update host attributes after initial creation.",
+             "param": ""},
+            {"value": "dont_create", "name": "Don't Create",
+             "desc": "Don't create the host if missing, but still update it.",
+             "param": ""},
+        ],
+    },
+    {
+        "group": "Deprecated",
+        "actions": [
+            {"value": "value_as_folder", "name": "Value as Folder",
+             "desc": "Use Move to Folder with Jinja instead.",
+             "param": "", "deprecated": True},
+            {"value": "attribute", "name": "Attribute",
+             "desc": "Migrate to a Custom Checkmk Attribute: key:{{yourattribute}}.",
+             "param": "", "deprecated": True},
+            {"value": "multiple_custom_attribute", "name": "Multiple Custom Attribute",
+             "desc": "Just switch to a normal Custom Attribute.",
+             "param": "", "deprecated": True},
+        ],
+    },
 ]
+
+# Flat (value, label) choices for the model field and the outcome summary.
+action_outcome_types = [
+    (action["value"], action["name"])
+    for group in ACTION_CATALOG for action in group["actions"]
+]
+
+# Built-in convenience actions -> the Checkmk host attribute they set. These
+# just make common attributes (IP, address family, agent, SNMP) easy to pick
+# without knowing the attribute key; at export they populate custom_attributes.
+BUILTIN_ATTRIBUTE_ACTIONS = {
+    action["value"]: action["attr"]
+    for group in ACTION_CATALOG for action in group["actions"]
+    if action.get("attr")
+}
+
+# Actions no longer selectable for new rules. Legacy rules may still carry
+# them, but such rules can no longer be saved until the action is migrated.
+DEPRECATED_ACTIONS = {
+    action["value"]
+    for group in ACTION_CATALOG for action in group["actions"]
+    if action.get("deprecated")
+}
 
 class CheckmkRuleOutcome(db.EmbeddedDocument):
     """

@@ -1,0 +1,359 @@
+{# Card-based action picker for Checkmk rule outcomes.
+
+   Replaces the long, hard-to-scan native <select> with a categorized grid of
+   cards (name + description). The native <select> stays in the DOM as the
+   form's source of truth — clicking a card just sets its value — so nothing
+   about submission, validation or select2 needs to change.
+
+   Deprecated actions render greyed-out and unclickable (unless a legacy rule
+   already uses one, so it stays visible for migration); server-side
+   validation still blocks saving them. Card descriptions come from
+   ACTION_CATALOG, so this template needs no per-action strings. #}
+<style>
+/* Hide the native select (and its select2 twin, whenever it initializes) once
+   the card picker has taken over. Colours use the theme --surface-* tokens
+   with light fallbacks so all four themes and the default render correctly. */
+select.action-native-hidden { display: none !important; }
+select.action-native-hidden + .select2-container { display: none !important; }
+
+/* One-time hint above the outcome rows: every parameter accepts Jinja, so the
+   individual cards don't need to repeat it. */
+.action-jinja-hint {
+  margin: 0 0 0.75rem;
+  padding: 6px 10px;
+  border-left: 3px solid #1abc9c;
+  border-radius: 4px;
+  background: var(--surface-subtle, #f1fbf9);
+  color: var(--surface-muted, #4a4f57);
+  font-size: 0.8rem;
+}
+.action-jinja-hint code {
+  font-family: ui-monospace, monospace;
+  background: rgba(127, 127, 127, 0.15);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.action-picker { margin-top: 0.25rem; }
+
+/* Collapsed state: only the selected action card + a Change button, so an
+   outcome you are not editing stays compact. */
+.action-collapsed {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 0.25rem;
+}
+.action-collapsed .action-card.is-summary {
+  flex: 1 1 auto;
+  cursor: pointer;
+}
+.action-change-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 6px 14px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 8px;
+  background: var(--surface-bg, #f8f9fa);
+  color: var(--surface-text, #2c3e50);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+.action-change-btn:hover { border-color: #1abc9c; color: #1abc9c; }
+.action-group { margin-bottom: 0.75rem; }
+.action-group-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--surface-muted, #6c757d);
+  margin: 0 0 0.35rem;
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+}
+.action-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 8px;
+  background: var(--surface-bg, #fff);
+  color: var(--surface-text, #2c3e50);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+.action-card:hover:not(.is-disabled) {
+  border-color: #1abc9c;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.action-card.is-selected {
+  border-color: #1abc9c;
+  background: rgba(26, 205, 182, 0.12);
+  box-shadow: 0 0 0 1px #1abc9c inset;
+}
+.action-card-name { font-weight: 600; font-size: 0.9rem; }
+.action-card-desc {
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--surface-muted, #6c757d);
+}
+.action-card.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.action-card-badge {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #7a4a00;
+  background: #ffe0a3;
+}
+
+/* Quick-pick value chips shown under the parameter field for actions that
+   take a fixed set of values (address family, agent, SNMP). */
+.action-value-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.action-value-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  background: var(--surface-bg, #f8f9fa);
+  color: var(--surface-text, #2c3e50);
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.action-value-chip:hover { border-color: #1abc9c; }
+.action-value-chip.is-selected {
+  border-color: #1abc9c;
+  background: rgba(26, 205, 182, 0.15);
+  font-weight: 700;
+}
+</style>
+<script>
+(function() {
+  var CATALOG = {{ action_catalog|tojson }};
+  var WARNING = {{ deprecation_warning|tojson }};
+
+  // value -> catalog entry, and the set of all known action values.
+  var BY_VALUE = {};
+  CATALOG.forEach(function(g) {
+    g.actions.forEach(function(a) { BY_VALUE[a.value] = a; });
+  });
+
+  function isActionSelect(sel) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (BY_VALUE[sel.options[i].value]) { return true; }
+    }
+    return false;
+  }
+
+  function paramInput(sel) {
+    var row = sel.closest('.inline-field') || sel.form;
+    if (!row) { return null; }
+    return row.querySelector(
+      '[id$="-action_param"], [name$="-action_param"]');
+  }
+
+  function applyParamHint(sel) {
+    var entry = BY_VALUE[sel.value];
+    var input = paramInput(sel);
+    if (input && entry) { input.setAttribute('placeholder', entry.param || ''); }
+  }
+
+  // For actions with a fixed value set, show quick-pick chips under the
+  // parameter field that fill it in (and highlight the current one).
+  function renderValueChips(sel) {
+    var input = paramInput(sel);
+    if (!input) { return; }
+    var existing = input.parentNode.querySelector('.action-value-chips');
+    if (existing) { existing.remove(); }
+    var entry = BY_VALUE[sel.value];
+    if (!entry || !entry.values || !entry.values.length) { return; }
+
+    var row = document.createElement('div');
+    row.className = 'action-value-chips';
+    entry.values.forEach(function(v) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'action-value-chip';
+      chip.textContent = v;
+      if (input.value === v) { chip.classList.add('is-selected'); }
+      chip.addEventListener('click', function() {
+        input.value = v;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        row.querySelectorAll('.action-value-chip.is-selected')
+          .forEach(function(c) { c.classList.remove('is-selected'); });
+        chip.classList.add('is-selected');
+      });
+      row.appendChild(chip);
+    });
+    input.insertAdjacentElement('afterend', row);
+  }
+
+  // Render one card. `interactive` cards live in the full grid and switch the
+  // selection on click; the collapsed summary reuses the same markup read-only.
+  function makeCard(a, sel, interactive, onSelect) {
+    var isSelected = a.value === sel.value;
+    // Deprecated actions can't be picked, but a legacy rule that already uses
+    // one keeps that card active so it stays visible and selected.
+    var disabled = interactive && a.deprecated && !isSelected;
+
+    var card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'action-card';
+    card.dataset.value = a.value;
+    if (isSelected) { card.classList.add('is-selected'); }
+    if (disabled) { card.classList.add('is-disabled'); card.disabled = true; }
+
+    var name = document.createElement('span');
+    name.className = 'action-card-name';
+    name.textContent = a.name;
+    card.appendChild(name);
+
+    var desc = document.createElement('span');
+    desc.className = 'action-card-desc';
+    desc.textContent = a.desc;
+    card.appendChild(desc);
+
+    if (a.deprecated) {
+      var badge = document.createElement('span');
+      badge.className = 'action-card-badge';
+      badge.textContent = WARNING;
+      card.appendChild(badge);
+    }
+
+    if (interactive) {
+      card.addEventListener('click', function() {
+        if (card.disabled) { return; }
+        onSelect(a);
+      });
+    }
+    return card;
+  }
+
+  function buildPicker(sel) {
+    if (sel.dataset.actionPicker) { return; }
+
+    // Collapsed summary: only the selected action, plus a "Change" button.
+    var collapsed = document.createElement('div');
+    collapsed.className = 'action-collapsed';
+
+    // Full categorized grid, hidden until the user chooses to change.
+    var grid = document.createElement('div');
+    grid.className = 'action-picker';
+
+    function collapse() { grid.style.display = 'none'; collapsed.style.display = ''; }
+    function expand() { collapsed.style.display = 'none'; grid.style.display = ''; }
+
+    function select(a) {
+      grid.querySelectorAll('.action-card.is-selected')
+        .forEach(function(c) { c.classList.remove('is-selected'); });
+      var picked = grid.querySelector('.action-card[data-value="' + a.value + '"]');
+      if (picked) { picked.classList.add('is-selected'); }
+      sel.value = a.value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      applyParamHint(sel);
+      renderValueChips(sel);
+      renderCollapsed();
+      collapse();
+    }
+
+    function renderCollapsed() {
+      collapsed.innerHTML = '';
+      var a = BY_VALUE[sel.value];
+      if (a) {
+        var card = makeCard(a, sel, false);
+        card.classList.add('is-selected', 'is-summary');
+        card.addEventListener('click', expand);
+        collapsed.appendChild(card);
+      }
+      var change = document.createElement('button');
+      change.type = 'button';
+      change.className = 'action-change-btn';
+      change.textContent = 'Change action';
+      change.addEventListener('click', expand);
+      collapsed.appendChild(change);
+    }
+
+    CATALOG.forEach(function(group) {
+      var gEl = document.createElement('div');
+      gEl.className = 'action-group';
+      var title = document.createElement('div');
+      title.className = 'action-group-title';
+      title.textContent = group.group;
+      gEl.appendChild(title);
+
+      var cards = document.createElement('div');
+      cards.className = 'action-cards';
+      group.actions.forEach(function(a) {
+        cards.appendChild(makeCard(a, sel, true, select));
+      });
+      gEl.appendChild(cards);
+      grid.appendChild(gEl);
+    });
+
+    // Build succeeded — now take over from the native control.
+    sel.insertAdjacentElement('afterend', grid);
+    sel.insertAdjacentElement('afterend', collapsed);
+    sel.classList.add('action-native-hidden');
+    sel.dataset.actionPicker = '1';
+    applyParamHint(sel);
+    renderValueChips(sel);
+    renderCollapsed();
+    collapse();
+  }
+
+  function scan(root) {
+    root.querySelectorAll('select').forEach(function(sel) {
+      if (isActionSelect(sel)) { buildPicker(sel); }
+    });
+  }
+
+  // Show the "parameters support Jinja" note once, above the outcome rows.
+  function addJinjaHint() {
+    var container = document.getElementById('outcomes');
+    if (!container || container.querySelector('.action-jinja-hint')) { return; }
+    var hint = document.createElement('div');
+    hint.className = 'action-jinja-hint';
+    hint.innerHTML =
+      'Every parameter supports Jinja — use <code>{{hostname}}</code> or any '
+      + 'host attribute.';
+    container.insertBefore(hint, container.firstChild);
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var form = document.querySelector('form');
+    if (!form) { return; }
+    addJinjaHint();
+    scan(form);
+    // Rebuild for outcome rows added after load (the "Add" button clones one).
+    new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+          if (node.nodeType === 1) { scan(node); }
+        });
+      });
+    }).observe(form, { childList: true, subtree: true });
+  });
+})();
+</script>

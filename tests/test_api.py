@@ -440,6 +440,9 @@ class PluginViewFormattingTest(unittest.TestCase):
             ModuleType('application.plugins.checkmk.models'),
         )
         checkmk_models_mod.action_outcome_types = [('create_rule', 'create_rule')]
+        checkmk_models_mod.ACTION_CATALOG = []
+        checkmk_models_mod.DEPRECATED_ACTIONS = set()
+        checkmk_models_mod.DEPRECATION_WARNING = 'will removed with 4.4'
         checkmk_models_mod.CheckmkSite = MagicMock()
         checkmk_models_mod.CheckmkSettings = MagicMock()
         checkmk_models_mod.CheckmkRuleMngmt = MagicMock()

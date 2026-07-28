@@ -59,6 +59,31 @@
   margin-bottom: 0.5rem;
 }
 
+/* Deprecated-actions warning card — accent border only; the card body
+   colours come from the theme-aware .home-card overrides. */
+#deprecated-warning { border-left: 4px solid #f9a825; }
+#deprecated-warning .deprecated-lead {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--surface-text, #2c3e50);
+}
+.deprecated-rule-list { list-style: none; margin: 0; padding: 0; }
+.deprecated-rule-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 0.4rem 0.2rem;
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+}
+.deprecated-rule-list li:last-child { border-bottom: none; }
+.deprecated-rule-list a { text-decoration: none; font-weight: 600; }
+.deprecated-actions {
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  color: var(--surface-muted, #6c757d);
+}
+
 /* Recent Errors card — theme-aware via the --surface-* tokens. */
 #recent-errors { border-left: 4px solid #e74c3c; }
 .error-log-list {
@@ -445,6 +470,25 @@ function toggleAllFilters() {
   <p>Open Source — built by <strong>Kuhn &amp; Rue&szlig; GmbH</strong> in Germany.</p>
   <span class="build-pill">Build {{ config.BUILD_DATE }}</span>
 </div>
+
+{% if deprecated_rules %}
+<div class="home-card" id="deprecated-warning">
+  <h2>⚠️ Deprecated Checkmk actions in use</h2>
+  <p class="deprecated-lead">
+    The following Checkmk rules still use actions that
+    <strong>{{ deprecation_warning }}</strong>.
+    Please migrate them — rules with a deprecated action can no longer be saved.
+  </p>
+  <ul class="deprecated-rule-list">
+    {% for rule in deprecated_rules %}
+    <li>
+      <a href="{{ url_for('checkmkrule.edit_view', id=rule.id) }}">{{ rule.name }}</a>
+      <span class="deprecated-actions">{{ rule.actions|join(', ') }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
 
 <div class="row">
   <!-- Left Column: Links + Notices -->

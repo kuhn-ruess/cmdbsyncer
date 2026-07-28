@@ -502,6 +502,20 @@ for _name in (
 ):
     setattr(_cmk_models, _name, MagicMock(name=f"stub.{_name}"))
 
+# Real value so rules.py can map built-in convenience actions to attributes.
+_cmk_models.BUILTIN_ATTRIBUTE_ACTIONS = {
+    "set_ip_address_family": "tag_address_family",
+    "set_ipaddress": "ipaddress",
+    "set_ipv6address": "ipv6address",
+    "set_agent": "tag_agent",
+    "set_snmp": "tag_snmp_ds",
+    "set_piggyback": "tag_piggyback",
+    "set_criticality": "tag_criticality",
+    "set_networking": "tag_networking",
+    "set_alias": "alias",
+    "set_site": "site",
+}
+
 # application.models.host extras
 _models_host.app = _StubApp()
 _models_host.HostError = type("HostError", (Exception,), {})
