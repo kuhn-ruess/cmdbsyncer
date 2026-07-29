@@ -245,6 +245,13 @@ def activate_changes(account):
     url = "/domain-types/activation_run/collections/pending_changes"
     data, headers = cmk.request(url, "GET")
     etag = headers.get('ETag')
+
+    # Nothing pending: activating would just return a 422 "no changes to
+    # activate" which we would otherwise report as a failure below.
+    if not data.get('value'):
+        print("No changes to activate")
+        return True
+
     if cmk.config.get('dont_activate_changes_if_more_then'):
         user = cmk.config['username']
         num_changes = len([x['user_id'] for x in data['value'] if x['user_id'] == user])
@@ -261,21 +268,41 @@ def activate_changes(account):
         'if-match': etag
     }
 
-    # Trigger Activate Changes
+    # Trigger Activate Changes.
+    # redirect=True makes Checkmk answer with a 303 to the
+    # 'wait-for-completion' endpoint, which requests follows until the
+    # activation is really done. Without it we only learn that the
+    # activation was *started* and silently report success even when it
+    # later fails (e.g. missing permission for foreign changes).
     url = "/domain-types/activation_run/actions/activate-changes/invoke"
     data = {
-        'redirect': False,
+        'redirect': True,
         'force_foreign_changes': True,
     }
     try:
-        cmk.request(url,
+        _, resp_header = cmk.request(url,
                     data=data,
                     method="POST",
                     additional_header=update_headers,
         )
-        print("Changes activated")
+        status_code = resp_header.get('status_code')
+        if status_code not in (200, 204):
+            # request() swallows a set of whitelisted API errors and just
+            # returns the status code; surface those instead of pretending
+            # the activation worked.
+            error = resp_header.get('error', f'Checkmk returned HTTP {status_code}')
+            print(f"{ColorCodes.FAIL}Activate Changes failed: {error}{ColorCodes.ENDC}")
+            log.log("Checkmk Activate Changes failed",
+                    source="Checkmk",
+                    details=[('error', str(error))])
+            return False
+        print(f"{ColorCodes.OKGREEN}Changes activated{ColorCodes.ENDC}")
     except CmkException as errors:
-        print(errors)
+        print(f"{ColorCodes.FAIL}Activate Changes failed: {errors}{ColorCodes.ENDC}")
+        log.log("Checkmk Activate Changes failed",
+                source="Checkmk",
+                details=[('error', str(errors))])
+        return False
     return True
 #.
 #   .-- Export Groups
