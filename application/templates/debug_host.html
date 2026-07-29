@@ -59,6 +59,11 @@
 .rule-acc .rule-tabs .btn { padding: 3px 10px; font-size: 0.85rem; }
 .rule-table th { font-size: 0.82rem; font-weight: 600;
     background: var(--surface-subtle, #f8f9fa); }
+/* The global sticky table header (admin/master.html) is meant for long
+   scrolling list views. These rule tables are short accordion panels, so
+   the sticky header detaches and slides over the first rule while the page
+   scrolls (most visibly in Edge). Pin it back to static. */
+.rule-table thead th { position: static; top: auto; z-index: auto; }
 .rule-hit { background: var(--debug-row-hit, #e8f5e8); }
 
 .preview-card { border-left: 4px solid #6610f2; }
