@@ -242,10 +242,22 @@
                 return lines.join('\n');
             }
 
+            function excelCsv() {
+                // Make the CSV open straight into Excel: a UTF-8 BOM so Excel
+                // detects the encoding (umlauts stay intact), a leading
+                // "sep=;" directive so Excel uses ";" as the column separator
+                // regardless of the user's locale, and CRLF line endings.
+                return '\uFEFF' + 'sep=;\r\n' +
+                    toTable(';', true).replace(/\n/g, '\r\n');
+            }
+
             var copyBtn = document.getElementById('dq_copy');
             if (copyBtn) {
                 copyBtn.addEventListener('click', function () {
-                    var text = toTable(',', true);
+                    // Plain ";"-separated CSV — the "sep="/BOM directives only
+                    // help when Excel *opens a file*, not when pasting, and
+                    // would show up as literal junk on paste.
+                    var text = toTable(';', true);
                     navigator.clipboard.writeText(text).then(function () {
                         copyBtn.innerHTML = '<i class="fa fa-check"></i> Copied';
                         setTimeout(function () {
@@ -259,7 +271,7 @@
             var csvBtn = document.getElementById('dq_csv');
             if (csvBtn) {
                 csvBtn.addEventListener('click', function () {
-                    var blob = new Blob([toTable(',', true)],
+                    var blob = new Blob([excelCsv()],
                         {type: 'text/csv;charset=utf-8;'});
                     var url = URL.createObjectURL(blob);
                     var link = document.createElement('a');
