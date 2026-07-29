@@ -32,6 +32,7 @@ from .models import (
 from .views import (
     CheckmkBiRuleView,
     CheckmkCacheView,
+    CheckmkDataQualityView,
     CheckmkDCDView,
     CheckmkDowntimeView,
     CheckmkFolderPoolView,
@@ -214,6 +215,15 @@ def register_admin_views(admin):
     admin.add_view(
         CheckmkCacheView(CheckmkObjectCache, name="Cache", category="Checkmk",
                         menu_icon_type='fa', menu_icon_value='fa-th')
+    )
+    admin.add_view(
+        CheckmkDataQualityView(
+            name="Data Quality Check",
+            category="Checkmk",
+            endpoint="checkmk_data_quality",
+            menu_icon_type='fa',
+            menu_icon_value='fa-check-square-o',
+        )
     )
 
     admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")

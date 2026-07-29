@@ -1970,3 +1970,74 @@ class CheckmkTestFolderScopeView(BaseView):
         flash(f"Saved {len(folders)} folder(s) for account '{account.name}'. "
               f"Its host export is now limited to these folders.", 'success')
         return redirect(self.get_url('.index', account=account.name))
+
+
+class CheckmkDataQualityView(BaseView):
+    """
+    Data Quality area: upload a CSV of hostnames and check them against a
+    Checkmk account's monitoring data. For every host the report shows whether
+    it is present, whether its agent works (the ``Check_MK`` service state) and
+    which contact groups are allowed to see it.
+
+    Read-only — this view never changes anything in Checkmk or the syncer.
+    """
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    @staticmethod
+    def _accounts():
+        """Enabled Checkmk (cmkv2) accounts — the pickable targets."""
+        return [a.name for a in
+                Account.objects(enabled=True, type='cmkv2').order_by('name')]
+
+    def _render(self, accounts, selected_account='', report=None):
+        """Render the Data Quality page in a single place."""
+        return self.render(
+            'admin/checkmk_data_quality.html',
+            accounts=accounts,
+            selected_account=selected_account,
+            report=report)
+
+    @expose('/', methods=['GET', 'POST'])
+    def index(self):
+        """Show the upload form and, on POST, the resulting report."""
+        accounts = self._accounts()
+        if request.method == 'GET':
+            return self._render(accounts)
+        return self._handle_upload(accounts)
+
+    def _handle_upload(self, accounts):
+        """Validate the POST, run the check and render (or redirect on error)."""
+        # pylint: disable=import-outside-toplevel
+        from .data_quality import parse_hostnames_from_csv, run_data_quality_check
+        from .cmk2 import CmkException
+
+        account_name = request.form.get('account')
+        upload = request.files.get('csv_file')
+        if account_name not in accounts:
+            flash('Select a Checkmk account first', 'error')
+            return redirect(self.get_url('.index'))
+        if upload is None or not upload.filename:
+            flash('Please choose a CSV file to upload', 'error')
+            return redirect(self.get_url('.index'))
+
+        try:
+            text = upload.read().decode('utf-8-sig', 'replace')
+        except (OSError, ValueError) as error:
+            flash(f'Could not read the uploaded file: {error}', 'error')
+            return redirect(self.get_url('.index'))
+
+        hostnames = parse_hostnames_from_csv(text)
+        if not hostnames:
+            flash('No hostnames found in the uploaded CSV', 'warning')
+            return self._render(accounts, account_name)
+
+        try:
+            report = run_data_quality_check(account_name, hostnames)
+        except CmkException as error:
+            flash(f"Checkmk request failed: {error}", 'error')
+            return self._render(accounts, account_name)
+
+        return self._render(accounts, account_name, report)

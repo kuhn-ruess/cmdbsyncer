@@ -1,0 +1,129 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Checkmk Data Quality Check</h3>
+    <p>
+        Upload a CSV of hostnames and check them against a Checkmk account's
+        monitoring data. For every host you see whether it is present, whether
+        its agent works (the <code>Check_MK</code> service) and which contact
+        groups are allowed to see it. This view is read-only — nothing in
+        Checkmk or the syncer is changed.
+    </p>
+
+    {% if not accounts %}
+    <div class="alert alert-warning">
+        No enabled Checkmk (cmkv2) account found. Create one first.
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('.index') }}" enctype="multipart/form-data"
+          class="card app-card mb-4">
+        <div class="card-body">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="form-group">
+                <label for="account">Checkmk account</label>
+                <select class="form-control" id="account" name="account" required>
+                    <option value="">— select account —</option>
+                    {% for account in accounts %}
+                    <option value="{{ account }}"
+                            {% if account == selected_account %}selected{% endif %}>
+                        {{ account }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="csv_file">CSV file</label>
+                <input type="file" class="form-control-file" id="csv_file"
+                       name="csv_file" accept=".csv,text/csv" required/>
+                <small class="form-text text-muted">
+                    One hostname per row. A header column named
+                    <code>hostname</code>, <code>host</code> or <code>name</code>
+                    is used automatically; otherwise the first column is taken.
+                </small>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fa fa-search"></i> Run check
+            </button>
+        </div>
+    </form>
+
+    {% if report %}
+    {% set s = report.summary %}
+    <div class="card app-card mb-4">
+        <div class="card-header">Summary for <strong>{{ selected_account }}</strong></div>
+        <div class="card-body">
+            <span class="badge badge-secondary mr-1">Checked: {{ s.total }}</span>
+            <span class="badge badge-success mr-1">Present: {{ s.found }}</span>
+            <span class="badge badge-danger mr-1">Missing: {{ s.missing }}</span>
+            <span class="badge badge-success mr-1">Agent OK: {{ s.agent_ok }}</span>
+            <span class="badge badge-warning mr-1">Agent problem: {{ s.agent_problem }}</span>
+            <span class="badge badge-secondary mr-1">No agent: {{ s.no_agent }}</span>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Host</th>
+                    <th>Present</th>
+                    <th>Host state</th>
+                    <th>Agent</th>
+                    <th>Contact groups</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in report.results %}
+                <tr>
+                    <td><code>{{ row.hostname }}</code></td>
+                    <td>
+                        {% if row.exists %}
+                        <span class="badge badge-success">Yes</span>
+                        {% else %}
+                        <span class="badge badge-danger">Not found</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.host_state == 'UP' %}
+                        <span class="badge badge-success">UP</span>
+                        {% elif row.host_state is not none %}
+                        <span class="badge badge-danger">{{ row.host_state }}</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.agent_state == 'OK' %}
+                        <span class="badge badge-success" title="{{ row.agent_output }}">OK</span>
+                        {% elif row.agent_state is not none %}
+                        <span class="badge badge-warning" title="{{ row.agent_output }}">
+                            {{ row.agent_state }}
+                        </span>
+                        {% elif row.exists %}
+                        <span class="badge badge-secondary"
+                              title="No Check_MK service found for this host">No agent</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.contact_groups %}
+                        {% for group in row.contact_groups %}
+                        <span class="badge badge-info mr-1">{{ group }}</span>
+                        {% endfor %}
+                        {% elif row.exists %}
+                        <span class="text-muted">none</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

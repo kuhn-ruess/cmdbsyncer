@@ -470,6 +470,12 @@ _try_load_real_module(
     "application.plugins.checkmk.rule_passwords",
     os.path.join("plugins", "checkmk", "rule_passwords.py"),
 )
+# data_quality only imports csv/io/json at module level (CMK2 is lazy), so it
+# loads cleanly for its own CSV-parsing / report-join unit tests.
+_try_load_real_module(
+    "application.plugins.checkmk.data_quality",
+    os.path.join("plugins", "checkmk", "data_quality.py"),
+)
 
 
 # --- Checkmk plugin modules --------------------------------------------------
