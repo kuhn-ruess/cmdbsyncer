@@ -16,6 +16,8 @@ only pulled in by ``run_data_quality_check`` at call time.
 import csv
 import io
 import json
+import re
+from datetime import datetime
 
 # Livestatus state code -> human label. Host and service states share the
 # 0/1/2/3 encoding but mean different things, so keep two maps.
@@ -25,6 +27,33 @@ SERVICE_STATE_LABELS = {0: 'OK', 1: 'WARN', 2: 'CRIT', 3: 'UNKNOWN'}
 # Column headers that mark the hostname column when the CSV carries a header
 # row. Matched case-insensitively against the trimmed header cells.
 _HOSTNAME_HEADERS = ('hostname', 'host_name', 'host', 'name')
+
+# Split pasted text on any run of newline / comma / semicolon / whitespace.
+_TEXT_SPLIT = re.compile(r'[\s,;]+')
+
+
+def parse_hostnames_from_text(text):
+    """
+    Extract a de-duplicated, order-preserving list of hostnames from free text
+    pasted into a textarea. Splits on newlines, commas, semicolons and
+    whitespace so both "one per line" and "a, b, c" pastes work.
+    """
+    if not text:
+        return []
+    hostnames = []
+    seen = set()
+    for token in _TEXT_SPLIT.split(text):
+        name = token.strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        hostnames.append(name)
+    return hostnames
+
+
+def _short_name(hostname):
+    """Lowercased part before the first dot — the domain-agnostic key."""
+    return hostname.split('.', 1)[0].lower()
 
 
 def parse_hostnames_from_csv(text):
@@ -113,34 +142,68 @@ def build_report(hostnames, monitored_hosts, checkmk_services):
     """
     Join the uploaded hostnames against the fetched monitoring data.
 
+    Each host gets one of three states:
+
+    * ``found`` — an exact name match exists in the monitoring.
+    * ``domain_mismatch`` — no exact match, but a host with the same short name
+      (part before the first dot) exists under a different name. This catches
+      the "created with a different domain" / "given without a domain but
+      monitored with one" cases the operator cares about; ``matched_names``
+      lists the actual Checkmk name(s).
+    * ``missing`` — neither an exact nor a short-name match exists.
+
     Pure function (no I/O) so the join logic is unit-testable. Returns a dict
     with a per-host ``results`` list and an aggregate ``summary``.
     """
+    # Index the monitored hosts by short name so a domain mismatch is a cheap
+    # dict lookup instead of an O(hosts) scan per uploaded host.
+    short_index = {}
+    for name in monitored_hosts:
+        short_index.setdefault(_short_name(name), []).append(name)
+
     results = []
     summary = {
         'total': len(hostnames),
         'found': 0,
+        'domain_mismatch': 0,
         'missing': 0,
         'agent_ok': 0,
         'agent_problem': 0,
         'no_agent': 0,
     }
     for hostname in hostnames:
-        host = monitored_hosts.get(hostname)
-        exists = host is not None
         entry = {
             'hostname': hostname,
-            'exists': exists,
+            'status': 'missing',
+            'exists': False,
+            'cmk_name': None,
+            'matched_names': [],
             'host_state': None,
             'contact_groups': [],
             'agent_state': None,
             'agent_output': '',
         }
-        if exists:
+        if hostname in monitored_hosts:
+            entry['status'] = 'found'
+            entry['cmk_name'] = hostname
             summary['found'] += 1
+        else:
+            matches = short_index.get(_short_name(hostname), [])
+            if matches:
+                entry['status'] = 'domain_mismatch'
+                entry['cmk_name'] = matches[0]
+                entry['matched_names'] = matches
+                summary['domain_mismatch'] += 1
+            else:
+                summary['missing'] += 1
+
+        cmk_name = entry['cmk_name']
+        if cmk_name is not None:
+            entry['exists'] = True
+            host = monitored_hosts[cmk_name]
             entry['host_state'] = HOST_STATE_LABELS.get(host['state'], host['state'])
             entry['contact_groups'] = host['contact_groups']
-            service = checkmk_services.get(hostname)
+            service = checkmk_services.get(cmk_name)
             if service is None:
                 summary['no_agent'] += 1
             else:
@@ -151,8 +214,6 @@ def build_report(hostnames, monitored_hosts, checkmk_services):
                     summary['agent_ok'] += 1
                 else:
                     summary['agent_problem'] += 1
-        else:
-            summary['missing'] += 1
         results.append(entry)
     return {'results': results, 'summary': summary}
 
@@ -171,3 +232,57 @@ def run_data_quality_check(account_name, hostnames):
     monitored_hosts = _fetch_monitored_hosts(cmk)
     checkmk_services = _fetch_checkmk_services(cmk)
     return build_report(hostnames, monitored_hosts, checkmk_services)
+
+
+def cmdb_template_names():
+    """Sorted names of the CMDB templates that can be applied to new hosts."""
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+    return [h.hostname for h in
+            Host.objects(object_type='template').only('hostname').order_by('hostname')]
+
+
+def create_internal_cmdb_hosts(hostnames, template_name=None):
+    """
+    Create the given hostnames as internal-CMDB host objects (source ``cmdb``),
+    optionally assigning a CMDB template so the new hosts inherit its
+    labels/attributes at export time.
+
+    Mirrors the internal-CMDB stamping the Host admin view does on save. Hosts
+    that already exist are left untouched and reported under ``skipped``.
+    Returns a summary dict with the created and skipped hostnames.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+    from application.models.account import (
+        CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
+
+    template = None
+    if template_name:
+        template = Host.objects(hostname=template_name, object_type='template').first()
+        if template is None:
+            raise ValueError(f"CMDB template '{template_name}' not found")
+
+    created = []
+    skipped = []
+    for hostname in hostnames:
+        host = Host.get_host(hostname)
+        if not host:
+            continue
+        if host.id:  # already exists — never overwrite a foreign object
+            skipped.append(host.hostname)
+            continue
+        now = datetime.now()
+        host.last_import_sync = now
+        host.last_import_seen = now
+        host.is_object = True
+        host.object_type = 'host'
+        host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
+        host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
+        host.no_autodelete = True
+        if template is not None:
+            host.cmdb_templates = [template]
+        host.set_inventory_attributes(CMDB_SOURCE_ACCOUNT_NAME)
+        host.save()
+        created.append(host.hostname)
+    return {'created': created, 'skipped': skipped, 'template': template_name}

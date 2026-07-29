@@ -7,6 +7,7 @@ import unittest
 
 from application.plugins.checkmk.data_quality import (
     parse_hostnames_from_csv,
+    parse_hostnames_from_text,
     build_report,
     _fetch_monitored_hosts,
     _fetch_checkmk_services,
@@ -59,6 +60,28 @@ class TestParseHostnames(unittest.TestCase):
             ['host1', 'host2', 'host3'])
 
 
+class TestParseHostnamesText(unittest.TestCase):
+    """Tests for parse_hostnames_from_text (pasted textarea input)"""
+
+    def test_empty(self):
+        self.assertEqual(parse_hostnames_from_text(''), [])
+
+    def test_one_per_line(self):
+        self.assertEqual(
+            parse_hostnames_from_text('host1\nhost2\nhost3'),
+            ['host1', 'host2', 'host3'])
+
+    def test_comma_and_semicolon_separated(self):
+        self.assertEqual(
+            parse_hostnames_from_text('host1, host2; host3'),
+            ['host1', 'host2', 'host3'])
+
+    def test_mixed_whitespace_and_duplicates(self):
+        self.assertEqual(
+            parse_hostnames_from_text('  host1 \n\n host2\thost1  '),
+            ['host1', 'host2'])
+
+
 class TestBuildReport(unittest.TestCase):
     """Tests for the pure join in build_report"""
 
@@ -99,6 +122,41 @@ class TestBuildReport(unittest.TestCase):
         self.assertTrue(entry['exists'])
         self.assertIsNone(entry['agent_state'])
         self.assertEqual(report['summary']['no_agent'], 1)
+
+    def test_domain_mismatch_input_short_cmk_fqdn(self):
+        # Uploaded without a domain, monitored with one.
+        monitored = {'web01.example.com': {'state': 0, 'contact_groups': ['all']}}
+        services = {'web01.example.com': {'state': 0, 'output': 'OK'}}
+        report = build_report(['web01'], monitored, services)
+        entry = report['results'][0]
+        self.assertEqual(entry['status'], 'domain_mismatch')
+        self.assertTrue(entry['exists'])
+        self.assertEqual(entry['cmk_name'], 'web01.example.com')
+        self.assertEqual(entry['matched_names'], ['web01.example.com'])
+        # Monitoring data comes from the actually-matched Checkmk host.
+        self.assertEqual(entry['host_state'], 'UP')
+        self.assertEqual(entry['agent_state'], 'OK')
+        self.assertEqual(report['summary']['domain_mismatch'], 1)
+        self.assertEqual(report['summary']['found'], 0)
+        self.assertEqual(report['summary']['missing'], 0)
+
+    def test_domain_mismatch_different_domain(self):
+        monitored = {'web01.b.de': {'state': 0, 'contact_groups': []}}
+        report = build_report(['web01.a.de'], monitored, {})
+        entry = report['results'][0]
+        self.assertEqual(entry['status'], 'domain_mismatch')
+        self.assertEqual(entry['cmk_name'], 'web01.b.de')
+
+    def test_exact_match_wins_over_short_name(self):
+        monitored = {
+            'web01': {'state': 0, 'contact_groups': ['all']},
+            'web01.example.com': {'state': 0, 'contact_groups': ['other']},
+        }
+        report = build_report(['web01'], monitored, {})
+        entry = report['results'][0]
+        self.assertEqual(entry['status'], 'found')
+        self.assertEqual(entry['cmk_name'], 'web01')
+        self.assertEqual(entry['contact_groups'], ['all'])
 
     def test_summary_totals(self):
         monitored = {

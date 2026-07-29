@@ -2085,44 +2085,63 @@ class CheckmkDataQualityView(BaseView):
 
     def _render(self, accounts, selected_account='', report=None):
         """Render the Data Quality page in a single place."""
+        # pylint: disable=import-outside-toplevel
+        from .data_quality import cmdb_template_names
         return self.render(
             'admin/checkmk_data_quality.html',
             accounts=accounts,
             selected_account=selected_account,
-            report=report)
+            report=report,
+            templates=cmdb_template_names() if report else [])
+
+    @staticmethod
+    def _hostnames_from_request():
+        """
+        Collect hostnames from either the pasted textarea or the uploaded CSV.
+        The textarea wins when both are filled. Returns ``(hostnames, error)``.
+        """
+        # pylint: disable=import-outside-toplevel
+        from .data_quality import parse_hostnames_from_text, parse_hostnames_from_csv
+
+        pasted = (request.form.get('hostnames_text') or '').strip()
+        if pasted:
+            return parse_hostnames_from_text(pasted), None
+
+        upload = request.files.get('csv_file')
+        if upload is not None and upload.filename:
+            try:
+                text = upload.read().decode('utf-8-sig', 'replace')
+            except (OSError, ValueError) as error:
+                return [], f'Could not read the uploaded file: {error}'
+            return parse_hostnames_from_csv(text), None
+
+        return [], 'Paste hostnames or choose a CSV file first'
 
     @expose('/', methods=['GET', 'POST'])
     def index(self):
-        """Show the upload form and, on POST, the resulting report."""
+        """Show the input form and, on POST, the resulting report."""
         accounts = self._accounts()
         if request.method == 'GET':
             return self._render(accounts)
-        return self._handle_upload(accounts)
+        return self._handle_check(accounts)
 
-    def _handle_upload(self, accounts):
+    def _handle_check(self, accounts):
         """Validate the POST, run the check and render (or redirect on error)."""
         # pylint: disable=import-outside-toplevel
-        from .data_quality import parse_hostnames_from_csv, run_data_quality_check
+        from .data_quality import run_data_quality_check
         from .cmk2 import CmkException
 
         account_name = request.form.get('account')
-        upload = request.files.get('csv_file')
         if account_name not in accounts:
             flash('Select a Checkmk account first', 'error')
             return redirect(self.get_url('.index'))
-        if upload is None or not upload.filename:
-            flash('Please choose a CSV file to upload', 'error')
-            return redirect(self.get_url('.index'))
 
-        try:
-            text = upload.read().decode('utf-8-sig', 'replace')
-        except (OSError, ValueError) as error:
-            flash(f'Could not read the uploaded file: {error}', 'error')
+        hostnames, error = self._hostnames_from_request()
+        if error:
+            flash(error, 'error')
             return redirect(self.get_url('.index'))
-
-        hostnames = parse_hostnames_from_csv(text)
         if not hostnames:
-            flash('No hostnames found in the uploaded CSV', 'warning')
+            flash('No hostnames found in the input', 'warning')
             return self._render(accounts, account_name)
 
         try:
@@ -2132,3 +2151,29 @@ class CheckmkDataQualityView(BaseView):
             return self._render(accounts, account_name)
 
         return self._render(accounts, account_name, report)
+
+    @expose('/create_missing', methods=['POST'])
+    def create_missing(self):
+        """Create the selected missing hosts as internal-CMDB objects."""
+        # pylint: disable=import-outside-toplevel
+        from .data_quality import create_internal_cmdb_hosts
+
+        hostnames = [h for h in request.form.getlist('missing_hosts') if h.strip()]
+        template_name = (request.form.get('template') or '').strip()
+        if not hostnames:
+            flash('No hosts selected to create', 'warning')
+            return redirect(self.get_url('.index'))
+
+        try:
+            result = create_internal_cmdb_hosts(hostnames, template_name or None)
+        except ValueError as error:
+            flash(str(error), 'error')
+            return redirect(self.get_url('.index'))
+
+        msg = f"Created {len(result['created'])} host(s) in the internal CMDB"
+        if template_name:
+            msg += f" with template '{template_name}'"
+        if result['skipped']:
+            msg += f"; skipped {len(result['skipped'])} already-existing host(s)"
+        flash(msg + '.', 'success')
+        return redirect(self.get_url('.index'))

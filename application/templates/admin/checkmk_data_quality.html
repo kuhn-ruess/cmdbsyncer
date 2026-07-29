@@ -4,11 +4,13 @@
 <div class="container mt-4">
     <h3>Checkmk Data Quality Check</h3>
     <p>
-        Upload a CSV of hostnames and check them against a Checkmk account's
-        monitoring data. For every host you see whether it is present, whether
-        its agent works (the <code>Check_MK</code> service) and which contact
-        groups are allowed to see it. This view is read-only — nothing in
-        Checkmk or the syncer is changed.
+        Provide a list of hostnames — paste them into the text box or upload a
+        CSV — and check them against a Checkmk account's monitoring data. For
+        every host you see whether it is present, whether it exists under a
+        different name/domain, whether its agent works (the <code>Check_MK</code>
+        service) and which contact groups may see it. Missing hosts can be
+        created as internal CMDB objects. Checking itself changes nothing in
+        Checkmk.
     </p>
 
     {% if not accounts %}
@@ -34,13 +36,22 @@
                 </select>
             </div>
             <div class="form-group">
-                <label for="csv_file">CSV file</label>
-                <input type="file" class="form-control-file" id="csv_file"
-                       name="csv_file" accept=".csv,text/csv" required/>
+                <label for="hostnames_text">Paste hostnames</label>
+                <textarea class="form-control" id="hostnames_text" name="hostnames_text"
+                          rows="6" placeholder="one per line, or comma-separated"></textarea>
                 <small class="form-text text-muted">
-                    One hostname per row. A header column named
-                    <code>hostname</code>, <code>host</code> or <code>name</code>
-                    is used automatically; otherwise the first column is taken.
+                    Paste hostnames here — one per line or separated by commas.
+                </small>
+            </div>
+            <div class="form-group">
+                <label for="csv_file">…or upload a CSV</label>
+                <input type="file" class="form-control-file" id="csv_file"
+                       name="csv_file" accept=".csv,text/csv"/>
+                <small class="form-text text-muted">
+                    A header column named <code>hostname</code>, <code>host</code>
+                    or <code>name</code> is used automatically; otherwise the
+                    first column is taken. The pasted text takes precedence if
+                    both are filled.
                 </small>
             </div>
             <button type="submit" class="btn btn-primary">
@@ -56,19 +67,31 @@
         <div class="card-body">
             <span class="badge badge-secondary mr-1">Checked: {{ s.total }}</span>
             <span class="badge badge-success mr-1">Present: {{ s.found }}</span>
+            <span class="badge badge-warning mr-1">Different name: {{ s.domain_mismatch }}</span>
             <span class="badge badge-danger mr-1">Missing: {{ s.missing }}</span>
+            <span class="badge badge-light mr-1">·</span>
             <span class="badge badge-success mr-1">Agent OK: {{ s.agent_ok }}</span>
             <span class="badge badge-warning mr-1">Agent problem: {{ s.agent_problem }}</span>
             <span class="badge badge-secondary mr-1">No agent: {{ s.no_agent }}</span>
         </div>
     </div>
 
+    <div class="mb-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="dq_copy">
+            <i class="fa fa-clipboard"></i> Copy result
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="dq_csv">
+            <i class="fa fa-download"></i> Download CSV
+        </button>
+    </div>
+
     <div class="table-responsive">
-        <table class="table table-striped table-hover">
+        <table class="table table-striped table-hover" id="dq_table">
             <thead>
                 <tr>
                     <th>Host</th>
-                    <th>Present</th>
+                    <th>Status</th>
+                    <th>Name in Checkmk</th>
                     <th>Host state</th>
                     <th>Agent</th>
                     <th>Contact groups</th>
@@ -79,10 +102,21 @@
                 <tr>
                     <td><code>{{ row.hostname }}</code></td>
                     <td>
-                        {% if row.exists %}
-                        <span class="badge badge-success">Yes</span>
+                        {% if row.status == 'found' %}
+                        <span class="badge badge-success">Present</span>
+                        {% elif row.status == 'domain_mismatch' %}
+                        <span class="badge badge-warning">Different name</span>
                         {% else %}
                         <span class="badge badge-danger">Not found</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.status == 'domain_mismatch' %}
+                        <code>{{ row.matched_names | join(', ') }}</code>
+                        {% elif row.status == 'found' %}
+                        <span class="text-muted">(same)</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
                         {% endif %}
                     </td>
                     <td>
@@ -124,6 +158,134 @@
             </tbody>
         </table>
     </div>
+
+    {% set missing = report.results | selectattr('status', 'equalto', 'missing') | list %}
+    {% if missing %}
+    <div class="card app-card mb-4">
+        <div class="card-header">
+            Create {{ missing | length }} missing host(s) in the internal CMDB
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                The selected hosts are created as syncer-managed objects (source
+                <code>cmdb</code>). The normal Checkmk export then rolls them out.
+                Optionally apply a CMDB template so they inherit its
+                labels/attributes.
+            </p>
+            <form method="POST" action="{{ url_for('.create_missing') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group">
+                    <label for="template">CMDB template (optional)</label>
+                    <select class="form-control" id="template" name="template">
+                        <option value="">— none —</option>
+                        {% for tpl in templates %}
+                        <option value="{{ tpl }}">{{ tpl }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            id="dq_toggle_all">Toggle all</button>
+                </div>
+                <div class="mb-3" style="max-height:260px;overflow-y:auto;">
+                    {% for row in missing %}
+                    <div class="form-check">
+                        <input class="form-check-input dq-missing" type="checkbox"
+                               name="missing_hosts" id="miss-{{ loop.index }}"
+                               value="{{ row.hostname }}" checked>
+                        <label class="form-check-label" for="miss-{{ loop.index }}">
+                            <code>{{ row.hostname }}</code>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-plus"></i> Create selected hosts
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <script type="application/json" id="dq_data">{{ report.results | tojson }}</script>
+    <script>
+        (function () {
+            var rows = JSON.parse(document.getElementById('dq_data').textContent);
+            var headers = ['host', 'status', 'name_in_checkmk', 'host_state',
+                           'agent_state', 'agent_output', 'contact_groups'];
+
+            function cells(row) {
+                return [
+                    row.hostname,
+                    row.status,
+                    row.status === 'domain_mismatch'
+                        ? (row.matched_names || []).join(' ')
+                        : (row.status === 'found' ? row.hostname : ''),
+                    row.host_state || '',
+                    row.agent_state || '',
+                    row.agent_output || '',
+                    (row.contact_groups || []).join(' ')
+                ];
+            }
+
+            function toTable(sep, quote) {
+                var lines = [headers.join(sep)];
+                rows.forEach(function (row) {
+                    lines.push(cells(row).map(function (value) {
+                        value = String(value);
+                        if (quote && /["\n,;]/.test(value)) {
+                            value = '"' + value.replace(/"/g, '""') + '"';
+                        }
+                        return value;
+                    }).join(sep));
+                });
+                return lines.join('\n');
+            }
+
+            var copyBtn = document.getElementById('dq_copy');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', function () {
+                    var text = toTable(',', true);
+                    navigator.clipboard.writeText(text).then(function () {
+                        copyBtn.innerHTML = '<i class="fa fa-check"></i> Copied';
+                        setTimeout(function () {
+                            copyBtn.innerHTML =
+                                '<i class="fa fa-clipboard"></i> Copy result';
+                        }, 1500);
+                    });
+                });
+            }
+
+            var csvBtn = document.getElementById('dq_csv');
+            if (csvBtn) {
+                csvBtn.addEventListener('click', function () {
+                    var blob = new Blob([toTable(',', true)],
+                        {type: 'text/csv;charset=utf-8;'});
+                    var url = URL.createObjectURL(blob);
+                    var link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'data_quality.csv';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                });
+            }
+
+            var toggle = document.getElementById('dq_toggle_all');
+            if (toggle) {
+                toggle.addEventListener('click', function () {
+                    var boxes = document.querySelectorAll('.dq-missing');
+                    var anyChecked = Array.prototype.some.call(boxes, function (b) {
+                        return b.checked;
+                    });
+                    Array.prototype.forEach.call(boxes, function (b) {
+                        b.checked = !anyChecked;
+                    });
+                });
+            }
+        })();
+    </script>
     {% endif %}
 </div>
 {% endblock %}
