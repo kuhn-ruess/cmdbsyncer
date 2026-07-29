@@ -451,6 +451,34 @@ def cli_export_rules(account, debug):
     export_rules(account)
 
 #.
+#   .-- Command: Export Ruleset Catalog for the UI autocomplete
+@cli_cmk.command('export_rulesets')
+@click.argument("account")
+@click.option("--debug", is_flag=True)
+def cli_export_rulesets(account, debug):
+    """
+    Fetch the full ruleset list from a Checkmk installation and store it as
+    application/plugins/checkmk/data/rulesets_<version>.json. This feeds the
+    ruleset autocomplete on the Setup-Rule edit form. Re-run per Checkmk
+    version you want offered as a suggestion.
+
+    ### Example
+    _./cmdbsyncer checkmk export_rulesets SITEACCOUNT_
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    from .rulesets_catalog import RulesetCatalog
+    try:
+        catalog = RulesetCatalog(account)
+        out_path, count = catalog.export_to_file()
+        print(f"{ColorCodes.OKGREEN}Wrote {count} rulesets "
+              f"(Checkmk {catalog.checkmk_version}) to {out_path}"
+              f"{ColorCodes.ENDC}")
+    except CmkException as error_obj:
+        print(f'{ColorCodes.FAIL}Checkmk Error: {error_obj}{ColorCodes.ENDC}')
+
+#.
 #   .-- Command: Import Project Rules from Checkmk Folder
 @cli_cmk.command('import_project_rules')
 @click.argument("project")

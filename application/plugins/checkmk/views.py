@@ -582,6 +582,8 @@ class CheckmkMngmtRuleView(RuleModelView):
     Management of Rules inside Checkmk
     """
     list_template = 'admin/checkmk_rule_mngmt_list.html'
+    edit_template = 'admin/model/checkmk_rule_mngmt_edit.html'
+    create_template = 'admin/model/checkmk_rule_mngmt_create.html'
 
     # Group the listing by the rule's ruleset so rules of the same
     # Checkmk ruleset land next to each other. `primary_ruleset` is
@@ -666,6 +668,18 @@ class CheckmkMngmtRuleView(RuleModelView):
                 if outcome.ruleset:
                     seen.add(outcome.ruleset)
         return {'rulesets': sorted(seen)}
+
+    @expose('/_ruleset_catalog')
+    def ruleset_catalog(self):
+        """Version-tagged catalog of every known Checkmk ruleset plus example
+        value templates — feeds the ruleset autocomplete on the edit form.
+        Data comes entirely from the JSON files under the plugin's data/ dir
+        (regenerate with `checkmk export_rulesets <account>`). Imported
+        lazily so loading this view module in isolation (unit tests, CLI)
+        doesn't pull in the Checkmk request stack."""
+        # pylint: disable=import-outside-toplevel
+        from .rulesets_catalog import load_catalog
+        return load_catalog()
 
     form_rules = [
         rules.HTML(f'<a href="{docu_links["cmk_setup_rules"]}" target="_blank" '

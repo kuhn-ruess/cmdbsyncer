@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Example value_template for Checkmk Setup rulesets, offered by the ruleset",
+    "autocomplete on the Setup-Rule edit form. Add entries here to grow the",
+    "suggestions - no code change needed. The value is exactly what Checkmk's",
+    "'Export Rule for API' shows (a Python literal); insert Jinja placeholders",
+    "like {{HOSTNAME}} or any host attribute where you need per-host values.",
+    "An example may be a plain string (same for every version) or an object",
+    "keyed by minor version, e.g. {\"2.4\": \"...\", \"2.5\": \"...\"}, when the",
+    "value format changed between releases - the UI then flags the difference."
+  ],
+  "examples": {
+    "checkgroup_parameters:filesystem": "{'levels': (80.0, 90.0)}",
+    "active_checks:httpv2": "{'endpoints': [{'service_name': {'prefix': 'auto', 'name': 'Website'}, 'url': 'https://{{HOSTNAME}}'}], 'standard_settings': {}}",
+    "active_checks:cmk_inv": "{'status_data_inventory': True}",
+    "ping_levels": "{'rta': (1500.0, 3000.0), 'loss': (80.0, 100.0), 'packets': 6, 'timeout': 20}",
+    "periodic_discovery": "{'check_interval': 120.0, 'severity_unmonitored': 1, 'severity_vanished': 0, 'severity_new_host_label': 1}",
+    "inventory_df_rules": "{'ignore_fs_types': ['tmpfs', 'nfs', 'smbfs', 'cifs', 'iso9660'], 'never_ignore_mountpoints': ['~.*/omd/sites/[^/]+/tmp$']}",
+    "host_contactgroups": "'all'",
+    "service_contactgroups": "'all'",
+    "extra_host_conf:notification_options": "'d,r,f,s'",
+    "only_hosts": "True",
+    "bulkwalk_hosts": "True",
+    "usewalk_hosts": "True",
+    "host_check_commands": "('service', 'Docker container status')",
+    "inventory_processes_rules": "{'descr': '%u active check helpers', 'match': '~/path/to/binary', 'user': False, 'default_params': {'cpu_rescale_max': True}}",
+    "special_agents:spring_boot_actuator": "{'url': 'http://{{HOSTNAME}}:8099/actuator/health', 'verify_ssl': False}",
+    "cmc_service_rrd_config": "{'format': 'cmc_single', 'cfs': ['MIN', 'MAX', 'AVERAGE'], 'step': 60, 'rras': [(50.0, 1, 2880), (50.0, 5, 2880), (50.0, 30, 4320), (50.0, 360, 5840)]}",
+    "datasource_programs": "'cat /path/to/agent_output.txt'"
+  }
+}

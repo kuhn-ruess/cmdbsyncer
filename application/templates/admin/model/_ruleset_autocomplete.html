@@ -1,0 +1,393 @@
+{# Ruleset autocomplete for the Checkmk Setup-Rule edit form.
+
+   A real dropdown (not a native <datalist>) so it can:
+     * search over BOTH the ruleset ID (e.g. checkgroup_parameters:filesystem)
+       and its human title, consistently across browsers, and
+     * make "use the example" an explicit, visible action — an
+       "Apply example" button that fills the Value Template — instead of a
+       hidden pre-fill the operator can't see.
+
+   The catalog is served by the view's `_ruleset_catalog` endpoint and comes
+   entirely from the JSON files under the plugin's data/ dir (regenerate with
+   `checkmk export_rulesets <account>`) — nothing here is hardcoded. Free text
+   stays possible; the dropdown only suggests. When a ruleset does not exist
+   in every known Checkmk version, its version scope is shown so
+   version-specific rulesets are recognisable. #}
+<style>
+.ruleset-ac-wrap { position: relative; }
+
+/* The suggestions panel, anchored under the ruleset input. Solid themed
+   surface so it stays readable in every theme (light fallbacks for default). */
+.ruleset-ac-menu {
+  position: absolute;
+  z-index: 1060;
+  left: 0; right: 0;
+  top: 100%;
+  margin-top: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--surface-bg, #fff);
+  color: var(--surface-text, #2c3e50);
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  display: none;
+}
+.ruleset-ac-menu.is-open { display: block; }
+.ruleset-ac-note {
+  padding: 6px 12px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--surface-muted, #6c757d);
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+}
+.ruleset-ac-item {
+  padding: 7px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--surface-divider, #f1f3f5);
+}
+.ruleset-ac-item:last-child { border-bottom: 0; }
+.ruleset-ac-item.is-active,
+.ruleset-ac-item:hover { background: rgba(26, 205, 182, 0.14); }
+.ruleset-ac-item-id {
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.ruleset-ac-item-id mark {
+  background: rgba(26, 205, 182, 0.38);
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+.ruleset-ac-item-title {
+  font-size: 0.78rem;
+  color: var(--surface-muted, #6c757d);
+}
+.ruleset-ac-item-meta { margin-top: 2px; }
+.ruleset-ac-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.ruleset-ac-badge.is-all {
+  color: var(--surface-text, #2c3e50);
+  background: rgba(127, 127, 127, 0.18);
+}
+.ruleset-ac-badge.is-limited { color: #7a4a00; background: #ffe0a3; }
+.ruleset-ac-badge.is-example {
+  margin-left: 5px;
+  color: #0b6b52;
+  background: rgba(26, 205, 182, 0.22);
+}
+
+/* Info + example block shown under the field once a ruleset is chosen. */
+.ruleset-info { margin-top: 8px; font-size: 0.8rem; line-height: 1.4; }
+.ruleset-info-title { font-weight: 600; }
+.ruleset-info .ruleset-ac-badge { margin-left: 6px; }
+.ruleset-info-unknown { color: var(--surface-muted, #9aa0a6); font-style: italic; }
+
+.ruleset-example {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid #1abc9c;
+  border-radius: 4px;
+  background: var(--surface-subtle, #f1fbf9);
+}
+.ruleset-example-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.ruleset-example-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--surface-muted, #4a4f57);
+}
+.ruleset-apply-btn {
+  padding: 4px 12px;
+  border: 1px solid #1abc9c;
+  border-radius: 8px;
+  background: #1abc9c;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, opacity 0.12s;
+}
+.ruleset-apply-btn:hover { background: #17a689; }
+.ruleset-apply-btn.is-done { background: #6c757d; border-color: #6c757d; }
+.ruleset-example-code {
+  margin: 0;
+  padding: 6px 8px;
+  overflow-x: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--surface-text, #2c3e50);
+  background: rgba(127, 127, 127, 0.10);
+  border-radius: 4px;
+}
+.ruleset-example-note {
+  margin-top: 5px;
+  font-size: 0.74rem;
+  color: var(--surface-muted, #6c757d);
+}
+</style>
+<script>
+(function() {
+  var ENDPOINT = '{{ url_for(".ruleset_catalog") }}';
+  var LIST = [];          // [{name, title, versions[], example, example_differs}]
+  var BY_NAME = {};
+  var ALL_VERSIONS = [];
+  var MAX_RESULTS = 60;
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, function(c) {
+      return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c];
+    });
+  }
+
+  // "2.4","2.5" -> "2.4 & 2.5"; single version stays as-is.
+  function joinVersions(vs) {
+    if (vs.length <= 1) { return vs.join(''); }
+    return vs.slice(0, -1).join(', ') + ' & ' + vs[vs.length - 1];
+  }
+
+  function versionBadge(entry, cls) {
+    var limited = entry.versions.length < ALL_VERSIONS.length;
+    var text = 'Checkmk ' + joinVersions(entry.versions) + (limited ? ' only' : '');
+    return '<span class="ruleset-ac-badge ' + (limited ? 'is-limited' : 'is-all')
+      + (cls ? ' ' + cls : '') + '">' + escapeHtml(text) + '</span>';
+  }
+
+  // Rank matches: ID prefix first, then ID substring, then title substring.
+  function search(q) {
+    q = q.trim().toLowerCase();
+    if (!q) {
+      // Empty query: surface the rulesets that ship an example first.
+      return LIST.filter(function(r) { return r.example; }).slice(0, MAX_RESULTS);
+    }
+    var pre = [], idsub = [], titlesub = [];
+    for (var i = 0; i < LIST.length; i++) {
+      var r = LIST[i];
+      var idl = r.name.toLowerCase();
+      var tl = (r.title || '').toLowerCase();
+      if (idl.indexOf(q) === 0) { pre.push(r); }
+      else if (idl.indexOf(q) !== -1) { idsub.push(r); }
+      else if (tl.indexOf(q) !== -1) { titlesub.push(r); }
+      if (pre.length >= MAX_RESULTS) { break; }
+    }
+    return pre.concat(idsub, titlesub).slice(0, MAX_RESULTS);
+  }
+
+  function highlight(text, q) {
+    q = q.trim();
+    if (!q) { return escapeHtml(text); }
+    var idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) { return escapeHtml(text); }
+    return escapeHtml(text.slice(0, idx))
+      + '<mark>' + escapeHtml(text.slice(idx, idx + q.length)) + '</mark>'
+      + escapeHtml(text.slice(idx + q.length));
+  }
+
+  function siblingValueTemplate(input) {
+    var id = input.id || input.name || '';
+    var prefix = id.replace(/ruleset$/, '');
+    if (prefix === id) { return null; }
+    var form = input.form || document;
+    return form.querySelector('[id="' + prefix + 'value_template"]')
+        || form.querySelector('[name="' + prefix + 'value_template"]');
+  }
+
+  // ---- per-field controller -------------------------------------------------
+  function wire(input) {
+    if (input.dataset.rulesetWired) { return; }
+    var id = input.id || input.name || '';
+    if (!/(^|-)ruleset$/.test(id) || id.indexOf('outcomes') === -1) { return; }
+    input.dataset.rulesetWired = '1';
+    input.setAttribute('autocomplete', 'off');
+
+    var wrap = document.createElement('div');
+    wrap.className = 'ruleset-ac-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+
+    var menu = document.createElement('div');
+    menu.className = 'ruleset-ac-menu';
+    wrap.appendChild(menu);
+
+    var info = document.createElement('div');
+    info.className = 'ruleset-info';
+    wrap.insertAdjacentElement('afterend', info);
+
+    var items = [];        // current rendered entries
+    var active = -1;       // keyboard-highlighted index
+
+    function close() { menu.classList.remove('is-open'); active = -1; }
+
+    function open(list, q) {
+      items = list;
+      menu.innerHTML = '';
+      if (!list.length) {
+        menu.innerHTML = '<div class="ruleset-ac-note">No matching ruleset — '
+          + 'free text is fine</div>';
+        menu.classList.add('is-open');
+        return;
+      }
+      if (!q) {
+        var note = document.createElement('div');
+        note.className = 'ruleset-ac-note';
+        note.textContent = 'Rulesets with a ready example — type to search all '
+          + LIST.length;
+        menu.appendChild(note);
+      }
+      list.forEach(function(r, i) {
+        var el = document.createElement('div');
+        el.className = 'ruleset-ac-item';
+        el.dataset.index = i;
+        var meta = versionBadge(r)
+          + (r.example ? '<span class="ruleset-ac-badge is-example">★ example</span>' : '');
+        el.innerHTML =
+          '<div class="ruleset-ac-item-id">' + highlight(r.name, q) + '</div>'
+          + '<div class="ruleset-ac-item-title">' + highlight(r.title || '', q) + '</div>'
+          + '<div class="ruleset-ac-item-meta">' + meta + '</div>';
+        // mousedown (not click) so the input doesn't blur-close first.
+        el.addEventListener('mousedown', function(ev) {
+          ev.preventDefault();
+          choose(r);
+        });
+        menu.appendChild(el);
+      });
+      menu.classList.add('is-open');
+    }
+
+    function setActive(next) {
+      var els = menu.querySelectorAll('.ruleset-ac-item');
+      if (!els.length) { return; }
+      active = (next + els.length) % els.length;
+      els.forEach(function(e, i) {
+        e.classList.toggle('is-active', i === active);
+        if (i === active) { e.scrollIntoView({ block: 'nearest' }); }
+      });
+    }
+
+    function choose(entry) {
+      input.value = entry.name;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      close();
+      renderInfo(entry);
+      input.focus();
+    }
+
+    // Info + (if present) the example with an explicit Apply button.
+    function renderInfo(entry) {
+      var name = (input.value || '').trim();
+      if (!entry) { entry = BY_NAME[name]; }
+      if (!name) { info.innerHTML = ''; return; }
+      if (!entry) {
+        info.innerHTML = '<span class="ruleset-info-unknown">Custom ruleset '
+          + '(not in the known 2.x catalog) — free input is fine.</span>';
+        return;
+      }
+      info.innerHTML = '';
+      var head = document.createElement('div');
+      head.innerHTML = '<span class="ruleset-info-title">'
+        + escapeHtml(entry.title || name) + '</span>' + versionBadge(entry);
+      info.appendChild(head);
+
+      if (!entry.example) { return; }
+      var box = document.createElement('div');
+      box.className = 'ruleset-example';
+      var diff = entry.example_differs
+        ? '<div class="ruleset-example-note">Note: the value differs between '
+          + 'Checkmk versions — this is the newest version’s example.</div>'
+        : '';
+      box.innerHTML =
+        '<div class="ruleset-example-head">'
+        + '<span class="ruleset-example-label">Example value template</span>'
+        + '<button type="button" class="ruleset-apply-btn">'
+        + 'Apply example to Value Template</button></div>'
+        + '<pre class="ruleset-example-code">' + escapeHtml(entry.example) + '</pre>'
+        + diff;
+      info.appendChild(box);
+
+      box.querySelector('.ruleset-apply-btn').addEventListener('click', function() {
+        applyExample(entry, this);
+      });
+    }
+
+    function applyExample(entry, btn) {
+      var target = siblingValueTemplate(input);
+      if (!target) { return; }
+      var current = (target.value || '').trim();
+      if (current && current !== entry.example.trim()) {
+        if (!window.confirm('Overwrite the current Value Template with the '
+            + 'example for "' + entry.name + '"?')) { return; }
+      }
+      target.value = entry.example;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+      btn.textContent = 'Applied ✓';
+      btn.classList.add('is-done');
+      setTimeout(function() {
+        btn.textContent = 'Apply example to Value Template';
+        btn.classList.remove('is-done');
+      }, 1500);
+    }
+
+    input.addEventListener('focus', function() { open(search(input.value), input.value.trim()); });
+    input.addEventListener('input', function() {
+      open(search(input.value), input.value.trim());
+      renderInfo(null);
+    });
+    input.addEventListener('blur', function() { setTimeout(close, 150); });
+    input.addEventListener('keydown', function(ev) {
+      if (!menu.classList.contains('is-open')) { return; }
+      if (ev.key === 'ArrowDown') { ev.preventDefault(); setActive(active + 1); }
+      else if (ev.key === 'ArrowUp') { ev.preventDefault(); setActive(active - 1); }
+      else if (ev.key === 'Enter') {
+        if (active >= 0 && items[active]) { ev.preventDefault(); choose(items[active]); }
+      } else if (ev.key === 'Escape') { close(); }
+    });
+
+    // Reflect whatever value the field already holds (edit of an existing rule).
+    renderInfo(null);
+  }
+
+  function scan(root) {
+    if (root.querySelectorAll) { root.querySelectorAll('input').forEach(wire); }
+    if (root.tagName === 'INPUT') { wire(root); }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    fetch(ENDPOINT, { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        ALL_VERSIONS = data.versions || [];
+        LIST = data.rulesets || [];
+        LIST.forEach(function(r) { BY_NAME[r.name] = r; });
+        scan(document);
+      })
+      .catch(function() { /* fail open — field still works as free text */ });
+
+    // Outcome rows can be added after load (the inline "Add" button clones one).
+    new MutationObserver(function(muts) {
+      muts.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+          if (node.nodeType === 1) { scan(node); }
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+})();
+</script>
