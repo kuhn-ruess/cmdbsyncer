@@ -17,7 +17,7 @@ import importlib.util
 import os
 import sys
 import types
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _APP_ROOT = os.path.join(_REPO_ROOT, "application")
@@ -631,3 +631,22 @@ def base_mock_init(self_param, **overrides):
     defaults.update(overrides)
     for key, value in defaults.items():
         setattr(self_param, key, value)
+
+
+def make_checkmk_rule_sync():
+    """
+    Build a CheckmkRuleSync with CMK2.__init__ stubbed out. The patch only
+    has to be active while __init__ runs — base_mock_init sets every
+    attribute the tests need as plain instance state — so a context manager
+    is enough and no per-test teardown is required. Shared by the checkmk
+    rule test modules so the construction dance lives in one place.
+
+    cmk_rules is pulled from sys.modules (the real module was loaded above by
+    _load_real_module) rather than imported, because a top-level import here
+    would run before the bootstrap installs the stubs it depends on.
+    """
+    cmk_rules = sys.modules['application.plugins.checkmk.cmk_rules']
+    with patch('application.plugins.checkmk.cmk_rules.CMK2.__init__',
+               lambda self_param, account=False: base_mock_init(
+                   self_param, rulsets_by_type={})):
+        return cmk_rules.CheckmkRuleSync()

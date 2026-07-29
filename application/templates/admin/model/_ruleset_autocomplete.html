@@ -391,3 +391,46 @@
   });
 })();
 </script>
+
+{# Put each outcome's Folder + Folder Index on one line. Folder takes the
+   remaining width, Folder Index stays a narrow numeric box. Pure layout (no
+   colours) so every theme is fine; re-runs for rows the inline "Add" button
+   clones. #}
+<style>
+.cmk-folder-row { display: flex; gap: 14px; align-items: flex-start; }
+.cmk-folder-row > .form-group { flex: 1 1 auto; }
+.cmk-folder-row > .cmk-folder-idx { flex: 0 0 140px; }
+</style>
+<script>
+(function() {
+  function pair(root) {
+    if (!root.querySelectorAll) { return; }
+    root.querySelectorAll('input[id*="outcomes"][id$="-folder"]').forEach(function(folder) {
+      var folderGroup = folder.closest('.form-group');
+      if (!folderGroup || folderGroup.dataset.folderPaired) { return; }
+      var idx = document.getElementById(folder.id.slice(0, -'folder'.length) + 'folder_index');
+      var idxGroup = idx && idx.closest('.form-group');
+      if (!idxGroup) { return; }
+      var row = document.createElement('div');
+      row.className = 'cmk-folder-row';
+      folderGroup.parentNode.insertBefore(row, folderGroup);
+      idxGroup.classList.add('cmk-folder-idx');
+      row.appendChild(folderGroup);
+      row.appendChild(idxGroup);
+      folderGroup.dataset.folderPaired = '1';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    pair(document);
+    // Outcome rows can be cloned after load by the inline "Add" button.
+    new MutationObserver(function(muts) {
+      muts.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+          if (node.nodeType === 1) { pair(node); }
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+})();
+</script>

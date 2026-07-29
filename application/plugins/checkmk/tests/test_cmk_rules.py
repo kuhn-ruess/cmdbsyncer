@@ -23,7 +23,7 @@ from application.plugins.checkmk.cmk_rules import (
 )
 import application.plugins.checkmk.inits as inits  # noqa: E402  pylint: disable=consider-using-from-import
 from application.plugins.checkmk.helpers import project_allows_account
-from tests import base_mock_init
+from tests import base_mock_init, make_checkmk_rule_sync
 
 
 class _FakeMongo:  # pylint: disable=too-few-public-methods
@@ -811,7 +811,7 @@ class TestCmkConditionReverse(unittest.TestCase):
         }
         outcome = cmk_rule_to_outcome(cmk_rule)
 
-        sync = _make_sync()
+        sync = make_checkmk_rule_sync()
         sync.checkmk_version = '2.3.0'
         rebuilt = sync.build_condition_and_update_rule_params(
             dict(outcome), {'all': {'HOSTNAME': None}})
@@ -824,14 +824,6 @@ class TestCmkConditionReverse(unittest.TestCase):
         self.assertEqual(cond['service_description']['match_on'], ['CPU'])
         self.assertEqual(rebuilt['value'], "{'levels': (80, 90)}")
         self.assertEqual(rebuilt['folder'], '/server')
-
-
-def _make_sync():
-    """Build a CheckmkRuleSync with CMK2.__init__ stubbed out."""
-    with patch('application.plugins.checkmk.cmk_rules.CMK2.__init__',
-               lambda self_param, account=False: base_mock_init(
-                   self_param, rulsets_by_type={})):
-        return CheckmkRuleSync()
 
 
 class _FakeProgress:
@@ -856,7 +848,7 @@ class TestFetchRulesInFolder(unittest.TestCase):
     """CheckmkRuleSync.list_used_rulesets + fetch_rules_in_folder."""
 
     def setUp(self):
-        self.sync = _make_sync()
+        self.sync = make_checkmk_rule_sync()
         self.progress_patcher = patch(
             'application.plugins.checkmk.cmk_rules.Progress', _FakeProgress())
         self.progress_patcher.start()

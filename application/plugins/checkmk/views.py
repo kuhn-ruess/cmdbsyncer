@@ -49,6 +49,13 @@ from .models import (
     CheckmkFolderPool,
     CheckmkSitePool,
 )
+from .cmk_rules import label_condition_problems
+
+
+def _subform_data(subform, name):
+    """Stripped value of field ``name`` on an inline outcome subform."""
+    field = getattr(subform, name, None)
+    return (field.data or '').strip() if field is not None else ''
 
 
 def _project_choices():
@@ -741,6 +748,12 @@ class CheckmkMngmtRuleView(RuleModelView):
             'outcomes': {
                 'form_subdocuments' : {
                     '': {
+                        # `loop_over_list` is derived from `list_to_loop` in
+                        # on_model_change: the loop is active whenever an
+                        # attribute is named, so the extra checkbox only ever
+                        # confused operators (checked + empty = silently no
+                        # loop). Hide it and let the single field speak.
+                        'form_excluded_columns': ['loop_over_list'],
                         'form_overrides' : {
                             'ruleset': StringField,
                             'folder': StringField,
@@ -751,43 +764,91 @@ class CheckmkMngmtRuleView(RuleModelView):
                             'condition_service_label': StringField,
                             'condition_service': StringField,
                         },
+                        'form_args': {
+                            'list_to_loop': {
+                                'label': 'Loop over Attribute (List)',
+                                'description': (
+                                    'Optional. Name a Host Attribute that holds a'
+                                    ' list to create one rule per entry. In every'
+                                    ' template below use {{ loop }} for the current'
+                                    ' entry and {{ loop_idx }} for its 0-based index.'
+                                    ' Leave empty to create a single rule.'
+                                ),
+                            },
+                            # The four conditions restrict WHERE the created
+                            # Checkmk rule applies. Empty = no restriction on
+                            # that dimension. All support Jinja. The label
+                            # fields expect key:value; the confusing part is
+                            # that "condition_label_template" is a HOST label
+                            # while "condition_service_label" is a SERVICE
+                            # label, and comma means OR for names but AND for
+                            # service labels — so spell all of that out.
+                            'condition_host': {
+                                'label': 'Condition — Host name',
+                                'description': (
+                                    'Optional. Only apply to these hosts.'
+                                    ' Comma-separated = any of them matches (OR).'
+                                    ' Jinja supported; {{ HOSTNAME }} is the'
+                                    ' current host. Empty = no host-name condition.'
+                                ),
+                            },
+                            'condition_label_template': {
+                                'label': 'Condition — Host label',
+                                'description': (
+                                    'Optional. Only apply to hosts carrying this'
+                                    ' label. Give a single key:value label (only'
+                                    ' one host label is supported). Jinja'
+                                    ' supported. Empty = no host-label condition.'
+                                ),
+                            },
+                            'condition_service': {
+                                'label': 'Condition — Service name',
+                                'description': (
+                                    'Optional. For service rulesets only: apply'
+                                    ' to these services. Comma-separated = any of'
+                                    ' them matches (OR). Jinja supported. Empty ='
+                                    ' no service-name condition.'
+                                ),
+                            },
+                            'condition_service_label': {
+                                'label': 'Condition — Service label',
+                                'description': (
+                                    'Optional. For service rulesets only: apply'
+                                    ' to services carrying these labels. key:value;'
+                                    ' comma-separated = all must match (AND). Jinja'
+                                    ' supported. Empty = no service-label condition.'
+                                ),
+                            },
+                        },
                         'form_widget_args': {
                             'list_to_loop': {
                                 'placeholder': (
-                                    'You can enter an Attribute which contains a List.'
-                                    ' Then the rule will be executed for every entry in this list.'
+                                    'e.g. some_list_attribute'
+                                    ' — one rule per entry, empty = single rule'
                                 )
                             },
                             'value_template': {
                                 'placeholder': (
-                                    'Jinja. You can use {{loop}} to access variable'
-                                    'when used in loop list mode'
+                                    'Jinja. In loop mode use {{ loop }} for the'
+                                    ' current entry and {{ loop_idx }} for its index.'
                                 )
                             },
                             'condition_label_template': {
-                                'placeholder': (
-                                    'Jinja. Need to return key:value'
-                                )
+                                'placeholder': 'key:value — e.g. os:linux (one label only)'
                             },
                             'condition_host': {
                                 'placeholder': (
-                                    'Hostname for Condition, Supports'
-                                    ' Comma Seperated Lists (or).'
-                                    ' Use {{HOSTNAME}} for actual Host'
+                                    '{{ HOSTNAME }} or host1, host2 (comma = OR)'
                                 )
                             },
                             'condition_service': {
                                 'placeholder': (
-                                    'Service Name for Condition,'
-                                    ' Supports Comma Seperated'
-                                    ' Lists (or)'
+                                    'e.g. CPU load, Memory (comma = OR)'
                                 )
                             },
                             'condition_service_label': {
                                 'placeholder': (
-                                    'Service Labels for Condition,'
-                                    ' Supports Comma Seperated'
-                                    ' Lists (and)'
+                                    'key:value, key:value (comma = AND)'
                                 )
                             },
                         }
@@ -843,7 +904,32 @@ class CheckmkMngmtRuleView(RuleModelView):
                     'danger',
                 )
                 return False
+        label_errors = self._condition_label_errors(outcomes)
+        if label_errors:
+            for message in label_errors:
+                flash(message, 'danger')
+            return False
         return True
+
+    @staticmethod
+    def _condition_label_errors(outcomes):
+        """
+        Report malformed label conditions at save time instead of letting the
+        export silently drop the rule later. The heavy lifting (what counts as
+        a static, certain-wrong value vs. a Jinja value trusted until export)
+        lives in ``label_condition_problems``; here we just tag each message
+        with its outcome position.
+        """
+        errors = []
+        for pos, entry in enumerate(getattr(outcomes, 'entries', None) or [], start=1):
+            subform = getattr(entry, 'form', None)
+            if subform is None:
+                continue
+            for problem in label_condition_problems(
+                    _subform_data(subform, 'condition_label_template'),
+                    _subform_data(subform, 'condition_service_label')):
+                errors.append(f"Outcome {pos}: {problem}.")
+        return errors
 
     def on_model_change(self, form, model, is_created):
         """
@@ -858,6 +944,11 @@ class CheckmkMngmtRuleView(RuleModelView):
             if rule.value_template[-1] == '"':
                 rule.value_template = rule.value_template[:-1]
             rule.value_template = rule.value_template.replace('\\n',' ')
+            # The loop is active whenever an attribute is named — the
+            # separate checkbox is gone from the form, so keep the stored
+            # flag in sync with the field the engine actually needs.
+            rule.list_to_loop = (rule.list_to_loop or '').strip()
+            rule.loop_over_list = bool(rule.list_to_loop)
 
         model.primary_ruleset = (
             model.outcomes[0].ruleset if model.outcomes else ''
