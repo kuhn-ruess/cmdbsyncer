@@ -172,6 +172,13 @@ class Host(db.Document):
 
         return bool(hostname_regex.fullmatch(self.hostname))
 
+    def is_fqdn(self):
+        """
+        Validate that the Hostname is a fully-qualified domain name:
+        a valid hostname that carries at least one dot (a domain part).
+        """
+        return '.' in self.hostname and self.is_valid_hostname()
+
     def __str__(self):
         return f"{self.object_type}: {self.hostname} ({self.source_account_name})"
 
@@ -186,6 +193,19 @@ class Host(db.Document):
         valid = {choice[0] for choice in object_types}
         if self.object_type not in valid:
             self.object_type = 'auto'
+
+        # Optional hard requirement that every newly created host carries a
+        # fully-qualified domain name. Enforced only on creation (`not
+        # self.pk`) so existing non-FQDN hosts stay editable; CMDB objects
+        # and templates are exempt since their name is not a hostname. This
+        # is the single choke point covering import, manual and API creation
+        # — every path persists through save() -> clean().
+        if app.config.get('REQUIRE_FQDN') and not self.pk \
+                and not self.is_object and self.object_type != 'template':
+            if not self.is_fqdn():
+                raise HostError(
+                    f"{self.hostname} is not a fully-qualified domain name "
+                    "(REQUIRE_FQDN is enabled)")
 
 
 
