@@ -22,8 +22,11 @@ class FileAdminView(FileAdmin):
     editable_extensions = ('md', 'txt', 'csv', 'yml', 'json', 'pem')
 
 
-    # Define the columns to show
-    possible_columns = ('name', 'rel_path')
+    # Define the columns to show. Do not override `possible_columns`
+    # here: the base class uses it to map a column name to its index in
+    # the item tuple (name, rel_path, is_dir, size, date) when sorting.
+    # Shrinking it breaks sorting for `size`/`date` (index lookup fails,
+    # sort silently falls back to the default).
     column_list = ('name', 'size', 'date')
 
     list_template = 'admin/file/list.html'
