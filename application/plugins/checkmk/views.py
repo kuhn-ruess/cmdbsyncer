@@ -2106,7 +2106,7 @@ class CheckmkDataQualityView(BaseView):
         return [a.name for a in
                 Account.objects(enabled=True, type='cmkv2').order_by('name')]
 
-    def _render(self, accounts, selected_account='', report=None):
+    def _render(self, accounts, selected_account='', report=None, uppercase=None):
         """Render the Data Quality page in a single place."""
         # pylint: disable=import-outside-toplevel
         from .data_quality import cmdb_template_names
@@ -2115,6 +2115,7 @@ class CheckmkDataQualityView(BaseView):
             accounts=accounts,
             selected_account=selected_account,
             report=report,
+            uppercase=uppercase,
             templates=cmdb_template_names() if report else [])
 
     @staticmethod
@@ -2174,6 +2175,27 @@ class CheckmkDataQualityView(BaseView):
             return self._render(accounts, account_name)
 
         return self._render(accounts, account_name, report)
+
+    @expose('/uppercase_scan', methods=['POST'])
+    def uppercase_scan(self):
+        """List the account's monitored hosts whose name contains uppercase."""
+        # pylint: disable=import-outside-toplevel
+        from .data_quality import find_uppercase_hosts
+        from .cmk2 import CmkException
+
+        accounts = self._accounts()
+        account_name = request.form.get('account')
+        if account_name not in accounts:
+            flash('Select a Checkmk account first', 'error')
+            return redirect(self.get_url('.index'))
+
+        try:
+            uppercase = find_uppercase_hosts(account_name)
+        except CmkException as error:
+            flash(f"Checkmk request failed: {error}", 'error')
+            return self._render(accounts, account_name)
+
+        return self._render(accounts, account_name, uppercase=uppercase)
 
     @expose('/create_missing', methods=['POST'])
     def create_missing(self):

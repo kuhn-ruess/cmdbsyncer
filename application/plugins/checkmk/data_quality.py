@@ -234,6 +234,35 @@ def run_data_quality_check(account_name, hostnames):
     return build_report(hostnames, monitored_hosts, checkmk_services)
 
 
+def filter_uppercase_hostnames(names):
+    """
+    Pure: from an iterable of hostnames return the ones that carry uppercase
+    letters, each as ``{'name': <original>, 'suggested': <lowercased>}``,
+    sorted case-insensitively by name. Checkmk treats hostnames
+    case-sensitively, so a mixed-case name is a common data-quality problem.
+    """
+    hosts = [{'name': name, 'suggested': name.lower()}
+             for name in names if name != name.lower()]
+    hosts.sort(key=lambda host: host['name'].lower())
+    return hosts
+
+
+def find_uppercase_hosts(account_name):
+    """
+    Fetch every monitored host of ``account_name`` and return those whose name
+    contains uppercase letters. Returns a dict with a ``hosts`` list (see
+    :func:`filter_uppercase_hostnames`) and a ``total`` count of hosts scanned.
+    """
+    # pylint: disable=import-outside-toplevel
+    from .cmk2 import CMK2
+    cmk = CMK2(account_name)
+    monitored_hosts = _fetch_monitored_hosts(cmk)
+    return {
+        'hosts': filter_uppercase_hostnames(monitored_hosts.keys()),
+        'total': len(monitored_hosts),
+    }
+
+
 def cmdb_template_names():
     """Sorted names of the CMDB templates that can be applied to new hosts."""
     # pylint: disable=import-outside-toplevel

@@ -9,6 +9,7 @@ from application.plugins.checkmk.data_quality import (
     parse_hostnames_from_csv,
     parse_hostnames_from_text,
     build_report,
+    filter_uppercase_hostnames,
     _fetch_monitored_hosts,
     _fetch_checkmk_services,
 )
@@ -80,6 +81,27 @@ class TestParseHostnamesText(unittest.TestCase):
         self.assertEqual(
             parse_hostnames_from_text('  host1 \n\n host2\thost1  '),
             ['host1', 'host2'])
+
+
+class TestFilterUppercaseHostnames(unittest.TestCase):
+    """Tests for the pure uppercase-hostname filter"""
+
+    def test_empty(self):
+        self.assertEqual(filter_uppercase_hostnames([]), [])
+
+    def test_only_uppercase_carrying_names_returned(self):
+        result = filter_uppercase_hostnames(['host1', 'Host2', 'HOST3'])
+        self.assertEqual(
+            result,
+            [{'name': 'Host2', 'suggested': 'host2'},
+             {'name': 'HOST3', 'suggested': 'host3'}])
+
+    def test_sorted_case_insensitively(self):
+        names = ['Zeta', 'alpha1', 'Beta', 'ALPHA0']
+        # 'alpha1' is all-lowercase and dropped; the rest sort case-insensitively.
+        self.assertEqual(
+            [h['name'] for h in filter_uppercase_hostnames(names)],
+            ['ALPHA0', 'Beta', 'Zeta'])
 
 
 class TestBuildReport(unittest.TestCase):
