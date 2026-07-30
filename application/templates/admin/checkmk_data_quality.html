@@ -62,21 +62,19 @@
 
     <hr class="my-4"/>
 
-    {# Standalone scan — nothing to do with the CSV/paste check above. #}
+    {# Account-wide checks — no host list needed, unrelated to the CSV/paste check above. #}
     <form method="POST" action="{{ url_for('.uppercase_scan') }}"
           class="card app-card mb-4">
-        <div class="card-header">Find hosts with uppercase names</div>
+        <div class="card-header">Account-wide checks</div>
         <div class="card-body">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <p class="text-muted">
-                A separate check that needs no host list: it scans the whole
-                selected account for monitored hosts whose name contains
-                uppercase letters. Checkmk is case-sensitive, so those are a
-                common data-quality problem.
+                Scan a Checkmk account for hosts with uppercase letters or
+                without a fully-qualified name.
             </p>
             <div class="form-group">
-                <label for="uppercase_account">Checkmk account</label>
-                <select class="form-control" id="uppercase_account" name="account" required>
+                <label for="scan_account">Checkmk account</label>
+                <select class="form-control" id="scan_account" name="account" required>
                     <option value="">— select account —</option>
                     {% for account in accounts %}
                     <option value="{{ account }}"
@@ -86,8 +84,13 @@
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="btn btn-outline-secondary">
+            <button type="submit" class="btn btn-outline-secondary"
+                    formaction="{{ url_for('.uppercase_scan') }}">
                 <i class="fa fa-font"></i> Find uppercase names
+            </button>
+            <button type="submit" class="btn btn-outline-secondary"
+                    formaction="{{ url_for('.non_fqdn_scan') }}">
+                <i class="fa fa-globe"></i> Find hosts without FQDN
             </button>
         </div>
     </form>
@@ -123,6 +126,40 @@
             <p class="text-muted mb-0">
                 No monitored host in this account has uppercase letters in its
                 name.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if non_fqdn %}
+    <div class="card app-card mb-4">
+        <div class="card-header">
+            Hosts without an FQDN in <strong>{{ selected_account }}</strong>
+            <span class="badge badge-warning ml-1">{{ non_fqdn.hosts | length }}</span>
+            <span class="text-muted">of {{ non_fqdn.total }} scanned</span>
+        </div>
+        <div class="card-body">
+            {% if non_fqdn.hosts %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name in Checkmk (no domain part)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for host in non_fqdn.hosts %}
+                        <tr>
+                            <td><code>{{ host.name }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">
+                Every monitored host in this account has a fully-qualified name.
             </p>
             {% endif %}
         </div>

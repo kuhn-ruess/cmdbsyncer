@@ -10,6 +10,7 @@ from application.plugins.checkmk.data_quality import (
     parse_hostnames_from_text,
     build_report,
     filter_uppercase_hostnames,
+    filter_non_fqdn_hostnames,
     _fetch_monitored_hosts,
     _fetch_checkmk_services,
 )
@@ -102,6 +103,24 @@ class TestFilterUppercaseHostnames(unittest.TestCase):
         self.assertEqual(
             [h['name'] for h in filter_uppercase_hostnames(names)],
             ['ALPHA0', 'Beta', 'Zeta'])
+
+
+class TestFilterNonFqdnHostnames(unittest.TestCase):
+    """Tests for the pure non-FQDN (no-dot) hostname filter"""
+
+    def test_empty(self):
+        self.assertEqual(filter_non_fqdn_hostnames([]), [])
+
+    def test_only_names_without_a_dot_returned(self):
+        result = filter_non_fqdn_hostnames(
+            ['host1', 'host2.example.com', 'db'])
+        self.assertEqual(
+            result, [{'name': 'db'}, {'name': 'host1'}])
+
+    def test_sorted_case_insensitively(self):
+        self.assertEqual(
+            [h['name'] for h in filter_non_fqdn_hostnames(['Zeb', 'alpha', 'Beta'])],
+            ['alpha', 'Beta', 'Zeb'])
 
 
 class TestBuildReport(unittest.TestCase):

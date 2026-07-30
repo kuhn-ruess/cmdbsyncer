@@ -247,18 +247,43 @@ def filter_uppercase_hostnames(names):
     return hosts
 
 
+def filter_non_fqdn_hostnames(names):
+    """
+    Pure: from an iterable of hostnames return the ones that are not a
+    fully-qualified domain name — i.e. carry no dot — each as ``{'name': ...}``,
+    sorted case-insensitively by name.
+    """
+    hosts = [{'name': name} for name in names if '.' not in name]
+    hosts.sort(key=lambda host: host['name'].lower())
+    return hosts
+
+
 def find_uppercase_hosts(account_name):
     """
     Fetch every monitored host of ``account_name`` and return those whose name
     contains uppercase letters. Returns a dict with a ``hosts`` list (see
     :func:`filter_uppercase_hostnames`) and a ``total`` count of hosts scanned.
     """
+    return _scan_account(account_name, filter_uppercase_hostnames)
+
+
+def find_non_fqdn_hosts(account_name):
+    """
+    Fetch every monitored host of ``account_name`` and return those that are not
+    a fully-qualified domain name (no dot). Returns a dict with a ``hosts`` list
+    (see :func:`filter_non_fqdn_hostnames`) and a ``total`` count scanned.
+    """
+    return _scan_account(account_name, filter_non_fqdn_hostnames)
+
+
+def _scan_account(account_name, name_filter):
+    """Fetch the account's monitored hosts and apply ``name_filter`` to them."""
     # pylint: disable=import-outside-toplevel
     from .cmk2 import CMK2
     cmk = CMK2(account_name)
     monitored_hosts = _fetch_monitored_hosts(cmk)
     return {
-        'hosts': filter_uppercase_hostnames(monitored_hosts.keys()),
+        'hosts': name_filter(monitored_hosts.keys()),
         'total': len(monitored_hosts),
     }
 

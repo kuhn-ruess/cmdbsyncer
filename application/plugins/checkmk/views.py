@@ -2106,8 +2106,12 @@ class CheckmkDataQualityView(BaseView):
         return [a.name for a in
                 Account.objects(enabled=True, type='cmkv2').order_by('name')]
 
-    def _render(self, accounts, selected_account='', report=None, uppercase=None):
-        """Render the Data Quality page in a single place."""
+    def _render(self, accounts, selected_account='', report=None, extra=None):
+        """
+        Render the Data Quality page in a single place. ``extra`` carries the
+        optional account-scan result blocks (``uppercase`` / ``non_fqdn``);
+        anything not passed is simply undefined (falsy) in the template.
+        """
         # pylint: disable=import-outside-toplevel
         from .data_quality import cmdb_template_names
         return self.render(
@@ -2115,8 +2119,8 @@ class CheckmkDataQualityView(BaseView):
             accounts=accounts,
             selected_account=selected_account,
             report=report,
-            uppercase=uppercase,
-            templates=cmdb_template_names() if report else [])
+            templates=cmdb_template_names() if report else [],
+            **(extra or {}))
 
     @staticmethod
     def _hostnames_from_request():
@@ -2176,11 +2180,13 @@ class CheckmkDataQualityView(BaseView):
 
         return self._render(accounts, account_name, report)
 
-    @expose('/uppercase_scan', methods=['POST'])
-    def uppercase_scan(self):
-        """List the account's monitored hosts whose name contains uppercase."""
+    def _account_scan(self, finder_name, render_key):
+        """
+        Run an account-wide scan (uppercase / non-FQDN names) using the named
+        finder in ``data_quality`` and render its result under ``render_key``.
+        """
         # pylint: disable=import-outside-toplevel
-        from .data_quality import find_uppercase_hosts
+        from . import data_quality
         from .cmk2 import CmkException
 
         accounts = self._accounts()
@@ -2190,12 +2196,22 @@ class CheckmkDataQualityView(BaseView):
             return redirect(self.get_url('.index'))
 
         try:
-            uppercase = find_uppercase_hosts(account_name)
+            result = getattr(data_quality, finder_name)(account_name)
         except CmkException as error:
             flash(f"Checkmk request failed: {error}", 'error')
             return self._render(accounts, account_name)
 
-        return self._render(accounts, account_name, uppercase=uppercase)
+        return self._render(accounts, account_name, extra={render_key: result})
+
+    @expose('/uppercase_scan', methods=['POST'])
+    def uppercase_scan(self):
+        """List the account's monitored hosts whose name contains uppercase."""
+        return self._account_scan('find_uppercase_hosts', 'uppercase')
+
+    @expose('/non_fqdn_scan', methods=['POST'])
+    def non_fqdn_scan(self):
+        """List the account's monitored hosts that are not an FQDN (no dot)."""
+        return self._account_scan('find_non_fqdn_hosts', 'non_fqdn')
 
     @expose('/create_missing', methods=['POST'])
     def create_missing(self):
