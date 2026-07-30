@@ -1375,6 +1375,21 @@ class CheckmkFolderPoolView(DefaultModelView):
 
         return super().on_model_change(form, model, is_created)
 
+def format_site_pool_members(_view, _context, model, _name):
+    """Render the member sites of a Site Pool with their current host usage."""
+    members = model.member_sites or []
+    if not members:
+        return Markup('<span class="text-muted">No sites</span>')
+    parts = []
+    for member in members:
+        parts.append(
+            '<span class="badge bg-secondary" style="margin:1px;">'
+            f'{escape(member.site_id)} &middot; {member.hosts_taken} hosts'
+            '</span>'
+        )
+    return Markup(' '.join(parts))
+
+
 class CheckmkSitePoolView(DefaultModelView):
     """
     Site Pool Model
@@ -1382,6 +1397,14 @@ class CheckmkSitePoolView(DefaultModelView):
     column_default_sort = "name"
 
     column_list = ('name', 'member_sites', 'enabled', 'documentation')
+
+    column_formatters = {
+        'member_sites': format_site_pool_members,
+    }
+
+    column_labels = {
+        'member_sites': 'Member Sites (host usage)',
+    }
 
     column_editable_list = [
         'enabled',

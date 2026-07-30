@@ -649,6 +649,14 @@ def self_configure():
     # Rule Projects became generic Projects
     _migrate_project_collection()
 
+    # Recount Checkmk pool seat usage so the counters are correct after an update
+    # pylint: disable=import-outside-toplevel
+    from application.plugins.checkmk.inits import sync_folderpools, sync_sitepools
+    print("Sync Checkmk Folder Pools")
+    sync_folderpools()
+    print("Sync Checkmk Site Pools")
+    sync_sitepools()
+
 #.
 #   .-- Command: Install default Ansible playbooks
 @_cli_sys.command('install_playbooks')
