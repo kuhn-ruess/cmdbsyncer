@@ -67,6 +67,27 @@
         listed separately so they don't inflate the live counts.
     </p>
 
+    {% if current_user.has_right('host') and uppercase_count %}
+    {# ---- Hostname normalisation (write action) ---- #}
+    <div class="app-card" style="padding: 0.75rem 1rem; margin-bottom: 1rem;
+         display: flex; align-items: center; justify-content: space-between;
+         gap: 1rem; flex-wrap: wrap;">
+        <div>
+            <strong>Lowercase all hostnames</strong>
+            <div class="text-muted" style="font-size: 0.9em;">
+                {{ uppercase_count }} host(s) have uppercase letters in their name.
+            </div>
+        </div>
+        <form method="POST" action="{{ url_for('.lowercase_hostnames') }}"
+              onsubmit="return confirm('Rename {{ uppercase_count }} host(s) with uppercase letters to lowercase?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-outline-primary btn-sm">
+                <i class="fa fa-font"></i> Lowercase all hostnames
+            </button>
+        </form>
+    </div>
+    {% endif %}
+
     {# ---- KPI scorecard ---- #}
     {% set live = totals.live %}
     {% set with_missing = totals.with_missing %}

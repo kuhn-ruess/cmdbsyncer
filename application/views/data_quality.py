@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 import re
 
-from flask import Response, request, url_for
+from flask import Response, request, url_for, flash, redirect
 from flask_admin import BaseView, expose
 from flask_login import current_user
 
@@ -273,18 +273,42 @@ class DataQualityView(BaseView):
             archive_list_url = url_for('archive.index_view')
         except Exception:  # pylint: disable=broad-except
             archive_list_url = None
+        # How many hosts still carry uppercase letters — shown next to the
+        # "Lowercase all hostnames" button as a preview of what it would do.
+        uppercase_count = Host.objects(
+            object_type__ne='template', hostname__regex=r'[A-Z]').count()
         return self.render(
             'admin/data_quality.html',
             now=now,
             host_list_url=url_for('host.index_view'),
             account_edit_url=account_edit_url,
             archive_list_url=archive_list_url,
+            uppercase_count=uppercase_count,
             lifecycle_filter_idx=idx.get('Lifecycle State'),
             account_filter_idx=idx.get('Account'),
             hostname_filter_idx=idx.get('Hostname'),
             stale_filter_idx=idx.get('Stale'),
             **data,
         )
+
+    @expose('/lowercase_hostnames', methods=['POST'])
+    def lowercase_hostnames(self):
+        """
+        Normalise every stored hostname to lowercase. Write action, so it
+        needs the Hosts right on top of viewing the dashboard.
+        """
+        if not current_user.has_right('host'):
+            flash('You need the Hosts right to change hostnames.', 'error')
+            return redirect(url_for('.index'))
+        # pylint: disable=import-outside-toplevel
+        from application.helpers.host_maintenance import lowercase_all_hostnames
+        result = lowercase_all_hostnames(apply=True)
+        msg = f"Lowercased {len(result['renamed'])} hostname(s)."
+        if result['collisions']:
+            msg += (f" Skipped {len(result['collisions'])} host(s) whose "
+                    "lowercase name already exists — merge those by hand.")
+        flash(msg, 'warning' if result['collisions'] else 'success')
+        return redirect(url_for('.index'))
 
     @staticmethod
     def _export(section, data):

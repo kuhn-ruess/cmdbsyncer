@@ -401,6 +401,35 @@ def delete_template_labels(do_apply, debug):  # pylint: disable=unused-argument
         print(f"{CC.OKCYAN}  ** {CC.ENDC}Re-run with --apply to delete them")
 
 #.
+#   .-- Command: Lowercase Hostnames
+@_cli_sys.command('lowercase_hostnames')
+@click.option('--apply', 'do_apply', is_flag=True,
+              help="Actually rename. Without this flag it is a dry run.")
+@click.option('--debug', is_flag=True)
+def lowercase_hostnames(do_apply, debug):  # pylint: disable=unused-argument
+    """
+    Rename hosts that have uppercase letters in their name to lowercase.
+
+    Dry run by default; pass --apply to write the renames. A host is skipped
+    when its lowercase name is already taken by another host.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.helpers.host_maintenance import lowercase_all_hostnames
+    mode = "APPLY" if do_apply else "DRY-RUN"
+    print(f"{CC.HEADER} ***** Lowercase Hostnames ({mode}) ***** {CC.ENDC}")
+    result = lowercase_all_hostnames(apply=do_apply)
+    verb = "Renamed" if do_apply else "Would rename"
+    for pair in result['renamed']:
+        print(f"{CC.OKGREEN}  ** {CC.ENDC}{verb} {pair['old']} -> {pair['new']}")
+    for pair in result['collisions']:
+        print(f"{CC.WARNING}  ** {CC.ENDC}Skipped {pair['old']}: "
+              f"'{pair['target']}' already exists (merge by hand)")
+    print(f"{CC.OKGREEN}  ** {CC.ENDC}{verb} {len(result['renamed'])} host(s); "
+          f"{len(result['collisions'])} collision(s)")
+    if not do_apply and result['renamed']:
+        print(f"{CC.OKCYAN}  ** {CC.ENDC}Re-run with --apply to rename them")
+
+#.
 #   .-- Command: Delete all Hosts
 @_cli_sys.command('delete_all_hosts')
 @click.argument("account", default="")
