@@ -16,7 +16,8 @@ def lowercase_all_hostnames(apply=False):
 
     Templates are left alone (their name is an identifier, not a hostname).
     A host is reported as a *collision* and skipped when its lowercase name is
-    already taken by another host, since the hostname is unique.
+    already taken by another host, since the hostname is unique — this includes
+    archived hosts, which keep occupying their name.
 
     Plans only by default; pass ``apply=True`` to write the renames. Returns a
     summary dict with ``renamed`` (list of ``{'old','new'}``), ``collisions``

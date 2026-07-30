@@ -386,13 +386,22 @@
                 <tr>
                     <td><code>{{ cluster|length }}</code></td>
                     <td>
-                        {% for name in cluster %}
-                        {% if hostname_filter_idx is not none %}
-                        <a href="{{ host_list_url }}?flt0_{{ hostname_filter_idx }}={{ name }}"
-                           class="badge badge-secondary mr-1"
-                           style="text-decoration:none;">{{ name }}</a>
+                        {% for member in cluster %}
+                        {% if member.archived %}
+                        {% if archive_list_url %}
+                        <a href="{{ archive_list_url }}?flt0_0={{ member.name }}"
+                           class="badge badge-light mr-1" style="text-decoration:none;"
+                           title="Archived host">{{ member.name }} <em>(archived)</em></a>
                         {% else %}
-                        <span class="badge badge-secondary mr-1">{{ name }}</span>
+                        <span class="badge badge-light mr-1"
+                              title="Archived host">{{ member.name }} <em>(archived)</em></span>
+                        {% endif %}
+                        {% elif hostname_filter_idx is not none %}
+                        <a href="{{ host_list_url }}?flt0_{{ hostname_filter_idx }}={{ member.name }}"
+                           class="badge badge-secondary mr-1"
+                           style="text-decoration:none;">{{ member.name }}</a>
+                        {% else %}
+                        <span class="badge badge-secondary mr-1">{{ member.name }}</span>
                         {% endif %}
                         {% endfor %}
                     </td>

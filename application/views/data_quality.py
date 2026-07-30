@@ -120,6 +120,21 @@ def _collect_silent_sources(seen_names):
     return out
 
 
+def _archive_pass(archive_q, per_source, normalized):
+    """
+    Fold the archived hosts into the per-source archive counts and the
+    duplicate-name clustering (marked ``archived``). Returns the total count.
+    """
+    total = 0
+    for host in archive_q.only('source_account_name', 'hostname'):
+        total += 1
+        per_source[host.source_account_name or '(none)']['archived'] += 1
+        key = _normalize_hostname(host.hostname)
+        if key:
+            normalized[key].append({'name': host.hostname, 'archived': True})
+    return total
+
+
 def _collect(now):  # pylint: disable=too-many-locals
     """
     One pass over the live host collection plus a tiny pass over the
@@ -169,7 +184,7 @@ def _collect(now):  # pylint: disable=too-many-locals
 
         key = _normalize_hostname(host.hostname)
         if key:
-            normalized[key].append(host.hostname)
+            normalized[key].append({'name': host.hostname, 'archived': False})
 
         if has_cmdb_schema:
             missing = _missing_cmdb_fields(host, cmdb_models, all_required)
@@ -184,10 +199,11 @@ def _collect(now):  # pylint: disable=too-many-locals
                         'missing': missing,
                     })
 
-    total_archived = 0
-    for host in archive_q.only('source_account_name'):
-        total_archived += 1
-        per_source[host.source_account_name or '(none)']['archived'] += 1
+    # Fold archived hosts into the archive counts and the duplicate clustering
+    # so a name that only differs in case (or domain) from an archived host is
+    # spotted too — e.g. a host that cannot be lowercased because the lowercase
+    # name is still held by an archived host.
+    total_archived = _archive_pass(archive_q, per_source, normalized)
 
     sources_silent_count = _annotate_freshness(per_source, now)
 
@@ -196,8 +212,9 @@ def _collect(now):  # pylint: disable=too-many-locals
     types = sorted(({'name': k, **v} for k, v in per_type.items()),
                    key=lambda r: -r['total'])
     duplicate_clusters = sorted(
-        [cluster for cluster in normalized.values() if len(cluster) > 1],
-        key=lambda lst: -len(lst),
+        [sorted(cluster, key=lambda m: (m['archived'], m['name'].lower()))
+         for cluster in normalized.values() if len(cluster) > 1],
+        key=lambda members: -len(members),
     )[:_DUPLICATE_HOST_LIMIT]
     missing_top = missing_field_freq.most_common(_MISSING_FIELD_FREQ_LIMIT)
 
@@ -306,7 +323,8 @@ class DataQualityView(BaseView):
         msg = f"Lowercased {len(result['renamed'])} hostname(s)."
         if result['collisions']:
             msg += (f" Skipped {len(result['collisions'])} host(s) whose "
-                    "lowercase name already exists — merge those by hand.")
+                    "lowercase name already exists (including archived hosts) — "
+                    "see “Possible duplicate hostnames” below and merge by hand.")
         flash(msg, 'warning' if result['collisions'] else 'success')
         return redirect(url_for('.index'))
 
@@ -316,7 +334,9 @@ class DataQualityView(BaseView):
         exporters = {
             'duplicates': lambda d: _csv_response(
                 'duplicates.csv', ['count', 'hostnames'],
-                [(len(c), ', '.join(c)) for c in d['duplicates']]),
+                [(len(c), ', '.join(
+                    m['name'] + (' (archived)' if m['archived'] else '')
+                    for m in c)) for c in d['duplicates']]),
             'empty_fields': lambda d: _csv_response(
                 'empty_fields.csv', ['hostname', 'object_type', 'missing'],
                 [(r['hostname'], r['object_type'], ', '.join(r['missing']))
