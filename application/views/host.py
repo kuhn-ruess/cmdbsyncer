@@ -136,6 +136,12 @@ def _account_field_choices(current=None):
     """
     choices = [(n, n) for n in _allowed_account_names()]
     known = {c[0] for c in choices}
+    # Let an operator hand a host over to the CMDB: picking this in the
+    # form sets the CMDB source sentinel, which locks the host from
+    # imports and makes it manageable only in the GUI.
+    if CMDB_SOURCE_ACCOUNT_NAME not in known:
+        choices.insert(0, (CMDB_SOURCE_ACCOUNT_NAME, 'cmdb (CMDB managed)'))
+        known.add(CMDB_SOURCE_ACCOUNT_NAME)
     if current and current not in known:
         choices.insert(0, (current, current))
     return choices
@@ -1916,12 +1922,18 @@ Impact Chain.
         chosen_account = (model.source_account_name or '').strip()
         if chosen_account == CMDB_SOURCE_ACCOUNT_NAME:
             model.source_account_id = CMDB_SOURCE_ACCOUNT_ID
+            # A CMDB-managed host is locked from imports and lives only in
+            # the GUI, so the import-protection flag is meaningless here.
+            # Drop it so maintenance autodelete/purge can still reap the
+            # host if it ever goes stale.
+            model.no_autodelete = False
         elif chosen_account:
             account = Account.objects(name=chosen_account).first()
             model.source_account_id = str(account.id) if account else ''
+            model.no_autodelete = True
         else:
             model.source_account_id = ''
-        model.no_autodelete = True
+            model.no_autodelete = True
         # Tag this label mutation as a manual edit so HostLabelChange
         # rows carry the right origin + acting user in the Timeline.
         # pylint: disable=protected-access
