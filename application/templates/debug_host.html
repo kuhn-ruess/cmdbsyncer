@@ -404,7 +404,10 @@
                         {% endif %}
                       </td>
                       <td>
-                        {% if rule['hit'] %}
+                        {% if rule['static'] %}
+                          <span class="badge badge-secondary">static</span>
+                          <span class="text-muted">host-independent — emitted for every host, match conditions ignored</span>
+                        {% elif rule['hit'] %}
                           {% if rule['match_reason'] %}
                             {{ render_condition(rule['match_reason']) }}
                           {% else %}

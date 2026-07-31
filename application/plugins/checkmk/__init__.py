@@ -274,6 +274,19 @@ def get_host_debug_data(hostname):
             'Setup Rules', CheckmkRulesetRule(),
             CheckmkRuleMngmt.objects(enabled=True).order_by('sort_field'),
             db_host, attributes)
+        # Static Setup rules carry no host data: on export their match
+        # conditions are ignored and they are emitted for every host
+        # (see CheckmkRuleSync.calculate_static_rules). The debug engine
+        # above still condition-matches them against this host, so its
+        # hit/miss is meaningless and misleads admins into reading a
+        # global rule as host-specific. Flag them so the page renders
+        # them as host-independent instead.
+        static_ids = {str(_id) for _id in CheckmkRuleMngmt.objects(
+            enabled=True, static_rule=True).scalar('id')}
+        for line in rule_logs['Setup Rules']:
+            if line.get('id') in static_ids:
+                line['static'] = True
+                line['hit'] = True  # always emitted on export
 
         # Same for the Downtime rules, so a downtime that unexpectedly is
         # not exported can be debugged in the GUI — including which
