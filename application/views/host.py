@@ -28,6 +28,7 @@ from application.plugins.checkmk import (
     get_rule_preview as cmk_rule_preview,
 )
 from application.plugins.checkmk.cmk_rules import get_preview_providers
+from application.plugins.checkmk.sitepool import release_site_for_site_id
 from application.plugins.netbox import get_device_debug_data as netbox_host_debug
 from application.plugins.ansible import get_ansible_debug_data as ansible_host_debug
 from application.plugins.ansible.models import AnsibleProject
@@ -2113,6 +2114,29 @@ Impact Chain.
             flash(f"Removed the project assignment from {updated} host(s)",
                   'success')
         return redirect(return_to)
+
+    @action('redistribute_site_pool', 'Redistribute Site Pool',
+            'Clear the Site Pool assignment on the selected hosts so they get '
+            'a fresh, least-loaded site on the next export?')
+    def action_redistribute_site_pool(self, ids):
+        """
+        Drop the sticky Checkmk Site Pool seat of the selected hosts. The
+        seat is freed on its pool and the host's ``pool_site`` lock cleared,
+        so the next export reassigns the host to the currently least-loaded
+        site of its pool. Hosts without a Site Pool assignment are skipped.
+        """
+        changed = 0
+        for host in Host.objects(id__in=ids):
+            old_site = host.get_pool_site()
+            if not old_site:
+                continue
+            release_site_for_site_id(old_site)
+            host.lock_to_pool_site(False)
+            changed += 1
+        flash(f'Cleared the Site Pool assignment on {changed} host(s); they '
+              f'will be reassigned to the least-loaded site on the next '
+              f'export.', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
 
     @action('set_account', 'Set Account', None)
     def action_set_account(self, ids):
