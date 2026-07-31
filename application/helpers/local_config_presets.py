@@ -250,12 +250,6 @@ PRESETS = [
              'hint': 'Lowercase every imported attribute key.'},
             {'key': 'REPLACE_ATTRIBUTE_KEYS', 'type': 'bool', 'default': False,
              'hint': 'Apply the REPLACERS table to attribute keys.'},
-            {'key': 'CHECK_FOR_VALID_HOSTNAME', 'type': 'bool',
-             'default': True,
-             'hint': 'Reject hostnames that fail the RFC-1123 regex.'},
-            {'key': 'REQUIRE_FQDN', 'type': 'bool', 'default': False,
-             'hint': 'Reject new hosts (import, manual or API) whose name '
-                     'is not a fully-qualified domain name (needs a dot).'},
             {'key': 'LABELS_ITERATE_FIRST_LEVEL', 'type': 'bool',
              'default': False,
              'hint': 'Treat the first-level keys of nested label dicts '

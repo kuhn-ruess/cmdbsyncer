@@ -629,6 +629,31 @@ def _migrate_project_collection():
     print(f" -> Migrated {moved} project(s), removed legacy collection")
 
 
+def _warn_migrated_account_settings(config):
+    """
+    Warn loudly if the deprecated CHECK_FOR_VALID_HOSTNAME / REQUIRE_FQDN
+    keys are still present in local_config.py. Both moved to the Account
+    (Object Settings) and have no effect from local_config.py any more.
+    """
+    migrated = [key for key in ('CHECK_FOR_VALID_HOSTNAME', 'REQUIRE_FQDN')
+                if key in config]
+    if not migrated:
+        return
+    line = "!" * 72
+    print(f"\n{CC.FAIL}{line}")
+    print("!! ACTION REQUIRED: deprecated hostname-check settings found")
+    print(f"{line}{CC.ENDC}")
+    for key in migrated:
+        print(f"{CC.FAIL}  * {key} = {config[key]!r}{CC.ENDC}")
+    print(f"{CC.WARNING}These settings moved to the Account (Object "
+          "Settings): 'Check for valid hostname' and 'Require FQDN'. They "
+          "no longer take effect from local_config.py and, unlike before, "
+          "no longer apply to object accounts.")
+    print("Enable them on the accounts that need them, then remove the "
+          f"keys above from local_config.py.{CC.ENDC}")
+    print(f"{CC.FAIL}{line}{CC.ENDC}\n")
+
+
 @_cli_sys.command('self_configure')
 def self_configure():
     """
@@ -655,6 +680,7 @@ def self_configure():
         'SESSION_COOKIE_NAME': "cmdb-syncer",
     }
     from local_config import config  # pylint: disable=import-outside-toplevel
+    _warn_migrated_account_settings(config)
     for key, value in values.items():
         if key not in config:
             config[key] = value

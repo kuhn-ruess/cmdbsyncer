@@ -24,6 +24,42 @@ _DOCS_BADGE = rules.HTML(
     f'<i class="fa fa-info-circle"></i> Documentation</a>'
 )
 
+
+def _field_help(text):
+    """
+    A visible, theme-aware help line placed right under a form field.
+
+    Flask-Admin only renders `form_descriptions` for checkboxes as a hover
+    tooltip (easy to miss, and unstyled in the custom themes), so switch
+    explanations are rendered explicitly instead.
+    """
+    return rules.HTML(
+        '<p style="margin:-8px 0 12px; font-size:0.82rem; '
+        'color:var(--surface-muted,#6c757d);">'
+        f'{escape(text)}</p>'
+    )
+
+
+# Shared switch explanations — user-facing wording, kept identical between the
+# main and child account forms where the same switch appears.
+_HELP_IS_MASTER = (
+    "Let this account take over and update hosts that another account already "
+    "imported. Normally a host belongs to the first account that imported it "
+    "and other accounts leave it untouched — a master account is allowed to "
+    "claim it."
+)
+_HELP_IS_OBJECT = (
+    "Store what this account imports as Objects instead of Hosts. Use it for "
+    "things that are not servers — like locations, contracts or clusters. "
+    "Objects are never exported as hosts, but all of their attributes stay "
+    "available in your rules."
+)
+_HELP_CMDB_OBJECT = (
+    "Treat this account as a source for your internal CMDB. Imported entries "
+    "automatically get your CMDB template and default fields, and are kept "
+    "even if they later disappear from the source (never auto-deleted)."
+)
+
 def _render_custom_data(_view, _context, model, _name):
     """
     Render for detail table
@@ -78,9 +114,13 @@ class ChildAccountModelView(DefaultModelView):
                      rules.Field('parent'),
                      rules.Field('enabled')]),
             section('2', 'cond', 'Object Settings',
-                    'Which object types this child account covers.',
+                    'Which object types this child account covers and its '
+                    'import name checks.',
                     [rules.Field('is_object'),
-                     rules.Field('object_type')]),
+                     _field_help(_HELP_IS_OBJECT),
+                     rules.Field('object_type'),
+                     rules.Field('check_for_valid_hostname'),
+                     rules.Field('require_fqdn')]),
             section('3', 'out', 'Additional Configuration',
                     'Freeform custom fields and per-plugin settings.',
                     [rules.Field('custom_fields'),
@@ -147,6 +187,7 @@ class AccountModelView(DefaultModelView):
                     [rules.Field('name'),
                      rules.Field('type'),
                      rules.Field('is_master'),
+                     _field_help(_HELP_IS_MASTER),
                      rules.Field('enabled')]),
             section('2', 'cond', 'Access',
                     'How the syncer connects to this system.',
@@ -158,10 +199,15 @@ class AccountModelView(DefaultModelView):
                     [rules.Field('custom_fields'),
                      rules.Field('plugin_settings')]),
             section('4', 'aux', 'Object Settings',
-                    'Which object types this account produces or targets.',
+                    'Which object types this account produces or targets and '
+                    'its import name checks.',
                     [rules.Field('is_object'),
+                     _field_help(_HELP_IS_OBJECT),
                      rules.Field('cmdb_object'),
-                     rules.Field('object_type')]),
+                     _field_help(_HELP_CMDB_OBJECT),
+                     rules.Field('object_type'),
+                     rules.Field('check_for_valid_hostname'),
+                     rules.Field('require_fqdn')]),
         ),
     ]
 

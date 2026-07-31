@@ -82,6 +82,10 @@ class Account(db.Document):
         parent (Account): Reference to the parent account.
         is_object (bool): Indicates if this account represents an object.
         object_type (str): Type of object associated with the account.
+        check_for_valid_hostname (bool): Reject imported hosts whose name
+            fails the RFC-1123 regex (non-object accounts only).
+        require_fqdn (bool): Reject imported hosts whose name is not a
+            fully-qualified domain name (non-object accounts only).
         address (str): Address or endpoint for the account.
         username (str): Username for authentication.
         password (str): Plaintext password (for backward compatibility).
@@ -121,6 +125,12 @@ class Account(db.Document):
     is_object = db.BooleanField(default=False)
     cmdb_object = db.BooleanField(default=False)
     object_type = db.StringField(choices=object_types)
+
+    # Per-account import checks (replace the former global
+    # CHECK_FOR_VALID_HOSTNAME / REQUIRE_FQDN local_config settings). Object
+    # accounts are exempt from both — their name is not a real hostname.
+    check_for_valid_hostname = db.BooleanField(default=True)
+    require_fqdn = db.BooleanField(default=False)
 
     address = db.StringField()
     username = db.StringField()

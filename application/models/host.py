@@ -179,6 +179,30 @@ class Host(db.Document):
         """
         return '.' in self.hostname and self.is_valid_hostname()
 
+    def _validate_import_name(self, account_dict, is_object):
+        """
+        Enforce the per-account hostname import checks and raise HostError on
+        a violation.
+
+        Both toggles live on the importing account (`check_for_valid_hostname`
+        defaults on, `require_fqdn` defaults off). Object accounts are exempt
+        from both — an object's name is not a real hostname. Templates are
+        additionally exempt from the FQDN check for the same reason.
+        """
+        if is_object:
+            return
+        account_dict = account_dict or {}
+        if self.object_type == 'host' \
+                and account_dict.get('check_for_valid_hostname', True) \
+                and not self.is_valid_hostname():
+            raise HostError(f"{self.hostname} is not a valid Hostname,"
+                            "but object type for import is set to host")
+        if self.object_type != 'template' \
+                and account_dict.get('require_fqdn', False) \
+                and not self.is_fqdn():
+            raise HostError(f"{self.hostname} is not a fully-qualified domain "
+                            "name (require_fqdn is enabled on the account)")
+
     def __str__(self):
         return f"{self.object_type}: {self.hostname} ({self.source_account_name})"
 
@@ -193,19 +217,6 @@ class Host(db.Document):
         valid = {choice[0] for choice in object_types}
         if self.object_type not in valid:
             self.object_type = 'auto'
-
-        # Optional hard requirement that every newly created host carries a
-        # fully-qualified domain name. Enforced only on creation (`not
-        # self.pk`) so existing non-FQDN hosts stay editable; CMDB objects
-        # and templates are exempt since their name is not a hostname. This
-        # is the single choke point covering import, manual and API creation
-        # — every path persists through save() -> clean().
-        if app.config.get('REQUIRE_FQDN') and not self.pk \
-                and not self.is_object and self.object_type != 'template':
-            if not self.is_fqdn():
-                raise HostError(
-                    f"{self.hostname} is not a fully-qualified domain name "
-                    "(REQUIRE_FQDN is enabled)")
 
 
 
@@ -839,10 +850,7 @@ class Host(db.Document):
             is_object = account_dict.get('is_object', False)
             self.object_type = account_dict.get('object_type', 'auto')
 
-        if self.object_type == 'host' and app.config['CHECK_FOR_VALID_HOSTNAME']:
-            if not self.is_valid_hostname():
-                raise HostError(f"{self.hostname} is not a valid Hostname,"
-                                   "but object type for import is set to host")
+        self._validate_import_name(account_dict, is_object)
 
         if account_dict['typ'] == 'from_api':
             self.no_autodelete = True
