@@ -5,9 +5,8 @@
         <div class="app-card" style="margin-top: 1.5rem;">
             <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
                 <h2>Set Account</h2>
-                <p>Assign the source account of {{ ids|length }} host(s).
-                   {% if not accounts %}You have no accounts available to
-                   assign.{% endif %}</p>
+                <p>Assign the source account of {{ ids|length }} host(s), or
+                   hand them over to the CMDB.</p>
             </div>
             <form method="POST" action="{{ url_for('.process_set_account') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -17,6 +16,7 @@
                 <div class="form-group">
                     <label for="account">Select account</label>
                     <select class="form-control" id="account" name="account" required>
+                        <option value="{{ cmdb_account_name }}">cmdb (CMDB managed)</option>
                         {% for account in accounts %}
                         <option value="{{ account }}">{{ account }}</option>
                         {% endfor %}
@@ -24,8 +24,7 @@
                 </div>
 
                 <div class="form-group mb-0">
-                    <button type="submit" class="btn btn-primary"
-                            {% if not accounts %}disabled{% endif %}>Set Account</button>
+                    <button type="submit" class="btn btn-primary">Set Account</button>
                     <a href="{{ return_to or url_for('.index_view') }}" class="btn btn-secondary">Cancel</a>
                 </div>
             </form>

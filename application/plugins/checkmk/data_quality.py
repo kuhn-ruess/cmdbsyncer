@@ -298,9 +298,9 @@ def cmdb_template_names():
 
 def create_internal_cmdb_hosts(hostnames, template_name=None):
     """
-    Create the given hostnames as internal-CMDB host objects (source ``cmdb``),
-    optionally assigning a CMDB template so the new hosts inherit its
-    labels/attributes at export time.
+    Create the given hostnames as internal CMDB-managed hosts (source ``cmdb``,
+    not CMDB objects), optionally assigning a CMDB template so the new hosts
+    inherit its labels/attributes at export time.
 
     Mirrors the internal-CMDB stamping the Host admin view does on save. Hosts
     that already exist are left untouched and reported under ``skipped``.
@@ -329,7 +329,10 @@ def create_internal_cmdb_hosts(hostnames, template_name=None):
         now = datetime.now()
         host.last_import_sync = now
         host.last_import_seen = now
-        host.is_object = True
+        # CMDB-managed *host*, not a CMDB object: keep is_object False so the
+        # new entries show up in the normal host list (and get exported to
+        # Checkmk) instead of landing in the Objects view.
+        host.is_object = False
         host.object_type = 'host'
         host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
         host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME

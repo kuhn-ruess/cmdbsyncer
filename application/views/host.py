@@ -787,7 +787,10 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         )
 
     def is_action_allowed(self, name):
-        if name.startswith('lifecycle_') and not app.config.get('CMDB_MODE'):
+        # Both lifecycle changes and "Convert to Host" mutate data; the
+        # Objects view is read-only outside CMDB mode, so hide them there.
+        if (name.startswith('lifecycle_') or name == 'make_host') \
+                and not app.config.get('CMDB_MODE'):
             return False
         return super().is_action_allowed(name)
 
@@ -887,6 +890,23 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         """Clone the source object under the new hostname."""
         return _process_copy_as_new('Object')
 
+    @action('make_host', 'Convert to Host',
+            'Remove the object flag from the selected entries and turn them '
+            'into regular hosts? They will move to the Hosts list.')
+    def action_make_host(self, ids):
+        """
+        Bulk-convert CMDB objects into regular hosts: clear ``is_object`` and
+        normalise ``object_type`` to ``host`` so they leave the Objects list
+        and appear under Hosts. Source account and labels are kept.
+        """
+        query = Host.objects(id__in=ids, is_object=True, object_type__ne='template')
+        scope = current_user.account_scope() if current_user.is_authenticated else None
+        if scope is not None:
+            query = query.filter(source_account_name__in=list(scope))
+        updated = query.update(set__is_object=False, set__object_type='host')
+        flash(f'Converted {updated} object(s) to host(s).', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
 
 class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
     """Template Model View for CMDB templates."""
@@ -897,6 +917,13 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         if not app.config.get('CMDB_MODE'):
             return False
         return super().is_accessible()
+
+    def is_action_allowed(self, name):
+        # A template is not a host — the inherited "Convert to Host" bulk
+        # action makes no sense here.
+        if name == 'make_host':
+            return False
+        return super().is_action_allowed(name)
 
     form_rules = [
         rules.HTML('''
@@ -2017,6 +2044,7 @@ Impact Chain.
             kwargs.setdefault('assign_project_choices',
                               [p.name for p in Project.objects().order_by('name')])
             kwargs.setdefault('set_account_choices', _allowed_account_names())
+            kwargs.setdefault('cmdb_account_name', CMDB_SOURCE_ACCOUNT_NAME)
             kwargs.setdefault('cmdb_mode', app.config.get('CMDB_MODE', False))
             # pylint: disable=import-outside-toplevel
             from application.views.saved_search import list_for_path
@@ -2102,6 +2130,7 @@ Impact Chain.
         ids = [str(escape(i)) for i in request.args.get('ids', '').split(',') if i]
         return render_template('admin/set_account_form.html', ids=ids,
                                accounts=_allowed_account_names(),
+                               cmdb_account_name=CMDB_SOURCE_ACCOUNT_NAME,
                                return_to=request.args.get('return_to', ''))
 
     @expose('/process_set_account', methods=['POST'])
@@ -2117,6 +2146,22 @@ Impact Chain.
 
         if not account_name:
             flash("No account selected", 'error')
+            return redirect(return_to)
+        # CMDB managed: hand the selected hosts over to the CMDB. The source
+        # sentinel locks them against imports (see Host.set_account), so no
+        # other account can overwrite them, and no_autodelete is dropped so
+        # maintenance can still reap them if they go stale — same behaviour as
+        # picking "cmdb" in the single-host edit form.
+        if account_name == CMDB_SOURCE_ACCOUNT_NAME:
+            query = Host.objects(id__in=host_ids)
+            scope = current_user.account_scope() if current_user.is_authenticated else None
+            if scope is not None:
+                query = query.filter(source_account_name__in=list(scope))
+            updated = query.update(
+                set__source_account_name=CMDB_SOURCE_ACCOUNT_NAME,
+                set__source_account_id=CMDB_SOURCE_ACCOUNT_ID,
+                set__no_autodelete=False)
+            flash(f"Set {updated} host(s) to CMDB managed", 'success')
             return redirect(return_to)
         if account_name not in _allowed_account_names():
             flash(f"Account '{account_name}' is not available to you", 'error')

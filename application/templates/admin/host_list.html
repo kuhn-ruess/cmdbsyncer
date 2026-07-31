@@ -200,6 +200,9 @@
           <div class="form-group mb-0">
             <label for="setAccountName">Select account</label>
             <select class="form-control" id="setAccountName" name="account" required>
+              {% if cmdb_account_name %}
+                <option value="{{ cmdb_account_name }}">cmdb (CMDB managed)</option>
+              {% endif %}
               {% for account in set_account_choices or [] %}
                 <option value="{{ account }}">{{ account }}</option>
               {% endfor %}
