@@ -57,6 +57,59 @@ application = app
 
 #   .-- Command: Maintenance
 
+# Default retention for archived (soft-deleted) hosts before they are
+# permanently removed. Overridable per account via the
+# `purge_archived_after_days` custom field; 0 disables the purge.
+DEFAULT_PURGE_ARCHIVED_DAYS = 30
+
+
+def _resolve_purge_days(account):
+    """
+    Days after which archived hosts are permanently deleted. Reads the
+    account's `purge_archived_after_days` override, falling back to
+    DEFAULT_PURGE_ARCHIVED_DAYS when unset. Returns 0 when explicitly
+    disabled. The legacy int-mode (no account) always uses the default.
+    """
+    raw = account.get('purge_archived_after_days') if isinstance(account, dict) else None
+    if raw in (None, ''):
+        return DEFAULT_PURGE_ARCHIVED_DAYS
+    return int(raw)
+
+
+def _purge_archived_hosts(account_filter, purge_days):
+    """
+    Permanently delete hosts that have been archived (soft-deleted) for
+    longer than `purge_days` days. Protected (`no_autodelete`) hosts and
+    templates are never purged. When an account filter is given the purge is
+    scoped to that source account, mirroring the archiving step above.
+
+    Returns the number of hosts removed.
+    """
+    if not purge_days:
+        print(f"{CC.WARNING} Archive purge disabled (0 days) {CC.ENDC}")
+        return 0
+
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=purge_days)
+    db_filter = {
+        'deleted_at__lte': cutoff,
+        'no_autodelete__ne': True,
+        'object_type__ne': 'template',
+    }
+    if account_filter:
+        db_filter['source_account_id'] = str(account_filter['id'])
+
+    print(f"{CC.UNDERLINE}Purge archived hosts older than {purge_days} days"
+          f"{CC.ENDC}")
+    purged = 0
+    # Materialize before deleting so removing documents doesn't disturb the
+    # cursor we're iterating.
+    for host in list(Host.objects(**db_filter)):
+        print(f"{CC.FAIL}  ** {CC.ENDC}Permanently deleting {host.hostname}")
+        host.delete()
+        purged += 1
+    return purged
+
+
 def maintenance(account):
     """
     Inner Maintenance Mode
@@ -81,50 +134,55 @@ def maintenance(account):
         if account_filter_name:
             account_filter = get_account_by_name(account_filter_name)
 
+    purge_days = _resolve_purge_days(account)
+
     if not days:
-        print(f"{CC.WARNING} Days set to 0, exiting {CC.ENDC}")
-        return
-
-    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days, " \
-          f"Filter: {account_filter_name}{CC.ENDC}")
-
-    now = datetime.datetime.now()
-    delta = datetime.timedelta(days)
-    timedelta = now - delta
-    if account_filter:
-        objects = Host.objects(last_import_seen__lte=timedelta,
-                               source_account_id=str(account_filter['id']),
-                               no_autodelete__ne=True,
-                               object_type__ne='template',
-                               deleted_at__exists=False)
+        print(f"{CC.WARNING} Days set to 0, skipping archiving step {CC.ENDC}")
     else:
-        objects = Host.objects(last_import_seen__lte=timedelta,
-                               no_autodelete__ne=True,
-                               object_type__ne='template',
-                               deleted_at__exists=False)
+        print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days, " \
+              f"Filter: {account_filter_name}{CC.ENDC}")
 
-    if dont_delete_if_more:
-        if len(objects) >= int(dont_delete_if_more):
-            details.append(
-                (
-                    'error',
-                    "Hosts were not deleted because their number "
-                    "exceeds the configured threshold."
+        now = datetime.datetime.now()
+        delta = datetime.timedelta(days)
+        timedelta = now - delta
+        if account_filter:
+            objects = Host.objects(last_import_seen__lte=timedelta,
+                                   source_account_id=str(account_filter['id']),
+                                   no_autodelete__ne=True,
+                                   object_type__ne='template',
+                                   deleted_at__exists=False)
+        else:
+            objects = Host.objects(last_import_seen__lte=timedelta,
+                                   no_autodelete__ne=True,
+                                   object_type__ne='template',
+                                   deleted_at__exists=False)
+
+        if dont_delete_if_more:
+            if len(objects) >= int(dont_delete_if_more):
+                details.append(
+                    (
+                        'error',
+                        "Hosts were not deleted because their number "
+                        "exceeds the configured threshold."
+                    )
                 )
-            )
-            objects = []
+                objects = []
 
-    deleted_hosts = 0
-    for host in objects:
-        print(f"{CC.WARNING}  ** {CC.ENDC}Archived host {host.hostname}")
-        if host.get_folder():
-            folder = host.get_folder()
-            remove_seat(folder)
-            print(f"{CC.WARNING}  *** {CC.ENDC}Seat in Pool {folder} free now")
-        host.soft_delete(reason=f"maintenance: not seen for {days} days")
-        host.save()
-        deleted_hosts += 1
-    details.append(('hosts_archived', deleted_hosts))
+        deleted_hosts = 0
+        for host in objects:
+            print(f"{CC.WARNING}  ** {CC.ENDC}Archived host {host.hostname}")
+            if host.get_folder():
+                folder = host.get_folder()
+                remove_seat(folder)
+                print(f"{CC.WARNING}  *** {CC.ENDC}Seat in Pool {folder} free now")
+            host.soft_delete(reason=f"maintenance: not seen for {days} days")
+            host.save()
+            deleted_hosts += 1
+        details.append(('hosts_archived', deleted_hosts))
+
+    purged_hosts = _purge_archived_hosts(account_filter, purge_days)
+    details.append(('hosts_purged', purged_hosts))
+
     log.log(f"Database Maintenance {account}",
             source="Maintenance", details=details)
 
