@@ -105,6 +105,14 @@ class ChildAccountModelView(DefaultModelView):
 
     column_filters = name_and_enabled_filters()
 
+    column_labels = {
+        'require_fqdn': 'Require FQDN',
+    }
+
+    form_args = {
+        'require_fqdn': {'label': 'Require FQDN'},
+    }
+
     form_rules = [
         _DOCS_BADGE,
         *modern_form(
@@ -215,6 +223,13 @@ class AccountModelView(DefaultModelView):
 
     column_labels = {
         'password': 'Attributes',
+        'require_fqdn': 'Require FQDN',
+        'cmdb_object': 'CMDB object',
+    }
+
+    form_args = {
+        'require_fqdn': {'label': 'Require FQDN'},
+        'cmdb_object': {'label': 'CMDB object'},
     }
 
     column_formatters = {

@@ -129,7 +129,7 @@ class Account(db.Document):
     # Per-account import checks (replace the former global
     # CHECK_FOR_VALID_HOSTNAME / REQUIRE_FQDN local_config settings). Object
     # accounts are exempt from both — their name is not a real hostname.
-    check_for_valid_hostname = db.BooleanField(default=True)
+    check_for_valid_hostname = db.BooleanField(default=False)
     require_fqdn = db.BooleanField(default=False)
 
     address = db.StringField()

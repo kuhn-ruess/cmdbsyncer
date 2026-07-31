@@ -185,7 +185,7 @@ class Host(db.Document):
         a violation.
 
         Both toggles live on the importing account (`check_for_valid_hostname`
-        defaults on, `require_fqdn` defaults off). Object accounts are exempt
+        and `require_fqdn` both default off). Object accounts are exempt
         from both — an object's name is not a real hostname. Templates are
         additionally exempt from the FQDN check for the same reason.
         """
@@ -193,7 +193,7 @@ class Host(db.Document):
             return
         account_dict = account_dict or {}
         if self.object_type == 'host' \
-                and account_dict.get('check_for_valid_hostname', True) \
+                and account_dict.get('check_for_valid_hostname', False) \
                 and not self.is_valid_hostname():
             raise HostError(f"{self.hostname} is not a valid Hostname,"
                             "but object type for import is set to host")
