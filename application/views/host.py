@@ -1949,11 +1949,10 @@ Impact Chain.
         chosen_account = (model.source_account_name or '').strip()
         if chosen_account == CMDB_SOURCE_ACCOUNT_NAME:
             model.source_account_id = CMDB_SOURCE_ACCOUNT_ID
-            # A CMDB-managed host is locked from imports and lives only in
-            # the GUI, so the import-protection flag is meaningless here.
-            # Drop it so maintenance autodelete/purge can still reap the
-            # host if it ever goes stale.
-            model.no_autodelete = False
+            # A CMDB-managed host (source sentinel) is authoritative: the lock
+            # in Host.set_account makes it un-overwritable by any import. It is
+            # curated in the CMDB, so keep it protected from autodelete too.
+            model.no_autodelete = True
         elif chosen_account:
             account = Account.objects(name=chosen_account).first()
             model.source_account_id = str(account.id) if account else ''
@@ -2148,10 +2147,9 @@ Impact Chain.
             flash("No account selected", 'error')
             return redirect(return_to)
         # CMDB managed: hand the selected hosts over to the CMDB. The source
-        # sentinel locks them against imports (see Host.set_account), so no
-        # other account can overwrite them, and no_autodelete is dropped so
-        # maintenance can still reap them if they go stale — same behaviour as
-        # picking "cmdb" in the single-host edit form.
+        # sentinel makes them authoritative — the lock in Host.set_account
+        # keeps any import from overwriting them — and they are always
+        # protected from autodelete, same as picking "cmdb" in the edit form.
         if account_name == CMDB_SOURCE_ACCOUNT_NAME:
             query = Host.objects(id__in=host_ids)
             scope = current_user.account_scope() if current_user.is_authenticated else None
@@ -2160,7 +2158,7 @@ Impact Chain.
             updated = query.update(
                 set__source_account_name=CMDB_SOURCE_ACCOUNT_NAME,
                 set__source_account_id=CMDB_SOURCE_ACCOUNT_ID,
-                set__no_autodelete=False)
+                set__no_autodelete=True)
             flash(f"Set {updated} host(s) to CMDB managed", 'success')
             return redirect(return_to)
         if account_name not in _allowed_account_names():
