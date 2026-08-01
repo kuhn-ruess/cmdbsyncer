@@ -13,7 +13,7 @@ of the Host-action machinery (copy_as_new, bulk-label processors).
 import re
 from datetime import datetime
 
-from flask import url_for
+from flask import request, url_for
 from markupsafe import Markup, escape
 
 from application import app
@@ -42,6 +42,47 @@ OBJECT_TYPE_ICONS = {
     'template': 'fa fa-file',
     'cmk_site': 'fa fa-sitemap',
 }
+
+
+def _location_badges_active():
+    """
+    True while the quick search is widened to also cover Objects and/or
+    the Archive (a search term plus at least one scope toggle). In that
+    mode every result row gets an origin badge so the user can tell
+    where each hit lies; otherwise the plain host list stays badge-free.
+    """
+    if not (request.args.get('search') or '').strip():
+        return False
+    return (request.args.get('inc_objects') == '1'
+            or request.args.get('inc_archive') == '1')
+
+
+def _render_hostname_with_location(_view, _context, model, _name):
+    """
+    Render the hostname and, while the quick search is widened, append a
+    badge showing where the hit lies (Host / Object / Template /
+    Archive). On the normal, non-widened host list no badge is added.
+    Priority: an archived row shows "Archive" regardless of whether it
+    is also an object, since that is the more important distinction.
+    """
+    name = escape(model.hostname or '')
+    if getattr(model, 'deleted_at', None):
+        badge = ('badge-dark', 'fa fa-archive', 'Archive')
+    elif getattr(model, 'object_type', None) == 'template':
+        badge = ('badge-info', 'fa fa-file', 'Template')
+    elif getattr(model, 'is_object', False):
+        badge = ('badge-primary', 'fa fa-cube', 'Object')
+    elif _location_badges_active():
+        badge = ('badge-secondary', 'fa fa-server', 'Host')
+    else:
+        return Markup(name)
+    badge_class, icon_class, label = badge
+    return Markup(
+        f'{name} <span class="badge {escape(badge_class)}" '
+        f'style="margin-left: 4px;">'
+        f'<i class="{escape(icon_class)}" style="margin-right: 4px;"></i>'
+        f'{escape(label)}</span>'
+    )
 
 
 def _render_object_type_icon(_view, _context, model, _name):

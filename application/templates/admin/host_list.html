@@ -97,6 +97,44 @@
 {% endif %}
 {{ super() }}
 
+{# Quick-search scope options — moved into the search form by the JS in
+   the tail block. When a search term is present, these toggles widen
+   the search to also cover Objects and/or the Archive. #}
+{% set _scope_active = request.args.get('search') and ((request.args.get('inc_objects') == '1') or (request.args.get('inc_archive') == '1')) %}
+<span id="quick-search-scope" style="display:none;">
+  <div class="dropdown ml-2">
+    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+            id="searchOptionsToggle" data-toggle="dropdown"
+            aria-haspopup="true" aria-expanded="false"
+            title="Widen the quick search to also cover Objects and/or the Archive">
+      <i class="fa fa-sliders-h"></i> Search options{% if _scope_active %}
+      <span class="badge badge-primary">on</span>{% endif %}
+    </button>
+    <div class="dropdown-menu dropdown-menu-right p-2" aria-labelledby="searchOptionsToggle"
+         style="min-width: 15rem;">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="incObjects"
+               name="inc_objects" value="1"
+               {% if request.args.get('inc_objects') == '1' %}checked{% endif %}>
+        <label class="form-check-label" for="incObjects">
+          Also search Objects
+        </label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="incArchive"
+               name="inc_archive" value="1"
+               {% if request.args.get('inc_archive') == '1' %}checked{% endif %}>
+        <label class="form-check-label" for="incArchive">
+          Also search Archive
+        </label>
+      </div>
+      <small class="text-muted d-block mt-1">
+        Matches are tagged with where they live.
+      </small>
+    </div>
+  </div>
+</span>
+
 <div class="modal fade" id="setTemplateModal" tabindex="-1" role="dialog"
      aria-labelledby="setTemplateModalLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
@@ -465,6 +503,28 @@
     '  "foo bar"         — quote to keep spaces and disable * / ?'
   ].join('\n');
   $('input[name="search"]').attr('title', SEARCH_HELP);
+
+  // Move the "Search options" dropdown into the search form so its
+  // checkboxes submit together with the search term. Keep the menu open
+  // while toggling, and re-run the search whenever a toggle changes
+  // (the scope only widens when a term is present).
+  (function() {
+    var $scope = $('#quick-search-scope');
+    var $search = $('input[name="search"]');
+    if (!$scope.length || !$search.length) {
+      return;
+    }
+    var $form = $search.closest('form');
+    $form.addClass('form-inline').append($scope.children());
+    $scope.remove();
+    // Bootstrap closes the dropdown on any inner click — stop that so
+    // both toggles can be set before the reload.
+    $form.on('click', '.dropdown-menu', function(event) {
+      event.stopPropagation();
+    });
+    $form.on('change', 'input[name="inc_objects"], input[name="inc_archive"]',
+      function() { $form.submit(); });
+  })();
 
   // The "With selected…" dropdown items call modelActions.execute(name).
   // `modelActions` is created by actions.js which is loaded inside

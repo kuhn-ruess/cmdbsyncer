@@ -69,6 +69,7 @@ from application.views.host_renderers import (
     _render_cmdb_template,
     _render_cmdb_template_preview,
     _render_datetime,
+    _render_hostname_with_location,
     _render_inventory_grid,
     _render_labels,
     _render_labels_with_origin,
@@ -1094,6 +1095,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
     )
 
     column_formatters = {
+        'hostname': _render_hostname_with_location,
         'log': format_log,
         'labels': _render_labels,
         'inventory': format_inventory,
@@ -1842,12 +1844,45 @@ Impact Chain.
         dt_str = now.strftime("%Y%m%d%H%M")
         return f"{self.model.__name__}_{dt_str}.syncer_json"
 
+    @staticmethod
+    def _search_scope_flags():
+        """
+        Read the two quick-search scope toggles. They only take effect
+        while the search box is actually in use — an empty search keeps
+        the host list a plain hosts-only list. Returns
+        (include_objects, include_archive).
+        """
+        if not (request.args.get('search') or '').strip():
+            return (False, False)
+        return (
+            request.args.get('inc_objects') == '1',
+            request.args.get('inc_archive') == '1',
+        )
+
     def get_query(self):
         """
-        Limit Objects
+        Limit to plain, non-archived hosts. When the quick-search scope
+        toggles are active, widen to also include Objects and/or the
+        Archive so a single search spans all of them; the per-row badge
+        (see `_render_hostname_with_location`) then marks where each hit
+        lies.
         """
-        return _scope_hosts_to_user(
-            Host.objects(is_object__ne=True, deleted_at__exists=False))
+        include_objects, include_archive = self._search_scope_flags()
+        filters = {}
+        if not include_objects:
+            filters['is_object__ne'] = True
+        if not include_archive:
+            filters['deleted_at__exists'] = False
+        return _scope_hosts_to_user(Host.objects(**filters))
+
+    def get_one(self, id):  # pylint: disable=redefined-builtin
+        """
+        Resolve a single row across the full (user-scoped) Host set,
+        independent of the list scope. Detail/edit links carry no search
+        args, so an Object or archived row opened from a widened search
+        would otherwise fall outside `get_query()` and 404.
+        """
+        return _scope_hosts_to_user(Host.objects).filter(pk=id).first()
 
     def scaffold_form(self):
         """Scaffold form with extra CMDB fields."""
