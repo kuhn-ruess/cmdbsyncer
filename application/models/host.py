@@ -208,12 +208,18 @@ class Host(db.Document):
 
     def clean(self):
         """
-        Normalize legacy/invalid object_type values before validation.
+        Normalize fields before validation on every save.
 
-        Older records may carry values like 'undefined' or None that are not
-        part of the current `object_types` choice list. Coerce anything not
-        recognized to 'auto' so saves don't blow up with ValidationError.
+        - Strip surrounding whitespace from the hostname. Leading/trailing
+          spaces slip in from the GUI form or messy source data and get
+          rejected downstream (e.g. Checkmk's hostname pattern), so trim
+          them for every save path, not just imports.
+        - Coerce legacy/invalid object_type values ('undefined', None, …)
+          that aren't part of the current `object_types` choice list to
+          'auto' so saves don't blow up with ValidationError.
         """
+        if self.hostname:
+            self.hostname = self.hostname.strip()
         valid = {choice[0] for choice in object_types}
         if self.object_type not in valid:
             self.object_type = 'auto'
