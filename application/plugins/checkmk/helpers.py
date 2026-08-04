@@ -34,21 +34,33 @@ def cmk_cleanup_hostname(input_str):
     return re.sub('[^a-zA-Z0-9_-]', '_', input_str.strip()).lower()
 
 
-def project_allows_account(project, account_name):
+def project_allows_account(project, account_name, kind='host'):
     """
-    True when a Project's rules (and assigned hosts) may be
-    exported to ``account_name``: not on the project's ``deny_by_accounts``
-    list, and either no ``limit_by_accounts`` allow list is set or the
-    account is on it. The deny list wins over the allow list.
+    True when a Project's members of ``kind`` ('host' or 'rule') may be
+    exported to ``account_name``: not on the applicable deny list, and
+    either no allow list is set or the account is on it. The deny list
+    wins over the allow list.
+
+    Hosts and rules are steered separately. ``kind='host'`` uses
+    ``limit_by_accounts`` / ``deny_by_accounts``; ``kind='rule'`` uses
+    ``rule_limit_by_accounts`` / ``rule_deny_by_accounts`` and falls back
+    to the host list per side when the rule list is empty — a project
+    that only fills the host lists keeps steering its rules the same way.
 
     Lives here (not on the model) so the account-scope decision is shared
     by the rule exports, the host export and the model without importing
     MongoEngine documents.
     """
-    denied = [name for name in (getattr(project, 'deny_by_accounts', None) or [])
-              if name]
+    def _names(attr):
+        return [name for name in (getattr(project, attr, None) or []) if name]
+
+    if kind == 'rule':
+        denied = _names('rule_deny_by_accounts') or _names('deny_by_accounts')
+        allowed = _names('rule_limit_by_accounts') or _names('limit_by_accounts')
+    else:
+        denied = _names('deny_by_accounts')
+        allowed = _names('limit_by_accounts')
+
     if account_name in denied:
         return False
-    allowed = [name for name in (getattr(project, 'limit_by_accounts', None) or [])
-               if name]
     return not allowed or account_name in allowed

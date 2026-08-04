@@ -1034,6 +1034,38 @@ class TestProjectAllowsAccount(unittest.TestCase):
         project = SimpleNamespace(limit_by_accounts=None)
         self.assertTrue(project_allows_account(project, 'any'))
 
+    @staticmethod
+    def _project(**kwargs):
+        fields = {'limit_by_accounts': [], 'deny_by_accounts': [],
+                  'rule_limit_by_accounts': [], 'rule_deny_by_accounts': []}
+        fields.update(kwargs)
+        return SimpleNamespace(**fields)
+
+    def test_rule_kind_uses_rule_lists(self):
+        # rule_limit_by_accounts steers rules independently of the host list.
+        project = self._project(limit_by_accounts=['prod'],
+                                rule_limit_by_accounts=['test'])
+        self.assertTrue(project_allows_account(project, 'test', kind='rule'))
+        self.assertFalse(project_allows_account(project, 'prod', kind='rule'))
+        # Hosts still follow the host list.
+        self.assertTrue(project_allows_account(project, 'prod', kind='host'))
+        self.assertFalse(project_allows_account(project, 'test', kind='host'))
+
+    def test_rule_kind_falls_back_to_host_list(self):
+        # Empty rule lists reuse the host allow/deny lists.
+        project = self._project(limit_by_accounts=['prod'],
+                                deny_by_accounts=['old'])
+        self.assertTrue(project_allows_account(project, 'prod', kind='rule'))
+        self.assertFalse(project_allows_account(project, 'test', kind='rule'))
+        self.assertFalse(project_allows_account(project, 'old', kind='rule'))
+
+    def test_rule_deny_falls_back_independently(self):
+        # A rule allow list set, rule deny empty -> deny falls back to host deny.
+        project = self._project(deny_by_accounts=['prod'],
+                                rule_limit_by_accounts=['prod', 'test'])
+        self.assertFalse(project_allows_account(project, 'prod', kind='rule'))
+        self.assertTrue(project_allows_account(project, 'test', kind='rule'))
+
 
 class TestExportDcdRulesProjectFilter(unittest.TestCase):
     """export_dcd_rules restricts DCD rules by their project's account filter."""

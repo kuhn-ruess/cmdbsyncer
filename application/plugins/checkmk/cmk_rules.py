@@ -785,8 +785,13 @@ class CheckmkRuleSync(CMK2):
             render_jinja(rule_params['folder'], **context))
         # Respect the account's folder scope (limit_by_folders): a scoped
         # account only receives rules whose target folder is in scope, just
-        # like the host export only pushes hosts of those folders.
-        if not folder_within_scope(
+        # like the host export only pushes hosts of those folders. A rule
+        # assigned to a Project is exempt — it is routed by the project's
+        # account lists (see projects_for_account), so the folder scope only
+        # gates project-less (global) rules. The marker is dropped afterwards
+        # so it never reaches the Checkmk payload.
+        rule_project = rule_params.pop('project', None)
+        if not rule_project and not folder_within_scope(
                 rule_params['folder'], self.config.get('limit_by_folders')):
             return None
         rule_params['value'] = value
@@ -1037,8 +1042,14 @@ class CheckmkRuleSync(CMK2):
         attributes = {'all': {'HOSTNAME': None}}
         for rule in self.static_rules:
             host_actions = {}
+            # Static rules skip the engine's add_outcomes, so stamp the
+            # project here too — a static project rule must ignore the
+            # account's folder scope like every other project rule.
+            rule_project = getattr(rule, 'project', None)
             for outcome in rule.outcomes:
                 outcome = dict(outcome.to_mongo())
+                if rule_project:
+                    outcome['project'] = rule_project
                 if outcome.get('loop_over_list') and \
                         outcome.get('list_to_loop'):
                     # loop_over_list iterates a *host* attribute list, which

@@ -1256,6 +1256,22 @@ class TestSyncCMK2Misc(unittest.TestCase):
             # The project map is cached per run — one query only.
             mock_project.objects.assert_called_once()
 
+    # ---- _host_result_exported ----
+    def test_host_result_exported(self):
+        # Scope limits to /test; a /prod host is out of scope.
+        self.syncer.config = {'limit_by_folders': '/test'}
+        in_scope = ({'move_folder': '/test/web'},)
+        out_scope = ({'move_folder': '/prod/db'},)
+
+        # Disabled hosts never export, project or not.
+        self.assertFalse(self.syncer._host_result_exported(False, in_scope, 'p'))
+        # A project host exports regardless of folder scope (routed by the
+        # project's account list, checked earlier in Stage A).
+        self.assertTrue(self.syncer._host_result_exported(True, out_scope, 'p'))
+        # A project-less host follows the folder scope.
+        self.assertTrue(self.syncer._host_result_exported(True, in_scope, None))
+        self.assertFalse(self.syncer._host_result_exported(True, out_scope, ''))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

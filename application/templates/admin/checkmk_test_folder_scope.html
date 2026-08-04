@@ -10,6 +10,14 @@
         without a scope keep exporting every host.
     </p>
 
+    <div class="alert alert-info">
+        <i class="fa fa-info-circle"></i>
+        <strong>Exception:</strong> hosts and rules assigned to a Project
+        ignore this folder scope — a Project routes its members purely by its
+        own account lists (see the Project settings). The scope below therefore
+        only limits objects that are <strong>not</strong> in a Project.
+    </div>
+
     {% if not accounts %}
     <div class="alert alert-warning">
         No enabled Checkmk (cmkv2) account found. Create one first.

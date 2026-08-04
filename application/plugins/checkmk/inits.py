@@ -336,13 +336,15 @@ def projects_for_account(account):
     """
     Names of the Projects whose rules may be exported to ``account``.
 
-    A project applies when its ``limit_by_accounts`` is empty (no restriction —
-    exported everywhere) or explicitly lists this account, and the account is
-    not on the project's ``deny_by_accounts`` list (deny wins).
+    Rules are steered by the project's ``rule_limit_by_accounts`` /
+    ``rule_deny_by_accounts`` (each falling back to the host list when
+    empty): a project applies when that allow list is empty (no
+    restriction — exported everywhere) or explicitly lists this account,
+    and the account is not on the applicable deny list (deny wins).
     """
     return [
         project.name for project in Project.objects()
-        if project_allows_account(project, account)
+        if project_allows_account(project, account, kind='rule')
     ]
 
 
