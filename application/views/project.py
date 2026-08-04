@@ -62,6 +62,18 @@ def _render_project_accounts(_view, _context, model, _name):
     return text
 
 
+# Field labels shared by the list view (column_labels) and the edit form
+# (form_args) — defined once so the two can't drift. Flask-Admin derives form
+# labels from the model field, not from column_labels, so the form needs its
+# own copy; referencing this dict keeps them identical.
+_ACCOUNT_FIELD_LABELS = {
+    'limit_by_accounts': 'Export HOSTS to Accounts',
+    'deny_by_accounts': 'Never export HOSTS to Accounts',
+    'rule_limit_by_accounts': 'Export RULES to Accounts',
+    'rule_deny_by_accounts': 'Never export RULES to Accounts',
+}
+
+
 def _import_project_rules(model, rule_dicts, project_name):
     """
     (Re)create rules of one model from exported JSON dicts and assign them to
@@ -89,11 +101,13 @@ def _import_project_rules(model, rule_dicts, project_name):
 class ProjectView(DefaultModelView):
     """
     Projects group syncer objects (currently Checkmk Setup Rules, DCD rules
-    and hosts) and limit which accounts they are exported to.
-    ``limit_by_accounts`` restricts a project's members to the listed
-    accounts (empty = all accounts); ``deny_by_accounts`` excludes accounts
-    and wins. Projects are im-/exportable as JSON to move them between
-    separate syncer instances.
+    and hosts) and limit which accounts they are exported to. Hosts and
+    rules are steered separately: ``limit_by_accounts`` / ``deny_by_accounts``
+    govern the hosts, the ``rule_*`` counterparts govern the rules (each
+    falling back to the host list when empty). Members of a project ignore
+    an account's Checkmk folder scope — the folder scope only gates
+    project-less objects. Projects are im-/exportable as JSON to move them
+    between separate syncer instances.
     """
     # Adds a direct link from the edit form to the Setup Rules of this project.
     edit_template = 'admin/project_edit.html'
@@ -106,8 +120,7 @@ class ProjectView(DefaultModelView):
         'rule_count': 'Rules',
         'dcd_rule_count': 'DCD Rules',
         'host_count': 'Hosts',
-        'limit_by_accounts': 'Exported to Accounts',
-        'deny_by_accounts': 'Never export to Accounts',
+        **_ACCOUNT_FIELD_LABELS,
     }
     column_formatters = {
         'name': _render_project_name_link,
@@ -121,18 +134,44 @@ class ProjectView(DefaultModelView):
     )
 
     form_columns = ('name', 'documentation', 'limit_by_accounts',
-                    'deny_by_accounts')
+                    'deny_by_accounts', 'rule_limit_by_accounts',
+                    'rule_deny_by_accounts')
     form_overrides = {
         'limit_by_accounts': AccountsMultiSelectField,
         'deny_by_accounts': AccountsMultiSelectField,
+        'rule_limit_by_accounts': AccountsMultiSelectField,
+        'rule_deny_by_accounts': AccountsMultiSelectField,
     }
-    form_descriptions = {
-        'limit_by_accounts': "Export this project's members (rules, hosts) "
-                             "only to these accounts. Leave empty for no "
-                             "restriction.",
-        'deny_by_accounts': "Never export this project's members to these "
-                            "accounts. The exclusion wins over 'Exported to "
-                            "Accounts'.",
+    # Field help text renders via WTForms' ``description`` (flask-admin's
+    # form template shows it under the field) — ``form_descriptions`` is not
+    # a flask-admin attribute and would be silently ignored.
+    form_args = {
+        'limit_by_accounts': {
+            'label': _ACCOUNT_FIELD_LABELS['limit_by_accounts'],
+            'description': "Export this project's HOSTS only to these "
+                           "accounts. Empty = all accounts. Members of a "
+                           "project ignore the account's folder scope (Limit "
+                           "Host Export to Folders) — the folder scope only "
+                           "limits hosts without a project.",
+        },
+        'deny_by_accounts': {
+            'label': _ACCOUNT_FIELD_LABELS['deny_by_accounts'],
+            'description': "Never export this project's HOSTS to these "
+                           "accounts. Wins over 'Export HOSTS to Accounts'.",
+        },
+        'rule_limit_by_accounts': {
+            'label': _ACCOUNT_FIELD_LABELS['rule_limit_by_accounts'],
+            'description': "Export this project's Setup/DCD RULES only to these "
+                           "accounts — steer rules independently of the hosts "
+                           "(e.g. rules to test first, prod later). Empty falls "
+                           "back to 'Export HOSTS to Accounts'.",
+        },
+        'rule_deny_by_accounts': {
+            'label': _ACCOUNT_FIELD_LABELS['rule_deny_by_accounts'],
+            'description': "Never export this project's RULES to these "
+                           "accounts. Empty falls back to the host deny list. "
+                           "Wins over 'Export RULES to Accounts'.",
+        },
     }
 
     def is_accessible(self):
@@ -247,12 +286,10 @@ class ProjectView(DefaultModelView):
             project.documentation = proj_data.get('documentation')
             # Keep the account filters — without them an imported project
             # silently falls back to "all accounts".
-            project.limit_by_accounts = [
-                str(entry) for entry in
-                (proj_data.get('limit_by_accounts') or []) if entry]
-            project.deny_by_accounts = [
-                str(entry) for entry in
-                (proj_data.get('deny_by_accounts') or []) if entry]
+            for field in ('limit_by_accounts', 'deny_by_accounts',
+                          'rule_limit_by_accounts', 'rule_deny_by_accounts'):
+                setattr(project, field, [
+                    str(entry) for entry in (proj_data.get(field) or []) if entry])
             project.save()
             projects += 1
 

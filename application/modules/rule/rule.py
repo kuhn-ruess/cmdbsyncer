@@ -231,6 +231,10 @@ class Rule():
                 'last_match': doc.get('last_match', False),
                 'name': doc.get('name', ''),
                 '_id': doc.get('_id'),
+                # Optional Project the rule belongs to (None for rule types
+                # without the field) — consumers use it to route the rule by
+                # the project's account lists instead of the folder scope.
+                'project': doc.get('project'),
             })
         self._rule_docs_cache = (current_key, objs, prepared)
         return objs, prepared

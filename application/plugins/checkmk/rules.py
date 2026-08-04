@@ -147,7 +147,13 @@ class CheckmkRulesetRule(Rule):
         """
         Add matching Rules to the set
         """
+        # Carry the rule's Project onto each outcome so the export can route
+        # a project rule by the project's account lists and skip the folder
+        # scope (see build_condition_and_update_rule_params).
+        project = (_rule or {}).get('project')
         for outcome in rule_outcomes:
+            if project:
+                outcome['project'] = project
             ruleset_type = outcome['ruleset']
             outcomes.setdefault(ruleset_type, [])
             outcomes[ruleset_type].append(outcome)

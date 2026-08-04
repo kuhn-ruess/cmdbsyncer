@@ -761,6 +761,23 @@ class SyncCMK2(CMK2):
 
 
 
+    def _host_result_exported(self, enabled, data, project_name):
+        """
+        Decide whether a calculated host makes the final export set.
+
+        A disabled host is never exported. A host assigned to a Project
+        is routed solely by that project's account list (already checked
+        in ``project_denied_for_account`` before the host reaches here) —
+        the account's ``limit_by_folders`` scope only gates project-less
+        hosts. So a project host is always exported; a project-less host
+        only when its target folder is within the scope.
+        """
+        if not enabled:
+            return False
+        if project_name:
+            return True
+        return self.host_folder_in_scope(data[0])
+
     # pylint: disable-next=too-many-locals
     def calculate_attributes_and_rules(self):
         """
@@ -784,6 +801,9 @@ class SyncCMK2(CMK2):
             task1 = progress.add_task("Calculating Hostrules and Attributes", total=total)
             host_actions = {}
             disabled_hosts = []
+            # Host's project is needed again in Stage B (folder-scope), but
+            # the pool result only carries the hostname — remember it here.
+            host_projects = {}
             with multiprocessing.Pool(initializer=init_db) as pool:
                 tasks = []
                 for db_host in db_objects:
@@ -795,6 +815,7 @@ class SyncCMK2(CMK2):
                             or self.project_denied_for_account(db_host.project):
                         progress.advance(task1)
                         continue
+                    host_projects[db_host.hostname] = db_host.project
                     task = pool.apply_async(self.calculate_host_actions, args=(db_host,))
                     tasks.append(task)
 
@@ -810,11 +831,8 @@ class SyncCMK2(CMK2):
                         progress.console.print(f"- ERROR: Timeout error for object ({error})")
                     else:
                         progress.advance(task1)
-                        if enabled and not self.host_folder_in_scope(data[0]):
-                            # Host's target folder is outside this account's
-                            # limit_by_folders scope — ignore it for this export.
-                            disabled_hosts.append(hostname)
-                        elif enabled:
+                        if self._host_result_exported(
+                                enabled, data, host_projects.get(hostname)):
                             host_actions[hostname] = data
                         else:
                             disabled_hosts.append(hostname)
