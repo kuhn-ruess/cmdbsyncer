@@ -1902,6 +1902,8 @@ Impact Chain.
         """
         if template.endswith('host_list.html') or template.endswith('list.html'):
             kwargs.setdefault('set_template_choices', self.get_template_list())
+            kwargs.setdefault('assign_project_choices',
+                              [p.name for p in Project.objects().order_by('name')])
             # pylint: disable=import-outside-toplevel
             from application.views.saved_search import list_for_path
             kwargs.setdefault(
