@@ -129,6 +129,9 @@ class BaseConfig():
 
     HTTP_REPEAT_TIMEOUT = 3
     HTTP_MAX_RETRIES = 2
+    # Checkmk's activate-changes wait-for-completion is a redirect-based
+    # long-poll; raise this if a big activation still hits "Exceeded N redirects".
+    HTTP_MAX_REDIRECTS = 100
 
     SWAGGER_ENABLED = True
     DEBUG = False

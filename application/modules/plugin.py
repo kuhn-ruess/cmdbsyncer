@@ -394,6 +394,11 @@ class Plugin():
         resp = None
         if self._http_session is None:
             self._http_session = requests.Session()
+            # requests defaults to 30 redirects. Checkmk's activate-changes
+            # 'wait-for-completion' endpoint is a redirect-based long-poll, so
+            # a large/slow activation exceeds that default and raises
+            # TooManyRedirects. Allow a configurable, more generous ceiling.
+            self._http_session.max_redirects = app.config['HTTP_MAX_REDIRECTS']
         for attempt in range(1, max_retries+1):
             try:
                 resp = self._http_session.request(method, url, **payload)
