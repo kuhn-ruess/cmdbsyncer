@@ -766,6 +766,16 @@ class CheckmkMngmtRuleView(RuleModelView):
                             'condition_service': StringField,
                         },
                         'form_args': {
+                            'keep_value': {
+                                'label': 'Keep manual Value',
+                                'description': (
+                                    'Write the Value only once, when the rule is'
+                                    ' first created. On later syncs the rule is'
+                                    ' kept but its Value is no longer overwritten,'
+                                    ' so it can be adjusted in Checkmk. A hint is'
+                                    ' added to the rule comment.'
+                                ),
+                            },
                             'list_to_loop': {
                                 'label': 'Loop over Attribute (List)',
                                 'description': (

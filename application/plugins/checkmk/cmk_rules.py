@@ -18,6 +18,11 @@ from application.helpers.syncer_jinja import render_jinja, get_list
 from application.modules.debug import ColorCodes as CC
 
 
+# Appended to the rule comment when an outcome opts into keeping a manually
+# adjusted value. Must stay identical between create and compare.
+KEEP_VALUE_HINT = "Value managed manually in Checkmk - Syncer will not overwrite it."
+
+
 def normalize_folder(folder):
     """
     Collapse repeated slashes and trim trailing ones so the rendered
@@ -872,6 +877,16 @@ class CheckmkRuleSync(CMK2):
         del rule_params['value_template']
         rule_params['optimize'] = False
 
+        # When the outcome opts into keeping a manually adjusted value, tell the
+        # operator right in the Checkmk rule comment that the Syncer will not
+        # overwrite it. The hint is part of the comment everywhere (create and
+        # the clean_rules compare), so it stays a stable identification key.
+        if rule_params.get('keep_value'):
+            base_comment = (rule_params.get('comment') or '').strip()
+            if KEEP_VALUE_HINT not in base_comment:
+                rule_params['comment'] = (
+                    f"{base_comment}\n{KEEP_VALUE_HINT}".strip())
+
         # Handle condition_label_template (Host label)
         if not self._apply_host_label_condition(rule_params, condition_tpl, context):
             return None  # skip this rule — malformed label reported already
@@ -1086,6 +1101,7 @@ class CheckmkRuleSync(CMK2):
         self.optimize_rules()
         self._sort_rulsets_by_intent()
         self.clean_rules()
+        self.clean_orphaned_rules()
         self.create_rules()
         self.sort_rules()
 
@@ -1415,6 +1431,12 @@ class CheckmkRuleSync(CMK2):
 
                     value = cmk_rule['extensions']['value_raw']
                     cmk_condition = cmk_rule['extensions']['conditions']
+                    # Folder the rule currently lives in on the Checkmk side.
+                    # Compared against the outcome's configured folder so a rule
+                    # that drifted into the wrong folder is corrected instead of
+                    # silently accepted.
+                    cmk_folder = normalize_cmk_folder(
+                        cmk_rule['extensions'].get('folder', '/'))
                     rule_found = False
                     condition_matches = []  # Collect all rules with matching conditions
 
@@ -1447,6 +1469,19 @@ class CheckmkRuleSync(CMK2):
                         # ordering on idempotent re-runs.
                         comment_match = rule.get('comment', '') == cmk_comment
                         value_match = deep_compare(cmk_value, check_value)
+                        # A rule that sits in the wrong folder is not a match —
+                        # it has to be recreated in the configured folder.
+                        # Compared case-insensitively: Checkmk stores folder
+                        # path ids lowercased, so "/Server" configured here maps
+                        # to "/server" on the CMK side and must not read as drift.
+                        folder_match = cmk_folder.lower() == \
+                            normalize_cmk_folder(rule['folder']).lower()
+                        # ``keep_value`` outcomes are written once and then left
+                        # for the operator to adjust in Checkmk. Treat the value
+                        # as matching regardless of drift so the rule is neither
+                        # updated nor deleted, as long as condition, comment and
+                        # folder still line up.
+                        value_ok = value_match or rule.get('keep_value')
 
                         # Collect all rules with matching conditions
                         if condition_match:
@@ -1454,10 +1489,12 @@ class CheckmkRuleSync(CMK2):
                                 'rule': rule,
                                 'expected_value': cmk_value,
                                 'actual_value': check_value,
-                                'value_match': value_match
+                                'value_match': value_match,
+                                'folder_match': folder_match,
                             })
 
-                        if condition_match and comment_match and value_match:
+                        if condition_match and comment_match and value_ok \
+                                and folder_match:
                             logger.debug("FULL MATCH")
                             rule_found = True
                             # Pin the cmk_rule id on the local entry and
@@ -1477,6 +1514,8 @@ class CheckmkRuleSync(CMK2):
                     # destructive delete+recreate (which briefly removes the
                     # rule from the active policy and churns ids).
                     if not rule_found and len(condition_matches) == 1 and \
+                            condition_matches[0]['folder_match'] and \
+                            not condition_matches[0]['rule'].get('keep_value') and \
                             not condition_matches[0]['value_match']:
                         our_rule = condition_matches[0]['rule']
                         rule_id = cmk_rule['id']
@@ -1555,3 +1594,40 @@ class CheckmkRuleSync(CMK2):
                             log_entry += f" - {deletion_details}"
                         self.log_details.append(("INFO", log_entry))
                 progress.advance(task1)
+
+    def clean_orphaned_rules(self):
+        """
+        Remove syncer-owned rules from rulesets the run no longer touches.
+
+        ``clean_rules`` only visits rulesets present in ``rulsets_by_type`` —
+        the ones the current run still generates rules for. When the last rule
+        targeting a ruleset is disabled or deleted, that ruleset drops out of
+        ``rulsets_by_type`` entirely, so its previously created (marker-owned)
+        rules would linger in Checkmk forever. Opt-in via the account's
+        ``remove_orphaned_rules`` setting: scan every used ruleset the run no
+        longer touches and delete the rules carrying this run's marker.
+
+        ``keep_value`` rules are deleted here like any other — once a rule is
+        no longer generated there is nothing left to keep.
+        """
+        if not self.config.get('remove_orphaned_rules'):
+            return
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Remove orphaned syncer rules")
+        orphan_rulesets = [
+            name for name in self.list_used_rulesets()
+            if name not in self.rulsets_by_type
+        ]
+        for ruleset_name in orphan_rulesets:
+            url = f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
+            rule_response = self.request(url, method="GET")[0]
+            for cmk_rule in rule_response['value']:
+                if cmk_rule['extensions']['properties'].get('description', '') \
+                        != self.rule_marker:
+                    continue
+                rule_id = cmk_rule['id']
+                print(f"{CC.OKBLUE} *{CC.ENDC} DELETE orphaned Rule in "
+                      f"{ruleset_name} {rule_id}")
+                self.request(f'/objects/rule/{rule_id}', method="DELETE")
+                self.log_details.append((
+                    "INFO",
+                    f"Deleted orphaned Rule in {ruleset_name} {rule_id}"))

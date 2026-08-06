@@ -412,12 +412,18 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
 
     ### Condition Host
     It's possible to define a Host Condition. Placeholder is {{ hostname }}
+
+    ### Keep manual Value
+    When enabled the Value is only written once, on rule creation. On later
+    syncs the Syncer keeps the rule but no longer overwrites its Value, so an
+    operator can adjust it in Checkmk. A hint is added to the rule comment.
     """
 
     ruleset = db.StringField()
     folder = db.StringField(required=True)
     folder_index = db.IntField(default=0)
     comment = db.StringField()
+    keep_value = db.BooleanField(default=False)
     loop_over_list = db.BooleanField(default=False)
     list_to_loop = db.StringField()
     value_template = db.StringField(required=True)

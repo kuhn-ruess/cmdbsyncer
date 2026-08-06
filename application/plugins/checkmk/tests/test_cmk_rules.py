@@ -2,6 +2,7 @@
 Unit tests for checkmk cmk_rules module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
+# pylint: disable=too-many-lines
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -488,6 +489,202 @@ class TestCheckmkRuleSync(unittest.TestCase):
         result = self.sync.build_condition_and_update_rule_params(
             shared_rule_params, attributes)
         self.assertIn('condition', result)
+
+
+class _FakeCleanProgress:
+    """Stand-in for rich.Progress used by clean_rules (console stubbed)."""
+    def __call__(self, *a, **k):
+        return self
+    def __enter__(self):
+        return self
+    def __exit__(self, *a):
+        return False
+    def add_task(self, *a, **k):
+        return 1
+    def advance(self, *a, **k):
+        pass
+    def get_default_columns(self, *a, **k):
+        return ()
+
+
+class TestCleanRulesFolderAndKeepValue(unittest.TestCase):
+    """clean_rules: wrong-folder correction and keep_value opt-out."""
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.project = None
+        self.sync._cmk_order_by_ruleset = {}
+        self.sync._rule_etag_wildcard_rejected = None
+        self.sync.log_details = []
+        self.progress_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.Progress',
+            _FakeCleanProgress())
+        self.progress_patcher.start()
+
+    def tearDown(self):
+        self.progress_patcher.stop()
+
+    @staticmethod
+    def _cmk_rule(folder, value, comment='c', rule_id='r1'):
+        return {
+            'id': rule_id,
+            'extensions': {
+                'folder': folder,
+                'value_raw': value,
+                'conditions': {'host_name': {'match_on': ['h']}},
+                'properties': {
+                    'description': 'cmdbsyncer_test_account',
+                    'comment': comment,
+                },
+            },
+        }
+
+    def _wire_get(self, cmk_rules):
+        calls = {'DELETE': [], 'PUT': []}
+
+        def fake_request(url, method='GET', **_kw):
+            if method == 'GET':
+                return {'value': cmk_rules}, {}
+            if method == 'DELETE':
+                calls['DELETE'].append(url)
+                return {}, {}
+            if method == 'PUT':
+                calls['PUT'].append(url)
+                return {}, {'status_code': 200}
+            return {}, {}
+        self.sync.request = MagicMock(side_effect=fake_request)
+        return calls
+
+    def test_wrong_folder_is_deleted_and_recreated(self):
+        # Same condition/value/comment but the CMK rule lives in the wrong
+        # folder: it must be deleted (create_rules then recreates it in the
+        # configured folder), not accepted as a match.
+        local = {
+            'value': "{'k': 'v'}", 'comment': 'c', 'folder': '/correct',
+            'condition': {'host_name': {'match_on': ['h']}},
+        }
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+        calls = self._wire_get([self._cmk_rule('/wrong', "{'k': 'v'}")])
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], ['/objects/rule/r1'])
+        # Not paired to the wrong-folder rule -> create_rules recreates it.
+        self.assertFalse(local.get('_skip_create'))
+
+    def test_right_folder_full_match_kept(self):
+        # Baseline: identical rule in the correct folder is left untouched.
+        local = {
+            'value': "{'k': 'v'}", 'comment': 'c', 'folder': '/correct',
+            'condition': {'host_name': {'match_on': ['h']}},
+        }
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+        calls = self._wire_get([self._cmk_rule('/correct', "{'k': 'v'}")])
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertTrue(local.get('_skip_create'))
+        self.assertEqual(local.get('_cmk_id'), 'r1')
+
+    def test_folder_case_insensitive_no_churn(self):
+        # Config "/Correct" maps to CMK "/correct" — must not read as drift.
+        local = {
+            'value': "{'k': 'v'}", 'comment': 'c', 'folder': '/Correct',
+            'condition': {'host_name': {'match_on': ['h']}},
+        }
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+        calls = self._wire_get([self._cmk_rule('/correct', "{'k': 'v'}")])
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertTrue(local.get('_skip_create'))
+
+    def test_keep_value_does_not_overwrite_drifted_value(self):
+        # keep_value: operator changed the value in CMK. Same condition,
+        # comment and folder -> keep the rule, never update or delete it.
+        local = {
+            'value': "{'k': 'NEW'}", 'comment': 'c', 'folder': '/correct',
+            'condition': {'host_name': {'match_on': ['h']}},
+            'keep_value': True,
+        }
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+        calls = self._wire_get([self._cmk_rule('/correct', "{'k': 'OLD'}")])
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertEqual(calls['PUT'], [])
+        self.assertTrue(local.get('_skip_create'))
+        self.assertEqual(local.get('_cmk_id'), 'r1')
+
+    def test_value_drift_without_keep_value_updates_in_place(self):
+        # Without keep_value a drifted value in the right folder is PUT-updated.
+        local = {
+            'value': "{'k': 'NEW'}", 'comment': 'c', 'folder': '/correct',
+            'condition': {'host_name': {'match_on': ['h']}},
+        }
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+        calls = self._wire_get([self._cmk_rule('/correct', "{'k': 'OLD'}")])
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertEqual(len(calls['PUT']), 1)
+        self.assertTrue(local.get('_skip_create'))
+
+
+class TestCleanOrphanedRules(unittest.TestCase):
+    """clean_orphaned_rules: opt-in removal of no-longer-generated rules."""
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.project = None
+        self.sync.log_details = []
+        # The run still generates rules for 'active_ruleset' only.
+        self.sync.rulsets_by_type = {'active_ruleset': []}
+
+    def _wire(self):
+        deletes = []
+
+        def fake_request(url, method='GET', **_kw):
+            if 'ruleset/collections/all?used=true' in url:
+                # Two used rulesets: one still active, one now orphaned.
+                return {'value': [
+                    {'id': 'active_ruleset', 'extensions': {
+                        'name': 'active_ruleset', 'number_of_rules': 1}},
+                    {'id': 'orphan_ruleset', 'extensions': {
+                        'name': 'orphan_ruleset', 'number_of_rules': 2}},
+                ]}, {}
+            if method == 'GET':  # rules of the orphan ruleset
+                return {'value': [
+                    {'id': 'mine', 'extensions': {'properties': {
+                        'description': 'cmdbsyncer_test_account'}}},
+                    {'id': 'foreign', 'extensions': {'properties': {
+                        'description': 'someone_else'}}},
+                ]}, {}
+            if method == 'DELETE':
+                deletes.append(url)
+                return {}, {}
+            return {}, {}
+        self.sync.request = MagicMock(side_effect=fake_request)
+        return deletes
+
+    def test_disabled_when_setting_off(self):
+        self.sync.config = {}
+        deletes = self._wire()
+        self.sync.clean_orphaned_rules()
+        self.assertEqual(deletes, [])
+
+    def test_deletes_only_owned_rules_in_orphaned_ruleset(self):
+        # Setting on: the orphaned ruleset's syncer-owned rule is deleted,
+        # the foreign (unmarked) rule is left untouched, and the still-active
+        # ruleset is never scanned.
+        self.sync.config = {'remove_orphaned_rules': True}
+        deletes = self._wire()
+        self.sync.clean_orphaned_rules()
+        self.assertEqual(deletes, ['/objects/rule/mine'])
 
 
 def _outcome(**fields):

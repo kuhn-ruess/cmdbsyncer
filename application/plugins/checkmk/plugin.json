@@ -16,6 +16,7 @@
         "bakery_passphrase": "",
         "dont_delete_hosts_if_more_then": "",
         "dont_activate_changes_if_more_then": "",
+        "remove_orphaned_rules": "",
         "verify_cert": "True",
         "ca_cert_chain": "",
         "ca_root_cert": "",
