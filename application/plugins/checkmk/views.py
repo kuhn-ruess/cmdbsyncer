@@ -9,7 +9,8 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter  # pylint: disable=no-name-in-module
 from pygments.lexers import DjangoLexer  # pylint: disable=no-name-in-module
 
-from wtforms import HiddenField, StringField, PasswordField, SelectMultipleField, SelectField
+from wtforms import HiddenField, StringField, PasswordField, SelectMultipleField, SelectField, \
+    TextAreaField
 from wtforms.validators import ValidationError
 from flask_admin import BaseView
 from flask_admin.form import rules
@@ -759,7 +760,7 @@ class CheckmkMngmtRuleView(RuleModelView):
                             'folder': StringField,
                             'condition_host': StringField,
                             'list_to_loop': StringField,
-                            'value_template': StringField,
+                            'value_template': TextAreaField,
                             'condition_label_template': StringField,
                             'condition_service_label': StringField,
                             'condition_service': StringField,
@@ -831,7 +832,9 @@ class CheckmkMngmtRuleView(RuleModelView):
                                 'placeholder': (
                                     'Jinja. In loop mode use {{ loop }} for the'
                                     ' current entry and {{ loop_idx }} for its index.'
-                                )
+                                ),
+                                'rows': 10,
+                                'style': 'font-family: monospace; white-space: pre;',
                             },
                             'condition_label_template': {
                                 'placeholder': 'key:value — e.g. os:linux (one label only)'
