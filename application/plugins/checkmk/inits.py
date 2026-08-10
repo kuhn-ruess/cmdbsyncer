@@ -800,4 +800,26 @@ def sync_sitepools(_account=False, _debug=False):
                 print(" - Is already up to date")
         if changed:
             pool.save()
+
+def reset_sitepools(_account=False, _debug=False):
+    """
+    Drop every Site Pool assignment so the next export calculates it again.
+
+    The assignment is sticky: a host keeps its site until it stops matching
+    the rule. After the pool members or the assignment rules changed, that
+    stickiness keeps the old distribution alive. This clears the ``pool_site``
+    lock on all hosts, zeroes the seat counters and drops the per-host rule
+    caches — the calculated ``site`` attribute lives in there too, so without
+    that the next export would hand out the old site again.
+    """
+    hosts = Host.objects(pool_site__ne=None)
+    print(f"Clearing the Site Pool assignment of {hosts.count()} hosts")
+    hosts.update(unset__pool_site=1)
+    Host.objects(cache__ne={}).update(set__cache={})
+
+    for pool in CheckmkSitePool.objects():
+        print(f"Reset seat counters of pool {pool.name}")
+        for member in pool.member_sites:
+            member.hosts_taken = 0
+        pool.save()
 #.

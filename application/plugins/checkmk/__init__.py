@@ -42,6 +42,7 @@ from .inits import (
     import_sites,
     sync_folderpools,
     sync_sitepools,
+    reset_sitepools,
 )
 
 def _load_rules():
@@ -763,6 +764,19 @@ def cli_cmk_sync_sitepools(debug=False):
 
     """
     sync_sitepools(_debug=debug)
+#.
+#   .-- Command: Reset Site Pools
+@cli_cmk.command('reset_sitepools')
+@click.option("--debug", default=False, is_flag=True)
+def cli_cmk_reset_sitepools(debug=False):
+    """
+    Clear all Checkmk Site Pool assignments, so they are calculated again
+
+    ### Example
+    _./cmdbsyncer checkmk reset_sitepools
+
+    """
+    reset_sitepools(_debug=debug)
 #.
 #   .-- Import Checkmk V1
 from .import_v1 import ImportCheckmk1
