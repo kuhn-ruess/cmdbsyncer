@@ -73,6 +73,26 @@ def _missing_cmdb_fields(host, cmdb_models, all_required):
     return [k for k in expected if not got.get(k, '').strip()]
 
 
+def _duplicate_clusters(normalized):
+    """
+    Turn the normalized-name buckets into the duplicate list.
+
+    A duplicate is only a problem while both names are in use. An archived
+    partner is not one — it is the normal result of a host being renamed or
+    replaced, and reporting those buried the real duplicates. So a cluster
+    needs at least two LIVE members to be listed; archived members ride
+    along on those clusters as context (they explain where a name comes
+    from). Archived entries sort last, then alphabetically.
+    """
+    clusters = [
+        sorted(cluster, key=lambda m: (m['archived'], m['name'].lower()))
+        for cluster in normalized.values()
+        if sum(1 for member in cluster if not member['archived']) > 1
+    ]
+    clusters.sort(key=lambda members: -len(members))
+    return clusters[:_DUPLICATE_HOST_LIMIT]
+
+
 def _annotate_freshness(per_source, now):
     """
     Tag each per-source row with a freshness bucket so the template
@@ -199,10 +219,10 @@ def _collect(now):  # pylint: disable=too-many-locals
                         'missing': missing,
                     })
 
-    # Fold archived hosts into the archive counts and the duplicate clustering
-    # so a name that only differs in case (or domain) from an archived host is
-    # spotted too — e.g. a host that cannot be lowercased because the lowercase
-    # name is still held by an archived host.
+    # Fold archived hosts into the archive counts and the duplicate clustering.
+    # They are kept in a cluster as context (an archived twin explains a name),
+    # but a cluster only counts as a duplicate when at least two LIVE hosts
+    # share the name — see below.
     total_archived = _archive_pass(archive_q, per_source, normalized)
 
     sources_silent_count = _annotate_freshness(per_source, now)
@@ -211,11 +231,7 @@ def _collect(now):  # pylint: disable=too-many-locals
                      key=lambda r: -r['total'])
     types = sorted(({'name': k, **v} for k, v in per_type.items()),
                    key=lambda r: -r['total'])
-    duplicate_clusters = sorted(
-        [sorted(cluster, key=lambda m: (m['archived'], m['name'].lower()))
-         for cluster in normalized.values() if len(cluster) > 1],
-        key=lambda members: -len(members),
-    )[:_DUPLICATE_HOST_LIMIT]
+    duplicate_clusters = _duplicate_clusters(normalized)
     missing_top = missing_field_freq.most_common(_MISSING_FIELD_FREQ_LIMIT)
 
     seen_source_names = {n for n in per_source if n != '(none)'}
