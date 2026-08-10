@@ -51,6 +51,7 @@ from application.views.host_filters import (
     FilterLifecycleState,
     FilterObjectType,
     FilterPoolFolder,
+    FilterSitePool,
     FilterStale,
     FilterCmdbTemplate,
     FilterLabelKeyAndValue,
@@ -1080,7 +1081,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
        ),
        FilterPoolFolder(
            Host,
-           'CMK Pool Folder'
+           'CMK Folder Pool'
        ),
        FilterLifecycleState(
            Host,
@@ -1091,6 +1092,13 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
            Host,
            'Stale',
            options=(('yes', 'Stale'), ('no', 'Fresh')),
+       ),
+       # Appended, not inserted: Flask-Admin encodes an active filter by
+       # its POSITION in this tuple, so a new entry in the middle would
+       # silently repoint every saved search that uses a later filter.
+       FilterSitePool(
+           Host,
+           'CMK Site Pool'
        ),
     )
 

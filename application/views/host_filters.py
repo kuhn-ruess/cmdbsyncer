@@ -126,7 +126,7 @@ class FilterStale(BaseMongoEngineFilter):
 
 class FilterPoolFolder(BaseMongoEngineFilter):
     """
-    Filter Value
+    Filter by the Checkmk Folder Pool folder a host is locked to.
     """
 
     def apply(self, query, value):
@@ -134,6 +134,30 @@ class FilterPoolFolder(BaseMongoEngineFilter):
 
     def operation(self):
         return "contains"
+
+
+class FilterSitePool(BaseMongoEngineFilter):
+    """
+    Filter by the Checkmk Site Pool site a host is locked to. Matches the
+    site id itself (`berlin_2`) or, when the value names a Site Pool, every
+    site of that pool — so "which hosts sit on this pool?" is one filter
+    instead of one per member site.
+    """
+
+    def apply(self, query, value):
+        value = (value or '').strip()
+        if not value:
+            return query
+        # pylint: disable-next=import-outside-toplevel
+        from application.plugins.checkmk.models import CheckmkSitePool
+        pool = CheckmkSitePool.objects(name=value).first()
+        if pool:
+            return query.filter(
+                pool_site__in=[x.site_id for x in pool.member_sites])
+        return query.filter(pool_site__icontains=value)
+
+    def operation(self):
+        return "is"
 
 
 class FilterCmdbTemplate(BaseMongoEngineFilter):
