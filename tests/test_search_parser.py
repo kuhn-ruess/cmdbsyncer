@@ -61,7 +61,7 @@ class ParseSearchTests(unittest.TestCase):
         result = parse_search('basti_test')
         body = repr(result)
         # The key clauses use the anchored regex
-        self.assertIn("'regex': '^basti_test$'", body)
+        self.assertIn("'regex': '^(?:basti_test)$'", body)
         # The value clauses keep the unanchored regex
         self.assertIn("'regex': 'basti_test'", body)
 
@@ -71,7 +71,7 @@ class ParseSearchTests(unittest.TestCase):
         # `^basti_test.*$` after wildcard expansion.
         result = parse_search('basti_test*')
         body = repr(result)
-        self.assertIn("'regex': '^basti_test.*$'", body)
+        self.assertIn("'regex': '^(?:basti_test.*)$'", body)
 
     def test_hostname_field_targets_only_hostname(self):
         result = parse_search('hostname:web')
@@ -186,6 +186,81 @@ class ParseSearchTests(unittest.TestCase):
             self.assertIn('$and', r)
             kinds = sorted(list(c.keys())[0] for c in r['$and'])
             self.assertEqual(kinds, ['$nor', '$or'])
+
+
+class ShortFieldFormTests(unittest.TestCase):
+    """`h:` / `l.x:` / `i.x:` are short forms of the long field names."""
+
+    def test_h_is_hostname(self):
+        self.assertEqual(parse_search('h:web'), parse_search('hostname:web'))
+        self.assertEqual(parse_search('host:web'), parse_search('hostname:web'))
+
+    def test_short_form_is_case_insensitive(self):
+        self.assertEqual(parse_search('H:web'), parse_search('hostname:web'))
+
+    def test_label_and_inventory_prefix(self):
+        self.assertEqual(parse_search('l.env:prod'),
+                         parse_search('labels.env:prod'))
+        self.assertEqual(parse_search('i.cpu:8'),
+                         parse_search('inventory.cpu:8'))
+
+    def test_label_key_keeps_its_case(self):
+        result = parse_search('l.Env:prod')
+        self.assertEqual(result, {'labels.Env': {'$regex': 'prod', '$options': 'i'}})
+
+    def test_unknown_field_untouched(self):
+        # `hoster` must not be mistaken for the `h` short form
+        result = parse_search('hoster:x')
+        self.assertEqual(result, {'$or': [
+            {'labels.hoster': {'$regex': 'x', '$options': 'i'}},
+            {'inventory.hoster': {'$regex': 'x', '$options': 'i'}},
+        ]})
+
+
+class RegexValueTests(unittest.TestCase):
+    """A value between slashes is used as a regex, without globbing."""
+
+    def test_regex_value_is_used_as_typed(self):
+        result = parse_search(r'h:/^web\d+$/')
+        self.assertEqual(result,
+                         {'hostname': {'$regex': r'^web\d+$', '$options': 'i'}})
+
+    def test_star_is_not_translated_in_regex(self):
+        # `web[0-9]*` must stay a regex quantifier, not become `.*`
+        result = parse_search('h:/web[0-9]*/')
+        self.assertEqual(result['hostname']['$regex'], 'web[0-9]*')
+
+    def test_regex_may_contain_parens_and_pipes(self):
+        result = parse_search('h:/^(web|db)[0-9]+/')
+        self.assertEqual(result['hostname']['$regex'], '^(web|db)[0-9]+')
+
+    def test_bare_regex_searches_every_field(self):
+        result = parse_search('/^web[0-9]+$/')
+        self.assertEqual(len(result['$or']), 5)
+        self.assertEqual(result['$or'][0],
+                         {'hostname': {'$regex': '^web[0-9]+$', '$options': 'i'}})
+
+    def test_regex_key_match_stays_anchored_as_a_group(self):
+        # An alternation must not swallow the key anchors
+        body = repr(parse_search('/web|db/'))
+        self.assertIn("'regex': '^(?:web|db)$'", body)
+
+    def test_regex_combines_with_operators(self):
+        result = parse_search('h:/^web/ AND env:prod')
+        self.assertIn('$and', result)
+        self.assertEqual(len(result['$and']), 2)
+
+    def test_invalid_regex_raises(self):
+        # Unlike a plain term, an explicit regex reports the typo
+        with self.assertRaises(SearchSyntaxError):
+            parse_search('h:/[unbalanced/')
+
+    def test_path_like_word_is_no_regex(self):
+        # `/srv/data` and `srv/data` stay ordinary terms
+        result = parse_search('hostname:srv/data')
+        self.assertEqual(result['hostname']['$regex'], 'srv/data')
+        self.assertEqual(parse_search('hostname:/srv/data')['hostname']['$regex'],
+                         '/srv/data')
 
 
 if __name__ == '__main__':

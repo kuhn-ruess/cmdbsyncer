@@ -496,9 +496,10 @@
     '  prod OR stage     — either matches',
     '  NOT archived  /  !archived',
     '  (prod OR stage) AND NOT test',
-    '  hostname:web*     — wildcard match against the hostname',
+    '  hostname:web*     — wildcard match against the hostname (h: is short for hostname:)',
+    '  h:/^web[0-9]+$/   — slashes make the value a regex (no * / ? globbing)',
     '  env:prod          — value under labels.env or inventory.env',
-    '  labels.env:prod   — only labels.env (use inventory. for inventory)',
+    '  labels.env:prod   — only labels.env (l.env: and i.cpu: are the short forms)',
     '  basti_test*       — keys starting with basti_test (e.g. basti_test2)',
     '  "foo bar"         — quote to keep spaces and disable * / ?'
   ].join('\n');

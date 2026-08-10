@@ -7,12 +7,15 @@ and parentheses. Each leaf is either a bare term (matched against
 `field:value` pair. `hostname:foo` targets the hostname column; any
 other field name is looked up under both `labels.<field>` and
 `inventory.<field>`, and `labels.x:y` / `inventory.x:y` route
-explicitly.
+explicitly. Short forms save typing: `h:` for `hostname:`, `l.x:` for
+`labels.x:` and `i.x:` for `inventory.x:`.
 
 Values are treated as MongoDB regex (case-insensitive). A trailing
 or embedded `*` is translated to `.*` and `?` to `.` so common Lucene
 wildcards behave intuitively; quoted values (`"foo bar"`) are escaped
-literally so spaces survive tokenisation.
+literally so spaces survive tokenisation. A value written between
+slashes (`h:/^web\\d+$/`) is taken as a regular expression as-is — no
+wildcard translation — for the cases where globbing is not enough.
 """
 import re
 
@@ -29,12 +32,26 @@ _TOKEN_RE = re.compile(
     | (?P<colon>:)
     | (?P<bang>!)
     | (?P<quoted>"(?:[^"\\]|\\.)*")
+    | (?P<regex>/(?:[^/\\]|\\.)*/(?=\s|\)|$))
     | (?P<word>[^\s():!"]+)
     ''',
     re.VERBOSE,
 )
 
 _KEYWORDS = {'AND': 'AND', 'OR': 'OR', 'NOT': 'NOT'}
+
+# How the value of a term is turned into a regex, per token kind.
+_VALUE_MODES = {'WORD': 'plain', 'QUOTED': 'quoted', 'REGEX': 'regex'}
+
+# Short forms for the field prefix, so the common searches stay short.
+_FIELD_ALIASES = {
+    'h': 'hostname',
+    'host': 'hostname',
+}
+_FIELD_PREFIX_ALIASES = (
+    ('l.', 'labels.'),
+    ('i.', 'inventory.'),
+)
 
 
 def _tokenize(text):
@@ -62,6 +79,11 @@ def _tokenize(text):
         elif match.group('quoted'):
             raw = match.group('quoted')
             tokens.append(('QUOTED', raw[1:-1].replace('\\"', '"')))
+        elif match.group('regex'):
+            # Only a token that starts with '/' and whose closing '/' ends
+            # the token is a regex — 'srv/data' stays an ordinary word.
+            raw = match.group('regex')
+            tokens.append(('REGEX', raw[1:-1].replace('\\/', '/')))
         elif match.group('word'):
             word = match.group('word')
             upper = word.upper()
@@ -114,7 +136,7 @@ class _Parser:  # pylint: disable=too-few-public-methods
             if kind == 'AND':
                 self._consume()
                 children.append(self._parse_unary())
-            elif kind in ('WORD', 'QUOTED', 'LPAREN', 'NOT'):
+            elif kind in ('WORD', 'QUOTED', 'REGEX', 'LPAREN', 'NOT'):
                 # implicit AND between adjacent atoms
                 children.append(self._parse_unary())
             else:
@@ -139,7 +161,7 @@ class _Parser:  # pylint: disable=too-few-public-methods
                 raise SearchSyntaxError("Missing closing parenthesis ')'")
             self._consume()
             return inner
-        if kind in ('WORD', 'QUOTED'):
+        if kind in ('WORD', 'QUOTED', 'REGEX'):
             return self._parse_term()
         if kind is None:
             raise SearchSyntaxError("Unexpected end of expression")
@@ -151,28 +173,54 @@ class _Parser:  # pylint: disable=too-few-public-methods
         if kind == 'WORD' and self._peek()[0] == 'COLON':
             self._consume()  # eat ':'
             val_kind, val_value = self._peek()
-            if val_kind in ('WORD', 'QUOTED'):
+            if val_kind in _VALUE_MODES:
                 self._consume()
-                return ('TERM', value, val_value, val_kind == 'QUOTED')
+                return ('TERM', value, val_value, _VALUE_MODES[val_kind])
             raise SearchSyntaxError(
                 f"Expected value after '{value}:' but got {val_value!r}"
             )
-        return ('TERM', None, value, kind == 'QUOTED')
+        return ('TERM', None, value, _VALUE_MODES[kind])
 
 
 _FIELD_KEY_RE = re.compile(r'^[A-Za-z0-9_.-]+$')
 
 
-def _value_to_regex(value, quoted):
+def _resolve_field(field):
+    """
+    Expand the short field forms: `h:` → `hostname:`, `l.env:` →
+    `labels.env:`, `i.cpu:` → `inventory.cpu:`. Anything else is
+    returned unchanged.
+    """
+    lowered = field.lower()
+    if lowered in _FIELD_ALIASES:
+        return _FIELD_ALIASES[lowered]
+    for short, full in _FIELD_PREFIX_ALIASES:
+        if lowered.startswith(short):
+            return full + field[len(short):]
+    return field
+
+
+def _value_to_regex(value, mode):
     """
     Turn the user-typed value into a Mongo regex string. Quoted values
-    are escaped verbatim (so `"foo*"` matches literal `foo*`). Unquoted
-    values support Lucene-style `*` (→`.*`) and `?` (→`.`); the rest is
-    treated as regex and falls back to a literal escape if it doesn't
-    compile.
+    are escaped verbatim (so `"foo*"` matches literal `foo*`). Slashed
+    values (`/^web\\d+$/`) are taken as a regular expression as typed —
+    an invalid one is an error instead of a silent literal match, since
+    asking for a regex explicitly means a typo should be visible.
+    Everything else supports Lucene-style `*` (→`.*`) and `?` (→`.`);
+    the rest is treated as regex and falls back to a literal escape if
+    it doesn't compile.
     """
-    if quoted:
+    if mode == 'quoted':
         return re.escape(value)
+
+    if mode == 'regex':
+        try:
+            re.compile(value)
+        except re.error as error:
+            raise SearchSyntaxError(
+                f"Invalid regular expression /{value}/: {error}") from error
+        return value
 
     converted = []
     for char in value:
@@ -228,15 +276,16 @@ def _dict_match_expr(field_name, regex_str, target):
     }}
 
 
-def _leaf_to_mongo(field, value, quoted):
+def _leaf_to_mongo(field, value, mode):
     """Translate a single TERM into a Mongo predicate dict."""
-    regex_str = _value_to_regex(value, quoted)
+    regex_str = _value_to_regex(value, mode)
     # Keys are matched as full strings — `basti_test` does NOT match a
     # label called `basti_test2`. Wildcards (`*`, `?`) expand the
     # anchored regex so users can opt in to prefix/suffix matching with
     # `basti_test*`. Values stay unanchored (substring match) because
-    # that's how users have always searched in the Syncer.
-    key_regex_str = f'^{regex_str}$'
+    # that's how users have always searched in the Syncer. The group
+    # keeps an alternation (`/web|db/`) from swallowing the anchors.
+    key_regex_str = f'^(?:{regex_str})$'
 
     if field is None:
         return {'$or': [
@@ -249,6 +298,8 @@ def _leaf_to_mongo(field, value, quoted):
 
     if not _FIELD_KEY_RE.fullmatch(field):
         raise SearchSyntaxError(f"Invalid field name {field!r}")
+
+    field = _resolve_field(field)
 
     if field == 'hostname':
         return {'hostname': {'$regex': regex_str, '$options': 'i'}}
@@ -265,8 +316,8 @@ def _leaf_to_mongo(field, value, quoted):
 def _ast_to_mongo(node):
     op = node[0]
     if op == 'TERM':
-        _, field, value, quoted = node
-        return _leaf_to_mongo(field, value, quoted)
+        _, field, value, mode = node
+        return _leaf_to_mongo(field, value, mode)
     if op == 'AND':
         return {'$and': [_ast_to_mongo(child) for child in node[1]]}
     if op == 'OR':
