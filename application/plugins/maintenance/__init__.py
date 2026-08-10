@@ -478,12 +478,17 @@ def lowercase_hostnames(do_apply, debug):  # pylint: disable=unused-argument
     result = lowercase_all_hostnames(apply=do_apply)
     verb = "Renamed" if do_apply else "Would rename"
     for pair in result['renamed']:
-        print(f"{CC.OKGREEN}  ** {CC.ENDC}{verb} {pair['old']} -> {pair['new']}")
+        archived = " [archived]" if pair['archived'] else ""
+        print(f"{CC.OKGREEN}  ** {CC.ENDC}{verb} {pair['old']}{archived} "
+              f"-> {pair['new']}")
     for pair in result['collisions']:
-        print(f"{CC.WARNING}  ** {CC.ENDC}Skipped {pair['old']}: "
-              f"'{pair['target']}' already exists (merge by hand)")
+        archived = " [archived]" if pair['archived'] else ""
+        holder = "archived host" if pair['target_archived'] else "host"
+        print(f"{CC.WARNING}  ** {CC.ENDC}Skipped {pair['old']}{archived}: "
+              f"'{pair['target']}' already exists as {holder} (merge by hand)")
     print(f"{CC.OKGREEN}  ** {CC.ENDC}{verb} {len(result['renamed'])} host(s); "
-          f"{len(result['collisions'])} collision(s)")
+          f"{len(result['collisions'])} collision(s); "
+          f"{result['archived']} of the affected host(s) are archived")
     if not do_apply and result['renamed']:
         print(f"{CC.OKCYAN}  ** {CC.ENDC}Re-run with --apply to rename them")
 

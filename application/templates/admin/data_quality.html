@@ -75,16 +75,45 @@
         <div>
             <strong>Lowercase all hostnames</strong>
             <div class="text-muted" style="font-size: 0.9em;">
-                {{ uppercase_count }} host(s) have uppercase letters in their name.
+                {{ uppercase_count }} host(s) have uppercase letters in their
+                name, {{ uppercase_archived }} of them in the archive.
             </div>
         </div>
-        <form method="POST" action="{{ url_for('.lowercase_hostnames') }}"
-              onsubmit="return confirm('Rename {{ uppercase_count }} host(s) with uppercase letters to lowercase?');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <button type="submit" class="btn btn-outline-primary btn-sm">
-                <i class="fa fa-font"></i> Lowercase all hostnames
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    id="dq-lowercase-preview-btn"
+                    data-url="{{ url_for('.lowercase_hostnames_preview') }}">
+                <i class="fa fa-list"></i> Show affected hosts
             </button>
-        </form>
+            <form method="POST" action="{{ url_for('.lowercase_hostnames') }}"
+                  onsubmit="return confirm('Rename {{ uppercase_count }} host(s) with uppercase letters to lowercase?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline-primary btn-sm">
+                    <i class="fa fa-font"></i> Lowercase all hostnames
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {# Affected-hosts list: planning walks every hostname, so it is fetched
+       on demand instead of on every dashboard render. #}
+    <div class="modal fade" id="dq-lowercase-modal" tabindex="-1" role="dialog">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Hosts affected by "Lowercase all hostnames"</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body" id="dq-lowercase-modal-body">
+            <p class="text-muted">Loading…</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
     </div>
     {% endif %}
 
@@ -462,4 +491,32 @@
     {% endif %}
 
 </div>
+{% endblock %}
+
+{% block tail %}
+  {{ super() }}
+  <script>
+  // Load the "affected hosts" list into the modal on first open. The
+  // planning pass walks every hostname, so it must not run on each
+  // dashboard render.
+  (function() {
+    var btn = document.getElementById('dq-lowercase-preview-btn');
+    if (!btn) { return; }
+    btn.addEventListener('click', function() {
+      var body = document.getElementById('dq-lowercase-modal-body');
+      body.innerHTML = '<p class="text-muted">Loading…</p>';
+      $('#dq-lowercase-modal').modal('show');
+      fetch(btn.dataset.url, {credentials: 'same-origin'})
+        .then(function(resp) {
+          if (!resp.ok) { throw new Error(resp.status + ' ' + resp.statusText); }
+          return resp.text();
+        })
+        .then(function(html) { body.innerHTML = html; })
+        .catch(function(err) {
+          body.innerHTML = '<div class="alert alert-danger">Could not load '
+            + 'the list: ' + err.message + '</div>';
+        });
+    });
+  })();
+  </script>
 {% endblock %}

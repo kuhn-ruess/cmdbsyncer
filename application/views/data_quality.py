@@ -292,8 +292,13 @@ class DataQualityView(BaseView):
             archive_list_url = None
         # How many hosts still carry uppercase letters — shown next to the
         # "Lowercase all hostnames" button as a preview of what it would do.
-        uppercase_count = Host.objects(
-            object_type__ne='template', hostname__regex=r'[A-Z]').count()
+        # Archived hosts are counted separately: they are renamed as well,
+        # and an archived name is the usual reason a rename collides.
+        uppercase_hosts = Host.objects(
+            object_type__ne='template', hostname__regex=r'[A-Z]')
+        uppercase_count = uppercase_hosts.count()
+        uppercase_archived = uppercase_hosts.filter(
+            deleted_at__exists=True).count()
         return self.render(
             'admin/data_quality.html',
             now=now,
@@ -301,11 +306,37 @@ class DataQualityView(BaseView):
             account_edit_url=account_edit_url,
             archive_list_url=archive_list_url,
             uppercase_count=uppercase_count,
+            uppercase_archived=uppercase_archived,
             lifecycle_filter_idx=idx.get('Lifecycle State'),
             account_filter_idx=idx.get('Account'),
             hostname_filter_idx=idx.get('Hostname'),
             stale_filter_idx=idx.get('Stale'),
             **data,
+        )
+
+    @expose('/lowercase_hostnames_preview')
+    def lowercase_hostnames_preview(self):
+        """
+        Fragment listing the hosts "Lowercase all hostnames" would touch:
+        what each name becomes, which entries are archived and which ones
+        collide with an existing name. Loaded on demand into the modal —
+        planning walks every hostname, too slow to do on each dashboard
+        render.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.helpers.host_maintenance import lowercase_all_hostnames
+        result = lowercase_all_hostnames(apply=False)
+        try:
+            archive_list_url = url_for('archive.index_view')
+        except Exception:  # pylint: disable=broad-except
+            archive_list_url = None
+        return self.render(
+            'admin/data_quality_lowercase_preview.html',
+            renamed=result['renamed'],
+            collisions=result['collisions'],
+            archived=result['archived'],
+            host_list_url=url_for('host.index_view'),
+            archive_list_url=archive_list_url,
         )
 
     @expose('/lowercase_hostnames', methods=['POST'])

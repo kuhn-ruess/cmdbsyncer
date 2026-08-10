@@ -1,0 +1,81 @@
+{# Fragment: what "Lowercase all hostnames" would do. Loaded into the
+   modal on the Data Quality page, so no master.html here. #}
+<p class="text-muted" style="font-size: 0.9em;">
+    {{ renamed|length }} host(s) would be renamed,
+    {{ collisions|length }} skipped because the lowercase name is already
+    taken, {{ archived }} of them are in the archive.
+</p>
+
+{% if not renamed and not collisions %}
+<div class="alert alert-success" style="margin-bottom: 0;">
+    No hostname carries uppercase letters — nothing to do.
+</div>
+{% endif %}
+
+{% if renamed %}
+<h5 style="margin-top: 0.5rem;">Would be renamed</h5>
+<div class="table-responsive" style="max-height: 40vh; overflow-y: auto;">
+<table class="table table-sm">
+    <thead>
+        <tr><th>Current name</th><th>Becomes</th><th>Where</th></tr>
+    </thead>
+    <tbody>
+    {% for entry in renamed %}
+        <tr>
+            <td><code>{{ entry.old }}</code></td>
+            <td><code>{{ entry.new }}</code></td>
+            <td>
+                {% if entry.archived %}
+                <span class="badge badge-secondary">archived</span>
+                {% if archive_list_url %}
+                <a href="{{ archive_list_url }}?search={{ entry.old|urlencode }}">show</a>
+                {% endif %}
+                {% else %}
+                <a href="{{ host_list_url }}?search={{ entry.old|urlencode }}">host list</a>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if collisions %}
+<h5 style="margin-top: 0.5rem;">Skipped — name already taken</h5>
+<div class="table-responsive" style="max-height: 40vh; overflow-y: auto;">
+<table class="table table-sm">
+    <thead>
+        <tr><th>Current name</th><th>Blocked by</th><th>Where</th></tr>
+    </thead>
+    <tbody>
+    {% for entry in collisions %}
+        <tr>
+            <td><code>{{ entry.old }}</code></td>
+            <td>
+                <code>{{ entry.target }}</code>
+                {% if entry.target_archived %}
+                <span class="badge badge-warning">archived host</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if entry.archived %}
+                <span class="badge badge-secondary">archived</span>
+                {% if archive_list_url %}
+                <a href="{{ archive_list_url }}?search={{ entry.old|urlencode }}">show</a>
+                {% endif %}
+                {% else %}
+                <a href="{{ host_list_url }}?search={{ entry.old|urlencode }}">host list</a>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="text-muted" style="font-size: 0.85em; margin-bottom: 0;">
+    A hostname exists only once. Where the lowercase name is held by an
+    archived host, delete or rename that archived entry first — then the
+    rename goes through.
+</p>
+{% endif %}
