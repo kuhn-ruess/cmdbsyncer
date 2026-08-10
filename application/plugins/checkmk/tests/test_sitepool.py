@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from mongoengine.errors import DoesNotExist
 from application.plugins.checkmk.rules import CheckmkRule
-from application.plugins.checkmk.inits import reset_sitepools
+from application.plugins.checkmk.inits import reset_sitepools, pool_sticky_notes
 from application.plugins.checkmk.sitepool import (
     get_site,
     release_site,
@@ -146,6 +146,28 @@ class TestSitePoolStickyRule(unittest.TestCase):
 
         self.assertEqual(result['custom_attributes']['site'], 'berlin_1')
         db_host.lock_to_pool_site.assert_called_once_with('berlin_1')
+
+
+class TestPoolStickyNotes(unittest.TestCase):
+    """The debug output tells that pool assignments are sticky"""
+
+    def test_notes_for_both_pools(self):
+        db_host = Mock()
+        db_host.get_folder.return_value = '/pool1'
+        db_host.get_pool_site.return_value = 'berlin_2'
+
+        notes = pool_sticky_notes(db_host)
+
+        self.assertIn('/pool1', notes['Folder Pool (sticky)'])
+        self.assertIn('reset_folderpools', notes['Folder Pool (sticky)'])
+        self.assertIn('berlin_2', notes['Site Pool (sticky)'])
+        self.assertIn('reset_sitepools', notes['Site Pool (sticky)'])
+
+    def test_no_notes_without_assignment(self):
+        db_host = Mock()
+        db_host.get_folder.return_value = False
+        db_host.get_pool_site.return_value = False
+        self.assertEqual(pool_sticky_notes(db_host), {})
 
 
 class TestResetSitePools(unittest.TestCase):

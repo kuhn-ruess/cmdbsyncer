@@ -539,20 +539,17 @@ def delete_all_hosts(account):
 def reset_folder_pools():
     """
     Reset Folder Pools Usage
+
+    Alias for _./cmdbsyncer checkmk reset_folderpools_, with a confirmation
     """
+    # pylint: disable-next=import-outside-toplevel
+    from application.plugins.checkmk.inits import reset_folderpools
     print(f"{CC.HEADER} Rested Pools {CC.ENDC}")
     print(" -> make sure to delete hosts from cmk after and resync")
     answer = input(" - Enter 'y' and hit enter to procceed: ")
     if answer.lower() in ['y', 'z']:
         print(f"{CC.WARNING}  ** {CC.ENDC}Start reset")
-        for pool in CheckmkFolderPool.objects():
-            print(f"      - {pool.folder_name}")
-            pool.folder_seats_taken = 0
-            pool.save()
-
-        for host in Host.objects():
-            host.folder = None
-            host.save()
+        reset_folderpools()
     else:
         print(f"{CC.OKGREEN}  ** {CC.ENDC}Aborted")
 

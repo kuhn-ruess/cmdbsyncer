@@ -42,7 +42,9 @@ from .inits import (
     import_sites,
     sync_folderpools,
     sync_sitepools,
+    reset_folderpools,
     reset_sitepools,
+    pool_sticky_notes,
 )
 
 def _load_rules():
@@ -258,6 +260,12 @@ def get_host_debug_data(hostname):
         # resolved value).
         from .cmk_rules import render_jinja_in_value
         actions = render_jinja_in_value(actions, attributes['all'])
+        # Pool assignments are sticky. Without saying so here, a folder or
+        # site that no longer fits the current pools/rules looks like a
+        # wrong rule outcome instead of an old assignment being kept.
+        # `actions` is a fresh copy at this point, so these notes reach the
+        # debug output only, never the export.
+        actions.update(pool_sticky_notes(db_host))
     else:
         actions = {}
 
@@ -751,6 +759,19 @@ def cli_cmk_sync_folderpools():
 
     """
     sync_folderpools()
+#.
+#   .-- Command: Reset Folder Pools
+@cli_cmk.command('reset_folderpools')
+@click.option("--debug", default=False, is_flag=True)
+def cli_cmk_reset_folderpools(debug=False):
+    """
+    Clear all Checkmk Folder Pool assignments, so they are calculated again
+
+    ### Example
+    _./cmdbsyncer checkmk reset_folderpools
+
+    """
+    reset_folderpools(_debug=debug)
 #.
 #   .-- Command: Sync Site Pools
 @cli_cmk.command('sync_sitepools')

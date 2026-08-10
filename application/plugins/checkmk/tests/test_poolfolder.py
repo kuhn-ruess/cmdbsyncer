@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from mongoengine.errors import DoesNotExist
+from application.plugins.checkmk.inits import reset_folderpools
 from application.plugins.checkmk.poolfolder import get_folder, remove_seat, _get_folders
 
 
@@ -108,6 +109,30 @@ class TestRemoveSeat(unittest.TestCase):
 
         # Should not raise
         remove_seat('/nonexistent')
+
+
+class TestResetFolderPools(unittest.TestCase):
+    """Tests for reset_folderpools"""
+
+    @patch('application.plugins.checkmk.inits.CheckmkFolderPool')
+    @patch('application.plugins.checkmk.inits.Host')
+    def test_clears_assignments_counters_and_cache(self, mock_host, mock_pool):
+        folder = Mock()
+        folder.folder_name = '/pool1'
+        folder.folder_seats_taken = 7
+        mock_pool.objects.return_value = [folder]
+
+        reset_folderpools()
+
+        # Folder lock dropped and rule caches invalidated, otherwise the
+        # cached outcome would carry the old folder into the next export.
+        mock_host.objects.assert_any_call(folder__ne=None)
+        mock_host.objects.return_value.update.assert_any_call(unset__folder=1)
+        mock_host.objects.assert_any_call(cache__ne={})
+        mock_host.objects.return_value.update.assert_any_call(set__cache={})
+
+        self.assertEqual(folder.folder_seats_taken, 0)
+        folder.save.assert_called_once()
 
 
 if __name__ == '__main__':

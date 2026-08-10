@@ -776,6 +776,26 @@ def sync_folderpools(_account=False, _debug=False):
             folder.save()
         else:
             print(" - Is already up to date")
+
+def reset_folderpools(_account=False, _debug=False):
+    """
+    Drop every Folder Pool assignment so the next export calculates it again.
+
+    Same idea as :func:`reset_sitepools`, for pool folders: a host keeps its
+    pool folder until it stops matching the rule, so changed pools or rules
+    never reach the hosts already assigned. Clears the ``folder`` lock on all
+    hosts, zeroes the seat counters and drops the per-host rule caches (the
+    calculated folder is cached in there as well).
+    """
+    hosts = Host.objects(folder__ne=None)
+    print(f"Clearing the Folder Pool assignment of {hosts.count()} hosts")
+    hosts.update(unset__folder=1)
+    Host.objects(cache__ne={}).update(set__cache={})
+
+    for pool in CheckmkFolderPool.objects():
+        print(f"Reset seat counter of folder {pool.folder_name}")
+        pool.folder_seats_taken = 0
+        pool.save()
 #.
 #   . Sync Site Pools
 def sync_sitepools(_account=False, _debug=False):
@@ -822,4 +842,27 @@ def reset_sitepools(_account=False, _debug=False):
         for member in pool.member_sites:
             member.hosts_taken = 0
         pool.save()
+
+def pool_sticky_notes(db_host):
+    """
+    Debug-only notes about the sticky Folder/Site Pool assignments of a host.
+
+    Both pool actions assign once and then keep their result until the host
+    stops matching the rule — changed pool members or changed rules do not
+    move an already assigned host. That is invisible in the outcomes, so the
+    host debug spells it out, together with the way out.
+    """
+    notes = {}
+    if folder := db_host.get_folder():
+        notes['Folder Pool (sticky)'] = \
+            f"Host is locked to the pool folder '{folder}' and keeps it as long " \
+            "as it matches a Folder Pool rule, even if the pools changed. " \
+            "Release it with './cmdbsyncer checkmk reset_folderpools'"
+    if site := db_host.get_pool_site():
+        notes['Site Pool (sticky)'] = \
+            f"Host is locked to the site '{site}' and keeps it as long as it " \
+            "matches a Site Pool rule, even if the pool changed. Release it " \
+            "with the host action 'Redistribute Site Pool' or " \
+            "'./cmdbsyncer checkmk reset_sitepools'"
+    return notes
 #.
