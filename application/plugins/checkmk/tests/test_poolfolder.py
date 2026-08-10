@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from mongoengine.errors import DoesNotExist
-from application.plugins.checkmk.inits import reset_folderpools
+from application.plugins.checkmk.inits import reset_folderpool, reset_folderpools
 from application.plugins.checkmk.poolfolder import get_folder, remove_seat, _get_folders
 
 
@@ -111,28 +111,47 @@ class TestRemoveSeat(unittest.TestCase):
         remove_seat('/nonexistent')
 
 
-class TestResetFolderPools(unittest.TestCase):
-    """Tests for reset_folderpools"""
+class TestResetFolderPool(unittest.TestCase):
+    """Tests for reset_folderpool (single pool)"""
 
-    @patch('application.plugins.checkmk.inits.CheckmkFolderPool')
     @patch('application.plugins.checkmk.inits.Host')
-    def test_clears_assignments_counters_and_cache(self, mock_host, mock_pool):
+    def test_clears_own_hosts_counter_and_cache(self, mock_host):
         folder = Mock()
         folder.folder_name = '/pool1'
         folder.folder_seats_taken = 7
+        mock_host.objects.return_value.count.return_value = 3
+
+        self.assertEqual(reset_folderpool(folder), 3)
+
+        # Only the hosts of this pool, and their rule cache goes with the
+        # lock — the cached outcome carries the old folder otherwise.
+        mock_host.objects.assert_called_once_with(folder='/pool1')
+        mock_host.objects.return_value.update.assert_called_once_with(
+            unset__folder=1, set__cache={})
+        self.assertEqual(folder.folder_seats_taken, 0)
+        folder.save.assert_called_once()
+
+
+class TestResetFolderPools(unittest.TestCase):
+    """Tests for reset_folderpools (all pools)"""
+
+    @patch('application.plugins.checkmk.inits.reset_folderpool')
+    @patch('application.plugins.checkmk.inits.CheckmkFolderPool')
+    @patch('application.plugins.checkmk.inits.Host')
+    def test_resets_every_pool_and_leftovers(self, mock_host, mock_pool,
+                                             mock_reset):
+        folder = Mock()
+        folder.folder_name = '/pool1'
         mock_pool.objects.return_value = [folder]
+        mock_reset.return_value = 2
 
         reset_folderpools()
 
-        # Folder lock dropped and rule caches invalidated, otherwise the
-        # cached outcome would carry the old folder into the next export.
+        mock_reset.assert_called_once_with(folder)
+        # Hosts locked to a folder whose pool is gone are released too.
         mock_host.objects.assert_any_call(folder__ne=None)
-        mock_host.objects.return_value.update.assert_any_call(unset__folder=1)
-        mock_host.objects.assert_any_call(cache__ne={})
-        mock_host.objects.return_value.update.assert_any_call(set__cache={})
-
-        self.assertEqual(folder.folder_seats_taken, 0)
-        folder.save.assert_called_once()
+        mock_host.objects.return_value.update.assert_called_once_with(
+            unset__folder=1, set__cache={})
 
 
 if __name__ == '__main__':

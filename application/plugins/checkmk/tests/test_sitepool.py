@@ -7,7 +7,11 @@ from unittest.mock import Mock, patch
 
 from mongoengine.errors import DoesNotExist
 from application.plugins.checkmk.rules import CheckmkRule
-from application.plugins.checkmk.inits import reset_sitepools, pool_sticky_notes
+from application.plugins.checkmk.inits import (
+    reset_sitepool,
+    reset_sitepools,
+    pool_sticky_notes,
+)
 from application.plugins.checkmk.sitepool import (
     get_site,
     release_site,
@@ -170,29 +174,49 @@ class TestPoolStickyNotes(unittest.TestCase):
         self.assertEqual(pool_sticky_notes(db_host), {})
 
 
-class TestResetSitePools(unittest.TestCase):
-    """Tests for reset_sitepools"""
+class TestResetSitePool(unittest.TestCase):
+    """Tests for reset_sitepool (single pool)"""
 
-    @patch('application.plugins.checkmk.inits.CheckmkSitePool')
     @patch('application.plugins.checkmk.inits.Host')
-    def test_clears_assignments_counters_and_cache(self, mock_host, mock_pool):
+    def test_clears_own_hosts_counters_and_cache(self, mock_host):
         pool = Mock()
         pool.name = 'berlin'
         pool.member_sites = [_member('berlin_1', 5), _member('berlin_2', 3)]
-        mock_pool.objects.return_value = [pool]
+        mock_host.objects.return_value.count.return_value = 8
 
-        reset_sitepools()
+        self.assertEqual(reset_sitepool(pool), 8)
 
-        # Sticky assignment dropped and rule caches invalidated, otherwise
-        # the cached outcome would carry the old site into the next export.
-        mock_host.objects.assert_any_call(pool_site__ne=None)
-        mock_host.objects.return_value.update.assert_any_call(unset__pool_site=1)
-        mock_host.objects.assert_any_call(cache__ne={})
-        mock_host.objects.return_value.update.assert_any_call(set__cache={})
-
+        # Only the hosts on this pool's sites, and their rule cache goes with
+        # the lock — the cached outcome carries the old site otherwise.
+        mock_host.objects.assert_called_once_with(
+            pool_site__in=['berlin_1', 'berlin_2'])
+        mock_host.objects.return_value.update.assert_called_once_with(
+            unset__pool_site=1, set__cache={})
         for member in pool.member_sites:
             self.assertEqual(member.hosts_taken, 0)
         pool.save.assert_called_once()
+
+
+class TestResetSitePools(unittest.TestCase):
+    """Tests for reset_sitepools (all pools)"""
+
+    @patch('application.plugins.checkmk.inits.reset_sitepool')
+    @patch('application.plugins.checkmk.inits.CheckmkSitePool')
+    @patch('application.plugins.checkmk.inits.Host')
+    def test_resets_every_pool_and_leftovers(self, mock_host, mock_pool,
+                                             mock_reset):
+        pool = Mock()
+        pool.name = 'berlin'
+        mock_pool.objects.return_value = [pool]
+        mock_reset.return_value = 4
+
+        reset_sitepools()
+
+        mock_reset.assert_called_once_with(pool)
+        # Hosts on a site no pool lists anymore are released too.
+        mock_host.objects.assert_any_call(pool_site__ne=None)
+        mock_host.objects.return_value.update.assert_called_once_with(
+            unset__pool_site=1, set__cache={})
 
 
 if __name__ == '__main__':

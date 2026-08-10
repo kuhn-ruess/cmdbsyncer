@@ -777,25 +777,31 @@ def sync_folderpools(_account=False, _debug=False):
         else:
             print(" - Is already up to date")
 
+def reset_folderpool(pool):
+    """
+    Drop the assignment of a single Folder Pool, return the number of hosts.
+
+    A host keeps its pool folder until it stops matching the rule, so changed
+    pools or rules never reach the hosts already assigned. Every host sitting
+    in this pool's folder loses the lock and its rule cache (the calculated
+    folder is cached in there as well), the seat counter starts at zero.
+    """
+    hosts = Host.objects(folder=pool.folder_name)
+    count = hosts.count()
+    hosts.update(unset__folder=1, set__cache={})
+    pool.folder_seats_taken = 0
+    pool.save()
+    return count
+
 def reset_folderpools(_account=False, _debug=False):
-    """
-    Drop every Folder Pool assignment so the next export calculates it again.
-
-    Same idea as :func:`reset_sitepools`, for pool folders: a host keeps its
-    pool folder until it stops matching the rule, so changed pools or rules
-    never reach the hosts already assigned. Clears the ``folder`` lock on all
-    hosts, zeroes the seat counters and drops the per-host rule caches (the
-    calculated folder is cached in there as well).
-    """
-    hosts = Host.objects(folder__ne=None)
-    print(f"Clearing the Folder Pool assignment of {hosts.count()} hosts")
-    hosts.update(unset__folder=1)
-    Host.objects(cache__ne={}).update(set__cache={})
-
+    """Drop every Folder Pool assignment so the next export calculates it again."""
     for pool in CheckmkFolderPool.objects():
-        print(f"Reset seat counter of folder {pool.folder_name}")
-        pool.folder_seats_taken = 0
-        pool.save()
+        print(f"Reset folder {pool.folder_name} ({reset_folderpool(pool)} hosts)")
+
+    # Hosts locked to a folder whose pool is gone would keep their lock.
+    leftovers = Host.objects(folder__ne=None)
+    print(f"Clearing {leftovers.count()} locks to folders without a pool")
+    leftovers.update(unset__folder=1, set__cache={})
 #.
 #   . Sync Site Pools
 def sync_sitepools(_account=False, _debug=False):
@@ -821,27 +827,33 @@ def sync_sitepools(_account=False, _debug=False):
         if changed:
             pool.save()
 
-def reset_sitepools(_account=False, _debug=False):
+def reset_sitepool(pool):
     """
-    Drop every Site Pool assignment so the next export calculates it again.
+    Drop the assignment of a single Site Pool, return the number of hosts.
 
     The assignment is sticky: a host keeps its site until it stops matching
-    the rule. After the pool members or the assignment rules changed, that
-    stickiness keeps the old distribution alive. This clears the ``pool_site``
-    lock on all hosts, zeroes the seat counters and drops the per-host rule
-    caches — the calculated ``site`` attribute lives in there too, so without
-    that the next export would hand out the old site again.
+    the rule, so a changed pool never reaches the hosts already on it. Every
+    host on one of this pool's sites loses the lock and its rule cache — the
+    calculated ``site`` attribute lives in there too, so without that the
+    next export would hand out the old site again.
     """
-    hosts = Host.objects(pool_site__ne=None)
-    print(f"Clearing the Site Pool assignment of {hosts.count()} hosts")
-    hosts.update(unset__pool_site=1)
-    Host.objects(cache__ne={}).update(set__cache={})
+    hosts = Host.objects(pool_site__in=[x.site_id for x in pool.member_sites])
+    count = hosts.count()
+    hosts.update(unset__pool_site=1, set__cache={})
+    for member in pool.member_sites:
+        member.hosts_taken = 0
+    pool.save()
+    return count
 
+def reset_sitepools(_account=False, _debug=False):
+    """Drop every Site Pool assignment so the next export calculates it again."""
     for pool in CheckmkSitePool.objects():
-        print(f"Reset seat counters of pool {pool.name}")
-        for member in pool.member_sites:
-            member.hosts_taken = 0
-        pool.save()
+        print(f"Reset pool {pool.name} ({reset_sitepool(pool)} hosts)")
+
+    # Hosts on a site that no pool lists anymore would keep their lock.
+    leftovers = Host.objects(pool_site__ne=None)
+    print(f"Clearing {leftovers.count()} locks to sites without a pool")
+    leftovers.update(unset__pool_site=1, set__cache={})
 
 def pool_sticky_notes(db_host):
     """

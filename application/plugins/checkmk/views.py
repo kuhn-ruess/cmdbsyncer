@@ -1374,6 +1374,26 @@ class CheckmkFolderPoolView(DefaultModelView):
         'folder_seats_taken': {'disabled': True},
     }
 
+    @action('reset_pool', 'Reset Pool',
+            'Free the seats of the selected pools? Their hosts lose the folder '
+            'and are distributed again on the next export.')
+    def action_reset_pool(self, ids):
+        """
+        Reset the selected Folder Pools: every host locked to their folder is
+        released and the seat counter starts at zero, so the next export
+        distributes those hosts again.
+        """
+        # pylint: disable-next=import-outside-toplevel
+        from .inits import reset_folderpool
+        hosts = 0
+        pools = 0
+        for pool in CheckmkFolderPool.objects(id__in=ids):
+            hosts += reset_folderpool(pool)
+            pools += 1
+        flash(f"Reset {pools} Folder Pool(s); {hosts} host(s) will be "
+              f"distributed again on the next export.", 'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
@@ -1446,6 +1466,26 @@ class CheckmkSitePoolView(DefaultModelView):
             }
         }
     }
+
+    @action('reset_pool', 'Reset Pool',
+            'Free the seats of the selected pools? Their hosts lose their site '
+            'and are spread across the pool again on the next export.')
+    def action_reset_pool(self, ids):
+        """
+        Reset the selected Site Pools: every host on one of their member sites
+        is released and the seat counters start at zero, so the next export
+        spreads those hosts across the pool again.
+        """
+        # pylint: disable-next=import-outside-toplevel
+        from .inits import reset_sitepool
+        hosts = 0
+        pools = 0
+        for pool in CheckmkSitePool.objects(id__in=ids):
+            hosts += reset_sitepool(pool)
+            pools += 1
+        flash(f"Reset {pools} Site Pool(s); {hosts} host(s) will be "
+              f"spread across the pool again on the next export.", 'success')
+        return redirect(request.referrer or url_for('.index_view'))
 
     def is_accessible(self):
         """ Overwrite """
