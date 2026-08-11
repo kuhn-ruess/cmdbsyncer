@@ -21,6 +21,18 @@ def format_error_flag(_v, _c, m, _p):
     return Markup('<span style="color:green;" class="fa fa-circle"></span>')
 
 
+def format_messages(_v, _c, m, p):
+    """
+    Render the newline separated cron messages one per line, so a run's
+    individual entries stay readable instead of running into each other.
+    """
+    value = getattr(m, p) or ''
+    lines = [line for line in value.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    return Markup('<br>'.join(escape(line) for line in lines))
+
+
 def format_date(_v, _c, m, p):
     """ Format Date Field"""
     if value := getattr(m, p):
@@ -302,6 +314,8 @@ class CronStatsView(DefaultModelView):
         'last_ended': format_date,
         'last_success_at': format_date,
         'failure': format_error_flag,
+        'last_message': format_messages,
+        'all_messages': format_messages,
     }
     def is_accessible(self):
         """ Overwrite """
