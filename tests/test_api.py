@@ -199,62 +199,67 @@ class APIAuthTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 401)
 
 
+def import_host_module():
+    """
+    Load `application/views/host.py` with every heavy import stubbed.
+    Module level so other test modules can reuse it instead of copying
+    the whole stub dance.
+    """
+    app_module = sys.modules['application']
+    app_module.app.config.setdefault('HOST_PAGESIZE', 100)
+    app_module.app.config.setdefault('BASE_PREFIX', '/')
+
+    checkmk_mod = sys.modules.setdefault(
+        'application.plugins.checkmk',
+        ModuleType('application.plugins.checkmk'),
+    )
+    checkmk_mod.get_host_debug_data = MagicMock()
+    checkmk_models_mod = sys.modules.setdefault(
+        'application.plugins.checkmk.models',
+        ModuleType('application.plugins.checkmk.models'),
+    )
+    checkmk_models_mod.CheckmkFolderPool = MagicMock()
+    netbox_mod = sys.modules.setdefault(
+        'application.plugins.netbox',
+        ModuleType('application.plugins.netbox'),
+    )
+    netbox_mod.get_device_debug_data = MagicMock()
+    ansible_mod = sys.modules.setdefault(
+        'application.plugins.ansible',
+        ModuleType('application.plugins.ansible'),
+    )
+    ansible_mod.get_ansible_debug_data = MagicMock()
+    ansible_models_mod = sys.modules.setdefault(
+        'application.plugins.ansible.models',
+        ModuleType('application.plugins.ansible.models'),
+    )
+    ansible_models_mod.AnsibleProject = MagicMock()
+    host_models_mod = sys.modules['application.models.host']
+    host_models_mod.CmdbField = MagicMock()
+    config_mod = sys.modules.setdefault(
+        'application.models.config',
+        ModuleType('application.models.config'),
+    )
+    config_mod.Config = MagicMock()
+    default_view_mod = sys.modules.setdefault(
+        'application.views.default',
+        ModuleType('application.views.default'),
+    )
+    default_view_mod.DefaultModelView = object
+    return _load_source_module(
+        'application.views.host',
+        os.path.join('application', 'views', 'host.py'),
+    )
+
+
 class HostViewFormattingTest(unittest.TestCase):
     """Escaping behavior in host admin renderers."""
-
-    @staticmethod
-    def _import_host_module():
-        app_module = sys.modules['application']
-        app_module.app.config.setdefault('HOST_PAGESIZE', 100)
-        app_module.app.config.setdefault('BASE_PREFIX', '/')
-
-        checkmk_mod = sys.modules.setdefault(
-            'application.plugins.checkmk',
-            ModuleType('application.plugins.checkmk'),
-        )
-        checkmk_mod.get_host_debug_data = MagicMock()
-        checkmk_models_mod = sys.modules.setdefault(
-            'application.plugins.checkmk.models',
-            ModuleType('application.plugins.checkmk.models'),
-        )
-        checkmk_models_mod.CheckmkFolderPool = MagicMock()
-        netbox_mod = sys.modules.setdefault(
-            'application.plugins.netbox',
-            ModuleType('application.plugins.netbox'),
-        )
-        netbox_mod.get_device_debug_data = MagicMock()
-        ansible_mod = sys.modules.setdefault(
-            'application.plugins.ansible',
-            ModuleType('application.plugins.ansible'),
-        )
-        ansible_mod.get_ansible_debug_data = MagicMock()
-        ansible_models_mod = sys.modules.setdefault(
-            'application.plugins.ansible.models',
-            ModuleType('application.plugins.ansible.models'),
-        )
-        ansible_models_mod.AnsibleProject = MagicMock()
-        host_models_mod = sys.modules['application.models.host']
-        host_models_mod.CmdbField = MagicMock()
-        config_mod = sys.modules.setdefault(
-            'application.models.config',
-            ModuleType('application.models.config'),
-        )
-        config_mod.Config = MagicMock()
-        default_view_mod = sys.modules.setdefault(
-            'application.views.default',
-            ModuleType('application.views.default'),
-        )
-        default_view_mod.DefaultModelView = object
-        return _load_source_module(
-            'application.views.host',
-            os.path.join('application', 'views', 'host.py'),
-        )
 
     def test_format_log_escapes_preview_entries(self):
         # `format_log` was extracted to `application.views.host_renderers`
         # in the host.py split; LogEntry now lives next to it. The host
         # module is still imported here so the chain of stub setups runs.
-        self._import_host_module()
+        import_host_module()
         renderers_module = _load_source_module(
             'application.views.host_renderers',
             os.path.join('application', 'views', 'host_renderers.py'),
@@ -277,7 +282,7 @@ class HostViewFormattingTest(unittest.TestCase):
         self.assertNotIn('<li>Inventory Change: key to <img src=x onerror=alert(1)></li>', rendered)
 
     def test_format_cache_escapes_cache_keys_and_values(self):
-        host_module = self._import_host_module()
+        host_module = import_host_module()
         model = SimpleNamespace(
             id='host1',
             cache={
@@ -295,7 +300,7 @@ class HostViewFormattingTest(unittest.TestCase):
         self.assertNotIn('<script>alert(2)</script>', rendered)
 
     def test_render_datetime_escapes_non_datetime_values(self):
-        host_module = self._import_host_module()
+        host_module = import_host_module()
         model = SimpleNamespace(last_import_seen='<img src=x onerror=alert(1)>')
 
         rendered = str(host_module._render_datetime(None, None, model, 'last_import_seen'))
