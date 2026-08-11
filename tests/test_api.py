@@ -337,6 +337,28 @@ class HostViewFormattingTest(unittest.TestCase):
         self.assertIn('&lt;img src=x onerror=alert(1)&gt;', rendered)
         self.assertNotIn('<img src=x onerror=alert(1)>', rendered)
 
+    def test_form_field_type_survives_cmdb_models_without_all_section(self):
+        """
+        A local_config.py may define CMDB_MODELS without an 'all' section.
+        Indexing it directly made every single-host save fail with
+        "Failed to update record. 'all'".
+        """
+        host_module = self._import_host_module()
+        config = sys.modules['application'].app.config
+        previous = config.get('CMDB_MODELS')
+        config['CMDB_MODELS'] = {'host': {'ipaddress': {'type': 'string'}}}
+        try:
+            field = host_module.HostModelView.get_form_field_type(None, 'ipaddress')
+            unknown = host_module.HostModelView.get_form_field_type(None, 'not_configured')
+        finally:
+            if previous is None:
+                config.pop('CMDB_MODELS', None)
+            else:
+                config['CMDB_MODELS'] = previous
+
+        self.assertIsNotNone(field)
+        self.assertIsNotNone(unknown)
+
 
 class RuleViewFormattingTest(unittest.TestCase):
     """Escaping behavior in shared rule renderers."""

@@ -61,6 +61,19 @@ class DeprecatedError(Exception):
     Raise for Deprecated functions
     """
 
+def get_cmdb_model_fields(object_type='host'):
+    """
+    Configured CMDB fields for the given object type, merged with the
+    fields configured for every type ('all'). Both keys are optional: a
+    local_config.py may define CMDB_MODELS without an 'all' section, so
+    never index it directly. Returns a fresh dict so callers can extend
+    it without mutating app.config.
+    """
+    cmdb_models = app.config.get('CMDB_MODELS', {}) or {}
+    fields = dict(cmdb_models.get(object_type, {}) or {})
+    fields.update(cmdb_models.get('all', {}) or {})
+    return fields
+
 class CmdbField(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     Field used in CMDB Mode
@@ -797,12 +810,7 @@ class Host(db.Document):
 
     def ensure_cmdb_default_fields(self):
         """Ensure configured CMDB default fields exist on this host/object."""
-        cmdb_models = app.config.get('CMDB_MODELS', {})
-        object_fields = cmdb_models.get(self.object_type, {})
-        global_fields = cmdb_models.get('all', {})
-
-        configured_keys = list(object_fields.keys())
-        configured_keys.extend([key for key in global_fields.keys() if key not in object_fields])
+        configured_keys = list(get_cmdb_model_fields(self.object_type))
 
         if not configured_keys:
             return

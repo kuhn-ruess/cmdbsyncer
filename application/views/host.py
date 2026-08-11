@@ -84,6 +84,7 @@ from application.views.saved_search import SavedSearchRoutesMixin
 from application.models.host import (
     Host, CmdbField, HostLabelChange, LIFECYCLE_STATES,
     CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME,
+    get_cmdb_model_fields,
 )
 from application.models.config import Config
 # pylint: enable=import-error
@@ -1947,8 +1948,8 @@ Impact Chain.
         based on your configuration (e.g., app.config['CMDB_MODELS']).
         Returns a WTForms Field class.
         """
-        field_type = app.config['CMDB_MODELS']['all'].get(field_name, {'type': 'string'})
-        field_type = field_type['type']
+        field_type = get_cmdb_model_fields().get(field_name, {'type': 'string'})
+        field_type = field_type.get('type', 'string')
         if field_type == 'boolean':
             return BooleanField
         return StringField
@@ -2016,8 +2017,7 @@ Impact Chain.
         model.project = model.project or None
         model.cmdb_templates = form.cmdb_templates.data or []
         # Set Extra Fields
-        cmdb_fields = app.config['CMDB_MODELS'].get(model.object_type, {})
-        cmdb_fields.update(app.config['CMDB_MODELS']['all'])
+        cmdb_fields = get_cmdb_model_fields(model.object_type)
         # The edit form renders every existing label (own + imported) into
         # cmdb_fields, so the submitted rows are the complete, authoritative
         # label set. Whatever the operator removed from the form is meant to
@@ -2433,8 +2433,7 @@ Impact Chain.
                 host._label_change_user = actor_email  # pylint: disable=protected-access
 
                 # Set Extra Fields from CMDB config
-                cmdb_fields = app.config['CMDB_MODELS'].get(host.object_type, {})
-                cmdb_fields.update(app.config['CMDB_MODELS']['all'])
+                cmdb_fields = get_cmdb_model_fields(host.object_type)
 
                 # Start from any cmdb_fields the host already has, then
                 # MERGE the host's existing labels back in — `update_host`

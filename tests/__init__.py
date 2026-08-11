@@ -527,6 +527,17 @@ _cmk_models.BUILTIN_ATTRIBUTE_ACTIONS = {
 _models_host.app = _StubApp()
 _models_host.HostError = type("HostError", (Exception,), {})
 
+
+def _stub_get_cmdb_model_fields(object_type="host"):
+    """Mirror of application.models.host.get_cmdb_model_fields."""
+    cmdb_models = _models_host.app.config.get("CMDB_MODELS", {}) or {}
+    fields = dict(cmdb_models.get(object_type, {}) or {})
+    fields.update(cmdb_models.get("all", {}) or {})
+    return fields
+
+
+_models_host.get_cmdb_model_fields = _stub_get_cmdb_model_fields
+
 # application.init_db
 _application.init_db = MagicMock(name="stub.init_db")
 
