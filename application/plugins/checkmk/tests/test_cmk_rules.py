@@ -343,6 +343,8 @@ class TestCheckmkRuleSync(unittest.TestCase):
         # matter how many hosts exist — one Checkmk rule per outcome, and
         # never via the per-host optimize path.
         mock_render.side_effect = lambda tpl, **kw: tpl
+        # Ruleset map already "fetched": keeps the condition check offline.
+        self.sync._ruleset_item_types = {}
 
         def _outcome_doc(value):
             return _FakeMongo({
@@ -404,6 +406,8 @@ class TestCheckmkRuleSync(unittest.TestCase):
         # exported as a plain rule instead of silently vanishing
         # (field report: a project's static rule never reached Checkmk).
         mock_render.side_effect = lambda tpl, **kw: tpl
+        # Ruleset map already "fetched": keeps the condition check offline.
+        self.sync._ruleset_item_types = {}
         rule = SimpleNamespace(name='Static', outcomes=[_FakeMongo({
             'ruleset': 'special_agents:icinga',
             'value_template': "{'k': 'v'}",
@@ -489,6 +493,118 @@ class TestCheckmkRuleSync(unittest.TestCase):
         result = self.sync.build_condition_and_update_rule_params(
             shared_rule_params, attributes)
         self.assertIn('condition', result)
+
+
+class TestUnsupportedConditions(unittest.TestCase):
+    """
+    Checkmk accepts a rule whose conditions its ruleset does not support
+    but stores it without them. Sending one anyway made clean_rules miss
+    its own rule, so every export deleted and recreated it.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+
+    def test_unsupported_conditions_on_host_ruleset(self):
+        # A host ruleset (item_type None) has no service item, so Checkmk
+        # stores neither of the two service conditions.
+        self.sync._ruleset_item_types = {'active_checks:httpv2': None}
+        self.assertEqual(
+            self.sync.unsupported_condition_keys('active_checks:httpv2'),
+            {'service_description', 'service_labels', 'service_label_groups'})
+
+    def test_unsupported_conditions_on_service_ruleset(self):
+        self.sync._ruleset_item_types = {'service_contactgroups': 'service',
+                                         'checkgroup_parameters:filesystem': 'item'}
+        self.assertEqual(
+            self.sync.unsupported_condition_keys('service_contactgroups'), set())
+        self.assertEqual(
+            self.sync.unsupported_condition_keys(
+                'checkgroup_parameters:filesystem'), set())
+
+    def test_unsupported_conditions_on_label_rulesets(self):
+        # A ruleset that assigns labels cannot match on the labels it assigns.
+        self.sync._ruleset_item_types = {'service_label_rules': 'service',
+                                         'host_label_rules': None}
+        self.assertEqual(
+            self.sync.unsupported_condition_keys('service_label_rules'),
+            {'service_labels', 'service_label_groups'})
+        # host_label_rules is a host ruleset, so it drops the service
+        # conditions on top of its own host labels.
+        self.assertEqual(
+            self.sync.unsupported_condition_keys('host_label_rules'),
+            {'service_description', 'service_labels', 'service_label_groups',
+             'host_labels', 'host_label_groups'})
+
+    def test_unsupported_conditions_unknown_ruleset(self):
+        # Without knowing the type we must not strip a configured condition.
+        self.sync._ruleset_item_types = {'known': 'service'}
+        self.assertEqual(self.sync.unsupported_condition_keys('unknown'), set())
+        self.assertEqual(self.sync.unsupported_condition_keys(None), set())
+
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_build_condition_drops_service_condition_on_host_ruleset(
+            self, mock_render):
+        # Regression: Checkmk accepts these conditions but stores the rule
+        # without them, so clean_rules never found its own rule again and
+        # every export deleted and recreated it.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        self.sync._ruleset_item_types = {'active_checks:httpv2': None}
+        rule_params = {
+            'ruleset': 'active_checks:httpv2',
+            'value_template': "{'k': 'v'}",
+            'folder': '/',
+            'comment': 'c',
+            'condition_service': 'CPU load',
+            'condition_service_label': 'foo:bar',
+        }
+        result = self.sync.build_condition_and_update_rule_params(
+            rule_params, {'all': {'HOSTNAME': 'host1'}})
+
+        condition = result['condition']
+        self.assertNotIn('service_description', condition)
+        self.assertEqual(condition['service_label_groups'], [])
+
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_build_condition_keeps_service_condition_on_service_ruleset(
+            self, mock_render):
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        self.sync._ruleset_item_types = {'service_contactgroups': 'service'}
+        rule_params = {
+            'ruleset': 'service_contactgroups',
+            'value_template': "'all'",
+            'folder': '/',
+            'comment': 'c',
+            'condition_service': 'CPU load',
+        }
+        result = self.sync.build_condition_and_update_rule_params(
+            rule_params, {'all': {'HOSTNAME': 'host1'}})
+
+        # get_list is stubbed in the test bootstrap, so only the presence of
+        # the condition is asserted — that it survives is the point here.
+        self.assertIn('service_description', result['condition'])
+        self.assertEqual(result['condition']['service_description']['operator'],
+                         'one_of')
+
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    def test_dropped_condition_is_reported_once(self, mock_render):
+        # One line per ruleset and key, not one per host.
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        self.sync._ruleset_item_types = {'active_checks:httpv2': None}
+        for hostname in ('host1', 'host2', 'host3'):
+            self.sync.build_condition_and_update_rule_params(
+                {
+                    'ruleset': 'active_checks:httpv2',
+                    'value_template': "{'k': 'v'}",
+                    'folder': '/',
+                    'comment': 'c',
+                    'condition_service': 'CPU load',
+                },
+                {'all': {'HOSTNAME': hostname}})
+
+        warnings = [msg for _level, msg in self.sync.log_details
+                    if 'service_description' in msg]
+        self.assertEqual(len(warnings), 1)
 
 
 class _FakeCleanProgress:
@@ -1010,6 +1126,8 @@ class TestCmkConditionReverse(unittest.TestCase):
 
         sync = make_checkmk_rule_sync()
         sync.checkmk_version = '2.3.0'
+        # Ruleset map already "fetched": keeps the condition check offline.
+        sync._ruleset_item_types = {}
         rebuilt = sync.build_condition_and_update_rule_params(
             dict(outcome), {'all': {'HOSTNAME': None}})
 

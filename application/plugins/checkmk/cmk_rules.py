@@ -22,6 +22,13 @@ from application.modules.debug import ColorCodes as CC
 # adjusted value. Must stay identical between create and compare.
 KEEP_VALUE_HINT = "Value managed manually in Checkmk - Syncer will not overwrite it."
 
+# Condition keys of the rule payload, per family. Both spellings are listed:
+# Checkmk 2.2 takes flat label lists, 2.3+ label groups (see
+# build_condition_and_update_rule_params).
+SERVICE_LABEL_KEYS = ('service_labels', 'service_label_groups')
+HOST_LABEL_KEYS = ('host_labels', 'host_label_groups')
+SERVICE_CONDITION_KEYS = ('service_description',) + SERVICE_LABEL_KEYS
+
 
 def normalize_folder(folder):
     """
@@ -711,6 +718,12 @@ class CheckmkRuleSync(CMK2):
         # one pass), so this stays None there — it is kept for callers that
         # manage a single project's rules in isolation.
         self.project = None
+        # ruleset name -> item_type, fetched once per run by
+        # ruleset_item_types(); None until the first lookup needs it.
+        self._ruleset_item_types = None
+        # (ruleset, condition key) pairs already reported as dropped, so the
+        # warning is logged once per run instead of once per host.
+        self._dropped_condition_warnings = set()
 
     @property
     def rule_marker(self):
@@ -773,6 +786,90 @@ class CheckmkRuleSync(CMK2):
             additional_header=additional,
         )
 
+
+    def ruleset_item_types(self):
+        """
+        Map every ruleset name of the target Checkmk to its ``item_type``,
+        fetched once per run. ``None`` marks a host ruleset (it has no
+        service item), anything else ("service" / "item") a service one.
+
+        ``used`` is a filter, not a flag — the full registry is the union of
+        ``used=true`` and ``used=false`` (see RulesetCatalog.export_to_file).
+        """
+        if self._ruleset_item_types is None:
+            item_types = {}
+            for used in ('true', 'false'):
+                try:
+                    response, _ = self.request(
+                        f"domain-types/ruleset/collections/all?used={used}",
+                        method="GET")
+                except CmkException as error:
+                    self.log_error(
+                        f"Could not read the ruleset list from Checkmk: {error}")
+                    continue
+                for ruleset in response.get('value', []):
+                    extensions = ruleset.get('extensions', {}) or {}
+                    name = extensions.get('name') or ruleset.get('id')
+                    if name:
+                        item_types[name] = extensions.get('item_type')
+            self._ruleset_item_types = item_types
+        return self._ruleset_item_types
+
+    def unsupported_condition_keys(self, ruleset_name):
+        """
+        Condition keys Checkmk silently discards for ``ruleset_name``.
+
+        Checkmk accepts a rule whose conditions the ruleset does not support
+        (HTTP 200) but stores it without them, so the condition is gone on the
+        next read. Sending one anyway makes every export delete and recreate
+        the rule, because ``clean_rules`` compares the sent condition with the
+        stored one and never recognises its own rule again. Verified against
+        Checkmk 2.3, 2.4 and 2.5:
+
+        * a host ruleset (``item_type`` is None) drops both service conditions
+        * "Service labels" (``service_label_rules``) drops service labels and
+          "Host labels" (``host_label_rules``) drops host labels — a ruleset
+          that assigns labels cannot match on the labels it assigns
+
+        An unknown ruleset yields nothing: without knowing its type we must
+        not strip a condition the admin configured.
+        """
+        if not ruleset_name:
+            return set()
+        item_types = self.ruleset_item_types()
+        keys = set()
+        if ruleset_name in item_types and item_types[ruleset_name] is None:
+            keys.update(SERVICE_CONDITION_KEYS)
+        if ruleset_name == 'service_label_rules':
+            keys.update(SERVICE_LABEL_KEYS)
+        if ruleset_name == 'host_label_rules':
+            keys.update(HOST_LABEL_KEYS)
+        return keys
+
+    def drop_unsupported_conditions(self, ruleset_name, condition_tpl,
+                                    base_keys):
+        """
+        Remove the conditions Checkmk would discard for this ruleset from
+        ``condition_tpl`` (in place), so what we send is what Checkmk stores.
+
+        Keys the condition template always carries are reset to their empty
+        value — Checkmk returns those empty rather than omitting them — while
+        keys only present when configured are removed entirely. The admin is
+        told once per ruleset and key that the condition has no effect.
+        """
+        for key in sorted(self.unsupported_condition_keys(ruleset_name)):
+            if not condition_tpl.get(key):
+                continue
+            if (ruleset_name, key) not in self._dropped_condition_warnings:
+                self._dropped_condition_warnings.add((ruleset_name, key))
+                self.log_error(
+                    f"Checkmk ignores the '{key}' condition in ruleset "
+                    f"'{ruleset_name}', so it is left out of the exported "
+                    f"rule. Remove it from the Setup Rule.")
+            if key in base_keys:
+                condition_tpl[key] = []
+            else:
+                del condition_tpl[key]
 
     def list_used_rulesets(self):
         """
@@ -851,6 +948,10 @@ class CheckmkRuleSync(CMK2):
         else:
             condition_tpl = {"host_tags": [], "service_label_groups": [],
                              "host_label_groups": []}
+        # Keys the template always carries. Checkmk returns those empty
+        # instead of omitting them, which decides how an unsupported
+        # condition has to be cleared (see drop_unsupported_conditions).
+        base_condition_keys = set(condition_tpl)
 
         # Prepare context for Jinja rendering
         context = dict(attributes['all'])
@@ -890,8 +991,6 @@ class CheckmkRuleSync(CMK2):
         # Handle condition_label_template (Host label)
         if not self._apply_host_label_condition(rule_params, condition_tpl, context):
             return None  # skip this rule — malformed label reported already
-        has_hostlabel_condition = bool(
-            condition_tpl.get('host_label_groups') or condition_tpl.get('host_labels'))
 
         # Handle condition_service (legacy support)
         if 'condition_service' in rule_params:
@@ -906,6 +1005,16 @@ class CheckmkRuleSync(CMK2):
         # Handle condition_service_label (Service labels)
         if not self._apply_service_label_condition(rule_params, condition_tpl, context):
             return None  # skip this rule — malformed label reported already
+
+        # Drop what Checkmk would silently discard for this ruleset, so the
+        # rule we send is the rule Checkmk stores — otherwise clean_rules
+        # never recognises it again and every run deletes and recreates it.
+        self.drop_unsupported_conditions(
+            rule_params.get('ruleset'), condition_tpl, base_condition_keys)
+        # Evaluated after the drop: a host-label condition Checkmk discards
+        # must not keep the per-host "optimize" coalescing from kicking in.
+        has_hostlabel_condition = bool(
+            condition_tpl.get('host_label_groups') or condition_tpl.get('host_labels'))
 
         # Handle condition_host. It's always at the end to calculate correct
         # identification hash of entry
