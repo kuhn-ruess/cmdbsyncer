@@ -493,6 +493,9 @@ _syncer_jinja.get_list = MagicMock(name="stub.get_list")
 _get_account = _stub_package("application.helpers.get_account")
 _get_account.get_account_by_name = MagicMock(name="stub.get_account_by_name")
 _get_account.AccountNotFoundError = _AccountNotFoundError
+# Context manager used by the admin views; tests that exercise the real
+# masking load the real module themselves (see test_security_fixes).
+_get_account.mask_account_secrets = MagicMock(name="stub.mask_account_secrets")
 
 # application.plugins.checkmk.models
 _cmk_models = _stub_package("application.plugins.checkmk.models")

@@ -182,6 +182,58 @@ def _strip_cmdb_form_rules(rule_list, drop_fields):
     return out
 
 
+def _labels_from_cmdb_form(rows):
+    """
+    Build the label dict out of the submitted cmdb_fields rows.
+
+    A row only becomes a label when it carries both a name and a value.
+    Emptying either one is how an operator deletes a label in the edit
+    form, so a blanked row has to disappear instead of being stored as
+    a label with an empty value. Configured CMDB model fields are
+    rendered value-less on purpose — they are placeholders, not labels.
+    Booleans are kept, only '' / None count as empty.
+    """
+    labels = {}
+    for row in rows or []:
+        key = (row.get('field_name') or '').strip()
+        value = row.get('field_value')
+        if isinstance(value, str):
+            value = value.strip()
+        if not key or value is None or value == '':
+            continue
+        labels[key] = value
+    return labels
+
+
+def _cmdb_field(key, value):
+    """Build a single CmdbField row for the edit form."""
+    field = CmdbField()
+    field.field_name = key
+    field.field_value = '' if value is None else str(value)
+    return field
+
+
+def _rebuild_cmdb_fields(model):
+    """
+    Rebuild `model.cmdb_fields` from what was actually stored: the
+    labels the host now has, plus the configured CMDB model fields,
+    which stay as value-less placeholders so they keep showing up in
+    the form.
+
+    Rebuilding (instead of appending to the rows the form populated) is
+    what makes a deletion stick — a row the operator emptied is neither
+    a label nor a configured field, so it disappears here too and can
+    not come back as an empty label on the next save. Sorted
+    alphabetically to match the order the edit view renders.
+    """
+    labels = model.labels or {}
+    configured = get_cmdb_model_fields(model.object_type)
+    model.cmdb_fields = [
+        _cmdb_field(key, labels.get(key))
+        for key in sorted(set(labels) | set(configured), key=str.lower)
+    ]
+
+
 # Per debug-mode permission role, checked before running the mode's
 # debug function. Module-level so it stays a single source of truth.
 DEBUG_MODE_ROLES = {
@@ -839,9 +891,9 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         model.no_autodelete = True
         if self._force_object_type is not None:
             model.object_type = self._force_object_type
-        new_labels = {x['field_name']: x['field_value'] for x in form.cmdb_fields.data}
-        model.update_host(new_labels)
+        model.update_host(_labels_from_cmdb_form(form.cmdb_fields.data))
         model.set_inventory_attributes('cmdb')
+        _rebuild_cmdb_fields(model)
 
     def is_accessible(self):
         """ Overwrite """
@@ -2016,18 +2068,12 @@ Impact Chain.
         # Normalise the blank "no project" choice to an unset field.
         model.project = model.project or None
         model.cmdb_templates = form.cmdb_templates.data or []
-        # Set Extra Fields
-        cmdb_fields = get_cmdb_model_fields(model.object_type)
         # The edit form renders every existing label (own + imported) into
         # cmdb_fields, so the submitted rows are the complete, authoritative
         # label set. Whatever the operator removed from the form is meant to
         # be deleted — do NOT merge the old labels back in here, or removed
         # rows would resurrect and labels could never be deleted in the UI.
-        new_labels = {
-            entry['field_name']: entry['field_value']
-            for entry in form.cmdb_fields.data
-            if entry.get('field_name')
-        }
+        new_labels = _labels_from_cmdb_form(form.cmdb_fields.data)
 
         existing_labels = model.labels or {}
 
@@ -2045,31 +2091,7 @@ Impact Chain.
         model.update_host(new_labels)
         model.set_inventory_attributes('cmdb')
 
-        existing_cmdb_fields = {
-            field.field_name for field in (model.cmdb_fields or [])
-            if getattr(field, 'field_name', None)
-        }
-        for label_key, label_value in new_labels.items():
-            if label_key not in existing_cmdb_fields:
-                new_field = CmdbField()
-                new_field.field_name = label_key
-                new_field.field_value = str(label_value) if label_value is not None else ''
-                model.cmdb_fields.append(new_field)
-                existing_cmdb_fields.add(label_key)
-
-        for key in cmdb_fields:
-            if key not in new_labels:
-                new_field = CmdbField()
-                new_field.field_name = key
-                model.cmdb_fields.append(new_field)
-
-        # Keep the persisted order stable: the edit view sorts entries
-        # alphabetically, so on save we preserve that ordering instead of
-        # leaving dropped/newly-appended entries out of place.
-        model.cmdb_fields = sorted(
-            model.cmdb_fields or [],
-            key=lambda f: (getattr(f, 'field_name', '') or '').lower(),
-        )
+        _rebuild_cmdb_fields(model)
 
     list_template = 'admin/host_list.html'
     details_template = 'admin/host_details.html'
