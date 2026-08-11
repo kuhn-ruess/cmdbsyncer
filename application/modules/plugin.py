@@ -16,6 +16,7 @@ from collections import namedtuple
 from mongoengine.errors import DoesNotExist
 import requests
 from application import logger, app, log
+from application.models.account import pop_master_skips
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.debug import ColorCodes
 from application.modules.custom_attributes.models import CustomAttributeRule as \
@@ -249,6 +250,8 @@ class Plugin():
         """
         if not getattr(self, '_init_complete', False):
             return
+        if skipped := pop_master_skips():
+            self.log_details.append(('skipped', skipped))
         duration = time.time() - self.start_time
         self.log_details.append(('duration', duration))
         self.log_details.append(('ended', datetime.now()))
