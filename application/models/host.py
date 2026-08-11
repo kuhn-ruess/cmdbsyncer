@@ -10,7 +10,7 @@ from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.models.account import (
-    object_types, CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
+    account_is_master, object_types, CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
 
 LIFECYCLE_STATES = (
     ('planned', 'Planned'),
@@ -825,9 +825,7 @@ class Host(db.Document):
         self.is_object = is_object
         self.last_import_id = import_id
 
-
         self.set_inventory_attributes(account_name)
-
 
         # Everthing Match already, make it short
         if self.source_account_id and self.source_account_id == account_id \
@@ -840,13 +838,15 @@ class Host(db.Document):
             self.source_account_name = account_name
             return True
 
-        # If we are here, there is no match. Only Chance, this Account is master
-        if account_dict.get('is_master'):
+        # If we are here, there is no match. Only a master account owns its
+        # hosts exclusively, everybody else hands them over on import.
+        if account_dict.get('is_master') or not account_is_master(self.source_account_id):
             self.source_account_id = account_id
             self.source_account_name = account_name
             return True
 
-        # No, Account was not master. So we go
+        # Owned by a master — the caller discards everything this run changed.
+        print(f"Host {self.hostname} not saved: owned by master {self.source_account_name}")
         return False
 
 
