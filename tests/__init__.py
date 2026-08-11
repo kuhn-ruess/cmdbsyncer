@@ -343,6 +343,9 @@ class _CustomEntry:  # pylint: disable=too-few-public-methods
 _models_account.Account = _Account
 _models_account.CustomEntry = _CustomEntry
 _models_account.object_types = []
+# plugin.py folds the hosts a master account kept into its log entry.
+_models_account.pop_master_skips = MagicMock(name="stub.pop_master_skips",
+                                             return_value='')
 
 _models_cron = _stub_package("application.models.cron")
 

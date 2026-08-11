@@ -10,7 +10,8 @@ from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.models.account import (
-    account_is_master, object_types, CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
+    account_is_master, report_master_skip, object_types,
+    CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
 
 LIFECYCLE_STATES = (
     ('planned', 'Planned'),
@@ -236,7 +237,6 @@ class Host(db.Document):
         valid = {choice[0] for choice in object_types}
         if self.object_type not in valid:
             self.object_type = 'auto'
-
 
 
     @staticmethod
@@ -898,7 +898,7 @@ class Host(db.Document):
             return True
 
         # Owned by a master — the caller discards everything this run changed.
-        print(f"Host {self.hostname} not saved: owned by master {self.source_account_name}")
+        report_master_skip(self.hostname, self.source_account_name)
         return False
 
 

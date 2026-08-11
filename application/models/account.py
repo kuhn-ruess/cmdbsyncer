@@ -198,6 +198,41 @@ class Account(db.Document):
 
 _IS_MASTER_CACHE = {}
 
+# Hosts an import had to leave alone because a master account owns them.
+# Buffered here because the Host model has no handle on the running
+# plugin; `Plugin.save_log` drains it into the run's log entry. Only a
+# sample of the names is kept, the rest is reported as a count.
+_MASTER_SKIPS = {'count': 0, 'names': []}
+_MASTER_SKIP_SAMPLE = 20
+
+
+def report_master_skip(hostname, owner):
+    """
+    Report that *hostname* was not updated because the master account
+    *owner* holds it. Goes to the CLI right away and into the log entry
+    of the plugin run that ends next.
+    """
+    print(f"Host {hostname} not saved: owned by master {owner}")
+    _MASTER_SKIPS['count'] += 1
+    if len(_MASTER_SKIPS['names']) < _MASTER_SKIP_SAMPLE:
+        _MASTER_SKIPS['names'].append(hostname)
+
+
+def pop_master_skips():
+    """
+    Drain the skips collected since the last call and render them as one
+    log-detail line. Empty string when there was nothing to report.
+    """
+    count = _MASTER_SKIPS['count']
+    names = _MASTER_SKIPS['names']
+    _MASTER_SKIPS.update(count=0, names=[])
+    if not count:
+        return ''
+    message = ', '.join(names)
+    if count > len(names):
+        message += f" and {count - len(names)} more"
+    return f"{count} host(s) kept by their master account: {message}"
+
 
 def account_is_master(account_id):
     """
