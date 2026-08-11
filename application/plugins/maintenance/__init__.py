@@ -110,6 +110,23 @@ def _purge_archived_hosts(account_filter, purge_days):
     return purged
 
 
+def _log_maintenance_run(account, details, params):
+    """
+    Write the maintenance log entry.
+
+    Only the account name belongs in the title — `account` is the full
+    account dict in non-legacy mode, and dumping it made the log list
+    unreadable. Its parameters are shown in the details table instead.
+    """
+    title = "Database Maintenance"
+    if isinstance(account, dict):
+        name = account.get('name', '')
+        title = f"{title} ({name})"
+        details.append(('account', name))
+    details.extend(params.items())
+    log.log(title, source="Maintenance", details=details)
+
+
 def maintenance(account):
     """
     Inner Maintenance Mode
@@ -183,8 +200,12 @@ def maintenance(account):
     purged_hosts = _purge_archived_hosts(account_filter, purge_days)
     details.append(('hosts_purged', purged_hosts))
 
-    log.log(f"Database Maintenance {account}",
-            source="Maintenance", details=details)
+    _log_maintenance_run(account, details, {
+        'delete_hosts_after_days': days,
+        'account_filter': account_filter_name or '',
+        'dont_delete_hosts_if_more_then': dont_delete_if_more or '',
+        'purge_hosts_after_days': purge_days,
+    })
 
 @_cli_sys.command('maintenance')
 @click.argument("days", default=7)
