@@ -1,7 +1,9 @@
 """
 Account
 """
+from bson.errors import InvalidId
 from mongoengine import DENY
+from mongoengine.errors import ValidationError
 from cryptography.fernet import Fernet
 
 from application import db, plugin_register
@@ -192,3 +194,23 @@ class Account(db.Document):
 
     def __str__(self):
         return f"{self.name} ({self.typ})"
+
+
+_IS_MASTER_CACHE = {}
+
+
+def account_is_master(account_id):
+    """
+    Whether the account with *account_id* is flagged as master.
+
+    An import asks this once per host it does not own, so the answer is
+    cached for the lifetime of the process. Unknown or malformed ids
+    (legacy data) count as "not master".
+    """
+    if account_id not in _IS_MASTER_CACHE:
+        try:
+            account = Account.objects(id=account_id).only('is_master').first()
+        except (ValidationError, InvalidId):
+            account = None
+        _IS_MASTER_CACHE[account_id] = bool(account and account.is_master)
+    return _IS_MASTER_CACHE[account_id]
