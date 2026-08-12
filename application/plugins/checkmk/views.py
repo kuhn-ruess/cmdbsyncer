@@ -344,6 +344,10 @@ _RULE_MNGMT_CARD_CSS = (
     'display:inline-block;vertical-align:top;color:inherit;}'
     '.cmk-rule-card .highlight pre{margin:0;white-space:pre-wrap;'
     'word-break:break-all;}'
+    '.cmk-rule-folder{font-size:0.85rem;margin:2px 0 4px;'
+    'word-break:break-all;overflow-wrap:anywhere;opacity:0.85;}'
+    '.cmk-rule-folder code{background:rgba(127,127,127,0.15);'
+    'padding:1px 5px;border-radius:3px;color:inherit;}'
     '</style>'
 )
 
@@ -359,10 +363,18 @@ def _render_rule_mngmt_outcome(_view, _context, model, _name):
             rule.value_template, DjangoLexer(),
             HtmlFormatter(sytle='colorfull'),
         )
+        # The folder decides where the rule ends up in Checkmk — show it
+        # right under the ruleset instead of forcing a click into the edit
+        # form. Index only when it's actually set (0 = top of the folder).
+        folder = escape(rule.folder or '/')
+        index = f' &middot; Index {rule.folder_index}' if rule.folder_index else ''
         html.append(f'''
            <div class="card cmk-rule-card">
              <div class="card-body">
                <h5 class="card-title mb-2">{escape(rule.ruleset)}</h5>
+               <div class="cmk-rule-folder">
+                 <i class="fa fa-folder-o"></i> <code>{folder}</code>{index}
+               </div>
                <ul>
                 <li><b>Template</b>: {value_template}</li>
         ''')
