@@ -106,6 +106,15 @@ class BaseConfig():
     LABELS_ITERATE_FIRST_LEVEL = False
     LABELS_IMPORT_EMPTY = False
 
+    # Label history behind the host "Timeline" tab. Off by default: it
+    # writes a document on every host save that changes labels, so an
+    # import that rewrites labels on every run turns it into the biggest
+    # collection in the database. Enable it where the history is worth
+    # that write volume. Retention is enforced by a TTL index; run
+    # `sys self_configure` after changing the number of days.
+    LABEL_HISTORY_ENABLED = False
+    LABEL_HISTORY_RETENTION_DAYS = 90
+
     REPLACERS = [
       (' ', '_'),
       ('/', '_'),

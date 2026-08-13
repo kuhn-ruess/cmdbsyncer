@@ -196,13 +196,7 @@ class _CmdbField:  # pylint: disable=too-few-public-methods
         self.field_value = field_value
 
 
-class _HostLabelChange:  # pylint: disable=too-few-public-methods
-    """Stub HostLabelChange model; tests patch .objects if needed."""
-    objects = MagicMock()
-
-
 _models_host.CmdbField = _CmdbField
-_models_host.HostLabelChange = _HostLabelChange
 # Tests don't exercise the lifecycle-state filter, so an empty option list
 # is enough to satisfy `from application.models.host import LIFECYCLE_STATES`.
 _models_host.LIFECYCLE_STATES = ()
@@ -229,6 +223,28 @@ class _HostInventoryTree:  # pylint: disable=too-few-public-methods
 _models_host_inv_tree = _stub_package("application.models.host_inventory_tree")
 _models_host_inv_tree.HostInventoryTreePath = _HostInventoryTreePath
 _models_host_inv_tree.HostInventoryTree = _HostInventoryTree
+
+
+# --- application.models.host_label_event -------------------------------------
+
+class _HostLabelChange:  # pylint: disable=too-few-public-methods
+    """Stub label-change entry; carries the fields the diff produces."""
+
+    def __init__(self, key=None, old_value=None, new_value=None, change=None):
+        self.key = key
+        self.old_value = old_value
+        self.new_value = new_value
+        self.change = change
+
+
+class _HostLabelEvent:  # pylint: disable=too-few-public-methods
+    """Stub HostLabelEvent model; tests patch .objects if needed."""
+    objects = MagicMock()
+
+
+_models_host_label_event = _stub_package("application.models.host_label_event")
+_models_host_label_event.HostLabelChange = _HostLabelChange
+_models_host_label_event.HostLabelEvent = _HostLabelEvent
 
 
 # --- application.models.project ----------------------------------------------
@@ -259,6 +275,7 @@ _mongoengine = _stub_package("mongoengine", path=[])
 _mongoengine.Document = type("Document", (), {})
 _mongoengine.ValidationError = type("ValidationError", (Exception,), {})
 _mongoengine.Q = type("Q", (), {})
+_mongoengine.get_db = MagicMock(name="stub.get_db")
 
 _mongoengine_errors = _stub_package("mongoengine.errors")
 _mongoengine_errors.DoesNotExist = type("DoesNotExist", (Exception,), {})
@@ -303,6 +320,17 @@ _cron.register_cronjob = MagicMock(name="stub.register_cronjob")
 
 _audit = _stub_package("application.helpers.audit")
 _audit.audit = MagicMock(name="stub.audit")
+
+
+# --- application.helpers.label_history --------------------------------------
+# Recording label changes is off unless local_config.py enables it; the
+# stub keeps that default so no test writes history documents.
+
+_label_history = _stub_package("application.helpers.label_history")
+_label_history.label_history_enabled = MagicMock(
+    name="stub.label_history_enabled", return_value=False)
+_label_history.label_history_retention_seconds = MagicMock(
+    name="stub.label_history_retention_seconds", return_value=90 * 86400)
 
 
 # --- Extra stubs for application.api tests ----------------------------------

@@ -82,6 +82,33 @@ PRESETS = [
         ],
     },
     {
+        'ident': 'label_history',
+        'name': 'Label history',
+        'description': (
+            "The host \"Timeline\" tab, which records who changed which "
+            "label when. Off by default because it writes a document on "
+            "every host save that changes labels."
+        ),
+        'note': (
+            "Run ``cmdbsyncer sys self_configure`` after changing the "
+            "retention — the number of days lives in a TTL index that "
+            "MongoDB only picks up when it is updated explicitly. Use "
+            "``cmdbsyncer sys label_history`` to see what the history "
+            "currently costs, and ``cmdbsyncer sys purge_label_history`` "
+            "to clean it up."
+        ),
+        'keys': [
+            {'key': 'LABEL_HISTORY_ENABLED', 'type': 'bool', 'default': False,
+             'hint': 'Record label changes for the Timeline tab. Only '
+                     'worth it when imports do not rewrite labels on '
+                     'every run.'},
+            {'key': 'LABEL_HISTORY_RETENTION_DAYS', 'type': 'int',
+             'default': 90,
+             'hint': 'Days an entry is kept before MongoDB drops it. '
+                     'Minimum 1 — the history is never kept forever.'},
+        ],
+    },
+    {
         'ident': 'cmk',
         'name': 'Checkmk options',
         'description': (

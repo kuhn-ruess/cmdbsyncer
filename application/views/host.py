@@ -38,6 +38,7 @@ from application.plugins.jira_cloud import get_jira_cloud_debug_data as jira_clo
 from application import app, logger
 from application.models.account import Account
 from application.helpers.get_account import mask_account_secrets
+from application.helpers.label_history import label_history_enabled
 from application.views.default import DefaultModelView
 from application.views.host_widgets import (
     StaticLabelField,
@@ -82,10 +83,11 @@ from application.views.host_renderers import (
 )
 from application.views.saved_search import SavedSearchRoutesMixin
 from application.models.host import (
-    Host, CmdbField, HostLabelChange, LIFECYCLE_STATES,
+    Host, CmdbField, LIFECYCLE_STATES,
     CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME,
     get_cmdb_model_fields,
 )
+from application.models.host_label_event import HostLabelEvent
 from application.models.config import Config
 # pylint: enable=import-error
 
@@ -931,9 +933,10 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         if not host:
             flash('Object not found.', 'error')
             return redirect(url_for('.index_view'))
-        changes = list(HostLabelChange.objects(host=host).order_by('-changed_at')[:500])
+        events = list(HostLabelEvent.objects(host=host).order_by('-changed_at')[:200])
         return self.render(
-            'admin/host_timeline.html', host=host, changes=changes,
+            'admin/host_timeline.html', host=host, events=events,
+            history_enabled=label_history_enabled(),
         )
 
     @expose('/copy_as_new_form')
@@ -1518,18 +1521,19 @@ Impact Chain.
     def timeline(self):
         """
         Render a standalone Timeline page for a single host:
-        every `HostLabelChange` row, newest first, grouped by day.
+        every recorded label-change event, newest first, grouped by day.
         """
         obj_id = request.args.get('obj_id', '').strip()
         host = Host.objects(id=obj_id).first() if obj_id else None
         if not host:
             flash('Host not found.', 'error')
             return redirect(url_for('.index_view'))
-        changes = list(HostLabelChange.objects(host=host).order_by('-changed_at')[:500])
+        events = list(HostLabelEvent.objects(host=host).order_by('-changed_at')[:200])
         return self.render(
             'admin/host_timeline.html',
             host=host,
-            changes=changes,
+            events=events,
+            history_enabled=label_history_enabled(),
             cmdb_mode=app.config.get('CMDB_MODE', False),
         )
 
@@ -2057,7 +2061,7 @@ Impact Chain.
         else:
             model.source_account_id = ''
             model.no_autodelete = True
-        # Tag this label mutation as a manual edit so HostLabelChange
+        # Tag this label mutation as a manual edit so the history
         # rows carry the right origin + acting user in the Timeline.
         # pylint: disable=protected-access
         model._label_change_source = 'manual'
@@ -2341,7 +2345,7 @@ Impact Chain.
         skipped = 0
         user_email = getattr(current_user, 'email', None)
         # Fetch all selected hosts in one query instead of one round-trip
-        # per id. Per-doc .save() stays — HostLabelChange signal handling
+        # per id. Per-doc .save() stays — label-history signal handling
         # and update_host's import_seen/sync bumps need it.
         hosts = Host.objects(id__in=host_ids)
         for host in hosts:
@@ -2381,7 +2385,7 @@ Impact Chain.
                 continue
 
             if labels != before:
-                # Tag the change so HostLabelChange rows show "manual"
+                # Tag the change so the history shows "manual"
                 # + the acting user in the Timeline, not "import".
                 # pylint: disable=protected-access
                 host._label_change_source = 'manual'
@@ -2449,7 +2453,7 @@ Impact Chain.
                 host.cache = {}
                 host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
                 host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
-                # Tag the label mutation so HostLabelChange rows show
+                # Tag the label mutation so the history shows
                 # who triggered the bulk action.
                 host._label_change_source = 'manual'  # pylint: disable=protected-access
                 host._label_change_user = actor_email  # pylint: disable=protected-access

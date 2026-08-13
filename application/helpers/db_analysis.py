@@ -21,8 +21,12 @@ GROWING_COLLECTIONS = {
         "Run log. Entries expire after 30 days; a huge collection means "
         "very noisy runs or a missing TTL index on 'datetime'.",
     'host_label_change':
-        "Label history behind the host Timeline tab. One entry per label "
-        "that changes on import — no automatic cleanup.",
+        "Legacy label history, one document per changed label and without "
+        "retention. Superseded by host_label_event; remove it with "
+        "'sys purge_label_history --all'.",
+    'host_label_event':
+        "Label history behind the host Timeline tab, one entry per host "
+        "save that changes labels. Kept for LABEL_HISTORY_RETENTION_DAYS.",
     'audit_entry':
         "Audit log. Kept until pruned by hand from the Audit Log view.",
     'ansible_run_stats':

@@ -23,13 +23,8 @@ from application.models.user import User
 from application.plugins.checkmk.models import CheckmkFolderPool
 from application.models.config import Config
 from application.helpers.cron import register_cronjob
-from application.helpers.db_analysis import (
-    GROWING_COLLECTIONS,
-    database_stats,
-    format_size,
-    largest_documents,
-)
 from application.helpers.get_account import get_account_by_name
+from application.helpers.label_history import sync_label_history_ttl
 from application.helpers.plugins import register_cli_group
 
 
@@ -566,103 +561,6 @@ def delete_all_hosts(account):
         print(f"{CC.OKGREEN}  ** {CC.ENDC}Aborted")
 
 #.
-#   .-- Command: Database Statistics
-
-def _print_totals(stats):
-    """Print the database wide numbers above the collection table."""
-    print(f"Database: {stats['database']}")
-    print(f"  Documents    : {stats['objects']:,}")
-    print(f"  Data size    : {format_size(stats['data_size'])} (uncompressed)")
-    print(f"  Storage size : {format_size(stats['storage_size'])} (on disk)")
-    print(f"  Index size   : {format_size(stats['index_size'])}")
-    print(f"  Total on disk: "
-          f"{format_size(stats['storage_size'] + stats['index_size'])}")
-    print(f"  Reusable     : {format_size(stats['free_size'])} "
-          f"(freed by deletes, given back to the filesystem by compact)")
-    if stats['fs_total_size']:
-        print(f"  Filesystem   : {format_size(stats['fs_used_size'])} used of "
-              f"{format_size(stats['fs_total_size'])}")
-
-
-def _print_collections(collections, grand_total, show_indexes):
-    """
-    Print one line per collection, biggest first. The share is always
-    relative to the whole database, not to the listed subset.
-    """
-    grand_total = grand_total or 1
-    print(f"\n{'Collection':<34}{'Documents':>12}{'Data':>11}"
-          f"{'Storage':>11}{'Indexes':>11}{'Total':>11}{'%':>7}")
-    print("-" * 97)
-    for entry in collections:
-        share = entry['total'] / grand_total * 100
-        print(f"{entry['name']:<34}{entry['count']:>12,}"
-              f"{format_size(entry['data_size']):>11}"
-              f"{format_size(entry['storage_size']):>11}"
-              f"{format_size(entry['index_size']):>11}"
-              f"{format_size(entry['total']):>11}{share:>6.1f}%")
-        if show_indexes:
-            for index_name, size in sorted(entry['index_sizes'].items(),
-                                           key=lambda x: x[1], reverse=True):
-                print(f"    {CC.OKCYAN}index{CC.ENDC} {index_name:<28}"
-                      f"{format_size(size):>11}")
-
-
-def _print_growth_hints(collections):
-    """Point out the listed collections that have no automatic cleanup."""
-    hints = [x for x in collections if x['name'] in GROWING_COLLECTIONS]
-    if not hints:
-        return
-    print(f"\n{CC.UNDERLINE}Collections that grow with every run{CC.ENDC}")
-    for entry in hints:
-        print(f"{CC.WARNING}  ** {CC.ENDC}{entry['name']} "
-              f"({format_size(entry['total'])}, {entry['count']:,} documents): "
-              f"{GROWING_COLLECTIONS[entry['name']]}")
-
-
-def _print_largest_documents(collection):
-    """Print the biggest documents of a single collection."""
-    print(f"\n{CC.UNDERLINE}Largest documents in {collection}{CC.ENDC}")
-    entries = largest_documents(collection)
-    if not entries:
-        print(f"{CC.WARNING}  ** {CC.ENDC}No documents (unknown collection?)")
-        return
-    for entry in entries:
-        print(f"{CC.OKCYAN}  ** {CC.ENDC}{format_size(entry['size']):>10}  "
-              f"{entry['label']} ({entry['id']})")
-
-
-@_cli_sys.command('db_stats')
-@click.option('--top', default=15, show_default=True,
-              help="How many collections to list. 0 lists all of them.")
-@click.option('--indexes', 'show_indexes', is_flag=True,
-              help="Also list every index with its size.")
-@click.option('--collection', default='',
-              help="Drill down: also show the largest documents of "
-                   "COLLECTION (scans it).")
-@click.option('--debug', is_flag=True)
-def db_stats(top, show_indexes, collection, debug):  # pylint: disable=unused-argument
-    """
-    Show what occupies the space in MongoDB.
-
-    Lists the database totals and every collection with its document
-    count, data size, size on disk and index size, biggest first, so a
-    database that ran full shows its cause at a glance.
-    """
-    print(f"{CC.HEADER} ***** MongoDB Storage Analysis ***** {CC.ENDC}")
-    stats = database_stats()
-    _print_totals(stats)
-    listed = stats['collections'] if not top else stats['collections'][:top]
-    grand_total = sum(x['total'] for x in stats['collections'])
-    _print_collections(listed, grand_total, show_indexes)
-    hidden = len(stats['collections']) - len(listed)
-    if hidden > 0:
-        print(f"{CC.OKCYAN}  ** {CC.ENDC}{hidden} smaller collection(s) not "
-              f"shown, use --top 0 for all")
-    _print_growth_hints(listed)
-    if collection:
-        _print_largest_documents(collection)
-
-#.
 #   .-- Command: Show Accounts
 @_cli_sys.command('show_accounts')
 def show_accounts():
@@ -868,6 +766,13 @@ def self_configure():
     # Rule Projects became generic Projects
     _migrate_project_collection()
 
+    # Keep the label history TTL in sync with the configured retention.
+    # MongoEngine only creates that index, it never updates its
+    # expireAfterSeconds, so an edited retention takes effect here.
+    print("Sync Label History retention")
+    seconds, action = sync_label_history_ttl()
+    print(f" -> TTL index {action} ({seconds // 86400} days)")
+
     # Recount Checkmk pool seat usage so the counters are correct after an update
     # pylint: disable=import-outside-toplevel
     from application.plugins.checkmk.inits import sync_folderpools, sync_sitepools
@@ -947,3 +852,7 @@ def install_playbooks(target, version, repo, force):
 #.
 register_cronjob("Syncer: Maintenence", maintenance)
 register_cronjob("Syncer: Mark Stale Hosts", mark_stale)
+
+# Database housekeeping commands live in their own module — they attach
+# to `_cli_sys` above, so they can only be imported once it exists.
+from application.plugins.maintenance import db_commands  # noqa: E402,F401  pylint: disable=wrong-import-position,unused-import
