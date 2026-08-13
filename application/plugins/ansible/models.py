@@ -7,6 +7,7 @@ import re
 from mongoengine.errors import ValidationError
 
 from application import db
+from application.helpers.retention import register_retention, retention_seconds
 from application.modules.inventory import is_reserved_provider_name
 from application.modules.rule.models import rule_types
 
@@ -106,6 +107,11 @@ run_statuses = [
     ('cancelled', 'Cancelled'),
 ]
 
+# Retention of the run history. It is the run *log* that makes these
+# documents big, so the default is deliberately shorter than a year.
+RUN_STATS_RETENTION_KEY = 'ANSIBLE_RUN_STATS_RETENTION_DAYS'
+DEFAULT_RUN_STATS_RETENTION_DAYS = 90
+
 run_modes = [
     ('run', 'Run'),
     ('check', 'Preview (--check --diff)'),
@@ -136,8 +142,21 @@ class AnsibleRunStats(db.Document):
 
     meta = {
         'strict': False,
-        'indexes': ['-started_at'],
+        'indexes': [
+            '-started_at',
+            # One document per playbook run, carrying its full log. A
+            # playbook fired per host on a cron writes thousands a day,
+            # so the history expires instead of growing forever.
+            {'fields': ['started_at'],
+             'expireAfterSeconds': retention_seconds(
+                 RUN_STATS_RETENTION_KEY, DEFAULT_RUN_STATS_RETENTION_DAYS)},
+        ],
     }
+
+
+register_retention('Ansible run history', AnsibleRunStats, 'started_at',
+                   RUN_STATS_RETENTION_KEY, DEFAULT_RUN_STATS_RETENTION_DAYS)
+
 
 class AnsibleCustomVariablesRule(db.Document):
     """

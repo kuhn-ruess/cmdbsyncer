@@ -9,6 +9,12 @@ queue instead of going straight to the Host document.
 """
 import datetime
 from application import db
+from application.helpers.retention import register_retention, retention_seconds
+
+# How long a decided approval stays readable. Pending entries are never
+# touched — they have no decision date for the TTL to work from.
+RETENTION_KEY = 'FIELD_APPROVAL_RETENTION_DAYS'
+DEFAULT_RETENTION_DAYS = 365
 
 
 _STATUS_CHOICES = (
@@ -46,6 +52,12 @@ class FieldApproval(db.Document):
         'indexes': [
             {'fields': ['status', '-requested_at']},
             {'fields': ['host_id']},
+            # Decided entries expire; pending ones carry no `decided_at`
+            # and a TTL index ignores documents whose field is missing,
+            # so nothing waiting for a decision is ever dropped.
+            {'fields': ['decided_at'],
+             'expireAfterSeconds': retention_seconds(
+                 RETENTION_KEY, DEFAULT_RETENTION_DAYS)},
         ],
         'ordering': ['-requested_at'],
     }
@@ -53,3 +65,7 @@ class FieldApproval(db.Document):
     def __str__(self):
         return (f"FieldApproval[{self.status}] {self.hostname}."
                 f"{self.field_name}: {self.old_value!r} -> {self.new_value!r}")
+
+
+register_retention('Decided field approvals', FieldApproval, 'decided_at',
+                   RETENTION_KEY, DEFAULT_RETENTION_DAYS)

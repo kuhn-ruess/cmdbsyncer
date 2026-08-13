@@ -24,7 +24,7 @@ from application.plugins.checkmk.models import CheckmkFolderPool
 from application.models.config import Config
 from application.helpers.cron import register_cronjob
 from application.helpers.get_account import get_account_by_name
-from application.helpers.label_history import sync_label_history_ttl
+from application.helpers.retention import sync_all
 from application.helpers.plugins import register_cli_group
 
 
@@ -111,6 +111,78 @@ def _purge_archived_hosts(account_filter, purge_days):
     return purged
 
 
+def _archive_unseen_hosts(days, account_filter, account_filter_name,
+                          dont_delete_if_more, details):
+    """
+    Soft-delete every host its source has not reported for `days` days,
+    freeing the Checkmk pool seat it held. Protected hosts, templates
+    and already-archived hosts are left alone; with
+    `dont_delete_hosts_if_more_then` set, a run that would archive more
+    than the threshold archives nothing and says so in `details`.
+
+    Returns the number of hosts archived.
+    """
+    print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days, " \
+          f"Filter: {account_filter_name}{CC.ENDC}")
+
+    cutoff = datetime.datetime.now() - datetime.timedelta(days)
+    db_filter = {
+        'last_import_seen__lte': cutoff,
+        'no_autodelete__ne': True,
+        'object_type__ne': 'template',
+        'deleted_at__exists': False,
+    }
+    if account_filter:
+        db_filter['source_account_id'] = str(account_filter['id'])
+    objects = Host.objects(**db_filter)
+
+    if dont_delete_if_more and len(objects) >= int(dont_delete_if_more):
+        details.append((
+            'error',
+            "Hosts were not deleted because their number "
+            "exceeds the configured threshold."
+        ))
+        return 0
+
+    archived = 0
+    for host in objects:
+        print(f"{CC.WARNING}  ** {CC.ENDC}Archived host {host.hostname}")
+        if folder := host.get_folder():
+            remove_seat(folder)
+            print(f"{CC.WARNING}  *** {CC.ENDC}Seat in Pool {folder} free now")
+        host.soft_delete(reason=f"maintenance: not seen for {days} days")
+        host.save()
+        archived += 1
+    return archived
+
+
+def _purge_orphaned_inventory_trees():
+    """
+    Delete inventory trees whose host no longer exists.
+
+    ``HostInventoryTree`` is keyed by hostname, not by a Host reference,
+    so a deleted host leaves its tree behind — and those trees are the
+    large documents. Only the archive's bulk delete cleaned up after
+    itself; everything else (the archive purge above, delete_all_hosts,
+    a single delete) left orphans.
+
+    Returns the number of trees removed.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host_inventory_tree import HostInventoryTree
+    tree_names = set(HostInventoryTree.objects.distinct('hostname'))
+    if not tree_names:
+        return 0
+    alive = set(Host.objects(hostname__in=list(tree_names)).distinct('hostname'))
+    orphans = tree_names - alive
+    if not orphans:
+        return 0
+    print(f"{CC.UNDERLINE}Remove inventory trees without a host{CC.ENDC}")
+    for hostname in sorted(orphans):
+        print(f"{CC.WARNING}  ** {CC.ENDC}Removing inventory tree of {hostname}")
+    return HostInventoryTree.objects(hostname__in=list(orphans)).delete()
+
+
 def _log_maintenance_run(account, details, params):
     """
     Write the maintenance log entry.
@@ -157,49 +229,15 @@ def maintenance(account):
     if not days:
         print(f"{CC.WARNING} Days set to 0, skipping archiving step {CC.ENDC}")
     else:
-        print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days, " \
-              f"Filter: {account_filter_name}{CC.ENDC}")
-
-        now = datetime.datetime.now()
-        delta = datetime.timedelta(days)
-        timedelta = now - delta
-        if account_filter:
-            objects = Host.objects(last_import_seen__lte=timedelta,
-                                   source_account_id=str(account_filter['id']),
-                                   no_autodelete__ne=True,
-                                   object_type__ne='template',
-                                   deleted_at__exists=False)
-        else:
-            objects = Host.objects(last_import_seen__lte=timedelta,
-                                   no_autodelete__ne=True,
-                                   object_type__ne='template',
-                                   deleted_at__exists=False)
-
-        if dont_delete_if_more:
-            if len(objects) >= int(dont_delete_if_more):
-                details.append(
-                    (
-                        'error',
-                        "Hosts were not deleted because their number "
-                        "exceeds the configured threshold."
-                    )
-                )
-                objects = []
-
-        deleted_hosts = 0
-        for host in objects:
-            print(f"{CC.WARNING}  ** {CC.ENDC}Archived host {host.hostname}")
-            if host.get_folder():
-                folder = host.get_folder()
-                remove_seat(folder)
-                print(f"{CC.WARNING}  *** {CC.ENDC}Seat in Pool {folder} free now")
-            host.soft_delete(reason=f"maintenance: not seen for {days} days")
-            host.save()
-            deleted_hosts += 1
-        details.append(('hosts_archived', deleted_hosts))
+        details.append(('hosts_archived', _archive_unseen_hosts(
+            days, account_filter, account_filter_name,
+            dont_delete_if_more, details)))
 
     purged_hosts = _purge_archived_hosts(account_filter, purge_days)
     details.append(('hosts_purged', purged_hosts))
+
+    orphaned_trees = _purge_orphaned_inventory_trees()
+    details.append(('inventory_trees_removed', orphaned_trees))
 
     _log_maintenance_run(account, details, {
         'delete_hosts_after_days': days,
@@ -766,12 +804,12 @@ def self_configure():
     # Rule Projects became generic Projects
     _migrate_project_collection()
 
-    # Keep the label history TTL in sync with the configured retention.
-    # MongoEngine only creates that index, it never updates its
+    # Keep every TTL in sync with its configured retention. MongoEngine
+    # only creates those indexes, it never updates their
     # expireAfterSeconds, so an edited retention takes effect here.
-    print("Sync Label History retention")
-    seconds, action = sync_label_history_ttl()
-    print(f" -> TTL index {action} ({seconds // 86400} days)")
+    print("Sync retention of the collections that grow with every run")
+    for name, days, action in sync_all():
+        print(f" -> {name}: TTL index {action} ({days} days)")
 
     # Recount Checkmk pool seat usage so the counters are correct after an update
     # pylint: disable=import-outside-toplevel

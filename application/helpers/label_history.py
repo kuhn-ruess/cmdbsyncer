@@ -15,8 +15,10 @@ back.
 import datetime
 from mongoengine import get_db
 from application import app
+from application.helpers.retention import retention_days, retention_seconds
 
 DEFAULT_RETENTION_DAYS = 90
+RETENTION_KEY = 'LABEL_HISTORY_RETENTION_DAYS'
 
 # Name of the legacy per-label collection (one document per changed
 # label). Superseded by the per-event `host_label_event` collection;
@@ -31,52 +33,15 @@ def label_history_enabled():
 
 def label_history_retention_days():
     """
-    Days an entry of the label history is kept. Always at least one day
-    — "keep forever" is what filled databases in the first place, so it
-    is deliberately not offered.
+    Days an entry of the label history is kept. Never zero — see
+    `application.helpers.retention`.
     """
-    try:
-        days = int(app.config.get('LABEL_HISTORY_RETENTION_DAYS',
-                                  DEFAULT_RETENTION_DAYS))
-    except (TypeError, ValueError):
-        days = DEFAULT_RETENTION_DAYS
-    return max(days, 1)
+    return retention_days(RETENTION_KEY, DEFAULT_RETENTION_DAYS)
 
 
 def label_history_retention_seconds():
     """Retention as the `expireAfterSeconds` a TTL index expects."""
-    return label_history_retention_days() * 86400
-
-
-def sync_label_history_ttl():
-    """
-    Make the TTL index on the label history match the configured
-    retention.
-
-    MongoEngine only ever *creates* indexes — a changed
-    `expireAfterSeconds` on an existing index is silently ignored, so
-    editing the retention would never take effect. Applied with collMod
-    instead.
-
-    Returns (seconds, action) where action is one of 'created',
-    'updated' or 'unchanged'.
-    """
-    # pylint: disable=import-outside-toplevel,protected-access
-    from application.models.host_label_event import HostLabelEvent
-    collection = HostLabelEvent._get_collection()
-    wanted = label_history_retention_seconds()
-    for name, index in collection.index_information().items():
-        if index.get('key') != [('changed_at', 1)]:
-            continue
-        if index.get('expireAfterSeconds') == wanted:
-            return wanted, 'unchanged'
-        collection.database.command(
-            'collMod', collection.name,
-            index={'name': name, 'expireAfterSeconds': wanted},
-        )
-        return wanted, 'updated'
-    collection.create_index('changed_at', expireAfterSeconds=wanted)
-    return wanted, 'created'
+    return retention_seconds(RETENTION_KEY, DEFAULT_RETENTION_DAYS)
 
 
 def history_collections():

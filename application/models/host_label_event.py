@@ -19,7 +19,10 @@ import datetime
 from mongoengine import CASCADE
 
 from application import db
-from application.helpers.label_history import label_history_retention_seconds
+from application.helpers.label_history import (
+    DEFAULT_RETENTION_DAYS, RETENTION_KEY, label_history_retention_seconds,
+)
+from application.helpers.retention import register_retention
 
 
 class HostLabelChange(db.EmbeddedDocument):
@@ -58,3 +61,7 @@ class HostLabelEvent(db.Document):
         ],
         'ordering': ['-changed_at'],
     }
+
+
+register_retention('Label history', HostLabelEvent, 'changed_at',
+                   RETENTION_KEY, DEFAULT_RETENTION_DAYS)

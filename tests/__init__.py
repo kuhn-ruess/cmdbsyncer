@@ -469,6 +469,13 @@ _load_real_module(
     os.path.join("modules", "rule", "match.py"),
 )
 
+# Loaded for real: it only reads app.config, and the label-history tests
+# exercise its retention clamping through it.
+_load_real_module(
+    "application.helpers.retention",
+    os.path.join("helpers", "retention.py"),
+)
+
 # application.modules.plugin pulls in render_jinja at import time, so the
 # helpers.syncer_jinja stub must be in place before the real plugin module
 # is loaded (the duplicated stub further down stays for the checkmk loaders

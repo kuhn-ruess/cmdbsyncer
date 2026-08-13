@@ -115,6 +115,19 @@ class BaseConfig():
     LABEL_HISTORY_ENABLED = False
     LABEL_HISTORY_RETENTION_DAYS = 90
 
+    # Retention of the collections that grow with every run. All are
+    # enforced by MongoDB itself through a TTL index; run
+    # `sys self_configure` after changing one.
+    ANSIBLE_RUN_STATS_RETENTION_DAYS = 90
+    FIELD_APPROVAL_RETENTION_DAYS = 365
+    AUDIT_RETENTION_DAYS = 365
+    APPROVAL_RETENTION_DAYS = 365
+
+    # Emit an audit event for label changes made by an import. Off by
+    # default: an import that rewrites labels on every run produces one
+    # event per host per run and buries the changes a person made.
+    AUDIT_IMPORT_LABEL_CHANGES = False
+
     REPLACERS = [
       (' ', '_'),
       ('/', '_'),

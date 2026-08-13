@@ -630,8 +630,11 @@ class Host(db.Document):
         audit log.
 
         The history document is only written when LABEL_HISTORY_ENABLED
-        is set; the audit event is emitted either way, since the audit
-        log has its own switch and its own retention.
+        is set. The audit event follows its own switch: a label change
+        made by a person is exactly what an audit log is for, while an
+        import rewriting labels on every run is a firehose that buries
+        it — so `source='import'` is skipped unless
+        AUDIT_IMPORT_LABEL_CHANGES says otherwise.
 
         Best-effort: errors must never break the enclosing save — an
         operator losing a single change event is far cheaper than an
@@ -657,7 +660,9 @@ class Host(db.Document):
                     changes=entries,
                 ).save()
             try:
-                self._emit_label_audit(added, updated, removed, source)
+                if source != 'import' \
+                        or app.config.get('AUDIT_IMPORT_LABEL_CHANGES', False):
+                    self._emit_label_audit(added, updated, removed, source)
             except Exception as exp:  # pylint: disable=broad-exception-caught
                 logger.warning(
                     "audit(host.label.changed) dispatch failed for %s: %s",

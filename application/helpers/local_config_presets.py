@@ -109,6 +109,41 @@ PRESETS = [
         ],
     },
     {
+        'ident': 'retention',
+        'name': 'Retention',
+        'description': (
+            "How long the collections that grow with every run are kept. "
+            "MongoDB drops the expired documents itself through a TTL "
+            "index."
+        ),
+        'note': (
+            "Run ``cmdbsyncer sys self_configure`` after changing a value "
+            "— MongoDB only picks up a new retention when the index is "
+            "updated explicitly. A value of 0 is read as 1 day; there is "
+            "no 'keep forever'."
+        ),
+        'keys': [
+            {'key': 'ANSIBLE_RUN_STATS_RETENTION_DAYS', 'type': 'int',
+             'default': 90,
+             'hint': 'Days an Ansible run stays in the history. Each entry '
+                     'carries the full playbook log.'},
+            {'key': 'FIELD_APPROVAL_RETENTION_DAYS', 'type': 'int',
+             'default': 365,
+             'hint': 'Days a decided field approval is kept. Pending ones '
+                     'are never dropped.'},
+            {'key': 'AUDIT_RETENTION_DAYS', 'type': 'int', 'default': 365,
+             'hint': 'Days an audit entry is kept.'},
+            {'key': 'APPROVAL_RETENTION_DAYS', 'type': 'int', 'default': 365,
+             'hint': 'Days a decided approval-queue entry is kept. Pending '
+                     'ones are never dropped.'},
+            {'key': 'AUDIT_IMPORT_LABEL_CHANGES', 'type': 'bool',
+             'default': False,
+             'hint': 'Also audit label changes made by an import. Off by '
+                     'default — an import that rewrites labels every run '
+                     'writes one event per host per run.'},
+        ],
+    },
+    {
         'ident': 'cmk',
         'name': 'Checkmk options',
         'description': (

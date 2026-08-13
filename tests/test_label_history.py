@@ -6,6 +6,7 @@ in tests/__init__.py) so the pure functions can be exercised without a
 live MongoDB.
 """
 import os
+import sys
 import unittest
 from datetime import datetime, timedelta
 
@@ -60,6 +61,30 @@ class RetentionTest(unittest.TestCase):
         """Nothing is written unless the installation opts in."""
         self.config.pop('LABEL_HISTORY_ENABLED', None)
         self.assertFalse(label_history.label_history_enabled())
+
+
+class RegistryTest(unittest.TestCase):
+    """Policies registered by the models."""
+
+    def setUp(self):
+        self.retention = sys.modules['application.helpers.retention']
+
+    def test_register_is_idempotent(self):
+        """
+        Re-importing a model module must not queue a second policy for
+        the same collection.
+        """
+        # pylint: disable=protected-access
+        before = list(self.retention._POLICIES)
+        doc = type('Doc', (), {})
+        self.retention.register_retention('probe', doc, 'ts', 'PROBE_DAYS', 7)
+        self.retention.register_retention('probe', doc, 'ts', 'PROBE_DAYS', 9)
+        names = [entry[0] for entry in self.retention._POLICIES]
+        try:
+            self.assertEqual(names.count('probe'), 1)
+            self.assertEqual(self.retention._POLICIES[-1][4], 9)
+        finally:
+            self.retention._POLICIES[:] = before
 
 
 class PipelineTest(unittest.TestCase):
