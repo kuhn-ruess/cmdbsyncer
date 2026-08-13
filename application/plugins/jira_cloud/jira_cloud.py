@@ -64,6 +64,30 @@ class JiraCloud(Plugin):
             for attribute in schema_resp.json():
                 self.name_cache[attribute['id']] = attribute['name']
 
+    @staticmethod
+    def attribute_value(value_entry):
+        """
+        Read one entry of an ``objectAttributeValues`` list.
+
+        Only Jira's *default* attribute types (Text, Integer, Date, …)
+        carry a plain ``value``. Typed attributes — Status, Reference,
+        User, Group, Project, Version — describe themselves in their own
+        sub-object instead and have no ``value`` key at all, so reading
+        it returned None for them: the export then saw every status field
+        as unset and rewrote it on every run. ``displayValue`` is what
+        Jira renders in the UI and matches the string the export writes.
+        """
+        for key in ('value', 'displayValue'):
+            if (value := value_entry.get(key)) is not None:
+                return value
+        if status := value_entry.get('status'):
+            return status.get('name')
+        if referenced := value_entry.get('referencedObject'):
+            return referenced.get('label')
+        if user := value_entry.get('user'):
+            return user.get('displayName')
+        return None
+
     def _iter_aql_objects(self, ql_query):
         """Yield every object for ``ql_query``, following AQL pagination."""
         url = f"{self.base_url}/v1/object/aql"
@@ -118,7 +142,8 @@ class JiraCloud(Plugin):
                 values = attr.get(obj_field) or []
                 if not values:
                     continue
-                labels[self.get_name_by_id(attr[id_field])] = values[0].get('value')
+                labels[self.get_name_by_id(attr[id_field])] = \
+                                                    self.attribute_value(values[0])
 
             host_obj.update_host(labels)
             do_save = host_obj.set_account(account_dict=self.config)

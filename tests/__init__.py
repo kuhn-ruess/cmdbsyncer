@@ -608,6 +608,15 @@ _try_load_real_module(
 )
 
 
+# --- Jira Cloud plugin modules -----------------------------------------------
+# jira_cloud.py holds the base class both the import and the export use; it
+# only needs the syncerapi + plugin stubs above.
+_try_load_real_module(
+    "application.plugins.jira_cloud.jira_cloud",
+    os.path.join("plugins", "jira_cloud", "jira_cloud.py"),
+)
+
+
 # --- API modules under test -------------------------------------------------
 # Load the real api/__init__, api/syncer, api/objects files under their
 # canonical module names. They import User/Account/LogEntry/Host etc. from

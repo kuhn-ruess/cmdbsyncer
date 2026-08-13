@@ -22,6 +22,7 @@ class TestPlugin(unittest.TestCase):
             'HTTP_REQUEST_TIMEOUT': 30,
             'HTTP_MAX_RETRIES': 3,
             'HTTP_REPEAT_TIMEOUT': 5,
+            'HTTP_MAX_REDIRECTS': 100,
             'DISABLE_SSL_ERRORS': False
         }
 

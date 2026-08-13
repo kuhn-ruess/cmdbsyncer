@@ -121,7 +121,7 @@ class JiraCloudExport(JiraCloud):
                 values = attr.get('objectAttributeValues') or []
                 if not values:
                     continue
-                value = values[0].get('value')
+                value = self.attribute_value(values[0])
                 current_attrs[attr_id] = value
                 if attr_id == lookup_attr_id:
                     lookup_value = value
