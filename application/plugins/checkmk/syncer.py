@@ -516,7 +516,6 @@ class SyncCMK2(CMK2):
             chunk_size = app.config['CMK_BULK_DELETE_OPERATIONS']
             total = math.ceil(len(delete_list) / chunk_size) if delete_list else 0
             for count, chunk in enumerate(self.chunks(delete_list, chunk_size), start=1):
-                self.num_deleted += len(chunk)
                 print(f" * Send Bulk Request {count}/{total}")
                 try:
                     self.request(url, data={'entries': chunk }, method="POST")
@@ -524,8 +523,7 @@ class SyncCMK2(CMK2):
                     self.log_details.append(("error", f"Host Bulk deletion failed: {exp}"))
                     print(f"{CC.WARNING} *{CC.ENDC} Bulk Host deletion failed failed {exp}")
                 else:
-                    pass
-                self.num_deleted += len(chunk)
+                    self.num_deleted += len(chunk)
         else:
             for host in delete_list:
                 url = f"/objects/host_config/{host}"

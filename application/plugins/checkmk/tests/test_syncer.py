@@ -262,6 +262,28 @@ class TestSyncCMK2(unittest.TestCase):
     @patch('application.plugins.checkmk.syncer.app')
     @patch('application.plugins.checkmk.syncer.CC')
     @patch('builtins.print')
+    def test_cleanup_hosts_counts_deletions_once(self, mock_print, mock_cc, mock_app):
+        """Deleted hosts are counted once per bulk request, failed ones not at all"""
+        mock_app.config = {**self.mock_app_config, 'CMK_BULK_DELETE_OPERATIONS': 2}
+        mock_cc.OKBLUE = mock_cc.ENDC = mock_cc.WARNING = ''
+
+        self.syncer.config = {}
+        self.syncer.num_deleted = 0
+        self.syncer.synced_hosts = []
+        ext = {'extensions': {'attributes':
+            {'labels': {'cmdb_syncer': 'test_account_123'}}}}
+        self.syncer.checkmk_hosts = {f'host{i}': ext for i in range(1, 5)}
+
+        # First chunk of two goes through, second one fails
+        with patch.object(self.syncer, 'request',
+                          side_effect=[({}, {}), CmkException("gone")]):
+            self.syncer.cleanup_hosts()
+
+        self.assertEqual(self.syncer.num_deleted, 2)
+
+    @patch('application.plugins.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.CC')
+    @patch('builtins.print')
     def test_cleanup_hosts_delete_limit_exceeded(self, mock_print, mock_cc, mock_app):
         """Test cleanup_hosts with delete limit exceeded"""
         mock_app.config = {**self.mock_app_config, 'CMK_DONT_DELETE_HOSTS': False}

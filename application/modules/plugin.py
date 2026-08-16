@@ -402,11 +402,23 @@ class Plugin():
             # a large/slow activation exceeds that default and raises
             # TooManyRedirects. Allow a configurable, more generous ceiling.
             self._http_session.max_redirects = app.config['HTTP_MAX_REDIRECTS']
+        # Repeating a request the target may already have applied turns a
+        # timeout into a phantom error: a slow Checkmk keeps processing a
+        # bulk-create long after our read timeout expired, so the retry comes
+        # back with "host already exists" — or "host not found" after a
+        # bulk-delete — for operations that actually succeeded. Only a connect
+        # timeout is provably safe to repeat, because nothing ever reached the
+        # target. Everything else is repeated for read-only requests only.
+        safe_to_repeat = read_only or method in ('get', 'head', 'options')
         for attempt in range(1, max_retries+1):
             try:
                 resp = self._http_session.request(method, url, **payload)
                 break
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                if not safe_to_repeat and not isinstance(e, requests.exceptions.ConnectTimeout):
+                    print(f"{method.upper()} failed and is not repeated, "
+                          f"the target may already have applied it: {e}")
+                    raise
                 print(f"Try {attempt} of {max_retries} failed: {e}")
                 if attempt < max_retries:
                     print(f"Timeout for {retry_wait} Secounds\033[5m...\033[0m")
