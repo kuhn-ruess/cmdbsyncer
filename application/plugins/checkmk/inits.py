@@ -270,14 +270,17 @@ def activate_changes(account):
     }
 
     # Trigger Activate Changes.
-    # redirect=True makes Checkmk answer with a 303 to the
-    # 'wait-for-completion' endpoint, which requests follows until the
-    # activation is really done. Without it we only learn that the
-    # activation was *started* and silently report success even when it
-    # later fails (e.g. missing permission for foreign changes).
+    # Default is fire and forget: Checkmk confirms that the activation was
+    # started and we return right away. With the account option
+    # 'wait_for_activate_changes' set, we ask for redirect=True instead, so
+    # Checkmk sends a 303 to its 'wait-for-completion' endpoint which
+    # requests follows until the activation is really done — only then can
+    # a failure during the activation itself (e.g. missing permission for
+    # foreign changes) be reported.
+    wait_for_completion = bool(cmk.config.get('wait_for_activate_changes'))
     url = "/domain-types/activation_run/actions/activate-changes/invoke"
     data = {
-        'redirect': True,
+        'redirect': wait_for_completion,
         'force_foreign_changes': True,
     }
     try:
@@ -297,7 +300,10 @@ def activate_changes(account):
                     source="Checkmk",
                     details=[('error', str(error))])
             return False
-        print(f"{ColorCodes.OKGREEN}Changes activated{ColorCodes.ENDC}")
+        if wait_for_completion:
+            print(f"{ColorCodes.OKGREEN}Changes activated{ColorCodes.ENDC}")
+        else:
+            print(f"{ColorCodes.OKGREEN}Activation started{ColorCodes.ENDC}")
     except CmkException as errors:
         print(f"{ColorCodes.FAIL}Activate Changes failed: {errors}{ColorCodes.ENDC}")
         log.log("Checkmk Activate Changes failed",
