@@ -22,6 +22,7 @@ class TestPlugin(unittest.TestCase):
             'HTTP_REQUEST_TIMEOUT': 30,
             'HTTP_MAX_RETRIES': 3,
             'HTTP_REPEAT_TIMEOUT': 5,
+            'HTTP_MAX_REDIRECTS': 100,
             'DISABLE_SSL_ERRORS': False
         }
 
@@ -228,6 +229,72 @@ class TestPlugin(unittest.TestCase):
             plugin = Plugin()
             with self.assertRaises(requests.exceptions.Timeout):
                 plugin.inner_request('GET', 'http://example.com')
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.time')
+    @patch('builtins.print')
+    def test_write_request_not_repeated_after_read_timeout(self, _print, _time, mock_app):
+        """A write the target may already have applied must not be sent twice"""
+        mock_app.config = self.mock_app_config
+
+        with patch('application.modules.plugin.requests') as mock_requests:
+            mock_requests.exceptions = requests.exceptions
+            mock_session = Mock()
+            mock_session.request.side_effect = \
+                requests.exceptions.ReadTimeout("Server still working")
+            mock_requests.Session.return_value = mock_session
+
+            plugin = Plugin()
+            with self.assertRaises(requests.exceptions.ReadTimeout):
+                plugin.inner_request('POST', 'http://example.com')
+
+            self.assertEqual(mock_session.request.call_count, 1)
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.time')
+    @patch('builtins.print')
+    def test_write_request_repeated_after_connect_timeout(self, _print, _time, mock_app):
+        """Nothing reached the target on a connect timeout, so repeating is safe"""
+        mock_app.config = self.mock_app_config
+
+        with patch('application.modules.plugin.requests') as mock_requests:
+            mock_requests.exceptions = requests.exceptions
+            mock_session = Mock()
+            mock_response = Mock()
+            mock_response.json.return_value = {'status': 'ok'}
+            mock_session.request.side_effect = [
+                requests.exceptions.ConnectTimeout("No connection"),
+                mock_response,
+            ]
+            mock_requests.Session.return_value = mock_session
+
+            plugin = Plugin()
+            plugin.inner_request('POST', 'http://example.com')
+
+            self.assertEqual(mock_session.request.call_count, 2)
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.time')
+    @patch('builtins.print')
+    def test_read_only_request_repeated_after_read_timeout(self, _print, _time, mock_app):
+        """A read-only POST (search/query) changes nothing, so it may be repeated"""
+        mock_app.config = self.mock_app_config
+
+        with patch('application.modules.plugin.requests') as mock_requests:
+            mock_requests.exceptions = requests.exceptions
+            mock_session = Mock()
+            mock_response = Mock()
+            mock_response.json.return_value = {'status': 'ok'}
+            mock_session.request.side_effect = [
+                requests.exceptions.ReadTimeout("Too slow"),
+                mock_response,
+            ]
+            mock_requests.Session.return_value = mock_session
+
+            plugin = Plugin()
+            plugin.inner_request('POST', 'http://example.com', read_only=True)
+
+            self.assertEqual(mock_session.request.call_count, 2)
 
     @patch('application.modules.plugin.app')
     @patch('application.modules.plugin.requests')

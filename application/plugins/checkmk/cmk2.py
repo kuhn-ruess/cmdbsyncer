@@ -170,11 +170,30 @@ class CMK2(Plugin):
                             f"HTTP {response.status_code} {method.upper()} "
                             f"{url}: {body or '<empty response body>'}"
                         )
-                    raise CmkException(f"{title} {detail}{fields}")
+                    # Only join the parts Checkmk actually sent. Formatting all
+                    # three unconditionally glued a literal "None" onto the
+                    # message whenever `fields` was absent, so an error like
+                    # "… were skipped: myhost." read as if a host named
+                    # "myhost.None" existed.
+                    message = " ".join(str(x) for x in (title, detail) if x is not None)
+                    if fields is not None:
+                        message += str(fields)
+                    raise CmkException(message)
                 return {}, {'status_code': response.status_code}
             resp_header['status_code'] = response.status_code
 
             return response_json, resp_header
+        except requests.exceptions.Timeout as exc:
+            # Write requests are no longer repeated after a read timeout (see
+            # Plugin.inner_request), so surface the timeout as a regular Checkmk
+            # error. The caller logs it and the sync continues instead of dying
+            # with a traceback — and the message says out loud that Checkmk may
+            # still have applied the operation.
+            raise CmkException(
+                f"Timeout on {method.upper()} {url}. Checkmk may still have applied "
+                "the request — it was not repeated to avoid duplicate operations. "
+                "Raise 'request_timeout' on the account if this happens regularly."
+            ) from exc
         except (ConnectionResetError, requests.exceptions.ProxyError):
             if response:
                 return {}, {'status_code': response.status_code}

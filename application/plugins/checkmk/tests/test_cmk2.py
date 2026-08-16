@@ -5,6 +5,8 @@ Unit tests for the CMK2 base class
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 
+import requests
+
 from application.plugins.checkmk.cmk2 import CmkException, CMK2
 
 
@@ -116,6 +118,53 @@ class TestCMK2Request(unittest.TestCase):
         with patch.object(self.cmk, 'inner_request', return_value=mock_response):
             with self.assertRaises(CmkException):
                 self.cmk.request('endpoint')
+
+    def test_error_without_fields_has_no_trailing_none(self):
+        """A missing `fields` must not append a literal "None" to the message"""
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            'title': 'Some actions failed',
+            'detail': 'The following were faulty and were skipped: myhost.',
+            'fields': None,
+        }
+        mock_response.headers = {}
+
+        with patch.object(self.cmk, 'inner_request', return_value=mock_response):
+            with self.assertRaises(CmkException) as caught:
+                self.cmk.request('endpoint')
+
+        self.assertEqual(
+            str(caught.exception),
+            'Some actions failed The following were faulty and were skipped: myhost.')
+
+    def test_error_with_fields_keeps_them_attached(self):
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            'title': 'Bad Request',
+            'detail': 'These fields have problems: entries',
+            'fields': {'entries': {'0': 'broken'}},
+        }
+        mock_response.headers = {}
+
+        with patch.object(self.cmk, 'inner_request', return_value=mock_response):
+            with self.assertRaises(CmkException) as caught:
+                self.cmk.request('endpoint')
+
+        self.assertEqual(
+            str(caught.exception),
+            "Bad Request These fields have problems: entries{'entries': {'0': 'broken'}}")
+
+    def test_timeout_raises_cmk_exception(self):
+        """A timeout must be a normal Checkmk error so the sync can continue"""
+        with patch.object(self.cmk, 'inner_request',
+                          side_effect=requests.exceptions.ReadTimeout("too slow")):
+            with self.assertRaises(CmkException) as caught:
+                self.cmk.request('endpoint', method='POST')
+
+        self.assertIn('Timeout on POST', str(caught.exception))
+        self.assertIn('request_timeout', str(caught.exception))
 
     def test_connection_error_raises_cmk_exception(self):
         with patch.object(self.cmk, 'inner_request', side_effect=ConnectionError("fail")):
