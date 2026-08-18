@@ -3049,22 +3049,13 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
             'Permanently delete the selected hosts? This cannot be undone.')
     def action_hard_delete(self, ids):
         """Permanently drop archived hosts from the database."""
-        # pylint: disable=import-outside-toplevel
-        from application.models.host_inventory_tree import HostInventoryTree
         if not current_user.has_right('hard_delete'):
             flash('Hard delete requires the "Permanently delete archived '
                   'objects" role.', 'error')
             return redirect(request.referrer or url_for('.index_view'))
-        # Snapshot the hostnames before deletion so the side-doc cleanup
-        # has something to match against. Side docs are keyed by
-        # hostname (string), not by Host reference, so orphans would
-        # otherwise survive and silently resurface if a host with the
-        # same name is re-imported later.
-        hostnames = list(
-            Host.objects(id__in=ids, deleted_at__exists=True).distinct('hostname')
-        )
+        # Inventory trees, field approvals and inbound relations are
+        # cleaned up by HostQuerySet.delete() — see
+        # application/models/host_cleanup.py.
         deleted = Host.objects(id__in=ids, deleted_at__exists=True).delete()
-        if hostnames:
-            HostInventoryTree.objects(hostname__in=hostnames).delete()
         flash(f'Hard-deleted {deleted} host(s).', 'success')
         return redirect(request.referrer or url_for('.index_view'))

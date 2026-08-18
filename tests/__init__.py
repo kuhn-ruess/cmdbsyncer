@@ -277,6 +277,21 @@ _mongoengine.ValidationError = type("ValidationError", (Exception,), {})
 _mongoengine.Q = type("Q", (), {})
 _mongoengine.get_db = MagicMock(name="stub.get_db")
 
+
+class _StubQuerySet:  # pylint: disable=too-few-public-methods
+    """Stub mongoengine QuerySet — a base HostQuerySet can subclass.
+
+    `delete` exists so tests can patch it and assert that the override
+    delegates; it is never reached unpatched.
+    """
+
+    def delete(self, *args, **kwargs):
+        """Never called unpatched — see the class docstring."""
+        raise NotImplementedError("stub QuerySet.delete must be patched")
+
+
+_mongoengine.QuerySet = _StubQuerySet
+
 _mongoengine_errors = _stub_package("mongoengine.errors")
 _mongoengine_errors.DoesNotExist = type("DoesNotExist", (Exception,), {})
 _mongoengine_errors.MultipleObjectsReturned = type(

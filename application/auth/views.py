@@ -27,6 +27,21 @@ AUTH_RATE_LIMIT = app.config.get('AUTH_RATE_LIMIT', '3 per minute; 10 per hour')
 AUTH = Blueprint('auth', __name__)
 
 
+def _oidc_login_url():
+    """URL of the OIDC entry point, or ``None`` when SSO is not usable.
+
+    Without this the only way to start an SSO login is to know that
+    ``/oidc/login`` exists and type it by hand. The blueprint check
+    matters as much as the config flag: ``OIDC_LOGIN`` can be switched
+    on in a plain OSS install where nothing serves that route.
+    """
+    if not app.config.get('OIDC_LOGIN'):
+        return None
+    if 'oidc' not in current_app.blueprints:
+        return None
+    return url_for('oidc.login')
+
+
 def _dbg(message, **details):
     """Write a Settings → Log entry only when AUTH_DEBUG is on.
 
@@ -132,6 +147,7 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
 
     context = {
         'LoginForm' : login_form,
+        'oidc_login_url': _oidc_login_url(),
     }
     if login_form.login_submit.data and login_form.validate_on_submit():
         email = login_form.login_email.data.lower()

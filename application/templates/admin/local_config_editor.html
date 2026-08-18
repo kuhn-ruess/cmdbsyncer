@@ -157,6 +157,11 @@
             </button>
             <div style="font-size: 13px; color: #888; margin-top: 4px;">
               {{ preset.description }}
+              {% if preset.doc_url %}
+              <a href="{{ preset.doc_url }}" target="_blank" rel="noopener">
+                <i class="fa fa-book"></i> Documentation
+              </a>
+              {% endif %}
             </div>
           </div>
 
@@ -215,6 +220,12 @@
                     {% endfor %}
                   </tbody>
                 </table>
+
+                {% if preset.extra_note %}
+                <div class="alert alert-warning" style="margin-bottom: 0.75rem; font-size: 13px;">
+                  {{ preset.extra_note }}
+                </div>
+                {% endif %}
 
                 {% if preset.note %}
                 <div class="alert alert-info" style="margin-bottom: 0.75rem; font-size: 13px;">

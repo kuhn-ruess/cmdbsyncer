@@ -10,6 +10,7 @@ from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.helpers.label_history import label_history_enabled
+from application.models.host_cleanup import HostQuerySet
 from application.models.account import (
     account_is_master, report_master_skip, object_types,
     CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
@@ -172,6 +173,10 @@ class Host(db.Document):
 
     meta = {
         'strict': False,
+        # Every deletion — single document or bulk queryset — runs through
+        # HostQuerySet.delete() so the side documents a delete rule cannot
+        # reach are cleaned up on all paths, including future ones.
+        'queryset_class': HostQuerySet,
     }
 
 

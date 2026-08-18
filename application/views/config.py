@@ -10,6 +10,7 @@ from flask_login import current_user
 
 from application import app
 from application.config import BaseConfig
+from application.docu_links import docu_links
 from application.helpers.local_config_file import (
     LocalConfigError, delete_key, is_writable, load, set_key,
 )
@@ -51,6 +52,9 @@ RESTART_ONLY_KEYS = frozenset({
     'LDAP_BIND_USER', 'LDAP_BIND_PASSWORD',
     'LDAP_SEARCH_BASE', 'LDAP_SEARCH_FILTER',
     'LDAP_REQUIRED_GROUP', 'LDAP_NAME_ATTR', 'LDAP_AUTO_CREATE',
+    'OIDC_ACCOUNT', 'OIDC_SCOPES', 'OIDC_EMAIL_CLAIM', 'OIDC_NAME_CLAIM',
+    'OIDC_GROUPS_CLAIM', 'OIDC_REQUIRED_GROUP', 'OIDC_AUTO_CREATE',
+    'OIDC_ADMIN_GROUP', 'OIDC_DEFAULT_ROLES',
     'SWAGGER_ENABLED',
 })
 
@@ -100,6 +104,26 @@ def _restore_runtime_default(key):
         app.config.pop(key, None)
     else:
         app.config[key] = default
+
+
+def _preset_extra_note(ident):
+    """Runtime detail a static preset text cannot know.
+
+    Right now only OIDC needs it: the redirect URI has to be registered
+    at the identity provider byte-for-byte, and it depends on how this
+    deployment is reached (host, scheme, mount path). Spelling it out
+    saves admins the guesswork that a redirect-URI mismatch otherwise
+    turns into a silent login failure. Built with ``url_for`` when the
+    enterprise blueprint is loaded, so it is literally the URL the
+    callback will send.
+    """
+    if ident != 'oidc':
+        return None
+    if 'oidc' in app.blueprints:
+        callback = url_for('oidc.callback', _external=True)
+    else:
+        callback = request.url_root.rstrip('/') + '/oidc/callback'
+    return f'Redirect URI to register at your identity provider: {callback}'
 
 
 def _coerce(raw_value, value_type):
@@ -257,6 +281,8 @@ class ConfigModelView(DefaultModelView):
                 'keys': preset_keys,
                 'overlap': overlap,
                 'total': len(preset['keys']),
+                'extra_note': _preset_extra_note(preset['ident']),
+                'doc_url': docu_links.get(preset.get('doc')),
             })
 
         return self.render(

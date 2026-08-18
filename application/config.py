@@ -281,6 +281,49 @@ class BaseConfig():
     LDAP_ROLE_MAPPING = {}
 
 
+    # OIDC / SSO login (enterprise feature)
+    # Native OpenID Connect client — logs users in against Entra ID,
+    # Okta, Keycloak, Google Workspace, Auth0 or any OIDC-compliant IdP
+    # without a mod_auth_openidc proxy in front. When OIDC_LOGIN is
+    # enabled and the enterprise 'oidc_login' feature is registered, the
+    # login page shows a "Sign in with SSO" button pointing at
+    # /oidc/login, and /oidc/callback handles the IdP redirect.
+    # All of the keys below are editable from Settings -> Config ->
+    # local_config.py, "OIDC / SSO login" preset.
+    OIDC_LOGIN = False
+    # Name of the Account (type 'oidc_idp') holding the connection:
+    #   address = issuer URL, username = client id, password = client secret.
+    # Credentials live on the Account so external secret stores apply.
+    OIDC_ACCOUNT = ''
+    # Scopes requested from the IdP. A plain string is split on commas
+    # and whitespace, so the config editor can set it too.
+    OIDC_SCOPES = 'openid email profile'
+    # Claims the user record is built from.
+    OIDC_EMAIL_CLAIM = 'email'
+    OIDC_NAME_CLAIM = 'name'
+    OIDC_GROUPS_CLAIM = 'groups'
+    # If set, the user must carry this group in their groups claim.
+    OIDC_REQUIRED_GROUP = ''
+    # Create a local User record on first successful OIDC login.
+    OIDC_AUTO_CREATE = True
+    # Shortcut for the common case: members of this group become global
+    # admins. Merged into OIDC_ROLE_MAPPING below, so both can be used.
+    OIDC_ADMIN_GROUP = ''
+    # Roles every user passing the gate receives. String (comma or
+    # whitespace separated) or list, so the config editor can set it.
+    OIDC_DEFAULT_ROLES = ''
+    # Map IdP groups to roles. When non-empty (or OIDC_ADMIN_GROUP /
+    # OIDC_DEFAULT_ROLES are set), roles/api_roles/global_admin are
+    # recomputed from group memberships on every login (the IdP is the
+    # source of truth). When all three are empty, roles are untouched.
+    #   {
+    #     'cmdbsyncer-admins': {'global_admin': True},
+    #     'cmdbsyncer-ops':    {'roles': ['host', 'log']},
+    #     'cmdbsyncer-api':    {'api_roles': ['all']},
+    #   }
+    OIDC_ROLE_MAPPING = {}
+
+
     FILEADMIN_PATH = os.environ.get('CMDBSYNCER_FILEADMIN_PATH', '/var/cmdbsyncer/files')
 
     ### Checkmk Stuff

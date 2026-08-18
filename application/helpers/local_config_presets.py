@@ -20,6 +20,9 @@ by hand.
 #             quoting in the file, never in the form.
 #   hint    — optional short help line shown below the input.
 
+# A preset may also carry a ``doc`` key holding a ``docu_links`` ident;
+# the editor renders it as a "Documentation" link next to the preset.
+
 PRESETS = [
     {
         'ident': 'mail',
@@ -323,6 +326,7 @@ PRESETS = [
     {
         'ident': 'ldap',
         'name': 'LDAP login',
+        'doc': 'ent_ldap_login',
         'description': (
             "Enterprise LDAP/AD login. When enabled, the login view "
             "tries an LDAP bind before falling back to the local "
@@ -375,6 +379,66 @@ PRESETS = [
                      '(LDAP and remote_user hooks). Turn on temporarily '
                      'to debug failed logins; turn off again for normal '
                      'operation.'},
+        ],
+    },
+    {
+        'ident': 'oidc',
+        'name': 'OIDC / SSO login',
+        'doc': 'ent_oidc_login',
+        'description': (
+            "Enterprise OIDC login against Entra ID, Okta, Keycloak, "
+            "Google Workspace, Auth0 or any OIDC-compliant identity "
+            "provider — no reverse-proxy module needed. Issuer URL and "
+            "client credentials are not set here: create an Account of "
+            "type \"OIDC identity provider\" (Address = issuer URL, "
+            "Username = client id, Password = client secret) and name it "
+            "in OIDC_ACCOUNT below. Once enabled, the login page shows a "
+            "\"Sign in with SSO\" button."
+        ),
+        'note': (
+            "Register the callback URL shown below as the allowed "
+            "redirect URI at your identity provider — a mismatch is the "
+            "most common reason a login fails. Group-to-role mapping is "
+            "covered by OIDC_ADMIN_GROUP and OIDC_DEFAULT_ROLES here; "
+            "for finer-grained mapping add the nested "
+            "``OIDC_ROLE_MAPPING`` dict to local_config.py by hand."
+        ),
+        'keys': [
+            {'key': 'OIDC_LOGIN', 'type': 'bool', 'default': True,
+             'hint': 'Master toggle. Off = no SSO button, /oidc/login '
+                     'refuses. Takes effect after a restart.'},
+            {'key': 'OIDC_ACCOUNT', 'type': 'str', 'default': 'entra-id',
+             'hint': 'Name of the Account holding issuer URL, client id '
+                     'and client secret. Create it under Accounts with '
+                     'type "OIDC identity provider" first.'},
+            {'key': 'OIDC_SCOPES', 'type': 'str',
+             'default': 'openid email profile',
+             'hint': 'Scopes requested from the IdP, space separated. '
+                     '"openid" is mandatory; add "groups" if your IdP '
+                     'needs it to emit group claims.'},
+            {'key': 'OIDC_EMAIL_CLAIM', 'type': 'str', 'default': 'email',
+             'hint': 'Claim holding the user\u2019s email address. This is '
+                     'what the local User record is matched on.'},
+            {'key': 'OIDC_NAME_CLAIM', 'type': 'str', 'default': 'name',
+             'hint': 'Claim used for User.name on auto-create.'},
+            {'key': 'OIDC_GROUPS_CLAIM', 'type': 'str', 'default': 'groups',
+             'hint': 'Claim carrying the user\u2019s groups. Entra ID emits '
+                     'group object IDs here, not display names.'},
+            {'key': 'OIDC_REQUIRED_GROUP', 'type': 'str', 'default': '',
+             'hint': 'Optional gate: only members of this group may log '
+                     'in. Empty = every user the IdP authenticates.'},
+            {'key': 'OIDC_AUTO_CREATE', 'type': 'bool', 'default': True,
+             'hint': 'Create a local User record on first successful '
+                     'login. Off = only users that already exist.'},
+            {'key': 'OIDC_ADMIN_GROUP', 'type': 'str', 'default': '',
+             'hint': 'Members of this group become global admins. '
+                     'Careful: once set, roles are recomputed from the '
+                     'IdP on every login, so permissions granted by '
+                     'hand in the UI are reverted.'},
+            {'key': 'OIDC_DEFAULT_ROLES', 'type': 'str', 'default': '',
+             'hint': 'Roles every user passing the gate receives, comma '
+                     'separated (e.g. "host, log"). Empty = new users '
+                     'start with no roles.'},
         ],
     },
     {

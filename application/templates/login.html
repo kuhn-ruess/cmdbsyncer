@@ -112,6 +112,52 @@ body {
     transform: translateY(1px);
 }
 
+.login-card .login-sso {
+    display: block;
+    width: 100%;
+    height: 44px;
+    line-height: 44px;
+    margin-bottom: 1.25rem;
+    border-radius: 8px;
+    border: 1px solid #d7dbe0;
+    background: #f7f9fa;
+    color: #333;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-align: center;
+    text-decoration: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.login-card .login-sso:hover {
+    border-color: #5b9bd5;
+    box-shadow: 0 4px 14px rgba(52, 152, 219, 0.2);
+    text-decoration: none;
+    color: #333;
+}
+
+.login-card .login-separator {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    color: #9aa0a6;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.login-card .login-separator::before,
+.login-card .login-separator::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #e3e6e9;
+}
+
+.login-card .login-separator span {
+    padding: 0 0.75rem;
+}
+
 .login-card .login-footer {
     margin-top: 1.25rem;
     text-align: center;
@@ -168,6 +214,13 @@ body {
             <code>REQUIRE_HTTPS = False</code> to
             <code>local_config.py</code> and restart the service.
         </div>
+        {% endif %}
+
+        {% if oidc_login_url %}
+        <a href="{{ oidc_login_url }}" class="login-sso">
+            <i class="fa fa-id-badge"></i> Sign in with SSO
+        </a>
+        <div class="login-separator"><span>or</span></div>
         {% endif %}
 
         <form method="POST" novalidate>
