@@ -30,6 +30,61 @@
        .navbar .dropdown-divider {
            margin: 0.35rem 0.25rem;
        }
+       /* Group separators in the top bar (NavDivider). Flask-Admin has
+          no divider for a horizontal menu, so the entry is an empty
+          nav-link turned into a thin rule here. */
+       .navbar .nav-link.nav-divider {
+           position: relative;
+           display: inline-block;
+           width: 1px;
+           height: 100%;
+           /* cmdbsyncer.css sets the nav-link padding with !important,
+              so the rule has to be beaten on its own terms. */
+           padding: 0 !important;
+           margin: 0 0.7rem;
+           background: none;
+           pointer-events: none;
+       }
+       /* The link only spans the menu row; the rule itself runs the full
+          height of the bar. The navbar centres its children, so the same
+          overhang above and below the row lands exactly on its edges —
+          0.85rem is the gap the row leaves to the top and the bottom.
+          It fades out towards those edges: a hairline running solid
+          through the empty zones above and below the entries reads like
+          a table border. */
+       .navbar .nav-link.nav-divider::before {
+           content: "";
+           position: absolute;
+           left: 0;
+           width: 1px;
+           top: -0.85rem;
+           bottom: -0.85rem;
+           background: linear-gradient(to bottom,
+               transparent 0%, currentColor 30%,
+               currentColor 70%, transparent 100%);
+           opacity: 0.45;
+       }
+       /* Collapsed navbar: the entries stack, so the rule has to lie
+          down with them. */
+       @media (max-width: 991.98px) {
+           .navbar .nav-link.nav-divider {
+               display: block;
+               width: auto;
+               height: 1px;
+               margin: 0.45rem 0.8rem;
+           }
+           .navbar .nav-link.nav-divider::before {
+               top: 0;
+               bottom: 0;
+               left: 0;
+               right: 0;
+               width: auto;
+               background: linear-gradient(to right,
+                   transparent 0%, currentColor 10%,
+                   currentColor 90%, transparent 100%);
+           }
+       }
+
        /* Module marks (menu_icon_type='image'): size them like the
           Font Awesome glyphs of the neighbouring entries and give them
           the same gap, otherwise the img renders at its natural size. */

@@ -550,6 +550,28 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
 
     _register_all_plugin_admin_views(admin)
 
+    #   .-- Top bar grouping
+    # The bar holds three groups: the working views (Objects, Modules,
+    # Projects), the read-only tools (Log, Files) and the administration
+    # (Settings). A rule between them makes that visible. Each rule is
+    # tied to the entries around it so it never floats next to an empty
+    # group — a user without the 'log' and 'fileadmin' rights sees no
+    # separator there at all.
+    from application.views.menu_links import NavDivider
+
+    def _nav_group_visible(*names):
+        """True while at least one of the named top bar entries is shown."""
+        return any(item.name in names and item.is_accessible() and item.is_visible()
+                   for item in admin.menu())
+
+    _work_group = ('Objects', 'Modules', 'Projects')
+    _tool_group = ('Log', 'Files')
+
+    admin.add_menu_item(NavDivider(
+        access=lambda: _nav_group_visible(*_work_group)
+        and _nav_group_visible(*_tool_group)))
+    #.
+
     from application.modules.log.models import LogEntry
     from application.modules.log.views import LogView
     admin.add_view(LogView(LogEntry, name="Log",
@@ -562,6 +584,10 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
             menu_icon_type='fa', menu_icon_value='fa-folder-open',
         )
         admin.add_view(file_admin_view)
+
+    admin.add_menu_item(NavDivider(
+        access=lambda: _nav_group_visible(*_work_group, *_tool_group)
+        and _nav_group_visible('Settings')))
 
     #.
     #   .-- Settings (admin-facing tools, distinct from per-user actions)

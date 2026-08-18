@@ -28,3 +28,22 @@ class AccessMenuLink(MenuLink):  # pylint: disable=too-few-public-methods
         # Tie visibility to access so a hidden link never keeps its category
         # (Settings) on screen for a user who cannot use it.
         return self.is_accessible()
+
+
+class NavDivider(AccessMenuLink):  # pylint: disable=too-few-public-methods
+    """
+    A separator between groups of top bar entries.
+
+    Flask-Admin only knows dividers inside a dropdown; in the horizontal
+    navbar it renders every link as an ``<a class="nav-link ...">``. So
+    this one carries no name and no icon and is turned into a thin rule by
+    the ``nav-divider`` class (see ``templates/admin/master.html``).
+
+    Pass an ``access`` predicate that is false whenever one of the groups
+    it separates is empty for this user, otherwise the rule floats at the
+    start or the end of the bar.
+    """
+
+    def __init__(self, access=None):
+        super().__init__(name='', url='#', class_name='nav-divider',
+                         access=access)
