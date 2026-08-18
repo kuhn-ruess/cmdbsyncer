@@ -417,6 +417,13 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     When enabled the Value is only written once, on rule creation. On later
     syncs the Syncer keeps the rule but no longer overwrites its Value, so an
     operator can adjust it in Checkmk. A hint is added to the rule comment.
+
+    ### Enforce exact Value
+    By default keys which exist only in Checkmk are accepted as defaults of
+    the ruleset, so removing a key from the Value Template is not applied.
+    Enable this to compare both values exactly, which pushes removed keys
+    too. Only enable it when needed: if Checkmk adds defaults to this
+    ruleset on save, the rule is rewritten on every run.
     """
 
     ruleset = db.StringField()
@@ -424,6 +431,7 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     folder_index = db.IntField(default=0)
     comment = db.StringField()
     keep_value = db.BooleanField(default=False)
+    enforce_value = db.BooleanField(default=False)
     loop_over_list = db.BooleanField(default=False)
     list_to_loop = db.StringField()
     value_template = db.StringField(required=True)

@@ -86,6 +86,25 @@ class TestDeepCompare(unittest.TestCase):
         # doesn't have, the rule needs a sync.
         self.assertFalse(deep_compare({'a': 1, 'b': 2}, {'a': 1}))
 
+    def test_strict_rejects_stored_superset(self):
+        # enforce_value: a key that is only in Checkmk is drift, not a
+        # default — that is how a removed key gets pushed.
+        self.assertFalse(
+            deep_compare({'a': 1}, {'a': 1, 'b': 'default'}, strict=True))
+
+    def test_strict_rejects_nested_stored_superset(self):
+        # The removed key usually sits deep inside the value.
+        ours = {'services': {'ec2': {'selection': 'all'}}}
+        stored = {'services': {'ec2': {'selection': 'all', 'limits': True}}}
+        self.assertTrue(deep_compare(ours, stored))
+        self.assertFalse(deep_compare(ours, stored, strict=True))
+
+    def test_strict_accepts_equal_values(self):
+        # Once the removal is written, the next run must not update again.
+        ours = {'services': {'ec2': {'selection': 'all'}}, 'regions': ['a', 'b']}
+        stored = {'services': {'ec2': {'selection': 'all'}}, 'regions': ['b', 'a']}
+        self.assertTrue(deep_compare(ours, stored, strict=True))
+
     def test_unequal_dicts_different_values(self):
         self.assertFalse(deep_compare({'a': 1}, {'a': 2}))
 
@@ -734,6 +753,42 @@ class TestCleanRulesFolderAndKeepValue(unittest.TestCase):
         self.assertEqual(calls['PUT'], [])
         self.assertTrue(local.get('_skip_create'))
         self.assertEqual(local.get('_cmk_id'), 'r1')
+
+    def test_removed_key_is_ignored_without_enforce_value(self):
+        # Default tolerance: the key only Checkmk has counts as a schema
+        # default, so dropping it from the template changes nothing.
+        local = {
+            'value': "{'ec2': {'selection': 'all'}}", 'comment': 'c',
+            'folder': '/correct',
+            'condition': {'host_name': {'match_on': ['h']}},
+        }
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+        calls = self._wire_get([self._cmk_rule(
+            '/correct', "{'ec2': {'selection': 'all', 'limits': True}}")])
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['PUT'], [])
+        self.assertEqual(calls['DELETE'], [])
+        self.assertTrue(local.get('_skip_create'))
+
+    def test_removed_key_is_pushed_with_enforce_value(self):
+        # enforce_value: the same removal is drift and gets PUT in place.
+        local = {
+            'value': "{'ec2': {'selection': 'all'}}", 'comment': 'c',
+            'folder': '/correct',
+            'condition': {'host_name': {'match_on': ['h']}},
+            'enforce_value': True,
+        }
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+        calls = self._wire_get([self._cmk_rule(
+            '/correct', "{'ec2': {'selection': 'all', 'limits': True}}")])
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertEqual(len(calls['PUT']), 1)
+        self.assertTrue(local.get('_skip_create'))
 
     def test_value_drift_without_keep_value_updates_in_place(self):
         # Without keep_value a drifted value in the right folder is PUT-updated.

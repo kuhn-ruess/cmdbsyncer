@@ -627,7 +627,7 @@ def clean_postproccessed(data):
         output[key] = value
     return output
 
-def deep_compare(ours, stored):
+def deep_compare(ours, stored, strict=False):
     """
     Check whether our configured rule value is equivalent to the value
     Checkmk has stored. Asymmetric on dict keys: Checkmk normalises rule
@@ -636,6 +636,13 @@ def deep_compare(ours, stored):
     endless UPDATE/DELETE churn — so we only require that every key we
     set matches; stored extras are accepted as defaults.
 
+    The price of that tolerance is that a key *removed* from the value
+    template reads exactly like a Checkmk-side default and is therefore
+    never pushed. ``strict`` (the outcome's ``enforce_value``) drops the
+    tolerance and demands identical key sets, so removals are applied —
+    at the risk of re-writing the rule on every run when this ruleset is
+    one of those Checkmk enriches.
+
     List items are compared order-insensitive to tolerate reorderings.
     Nested dicts inside lists are still compared structurally via each
     element's ``==``.
@@ -643,9 +650,12 @@ def deep_compare(ours, stored):
     if isinstance(ours, dict) and isinstance(stored, dict):
         ours = clean_postproccessed(ours)
         stored = clean_postproccessed(stored)
-        if not set(ours.keys()).issubset(set(stored.keys())):
+        if strict:
+            if set(ours.keys()) != set(stored.keys()):
+                return False
+        elif not set(ours.keys()).issubset(set(stored.keys())):
             return False
-        return all(deep_compare(v, stored[k]) for k, v in ours.items())
+        return all(deep_compare(v, stored[k], strict) for k, v in ours.items())
     if isinstance(ours, list) and isinstance(stored, list):
         return sorted(ours, key=str) == sorted(stored, key=str)
     return ours == stored
@@ -1577,7 +1587,13 @@ class CheckmkRuleSync(CMK2):
                         # cancelling the configured folder_index
                         # ordering on idempotent re-runs.
                         comment_match = rule.get('comment', '') == cmk_comment
-                        value_match = deep_compare(cmk_value, check_value)
+                        # ``enforce_value`` outcomes compare the key sets
+                        # strictly, so a key dropped from the value template
+                        # counts as drift instead of being read as a
+                        # Checkmk-side schema default.
+                        value_match = deep_compare(
+                            cmk_value, check_value,
+                            strict=bool(rule.get('enforce_value')))
                         # A rule that sits in the wrong folder is not a match —
                         # it has to be recreated in the configured folder.
                         # Compared case-insensitively: Checkmk stores folder
