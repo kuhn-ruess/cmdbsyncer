@@ -42,7 +42,9 @@ class HostInventoryTree(db.Document):
         'collection': 'host_inventory_tree',
         'strict': False,
         'indexes': [
+            # `hostname` alone is the leftmost prefix of this one, so a
+            # second index on it would be maintained on every write and
+            # never chosen by the planner.
             {'fields': ('hostname', 'source'), 'unique': True},
-            {'fields': ['hostname']},
         ],
     }
