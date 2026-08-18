@@ -370,41 +370,56 @@
         .nv { color: #32CD32; font-weight: bold; }
     </style>
     <style type="text/css">
-        /* Nested dropdown (Flask-Admin sub-categories). Bootstrap
-           dropped submenus after BS3, so we re-add the hover-open
-           pattern explicitly. Applied whenever a <li> inside a
-           .dropdown-menu has its own .dropdown-menu child — flask
-           admin marks these with class="submenu" on the wrapping li. */
-        .navbar .dropdown-menu .dropdown-submenu,
-        .navbar .dropdown-menu li.submenu {
+        /* Nested dropdowns (Flask-Admin sub-categories). Bootstrap
+           dropped submenus after BS3, so the side-open pattern is
+           re-added here. Flask-Admin wraps every category in a
+           <li class="dropdown">, top level and nested alike — the
+           nested ones are those sitting inside a .dropdown-menu. */
+        .navbar .dropdown-menu li.dropdown {
             position: relative;
         }
-        .navbar .dropdown-menu .dropdown-submenu > a::after,
-        .navbar .dropdown-menu li.submenu > a::after {
-            content: "▸";
-            float: right;
-            margin-left: 0.5rem;
-            color: #888;
-        }
-        .navbar .dropdown-menu .dropdown-submenu > .dropdown-menu,
-        .navbar .dropdown-menu li.submenu > .dropdown-menu {
+        .navbar .dropdown-menu li.dropdown > .dropdown-menu {
             top: 0;
             left: 100%;
-            margin-top: -1px;
+            /* Cancels the menu's own top padding, so its first entry
+               lines up with the entry that opened it. */
+            margin-top: -0.4rem;
             margin-left: 0;
-            display: none;
         }
-        .navbar .dropdown-menu .dropdown-submenu:hover > .dropdown-menu,
-        .navbar .dropdown-menu li.submenu:hover > .dropdown-menu {
-            display: block;
+        /* These open to the side, so their caret should point that way
+           instead of down like the ones in the bar. */
+        .navbar .dropdown-menu li.dropdown > .dropdown-toggle::after {
+            float: right;
+            margin-top: 0.5em;
+            transform: rotate(-90deg);
         }
         /* On narrow viewports the submenu would be cut off; flip it to
            open on the left side of the parent item instead. */
         @media (max-width: 992px) {
-            .navbar .dropdown-menu .dropdown-submenu > .dropdown-menu,
-            .navbar .dropdown-menu li.submenu > .dropdown-menu {
+            .navbar .dropdown-menu li.dropdown > .dropdown-menu {
                 left: auto;
                 right: 100%;
+            }
+        }
+
+        /* Menus open on hover, top level and submenus alike. Bootstrap's
+           click handler is untouched, so keyboard use still works — and
+           the rule is limited to real pointers on the expanded bar,
+           where hover is a gesture that exists at all. */
+        @media (hover: hover) and (pointer: fine) and (min-width: 992px) {
+            .navbar li.dropdown:hover > .dropdown-menu {
+                display: block;
+            }
+            /* A top level menu hangs 0.35rem below its entry. Without
+               this bridge over the gap the pointer is outside both boxes
+               on the way down and the menu closes again. */
+            .navbar .navbar-nav > li.dropdown > .dropdown-menu::before {
+                content: "";
+                position: absolute;
+                top: -0.4rem;
+                left: 0;
+                right: 0;
+                height: 0.4rem;
             }
         }
     </style>
