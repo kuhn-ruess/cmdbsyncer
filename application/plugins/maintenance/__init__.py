@@ -12,7 +12,6 @@ from pathlib import Path
 from pprint import pformat
 from cryptography.fernet import Fernet
 import click
-from mongoengine import get_db
 from mongoengine.errors import DoesNotExist, ValidationError
 from application import app, logger, log
 from application._version import __version__ as _SYNCER_VERSION
@@ -24,6 +23,7 @@ from application.models.user import User
 from application.plugins.checkmk.models import CheckmkFolderPool
 from application.models.config import Config
 from application.helpers.cron import register_cronjob
+from application.helpers.stale_indexes import drop_stale_indexes
 from application.helpers.get_account import get_account_by_name
 from application.helpers.retention import sync_all
 from application.helpers.plugins import register_cli_group
@@ -830,31 +830,6 @@ def _warn_migrated_account_settings(config):
     print(f"{CC.FAIL}{line}{CC.ENDC}\n")
 
 
-# Indexes a model used to declare and no longer does. MongoEngine only
-# ever creates indexes; it never removes one a model stopped declaring, so
-# they keep costing write throughput and storage on every existing
-# installation until they are dropped explicitly.
-_STALE_INDEXES = (
-    # Superseded by the (hostname, source) unique index, whose leftmost
-    # prefix already serves every query on hostname alone.
-    ('host_inventory_tree', 'hostname_1'),
-)
-
-
-def _drop_stale_indexes():
-    """Remove indexes the models no longer declare. Idempotent."""
-    database = get_db()
-    existing = set(database.list_collection_names())
-    for collection_name, index_name in _STALE_INDEXES:
-        if collection_name not in existing:
-            continue
-        collection = database[collection_name]
-        if index_name not in collection.index_information():
-            continue
-        collection.drop_index(index_name)
-        print(f" -> dropped {collection_name}.{index_name}")
-
-
 @_cli_sys.command('self_configure')
 def self_configure():
     """
@@ -913,7 +888,8 @@ def self_configure():
         print(f" -> {name}: TTL index {action} ({days} days)")
 
     print("Drop indexes the models no longer declare")
-    _drop_stale_indexes()
+    for dropped in drop_stale_indexes():
+        print(f" -> dropped {dropped}")
 
     # Recount Checkmk pool seat usage so the counters are correct after an update
     # pylint: disable=import-outside-toplevel

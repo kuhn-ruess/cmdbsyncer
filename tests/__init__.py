@@ -276,6 +276,7 @@ _mongoengine.Document = type("Document", (), {})
 _mongoengine.ValidationError = type("ValidationError", (Exception,), {})
 _mongoengine.Q = type("Q", (), {})
 _mongoengine.get_db = MagicMock(name="stub.get_db")
+_mongoengine.DENY = 3
 
 
 class _StubQuerySet:  # pylint: disable=too-few-public-methods
