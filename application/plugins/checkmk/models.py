@@ -231,12 +231,20 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
 
     ### Condition Host
     It's possible to define a Host Condition. Placeholder is {{ hostname }}
+
+    ### Enforce exact Value
+    By default keys which exist only in Checkmk are accepted as defaults of
+    the ruleset, so removing a key from the Value Template is not applied.
+    Enable this to compare both values exactly, which pushes removed keys
+    too. Only enable it when needed: if Checkmk adds defaults to this
+    ruleset on save, the rule is rewritten on every run.
     """
 
     ruleset = db.StringField()
     folder = db.StringField(required=True)
     folder_index = db.IntField(default=0)
     comment = db.StringField()
+    enforce_value = db.BooleanField(default=False)
     loop_over_list = db.BooleanField(default=False)
     list_to_loop = db.StringField()
     value_template = db.StringField(required=True)

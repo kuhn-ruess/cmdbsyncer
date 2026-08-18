@@ -2,6 +2,7 @@
 Unit tests for checkmk cmk_rules module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
+# pylint: disable=too-many-lines
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -84,6 +85,25 @@ class TestDeepCompare(unittest.TestCase):
         # The reverse asymmetry still counts: if WE set a key Checkmk
         # doesn't have, the rule needs a sync.
         self.assertFalse(deep_compare({'a': 1, 'b': 2}, {'a': 1}))
+
+    def test_strict_rejects_stored_superset(self):
+        # enforce_value: a key that is only in Checkmk is drift, not a
+        # default — that is how a removed key gets pushed.
+        self.assertFalse(
+            deep_compare({'a': 1}, {'a': 1, 'b': 'default'}, strict=True))
+
+    def test_strict_rejects_nested_stored_superset(self):
+        # The removed key usually sits deep inside the value.
+        ours = {'services': {'ec2': {'selection': 'all'}}}
+        stored = {'services': {'ec2': {'selection': 'all', 'limits': True}}}
+        self.assertTrue(deep_compare(ours, stored))
+        self.assertFalse(deep_compare(ours, stored, strict=True))
+
+    def test_strict_accepts_equal_values(self):
+        # Once the removal is written, the next run must not update again.
+        ours = {'services': {'ec2': {'selection': 'all'}}, 'regions': ['a', 'b']}
+        stored = {'services': {'ec2': {'selection': 'all'}}, 'regions': ['b', 'a']}
+        self.assertTrue(deep_compare(ours, stored, strict=True))
 
     def test_unequal_dicts_different_values(self):
         self.assertFalse(deep_compare({'a': 1}, {'a': 2}))

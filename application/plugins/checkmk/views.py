@@ -670,6 +670,20 @@ class CheckmkMngmtRuleView(RuleModelView):
                             'condition_service_label': StringField,
                             'condition_service': StringField,
                         },
+                        'form_args': {
+                            'enforce_value': {
+                                'label': 'Enforce exact Value',
+                                'description': (
+                                    'Compare the Value exactly. By default keys'
+                                    ' which exist only in Checkmk count as'
+                                    ' defaults of the ruleset, so keys you remove'
+                                    ' from the Value Template are not applied.'
+                                    ' Enable this to push removals as well —'
+                                    ' but if Checkmk adds defaults to this'
+                                    ' ruleset, the rule is rewritten on every run.'
+                                ),
+                            },
+                        },
                         'form_widget_args': {
                             'list_to_loop': {
                                 'placeholder': (
