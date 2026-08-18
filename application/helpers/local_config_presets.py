@@ -259,6 +259,11 @@ PRESETS = [
                      'as individual labels.'},
             {'key': 'LABELS_IMPORT_EMPTY', 'type': 'bool', 'default': False,
              'hint': 'Import labels even when their value is empty.'},
+            {'key': 'LABEL_HISTORY_ENABLED', 'type': 'bool', 'default': False,
+             'hint': 'Record every label change for the host "Timeline" '
+                     'tab. Off by default — an import that rewrites '
+                     'labels every run writes one entry per label per '
+                     'run and nothing removes them again.'},
         ],
     },
     {

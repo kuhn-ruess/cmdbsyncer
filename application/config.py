@@ -107,6 +107,12 @@ class BaseConfig():
     LABELS_ITERATE_FIRST_LEVEL = False
     LABELS_IMPORT_EMPTY = False
 
+    # Write the host label history behind the "Timeline" tab. Off by
+    # default: it stores one document per changed label and nothing ever
+    # removed them, so on an installation whose import rewrites labels on
+    # every run it grows into the largest collection of the database.
+    LABEL_HISTORY_ENABLED = False
+
     REPLACERS = [
       (' ', '_'),
       ('/', '_'),

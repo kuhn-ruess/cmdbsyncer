@@ -575,6 +575,10 @@ class Host(db.Document):
         and emit a single `host.label.changed` event into the
         Enterprise audit log.
 
+        The history rows are only written when LABEL_HISTORY_ENABLED is
+        set; the audit event is emitted either way, since the audit log
+        has its own switch and its own retention.
+
         Best-effort: errors must never break the enclosing save — an
         operator losing a single change event is far cheaper than an
         import run falling over.
@@ -586,7 +590,8 @@ class Host(db.Document):
                 self._diff_labels(new_labels)
             if not entries:
                 return
-            HostLabelChange.objects.insert(entries)
+            if app.config.get('LABEL_HISTORY_ENABLED', False):
+                HostLabelChange.objects.insert(entries)
             try:
                 self._emit_label_audit(added, updated, removed, source)
             except Exception as exp:  # pylint: disable=broad-exception-caught

@@ -40,9 +40,16 @@
 
     {% if not changes %}
     <div class="app-card tl-empty">
+        {% if not config['LABEL_HISTORY_ENABLED'] %}
+        The label history is switched off, so no changes are being recorded.
+        Turn on <code>LABEL_HISTORY_ENABLED</code> under Config &rarr; Local
+        Config to fill this tab &mdash; it is off by default because an import
+        that rewrites labels on every run writes one entry per label per run.
+        {% else %}
         No label changes have been recorded for this host yet.
         The history starts the first time a label is added, updated, or removed
         after this version of the syncer is running.
+        {% endif %}
     </div>
     {% else %}
 
