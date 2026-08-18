@@ -46,19 +46,20 @@
            pointer-events: none;
        }
        /* The link only spans the menu row; the rule itself runs the full
-          height of the bar. The navbar centres its children, so the same
-          overhang above and below the row lands exactly on its edges —
-          0.85rem is the gap the row leaves to the top and the bottom.
-          It fades out towards those edges: a hairline running solid
-          through the empty zones above and below the entries reads like
-          a table border. */
+          height of the bar. The bar centres its children, so a rule as
+          tall as the bar and centred on the row lands exactly on its
+          edges — both values come from cmdbsyncer.css, so changing the
+          bar's height moves the rule with it. It fades out towards those
+          edges: a hairline running solid through the empty zones above
+          and below the entries reads like a table border. */
        .navbar .nav-link.nav-divider::before {
            content: "";
            position: absolute;
            left: 0;
            width: 1px;
-           top: -0.85rem;
-           bottom: -0.85rem;
+           top: 50%;
+           height: calc(var(--nav-row-height) + 2 * var(--nav-pad-y));
+           transform: translateY(-50%);
            background: linear-gradient(to bottom,
                transparent 0%, currentColor 30%,
                currentColor 70%, transparent 100%);
@@ -75,10 +76,11 @@
            }
            .navbar .nav-link.nav-divider::before {
                top: 0;
-               bottom: 0;
                left: 0;
                right: 0;
                width: auto;
+               height: 1px;
+               transform: none;
                background: linear-gradient(to right,
                    transparent 0%, currentColor 10%,
                    currentColor 90%, transparent 100%);
