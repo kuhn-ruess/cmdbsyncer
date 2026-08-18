@@ -491,6 +491,13 @@ _load_real_module(
     os.path.join("helpers", "retention.py"),
 )
 
+# Loaded for real too: at import time it needs nothing but datetime and the
+# stubbed mongoengine, and the host views import `relation_target` from it.
+_load_real_module(
+    "application.models.host_cleanup",
+    os.path.join("models", "host_cleanup.py"),
+)
+
 # application.modules.plugin pulls in render_jinja at import time, so the
 # helpers.syncer_jinja stub must be in place before the real plugin module
 # is loaded (the duplicated stub further down stays for the checkmk loaders

@@ -1597,6 +1597,7 @@ Impact Chain.
         # pylint: disable=import-outside-toplevel
         from flask import jsonify
         from application.models.host import RELATION_TYPES, RELATION_INVERSE_LABEL
+        from application.models.host_cleanup import relation_target
         if not app.config.get('CMDB_MODE'):
             return jsonify({'nodes': [], 'edges': []}), 403
         obj_id = request.args.get('obj_id', '').strip()
@@ -1616,7 +1617,7 @@ Impact Chain.
         nodes = {str(focus.pk): _node(focus, is_focus=True)}
         edges = []
         for rel in (focus.relations or []):
-            tgt = rel.target_host
+            tgt = relation_target(rel)
             if not tgt:
                 continue
             tgt_id = str(tgt.pk)
@@ -1635,7 +1636,8 @@ Impact Chain.
                 continue
             nodes.setdefault(src_id, _node(src))
             for rel in (src.relations or []):
-                if rel.target_host and rel.target_host.pk == focus.pk:
+                rel_target = relation_target(rel)
+                if rel_target and rel_target.pk == focus.pk:
                     edges.append({
                         'from': src_id, 'to': str(focus.pk),
                         'label': RELATION_INVERSE_LABEL.get(rel.type, rel.type),

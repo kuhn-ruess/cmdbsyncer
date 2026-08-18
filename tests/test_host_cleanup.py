@@ -11,13 +11,11 @@ bulk delete.
 """
 # pylint: disable=missing-function-docstring,missing-class-docstring
 # pylint: disable=protected-access
-import os
 import sys
 import types
 import unittest
 from unittest.mock import MagicMock, patch
 
-from tests import _load_real_module  # pylint: disable=no-name-in-module
 
 
 class _FieldApproval:  # pylint: disable=too-few-public-methods
@@ -28,14 +26,10 @@ _fa_module = types.ModuleType('application.models.field_approval')
 _fa_module.FieldApproval = _FieldApproval
 sys.modules['application.models.field_approval'] = _fa_module
 
-host_cleanup = _load_real_module(
-    'application.models.host_cleanup_under_test',
-    os.path.join('models', 'host_cleanup.py'),
-)
-
-# Imported after the loader above so the stubs from tests/__init__.py are
-# the ones the module under test resolves against.
+# Imported after the FieldApproval stub above so the module under test
+# resolves against it.
 # pylint: disable=wrong-import-position
+from application.models import host_cleanup                   # noqa: E402
 from application.models.host import Host                      # noqa: E402
 from application.models.host_inventory_tree import (          # noqa: E402
     HostInventoryTree,
@@ -131,6 +125,37 @@ class HostQuerySetDeleteTest(unittest.TestCase):
              patch.object(host_cleanup, '_purge_side_documents'):
             queryset.delete(write_concern={'w': 2})
         base_delete.assert_called_once_with(write_concern={'w': 2})
+
+
+class RelationTargetTest(unittest.TestCase):
+    """
+    Databases written before the queryset cleanup still carry references
+    to deleted hosts. MongoEngine raises on dereferencing one instead of
+    returning None, so `if not rel.target_host` never gets to run — the
+    line setting up the check has already raised.
+    """
+
+    def test_returns_the_target_when_it_exists(self):
+        target = _host('id1', 'host-a')
+        relation = types.SimpleNamespace(target_host=target)
+        self.assertIs(host_cleanup.relation_target(relation), target)
+
+    def test_returns_none_for_a_deleted_target(self):
+        class _Dangling:  # pylint: disable=too-few-public-methods
+            @property
+            def target_host(self):
+                raise host_cleanup.DoesNotExist('deleted')
+
+        self.assertIsNone(host_cleanup.relation_target(_Dangling()))
+
+    def test_other_errors_are_not_swallowed(self):
+        class _Broken:  # pylint: disable=too-few-public-methods
+            @property
+            def target_host(self):
+                raise ValueError('something else')
+
+        with self.assertRaises(ValueError):
+            host_cleanup.relation_target(_Broken())
 
 
 class HookLocationTest(unittest.TestCase):

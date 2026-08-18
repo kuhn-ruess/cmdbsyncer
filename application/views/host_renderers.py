@@ -17,6 +17,7 @@ from flask import request, url_for
 from markupsafe import Markup, escape
 
 from application import app
+from application.models.host_cleanup import relation_target
 from application.modules.log.models import LogEntry
 from application.views.host_filters import FilterCmdbTemplate
 
@@ -151,7 +152,7 @@ def _render_relations(_view, _context, model, _name):  # pylint: disable=too-man
 
     rows = []
     for rel in relations:
-        target = rel.target_host
+        target = relation_target(rel)
         if not target:
             continue
         href = url_for('host.details_view', id=str(target.pk))
@@ -172,7 +173,8 @@ def _render_relations(_view, _context, model, _name):  # pylint: disable=too-man
         )
         for src in inbound:
             for rel in (src.relations or []):
-                if rel.target_host and rel.target_host.pk == pk:
+                target = relation_target(rel)
+                if target and target.pk == pk:
                     inbound_by_type.setdefault(rel.type, []).append(src)
 
     inbound_rows = []

@@ -10,7 +10,7 @@ from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.helpers.label_history import label_history_enabled
-from application.models.host_cleanup import HostQuerySet
+from application.models.host_cleanup import HostQuerySet, relation_target
 from application.models.account import (
     account_is_master, report_master_skip, object_types,
     CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
@@ -1044,8 +1044,9 @@ class Host(db.Document):
         if rtype not in valid:
             raise HostError(f"Unknown relation type: {rtype}")
         for existing in (self.relations or []):
-            if existing.type == rtype and existing.target_host \
-                    and existing.target_host.pk == target.pk:
+            existing_target = relation_target(existing)
+            if existing.type == rtype and existing_target \
+                    and existing_target.pk == target.pk:
                 return False
         rel = HostRelation(type=rtype, target_host=target, source=source)
         if self.relations is None:
@@ -1063,8 +1064,8 @@ class Host(db.Document):
         before = len(self.relations)
         self.relations = [
             rel for rel in self.relations
-            if not (rel.type == rtype and rel.target_host
-                    and rel.target_host.pk == target.pk)
+            if not (rel.type == rtype and relation_target(rel)
+                    and relation_target(rel).pk == target.pk)
         ]
         if len(self.relations) != before:
             self.add_log(f"Relation -{rtype} -> {target.hostname}")

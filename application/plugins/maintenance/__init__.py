@@ -183,6 +183,78 @@ def _purge_orphaned_inventory_trees():
     return HostInventoryTree.objects(hostname__in=list(orphans)).delete()
 
 
+def _purge_orphaned_field_approvals():
+    """
+    Close field approvals whose host no longer exists.
+
+    ``FieldApproval`` is keyed by hostname, and only decided entries
+    expire — a pending one for a deleted host would sit in the queue
+    forever and keep counting towards the "pending" badge. Rejecting
+    rather than deleting keeps the decision trail and lets the existing
+    TTL clear them on schedule.
+
+    Returns the number of approvals closed.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.field_approval import FieldApproval
+    names = set(FieldApproval.objects(status='pending').distinct('hostname'))
+    if not names:
+        return 0
+    alive = set(Host.objects(hostname__in=list(names)).distinct('hostname'))
+    orphans = names - alive
+    if not orphans:
+        return 0
+    print(f"{CC.UNDERLINE}Close field approvals without a host{CC.ENDC}")
+    for hostname in sorted(orphans):
+        print(f"{CC.WARNING}  ** {CC.ENDC}Rejecting open approvals of {hostname}")
+    return FieldApproval.objects(
+        hostname__in=list(orphans), status='pending',
+    ).update(
+        set__status='rejected',
+        set__decided_at=datetime.datetime.utcnow(),
+        set__decision_reason='Host was deleted',
+    )
+
+
+def _purge_dangling_relations():
+    """
+    Drop relation edges that point at a host which no longer exists.
+
+    ``HostRelation.target_host`` sits inside an embedded document, where
+    MongoEngine cannot attach a delete rule, so versions before the
+    queryset-level cleanup left a dangling reference behind on every host
+    that pointed at a deleted one. Reading such an edge raises
+    ``DoesNotExist``, which used to take the whole host detail view down.
+
+    Returns the number of hosts whose relation list was repaired.
+    """
+    # Read the raw documents: going through MongoEngine would dereference
+    # every edge, which is both the expensive way to collect ObjectIds and
+    # the thing that raises on exactly the edges this sweep is looking for.
+    collection = Host._get_collection()  # pylint: disable=protected-access
+    targets = set()
+    for doc in collection.find({'relations': {'$exists': True, '$ne': []}},
+                               {'relations.target_host': 1}):
+        for rel in doc.get('relations') or []:
+            if rel.get('target_host'):
+                targets.add(rel['target_host'])
+    if not targets:
+        return 0
+    alive = set(Host.objects(id__in=list(targets)).distinct('id'))
+    dangling = targets - alive
+    if not dangling:
+        return 0
+    print(f"{CC.UNDERLINE}Remove relations pointing at deleted hosts{CC.ENDC}")
+    print(f"{CC.WARNING}  ** {CC.ENDC}{len(dangling)} deleted target(s) "
+          f"still referenced")
+    return Host.objects(
+        __raw__={'relations.target_host': {'$in': list(dangling)}},
+    ).update(
+        __raw__={'$pull': {'relations': {
+            'target_host': {'$in': list(dangling)}}}},
+    )
+
+
 def _log_maintenance_run(account, details, params):
     """
     Write the maintenance log entry.
@@ -238,6 +310,9 @@ def maintenance(account):
 
     orphaned_trees = _purge_orphaned_inventory_trees()
     details.append(('inventory_trees_removed', orphaned_trees))
+
+    details.append(('field_approvals_closed', _purge_orphaned_field_approvals()))
+    details.append(('dangling_relations_removed', _purge_dangling_relations()))
 
     _log_maintenance_run(account, details, {
         'delete_hosts_after_days': days,

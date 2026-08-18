@@ -13,10 +13,34 @@ rather than returning ``None``.
 ``HostLabelEvent`` is deliberately absent: it holds a real
 ``ReferenceField`` with ``reverse_delete_rule=CASCADE``, which
 MongoEngine applies on both the single-document and the bulk path.
+
+The module also owns ``relation_target()``, the read side of the same
+problem: databases written by earlier versions still carry dangling
+references, and every caller that reads one has to survive them until
+``cmdbsyncer sys maintenance`` has repaired the data.
 """
 import datetime
 
 from mongoengine import QuerySet
+from mongoengine.errors import DoesNotExist
+
+
+def relation_target(relation):
+    """
+    The Host a relation points at, or ``None`` if it points at a deleted
+    one.
+
+    Reading ``relation.target_host`` directly is not safe: MongoEngine
+    raises ``DoesNotExist`` on a dangling reference rather than returning
+    ``None``, so the obvious ``if not rel.target_host`` guard never runs —
+    the line that would set up the check has already raised. Deletions go
+    through ``HostQuerySet`` now, but references left behind by earlier
+    versions are still out there.
+    """
+    try:
+        return relation.target_host
+    except DoesNotExist:
+        return None
 
 
 def _purge_side_documents(host_ids, hostnames):
