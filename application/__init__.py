@@ -529,6 +529,12 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
                                    menu_icon_value='fa-stethoscope'))
     #.
     #   .-- Global
+    # Registered before the first real Modules view so "Overview" ends up at
+    # the top of the menu — Flask-Admin keeps the registration order. The
+    # plugins add their own overview the same way in register_admin_views.
+    from application.views.module_overview import register_module_menu
+    register_module_menu(admin, "Modules")
+
     from application.modules.custom_attributes.models import CustomAttributeRule
     from application.modules.custom_attributes.views import CustomAttributeView
     admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes",

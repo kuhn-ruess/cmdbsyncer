@@ -2,6 +2,7 @@
 Flask-Admin view registration for the Ansible plugin.
 """
 # pylint: disable=too-few-public-methods
+from application.views.module_overview import register_module_menu
 from .models import (
     AnsibleCustomVariablesRule,
     AnsibleFilterRule,
@@ -41,6 +42,7 @@ def register_admin_views(admin):
              └─ Playbook Fire Rules
     """
     admin.add_sub_category(name="Ansible", parent_name="Modules")
+    register_module_menu(admin, "Ansible")
 
     admin.add_view(
         AnsibleProjectView(

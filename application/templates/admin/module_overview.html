@@ -1,0 +1,123 @@
+{% extends 'admin/master.html' %}
+
+{% macro tile_icon(tile) -%}
+  {%- if tile.icon_type == 'image' -%}
+    <img class="mo-icon-img" src="{{ url_for('static', filename=tile.icon_value) }}" alt="">
+  {%- elif tile.icon_type == 'image-url' -%}
+    <img class="mo-icon-img" src="{{ tile.icon_value }}" alt="">
+  {%- elif tile.icon_type == 'glyph' -%}
+    <i class="glyphicon {{ tile.icon_value }}"></i>
+  {%- elif tile.icon_type == 'fa' -%}
+    <i class="fa {{ tile.icon_value }}"></i>
+  {%- else -%}
+    <i class="fa fa-angle-right"></i>
+  {%- endif -%}
+{%- endmacro %}
+
+{% block body %}
+<style>
+/* Theme-aware via the --surface-* tokens (light fallbacks), tiles use
+   .app-card so all four themes recolour them without extra rules. */
+.mo-wrap { max-width: 1180px; margin: 1.5rem auto; }
+.mo-hero {
+    display: flex; gap: 1.1rem; align-items: flex-start;
+    border-radius: 12px;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.4rem;
+    background: var(--surface-subtle, #f8f9fa);
+    border: 1px solid var(--surface-border, #e2e6ea);
+    color: var(--surface-text, #2c3e50);
+}
+.mo-hero-icon {
+    flex: 0 0 auto;
+    width: 48px; height: 48px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.9rem;
+}
+.mo-hero-icon img.mo-icon-img { width: 48px; height: 48px; }
+.mo-hero h2 { margin: 0 0 0.4rem; }
+.mo-hero p { margin: 0; max-width: 78ch; color: var(--surface-muted, #6c757d); }
+.mo-hero .mo-docs { display: inline-block; margin-top: 0.7rem; font-size: 0.9rem; }
+
+.mo-section-head {
+    margin: 1.8rem 0 0.8rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--surface-border, #e2e6ea);
+}
+.mo-section-head h4 { margin: 0; color: var(--surface-text, #2c3e50); }
+.mo-section-head p { margin: 0.25rem 0 0; font-size: 0.9rem;
+                     color: var(--surface-muted, #6c757d); }
+
+.mo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 0.9rem;
+}
+.mo-tile {
+    display: flex; gap: 0.85rem; align-items: flex-start;
+    padding: 0.95rem 1.1rem;
+    border: 1px solid var(--surface-border, #e2e6ea);
+    border-radius: 10px;
+    background: var(--surface-bg, #fff);
+    color: var(--surface-text, inherit);
+    text-decoration: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.mo-tile:hover, .mo-tile:focus {
+    text-decoration: none;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+.mo-tile-icon {
+    flex: 0 0 auto;
+    width: 34px; height: 34px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1.15rem;
+    opacity: 0.85;
+}
+.mo-tile-icon img.mo-icon-img { width: 26px; height: 26px; }
+.mo-tile-text { min-width: 0; }
+.mo-tile-text strong { display: block; margin-bottom: 0.2rem; }
+.mo-tile-text span {
+    display: block; font-size: 0.87rem; line-height: 1.35;
+    color: var(--surface-muted, #6c757d);
+}
+</style>
+
+<div class="mo-wrap">
+  <div class="mo-hero">
+    <div class="mo-hero-icon">
+      {{ tile_icon({'icon_type': icon_type, 'icon_value': icon_value}) }}
+    </div>
+    <div>
+      <h2>{{ module }}</h2>
+      {% if intro %}<p>{{ intro }}</p>{% endif %}
+      {% if docs_url %}
+        <a class="mo-docs" href="{{ docs_url }}" target="_blank" rel="noopener">
+          <i class="fa fa-book"></i> Documentation
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% for section in sections %}
+    {% if section.name %}
+      <div class="mo-section-head">
+        <h4>{{ section.name }}</h4>
+        {% if section.description %}<p>{{ section.description }}</p>{% endif %}
+      </div>
+    {% endif %}
+    <div class="mo-grid">
+      {% for tile in section.tiles %}
+        <a class="app-card mo-tile" href="{{ tile.url }}">
+          <span class="mo-tile-icon">{{ tile_icon(tile) }}</span>
+          <span class="mo-tile-text">
+            <strong>{{ tile.name }}</strong>
+            {% if tile.description %}<span>{{ tile.description }}</span>{% endif %}
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

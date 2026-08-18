@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Ansible">
+  <rect width="24" height="24" rx="5" fill="#c9201e"/>
+  <path d="M12 5l6 14-6-4.2L6 19z" fill="none" stroke="#ffffff" stroke-width="1.9"
+        stroke-linejoin="round"/>
+</svg>

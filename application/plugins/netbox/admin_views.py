@@ -1,4 +1,8 @@
-from application.modules.rule.views import FiltereModelView, RewriteAttributeView
+"""
+Flask-Admin view registration for the Netbox plugin.
+"""
+from application.views.module_overview import register_module_menu
+from application.modules.rule.views import RewriteAttributeView
 
 from .views import (
                   NetboxCustomAttributesView,
@@ -23,6 +27,7 @@ from .models import (
 def register_admin_views(admin):
     """Register Flask-Admin views."""
     admin.add_sub_category(name="Netbox", parent_name="Modules")
+    register_module_menu(admin, "Netbox")
 
     admin.add_view(RewriteAttributeView(NetboxRewriteAttributeRule, name="Rewrite Attributes",
                                                                 category="Netbox",

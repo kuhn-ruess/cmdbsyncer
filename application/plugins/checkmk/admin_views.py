@@ -6,6 +6,7 @@ to avoid heavy imports during package loading.
 """
 
 from application.modules.rule.views import FiltereModelView, RewriteAttributeView
+from application.views.module_overview import register_module_menu
 
 from .models import (
     CheckmkBiAggregation,
@@ -54,6 +55,7 @@ from .views import (
 def register_admin_views(admin):
     """Register all Flask-Admin views that belong to the Checkmk plugin."""
     admin.add_sub_category(name="Checkmk", parent_name="Modules")
+    register_module_menu(admin, "Checkmk")
 
     admin.add_view(
         RewriteAttributeView(

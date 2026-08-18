@@ -1,4 +1,5 @@
 """Flask-Admin registration for the Jira Cloud Export views."""
+from application.views.module_overview import register_module_menu
 from application.modules.rule.views import RewriteAttributeView
 
 from .views import (
@@ -17,6 +18,7 @@ from .models import (
 def register_admin_views(admin):
     """Register the Jira Cloud submenu."""
     admin.add_sub_category(name="Jira Cloud", parent_name="Modules")
+    register_module_menu(admin, "Jira Cloud")
 
     admin.add_view(JiraCloudFilterView(
         JiraCloudFilterRule,

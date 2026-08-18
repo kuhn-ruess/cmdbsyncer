@@ -30,6 +30,17 @@
        .navbar .dropdown-divider {
            margin: 0.35rem 0.25rem;
        }
+       /* Module marks (menu_icon_type='image'): size them like the
+          Font Awesome glyphs of the neighbouring entries and give them
+          the same gap, otherwise the img renders at its natural size. */
+       .navbar .dropdown-item > img,
+       .navbar .dropdown-toggle > img,
+       .navbar .nav-link > img {
+           width: 16px;
+           height: 16px;
+           margin-right: 0.2rem;
+           vertical-align: -3px;
+       }
 
        /* Commit button with the pending-changes count inside it. */
        #commit-button {
