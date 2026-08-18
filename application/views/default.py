@@ -5,7 +5,9 @@ Default Model Views
 import os
 import re
 import html
+import time
 from copy import deepcopy
+from datetime import datetime, timedelta
 from flask import url_for, redirect, flash, request, abort
 from flask_login import current_user
 from flask_admin import AdminIndexView
@@ -85,6 +87,129 @@ def _list_other_changelogs():
             return (0,)
 
     return sorted(names, key=_version_tuple, reverse=True)
+
+
+def _may(right):
+    """True if the logged-in user holds ``right`` (global admins hold all)."""
+    return current_user.is_authenticated and (
+        current_user.global_admin or current_user.has_right(right))
+
+
+def _humanize_age(value, now=None):
+    """
+    Compact relative age of a timestamp ("3 min ago", "2 days ago").
+
+    Every timestamp the dashboard shows (log entries, cron runs, imports)
+    is written with ``datetime.now()``, so local time is the right
+    reference here. Returns an empty string for a missing value.
+    """
+    if not value:
+        return ''
+    now = now or datetime.now()
+    seconds = int((now - value).total_seconds())
+    if seconds < 0:
+        # Clock skew or a scheduled-in-the-future timestamp.
+        return 'just now'
+    if seconds < 60:
+        return f"{seconds} sec ago"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} min ago"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours} h ago"
+    days = hours // 24
+    return f"{days} day ago" if days == 1 else f"{days} days ago"
+
+
+def _humanize_eta(value, now=None):
+    """Compact time-until for a future timestamp ("in 4 min")."""
+    if not value:
+        return ''
+    now = now or datetime.now()
+    seconds = int((value - now).total_seconds())
+    if seconds <= 0:
+        return 'due'
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"in {max(minutes, 1)} min"
+    hours = minutes // 60
+    if hours < 24:
+        return f"in {hours} h"
+    days = hours // 24
+    return "in 1 day" if days == 1 else f"in {days} days"
+
+
+# The per-source host figures come from a $group over the whole host
+# collection — one pass, but a pass the start page would otherwise pay for
+# on every single load. A short TTL keeps the dashboard cheap on large
+# installations without making the numbers feel stale.
+# Account types no cron group can ever drive: their objects arrive over the
+# REST API or are maintained inside the Syncer. Calling those "not
+# scheduled" reads like a misconfiguration when it is simply how they work.
+_UNSCHEDULED_TYPES = {
+    'from_api': 'pushed via API',
+    'cmdb': 'managed in the syncer',
+    'restapi': 'API credentials only',
+}
+
+
+def _cadence(account_type, name=''):
+    """What drives a system when no cron group does."""
+    # pylint: disable=import-outside-toplevel
+    from application.models.account import CMDB_SOURCE_ACCOUNT_NAME
+    if account_type in _UNSCHEDULED_TYPES:
+        return _UNSCHEDULED_TYPES[account_type]
+    # Objects in CMDB mode carry the reserved source name, not an account.
+    if name == CMDB_SOURCE_ACCOUNT_NAME:
+        return _UNSCHEDULED_TYPES['cmdb']
+    return 'not scheduled'
+
+
+# Configured Accounts are always listed in full — they are the install's
+# actual wiring. Only the tail of historical source names that no Account
+# belongs to any more is cut, and the card says how many it dropped.
+_FLOW_SOURCE_LIMIT = 5
+
+_HOST_SOURCE_TTL = 60
+_host_source_cache = {}
+
+
+def _host_sources(scope):
+    """
+    ``{source_account_name: {'count': int, 'last_seen': datetime}}`` over
+    the hosts the Host list shows (no objects, not archived), limited to
+    the user's account scope.
+
+    ``scope`` is the user's account allowlist or None for unrestricted.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+
+    key = tuple(sorted(scope)) if scope else None
+    cached = _host_source_cache.get(key)
+    if cached and time.monotonic() - cached[0] < _HOST_SOURCE_TTL:
+        return cached[1]
+
+    query = Host.objects(is_object__ne=True, deleted_at__exists=False)
+    if scope:
+        query = query.filter(source_account_name__in=list(scope))
+    result = {}
+    try:
+        for row in query.aggregate([
+                {'$group': {
+                    '_id': '$source_account_name',
+                    'count': {'$sum': 1},
+                    'last_seen': {'$max': '$last_import_seen'},
+                }}]):
+            result[row['_id'] or ''] = {
+                'count': row['count'],
+                'last_seen': row.get('last_seen'),
+            }
+    except Exception:  # pylint: disable=broad-exception-caught
+        return {}
+    _host_source_cache[key] = (time.monotonic(), result)
+    return result
 
 
 class DefaultModelView(ModelView):
@@ -345,7 +470,7 @@ class IndexView(AdminIndexView):
     @expose('/')
     def index(self):
         """
-        Index view with changelog
+        Index view: setup state, what the sync is doing, and the changelog.
         """
         # A fresh installation lands on the First Steps wizard until the
         # setup checklist is complete or an admin dismissed it.
@@ -354,65 +479,75 @@ class IndexView(AdminIndexView):
         if first_steps_pending():
             return redirect(url_for('first_steps.index'))
 
-        changelog_html = None
+        context = self._changelog_context()
+        context.update(self._status_context())
+        return self.render('admin/index.html', **context)
+
+    def _changelog_context(self):
+        """Release notes and operator messages for the right-hand column."""
         try:
             changelog_html = self._markdown_to_html(
                 _load_changelog(), collapse_sections=True,
             )
         except FileNotFoundError:
             changelog_html = "<p>Changelog not found.</p>"
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             changelog_html = "<p>Error loading changelog.</p>"
+        return {
+            'changelog_html': changelog_html,
+            'notices': self._load_notices(),
+            'older_changelogs': _list_other_changelogs(),
+        }
 
-        notices = self._load_notices()
-        older_changelogs = _list_other_changelogs()
+    def _status_context(self):
+        """
+        The operational half of the start page. Every card is gated on the
+        right that guards the views it exposes and links into, so a user
+        never sees data on the dashboard they could not open themselves.
+        """
+        # Latest log entries that reported errors — failing sync jobs stay
+        # visible without opening the Log.
+        can_see_log = _may('log')
+        error_logs, error_count_24h = \
+            self._collect_error_logs() if can_see_log else ([], 0)
 
-        # Latest log entries that reported errors — surfaced on the start
-        # page so failing sync jobs are visible without opening the Log.
-        # Only for users who may see the Log: the card exposes log
-        # timestamps and messages and links into the (log-gated) Log
-        # views, so gate it on the same 'log' right.
-        # pylint: disable=import-outside-toplevel
-        error_logs = []
-        can_see_log = current_user.is_authenticated and (
-            current_user.global_admin or current_user.has_right('log'))
-        if can_see_log:
-            from application.modules.log.models import LogEntry
-            try:
-                error_logs = list(
-                    LogEntry.objects(has_error=True).order_by('-datetime')[:5])
-            except Exception:  # pylint: disable=broad-exception-caught
-                error_logs = []
-
-        # Cron status + one-click trigger, shown only to users who may see
-        # cron (same gate as the Cron views).
-        cron_status = []
-        can_trigger_cron = current_user.is_authenticated and (
-            current_user.global_admin or current_user.has_right('cron'))
-        if can_trigger_cron:
-            cron_status = self._collect_cron_status()
+        # Cron status + one-click trigger.
+        can_trigger_cron = _may('cron')
+        cron_status = self._collect_cron_status() if can_trigger_cron else []
 
         # Warn users who can edit Checkmk rules about deprecated actions still
         # in use — those actions will be removed with 4.4 and rules carrying
         # them can no longer be saved until migrated.
-        deprecated_rules = []
-        deprecation_warning = ''
-        if current_user.is_authenticated and (
-                current_user.global_admin or current_user.has_right('checkmk')):
-            deprecated_rules, deprecation_warning = self._collect_deprecated_rules()
+        deprecated_rules, deprecation_warning = \
+            self._collect_deprecated_rules() if _may('checkmk') else ([], '')
 
-        return self.render(
-            'admin/index.html',
-            changelog_html=changelog_html,
-            notices=notices,
-            older_changelogs=older_changelogs,
-            error_logs=error_logs,
-            can_see_log=can_see_log,
-            cron_status=cron_status,
-            can_trigger_cron=can_trigger_cron,
-            deprecated_rules=deprecated_rules,
-            deprecation_warning=deprecation_warning,
-        )
+        # Data flow: which systems are connected, which of them carry data.
+        # The card shows account names and host counts — the same information
+        # the Host list exposes, hence the same right.
+        can_see_flow = _may('host')
+        connected_systems, total_hosts = \
+            self._collect_connected_systems() if can_see_flow else ([], 0)
+        orphans = [row for row in connected_systems if row['orphan']]
+        visible_systems = [row for row in connected_systems if not row['orphan']] \
+            + orphans[:_FLOW_SOURCE_LIMIT]
+        hidden_systems = max(len(orphans) - _FLOW_SOURCE_LIMIT, 0)
+
+        return {
+            'error_logs': error_logs,
+            'error_count_24h': error_count_24h,
+            'can_see_log': can_see_log,
+            'cron_status': cron_status,
+            'can_trigger_cron': can_trigger_cron,
+            'deprecated_rules': deprecated_rules,
+            'deprecation_warning': deprecation_warning,
+            'connected_systems': visible_systems,
+            'connected_systems_hidden': hidden_systems,
+            'total_hosts': total_hosts,
+            'can_see_flow': can_see_flow,
+            # Only link the flow rows the user may actually open.
+            'can_edit_accounts': _may('account'),
+            'setup_progress': self._collect_setup_progress(),
+        }
 
     @staticmethod
     def _collect_deprecated_rules():
@@ -447,22 +582,172 @@ class IndexView(AdminIndexView):
         from application.models.cron import CronGroup, CronStats
         try:
             stats = {s.group: s for s in CronStats.objects()}
+            now = datetime.now()
             rows = []
             for group in CronGroup.objects().order_by('name'):
                 st = stats.get(group.name)
+                last_start = st.last_start if st else None
+                next_run = st.next_run if st else None
                 rows.append({
+                    'id': str(group.id),
                     'name': group.name,
                     'enabled': group.enabled,
                     'run_once_next': group.run_once_next,
                     'is_running': st.is_running if st else False,
-                    'last_start': st.last_start if st else None,
-                    'next_run': st.next_run if st else None,
+                    'last_start': last_start,
+                    'last_start_age': _humanize_age(last_start, now),
+                    'next_run': next_run,
+                    'next_run_eta': _humanize_eta(next_run, now),
                     'last_message': (st.last_message if st else '') or '',
                     'failure': st.failure if st else False,
                 })
             return rows
         except Exception:  # pylint: disable=broad-exception-caught
             return []
+
+    @staticmethod
+    def _collect_error_logs():
+        """
+        ``([latest failed log entries], count of the last 24 h)``.
+
+        The five newest entries alone cannot say whether the card is a live
+        alarm or just history, so the 24 h count comes along with them.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.modules.log.models import LogEntry
+        try:
+            now = datetime.now()
+            entries = [{
+                'id': str(entry.id),
+                'datetime': entry.datetime,
+                'age': _humanize_age(entry.datetime, now),
+                'message': entry.message,
+            } for entry in
+                LogEntry.objects(has_error=True).order_by('-datetime')[:5]]
+            recent = LogEntry.objects(
+                has_error=True,
+                datetime__gte=now - timedelta(hours=24)).count()
+            return entries, recent
+        except Exception:  # pylint: disable=broad-exception-caught
+            return [], 0
+
+    @staticmethod
+    def _cron_jobs_by_account():
+        """
+        ``({account name: [(group name, group id)]}, {account name: newest
+        run})`` over every cron group — what actually drives each account.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.models.cron import CronGroup, CronStats
+        jobs = {}
+        last_runs = {}
+        try:
+            stats = {s.group: s for s in CronStats.objects()}
+            for group in CronGroup.objects().order_by('name'):
+                started = stats[group.name].last_start \
+                    if group.name in stats else None
+                for job in group.jobs:
+                    if not job.account:
+                        continue
+                    name = job.account.name
+                    entry = (group.name, str(group.id))
+                    if entry not in jobs.setdefault(name, []):
+                        jobs[name].append(entry)
+                    if started and (not last_runs.get(name)
+                                    or started > last_runs[name]):
+                        last_runs[name] = started
+        except Exception:  # pylint: disable=broad-exception-caught
+            return {}, {}
+        return jobs, last_runs
+
+    @staticmethod
+    def _collect_connected_systems():
+        """
+        One row per connected system for the "Data flow" card: the Account,
+        how many hosts it imported, and which cron groups drive it.
+
+        Everything is read from what the install actually does — hosts carry
+        the account they came from, cron groups carry the account each job
+        runs against — so an Account that is configured but never used shows
+        up as exactly that.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.models.account import Account
+
+        scope = current_user.account_scope() if current_user.is_authenticated else None
+        sources = _host_sources(scope)
+        now = datetime.now()
+
+        jobs, last_runs = IndexView._cron_jobs_by_account()
+
+        rows = []
+        seen = set()
+        try:
+            for account in Account.objects(enabled=True).order_by('name'):
+                if scope and account.name not in scope:
+                    continue
+                seen.add(account.name)
+                source = sources.get(account.name, {})
+                rows.append({
+                    'name': account.name,
+                    'id': str(account.id),
+                    'orphan': False,
+                    'type': account.type or '',
+                    'cadence': _cadence(account.type, account.name),
+                    'hosts': source.get('count', 0),
+                    'last_import_age': _humanize_age(source.get('last_seen'), now),
+                    'groups': jobs.get(account.name, []),
+                    'last_run_age': _humanize_age(last_runs.get(account.name), now),
+                })
+        except Exception:  # pylint: disable=broad-exception-caught
+            return [], 0
+
+        # Hosts whose source account no longer exists (or was disabled, or
+        # were created by hand) still count — hiding them would make the
+        # total on the card disagree with the Host list.
+        for name, source in sorted(sources.items()):
+            if name in seen:
+                continue
+            rows.append({
+                'name': name or 'without account',
+                'id': None,
+                'orphan': True,
+                'type': '',
+                'cadence': _cadence('', name),
+                'hosts': source.get('count', 0),
+                'last_import_age': _humanize_age(source.get('last_seen'), now),
+                'groups': jobs.get(name, []),
+                'last_run_age': _humanize_age(last_runs.get(name), now),
+            })
+
+        # Configured Accounts first, each group by the data it carries, so
+        # the install's wiring stays on top of its history.
+        rows.sort(key=lambda row: (row['orphan'], -row['hosts'], row['name'].lower()))
+        total_hosts = sum(entry.get('count', 0) for entry in sources.values())
+        return rows, total_hosts
+
+    @staticmethod
+    def _collect_setup_progress():
+        """
+        ``(done, total, [open step titles])`` of the First Steps checklist,
+        or None once every step is finished — the card only exists to point
+        at the unfinished ones.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.views.first_steps import get_first_steps
+        try:
+            steps = get_first_steps()
+        except Exception:  # pylint: disable=broad-exception-caught
+            return None
+        done = [s for s in steps if s['done']]
+        if len(done) == len(steps):
+            return None
+        return {
+            'done': len(done),
+            'total': len(steps),
+            'percent': int(len(done) * 100 / len(steps)) if steps else 0,
+            'open_steps': [s['title'] for s in steps if not s['done']],
+        }
 
     @expose('/trigger_cron', methods=['POST'])
     def trigger_cron(self):

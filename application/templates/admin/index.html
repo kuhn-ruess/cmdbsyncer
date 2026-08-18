@@ -168,6 +168,129 @@
 .cron-trigger-btn:hover:not(:disabled) { border-color: #2980b9; color: #2980b9; }
 .cron-trigger-btn:disabled { opacity: 0.5; cursor: default; }
 
+/* Setup progress — only rendered while the First Steps checklist still
+   has open items. Colours come from the --surface-* tokens so all four
+   themes stay covered. */
+#setup-progress { border-left: 4px solid #1acdb6; }
+.setup-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.setup-head h2 { border-bottom: none; margin: 0; padding: 0; }
+.setup-count {
+  font-size: 0.85rem;
+  color: var(--surface-muted, #6c757d);
+  font-weight: 600;
+}
+.setup-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-divider, #eef0f3);
+  overflow: hidden;
+  margin: 0.7rem 0 0.6rem;
+}
+.setup-bar span { display: block; height: 100%; background: #1acdb6; }
+.setup-open {
+  list-style: none;
+  margin: 0 0 0.8rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.2rem;
+}
+.setup-open li {
+  font-size: 0.85rem;
+  color: var(--surface-muted, #6c757d);
+}
+.setup-open li::before { content: "\25CB\00a0\00a0"; }
+.setup-cta {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* Data flow — which systems are connected and which of them carry data. */
+#data-flow { border-left: 4px solid #9b59b6; }
+.flow-lead {
+  margin: 0 0 0.6rem;
+  font-size: 0.88rem;
+  color: var(--surface-muted, #6c757d);
+}
+.flow-total {
+  margin: 0 0 0.7rem;
+  font-size: 0.9rem;
+  color: var(--surface-text, #2c3e50);
+}
+.flow-table { width: 100%; border-collapse: collapse; }
+.flow-table th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  color: var(--surface-muted, #6c757d);
+  padding: 0 0.3rem 0.35rem;
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+}
+.flow-table td {
+  padding: 0.4rem 0.3rem;
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+  font-size: 0.85rem;
+  vertical-align: middle;
+  color: var(--surface-text, #2c3e50);
+}
+.flow-table tr:last-child td { border-bottom: none; }
+.flow-table .num { text-align: right; white-space: nowrap; }
+.flow-name { font-weight: 600; }
+.flow-type {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--surface-muted, #6c757d);
+}
+.flow-time {
+  font-size: 0.78rem;
+  color: var(--surface-muted, #6c757d);
+  white-space: nowrap;
+}
+.flow-groups { font-size: 0.8rem; }
+.flow-act { display: block; }
+.flow-idle { color: var(--surface-muted, #6c757d); }
+.flow-more {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--surface-muted, #6c757d);
+}
+
+/* Cron: the failure/progress message and the next-run estimate. */
+.cron-eta {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--surface-muted, #6c757d);
+}
+.cron-msg-row td {
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+  padding: 0 0.3rem 0.45rem;
+  font-size: 0.76rem;
+  font-family: ui-monospace, monospace;
+  color: var(--surface-muted, #6c757d);
+  word-break: break-word;
+}
+.cron-status-table tr.cron-main-row td { border-bottom: none; }
+
+/* Recent errors: how old, and how many are actually recent. */
+.error-count {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.error-count-hot { color: #e74c3c; }
+.error-count-cold { color: var(--surface-muted, #6c757d); }
+.error-log-age { text-transform: none; }
+
 .links-list {
   list-style: none;
   padding: 0;
@@ -490,41 +613,99 @@ function toggleAllFilters() {
 </div>
 {% endif %}
 
-<div class="row">
-  <!-- Left Column: Links + Notices -->
-  <div class="col-md-4">
-    <div class="home-card">
-      <h2>Links</h2>
-      <ul class="links-list">
-        <li><a href="{{ url_for('first_steps.index') }}">🚀 First Steps</a></li>
-        <li><a href="https://cmdbsyncer.de">🏠 Homepage</a></li>
-        <li><a href="https://docs.cmdbsyncer.de">📚 Documentation</a></li>
-        <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">⚙️ Source Code</a></li>
-        <li><a href="https://kuhn-ruess.de">🏢 Kuhn &amp; Rue&szlig; GmbH</a></li>
-      </ul>
-    </div>
+{% if setup_progress %}
+<div class="home-card" id="setup-progress">
+  <div class="setup-head">
+    <h2>Finish your setup</h2>
+    <span class="setup-count">
+      {{ setup_progress.done }} of {{ setup_progress.total }} steps done
+    </span>
+  </div>
+  <div class="setup-bar"><span style="width: {{ setup_progress.percent }}%"></span></div>
+  <ul class="setup-open">
+    {% for title in setup_progress.open_steps %}
+    <li>{{ title }}</li>
+    {% endfor %}
+  </ul>
+  <a class="setup-cta" href="{{ url_for('first_steps.index') }}">
+    🚀 Continue with First Steps &rarr;
+  </a>
+</div>
+{% endif %}
 
-    {% if can_see_log %}
-    <div class="home-card" id="recent-errors">
-      <h2>Recent Errors</h2>
-      {% if error_logs %}
-      <ul class="error-log-list">
-        {% for entry in error_logs %}
-        <li>
-          <a href="{{ url_for('logentry.details_view', id=entry.id) }}">
-            <span class="error-log-time">
-              {{ entry.datetime.strftime('%Y-%m-%d %H:%M') if entry.datetime else '—' }}
-            </span>
-            <span class="error-log-message">{{ entry.message }}</span>
-          </a>
-        </li>
+<div class="row">
+  <!-- Left Column: what the syncer is doing right now -->
+  <div class="col-md-8">
+    {% if can_see_flow %}
+    <div class="home-card" id="data-flow">
+      <h2>Data flow</h2>
+      <p class="flow-lead">
+        Every system the syncer talks to is an <strong>Account</strong>. Imports fill
+        the host database, cron groups run the imports and exports on a schedule.
+      </p>
+      {% if connected_systems %}
+      <p class="flow-total">
+        <strong>{{ total_hosts }}</strong> hosts in the database
+      </p>
+      <table class="flow-table">
+        <thead>
+          <tr>
+            <th>System</th>
+            <th>Type</th>
+            <th class="num">Hosts</th>
+            <th>Last activity</th>
+            <th>Scheduled in</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for row in connected_systems %}
+          <tr>
+            <td class="flow-name">
+              {% if row.id and can_edit_accounts %}
+              <a href="{{ url_for('account.edit_view', id=row.id) }}">{{ row.name }}</a>
+              {% else %}{{ row.name }}{% endif %}
+            </td>
+            <td class="flow-type">
+              {% if row.orphan %}<em>no account</em>{% else %}{{ row.type or '—' }}{% endif %}
+            </td>
+            <td class="num">{{ row.hosts or '—' }}</td>
+            <td class="flow-time">
+              {% if row.last_import_age %}
+              <span class="flow-act">imported {{ row.last_import_age }}</span>
+              {% endif %}
+              {% if row.last_run_age %}
+              <span class="flow-act">ran {{ row.last_run_age }}</span>
+              {% endif %}
+              {% if not row.last_import_age and not row.last_run_age %}—{% endif %}
+            </td>
+            <td class="flow-groups">
+              {% if row.groups %}
+                {% for group_name, group_id in row.groups %}
+                  {%- if can_trigger_cron -%}
+                  <a href="{{ url_for('crongroup.edit_view', id=group_id) }}">{{ group_name }}</a>
+                  {%- else -%}{{ group_name }}{%- endif -%}
+                  {%- if not loop.last %}, {% endif -%}
+                {% endfor %}
+              {% else %}
+              <span class="flow-idle">{{ row.cadence }}</span>
+              {% endif %}
+            </td>
+          </tr>
         {% endfor %}
-      </ul>
-      <a class="error-log-all" href="{{ url_for('logentry.index_view') }}">
-        Open the full log →
-      </a>
+        </tbody>
+      </table>
+      {% if connected_systems_hidden %}
+      <p class="flow-more">
+        + {{ connected_systems_hidden }} further import
+        source{{ '' if connected_systems_hidden == 1 else 's' }} with no Account of their
+        own — <a href="{{ url_for('host.index_view') }}">find their hosts in the Host list</a>
+      </p>
+      {% endif %}
       {% else %}
-      <p class="error-log-empty">✅ No errors in the recent log entries.</p>
+      <p class="error-log-empty">
+        No accounts connected yet —
+        <a href="{{ url_for('account.create_view') }}">create your first Account</a>.
+      </p>
       {% endif %}
     </div>
     {% endif %}
@@ -536,8 +717,11 @@ function toggleAllFilters() {
       <table class="cron-status-table">
         <tbody>
         {% for job in cron_status %}
-          <tr>
-            <td class="cron-name">{{ job.name }}</td>
+          {% set show_message = job.last_message and (job.failure or job.is_running) %}
+          <tr {% if show_message %}class="cron-main-row"{% endif %}>
+            <td class="cron-name">
+              <a href="{{ url_for('crongroup.edit_view', id=job.id) }}">{{ job.name }}</a>
+            </td>
             <td class="cron-badge-cell">
               {% if not job.enabled %}
                 <span class="cron-badge cron-badge-off">disabled</span>
@@ -554,6 +738,17 @@ function toggleAllFilters() {
             </td>
             <td class="cron-time" title="Last start">
               {{ job.last_start.strftime('%Y-%m-%d %H:%M') if job.last_start else '—' }}
+              {% if job.last_start_age %}
+              <span class="cron-eta">{{ job.last_start_age }}</span>
+              {% endif %}
+            </td>
+            <td class="cron-time" title="Next run">
+              {% if job.enabled and job.next_run %}
+                {{ job.next_run.strftime('%Y-%m-%d %H:%M') }}
+                <span class="cron-eta">{{ job.next_run_eta }}</span>
+              {% else %}
+                —
+              {% endif %}
             </td>
             <td class="cron-trigger-cell">
               <form method="POST" action="{{ url_for('admin.trigger_cron') }}"
@@ -568,6 +763,11 @@ function toggleAllFilters() {
               </form>
             </td>
           </tr>
+          {% if show_message %}
+          <tr class="cron-msg-row">
+            <td colspan="5">{{ job.last_message }}</td>
+          </tr>
+          {% endif %}
         {% endfor %}
         </tbody>
       </table>
@@ -576,6 +776,55 @@ function toggleAllFilters() {
       {% endif %}
     </div>
     {% endif %}
+
+    {% if can_see_log %}
+    <div class="home-card" id="recent-errors">
+      <h2>Recent Errors</h2>
+      {% if error_logs %}
+      <p class="error-count {{ 'error-count-hot' if error_count_24h else 'error-count-cold' }}">
+        {% if error_count_24h %}
+          {{ error_count_24h }} error{{ '' if error_count_24h == 1 else 's' }} in the last 24 hours
+        {% else %}
+          No errors in the last 24 hours — the newest ones are older than that.
+        {% endif %}
+      </p>
+      <ul class="error-log-list">
+        {% for entry in error_logs %}
+        <li>
+          <a href="{{ url_for('logentry.details_view', id=entry.id) }}">
+            <span class="error-log-time">
+              {{ entry.datetime.strftime('%Y-%m-%d %H:%M') if entry.datetime else '—' }}
+              {% if entry.age %}
+              <span class="error-log-age">· {{ entry.age }}</span>
+              {% endif %}
+            </span>
+            <span class="error-log-message">{{ entry.message }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      <a class="error-log-all" href="{{ url_for('logentry.index_view') }}">
+        Open the full log &rarr;
+      </a>
+      {% else %}
+      <p class="error-log-empty">✅ No errors in the recent log entries.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right Column: reference material -->
+  <div class="col-md-4">
+    <div class="home-card">
+      <h2>Links</h2>
+      <ul class="links-list">
+        <li><a href="{{ url_for('first_steps.index') }}">🚀 First Steps</a></li>
+        <li><a href="https://cmdbsyncer.de">🏠 Homepage</a></li>
+        <li><a href="https://docs.cmdbsyncer.de">📚 Documentation</a></li>
+        <li><a href="https://github.com/kuhn-ruess/cmdbsyncer">⚙️ Source Code</a></li>
+        <li><a href="https://kuhn-ruess.de">🏢 Kuhn &amp; Rue&szlig; GmbH</a></li>
+      </ul>
+    </div>
 
     {% if notices %}
     <div id="notices-section" class="home-card">
@@ -588,10 +837,7 @@ function toggleAllFilters() {
       {% endfor %}
     </div>
     {% endif %}
-  </div>
 
-  <!-- Right Column: Changelog -->
-  <div class="col-md-8">
     {% if changelog_html %}
     <div class="home-card">
       <h2>Changelog</h2>
