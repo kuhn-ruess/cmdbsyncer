@@ -55,6 +55,7 @@ from application.views.host_filters import (
     FilterSitePool,
     FilterStale,
     FilterCmdbTemplate,
+    FilterHasCmdbTemplate,
     FilterLabelKeyAndValue,
     FilterInventoryKeyAndValue,
     HostnameAndLabelSearchMixin,
@@ -1172,6 +1173,13 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
            Host,
            'CMK Site Pool'
        ),
+       # Same group name as FilterCmdbTemplate, so both operations
+       # ("contains" / "is") show up under one "CMDB Template" entry.
+       FilterHasCmdbTemplate(
+           Host,
+           'CMDB Template',
+           options=(('yes', 'Assigned'), ('no', 'Not assigned')),
+       ),
     )
 
     column_formatters = {
@@ -1891,17 +1899,6 @@ Impact Chain.
             self.column_exclude_list.append('labels')
 
         super().__init__(model, **kwargs)
-
-        # CMDB Template filter is reachable only via the click-to-filter
-        # icon next to each template badge — exposing it in the filter
-        # dropdown would just confuse users (the typed value is a
-        # template ObjectId nobody types by hand). Strip it from the
-        # filter-group UI but leave _filter_args wired so the URL keeps
-        # resolving.
-        if self._filter_groups:
-            for flt in list(self._filter_groups):
-                if flt == 'CMDB Template':
-                    self._filter_groups.pop(flt)
 
     def is_action_allowed(self, name):
         if (name in self._CMDB_ONLY_ACTIONS

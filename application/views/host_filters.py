@@ -195,6 +195,28 @@ class FilterCmdbTemplate(BaseMongoEngineFilter):
         return "contains"
 
 
+class FilterHasCmdbTemplate(BaseMongoEngineFilter):
+    """
+    Boolean companion to FilterCmdbTemplate: "yes" lists every host
+    that has at least one CMDB template assigned, "no" every host that
+    has none — the "which hosts did the template rollout miss?"
+    question, which the name-based filter can't express.
+    """
+
+    def apply(self, query, value):
+        value = (value or '').strip().lower()
+        # `cmdb_templates.0` covers all three "no template" shapes at
+        # once — field missing, null, and empty list.
+        if value in ('1', 'yes', 'y', 'true'):
+            return query.filter(__raw__={'cmdb_templates.0': {'$exists': True}})
+        if value in ('0', 'no', 'n', 'false'):
+            return query.filter(__raw__={'cmdb_templates.0': {'$exists': False}})
+        return query
+
+    def operation(self):
+        return "is"
+
+
 def _build_keyvalue_pipeline(field, value):
     """
     Build a MongoDB `$or` pipeline for a "key:value" label/inventory
