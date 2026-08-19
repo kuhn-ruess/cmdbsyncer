@@ -407,6 +407,35 @@
 }
 #changelog-content .changelog-body li { margin: 0.1rem 0; }
 
+/* The changelog is by far the tallest thing on the start page and used to
+   stretch the row well past the data-flow column next to it. From md up the
+   right column is capped at the left column's height and the changelog
+   scrolls inside its own card instead.
+
+   `flex: 1 1 0` on the card is what does it: a flex item with a zero basis
+   contributes nothing to the column's content height, so the row is sized by
+   the left column alone and the card simply takes whatever is left over.
+   min-height keeps the box usable when the left column happens to be short.
+   Below md the columns stack, where a capped height would only get in the
+   way — hence the media query. */
+@media (min-width: 768px) {
+  .home-row > .col-md-4 {
+    display: flex;
+    flex-direction: column;
+  }
+  .home-row .changelog-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 14rem;
+  }
+  .home-row .changelog-card #changelog-content {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
 .notice-box {
   background-color: #fff8e1;
   border: 1px solid #ffd54f;
@@ -633,7 +662,7 @@ function toggleAllFilters() {
 </div>
 {% endif %}
 
-<div class="row">
+<div class="row home-row">
   <!-- Left Column: what the syncer is doing right now -->
   <div class="col-md-8">
     {% if can_see_flow %}
@@ -839,7 +868,7 @@ function toggleAllFilters() {
     {% endif %}
 
     {% if changelog_html %}
-    <div class="home-card">
+    <div class="home-card changelog-card">
       <h2>Changelog</h2>
 
       <h4 style="font-size: 0.9rem; color: #6c757d; font-weight: 600;">Filter</h4>

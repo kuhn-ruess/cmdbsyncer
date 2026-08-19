@@ -1,9 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="NetBox">
-  <rect width="24" height="24" rx="5" fill="#00a9ce"/>
-  <g fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
-    <rect x="5.5" y="5.5" width="13" height="4" rx="1.2"/>
-    <rect x="5.5" y="14.5" width="13" height="4" rx="1.2"/>
-    <path d="M8.4 7.5h.01M8.4 16.5h.01"/>
-    <path d="M12 9.5v5"/>
+  <rect width="24" height="24" rx="5" fill="#a06a3c"/>
+  <g fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="6" y="4.6" width="12" height="14.8" rx="1.6"/>
+    <path d="M8.8 8.4h6.4M8.8 12h6.4M8.8 15.6h6.4"/>
   </g>
 </svg>

@@ -387,10 +387,19 @@
             margin-left: 0;
         }
         /* These open to the side, so their caret should point that way
-           instead of down like the ones in the bar. */
+           instead of down like the ones in the bar. The caret is taken out
+           of the flow and the entry reserves room for it with padding — as
+           a float it dropped onto a second line as soon as the label was
+           long enough to fill the menu's width. */
+        .navbar .dropdown-menu li.dropdown > .dropdown-toggle {
+            position: relative;
+            padding-right: 1.9rem;
+        }
         .navbar .dropdown-menu li.dropdown > .dropdown-toggle::after {
-            float: right;
-            margin-top: 0.5em;
+            position: absolute;
+            top: 50%;
+            right: 0.8rem;
+            margin-top: -0.15em;
             transform: rotate(-90deg);
         }
         /* On narrow viewports the submenu would be cut off; flip it to

@@ -432,6 +432,20 @@ def _register_all_plugin_admin_views(admin_):
             register(admin_)
 
 
+def _add_sub_menu(admin_, menu_name, icon, parent="Settings"):
+    """
+    A sub menu of ``parent``, carrying an icon.
+
+    ``add_sub_category`` creates the category without one, so the icon has
+    to be attached to the menu item afterwards.
+    """
+    admin_.add_sub_category(name=menu_name, parent_name=parent)
+    category = admin_.get_category_menu_item(menu_name)
+    if category is not None:
+        category.icon_type = 'fa'
+        category.icon_value = icon
+
+
 def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statements
     """Register every blueprint, Flask-Admin view, and view-only import.
 
@@ -592,32 +606,40 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     #.
     #   .-- Settings (admin-facing tools, distinct from per-user actions)
     admin.add_category(name="Settings", icon_type='fa', icon_value='fa-cog')
-    # Accounts and Cronjobs live under Settings — they are configuration,
-    # not day-to-day working views, and keep the top bar compact. The
-    # account entries sit flat at the top, separated by a divider.
+    # Accounts, cronjobs and the configuration live under Settings — they
+    # are configuration, not day-to-day working views, and keep the top bar
+    # compact. Each of the three topics gets its own sub menu, so Settings
+    # itself stays a short list.
     from application.views.account import AccountModelView, ChildAccountModelView
     from application.views.menu_links import AccessMenuLink
     from flask_login import current_user as _menu_user
-    admin.add_view(AccountModelView(Account, name="Accounts", category="Settings",
+
+    _add_sub_menu(admin, "Accounts", 'fa-user-circle')
+    admin.add_view(AccountModelView(Account, name="Accounts", category="Accounts",
                                     menu_icon_type='fa', menu_icon_value='fa-user-circle'))
     admin.add_view(ChildAccountModelView(Account, name="Account Overrides",
-                                         endpoint='account_childs', category="Settings",
+                                         endpoint='account_childs', category="Accounts",
                                          menu_icon_type='fa', menu_icon_value='fa-users'))
-    admin.add_link(AccessMenuLink(name='divider-accounts', category='Settings',
-                                  url='#', class_name='dropdown-divider',
-                                  access=lambda: _menu_user.is_authenticated
-                                  and _menu_user.has_right('account')))
 
     from application.models.cron import CronGroup, CronStats
     from application.views.cron import CronStatsView, CronGroupView
-    admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Settings",
+    _add_sub_menu(admin, "Cronjobs", 'fa-clock-o')
+    admin.add_view(CronGroupView(CronGroup, name="Cronjob Group", category="Cronjobs",
                                  menu_icon_type='fa', menu_icon_value='fa-calendar'))
-    admin.add_view(CronStatsView(CronStats, name="State Table", category="Settings",
+    admin.add_view(CronStatsView(CronStats, name="State Table", category="Cronjobs",
                                  menu_icon_type='fa', menu_icon_value='fa-table'))
-    admin.add_link(AccessMenuLink(name='divider-cronjobs', category='Settings',
-                                  url='#', class_name='dropdown-divider',
+
+    from application.models.config import Config
+    from application.views.config import ConfigModelView
+    _add_sub_menu(admin, "Configuration", 'fa-sliders')
+    admin.add_view(ConfigModelView(Config, name="System Config",
+                                   endpoint='config', category="Configuration",
+                                   menu_icon_type='fa', menu_icon_value='fa-cogs'))
+    admin.add_link(AccessMenuLink(name='Edit local_config.py', category='Configuration',
+                                  endpoint='config.local_config_editor',
+                                  icon_type='fa', icon_value='fa-file-code-o',
                                   access=lambda: _menu_user.is_authenticated
-                                  and _menu_user.has_right('cron')))
+                                  and _menu_user.global_admin))
 
     # Pre-declare enterprise sub-categories so their views land in the
     # right place when register_admin_views runs. Flask-Admin creates
@@ -639,18 +661,6 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     from application.views.user import UserView
     admin.add_view(UserView(User, category='Settings',
                             menu_icon_type='fa', menu_icon_value='fa-user'))
-
-    from application.models.config import Config
-    from application.views.config import ConfigModelView
-
-    admin.add_view(ConfigModelView(Config, name="System Config",
-                                   endpoint='config', category="Settings",
-                                   menu_icon_type='fa', menu_icon_value='fa-cogs'))
-    admin.add_link(AccessMenuLink(name='Edit local_config.py', category='Settings',
-                                  endpoint='config.local_config_editor',
-                                  icon_type='fa', icon_value='fa-file-code-o',
-                                  access=lambda: _menu_user.is_authenticated
-                                  and _menu_user.global_admin))
 
     from application.models.saved_search import SavedSearch
     from application.views.saved_search import SavedSearchView

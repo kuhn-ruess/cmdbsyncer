@@ -5,8 +5,15 @@ and on each module's Overview page.
 
 These are **not** the vendors' logos. Logos and names of Checkmk, Red
 Hat/Ansible, NetBox, i-doit, Atlassian/Jira and Broadcom/VMware are trademarks
-of their respective owners; no vendor logo is bundled here, only a neutral
-in-house mark drawn for this project.
+of their respective owners; no vendor logo is bundled here, only a mark drawn
+for this project.
+
+Both halves of each mark are deliberately unrelated to the vendor: the glyph
+shows what the module does (a gauge for monitoring, a rack, a database, a
+cube) instead of quoting the vendor's symbol, and the colour comes from this
+project's own palette — no module carries the colour its vendor brands with.
+The palette is picked so the six stay distinguishable at menu size and keep a
+readable contrast against the white glyph in every theme.
 
 If your installation is allowed to display the real logos (for example
 because you run the product and your licence or the vendor's brand

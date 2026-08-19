@@ -1,11 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="i-doit">
-  <rect width="24" height="24" rx="5" fill="#e8730c"/>
-  <g fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round">
-    <path d="M12 8.5v3.2M6.5 16v-1.6a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1V16"/>
-  </g>
-  <g fill="#ffffff">
-    <rect x="9.6" y="4.6" width="4.8" height="3.9" rx="1"/>
-    <rect x="4.2" y="15.6" width="4.6" height="3.9" rx="1"/>
-    <rect x="15.2" y="15.6" width="4.6" height="3.9" rx="1"/>
+  <rect width="24" height="24" rx="5" fill="#3f7d80"/>
+  <g fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round">
+    <ellipse cx="12" cy="7" rx="5.5" ry="2.2"/>
+    <path d="M6.5 7v10a5.5 2.2 0 0 0 11 0V7"/>
+    <path d="M6.5 12a5.5 2.2 0 0 0 11 0"/>
   </g>
 </svg>

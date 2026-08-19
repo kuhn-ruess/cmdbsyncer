@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="VMware">
-  <rect width="24" height="24" rx="5" fill="#5c6f7b"/>
-  <g fill="none" stroke="#a4d233" stroke-width="2.2" stroke-linecap="round">
-    <path d="M6.6 7.4v9.2M12 7.4v9.2M17.4 7.4v9.2"/>
+  <rect width="24" height="24" rx="5" fill="#9c5560"/>
+  <g fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 4.7l6.6 3.6v7.4L12 19.3l-6.6-3.6V8.3z"/>
+    <path d="M5.4 8.3L12 11.9l6.6-3.6M12 11.9v7.4"/>
   </g>
 </svg>

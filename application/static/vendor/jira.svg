@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Jira Cloud">
-  <rect width="24" height="24" rx="5" fill="#0052cc"/>
-  <path d="M12 4.6l6.2 6.2H14v4.4h-4v-4.4H5.8z" fill="#ffffff"/>
-  <rect x="9.4" y="17" width="5.2" height="2.3" rx="1.1" fill="#ffffff" opacity=".8"/>
+  <rect width="24" height="24" rx="5" fill="#5b7a55"/>
+  <path d="M7.4 4.8v14.4" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M7.4 6.2h10.2l-2.3 3.3 2.3 3.3H7.4z" fill="#ffffff"/>
 </svg>
