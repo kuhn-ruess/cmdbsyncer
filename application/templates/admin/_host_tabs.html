@@ -72,11 +72,15 @@
             </a>
         </li>
         {% endif %}
+        {# Nothing is recorded while LABEL_HISTORY_ENABLED is off, so the
+           tab would only lead to a page saying the feature is disabled. #}
+        {% if config.get('LABEL_HISTORY_ENABLED') %}
         <li class="{{ 'active' if active == 'timeline' else '' }}">
             <a href="{{ url_for('host.timeline', obj_id=_id) }}">
                 <i class="fa fa-history"></i> Timeline
             </a>
         </li>
+        {% endif %}
         <li class="{{ 'active' if active == 'inventory_tree' else '' }}">
             <a href="{{ url_for('host.inventory_tree', obj_id=_id) }}">
                 <i class="fa fa-tree"></i> Inventory Tree

@@ -8,7 +8,7 @@ import html
 import time
 from copy import deepcopy
 from datetime import datetime, timedelta
-from flask import url_for, redirect, flash, request, abort
+from flask import url_for, redirect, flash, request, abort, current_app
 from flask_login import current_user
 from flask_admin import AdminIndexView
 from flask_admin import expose
@@ -219,6 +219,19 @@ def _host_sources(scope):
 _WRITING_ROW_ACTIONS = ('clone_view', 'copy_as_new_form', 'restore_row')
 
 
+def row_action_target(action):
+    """
+    Where a row action points, as one searchable string.
+
+    Flask-Admin has two flavours: ``EndpointLinkRowAction`` carries an
+    ``endpoint``, ``LinkRowAction`` a ready-made ``url``. Callers that want
+    to drop an action by what it does should not have to know which.
+    """
+    endpoint = getattr(action, 'endpoint', '') or ''
+    url = getattr(action, 'url', '') or ''
+    return f"{endpoint} {url}"
+
+
 class DefaultModelView(ModelView):
     """
     Default Model View Overwrite
@@ -273,9 +286,7 @@ class DefaultModelView(ModelView):
             return actions
 
         def writes(action):
-            endpoint = getattr(action, 'endpoint', '') or ''
-            url = getattr(action, 'url', '') or ''
-            target = f"{endpoint} {url}"
+            target = row_action_target(action)
             return any(marker in target for marker in _WRITING_ROW_ACTIONS)
 
         return [action for action in actions if not writes(action)]
@@ -504,8 +515,15 @@ class IndexView(AdminIndexView):
         """
         Load all notice files from ``application/notices/``.
         Returns list of dicts with 'id' and 'content'.
+
+        Empty while ``START_PAGE_NOTICES_ENABLED`` is off, which also takes
+        the "Messages" card off the start page — the template only draws it
+        when there is something to show. The files stay where they are, so
+        turning the switch back on brings them back.
         """
         notices = []
+        if not current_app.config.get('START_PAGE_NOTICES_ENABLED', False):
+            return notices
         notices_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'notices')
         if not os.path.isdir(notices_dir):
             return notices

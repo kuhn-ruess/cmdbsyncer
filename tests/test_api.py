@@ -263,6 +263,10 @@ def import_host_module():
         ModuleType('application.views.default'),
     )
     default_view_mod.DefaultModelView = object
+    # host.py imports this helper from the real module.
+    default_view_mod.row_action_target = (
+        lambda action: f"{getattr(action, 'endpoint', '') or ''} "
+                       f"{getattr(action, 'url', '') or ''}")
     return _load_source_module(
         'application.views.host',
         os.path.join('application', 'views', 'host.py'),
@@ -375,6 +379,59 @@ class HostViewFormattingTest(unittest.TestCase):
         self.assertIsNotNone(unknown)
 
 
+class TimelineRowActionTest(unittest.TestCase):
+    """The Timeline row action follows LABEL_HISTORY_ENABLED."""
+
+    class _Action:  # pylint: disable=too-few-public-methods
+        def __init__(self, endpoint='', url=''):
+            self.endpoint = endpoint
+            self.url = url
+
+    def _view(self, host_module, actions):
+        """A view built from the mixin whose parent returns `actions`."""
+        class _Parent:  # pylint: disable=too-few-public-methods
+            """Stands in for the Flask-Admin view under the mixin."""
+
+            def get_list_row_actions(self):
+                """What the mixin filters."""
+                return actions
+
+        class _View(host_module._TimelineRowActionMixin,  # pylint: disable=too-few-public-methods
+                    _Parent):
+            """The mixin on top of that stand-in."""
+
+        return _View()
+
+    def _run(self, enabled):
+        host_module = import_host_module()
+        actions = [
+            self._Action(endpoint='.timeline'),
+            self._Action(url='admin/host/timeline?obj_id={row_id}'),
+            self._Action(url='admin/host/debug?obj_id={row_id}'),
+            self._Action(endpoint='.copy_as_new_form'),
+        ]
+        view = self._view(host_module, actions)
+        with patch.object(host_module, 'label_history_enabled',
+                          return_value=enabled):
+            return view.get_list_row_actions()
+
+    def test_timeline_hidden_while_history_off(self):
+        kept = self._run(enabled=False)
+        self.assertEqual(len(kept), 2)
+        for action in kept:
+            self.assertNotIn('timeline', f"{action.endpoint} {action.url}")
+
+    def test_timeline_shown_while_history_on(self):
+        # Control: the filter must not be removing the icon unconditionally.
+        self.assertEqual(len(self._run(enabled=True)), 4)
+
+    def test_other_row_actions_survive(self):
+        kept = self._run(enabled=False)
+        targets = [f"{a.endpoint} {a.url}" for a in kept]
+        self.assertTrue(any('debug' in t for t in targets))
+        self.assertTrue(any('copy_as_new_form' in t for t in targets))
+
+
 class RuleViewFormattingTest(unittest.TestCase):
     """Escaping behavior in shared rule renderers."""
 
@@ -385,6 +442,10 @@ class RuleViewFormattingTest(unittest.TestCase):
             ModuleType('application.views.default'),
         )
         default_view_mod.DefaultModelView = object
+        # host.py imports this helper from the real module.
+        default_view_mod.row_action_target = (
+            lambda action: f"{getattr(action, 'endpoint', '') or ''} "
+                           f"{getattr(action, 'url', '') or ''}")
 
         rule_models_mod = sys.modules.setdefault(
             'application.modules.rule.models',
@@ -467,6 +528,10 @@ class PluginViewFormattingTest(unittest.TestCase):
             ModuleType('application.views.default'),
         )
         default_view_mod.DefaultModelView = object
+        # host.py imports this helper from the real module.
+        default_view_mod.row_action_target = (
+            lambda action: f"{getattr(action, 'endpoint', '') or ''} "
+                           f"{getattr(action, 'url', '') or ''}")
 
     def test_checkmk_group_outcomes_escape_user_values(self):
         self._ensure_default_view_stub()

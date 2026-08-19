@@ -39,7 +39,7 @@ from application import app, logger
 from application.models.account import Account
 from application.helpers.get_account import mask_account_secrets
 from application.helpers.label_history import label_history_enabled
-from application.views.default import DefaultModelView
+from application.views.default import DefaultModelView, row_action_target
 from application.views.host_widgets import (
     StaticLabelField,
     StaticTemplateLabelField,
@@ -520,6 +520,24 @@ class HostProjectSelectField(SelectField):
         super().__init__(*args, **kwargs)
 
 
+class _TimelineRowActionMixin:  # pylint: disable=too-few-public-methods
+    """
+    Drop the Timeline row action while label history is switched off.
+
+    ``LABEL_HISTORY_ENABLED`` is off by default. With it off nothing is
+    recorded, so the timeline page has nothing to show but a note saying
+    the feature is disabled — an icon leading there is a dead end.
+    """
+
+    def get_list_row_actions(self):
+        """Row actions, minus the timeline icon when history is off."""
+        actions = super().get_list_row_actions()
+        if label_history_enabled():
+            return actions
+        return [action for action in actions
+                if 'timeline' not in row_action_target(action)]
+
+
 class _SoftDeleteHostMixin:
     """
     Replace per-row / bulk Delete with `Host.soft_delete`. Hard delete
@@ -595,6 +613,7 @@ class _LifecycleBulkActionsMixin:
 
 class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestors,too-many-instance-attributes
                       _LifecycleBulkActionsMixin,
+                      _TimelineRowActionMixin,
                       HostnameAndLabelSearchMixin, DefaultModelView):
     """
     Onlye show objects
@@ -1048,6 +1067,7 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
 class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-methods,too-many-ancestors,too-many-instance-attributes
                     _LifecycleBulkActionsMixin,
                     SavedSearchRoutesMixin,
+                    _TimelineRowActionMixin,
                     HostnameAndLabelSearchMixin,
                     DefaultModelView):
     """

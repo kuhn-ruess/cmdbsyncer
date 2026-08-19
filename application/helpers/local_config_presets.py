@@ -474,6 +474,10 @@ PRESETS = [
             {'key': 'SWAGGER_ENABLED', 'type': 'bool', 'default': True,
              'hint': 'Expose the interactive ``/api/v1`` Swagger UI. '
                      'Turn off in hardened deployments.'},
+            {'key': 'START_PAGE_NOTICES_ENABLED', 'type': 'bool',
+             'default': False,
+             'hint': 'Show the "Messages" card on the start page, fed '
+                     'from the notice files shipped with a release.'},
         ],
     },
 ]

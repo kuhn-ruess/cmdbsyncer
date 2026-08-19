@@ -206,6 +206,12 @@ class BaseConfig():
     HOST_PAGESIZE = 100
     LABEL_PREVIEW_DISABLED = False
 
+    # The "Messages" card on the start page, fed from the .txt files in
+    # ``application/notices/``. Off by default — the notices are release
+    # announcements, and once they have been read they are only in the way.
+    # Turn it back on when a release has something that has to be seen.
+    START_PAGE_NOTICES_ENABLED = False
+
     REMOTE_USER_LOGIN = False
 
     # Verbose login-flow logging. Off by default — flip on temporarily to
