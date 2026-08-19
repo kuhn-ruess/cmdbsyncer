@@ -70,8 +70,16 @@ body { padding-top: 0; }
     border-radius: 6px;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
-.navbar .nav-link:hover,
-.navbar .nav-link:focus {
+.navbar .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+    color: #fff !important;
+}
+/* Keyboard focus only. A mouse click on a menu entry focuses it as well,
+   and with a plain :focus the entry kept its highlight long after the menu
+   had closed again. Deliberately a rule of its own: a browser that does not
+   know :focus-visible drops it and keeps the :hover rule above, rather than
+   dropping both because one selector of a list was unknown. */
+.navbar .nav-link:focus-visible {
     background-color: rgba(255, 255, 255, 0.14);
     color: #fff !important;
 }

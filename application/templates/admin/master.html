@@ -801,5 +801,26 @@
       });
     })();
 
+    /* The top bar opens its menus on hover (see the stylesheet), but
+       Bootstrap's click handler is still attached: a mouse click latches the
+       menu open with .show, which the hover rule cannot undo. The clicked
+       menu then stayed visible while the pointer already opened the next one.
+       Wherever hover opens the menus, hover alone decides which one is
+       visible, so a mouse click on a toggle is swallowed. Keyboard
+       activation still reaches Bootstrap — a click from Enter or Space
+       reports a detail of 0 — so the menus stay reachable without a mouse.
+       The media query has to match the stylesheet's exactly. */
+    (function() {
+      var hoverOpensMenus = window.matchMedia(
+        '(hover: hover) and (pointer: fine) and (min-width: 992px)');
+      document.addEventListener('click', function(ev) {
+        if (!hoverOpensMenus.matches || ev.detail === 0) { return; }
+        if (!ev.target || !ev.target.closest) { return; }
+        if (!ev.target.closest('.navbar .dropdown-toggle')) { return; }
+        ev.preventDefault();
+        ev.stopPropagation();
+      }, true);
+    })();
+
     </script>
 {% endblock %}
