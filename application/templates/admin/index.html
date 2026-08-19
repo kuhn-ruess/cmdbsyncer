@@ -436,6 +436,49 @@
   }
 }
 
+/* Full screen changelog. The capped card next to the data-flow column is
+   fine for a glance; reading a whole release wants the room. Toggling the
+   class takes the card out of the column and lays it over the page —
+   colours keep coming from the theme's .home-card rule, so all four themes
+   follow along without their own override. */
+.changelog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.changelog-fullscreen-toggle {
+  background: none;
+  border: 1px solid var(--surface-border, #dde1e6);
+  color: inherit;
+  border-radius: 6px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.changelog-fullscreen-toggle:hover,
+.changelog-fullscreen-toggle:focus-visible {
+  background: var(--surface-subtle, rgba(0, 0, 0, 0.06));
+}
+.home-card.changelog-card.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  margin: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Beats the capped-column rule above, which is one class less specific. */
+.home-card.changelog-card.is-fullscreen #changelog-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* The page behind must not scroll along under the overlay. */
+body.changelog-fullscreen-open { overflow: hidden; }
+
 .notice-box {
   background-color: #fff8e1;
   border: 1px solid #ffd54f;
@@ -469,6 +512,27 @@
 </style>
 
 <script>
+function toggleChangelogFullscreen() {
+  const card = document.querySelector('.changelog-card');
+  if (!card) return;
+  const full = card.classList.toggle('is-fullscreen');
+  document.body.classList.toggle('changelog-fullscreen-open', full);
+  const button = card.querySelector('.changelog-fullscreen-toggle');
+  if (!button) return;
+  button.title = full ? 'Leave full screen'
+                      : 'Show the changelog full screen';
+  const icon = button.querySelector('i');
+  if (icon) icon.className = full ? 'fa fa-compress' : 'fa fa-expand';
+}
+
+// Escape is what everyone tries first to get out of a full screen view.
+document.addEventListener('keydown', function (event) {
+  if (event.key !== 'Escape') return;
+  if (document.querySelector('.changelog-card.is-fullscreen')) {
+    toggleChangelogFullscreen();
+  }
+});
+
 function confirmNotice(noticeId) {
   if (!confirm('Have you checked and confirmed this notice?')) return;
   const confirmed = JSON.parse(localStorage.getItem('confirmed-notices') || '[]');
@@ -869,7 +933,14 @@ function toggleAllFilters() {
 
     {% if changelog_html %}
     <div class="home-card changelog-card">
-      <h2>Changelog</h2>
+      <h2 class="changelog-heading">
+        Changelog
+        <button type="button" class="changelog-fullscreen-toggle"
+                onclick="toggleChangelogFullscreen()"
+                title="Show the changelog full screen">
+          <i class="fa fa-expand"></i>
+        </button>
+      </h2>
 
       <h4 style="font-size: 0.9rem; color: #6c757d; font-weight: 600;">Filter</h4>
       <div class="filter-chip-row" style="margin-bottom: 1rem;">
