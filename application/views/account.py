@@ -2,7 +2,7 @@
 Account Model View
 """
 # pylint: disable=fixme
-from flask import request, url_for
+from flask import redirect, request, url_for
 from markupsafe import Markup, escape
 from mongoengine.errors import OperationError
 from flask_login import current_user
@@ -257,6 +257,12 @@ class AccountModelView(DefaultModelView):
         Skipped on POST (the main create form posts back to this same
         URL) and when `?type=...` is already in the query string.
         """
+        if not self.can_create:
+            # Flask-Admin's own create_view bails out like this, but the
+            # type picker below runs before we ever delegate to it — a
+            # read-only user would otherwise be shown a create page whose
+            # POST is refused.
+            return redirect(self.get_url('.index_view'))
         if request.method == 'GET' and not request.args.get('type'):
             # pylint: disable=import-outside-toplevel
             from application.models.account import get_account_types

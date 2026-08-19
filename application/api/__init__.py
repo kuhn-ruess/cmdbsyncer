@@ -8,7 +8,9 @@ from flask import abort, request, current_app, g
 from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 from application.helpers.audit import audit
 from application.models.account import Account
-from application.models.user import User, find_user_by_api_token, API_TOKEN_PREFIX
+from application.models.user import (
+    User, find_user_by_api_token, is_readonly, API_TOKEN_PREFIX,
+)
 from application import log
 
 
@@ -169,6 +171,36 @@ def _authenticate_user():
     return user_result, username
 
 
+# Anything that is not one of these changes state, so a read-only account
+# is refused on the method rather than on a list of endpoints that would
+# have to be kept in sync with the API surface.
+_READING_METHODS = {'GET', 'HEAD', 'OPTIONS'}
+
+
+def _abort_when_readonly(user_result, username):
+    """
+    Refuse a writing call made by a read-only account.
+
+    Same rule as the web UI (see ``_enforce_readonly`` in
+    ``application/__init__.py``): the flag is a restriction on top of the
+    roles, so the account keeps every read its ``api_roles`` grant and
+    loses every write. A personal API token authenticates as its owner and
+    therefore carries the owner's flag — it is no way around this.
+
+    403 rather than 401: the credentials were fine, the operation was not.
+    """
+    if request.method in _READING_METHODS:
+        return
+    if not is_readonly(user_result):
+        return
+    log.log("API write refused",
+            details=[('error', f"User '{username}' is read only"),
+                     ('path', request.path),
+                     ('ip', request.remote_addr)],
+            source="API")
+    abort(403, "read only account")
+
+
 def require_token(fn):
     """
     Decorator for Flask-RESTX endpoints mounted under /api/v1. Authenticates
@@ -181,6 +213,7 @@ def require_token(fn):
     def decorated_view(*args, **kwargs):
         user_result, username = _authenticate_user()
         g.api_user = user_result
+        _abort_when_readonly(user_result, username)
         roles = user_result.api_roles or []
         current_path = request.path.replace('/api/v1/', '')
         allowed = any(
@@ -206,6 +239,7 @@ def require_api_role(role_name):
         def decorated_view(*args, **kwargs):
             user_result, username = _authenticate_user()
             g.api_user = user_result
+            _abort_when_readonly(user_result, username)
             roles = user_result.api_roles or []
             if 'all' not in roles and role_name not in roles:
                 _abort_unauthorized(

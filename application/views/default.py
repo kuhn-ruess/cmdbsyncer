@@ -23,6 +23,7 @@ from wtforms.validators import ValidationError
 from mongoengine.errors import NotUniqueError
 
 from application._version import __version__
+from application.models.user import is_readonly
 
 
 # Only filenames matching this pattern can be served via the old-changelog
@@ -212,6 +213,12 @@ def _host_sources(scope):
     return result
 
 
+# Row actions that lead to a create/restore flow. Read-only users get them
+# taken out of the list — the endpoints themselves are refused anyway, this
+# just keeps the icons from promising something that will not happen.
+_WRITING_ROW_ACTIONS = ('clone_view', 'copy_as_new_form', 'restore_row')
+
+
 class DefaultModelView(ModelView):
     """
     Default Model View Overwrite
@@ -220,6 +227,59 @@ class DefaultModelView(ModelView):
     column_extra_row_actions = [
         EndpointLinkRowAction("fa fa-clone", ".clone_view", title="Clone"),
     ]
+
+    #   .-- Read only users
+    # Flask-Admin reads these three off the view on every list, form and
+    # write, so making them properties takes the whole model layer out of a
+    # read-only user's reach in one place — new views inherit it. The write
+    # itself is refused centrally (see ``_enforce_readonly``); these only
+    # keep the UI from offering buttons that would be turned away.
+    #
+    # A subclass must therefore not assign ``can_create``/``can_edit``/
+    # ``can_delete`` as a class attribute of its own — that shadows the
+    # property. Assigning ``False`` is harmless (it stays False for
+    # everyone), assigning ``True`` would hand the right back to read-only
+    # users, which is why no subclass does it.
+    @property
+    def can_create(self):
+        """Flask-Admin's create flag, off for read-only users."""
+        return not is_readonly(current_user)
+
+    @property
+    def can_edit(self):
+        """Flask-Admin's edit flag, off for read-only users."""
+        return not is_readonly(current_user)
+
+    @property
+    def can_delete(self):
+        """Flask-Admin's delete flag, off for read-only users."""
+        return not is_readonly(current_user)
+
+    def is_action_allowed(self, name):
+        """Bulk actions all write, so a read-only user gets none of them."""
+        if is_readonly(current_user):
+            return False
+        return super().is_action_allowed(name)
+
+    def get_list_row_actions(self):
+        """
+        Row actions minus the ones that write, for read-only users — they
+        would only lead to a refusal. Edit and delete are already gone
+        through the properties above; what is left are the hand-made link
+        actions, matched by where they point.
+        """
+        actions = super().get_list_row_actions()
+        if not is_readonly(current_user):
+            return actions
+
+        def writes(action):
+            endpoint = getattr(action, 'endpoint', '') or ''
+            url = getattr(action, 'url', '') or ''
+            target = f"{endpoint} {url}"
+            return any(marker in target for marker in _WRITING_ROW_ACTIONS)
+
+        return [action for action in actions if not writes(action)]
+    #.
 
     def _run_view(self, fn, *args, **kwargs):
         """

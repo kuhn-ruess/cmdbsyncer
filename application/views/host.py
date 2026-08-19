@@ -600,8 +600,6 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
     Onlye show objects
     """
 
-    can_create = True
-    can_edit = True
     can_export = True
     can_view_details = True
 
@@ -1055,8 +1053,6 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
     """
     Host Model
     """
-    can_create = True
-    can_edit = True
     can_export = True
     can_set_page_size = True
     can_view_details = True

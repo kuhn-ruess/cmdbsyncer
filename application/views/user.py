@@ -45,7 +45,7 @@ class UserView(DefaultModelView):
     """
     Extended Admin View for Users
     """
-    column_sortable_list = ("email", "global_admin")
+    column_sortable_list = ("email", "global_admin", "readonly")
     column_exclude_list = ("pwdhash", 'tfa_secret',
                            'force_password_change', 'date_changed', 'date_password')
     # api_tokens are managed self-service (plaintext is only ever shown to the
@@ -61,10 +61,12 @@ class UserView(DefaultModelView):
         'email',
         'name',
         'global_admin',
+        'readonly',
     )
 
     column_editable_list = (
         'disabled',
+        'readonly',
     )
 
     # Populated in ``scaffold_form`` from the theme registry — declared
@@ -80,12 +82,16 @@ class UserView(DefaultModelView):
                  rules.Field('email')]),
         section('2', 'cond', 'Access',
                 'Role grants for the admin UI and API. Global admin '
-                'overrides every per-section role. Leave "Restrict to '
-                'accounts" empty for full access, or pick accounts to '
-                'limit this user to hosts of those accounts — both in the '
-                'REST API and in the Host and Objects lists.',
+                'overrides every per-section role. "Read only" works the '
+                'other way round and beats both: the user keeps every view '
+                'their roles open up and can change nothing, in the UI and '
+                'over the REST API alike. Leave "Restrict to accounts" '
+                'empty for full access, or pick accounts to limit this '
+                'user to hosts of those accounts — both in the REST API '
+                'and in the Host and Objects lists.',
                 [rules.Field('global_admin'),
                  rules.Field('disabled'),
+                 rules.Field('readonly'),
                  rules.Field('roles'),
                  rules.Field('api_roles'),
                  rules.Field('restrict_to_accounts')]),

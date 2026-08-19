@@ -76,6 +76,9 @@ class _FakeUser:  # pylint: disable=too-few-public-methods
         self.api_roles = api_roles if api_roles is not None else ['all']
         self.restrict_to_accounts = restrict_to_accounts or []
         self.disabled = disabled
+        # Set by the read-only tests; a plain attribute keeps the stub's
+        # constructor as narrow as the production model's own default.
+        self.readonly = False
         self._password_ok = password_ok
         _FAKE_USER_COUNTER[0] += 1
         self.id = f'fake-user-{_FAKE_USER_COUNTER[0]}'
@@ -87,6 +90,13 @@ class _FakeUser:  # pylint: disable=too-few-public-methods
     def account_scope(self):
         accounts = {a for a in (self.restrict_to_accounts or []) if a}
         return accounts or None
+
+
+def _readonly_user(**kwargs):
+    """A _FakeUser carrying the read-only flag."""
+    user = _FakeUser(**kwargs)
+    user.readonly = True
+    return user
 
 
 class APIAuthTest(unittest.TestCase):
@@ -708,6 +718,83 @@ class SyncerAPITest(unittest.TestCase):
         self.assertEqual(body['num_objects'], 3)
         self.assertEqual(body['not_updated_last_24h'], 2)
         self.assertIn('24h_checkpoint', body)
+
+
+class APIReadOnlyUserTest(unittest.TestCase):
+    """A read-only account may read over the API and may not write."""
+
+    def setUp(self):
+        self.app = _build_app()
+        self.client = self.app.test_client()
+        self.headers = _basic_auth()
+
+    @patch('application.api.syncer.Host')
+    @patch('application.api.User')
+    def test_read_only_user_may_read(self, user_cls, host_cls):
+        user_cls.objects.get.return_value = _readonly_user(api_roles=['all'])
+        host_cls.objects.return_value.count.return_value = 0
+        resp = self.client.get('/api/v1/syncer/hosts', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    @patch('application.api.User')
+    def test_read_only_user_cannot_post(self, user_cls, host_cls, get_account):
+        user_cls.objects.get.return_value = _readonly_user(api_roles=['all'])
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct', 'labels': {'env': 'prod'}},
+        )
+        # 403, not 401: the credentials were fine, the operation was not.
+        self.assertEqual(resp.status_code, 403)
+        # The refusal happens before the view runs, so nothing was touched.
+        host_cls.get_host.assert_not_called()
+        get_account.assert_not_called()
+
+    @patch('application.api.objects.Host')
+    @patch('application.api.User')
+    def test_read_only_user_cannot_delete(self, user_cls, host_cls):
+        user_cls.objects.get.return_value = _readonly_user(api_roles=['all'])
+        resp = self.client.delete('/api/v1/objects/web01', headers=self.headers)
+        self.assertEqual(resp.status_code, 403)
+        host_cls.objects.assert_not_called()
+
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    @patch('application.api.User')
+    def test_normal_user_still_writes(self, user_cls, host_cls, get_account):
+        # Control: the gate must not be refusing everybody.
+        user_cls.objects.get.return_value = _FakeUser(api_roles=['all'])
+        host = MagicMock()
+        host.set_account.return_value = True
+        host_cls.get_host.return_value = host
+        get_account.return_value = {'name': 'acct', '_id': 'id1'}
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct', 'labels': {'env': 'prod'}},
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    @patch('application.api.objects.Host')
+    @patch('application.api.User')
+    @patch('application.api.find_user_by_api_token')
+    def test_api_token_of_read_only_owner_cannot_write(self, find_token,
+                                                       _user_cls, host_cls):
+        # A personal token authenticates as its owner, so it has to carry
+        # the owner's flag rather than being a way around it. The payload
+        # has to be complete: flask-restx validates it before the auth
+        # decorator runs, and an incomplete one never reaches the gate.
+        find_token.return_value = (_readonly_user(api_roles=['all']),
+                                   MagicMock(last_used_at=datetime.utcnow()))
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers={'Authorization': 'Bearer cmdb_pat_whatever'},
+            json={'account': 'acct', 'labels': {'env': 'prod'}},
+        )
+        self.assertEqual(resp.status_code, 403)
+        host_cls.get_host.assert_not_called()
 
 
 class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-methods

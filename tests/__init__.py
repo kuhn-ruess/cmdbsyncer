@@ -369,6 +369,8 @@ _models_user.User = _User
 _models_user.find_user_by_api_token = MagicMock(
     name="stub.find_user_by_api_token", return_value=(None, None))
 _models_user.API_TOKEN_PREFIX = 'cmdb_pat_'
+# Mirrors the real helper so the API's read-only gate behaves in tests.
+_models_user.is_readonly = lambda user: bool(getattr(user, 'readonly', False))
 
 _models_account = _stub_package("application.models.account")
 

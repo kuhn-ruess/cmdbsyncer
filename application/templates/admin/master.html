@@ -473,7 +473,9 @@
                     </li>
                     {% endif %}
                     {# Commit button with the pending-changes count inside
-                       it — no separate floating badge. #}
+                       it — no separate floating badge. Committing writes,
+                       so a read-only user does not get the button. #}
+                    {% if not user_readonly %}
                     <li id="commit-button" class="nav-item">
                       <a href="#activate_changes"
                          class="toggle_activate_modal btn btn-primary commit-changes-btn"
@@ -484,6 +486,7 @@
                         {% endif %}
                       </a>
                     </li>
+                    {% endif %}
                     {# Profile: per-user actions as an icon-only dropdown on
                        the far right — the usual webapp pattern. Same markup
                        as Flask-Admin's own navbar dropdowns, so the dropdown

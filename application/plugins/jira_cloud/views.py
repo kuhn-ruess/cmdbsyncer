@@ -238,7 +238,6 @@ class JiraSchemaCacheView(DefaultModelView):
 
     can_create = False
     can_edit = False
-    can_delete = True
 
     column_list = ('account', 'updated', 'render_summary')
     column_labels = {'render_summary': "Object Types"}

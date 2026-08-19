@@ -60,6 +60,16 @@ api_roles = [
   ('metrics', "Prometheus metrics scrape"),
 ]
 
+def is_readonly(user):
+    """
+    True when ``user`` is flagged read only.
+
+    Takes any object so callers do not have to care whether they hold a
+    ``User``, Flask-Login's anonymous user, or ``None``.
+    """
+    return bool(getattr(user, 'readonly', False))
+
+
 class ApiToken(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     A personal API access token belonging to a User. Only the hash is
@@ -112,6 +122,11 @@ class User(db.Document, UserMixin):
     tfa_secret = db.StringField()
 
     disabled = db.BooleanField(default=False)
+
+    # Read only is a restriction, not a grant: it sits on top of whatever
+    # `roles` and `global_admin` allow. The user keeps seeing everything
+    # they could see before and may change none of it — see `is_readonly`.
+    readonly = db.BooleanField(default=False)
 
     date_added = db.DateTimeField()
     date_changed = db.DateTimeField(default=datetime.now())

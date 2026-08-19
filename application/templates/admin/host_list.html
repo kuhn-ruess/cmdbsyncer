@@ -31,7 +31,7 @@
   {% else %}
     <span class="text-muted" style="font-size: 0.9rem;">none yet</span>
   {% endif %}
-  {% if cmdb_mode %}
+  {% if cmdb_mode and not user_readonly %}
   <button type="button" class="btn btn-sm btn-outline-primary"
           data-toggle="modal" data-target="#bulkAddModal"
           title="Add multiple hosts at once by pasting a CSV or a plain hostname list"

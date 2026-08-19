@@ -62,7 +62,7 @@ from logging import config as log_config
 from tablib.formats import registry as tablib_registry
 import mongoengine
 from sortedcontainers import SortedDict
-from flask import Flask, url_for, redirect
+from flask import Flask, abort, url_for, redirect
 from flask_admin import Admin
 from flask_admin.menu import MenuLink
 from flask_login import LoginManager
@@ -254,6 +254,48 @@ if not CLI_MODE:
         """
         app.config['CHANGES'] = get_changes()
 
+    # Anything that is not one of these changes state by definition, so the
+    # read-only gate below can work off the method instead of a list of
+    # endpoints it would have to be kept in sync with.
+    _READING_METHODS = {'GET', 'HEAD', 'OPTIONS'}
+
+    @app.before_request
+    def _enforce_readonly():
+        """
+        Stop a read-only user before any write reaches a view.
+
+        Deliberately central and deny-by-default: the write surface is
+        spread over Flask-Admin's own create/edit/delete views, ~20 bulk
+        actions and ~30 hand-written POST endpoints, and a new view added
+        later must not be able to forget the check. The buttons are hidden
+        as well (see ``DefaultModelView``), so reaching this is the
+        backstop, not the normal path.
+
+        Two areas stay open because they are the user's own state rather
+        than syncer data: the ``auth`` blueprint (login, logout, password,
+        2FA, theme, personal API tokens) and their saved searches. A
+        read-only user's API tokens are no loophole — the API applies the
+        same rule, see ``application.api.require_token``.
+
+        The REST API authenticates per request instead of through
+        Flask-Login, so ``current_user`` is anonymous there and this hook
+        passes those calls straight through to that check.
+        """
+        # pylint: disable=import-outside-toplevel
+        from flask_login import current_user as _user
+        from application.models.user import is_readonly
+        if _flask_request.method in _READING_METHODS:
+            return None
+        # The user's own account and their own saved searches: personal
+        # state, not syncer data. Blocking the password form in particular
+        # would lock out anyone carrying ``force_password_change``.
+        if _flask_request.blueprint in ('auth', 'saved_searches'):
+            return None
+        if not (_user.is_authenticated and is_readonly(_user)):
+            return None
+        abort(403, description="This account is read only and may not change data.")
+        return None
+
     @app.context_processor
     def _inject_pending_approvals():
         """
@@ -280,6 +322,22 @@ if not CLI_MODE:
             'pending_approval_count': count,
             'pending_approval_url': '/admin/fieldapproval/',
         }
+
+    @app.context_processor
+    def _inject_readonly():
+        """
+        Let templates hide what a read-only user cannot do. The refusal
+        itself is ``_enforce_readonly``; this only keeps buttons that would
+        be turned away out of the page.
+        """
+        # pylint: disable=import-outside-toplevel
+        from flask_login import current_user as _user
+        from application.models.user import is_readonly
+        try:
+            return {'user_readonly': bool(_user.is_authenticated
+                                          and is_readonly(_user))}
+        except Exception:  # pylint: disable=broad-exception-caught
+            return {'user_readonly': False}
 
     @app.context_processor
     def _inject_user_theme():
