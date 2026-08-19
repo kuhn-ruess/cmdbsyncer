@@ -3,10 +3,10 @@
 Small square marks shown next to the module entries in the "Modules" menu
 and on each module's Overview page.
 
-These are **not** the vendors' logos. Logos of Checkmk, Red Hat/Ansible,
-NetBox, i-doit, Atlassian/Jira and Broadcom/VMware are trademarks of their
-owners and are deliberately not bundled here — only a neutral mark in the
-product's well-known colour is shipped, which no trademark covers.
+These are **not** the vendors' logos. Logos and names of Checkmk, Red
+Hat/Ansible, NetBox, i-doit, Atlassian/Jira and Broadcom/VMware are trademarks
+of their respective owners; no vendor logo is bundled here, only a neutral
+in-house mark drawn for this project.
 
 If your installation is allowed to display the real logos (for example
 because you run the product and your licence or the vendor's brand

@@ -19,6 +19,7 @@ A rule-based and modular system to synchronize hosts between Checkmk, Netbox, an
 - [Screenshots](#screenshots)
 - [Contributing](#contributing)
 - [License](#license)
+- [Trademarks](#trademarks)
 
 ## 🎯 Overview
 
@@ -324,6 +325,17 @@ git config core.hooksPath .githooks
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE) - see the LICENSE file for details.
+
+## ™️ Trademarks
+
+Checkmk, Netbox, Ansible, i-doit, Jira, ServiceNow, VMware, PRTG, JDisc, Cisco DNA,
+BMC Remedy and all other product names mentioned in this project are trademarks or
+registered trademarks of their respective owners. They are used here solely to
+describe which systems CMDBsyncer can exchange data with.
+
+CMDBsyncer is an independent project and is not affiliated with, endorsed by, or
+sponsored by any of these vendors. No vendor logo is bundled with this software —
+the module icons in `application/static/vendor/` are neutral in-house marks.
 
 ## 🆘 Support
 
