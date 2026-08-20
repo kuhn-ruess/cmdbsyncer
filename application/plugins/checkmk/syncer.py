@@ -815,18 +815,23 @@ class SyncCMK2(CMK2):
                         continue
                     host_projects[db_host.hostname] = db_host.project
                     task = pool.apply_async(self.calculate_host_actions, args=(db_host,))
-                    tasks.append(task)
+                    tasks.append((db_host.hostname, task))
 
                 progress.console.print("Waiting for Calculation to finish")
-                for task in tasks:
+                for host_name, task in tasks:
                     try:
                         hostname, enabled, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
-                        progress.console.print("- ERROR: Timeout for a object")
+                        progress.console.print(f"- ERROR: Timeout for {host_name}")
                     except Exception as error:  # pylint: disable=broad-exception-caught
+                        # Not a timeout: the worker raised. Name the host and
+                        # the real error — a rule with a broken condition used
+                        # to hide behind a "Timeout error" label here.
                         if self.debug:
                             raise
-                        progress.console.print(f"- ERROR: Timeout error for object ({error})")
+                        progress.console.print(
+                            f"- ERROR in worker for {host_name}: "
+                            f"{type(error).__name__}: {error}")
                     else:
                         progress.advance(task1)
                         if self._host_result_exported(

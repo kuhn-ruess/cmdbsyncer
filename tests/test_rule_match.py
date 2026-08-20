@@ -16,6 +16,7 @@ from application.modules.rule.match import (
     match,
     make_bool,
     MatchException,
+    MAX_REGEX_LENGTH,
     _compiled_regex,
 )
 
@@ -230,7 +231,7 @@ class TestRegexCache(unittest.TestCase):
         self.assertIs(pattern1, pattern2)
 
     def test_cache_enforces_length_limit(self):
-        overlong = "a" * 1001
+        overlong = "a" * (MAX_REGEX_LENGTH + 1)
         with self.assertRaises(re.error):
             _compiled_regex(overlong)
 
