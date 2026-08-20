@@ -10,14 +10,22 @@ import re
 # host in a sync run, so re-compiling per call is pure overhead.
 _REGEX_CACHE = {}
 
+# Upper bound for user-supplied patterns. It only caps how much work a
+# single compile can cost — a list of hostnames joined into one
+# alternation is a legitimate pattern and easily passes a few thousand
+# characters, so the limit has to leave room for it.
+MAX_REGEX_LENGTH = 10000
+
 
 def _compiled_regex(needle):
     """Return a compiled regex for `needle`, caching the result."""
     cached = _REGEX_CACHE.get(needle)
     if cached is not None:
         return cached
-    if len(needle) > 1000:
-        raise re.error("Regex pattern exceeds maximum length of 1000 characters")
+    if len(needle) > MAX_REGEX_LENGTH:
+        raise re.error(
+            f"Regex pattern is {len(needle)} characters long, "
+            f"the maximum is {MAX_REGEX_LENGTH}")
     compiled = re.compile(needle)
     _REGEX_CACHE[needle] = compiled
     return compiled

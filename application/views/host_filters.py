@@ -13,6 +13,7 @@ from flask import flash
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
 
 from application.models.host import Host
+from application.modules.rule.match import MAX_REGEX_LENGTH
 from application.modules.search_parser import parse_search, SearchSyntaxError
 
 FILTER_KEY_RE = re.compile(r'^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$')
@@ -32,8 +33,10 @@ def _compile_filter_regex(value):
     the raw value is used verbatim — we only size-limit it and confirm
     it compiles, matching the hostname-filter precedent.
     """
-    if len(value) > 500:
-        raise ValueError("Filter value too long")
+    if len(value) > MAX_REGEX_LENGTH:
+        raise ValueError(
+            f"Filter value is {len(value)} characters long, "
+            f"the maximum is {MAX_REGEX_LENGTH}")
     re.compile(value)
     return value
 
@@ -56,11 +59,20 @@ class FilterHostnameRegex(BaseMongoEngineFilter):
     """
 
     def apply(self, query, value):
-        if len(value) > 1000:
+        """
+        A pattern that is too long or does not compile says so instead
+        of quietly matching nothing — an empty host list looks like
+        "no host has this name" and sends people hunting in the wrong
+        place.
+        """
+        if len(value) > MAX_REGEX_LENGTH:
+            flash(f"Filter value is {len(value)} characters long, "
+                  f"the maximum is {MAX_REGEX_LENGTH}", 'danger')
             return query.filter(hostname=None)
         try:
             regex = re.compile(value)
-        except re.error:
+        except re.error as error:
+            flash(f"Invalid regular expression: {error}", 'danger')
             return query.filter(hostname=None)
         return query.filter(hostname=regex)
 
