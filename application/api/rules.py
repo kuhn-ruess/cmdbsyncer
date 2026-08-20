@@ -205,7 +205,8 @@ class RulesExport(Resource):
     @API.param('include_hosts',
                'Set to ``1`` to also export the ``host_objects`` collection. '
                'Skipped by default — usually not what you want in a rule '
-               'backup.')
+               'backup. CMDB templates are always exported as their own '
+               '``cmdb_templates`` type.')
     @API.param('include_accounts',
                'Set to ``1`` to also export accounts. Skipped by default.')
     @API.param('include_users',

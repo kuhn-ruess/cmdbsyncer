@@ -356,7 +356,8 @@ def export_all_rules(include_hosts: bool = False,
 
     ``host_objects``, ``accounts`` and ``users`` are skipped by default —
     pass the matching flag to opt in. The user export contains hashed
-    passwords; treat the response as secret.
+    passwords; treat the response as secret. CMDB templates come along as
+    their own ``cmdb_templates`` type, no flag needed.
     """
     _current_user()
     return grouped_rules_export(

@@ -1,6 +1,8 @@
 """
 Registry of rule types that can be imported/exported — maps a short
-rule-type ident to its (module_path, model_class_name).
+rule-type ident to its (module_path, model_class_name) or, when the
+type is only a subset of a collection, to
+(module_path, model_class_name, queryset_filter_kwargs).
 """
 rules = {
     'ansible_customvars': ('application.plugins.ansible.models', 'AnsibleCustomVariablesRule'),
@@ -23,7 +25,10 @@ rules = {
     'cmk_downtimes': ('application.plugins.checkmk.models', 'CheckmkDowntimeRule'),
     'cmk_dcd_rules': ('application.plugins.checkmk.models', 'CheckmkDCDRule'),
     'cmk_folder_pool': ('application.plugins.checkmk.models', 'CheckmkFolderPool'),
-    'host_objects': ('application.models.host', 'Host'),
+    'host_objects': ('application.models.host', 'Host',
+                     {'object_type__ne': 'template'}),
+    'cmdb_templates': ('application.models.host', 'Host',
+                       {'object_type': 'template'}),
     'accounts': ('application.models.account', 'Account'),
     'users': ('application.models.user', 'User'),
     'idoit_rules': ('application.plugins.idoit.models', 'IdoitCustomAttributes'),

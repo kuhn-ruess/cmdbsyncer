@@ -47,9 +47,22 @@ def _model_class_for(rule_type):
     """Resolve the model class for *rule_type* or None on unknown type."""
     if rule_type not in enabled_rules:
         return None
-    module_path, class_name = enabled_rules[rule_type]
+    module_path, class_name = enabled_rules[rule_type][:2]
     module = importlib.import_module(module_path)
     return getattr(module, class_name, None)
+
+
+def _queryset_filter_for(rule_type):
+    """Queryset filter kwargs for *rule_type*.
+
+    Two rule types share the Host collection: ``host_objects`` and
+    ``cmdb_templates``. The registry carries the filter that keeps them
+    apart, so neither exports the other's documents.
+    """
+    entry = enabled_rules.get(rule_type)
+    if not entry or len(entry) < 3:
+        return {}
+    return dict(entry[2])
 
 
 def iter_rules_of_type(rule_type):
@@ -57,7 +70,7 @@ def iter_rules_of_type(rule_type):
     model_class = _model_class_for(rule_type)
     if model_class is None:
         return
-    for db_rule in model_class.objects():
+    for db_rule in model_class.objects(**_queryset_filter_for(rule_type)):
         yield db_rule.to_json()
 
 
@@ -73,6 +86,9 @@ def iter_all_rules(include_hosts=False, include_accounts=False, include_users=Fa
     are usually not what you want in a rule backup. Pass the matching
     ``include_*=True`` flag to opt in. User exports contain hashed
     passwords and role assignments — treat the resulting data as secret.
+
+    CMDB templates (``cmdb_templates``) are configuration rather than
+    data and are always exported; ``host_objects`` never contains them.
     """
     skip = {
         HOST_COLLECTION_RULE_TYPE: not include_hosts,
