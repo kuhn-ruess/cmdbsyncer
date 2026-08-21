@@ -1103,17 +1103,14 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
 
     def on_model_change(self, form, model, is_created):
         super().on_model_change(form, model, is_created)
-        # Editing a template invalidates the rendered Jinja values its
-        # consumers carry in `cache`. Wipe those caches in one bulk
-        # update so the next sync re-evaluates rules against the new
-        # template. Also drop the in-process template-match cache so a
-        # changed `cmdb_match` is picked up on the next host save.
+        # The consumers' attribute cache is invalidated by the post_save
+        # receiver in application.models.host_templates — which hosts
+        # carry the template is a separate question, and re-matching is
+        # never implicit.
         if not is_created:
-            Host.objects(cmdb_templates=model.id).update(cache={})
             flash('Template saved. Which hosts carry it stays as it is — '
                   'use "Re-apply to matching hosts" in the template list '
                   'to re-run the match.', 'info')
-        Host.clear_template_cache()
 
 
 class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-methods,too-many-ancestors,too-many-instance-attributes

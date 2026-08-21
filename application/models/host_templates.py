@@ -74,3 +74,24 @@ def sync_template_assignment(template, remove_stale=False):
         Host.objects(id__in=to_remove).update(
             pull__cmdb_templates=template.id, set__cache={})
     return len(to_add), len(to_remove)
+
+
+def clear_consumer_cache(_sender, document, created=False, **_kwargs):
+    """
+    Wired to `Host` post_save: whenever a template document is written,
+    drop the export attribute cache of every host carrying it, because
+    the template's values are merged into that cache. Covers every way a
+    template can be edited — web UI, rule import, API and CLI — instead
+    of each of them having to remember.
+
+    A freshly created template has no consumers yet, so it is skipped.
+    """
+    if created or getattr(document, 'object_type', None) != 'template':
+        return
+    if not document.pk:
+        return
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+    Host.objects(cmdb_templates=document.pk).update(set__cache={})
+    # A changed `cmdb_match` has to be picked up by the next host save.
+    Host.clear_template_cache()

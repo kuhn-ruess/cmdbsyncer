@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from application.models.host_templates import (
-    parse_cmdb_match, sync_template_assignment,
+    clear_consumer_cache, parse_cmdb_match, sync_template_assignment,
 )
 
 
@@ -113,4 +113,36 @@ class SyncTemplateAssignmentTest(unittest.TestCase):
         result, updates = self._run(matching=[], assigned=['h1'],
                                     cmdb_match='', remove_stale=True)
         self.assertIsNone(result)
+        self.assertEqual(updates, [])
+
+
+class ClearConsumerCacheTest(unittest.TestCase):
+    """application.models.host_templates.clear_consumer_cache"""
+
+    def _run(self, document, created=False):
+        store = {'matching': [], 'assigned': [], 'updates': []}
+        cleared = []
+        host_cls = SimpleNamespace(
+            objects=lambda **_kw: _Query(store),
+            clear_template_cache=lambda: cleared.append(True),
+        )
+        with patch('application.models.host.Host', host_cls):
+            clear_consumer_cache(None, document, created=created)
+        return store['updates'], cleared
+
+    def test_saving_a_template_drops_the_consumers_cache(self):
+        updates, cleared = self._run(
+            SimpleNamespace(pk='tmpl1', object_type='template'))
+        self.assertEqual(updates, [{'set__cache': {}}])
+        self.assertTrue(cleared)
+
+    def test_a_plain_host_save_is_ignored(self):
+        updates, cleared = self._run(
+            SimpleNamespace(pk='h1', object_type='host'))
+        self.assertEqual(updates, [])
+        self.assertFalse(cleared)
+
+    def test_a_new_template_has_no_consumers_yet(self):
+        updates, _cleared = self._run(
+            SimpleNamespace(pk='tmpl1', object_type='template'), created=True)
         self.assertEqual(updates, [])

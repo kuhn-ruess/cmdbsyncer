@@ -3,7 +3,7 @@ Host Model
 """
 import re
 import datetime
-from mongoengine import Q, PULL
+from mongoengine import Q, PULL, signals
 from mongoengine.errors import DoesNotExist
 from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
@@ -11,7 +11,7 @@ from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.helpers.label_history import label_history_enabled
 from application.models.host_cleanup import HostQuerySet, relation_target
-from application.models.host_templates import parse_cmdb_match
+from application.models.host_templates import parse_cmdb_match, clear_consumer_cache
 from application.models.account import (
     account_is_master, report_master_skip, object_types,
     CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
@@ -1084,3 +1084,8 @@ class Host(db.Document):
         return list(Host.objects(__raw__={'relations': {'$elemMatch': {
             'type': rtype, 'target_host': self.pk,
         }}}))
+
+
+# Template values live in every consumer's attribute cache, so editing a
+# template has to invalidate it — no matter which entry point wrote it.
+signals.post_save.connect(clear_consumer_cache, sender=Host)
