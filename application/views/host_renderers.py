@@ -18,6 +18,7 @@ from markupsafe import Markup, escape
 
 from application import app
 from application.models.host_cleanup import relation_target
+from application.models.host_templates import active_templates
 from application.modules.log.models import LogEntry
 from application.views.host_filters import FilterCmdbTemplate
 
@@ -315,7 +316,7 @@ def _render_labels_with_origin(_view, _context, model, _name):
     manual = model.labels or {}
     templates = []
     if cmdb_mode:
-        for tmpl in (model.cmdb_templates or []):
+        for tmpl in active_templates(model):
             if getattr(tmpl, 'labels', None):
                 templates.append((tmpl.hostname, dict(tmpl.labels)))
 
@@ -372,7 +373,7 @@ def _render_labels(_view, _context, model, _name):
     # manually — a manual label wins.
     template_labels = {}
     if cmdb_mode:
-        for tmpl in (model.cmdb_templates or []):
+        for tmpl in active_templates(model):
             for key, value in (getattr(tmpl, 'labels', None) or {}).items():
                 if value and key not in (model.labels or {}):
                     template_labels.setdefault(key, (value, tmpl.hostname))
@@ -443,10 +444,11 @@ def _render_cmdb_template(_view, _context, model, _name):
     Key / Value / Type table per template, headed by the template
     hostname. Same visual style as Labels and Inventory.
     """
-    if not model.cmdb_templates:
+    templates = active_templates(model)
+    if not templates:
         return Markup("")
     html = ""
-    for tmpl in model.cmdb_templates:
+    for tmpl in templates:
         html += (
             f'<h6 style="margin-top: 8px; font-weight: bold;">'
             f'{escape(tmpl.hostname)}</h6>'
@@ -501,11 +503,17 @@ def _render_cmdb_template_preview(view, _context, model, _name):
     html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
     for tmpl in model.cmdb_templates:
         name = escape(tmpl.hostname)
+        # An archived template stays assigned — a restore brings it back
+        # — but it contributes nothing, so it must not read like the
+        # active ones do.
+        archived = bool(getattr(tmpl, 'deleted_at', None))
         badge = (
-            f'<span class="badge badge-dark" '
-            f'style="{_LABEL_BADGE_STYLE}" '
-            f'title="{name}">'
-            f'<i class="fa fa-file"></i> {name}</span>'
+            f'<span class="badge {"badge-secondary" if archived else "badge-dark"}" '
+            f'style="{_LABEL_BADGE_STYLE}'
+            f'{" opacity: 0.6;" if archived else ""}" '
+            f'title="{name}{" (archived — contributes nothing)" if archived else ""}">'
+            f'<i class="fa fa-file"></i> {name}'
+            f'{" (archived)" if archived else ""}</span>'
         )
         href = _template_edit_url(tmpl)
         if href:

@@ -396,7 +396,8 @@ class Host(db.Document):
         Only fetches the fields needed for matching (id, cmdb_match).
         """
         cls._template_match_cache = list(
-            cls.objects(object_type='template', cmdb_match__ne=None).only('id', 'cmdb_match')
+            cls.objects(object_type='template', cmdb_match__ne=None,
+                        deleted_at__exists=False).only('id', 'cmdb_match')
         )
 
     @classmethod
@@ -431,7 +432,8 @@ class Host(db.Document):
         else:
             try:
                 template_list = list(
-                    Host.objects(object_type='template', cmdb_match__ne=None)
+                    Host.objects(object_type='template', cmdb_match__ne=None,
+                                 deleted_at__exists=False)
                         .only('id', 'cmdb_match')
                 )
             except Exception:  # pylint: disable=broad-exception-caught

@@ -26,6 +26,20 @@ def parse_cmdb_match(cmdb_match):
     return key, value
 
 
+def active_templates(host):
+    """
+    The templates a host carries that still contribute something. An
+    archived (soft-deleted) template keeps its assignment so a restore
+    brings it back, but it must not feed an export or be presented as
+    contributing in the meantime.
+
+    Returns:
+        list: the host's non-archived templates.
+    """
+    return [tmpl for tmpl in (host.cmdb_templates or [])
+            if not getattr(tmpl, 'deleted_at', None)]
+
+
 def sync_template_assignment(template, remove_stale=False):
     """
     Re-run one template's label match over the whole database and give

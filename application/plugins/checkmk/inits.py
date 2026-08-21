@@ -514,7 +514,8 @@ def assign_cmdb_template_from_folder(account, folder, template_name,  # pylint: 
     when the template does not exist. Returns the number of hosts the template
     was newly assigned to.
     """
-    template = Host.objects(hostname=template_name, object_type='template').first()
+    template = Host.objects(hostname=template_name, object_type='template',
+                            deleted_at__exists=False).first()
     if not template:
         message = f"CMDB template '{template_name}' not found"
         print(f'{ColorCodes.FAIL}{message}{ColorCodes.ENDC}')

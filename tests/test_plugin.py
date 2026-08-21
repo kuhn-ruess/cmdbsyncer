@@ -2,6 +2,7 @@
 Unit tests for the Plugin base class
 """
 # pylint: disable=missing-function-docstring,unused-argument,too-many-public-methods
+import datetime
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 import time
@@ -517,6 +518,7 @@ class TestPlugin(unittest.TestCase):
 
         tmpl = Mock()
         tmpl.hostname = 'web-template'
+        tmpl.deleted_at = None  # an archived template contributes nothing
         tmpl.labels = {
             'environment': 'template-env',  # collides with host label
             'tier': 'template-tier',        # collides with host inventory
@@ -555,6 +557,7 @@ class TestPlugin(unittest.TestCase):
 
         tmpl = Mock()
         tmpl.hostname = 'web-template'
+        tmpl.deleted_at = None  # an archived template contributes nothing
         tmpl.labels = {
             'description': 'Server {{ HOSTNAME }}',
             'plain': 'no jinja here',
@@ -588,6 +591,40 @@ class TestPlugin(unittest.TestCase):
         call_kwargs = mock_render.call_args.kwargs
         self.assertEqual(call_kwargs['HOSTNAME'], 'web01')
         self.assertEqual(call_kwargs['environment'], 'prod')
+
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_skips_archived_templates(self, mock_app):
+        """An archived template stays assigned but feeds no export."""
+        mock_app.config = self.mock_app_config
+
+        archived = Mock()
+        archived.hostname = 'old-template'
+        archived.deleted_at = datetime.datetime(2026, 1, 1)
+        archived.labels = {'owner': 'from-archived-template'}
+
+        live = Mock()
+        live.hostname = 'web-template'
+        live.deleted_at = None
+        live.labels = {'tier': 'from-live-template'}
+
+        mock_host = Mock()
+        mock_host.hostname = 'web01'
+        mock_host.cache = {}
+        mock_host.labels = {}
+        mock_host.inventory = {}
+        mock_host.cmdb_templates = [archived, live]
+
+        plugin = Plugin()
+        plugin.custom_attributes = Mock()
+        plugin.custom_attributes.get_outcomes.return_value = {}
+        plugin.init_custom_attributes = Mock()
+        plugin.rewrite = None
+        plugin.filter = None
+
+        result = plugin.get_attributes(mock_host, False)
+
+        self.assertNotIn('owner', result['all'])
+        self.assertEqual(result['all']['tier'], 'from-live-template')
 
     @patch('application.modules.plugin.app')
     def test_get_host_data(self, mock_app):

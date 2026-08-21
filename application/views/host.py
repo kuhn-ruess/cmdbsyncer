@@ -1012,7 +1012,8 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         """
         added, removed = 0, 0
         skipped = []
-        for template in Host.objects(id__in=ids, object_type='template'):
+        for template in Host.objects(id__in=ids, object_type='template',
+                                     deleted_at__exists=False):
             result = sync_template_assignment(template,
                                               remove_stale=remove_stale)
             if result is None:
@@ -1099,7 +1100,8 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         """
         Limit Objects
         """
-        return Host.objects(is_object=True, object_type="template")
+        return Host.objects(is_object=True, object_type="template",
+                            deleted_at__exists=False)
 
     def on_model_change(self, form, model, is_created):
         super().on_model_change(form, model, is_created)
@@ -2019,7 +2021,8 @@ Impact Chain.
 
         # Filter cmdb_templates to show only template objects
         if hasattr(form_class, 'cmdb_templates'):
-            form_class.cmdb_templates.kwargs['queryset'] = Host.objects(object_type='template')
+            form_class.cmdb_templates.kwargs['queryset'] = Host.objects(
+                object_type='template', deleted_at__exists=False)
 
         return form_class
 

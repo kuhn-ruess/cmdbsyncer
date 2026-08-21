@@ -9,6 +9,8 @@ cleanly into their own file.
 from markupsafe import Markup, escape
 from wtforms import Field
 
+from application.models.host_templates import active_templates
+
 
 class StaticLabelWidget:  # pylint: disable=too-few-public-methods
     """
@@ -52,7 +54,8 @@ class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
 
     def __call__(self, field, **kwargs):
         model = field.object_data
-        if not model or not hasattr(model, 'cmdb_templates') or not model.cmdb_templates:
+        templates = active_templates(model) if model else []
+        if not templates:
             return Markup(
                 self._INTRO
                 + '<div class="alert alert-info">'
@@ -62,7 +65,7 @@ class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
 
         html = self._INTRO
         had_entries = False
-        for template in model.cmdb_templates:
+        for template in templates:
             if not hasattr(template, 'labels') or not template.labels:
                 continue
             had_entries = True

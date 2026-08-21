@@ -18,6 +18,7 @@ import requests
 from application import logger, app, log
 from application.models.account import pop_master_skips
 from application.helpers.syncer_jinja import render_jinja
+from application.models.host_templates import active_templates
 from application.modules.debug import ColorCodes
 from application.modules.custom_attributes.models import CustomAttributeRule as \
     CustomAttributeRuleModel
@@ -501,7 +502,7 @@ class Plugin():
         # already applied above) always wins: a template only contributes
         # keys the host does not provide itself. A template also never
         # overrides a value an earlier template already supplied.
-        for tmpl in (db_host.cmdb_templates or []):
+        for tmpl in active_templates(db_host):
             for key, value in (tmpl.labels or {}).items():
                 if key in attributes:
                     continue

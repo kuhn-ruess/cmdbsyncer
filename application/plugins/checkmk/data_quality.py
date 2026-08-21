@@ -293,7 +293,8 @@ def cmdb_template_names():
     # pylint: disable=import-outside-toplevel
     from application.models.host import Host
     return [h.hostname for h in
-            Host.objects(object_type='template').only('hostname').order_by('hostname')]
+            Host.objects(object_type='template', deleted_at__exists=False)
+                .only('hostname').order_by('hostname')]
 
 
 def create_internal_cmdb_hosts(hostnames, template_name=None):
@@ -313,7 +314,8 @@ def create_internal_cmdb_hosts(hostnames, template_name=None):
 
     template = None
     if template_name:
-        template = Host.objects(hostname=template_name, object_type='template').first()
+        template = Host.objects(hostname=template_name, object_type='template',
+                                deleted_at__exists=False).first()
         if template is None:
             raise ValueError(f"CMDB template '{template_name}' not found")
 
