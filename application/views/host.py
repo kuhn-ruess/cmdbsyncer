@@ -88,6 +88,7 @@ from application.models.host import (
     CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME,
     get_cmdb_model_fields,
 )
+from application.models.host_templates import sync_template_assignment
 from application.models.host_label_event import HostLabelEvent
 from application.models.config import Config
 # pylint: enable=import-error
@@ -1002,6 +1003,53 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
             return False
         return super().is_action_allowed(name)
 
+    def _resync_assignments(self, ids, remove_stale):
+        """
+        Re-apply the selected templates to the hosts. Editing a template
+        deliberately does not re-match anything — this is the manual
+        trigger for it. Templates without a `cmdb_match` pattern are only
+        ever assigned by hand and are therefore skipped.
+        """
+        added, removed = 0, 0
+        skipped = []
+        for template in Host.objects(id__in=ids, object_type='template'):
+            result = sync_template_assignment(template,
+                                              remove_stale=remove_stale)
+            if result is None:
+                skipped.append(template.hostname)
+                continue
+            added += result[0]
+            removed += result[1]
+        Host.clear_template_cache()
+        message = f'Re-matched templates: {added} assignment(s) added'
+        message += (f', {removed} removed.' if remove_stale else '.')
+        flash(message, 'success' if added or removed else 'info')
+        if skipped:
+            flash('No CMDB match pattern, assignments left untouched: '
+                  + ', '.join(skipped), 'warning')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('resync_assignments', 'Re-apply to matching hosts',
+            'Re-run the label match of the selected template(s)? Every host '
+            'matching the pattern gets the template. Existing assignments '
+            'are kept.')
+    def action_resync_assignments(self, ids):
+        """Assign the selected templates to everything matching now."""
+        return self._resync_assignments(ids, remove_stale=False)
+
+    @action('resync_assignments_strict',
+            'Re-apply and remove from non-matching hosts',
+            'Re-run the label match AND take the selected template(s) off '
+            'every host that does not match the pattern? This also removes '
+            'assignments that were made by hand.')
+    def action_resync_assignments_strict(self, ids):
+        """
+        Same, but the pattern becomes authoritative: a host that does not
+        match loses the template — including a host somebody assigned it
+        to by hand, which is why this is its own action.
+        """
+        return self._resync_assignments(ids, remove_stale=True)
+
     form_rules = [
         rules.HTML('''
         <style>
@@ -1062,6 +1110,9 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         # changed `cmdb_match` is picked up on the next host save.
         if not is_created:
             Host.objects(cmdb_templates=model.id).update(cache={})
+            flash('Template saved. Which hosts carry it stays as it is — '
+                  'use "Re-apply to matching hosts" in the template list '
+                  'to re-run the match.', 'info')
         Host.clear_template_cache()
 
 

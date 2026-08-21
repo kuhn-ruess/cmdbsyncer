@@ -11,6 +11,7 @@ from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.helpers.label_history import label_history_enabled
 from application.models.host_cleanup import HostQuerySet, relation_target
+from application.models.host_templates import parse_cmdb_match
 from application.models.account import (
     account_is_master, report_master_skip, object_types,
     CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
@@ -438,10 +439,10 @@ class Host(db.Document):
 
         matched = []
         for template in template_list:
-            if not template.cmdb_match or ':' not in template.cmdb_match:
+            parsed = parse_cmdb_match(template.cmdb_match)
+            if not parsed:
                 continue
-            key, value = template.cmdb_match.split(':', 1)
-            key, value = key.strip(), value.strip()
+            key, value = parsed
             if self.labels.get(key) == value:
                 matched.append(template)
 

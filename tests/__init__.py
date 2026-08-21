@@ -501,6 +501,13 @@ _load_real_module(
     os.path.join("models", "host_cleanup.py"),
 )
 
+# Same deal: template matching imports Host lazily inside its functions,
+# so the module itself loads without the database.
+_load_real_module(
+    "application.models.host_templates",
+    os.path.join("models", "host_templates.py"),
+)
+
 # application.modules.plugin pulls in render_jinja at import time, so the
 # helpers.syncer_jinja stub must be in place before the real plugin module
 # is loaded (the duplicated stub further down stays for the checkmk loaders
