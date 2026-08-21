@@ -2263,10 +2263,13 @@ Impact Chain.
             scope = current_user.account_scope() if current_user.is_authenticated else None
             if scope is not None:
                 query = query.filter(source_account_name__in=list(scope))
+            # `SOURCE_ACCOUNT` is part of the cached export attributes,
+            # so the cache has to go with the account change.
             updated = query.update(
                 set__source_account_name=CMDB_SOURCE_ACCOUNT_NAME,
                 set__source_account_id=CMDB_SOURCE_ACCOUNT_ID,
-                set__no_autodelete=True)
+                set__no_autodelete=True,
+                set__cache={})
             flash(f"Set {updated} host(s) to CMDB managed", 'success')
             return redirect(return_to)
         if account_name not in _allowed_account_names():
@@ -2287,7 +2290,8 @@ Impact Chain.
             query = query.filter(source_account_name__in=list(scope))
         updated = query.update(
             set__source_account_name=account.name,
-            set__source_account_id=str(account.id))
+            set__source_account_id=str(account.id),
+            set__cache={})
         flash(f"Set account '{account_name}' on {updated} host(s)", 'success')
         return redirect(return_to)
 
