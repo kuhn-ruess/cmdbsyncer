@@ -22,7 +22,7 @@
       {% endfor %}
     {% endwith %}
     {% block fa_form %}
-      {{ lib.render_form(form, dir_url, action=request.url, is_modal=True) }}
+      {{ lib.render_form(form, dir_url, action=request.path, is_modal=True) }}
     {% endblock %}
   </div>
 {% endblock %}
