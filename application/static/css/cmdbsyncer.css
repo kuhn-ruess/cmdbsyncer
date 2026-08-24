@@ -186,6 +186,31 @@ body { padding-top: 0; }
     width: 1%;
 }
 
+/* Rules and other switched-off list entries, tagged with `.rule-disabled`
+   by the tail script in `templates/admin/master.html`.
+
+   Each of the four themes paints these rows itself (with !important, so
+   those rules win over this one). This is the base coat for the default
+   theme, which loads no theme file at all — without it a disabled rule
+   was indistinguishable from an active one.
+
+   The colour lands on the cells as well as the row: Bootstrap's zebra
+   rule paints `tr`, and a td background is what covers it. */
+.model-list tbody tr.rule-disabled,
+.table tbody tr.rule-disabled,
+.model-list tbody tr.rule-disabled > *,
+.table tbody tr.rule-disabled > * {
+    background-color: var(--surface-subtle, #edeff2);
+    color: var(--surface-muted, #7b838c);
+    font-style: italic;
+}
+/* Second cell, next to the row actions — a stripe that reads as "off"
+   before the text does. */
+.model-list tbody tr.rule-disabled td:nth-child(2),
+.table tbody tr.rule-disabled td:nth-child(2) {
+    border-left: 4px solid var(--surface-danger, #c0392b);
+}
+
 /* Plain code preview used in rule list/overview renderers
    (`_render_jinja`, `_render_filter_outcomes`, `_render_attribute_rewrite`).
    Theme-aware via the --surface-* tokens; themes that don't define them
