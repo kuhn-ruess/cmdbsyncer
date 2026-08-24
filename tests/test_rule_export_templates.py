@@ -1,4 +1,8 @@
-"""CMDB templates export as their own rule type, split off from hosts."""
+"""CMDB templates export as their own rule type, split off from hosts.
+
+Also covers the opt-in gate of the Checkmk password store, which shares
+the same skip mechanism.
+"""
 # pylint: disable=missing-function-docstring,missing-class-docstring,wrong-import-position
 
 import importlib.util
@@ -45,8 +49,17 @@ class FakeHost:  # pylint: disable=too-few-public-methods
 # test in this process. The registry stub and the module under test are
 # swapped in only for the load and put back afterwards; `mod` keeps its
 # own reference to the stubbed registry.
+class FakePassword:  # pylint: disable=too-few-public-methods
+    """Stand-in for the Checkmk password store model."""
+
+    @classmethod
+    def objects(cls, **_kwargs):
+        return [FakeDoc('secret-store-entry')]
+
+
 _host_module = types.ModuleType('tests.fake_host_model')
 _host_module.Host = FakeHost
+_host_module.CheckmkPassword = FakePassword
 sys.modules['tests.fake_host_model'] = _host_module
 
 _defs = types.ModuleType('application.plugins.rules.rule_definitions')
@@ -56,6 +69,7 @@ _defs.rules = {
                      {'object_type__ne': 'template'}),
     'cmdb_templates': ('tests.fake_host_model', 'Host',
                        {'object_type': 'template'}),
+    'cmk_passwords': ('tests.fake_host_model', 'CheckmkPassword'),
 }
 
 _MOD_PATH = os.path.join(
@@ -104,3 +118,9 @@ class ExportTemplatesTests(unittest.TestCase):
     def test_grouped_export_keeps_types_apart(self):
         grouped = mod.grouped_rules_export(include_hosts=True)['rules']
         self.assertEqual(sorted(grouped), ['cmdb_templates', 'host_objects'])
+
+    def test_passwords_need_their_own_flag(self):
+        self.assertNotIn('cmk_passwords',
+                         [rule_type for rule_type, _rule in mod.iter_all_rules()])
+        self.assertIn(('cmk_passwords', 'secret-store-entry'),
+                      list(mod.iter_all_rules(include_passwords=True)))

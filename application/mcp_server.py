@@ -351,19 +351,22 @@ def export_rules(rule_type: str) -> dict:
 @mcp.tool()
 def export_all_rules(include_hosts: bool = False,
                      include_accounts: bool = False,
-                     include_users: bool = False) -> dict:
+                     include_users: bool = False,
+                     include_passwords: bool = False) -> dict:
     """Export every enabled rule type, grouped by type.
 
-    ``host_objects``, ``accounts`` and ``users`` are skipped by default —
-    pass the matching flag to opt in. The user export contains hashed
-    passwords; treat the response as secret. CMDB templates come along as
-    their own ``cmdb_templates`` type, no flag needed.
+    ``host_objects``, ``accounts``, ``users`` and ``cmk_passwords`` are
+    skipped by default — pass the matching flag to opt in. The user and
+    password exports contain secrets; treat the response accordingly.
+    CMDB templates come along as their own ``cmdb_templates`` type, no
+    flag needed.
     """
     _current_user()
     return grouped_rules_export(
         include_hosts=include_hosts,
         include_accounts=include_accounts,
         include_users=include_users,
+        include_passwords=include_passwords,
     )
 
 

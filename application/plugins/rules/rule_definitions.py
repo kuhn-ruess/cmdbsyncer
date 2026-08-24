@@ -3,8 +3,13 @@ Registry of rule types that can be imported/exported — maps a short
 rule-type ident to its (module_path, model_class_name) or, when the
 type is only a subset of a collection, to
 (module_path, model_class_name, queryset_filter_kwargs).
+
+Everything a user configures belongs in ``rules`` so a full export is a
+complete configuration backup. Runtime state, caches and history are
+listed in ``not_exported`` further down.
 """
 rules = {
+    'ansible_projects': ('application.plugins.ansible.models', 'AnsibleProject'),
     'ansible_customvars': ('application.plugins.ansible.models', 'AnsibleCustomVariablesRule'),
     'ansible_filter': ('application.plugins.ansible.models', 'AnsibleFilterRule'),
     'ansible_playbook_fire': ('application.plugins.ansible.models', 'AnsiblePlaybookFireRule'),
@@ -24,13 +29,28 @@ rules = {
     'cmk_bi_rule': ('application.plugins.checkmk.models', 'CheckmkBiRule'),
     'cmk_downtimes': ('application.plugins.checkmk.models', 'CheckmkDowntimeRule'),
     'cmk_dcd_rules': ('application.plugins.checkmk.models', 'CheckmkDCDRule'),
+    'cmk_notification_rules': ('application.plugins.checkmk.models',
+                              'CheckmkNotificationRule'),
     'cmk_folder_pool': ('application.plugins.checkmk.models', 'CheckmkFolderPool'),
+    'cmk_site_pool': ('application.plugins.checkmk.models', 'CheckmkSitePool'),
+    'cmk_passwords': ('application.plugins.checkmk.models', 'CheckmkPassword'),
     'host_objects': ('application.models.host', 'Host',
                      {'object_type__ne': 'template'}),
     'cmdb_templates': ('application.models.host', 'Host',
                        {'object_type': 'template'}),
+    'projects': ('application.models.project', 'Project'),
+    'saved_searches': ('application.models.saved_search', 'SavedSearch'),
+    'system_config': ('application.models.config', 'Config'),
+    'notification_channels': ('application.models.notification_channel',
+                             'NotificationChannel'),
+    'notification_rules': ('application.models.notification_rule',
+                          'NotificationRule'),
     'accounts': ('application.models.account', 'Account'),
     'users': ('application.models.user', 'User'),
+    'jira_export': ('application.plugins.jira_cloud.models', 'JiraExportRule'),
+    'jira_filter': ('application.plugins.jira_cloud.models', 'JiraCloudFilterRule'),
+    'jira_rewrite': ('application.plugins.jira_cloud.models',
+                    'JiraCloudRewriteAttributeRule'),
     'idoit_rules': ('application.plugins.idoit.models', 'IdoitCustomAttributes'),
     'idoit_rewrite': ('application.plugins.idoit.models', 'IdoitRewriteAttributeRule'),
     'netbox_dcim_interfaces': ('application.plugins.netbox.models',
@@ -54,3 +74,22 @@ rules = {
 
 
 rule_names = [(x, y[1]) for x, y in rules.items()]
+
+
+# Collections that are deliberately NOT part of import/export: runtime
+# state, caches, statistics and history. They are rebuilt by the syncer
+# itself and would only bloat a configuration backup. Listing them here
+# (instead of just leaving them out) is what lets the registry test fail
+# whenever a new model shows up that nobody classified either way.
+not_exported = {
+    'AnsibleRunStats': 'Playbook run history',
+    'CheckmkObjectCache': 'Rebuilt from the Checkmk API',
+    'CronStats': 'Cronjob run statistics',
+    'FieldApproval': 'Approval queue, tied to live hosts',
+    'HostInventoryTree': 'Inventory data of a single host',
+    'HostLabelEvent': 'Label change history',
+    'JiraSchemaCache': 'Rebuilt by jira sync_schema',
+    'LogEntry': 'Syncer log',
+    'NotificationState': 'Cooldown state of notification rules',
+    'State': 'Open-changes counter',
+}

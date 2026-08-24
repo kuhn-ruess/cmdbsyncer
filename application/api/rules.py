@@ -213,6 +213,10 @@ class RulesExport(Resource):
                'Set to ``1`` to also export users. The output contains hashed '
                'passwords and role assignments — treat as secret. Skipped by '
                'default.')
+    @API.param('include_passwords',
+               'Set to ``1`` to also export the Checkmk password store '
+               '(``cmk_passwords``). The entries stay encrypted with this '
+               'instance key — treat as secret. Skipped by default.')
     @API.response(200, 'Every rule, grouped by ``rule_type``.',
                   RULES_EXPORT_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
@@ -225,6 +229,7 @@ class RulesExport(Resource):
             include_hosts=_flag('include_hosts'),
             include_accounts=_flag('include_accounts'),
             include_users=_flag('include_users'),
+            include_passwords=_flag('include_passwords'),
         )
 
 

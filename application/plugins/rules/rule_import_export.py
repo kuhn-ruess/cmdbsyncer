@@ -22,6 +22,7 @@ from .rule_definitions import rules as enabled_rules
 HOST_COLLECTION_RULE_TYPE = 'host_objects'
 ACCOUNTS_RULE_TYPE = 'accounts'
 USERS_RULE_TYPE = 'users'
+PASSWORDS_RULE_TYPE = 'cmk_passwords'
 
 
 def get_ruletype_by_filename(filename):
@@ -78,14 +79,18 @@ def iter_rules_of_type(rule_type):
 export_rules_from_model = iter_rules_of_type
 
 
-def iter_all_rules(include_hosts=False, include_accounts=False, include_users=False):
+def iter_all_rules(include_hosts=False, include_accounts=False,
+                   include_users=False, include_passwords=False):
     """Yield ``(rule_type, json_string)`` for every enabled rule type, in
     sorted ``rule_type`` order.
 
-    Hosts/objects, accounts, and users are skipped by default since they
-    are usually not what you want in a rule backup. Pass the matching
-    ``include_*=True`` flag to opt in. User exports contain hashed
-    passwords and role assignments — treat the resulting data as secret.
+    Everything a user configures is exported by default, so the result is
+    a complete configuration backup. Four types carry either bulk data or
+    secrets and are opt-in via the matching ``include_*=True`` flag:
+    ``host_objects``, ``accounts``, ``users`` (hashed passwords and
+    roles) and ``cmk_passwords`` (the Checkmk password store, encrypted
+    with this instance's ``CRYPTOGRAPHY_KEY``). Treat exports made with
+    those flags as secret.
 
     CMDB templates (``cmdb_templates``) are configuration rather than
     data and are always exported; ``host_objects`` never contains them.
@@ -94,6 +99,7 @@ def iter_all_rules(include_hosts=False, include_accounts=False, include_users=Fa
         HOST_COLLECTION_RULE_TYPE: not include_hosts,
         ACCOUNTS_RULE_TYPE: not include_accounts,
         USERS_RULE_TYPE: not include_users,
+        PASSWORDS_RULE_TYPE: not include_passwords,
     }
     for rule_type in sorted(enabled_rules):
         if skip.get(rule_type):
@@ -165,7 +171,7 @@ def import_rule_lines(lines, default_rule_type=None):
 
 
 def grouped_rules_export(include_hosts=False, include_accounts=False,
-                         include_users=False):
+                         include_users=False, include_passwords=False):
     """Return ``{exported_at, rules: {rule_type: [dict, ...]}}`` for every
     enabled rule type. Used by both the REST ``/rules/export`` endpoint
     and the MCP ``export_all_rules`` tool."""
@@ -174,6 +180,7 @@ def grouped_rules_export(include_hosts=False, include_accounts=False,
         include_hosts=include_hosts,
         include_accounts=include_accounts,
         include_users=include_users,
+        include_passwords=include_passwords,
     ):
         try:
             grouped.setdefault(rule_type, []).append(json.loads(raw))
@@ -233,26 +240,28 @@ def export_rules(rule_type):
 
 
 def export_all_rules(target_path=None, include_hosts=False,
-                     include_accounts=False, include_users=False):
+                     include_accounts=False, include_users=False,
+                     include_passwords=False):
     """
     Export all Rules of every known type into a single file (CLI).
     """
     if not target_path:
         target_path = f"syncer_rules_export_{datetime.now():%Y%m%d_%H%M%S}.jsonl"
-    skipped = []
-    if not include_hosts:
-        skipped.append(f"--include-hosts to export {HOST_COLLECTION_RULE_TYPE}")
-    if not include_accounts:
-        skipped.append(f"--include-accounts to export {ACCOUNTS_RULE_TYPE}")
-    if not include_users:
-        skipped.append(f"--include-users to export {USERS_RULE_TYPE}")
-    for hint in skipped:
-        print(f"* Skipped (use {hint})")
+    skipped = [
+        (include_hosts, '--include-hosts', HOST_COLLECTION_RULE_TYPE),
+        (include_accounts, '--include-accounts', ACCOUNTS_RULE_TYPE),
+        (include_users, '--include-users', USERS_RULE_TYPE),
+        (include_passwords, '--include-passwords', PASSWORDS_RULE_TYPE),
+    ]
+    for enabled, flag, rule_type in skipped:
+        if not enabled:
+            print(f"* Skipped (use {flag} to export {rule_type})")
 
     total = 0
     last_type = None
     with open(target_path, 'w', encoding='utf-8') as outfile:
-        for rule_type, rule in iter_all_rules(include_hosts, include_accounts, include_users):
+        for rule_type, rule in iter_all_rules(include_hosts, include_accounts,
+                                              include_users, include_passwords):
             if rule_type != last_type:
                 outfile.write(json.dumps({"rule_type": rule_type}) + "\n")
                 last_type = rule_type
