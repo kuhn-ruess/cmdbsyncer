@@ -411,17 +411,21 @@
             }
         }
 
-        /* Menus open on hover, top level and submenus alike. Bootstrap's
-           click handler is untouched, so keyboard use still works — and
-           the rule is limited to real pointers on the expanded bar,
-           where hover is a gesture that exists at all. */
+        /* Menus open on hover, top level and submenus alike, and stay
+           open until another menu takes over or a click lands outside —
+           see the script at the end of the page, which owns the class.
+           Hovering only ever opens: a small menu is easy to slip out of,
+           and closing on that would make the bar feel jumpy.
+           Bootstrap's click handler is untouched, so keyboard use still
+           works — and the rules are limited to real pointers on the
+           expanded bar, where hover is a gesture that exists at all. */
         @media (hover: hover) and (pointer: fine) and (min-width: 992px) {
-            .navbar li.dropdown:hover > .dropdown-menu {
+            .navbar li.dropdown.cmdb-menu-open > .dropdown-menu {
                 display: block;
             }
-            /* A top level menu hangs 0.35rem below its entry. Without
-               this bridge over the gap the pointer is outside both boxes
-               on the way down and the menu closes again. */
+            /* A top level menu hangs 0.35rem below its entry. The bridge
+               over the gap keeps the pointer inside the menu on its way
+               down, so travelling into it never lands on the page behind. */
             .navbar .navbar-nav > li.dropdown > .dropdown-menu::before {
                 content: "";
                 position: absolute;
@@ -804,25 +808,110 @@
       });
     })();
 
-    /* The top bar opens its menus on hover (see the stylesheet), but
-       Bootstrap's click handler is still attached: a mouse click latches the
-       menu open with .show, which the hover rule cannot undo. The clicked
-       menu then stayed visible while the pointer already opened the next one.
-       Wherever hover opens the menus, hover alone decides which one is
-       visible, so a mouse click on a toggle is swallowed. Keyboard
-       activation still reaches Bootstrap — a click from Enter or Space
-       reports a detail of 0 — so the menus stay reachable without a mouse.
-       The media query has to match the stylesheet's exactly. */
+    /* Owner of the .cmdb-menu-open class the stylesheet renders.
+       Hovering a menu entry opens it; leaving it does NOT close it,
+       because a small menu is easy to slip out of by a few pixels. A
+       menu closes when another one opens, when a click lands outside
+       the bar, when its own entry is clicked again, or on Escape.
+
+       Bootstrap's click handler would latch a menu open with .show,
+       which nothing here can undo — so a mouse click on a toggle is
+       swallowed and handled below instead. Keyboard activation still
+       reaches Bootstrap (a click from Enter or Space reports a detail
+       of 0), so the menus stay reachable without a mouse. The media
+       query has to match the stylesheet's exactly. */
     (function() {
+      var OPEN = 'cmdb-menu-open';
+      var MENU = '.navbar li.dropdown';
       var hoverOpensMenus = window.matchMedia(
         '(hover: hover) and (pointer: fine) and (min-width: 992px)');
+      /* The menu a click has just shut. The pointer is still on its
+         entry, so moving onto a child of it (the icon inside the label)
+         would fire a fresh mouseover and open the menu right back up.
+         It stays shut until the pointer has left the entry. */
+      var closedByClick = null;
+
+      function openMenus() {
+        return Array.prototype.slice.call(
+          document.querySelectorAll(MENU + '.' + OPEN));
+      }
+
+      function closeAll(except) {
+        var keep = except || [];
+        openMenus().forEach(function(item) {
+          if (keep.indexOf(item) === -1) { item.classList.remove(OPEN); }
+        });
+      }
+
+      /* The entry plus every menu it is nested in — everything else is
+         closed, which is what makes a sibling menu take over. */
+      function chainOf(item) {
+        var chain = [];
+        while (item) {
+          chain.push(item);
+          item = item.parentNode && item.parentNode.closest
+            ? item.parentNode.closest(MENU) : null;
+        }
+        return chain;
+      }
+
+      function open(item) {
+        var chain = chainOf(item);
+        closeAll(chain);
+        chain.forEach(function(entry) { entry.classList.add(OPEN); });
+      }
+
+      document.addEventListener('mouseover', function(ev) {
+        if (!hoverOpensMenus.matches || !ev.target || !ev.target.closest) {
+          return;
+        }
+        if (closedByClick) {
+          if (closedByClick.contains(ev.target)) { return; }
+          closedByClick = null;
+        }
+        var entry = ev.target.closest('.navbar li');
+        if (!entry) { return; }
+        if (entry.classList.contains('dropdown')) {
+          if (!entry.classList.contains(OPEN)) { open(entry); }
+          return;
+        }
+        /* A plain entry: keep the menu it lives in open and put away
+           the submenu of the neighbour we just came from. Entries
+           outside any menu leave everything as it is — moving the
+           pointer off the bar must not close what is open. */
+        var parent = entry.parentNode && entry.parentNode.closest
+          ? entry.parentNode.closest(MENU) : null;
+        if (parent) { open(parent); }
+      });
+
       document.addEventListener('click', function(ev) {
-        if (!hoverOpensMenus.matches || ev.detail === 0) { return; }
-        if (!ev.target || !ev.target.closest) { return; }
-        if (!ev.target.closest('.navbar .dropdown-toggle')) { return; }
-        ev.preventDefault();
-        ev.stopPropagation();
+        if (!hoverOpensMenus.matches || !ev.target || !ev.target.closest) {
+          return;
+        }
+        var toggle = ev.detail !== 0
+          && ev.target.closest('.navbar .dropdown-toggle');
+        var item = toggle ? toggle.closest(MENU) : null;
+        if (item) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (item.classList.contains(OPEN)) {
+            closeAll(chainOf(item).slice(1));
+            closedByClick = item;
+          } else {
+            open(item);
+          }
+          return;
+        }
+        /* A click on a menu entry navigates away anyway; only clicks
+           next to the bar have to put the open menu away. */
+        if (!ev.target.closest('.navbar')) { closeAll(); }
       }, true);
+
+      document.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Escape') { closeAll(); }
+      });
+
+      hoverOpensMenus.addEventListener('change', function() { closeAll(); });
     })();
 
     </script>
