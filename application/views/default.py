@@ -12,6 +12,7 @@ from flask import url_for, redirect, flash, request, abort, current_app
 from flask_login import current_user
 from flask_admin import AdminIndexView
 from flask_admin import expose
+from flask_admin.actions import action
 from flask_admin.contrib.mongoengine import ModelView
 from flask_admin.contrib.mongoengine.filters import BooleanEqualFilter, FilterLike
 from flask_admin.model.template import EndpointLinkRowAction
@@ -23,6 +24,7 @@ from wtforms.validators import ValidationError
 from mongoengine.errors import NotUniqueError
 
 from application._version import __version__
+from application.helpers.sates import add_changes
 from application.models.user import is_readonly
 
 
@@ -219,7 +221,7 @@ def _host_sources(scope):
 _WRITING_ROW_ACTIONS = ('clone_view', 'copy_as_new_form', 'restore_row')
 
 
-def row_action_target(action):
+def row_action_target(row_action):
     """
     Where a row action points, as one searchable string.
 
@@ -227,8 +229,8 @@ def row_action_target(action):
     ``endpoint``, ``LinkRowAction`` a ready-made ``url``. Callers that want
     to drop an action by what it does should not have to know which.
     """
-    endpoint = getattr(action, 'endpoint', '') or ''
-    url = getattr(action, 'url', '') or ''
+    endpoint = getattr(row_action, 'endpoint', '') or ''
+    url = getattr(row_action, 'url', '') or ''
     return f"{endpoint} {url}"
 
 
@@ -269,8 +271,14 @@ class DefaultModelView(ModelView):
         return not is_readonly(current_user)
 
     def is_action_allowed(self, name):
-        """Bulk actions all write, so a read-only user gets none of them."""
+        """Bulk actions all write, so a read-only user gets none of them.
+
+        Enabling and disabling is offered wherever the model has the
+        field to flip — every rule and every other switchable object.
+        """
         if is_readonly(current_user):
+            return False
+        if name in ('enable', 'disable') and 'enabled' not in self.model._fields:
             return False
         return super().is_action_allowed(name)
 
@@ -285,11 +293,54 @@ class DefaultModelView(ModelView):
         if not is_readonly(current_user):
             return actions
 
-        def writes(action):
-            target = row_action_target(action)
+        def writes(row_action):
+            target = row_action_target(row_action)
             return any(marker in target for marker in _WRITING_ROW_ACTIONS)
 
-        return [action for action in actions if not writes(action)]
+        return [row_action for row_action in actions if not writes(row_action)]
+    #.
+
+    #   .-- Enable / Disable
+    def on_bulk_change(self):
+        """Called once after a bulk action wrote to the collection.
+
+        The form hooks (``on_model_change``) never run for those, so a
+        view whose data is cached elsewhere drops its caches here. The
+        pending-changes counter is already taken care of.
+        """
+
+    def _bulk_set_enabled(self, ids, enabled):
+        """Flip ``enabled`` on the selected documents.
+
+        Selection is resolved the way Flask-Admin's own delete action
+        does it, so a view that narrows its queryset (per project, per
+        account) can only ever switch what it also lists.
+        """
+        changed = 0
+        selected = self.get_query().in_bulk(
+            [self.object_id_converter(pk) for pk in ids])
+        for model in selected.values():
+            if bool(model.enabled) == enabled:
+                continue
+            model.enabled = enabled
+            model.save()
+            changed += 1
+        if changed:
+            add_changes()
+            self.on_bulk_change()
+        flash(f'{changed} entr{"y" if changed == 1 else "ies"} '
+              f'{"enabled" if enabled else "disabled"}.', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('enable', 'Enable', None)
+    def action_enable(self, ids):
+        """Switch the selected entries on."""
+        return self._bulk_set_enabled(ids, True)
+
+    @action('disable', 'Disable', 'Disable the selected entries?')
+    def action_disable(self, ids):
+        """Switch the selected entries off."""
+        return self._bulk_set_enabled(ids, False)
     #.
 
     def _run_view(self, fn, *args, **kwargs):

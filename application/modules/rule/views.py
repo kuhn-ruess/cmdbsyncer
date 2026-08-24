@@ -464,6 +464,13 @@ class RuleModelView(DefaultModelView):
             flash("Duplicate Entry Name", "error")
             return False
 
+    def on_bulk_change(self):
+        """
+        A bulk action wrote rules past the form hooks — drop the outcomes
+        computed from them, the same way an edit does.
+        """
+        invalidate_host_rule_caches()
+
     def on_model_change(self, form, model, is_created):
         """
         Overwrite Actions on Model Change
@@ -603,6 +610,13 @@ class FiltereModelView(DefaultModelView):
         except NotUniqueError:
             flash("Duplicate Entry Name", "error")
             return False
+
+    def on_bulk_change(self):
+        """
+        A bulk action wrote rules past the form hooks — drop the outcomes
+        computed from them, the same way an edit does.
+        """
+        invalidate_host_rule_caches()
 
     def on_model_change(self, form, model, is_created):
         """
