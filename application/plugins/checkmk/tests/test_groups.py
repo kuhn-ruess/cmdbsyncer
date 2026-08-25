@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from mongoengine.errors import DoesNotExist
+from application.plugins.checkmk.cmk2 import CmkException
 from application.plugins.checkmk.groups import CheckmkGroupSync
 from tests import base_mock_init
 
@@ -181,6 +182,51 @@ class TestCheckmkGroupSync(unittest.TestCase):
         mock_host.objects_by_filter.assert_called_once_with(
             ['host', 'shadow_host'])
         mock_host.get_export_hosts.assert_not_called()
+
+    @patch('application.plugins.checkmk.groups.str_replace',
+           lambda value, exceptions: value)
+    @patch('application.plugins.checkmk.groups.CheckmkGroupRule')
+    def test_export_continues_when_delete_fails(self, mock_rule_cls):
+        """A group Checkmk refuses to delete must not abort the export."""
+        outcome = Mock()
+        outcome.group_name = 'host_groups'
+        outcome.foreach_type = 'label'
+        outcome.foreach = 'site'
+        outcome.rewrite = None
+        outcome.rewrite_title = None
+        rule = Mock()
+        rule.outcome = outcome
+        mock_rule_cls.objects.return_value = [rule]
+
+        self.sync.parse_attributes = Mock(
+            return_value=({'site': ['keep']}, {}))
+        cache = Mock()
+        cache.content = {'list': [['keep', 'keep'], ['busy', 'busy'],
+                                 ['gone', 'gone']]}
+        self.sync.get_cache_object = Mock(return_value=cache)
+        self.sync.log_details = []
+
+        cmk_groups = ({'value': [{'id': 'keep', 'title': 'keep'},
+                                 {'id': 'busy', 'title': 'busy'},
+                                 {'id': 'gone', 'title': 'gone'}]}, {})
+
+        def fake_request(url, method='GET', data=None):
+            if method == 'DELETE':
+                if url.endswith('busy'):
+                    raise CmkException('Group is still in use')
+                return {}, {}
+            return cmk_groups
+        self.sync.request = Mock(side_effect=fake_request)
+
+        self.sync.export_cmk_groups(False)
+
+        deleted = [call.args[0] for call in self.sync.request.call_args_list
+                   if call.kwargs.get('method') == 'DELETE']
+        self.assertEqual(len(deleted), 2)
+        self.assertTrue(any(x.endswith('gone') for x in deleted))
+        # The undeletable group stays in the cache so the next run retries it
+        self.assertIn(['busy', 'busy'], cache.content['list'])
+        self.assertNotIn(['gone', 'gone'], cache.content['list'])
 
 
 if __name__ == '__main__':

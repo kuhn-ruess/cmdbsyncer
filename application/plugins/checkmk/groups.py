@@ -301,10 +301,28 @@ class CheckmkGroupSync(CMK2):
 
             if not test_run:
                 print(f"{CC.OKBLUE} *{CC.ENDC} Delete Groups if needed")
+                undeletable = []
                 for name in syncers_groups_in_cmk:
                     if name not in [x[1] for x in handeled_groups]:
                         # Checkmk is not deleting objects if the still referenced
                         url = f"{urls[group_type]['delete']}{name}"
-                        self.request(url, method="DELETE")
+                        try:
+                            self.request(url, method="DELETE")
+                        except CmkException as error:
+                            # Checkmk refuses to delete groups which are still
+                            # in use. That's no reason to abort the whole
+                            # export: report it and continue with the rest.
+                            undeletable.append(name)
+                            self.log_details.append(
+                                ("WARNING", f"Could not delete Group {name}: {error}"))
+                            print(f"{CC.WARNING} *{CC.ENDC} "
+                                  f"Group {name} not deleted: {error}")
+                            continue
                         self.log_details.append(("INFO", f"Deleted Group: {name}"))
                         print(f"{CC.OKBLUE} *{CC.ENDC} Group {name} deleted")
+                if undeletable:
+                    # Keep them in the cache, otherwise the next run would
+                    # treat them as foreign groups and never retry the delete.
+                    group_cache.content['list'] = configured_groups + \
+                        [x for x in cached_group_list if x[1] in undeletable]
+                    group_cache.save()
