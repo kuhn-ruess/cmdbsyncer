@@ -1496,8 +1496,16 @@ class CheckmkRuleSync(CMK2):
             hosts = group['hosts']
             exact, wider, partial = self._suggest_labels_for_group(
                 hosts, per_group[key], totals)
+            # Checkmk stores a rule of some rulesets without its host
+            # label condition (a ruleset that assigns host labels cannot
+            # match on them). Swapping the host list for a label there
+            # would leave the rule with no condition at all — it would
+            # apply to every host in the folder.
+            label_condition_kept = not set(HOST_LABEL_KEYS).intersection(
+                self.unsupported_condition_keys(key[0]))
             results.append({
                 'ruleset': key[0],
+                'label_condition_kept': label_condition_kept,
                 'rule': group['rule'],
                 'syncer_rules': sorted(group['syncer_rules']),
                 'hosts': len(hosts),
@@ -1534,6 +1542,12 @@ class CheckmkRuleSync(CMK2):
             if rule.get('comment'):
                 print(f"   comment: {rule['comment'].splitlines()[0]}")
             print(f"   value:   {shorten_value(rule.get('value', ''))}")
+            if result['exact'] and not result['label_condition_kept']:
+                print(f"{CC.FAIL}   !! {CC.ENDC}Checkmk discards host label "
+                      f"conditions in ruleset {result['ruleset']}, so a "
+                      "label cannot replace the host list here — the rule "
+                      "would end up matching every host")
+                continue
             for label, _inside, _outside in result['exact']:
                 print(f"{CC.OKGREEN}   -> in the outcome set Condition Label "
                       f"to {label[0]}:{label[1]} and clear Condition Host"
@@ -1575,12 +1589,10 @@ class CheckmkRuleSync(CMK2):
             CheckmkRuleMngmt, CheckmkFilterRule)
         if not result['exact']:
             return None
-        if len(result['syncer_rules']) != 1:
-            return ("several Setup Rules produce this condition, "
-                    "not touched")
+        blocker = self._reason_not_to_apply(result)
+        if blocker:
+            return blocker
         rule_name, outcome_index = result['syncer_rules'][0]
-        if outcome_index is None:
-            return "outcome unknown, not touched"
         # Every exact label covers the same hosts, so any of them is
         # correct — pick the first by name so re-runs are stable, and
         # name the alternatives in the report.
@@ -1605,6 +1617,22 @@ class CheckmkRuleSync(CMK2):
                                for other in labels[1:])
             done.append(f"equally exact alternatives were {others}")
         return "; ".join(done)
+
+    @staticmethod
+    def _reason_not_to_apply(result):
+        """
+        Why this finding must not be rewritten automatically, or None
+        when it is a straight swap.
+        """
+        if not result.get('label_condition_kept', True):
+            return ("Checkmk discards host label conditions in ruleset "
+                    f"{result['ruleset']}, not touched")
+        if len(result['syncer_rules']) != 1:
+            return ("several Setup Rules produce this condition, "
+                    "not touched")
+        if result['syncer_rules'][0][1] is None:
+            return "outcome unknown, not touched"
+        return None
 
     @staticmethod
     def _whitelist_attribute(filter_model, key):

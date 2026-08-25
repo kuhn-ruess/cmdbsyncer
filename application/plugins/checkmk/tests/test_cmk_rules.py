@@ -873,9 +873,11 @@ class TestApplyFindings(unittest.TestCase):
             name='Syncer: attributes used by rule conditions',
             outcomes=[], save=MagicMock())
 
-    def _result(self, exact=None, syncer_rules=None, exported=('env',)):
+    def _result(self, exact=None, syncer_rules=None, exported=('env',),
+                label_condition_kept=True):
         return {
             'ruleset': 'agent_config:only_from',
+            'label_condition_kept': label_condition_kept,
             'rule': {'folder': '/', 'comment': '', 'value': "{'a': 1}"},
             'syncer_rules': syncer_rules if syncer_rules is not None
                             else [('Agent Access', 0)],
@@ -930,6 +932,16 @@ class TestApplyFindings(unittest.TestCase):
             self.assertIsNone(self.sync._apply_finding(self._result(exact=[])))
         self.rule.save.assert_not_called()
 
+    def test_a_ruleset_discarding_host_labels_is_never_rewritten(self):
+        # Otherwise the rule loses its condition entirely and applies to
+        # every host in the folder.
+        with self._models():
+            status = self.sync._apply_finding(
+                self._result(label_condition_kept=False))
+        self.assertIn('discards host label conditions', status)
+        self.rule.save.assert_not_called()
+        self.assertEqual(self.outcome.condition_host, '{{HOSTNAME}}')
+
     def test_two_source_rules_are_too_ambiguous_to_apply(self):
         result = self._result(
             syncer_rules=[('Rule A', 0), ('Rule B', 1)])
@@ -965,6 +977,11 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         self.sync = make_checkmk_rule_sync()
         self.sync.debug = False
         self.sync.actions = MagicMock()
+        # Offline: read the ruleset item types from the shipped catalog
+        # instead of asking Checkmk.
+        _load_rulesets_catalog()
+        self.sync.offline = True
+        self.sync._ruleset_item_types = None
         self.progress_patcher = patch(
             'application.plugins.checkmk.cmk_rules.Progress',
             _FakeCleanProgress())
@@ -1165,6 +1182,34 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         with patch('application.plugins.checkmk.cmk_rules.Host') as host_cls:
             host_cls.active_non_template.return_value = 'every-host'
             self.assertEqual(self.sync._export_hosts(), 'every-host')
+
+    def test_a_ruleset_that_discards_host_labels_is_not_suggested(self):
+        # Checkmk stores a host_label_rules rule without its host label
+        # condition, so swapping the host list for a label would leave
+        # the rule matching every host in the folder.
+        inventory = {f'prod{index}': {'env': 'prod'} for index in range(4)}
+        self._wire_inventory(inventory)
+        self.sync.rulsets_by_type = {'host_label_rules': [
+            self._entry(f'prod{index}') for index in range(4)]}
+
+        results = self.sync.analyse_rule_optimization(min_hosts=3)
+
+        self.assertFalse(results[0]['label_condition_kept'])
+        self.assertEqual(
+            self.sync._reason_not_to_apply(results[0]),
+            'Checkmk discards host label conditions in ruleset '
+            'host_label_rules, not touched')
+
+    def test_a_normal_ruleset_keeps_its_label_condition(self):
+        inventory = {f'prod{index}': {'env': 'prod'} for index in range(4)}
+        self._wire_inventory(inventory)
+        self.sync.rulsets_by_type = {'agent_config:only_from': [
+            self._entry(f'prod{index}') for index in range(4)]}
+
+        results = self.sync.analyse_rule_optimization(min_hosts=3)
+
+        self.assertTrue(results[0]['label_condition_kept'])
+        self.assertIsNone(self.sync._reason_not_to_apply(results[0]))
 
     def test_small_rules_are_not_reported(self):
         self._wire_inventory({'h1': {'env': 'prod'}})
