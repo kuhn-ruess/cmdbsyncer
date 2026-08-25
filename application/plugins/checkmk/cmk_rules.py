@@ -10,6 +10,7 @@ from collections import Counter
 from pprint import pformat
 
 
+from mongoengine.errors import DoesNotExist
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application import app, logger
@@ -63,6 +64,31 @@ MAX_LABEL_VALUE_LEN = 80
 # How much of a group a label has to cover to be worth reporting as a
 # near miss.
 PARTIAL_LABEL_COVERAGE = 0.8
+# Filter rule that 'analyse_rules --apply' collects its whitelists in.
+APPLY_FILTER_RULE_NAME = 'Syncer: attributes used by rule conditions'
+# Characters that make an attribute unusable as a single Checkmk label:
+# a comma means the value is really a list, the rest are wildcard and
+# regex metacharacters, i.e. a pattern rather than a value.
+# A colon separates key from value in a label condition, so neither half
+# may carry one — values have theirs replaced before the check, the way
+# the export does it.
+INVALID_LABEL_CHARS = set(',:*?^$()[]{}|\\/"\'')
+
+
+def _usable_as_label(text):
+    """
+    Whether ``text`` can be one half of a ``key:value`` label condition.
+
+    Rejects what only looks like a value: comma-separated lists, service
+    and regex patterns, wildcards, and anything carrying whitespace —
+    matching on those is guesswork, and suggesting them produces a
+    condition that matches nothing or the wrong hosts.
+    """
+    if not text or text != text.strip():
+        return False
+    if any(char.isspace() for char in text):
+        return False
+    return not INVALID_LABEL_CHARS.intersection(text)
 
 
 def shorten_value(value, limit=120):
@@ -1024,6 +1050,7 @@ class CheckmkRuleSync(CMK2):
         # neither the identity hash nor anything Checkmk sees, and put
         # back once the rule is fully built.
         syncer_rule = rule_params.pop('_syncer_rule', None)
+        syncer_outcome = rule_params.pop('_syncer_outcome', None)
 
         # Setup condition template based on Checkmk version
         if self.checkmk_version.startswith('2.2'):
@@ -1122,6 +1149,7 @@ class CheckmkRuleSync(CMK2):
         rule_params['condition'] = condition_tpl
         if syncer_rule is not None:
             rule_params['_syncer_rule'] = syncer_rule
+            rule_params['_syncer_outcome'] = syncer_outcome
         return rule_params
 
     def _apply_host_label_condition(self, rule_params, condition_tpl, context):
@@ -1263,7 +1291,7 @@ class CheckmkRuleSync(CMK2):
         self.create_rules()
         self.sort_rules()
 
-    def export_hosts(self):
+    def _export_hosts(self):
         """
         The hosts this run generates rules for. Honors the account's
         object filter, and otherwise stays on the host-only default.
@@ -1298,7 +1326,7 @@ class CheckmkRuleSync(CMK2):
         """
         print(f"\n{CC.HEADER}Build needed Rules{CC.ENDC}")
         print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
-        db_objects = self.export_hosts()
+        db_objects = self._export_hosts()
         total = db_objects.count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
@@ -1337,24 +1365,37 @@ class CheckmkRuleSync(CMK2):
                 group['hosts'].update(condition_hosts(rule['condition']))
                 source = rule.get('_syncer_rule')
                 if source:
-                    group['syncer_rules'].add(source)
+                    group['syncer_rules'].add(
+                        (source, rule.get('_syncer_outcome')))
         return groups
 
     @staticmethod
     def _host_label_set(attributes):
         """
-        The host's attributes as a set of hashable ``key:value`` pairs.
-        Values that are not short scalars cannot serve as a Checkmk host
-        label condition, so they are left out.
+        The host's attributes as a set of hashable ``key:value`` pairs,
+        rendered the way the host export writes them as Checkmk labels —
+        a suggested condition has to match what Checkmk actually stores.
+
+        Anything that cannot serve as a single label value is left out
+        rather than suggested: containers, comma-separated lists, values
+        carrying whitespace, wildcards or service/regex patterns.
         """
+        lowercase = app.config.get('CMK_LOWERCASE_LABEL_VALUES')
         labels = set()
         for key, value in (attributes or {}).items():
             if isinstance(value, (dict, list, tuple, set)):
                 continue
-            value = str(value)
+            key = str(key)
+            # The export writes ``str(value).replace(':', '-')``, plus the
+            # optional lowercasing — see CheckmkHostSync.
+            value = str(value).replace(':', '-')
+            if lowercase:
+                value = value.lower()
             if not value or len(value) > MAX_LABEL_VALUE_LEN:
                 continue
-            labels.add((str(key), value))
+            if not _usable_as_label(key) or not _usable_as_label(value):
+                continue
+            labels.add((key, value))
         return labels
 
     def _collect_label_coverage(self, groups):
@@ -1375,7 +1416,7 @@ class CheckmkRuleSync(CMK2):
         # through first, and the report says so.
         exported_keys = set()
         print(f"{CC.OKGREEN} -- {CC.ENDC} Collect labels of all hosts")
-        db_objects = self.export_hosts()
+        db_objects = self._export_hosts()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
@@ -1422,7 +1463,7 @@ class CheckmkRuleSync(CMK2):
         partial.sort(key=lambda entry: -entry[1])
         return exact, wider, partial
 
-    def analyse_rule_optimization(self, min_hosts=10, top=20):
+    def analyse_rule_optimization(self, min_hosts=10, top=20, apply=False):
         """
         Report which rules were built from a long list of host names and
         which host label could take its place.
@@ -1466,6 +1507,13 @@ class CheckmkRuleSync(CMK2):
                 'exported_keys': exported_keys,
             })
         self._print_optimization_report(results)
+        if apply:
+            self.apply_findings(results)
+        else:
+            replaceable = sum(1 for result in results if result['exact'])
+            if replaceable:
+                print(f"{CC.OKCYAN}  ** {CC.ENDC}Re-run with --apply to "
+                      "change those Setup Rules for you")
         return results
 
     def _print_optimization_report(self, results):
@@ -1476,7 +1524,8 @@ class CheckmkRuleSync(CMK2):
         """
         for result in results:
             rule = result['rule']
-            names = ", ".join(result['syncer_rules']) or '<unknown>'
+            names = ", ".join(
+                name for name, _index in result['syncer_rules']) or '<unknown>'
             print(f"\n{CC.OKBLUE} * {CC.ENDC}Setup Rule "
                   f"{CC.BOLD}{names}{CC.ENDC} — "
                   f"{result['hosts']} hosts end up in one condition")
@@ -1511,6 +1560,114 @@ class CheckmkRuleSync(CMK2):
         print(f"\n{CC.HEADER}  ** {CC.ENDC}{replaceable} of {len(results)} "
               "reported Setup Rule(s) can be switched to a single "
               "Host label condition")
+
+    def _apply_finding(self, result):
+        """
+        Rewrite one Setup Rule outcome to use the suggested label instead
+        of a host condition, and let the attribute through the export
+        filter if it does not pass it yet.
+
+        Returns a status string for the report, or None when the finding
+        is not safe to apply on its own.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.plugins.checkmk.models import (
+            CheckmkRuleMngmt, CheckmkFilterRule)
+        if not result['exact']:
+            return None
+        if len(result['syncer_rules']) != 1:
+            return ("several Setup Rules produce this condition, "
+                    "not touched")
+        rule_name, outcome_index = result['syncer_rules'][0]
+        if outcome_index is None:
+            return "outcome unknown, not touched"
+        # Every exact label covers the same hosts, so any of them is
+        # correct — pick the first by name so re-runs are stable, and
+        # name the alternatives in the report.
+        labels = sorted(label for label, _inside, _outside in result['exact'])
+        key, value = labels[0]
+        try:
+            rule = CheckmkRuleMngmt.objects.get(name=rule_name)
+        except DoesNotExist:
+            return f"Setup Rule '{rule_name}' no longer exists"
+        try:
+            outcome = rule.outcomes[outcome_index]
+        except IndexError:
+            return f"Setup Rule '{rule_name}' has no outcome {outcome_index}"
+        outcome.condition_label_template = f"{key}:{value}"
+        outcome.condition_host = ''
+        rule.save()
+        done = [f"condition is now the label {key}:{value}"]
+        if key not in result['exported_keys']:
+            done.append(self._whitelist_attribute(CheckmkFilterRule, key))
+        if len(labels) > 1:
+            others = ", ".join(f"{other[0]}:{other[1]}"
+                               for other in labels[1:])
+            done.append(f"equally exact alternatives were {others}")
+        return "; ".join(done)
+
+    @staticmethod
+    def _whitelist_attribute(filter_model, key):
+        """
+        Make sure ``key`` reaches Checkmk as a host label by whitelisting
+        it in a filter rule the analysis owns. Collected in one rule so
+        repeated runs extend it instead of littering the rule list.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.modules.rule.models import FilterAction
+        rule = filter_model.objects(name=APPLY_FILTER_RULE_NAME).first()
+        if not rule:
+            rule = filter_model()
+            rule.name = APPLY_FILTER_RULE_NAME
+            rule.documentation = (
+                "Created by 'checkmk analyse_rules --apply'. Lets the "
+                "attributes through that Setup Rule conditions match on.")
+            rule.condition_typ = 'anyway'
+            rule.conditions = []
+            rule.outcomes = []
+            rule.enabled = True
+        already = {outcome.attribute_name for outcome in rule.outcomes
+                   if outcome.action == 'whitelist_attribute'}
+        if key in already:
+            return f"'{key}' already passes filter rule {rule.name}"
+        action = FilterAction()
+        action.action = 'whitelist_attribute'
+        action.attribute_name = key
+        rule.outcomes.append(action)
+        rule.save()
+        return f"'{key}' whitelisted in filter rule {rule.name}"
+
+    def apply_findings(self, results):
+        """
+        Apply every finding that is a straight swap: the label covers
+        exactly the hosts of the rule, so the export keeps producing the
+        same rule for the same hosts — just with a short condition.
+
+        ``wider`` and ``partial`` suggestions change which hosts get the
+        rule and are never applied automatically.
+        """
+        print(f"\n{CC.HEADER}Apply findings{CC.ENDC}")
+        applied = 0
+        for result in results:
+            status = self._apply_finding(result)
+            if status is None:
+                continue
+            names = ", ".join(name for name, _i in result['syncer_rules'])
+            if result['exact']:
+                applied += 1
+                print(f"{CC.OKGREEN}  ** {CC.ENDC}{names}: {status}")
+            else:
+                print(f"{CC.WARNING}  ** {CC.ENDC}{names}: {status}")
+        if applied:
+            # The outcomes computed from the old conditions are cached on
+            # every host — same as a rule edit in the web interface.
+            Host.objects(cache__ne={}).update(set__cache={})
+            print(f"{CC.OKGREEN}  ** {CC.ENDC}{applied} Setup Rule(s) "
+                  "changed, host caches dropped")
+        else:
+            print(f"{CC.WARNING}  ** {CC.ENDC}Nothing was safe to apply "
+                  "on its own")
+        return applied
 
     def calculate_rules_of_host(self, host_actions, attributes):
         """

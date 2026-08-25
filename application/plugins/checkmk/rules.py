@@ -155,12 +155,15 @@ class CheckmkRulesetRule(Rule):
         # a project rule by the project's account lists and skip the folder
         # scope (see build_condition_and_update_rule_params).
         project = (_rule or {}).get('project')
-        for outcome in rule_outcomes:
+        for index, outcome in enumerate(rule_outcomes):
             if self.tag_source_rule:
                 # Copy: the prepared outcome dicts are shared across
-                # hosts by the rule engine's cache.
+                # hosts by the rule engine's cache. The index is the
+                # outcome's position in the rule document, so a finding
+                # can be applied to exactly the right outcome.
                 outcome = dict(outcome)
                 outcome['_syncer_rule'] = (_rule or {}).get('name', '')
+                outcome['_syncer_outcome'] = index
             if project:
                 outcome['project'] = project
             ruleset_type = outcome['ruleset']

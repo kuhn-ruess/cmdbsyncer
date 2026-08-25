@@ -313,7 +313,8 @@ def activate_changes(account):
     return True
 #.
 #   .-- Analyse Rule Optimization
-def analyse_rules(account=None, min_hosts=10, top=20, debug=False):
+def analyse_rules(account=None, min_hosts=10, top=20, apply=False,
+                  debug=False):
     """
     Report which Setup Rules are built from a long list of host names,
     and which host label could replace that list.
@@ -322,6 +323,9 @@ def analyse_rules(account=None, min_hosts=10, top=20, debug=False):
     account is optional. Given one, the analysis sees exactly what that
     account would export (its project and folder scope, its object
     filter); without one it looks at every enabled rule.
+
+    ``apply=True`` rewrites the Setup Rules whose host list a label
+    covers exactly. Everything else is only reported.
     """
     rules = _load_rules()
     syncer = CheckmkRuleSync(account or False, probe_version=False)
@@ -349,7 +353,8 @@ def analyse_rules(account=None, min_hosts=10, top=20, debug=False):
         print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}No account given: "
               "reporting every enabled rule, without an account's project, "
               "folder or object scope")
-    return syncer.analyse_rule_optimization(min_hosts=min_hosts, top=top)
+    return syncer.analyse_rule_optimization(
+        min_hosts=min_hosts, top=top, apply=apply)
 
 #.
 #   .-- Export Groups

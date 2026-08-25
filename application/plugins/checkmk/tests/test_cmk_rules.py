@@ -9,8 +9,9 @@ import unittest
 from collections import Counter
 from unittest.mock import patch, MagicMock
 
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
+from application import app
 from application.plugins.checkmk.cmk2 import CmkException
 from application.plugins.checkmk.cmk_rules import (
     clean_postproccessed,
@@ -831,6 +832,7 @@ class TestSourceRuleTagging(unittest.TestCase):
         outcomes = self.rule.add_outcomes(
             {'name': 'My Rule'}, [{'ruleset': 'r1'}], {})
         self.assertEqual(outcomes['r1'][0]['_syncer_rule'], 'My Rule')
+        self.assertEqual(outcomes['r1'][0]['_syncer_outcome'], 0)
 
     def test_the_shared_outcome_dict_is_not_touched(self):
         # The rule engine reuses the prepared outcome dicts for every
@@ -851,6 +853,99 @@ def _load_rulesets_catalog():
         _load_real_module(name, os.path.join(
             'plugins', 'checkmk', 'rulesets_catalog.py'))
     return sys.modules[name]
+
+
+class TestApplyFindings(unittest.TestCase):
+    """
+    --apply rewrites a Setup Rule outcome to the suggested label. Only an
+    exact finding qualifies: it covers the same hosts, so the export
+    keeps producing the same rule — just with a short condition.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.log_details = []
+        self.outcome = SimpleNamespace(
+            condition_label_template='', condition_host='{{HOSTNAME}}')
+        self.rule = SimpleNamespace(
+            name='Agent Access', outcomes=[self.outcome], save=MagicMock())
+        self.filter_rule = SimpleNamespace(
+            name='Syncer: attributes used by rule conditions',
+            outcomes=[], save=MagicMock())
+
+    def _result(self, exact=None, syncer_rules=None, exported=('env',)):
+        return {
+            'ruleset': 'agent_config:only_from',
+            'rule': {'folder': '/', 'comment': '', 'value': "{'a': 1}"},
+            'syncer_rules': syncer_rules if syncer_rules is not None
+                            else [('Agent Access', 0)],
+            'hosts': 900,
+            'exact': exact if exact is not None
+                     else [(('env', 'prod'), 900, 0)],
+            'wider': [], 'partial': [],
+            'exported_keys': set(exported),
+        }
+
+    def _models(self):
+        """Stub the two rule documents the apply step writes to."""
+        models = ModuleType('application.plugins.checkmk.models')
+        models.CheckmkRuleMngmt = MagicMock()
+        models.CheckmkRuleMngmt.objects.get.return_value = self.rule
+        models.CheckmkFilterRule = MagicMock()
+        models.CheckmkFilterRule.objects.return_value.first.return_value = \
+            self.filter_rule
+        rule_models = ModuleType('application.modules.rule.models')
+        rule_models.FilterAction = lambda: SimpleNamespace(
+            action=None, attribute_name=None)
+        return patch.dict(sys.modules, {
+            'application.plugins.checkmk.models': models,
+            'application.modules.rule.models': rule_models})
+
+    def test_the_outcome_gets_the_label_and_loses_the_host_condition(self):
+        with self._models():
+            status = self.sync._apply_finding(self._result())
+        self.assertEqual(self.outcome.condition_label_template, 'env:prod')
+        self.assertEqual(self.outcome.condition_host, '')
+        self.rule.save.assert_called_once()
+        self.assertIn('env:prod', status)
+
+    def test_an_attribute_the_filter_drops_is_whitelisted(self):
+        with self._models():
+            status = self.sync._apply_finding(self._result(exported=()))
+        self.assertEqual(
+            [(action.action, action.attribute_name)
+             for action in self.filter_rule.outcomes],
+            [('whitelist_attribute', 'env')])
+        self.filter_rule.save.assert_called_once()
+        self.assertIn('whitelisted', status)
+
+    def test_an_attribute_that_already_passes_is_left_alone(self):
+        with self._models():
+            self.sync._apply_finding(self._result(exported=('env',)))
+        self.assertEqual(self.filter_rule.outcomes, [])
+        self.filter_rule.save.assert_not_called()
+
+    def test_nothing_exact_is_never_applied(self):
+        with self._models():
+            self.assertIsNone(self.sync._apply_finding(self._result(exact=[])))
+        self.rule.save.assert_not_called()
+
+    def test_two_source_rules_are_too_ambiguous_to_apply(self):
+        result = self._result(
+            syncer_rules=[('Rule A', 0), ('Rule B', 1)])
+        with self._models():
+            status = self.sync._apply_finding(result)
+        self.assertIn('several Setup Rules', status)
+        self.rule.save.assert_not_called()
+
+    def test_the_first_label_wins_and_the_others_are_named(self):
+        result = self._result(exact=[(('site', 'hh'), 900, 0),
+                                     (('env', 'prod'), 900, 0)])
+        with self._models():
+            status = self.sync._apply_finding(result)
+        # Sorted, so re-runs pick the same one.
+        self.assertEqual(self.outcome.condition_label_template, 'env:prod')
+        self.assertIn('site:hh', status)
 
 
 class _FakeHost:  # pylint: disable=too-few-public-methods
@@ -885,6 +980,7 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
             'optimize': optimize,
             'optimize_rule_hash': rule_hash,
             '_syncer_rule': syncer_rule,
+            '_syncer_outcome': 0,
             'folder': '/', 'comment': 'Agent access',
             'value': "{'only_from': ['10.0.0.1']}",
             'condition': {'host_name': {'match_on': [hostname],
@@ -897,7 +993,7 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         `exported` names the attributes that pass the export filter, i.e.
         the ones Checkmk sees as a host label. Defaults to all of them.
         """
-        self.sync.export_hosts = lambda: MagicMock(
+        self.sync._export_hosts = lambda: MagicMock(
             count=lambda: len(inventory),
             __iter__=lambda _self=None: iter(
                 [_FakeHost(name) for name in inventory]))
@@ -923,7 +1019,7 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         self.assertEqual(groups[('ruleset1', 'h2')]['hosts'], {'other'})
         # The report has to name the Setup Rule, not the Checkmk rule.
         self.assertEqual(groups[('ruleset1', 'h1')]['syncer_rules'],
-                         {'Agent access'})
+                         {('Agent access', 0)})
 
     def test_label_set_skips_what_cannot_be_a_label(self):
         labels = self.sync._host_label_set({
@@ -934,6 +1030,34 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
             'count': 3,               # scalar, stringified
         })
         self.assertEqual(labels, {('env', 'prod'), ('count', '3')})
+
+    def test_values_that_are_not_a_single_label_are_not_suggested(self):
+        # Suggesting these produces a condition that matches nothing or
+        # the wrong hosts, so they never become a candidate.
+        labels = self.sync._host_label_set({
+            'roles': 'web, db',            # really a list
+            'services': 'Interface *',     # wildcard
+            'pattern': '^CPU load$',       # service/regex pattern
+            'place': 'Data Center 1',      # whitespace
+            'padded': '  prod  ',          # whitespace
+            'key:bad': 'v',                # colon in the key
+            'env': 'prod',                 # the only usable one
+        })
+        self.assertEqual(labels, {('env', 'prod')})
+
+    def test_a_colon_in_the_value_becomes_a_dash(self):
+        # The host export stores labels as str(value).replace(':', '-'),
+        # so a suggested condition has to say the same.
+        self.assertEqual(self.sync._host_label_set({'ver': '2:1'}),
+                         {('ver', '2-1')})
+
+    def test_lowercasing_follows_the_export_setting(self):
+        with patch.dict(app.config, {'CMK_LOWERCASE_LABEL_VALUES': True}):
+            self.assertEqual(self.sync._host_label_set({'env': 'PROD'}),
+                             {('env', 'prod')})
+        with patch.dict(app.config, {'CMK_LOWERCASE_LABEL_VALUES': False}):
+            self.assertEqual(self.sync._host_label_set({'env': 'PROD'}),
+                             {('env', 'PROD')})
 
     def test_suggestions_are_classified(self):
         hosts = {f'h{index}' for index in range(10)}
@@ -962,7 +1086,7 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         self.assertEqual(len(results), 1)
         result = results[0]
         self.assertEqual(result['hosts'], 5)
-        self.assertEqual(result['syncer_rules'], ['Agent access'])
+        self.assertEqual(result['syncer_rules'], [('Agent access', 0)])
         self.assertEqual([entry[0] for entry in result['exact']],
                          [('env', 'prod')])
         # role:web covers the group but would pull in the two dev hosts.
@@ -1029,7 +1153,7 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
             'Checkmk: Export Rules': {'filter': ['host', 'shadow_host']}}}
         with patch('application.plugins.checkmk.cmk_rules.Host') as host_cls:
             host_cls.objects_by_filter.return_value = 'scoped'
-            self.assertEqual(self.sync.export_hosts(), 'scoped')
+            self.assertEqual(self.sync._export_hosts(), 'scoped')
         host_cls.objects_by_filter.assert_called_once_with(
             ['host', 'shadow_host'])
 
@@ -1040,7 +1164,7 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         self.sync.config = {}
         with patch('application.plugins.checkmk.cmk_rules.Host') as host_cls:
             host_cls.active_non_template.return_value = 'every-host'
-            self.assertEqual(self.sync.export_hosts(), 'every-host')
+            self.assertEqual(self.sync._export_hosts(), 'every-host')
 
     def test_small_rules_are_not_reported(self):
         self._wire_inventory({'h1': {'env': 'prod'}})
