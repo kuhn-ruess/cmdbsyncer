@@ -21,6 +21,12 @@ class BaseConfig():
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
     BASE_PREFIX = '/'
+
+    # Admin pages use the full window width instead of Bootstrap's
+    # 1140px container — the host and object lists carry wide columns
+    # (labels, CMDB attributes) and the forms edit long values, both of
+    # which were squeezed while the screen stayed empty left and right.
+    FLASK_ADMIN_FLUID_LAYOUT = True
     SESSION_COOKIE_NAME = "syncer"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SECURE = True

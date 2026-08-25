@@ -622,6 +622,86 @@ class _LifecycleBulkActionsMixin:
         return self._bulk_set_lifecycle(ids, 'archived')
 
 
+# Compact layout for the `cmdb_fields` inline list on the object and
+# template forms. Flask-Admin wraps every entry in a bootstrap card with
+# its own legend, which turns a handful of attributes into a very tall
+# form and leaves the value input squeezed between the card paddings.
+# This flattens each entry to a single key/value line so the value can
+# use the width of the form. Scoped to #cmdb_fields, so other inline
+# lists keep the stock rendering.
+#
+# Flask-Admin DOM (bootstrap4 theme):
+#   <label for="cmdb_fields">Cmdb Fields</label>
+#   <div class="inline-field" id="cmdb_fields">
+#     <div class="inline-field-list">
+#       <div class="inline-field card card-body mb-3" id="cmdb_fields-N">
+#         <legend><small>Cmdb Fields #N <div class="pull-right">[X]</div></small></legend>
+#         <div class="clearfix"></div>
+#         <div class="inline-form-field">
+#           <div class="form-row">…key…  :  …value…</div>
+#     …
+#     <a id="cmdb_fields-button" class="btn btn-primary">Add</a>
+CMDB_FIELDS_FORM_CSS = '''
+<style>
+/* The FieldSet already names the section. */
+label[for="cmdb_fields"] { display: none !important; }
+
+#cmdb_fields .inline-field { position: relative; }
+
+/* Flatten the per-entry card to a plain padded line. Right padding
+   leaves room for the JS-injected delete ✕ (master.html), left padding
+   for the drag handle rendered into the legend. */
+#cmdb_fields .inline-field.card {
+    margin: 0 !important;
+    padding: 3px 44px 3px 24px !important;
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent !important;
+    border-radius: 0 !important;
+}
+
+/* Drag handle stays, its "Cmdb Fields #N" caption and the native
+   delete link do not. */
+#cmdb_fields .inline-field > legend {
+    position: absolute !important;
+    top: 7px !important;
+    left: 2px !important;
+    right: auto !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    line-height: 1 !important;
+    font-size: 0 !important;
+}
+#cmdb_fields .inline-field > legend small { font-size: 0 !important; }
+#cmdb_fields .inline-field > legend .pull-right { display: none !important; }
+#cmdb_fields .inline-field > .clearfix { display: none !important; }
+
+/* One line per entry: key keeps its width, the value column takes
+   everything that is left. */
+#cmdb_fields .form-row {
+    margin: 0 !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    width: 100%;
+}
+#cmdb_fields .form-row > .col,
+#cmdb_fields .form-row > .col-auto {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    min-width: 0;
+}
+#cmdb_fields .form-group { margin: 0 !important; padding: 0 !important; }
+#cmdb_fields .form-group > label { display: none !important; }
+#cmdb_fields input { padding: 3px 8px !important; height: auto !important; }
+
+#cmdb_fields .inline-field-list { display: grid; gap: 3px; }
+#cmdb_fields > a.btn { margin-top: 10px; }
+</style>
+'''
+
+
 class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestors,too-many-instance-attributes
                       _LifecycleBulkActionsMixin,
                       _TimelineRowActionMixin,
@@ -730,24 +810,7 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
     }
 
     form_rules = [
-        rules.HTML('''
-        <style>
-        [id^="cmdb_fields-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
-        [id^="cmdb_fields-"] legend small { font-size: 0 !important; }
-        [id^="cmdb_fields-"] legend small .pull-right { font-size: 1rem !important; }
-        [id^="cmdb_fields-"] .card {
-            margin-bottom: 8px !important;
-            padding: 10px !important;
-            background-color: var(--surface-subtle, #f8f9fa) !important;
-            color: var(--surface-text, inherit) !important;
-            border: 1px solid var(--surface-border, transparent) !important;
-            border-radius: 8px !important;
-        }
-        [id^="cmdb_fields-"] label { display: none !important; }
-        [id^="cmdb_fields-"] .form-group { margin-bottom: 0 !important; }
-        [id^="cmdb_fields-"] .inline-field { margin-bottom: 8px !important; }
-        </style>
-        '''),
+        rules.HTML(CMDB_FIELDS_FORM_CSS),
         rules.Field('hostname'),
         rules.Field('object_type'),
         rules.Field('lifecycle_state'),
@@ -779,12 +842,16 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
                                 'margin-right: 5px; '
                                 'font-weight: bold; '
                                 'border: 1px solid #1abc9c; '
-                                'width: 220px;'
+                                'width: 300px;'
                             ),
                             'size': 20,
                             'placeholder': 'Key'
                         },
                         'field_value': {
+                            # No fixed width: the value column grows with
+                            # the form, and attribute values are long —
+                            # a comma-separated service list does not fit
+                            # into a 450px box.
                             'style': (
                                 'background-color: #81DAF5; '
                                 'border-radius: 5px; '
@@ -792,7 +859,8 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
                                 'font-family: monospace; '
                                 'margin-left: 5px; '
                                 'border: 1px solid #3498db; '
-                                'width: 450px;'
+                                'width: 100%; '
+                                'box-sizing: border-box;'
                             ),
                             'size': 40,
                             'placeholder': 'Value'
@@ -814,7 +882,7 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
                             ' margin: 0 3px;">:</span>'
                             '</div>'
                         ),
-                        rules.HTML('<div class="col-auto">'),
+                        rules.HTML('<div class="col">'),
                         rules.Field('field_value'),
                         rules.HTML('</div>'),
                         rules.HTML('</div>'),
@@ -1072,24 +1140,7 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         return self._resync_assignments(ids, remove_stale=True)
 
     form_rules = [
-        rules.HTML('''
-        <style>
-        [id^="cmdb_fields-"] legend { border: none !important; padding: 0 !important; margin: 0 0 4px 0 !important; }
-        [id^="cmdb_fields-"] legend small { font-size: 0 !important; }
-        [id^="cmdb_fields-"] legend small .pull-right { font-size: 1rem !important; }
-        [id^="cmdb_fields-"] .card {
-            margin-bottom: 8px !important;
-            padding: 10px !important;
-            background-color: var(--surface-subtle, #f8f9fa) !important;
-            color: var(--surface-text, inherit) !important;
-            border: 1px solid var(--surface-border, transparent) !important;
-            border-radius: 8px !important;
-        }
-        [id^="cmdb_fields-"] label { display: none !important; }
-        [id^="cmdb_fields-"] .form-group { margin-bottom: 0 !important; }
-        [id^="cmdb_fields-"] .inline-field { margin-bottom: 8px !important; }
-        </style>
-        '''),
+        rules.HTML(CMDB_FIELDS_FORM_CSS),
         rules.Field('hostname'),
         rules.FieldSet(('cmdb_fields', 'cmdb_match'), "CMDB Fields"),
     ]
@@ -1112,6 +1163,20 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         'raw',
         'cache',
         'is_object',
+        # A template is neither imported nor exported on its own, so
+        # everything a host carries for those two — staleness, the
+        # Checkmk site pool, the project scope, relations — is empty
+        # noise here. The list keeps name, attributes, match and
+        # lifecycle; `deleted_at` is always empty because the query
+        # filters archived templates out.
+        'is_stale',
+        'stale_since',
+        'deleted_at',
+        'delete_reason',
+        'lifecycle_state_changed_at',
+        'relations',
+        'pool_site',
+        'project',
     ]
 
     _force_object_type = 'template'

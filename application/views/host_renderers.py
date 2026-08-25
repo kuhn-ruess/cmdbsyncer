@@ -244,25 +244,60 @@ _LABEL_BADGE_STYLE = (
 _LABEL_WRAPPER_STYLE = 'max-width: 600px;'
 
 
+def _split_attr_value(value):
+    """
+    Split a CMDB attribute value into the parts to show as separate
+    chips. Comma-separated lists are a common way to keep several
+    values in one attribute — showing them as one long string forces a
+    truncation, so each part gets its own chip and the row wraps.
+    A value without a comma stays a single chip.
+    """
+    text = str(value)
+    if ',' not in text:
+        return [text]
+    parts = [part.strip() for part in text.split(',')]
+    parts = [part for part in parts if part]
+    return parts or [text]
+
+
+def _render_attr_values(value):
+    """
+    The value side of one attribute row: one chip per comma-separated
+    part. Nothing is shortened — the parts wrap over as many lines as
+    the column needs.
+    """
+    if not value:
+        return '<span class="cmdb-attr-val cmdb-attr-empty">empty</span>'
+    return ''.join(f'<span class="cmdb-attr-val">{escape(part)}</span>'
+                   for part in _split_attr_value(value))
+
+
 def _render_cmdb_fields_preview(_view, _context, model, _name):
     """
-    Compact badge preview of CMDB fields for the list view. Mirrors
-    the label-preview rendering so the host list stays uniform.
+    Structured preview of the CMDB attributes for the list view: one
+    row per attribute, the name on the left, its value(s) on the right.
+    The name column has a fixed width so the names line up over all
+    rows of the list; comma-separated values become one chip each and
+    wrap over as many lines as they need instead of being cut off.
     """
     if not model.cmdb_fields:
         return Markup("")
-    html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
+    rows = []
     for entry in model.cmdb_fields:
-        if not entry.field_value:
+        if not entry.field_name:
             continue
-        text = f"{entry.field_name}:{entry.field_value}"
-        html += (
-            f'<span class="badge badge-info mr-1" '
-            f'style="{_LABEL_BADGE_STYLE}" title="{escape(text)}">'
-            f'{escape(text)}</span>'
+        rows.append(
+            f'<div class="cmdb-attr">'
+            f'<span class="cmdb-attr-key">{escape(entry.field_name)}</span>'
+            f'<span class="cmdb-attr-vals">'
+            f'{_render_attr_values(entry.field_value)}</span>'
+            f'</div>'
         )
-    html += '</div>'
-    return Markup(html)
+    if not rows:
+        return Markup("")
+    # Styling lives in static/css/cmdbsyncer.css — a list renders this
+    # once per row, so the CSS must not travel with it.
+    return Markup('<div class="cmdb-attrs">' + ''.join(rows) + '</div>')
 
 
 def _render_cmdb_fields(_view, _context, model, _name):

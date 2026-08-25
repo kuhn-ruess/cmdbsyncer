@@ -256,3 +256,63 @@ pre.syncer-code {
 .app-hero h1 { font-size: 1.9rem; }
 .app-hero h2 { font-size: 1.5rem; }
 .app-hero p { margin: 0.4rem 0 0; font-size: 0.95rem; opacity: 0.82; }
+
+/* CMDB attribute preview in the object/template lists: one row per
+   attribute, the name on the left, the value(s) on the right. The name
+   column has a fixed width so the names line up over all rows of the
+   list, and a comma-separated value is split into one chip per part so
+   a list of values wraps over several lines instead of being cut off. */
+.cmdb-attrs {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.cmdb-attr {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+}
+.cmdb-attr-key {
+    /* Fixed, not content-sized: a shared width is what makes the
+       column scannable from row to row. Long names wrap instead of
+       being cut off. */
+    flex: 0 0 15rem;
+    max-width: 40%;
+    font-weight: 600;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    padding: 1px 6px;
+    border-radius: 3px;
+    overflow-wrap: anywhere;
+    background: var(--surface-subtle, #eef1f4);
+    color: var(--surface-text, inherit);
+    border: 1px solid var(--surface-divider, rgba(0, 0, 0, 0.1));
+}
+.cmdb-attr-vals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.cmdb-attr-val {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    padding: 1px 6px;
+    border-radius: 3px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--surface-text, inherit);
+    border: 1px solid var(--surface-divider, rgba(0, 0, 0, 0.1));
+}
+.cmdb-attr-val.cmdb-attr-empty {
+    font-style: italic;
+    opacity: 0.6;
+    border-style: dashed;
+}
+@media (max-width: 992px) {
+    .cmdb-attr { flex-direction: column; gap: 2px; }
+    .cmdb-attr-key { flex: 0 0 auto; max-width: 100%; }
+}
