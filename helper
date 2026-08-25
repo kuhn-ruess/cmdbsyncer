@@ -32,7 +32,18 @@ compose() {
 
 case "${1:-}" in
 "up")
-    compose rm
+    # -f: without it "rm" asks for confirmation, which nobody can answer
+    # when the stack is being brought up in the background.
+    compose rm -f
+    # Detached: the stack keeps running when the terminal goes away, and
+    # the shell is free again. Use "./helper logs" to follow the output.
+    compose up --build --force-recreate --detach
+    echo "Stack started in the background. Follow it with: ./helper logs"
+    ;;
+"up-fg")
+    # Same, but attached — for when you want the build and startup
+    # output right here and Ctrl-C to stop the stack.
+    compose rm -f
     compose up --build --force-recreate
     ;;
 "start")
@@ -70,6 +81,7 @@ case "${1:-}" in
 *)
     echo "Simple Helper for CMDB Syncer Jobs."
     echo "Runtime: $RUNTIME (override with CONTAINER_RUNTIME=docker|podman)"
-    echo "Commands: up, down, start, stop, restart, logs, shell, cmdbsyncer, create_user EMAIL, bve"
+    echo "Commands: up (background), up-fg (attached), down, start, stop, restart,"
+    echo "          logs, shell, cmdbsyncer, create_user EMAIL, bve"
     ;;
 esac
