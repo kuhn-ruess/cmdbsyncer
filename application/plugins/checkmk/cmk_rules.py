@@ -859,7 +859,7 @@ def analyze_value_differences(expected, actual):
         return '; '.join(differences) if differences else "List order differs"
     return f"Expected: {repr(expected)}, Got: {repr(actual)}"
 
-class CheckmkRuleSync(CMK2):
+class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
     """
     Export Checkmk Rules
     """
@@ -883,6 +883,11 @@ class CheckmkRuleSync(CMK2):
         # sort_rules to skip the move chain when CMK already lists the
         # rules in the desired order.
         self._cmk_order_by_ruleset = {}
+        # Rules created during this run, per ruleset, in the order they
+        # were POSTed. Checkmk appends a new rule at the bottom of the
+        # folder, so together with the captured order this reconstructs
+        # where every owned rule currently sits — without a second GET.
+        self._created_order_by_ruleset = {}
         # Rulesets whose current state could not be read this run (timeout,
         # Checkmk error). Their create step is skipped as well: without
         # knowing what is already there, creating would duplicate rules.
@@ -1954,6 +1959,43 @@ class CheckmkRuleSync(CMK2):
             )
             self.rulsets_by_type[ruleset_name] = rules
 
+    def _plan_rule_moves(self):
+        """
+        Work out which rules have to be moved, before sending anything.
+
+        Returns ``[(ruleset, rule_id, after_rule_id), …]``. Planning up
+        front is what makes the progress bar honest: the reorder is one
+        request per move, and a big ruleset used to sit on a bar that
+        only advanced once the whole chain was through.
+        """
+        planned = []
+        for ruleset_name, rules in self.rulsets_by_type.items():
+            if len(rules) < 2:
+                continue
+            # folder_index defaults to 0; if no rule in this ruleset
+            # has an explicit folder_index > 0, the admin has not
+            # configured an order — leave the Checkmk-side ordering
+            # untouched instead of chaining a move per rule.
+            if not any(r.get('folder_index', 0) for r in rules):
+                continue
+            desired_ids = self._desired_cmk_id_chain(rules)
+            if len(desired_ids) < 2:
+                continue
+            # Skip the move chain when CMK already lists the
+            # syncer-owned rules in the desired order.
+            if self._is_already_sorted(ruleset_name, rules, desired_ids):
+                continue
+            current_order = self._current_owned_order(ruleset_name,
+                                                      desired_ids)
+            if current_order is None:
+                indices = range(1, len(desired_ids))
+            else:
+                indices = self._moves_needed(desired_ids, current_order)
+            for index in indices:
+                planned.append((ruleset_name, desired_ids[index],
+                                desired_ids[index - 1]))
+        return planned
+
     def sort_rules(self):
         """
         Reorder syncer-owned rules in each Checkmk ruleset so they
@@ -1969,69 +2011,59 @@ class CheckmkRuleSync(CMK2):
         previous one. This minimises disruption to user rules
         compared to a ``top_of_folder`` / ``bottom_of_folder`` sweep
         that would push the syncer block past every user rule.
+
+        Set the account option ``skip_rule_reorder`` to leave the
+        Checkmk-side order alone entirely — every move is a write plus
+        a pending change, and on a large ruleset that is the slowest
+        part of the export by far.
         """
+        if self.config.get('skip_rule_reorder'):
+            print(f"{CC.OKGREEN} -- {CC.ENDC} Reorder skipped "
+                  "(skip_rule_reorder is set on the account)")
+            return
         print(f"{CC.OKGREEN} -- {CC.ENDC} Reorder syncer rules")
+        planned = self._plan_rule_moves()
+        if not planned:
+            print(f"{CC.OKGREEN}  ** {CC.ENDC}Every ruleset is already in "
+                  "the configured order")
+            return
+        rulesets = len({entry[0] for entry in planned})
+        print(f"{CC.OKBLUE}  * {CC.ENDC}{len(planned)} rule(s) to move "
+              f"across {rulesets} ruleset(s)")
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
                       TimeElapsedColumn()) as progress:
-            total_rules = sum(len(r) for r in self.rulsets_by_type.values())
-            task1 = progress.add_task(
-                f"Sort {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
-                total=len(self.rulsets_by_type),
-            )
-            for ruleset_name, rules in self.rulsets_by_type.items():
-                if len(rules) < 2:
-                    progress.advance(task1)
-                    continue
-                # folder_index defaults to 0; if no rule in this ruleset
-                # has an explicit folder_index > 0, the admin has not
-                # configured an order — leave the Checkmk-side ordering
-                # untouched instead of chaining a move per rule.
-                if not any(r.get('folder_index', 0) for r in rules):
-                    progress.advance(task1)
-                    continue
-                desired_ids = self._desired_cmk_id_chain(rules)
-                if len(desired_ids) < 2:
-                    progress.advance(task1)
-                    continue
-                # Skip the move chain when CMK already lists the
-                # syncer-owned rules in the desired order.
-                if self._is_already_sorted(ruleset_name, rules, desired_ids):
-                    progress.advance(task1)
-                    continue
-                for i in range(1, len(desired_ids)):
-                    move_url = (
-                        f"objects/rule/{desired_ids[i]}/actions/move/invoke"
-                    )
-                    payload = {
-                        "position": "after_specific_rule",
-                        "rule_id": desired_ids[i - 1],
-                    }
-                    try:
-                        self.request(move_url, data=payload, method="POST")
-                        self.log_details.append((
-                            "INFO",
-                            f"Reordered rule in {ruleset_name}: "
-                            f"{desired_ids[i]} after {desired_ids[i - 1]}",
-                        ))
-                    except CmkException as error:
-                        message = (
-                            f"Could not reorder rule {desired_ids[i]} in "
-                            f"{ruleset_name}: {error}"
-                        )
-                        self.log_error(message)
-                    except Exception as error:  # pylint: disable=broad-except
-                        # A non-CmkException (timeout, network reset, JSON
-                        # decode, …) used to bubble out of sort_rules and
-                        # silently abort the rest of the reorder. Catch it
-                        # explicitly so the run continues and the failure
-                        # is visible on stdout and in the run log.
-                        message = (
-                            f"Unexpected error reordering rule {desired_ids[i]} in "
-                            f"{ruleset_name}: {type(error).__name__}: {error}"
-                        )
-                        self.log_error(message)
+            # One step per move, not per ruleset: a single ruleset can
+            # hold hundreds of moves, and a bar that only ticks when it
+            # is finished looks like the export has hung.
+            task1 = progress.add_task("Move rules", total=len(planned))
+            for ruleset_name, rule_id, after_id in planned:
+                move_url = f"objects/rule/{rule_id}/actions/move/invoke"
+                payload = {
+                    "position": "after_specific_rule",
+                    "rule_id": after_id,
+                }
+                try:
+                    self.request(move_url, data=payload, method="POST")
+                    self.log_details.append((
+                        "INFO",
+                        f"Reordered rule in {ruleset_name}: "
+                        f"{rule_id} after {after_id}",
+                    ))
+                except CmkException as error:
+                    self.log_error(
+                        f"Could not reorder rule {rule_id} in "
+                        f"{ruleset_name}: {error}")
+                except Exception as error:  # pylint: disable=broad-except
+                    # A non-CmkException (timeout, network reset, JSON
+                    # decode, …) used to bubble out of sort_rules and
+                    # silently abort the rest of the reorder. Catch it
+                    # explicitly so the run continues and the failure
+                    # is visible on stdout and in the run log.
+                    self.log_error(
+                        f"Unexpected error reordering rule {rule_id} in "
+                        f"{ruleset_name}: {type(error).__name__}: {error}")
                 progress.advance(task1)
 
     def _desired_cmk_id_chain(self, rules):
@@ -2050,6 +2082,53 @@ class CheckmkRuleSync(CMK2):
             rule['_cmk_id'] for rule in rules
             if rule.get('_cmk_id')
         ]
+
+    def _current_owned_order(self, ruleset_name, desired_ids):
+        """
+        The order Checkmk currently lists this run's own rules in, or
+        None when it cannot be reconstructed.
+
+        Built from the snapshot ``clean_rules`` captured plus the rules
+        created afterwards (Checkmk appends those at the bottom, in the
+        order they were sent). Returning None makes the caller fall back
+        to reordering everything, which is always correct — just slower.
+        """
+        captured = self._cmk_order_by_ruleset.get(ruleset_name)
+        if captured is None:
+            return None
+        desired_set = set(desired_ids)
+        order = [rid for rid in captured if rid in desired_set]
+        for rule_id in self._created_order_by_ruleset.get(ruleset_name, []):
+            if rule_id in desired_set and rule_id not in order:
+                order.append(rule_id)
+        if set(order) != desired_set or len(order) != len(desired_ids):
+            # Some rule cannot be placed — do not guess, move everything.
+            return None
+        return order
+
+    @staticmethod
+    def _moves_needed(desired_ids, current_order):
+        """
+        The indices in ``desired_ids`` that actually have to be moved.
+
+        Walking the desired order and only moving a rule when it does
+        not already sit right behind its predecessor turns "reorder
+        everything" into "reorder what is out of place" — an untouched
+        ruleset needs no request at all, a single displaced rule needs
+        one instead of N-1. The simulated list mirrors what Checkmk
+        does, so later comparisons see the earlier moves.
+        """
+        simulated = list(current_order)
+        moves = []
+        for index in range(1, len(desired_ids)):
+            rule_id = desired_ids[index]
+            previous = desired_ids[index - 1]
+            if simulated.index(rule_id) == simulated.index(previous) + 1:
+                continue
+            moves.append(index)
+            simulated.remove(rule_id)
+            simulated.insert(simulated.index(previous) + 1, rule_id)
+        return moves
 
     def _is_already_sorted(self, ruleset_name, rules, desired_ids):
         """
@@ -2130,6 +2209,9 @@ class CheckmkRuleSync(CMK2):
                             rule['_cmk_id'] = response[0].get('id')
                         except (TypeError, IndexError, AttributeError):
                             rule['_cmk_id'] = None
+                        if rule.get('_cmk_id'):
+                            self._created_order_by_ruleset.setdefault(
+                                ruleset_name, []).append(rule['_cmk_id'])
                         self.log_details.append(("INFO",
                                               f"Created Rule in {ruleset_name}: {rule['value']}"))
                     except CmkException as error:

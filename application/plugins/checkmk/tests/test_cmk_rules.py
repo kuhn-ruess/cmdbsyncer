@@ -1039,6 +1039,103 @@ class TestApplyFindings(unittest.TestCase):
         self.assertIn('site:hh', status)
 
 
+class TestRuleMoveePlanning(unittest.TestCase):
+    """
+    Reordering is one Checkmk write per move. Moving every rule of a
+    ruleset on every run is what made a large export look like it had
+    hung in "Reorder syncer rules" — only what is out of place moves.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.config = {}
+        self.sync.log_details = []
+        self.sync._cmk_order_by_ruleset = {}
+        self.sync._created_order_by_ruleset = {}
+
+    def test_an_ordered_ruleset_needs_no_move(self):
+        self.assertEqual(
+            self.sync._moves_needed(['a', 'b', 'c'], ['a', 'b', 'c']), [])
+
+    def test_one_displaced_rule_is_one_move(self):
+        # 'b' and 'c' are swapped — one move puts both right, and the
+        # walk finds it at the first of the two.
+        self.assertEqual(
+            self.sync._moves_needed(['a', 'b', 'c'], ['a', 'c', 'b']), [1])
+
+    def test_a_reversed_ruleset_moves_everything(self):
+        self.assertEqual(
+            self.sync._moves_needed(['a', 'b', 'c'], ['c', 'b', 'a']), [1, 2])
+
+    def test_a_rule_appended_at_the_bottom_is_one_move(self):
+        # A freshly created rule lands at the end of the folder.
+        self.assertEqual(
+            self.sync._moves_needed(['a', 'new', 'b'], ['a', 'b', 'new']),
+            [1])
+
+    def test_foreign_rules_between_ours_do_not_count(self):
+        # Only our own rules are in the order, so a user rule sitting
+        # between two of them is not a reason to move anything.
+        self.assertEqual(
+            self.sync._moves_needed(['a', 'b'], ['a', 'b']), [])
+
+    def test_the_current_order_is_captured_plus_created(self):
+        self.sync._cmk_order_by_ruleset['r1'] = ['old1', 'foreign', 'old2']
+        self.sync._created_order_by_ruleset['r1'] = ['new1']
+        self.assertEqual(
+            self.sync._current_owned_order('r1', ['old1', 'old2', 'new1']),
+            ['old1', 'old2', 'new1'])
+
+    def test_an_unaccountable_rule_falls_back_to_a_full_reorder(self):
+        # A rule that is in neither list — do not guess where it sits.
+        self.sync._cmk_order_by_ruleset['r1'] = ['old1']
+        self.assertIsNone(
+            self.sync._current_owned_order('r1', ['old1', 'mystery']))
+
+    def test_no_snapshot_falls_back_to_a_full_reorder(self):
+        self.assertIsNone(self.sync._current_owned_order('r1', ['a', 'b']))
+
+    def _wire_ruleset(self, ids, order, folder_index=1):
+        rules = [{'_cmk_id': rid, 'folder_index': folder_index,
+                  '_skip_create': True} for rid in ids]
+        self.sync.rulsets_by_type = {'r1': rules}
+        self.sync._cmk_order_by_ruleset['r1'] = order
+
+    def test_planning_only_lists_the_rules_out_of_place(self):
+        self._wire_ruleset(['a', 'b', 'c'], ['a', 'c', 'b'])
+        # Two rules are swapped, so exactly one move fixes the ruleset —
+        # not the two the old chain would have sent.
+        self.assertEqual(self.sync._plan_rule_moves(),
+                         [('r1', 'b', 'a')])
+
+    def test_planning_skips_a_ruleset_without_a_configured_order(self):
+        self._wire_ruleset(['a', 'b'], ['b', 'a'], folder_index=0)
+        self.assertEqual(self.sync._plan_rule_moves(), [])
+
+    def test_nothing_is_sent_when_nothing_moves(self):
+        self._wire_ruleset(['a', 'b'], ['a', 'b'])
+        self.sync.request = MagicMock()
+        with patch('builtins.print'):
+            self.sync.sort_rules()
+        self.sync.request.assert_not_called()
+
+    def test_the_reorder_can_be_switched_off_on_the_account(self):
+        self._wire_ruleset(['a', 'b', 'c'], ['c', 'b', 'a'])
+        self.sync.config = {'skip_rule_reorder': True}
+        self.sync.request = MagicMock()
+        with patch('builtins.print'):
+            self.sync.sort_rules()
+        self.sync.request.assert_not_called()
+
+    def test_each_planned_move_is_one_request(self):
+        self._wire_ruleset(['a', 'b', 'c'], ['c', 'b', 'a'])
+        self.sync.request = MagicMock(return_value=({}, {}))
+        with patch('application.plugins.checkmk.cmk_rules.Progress',
+                   _FakeCleanProgress()), patch('builtins.print'):
+            self.sync.sort_rules()
+        self.assertEqual(self.sync.request.call_count, 2)
+
+
 class TestFindingStorage(unittest.TestCase):
     """
     The findings the web interface stores and applies. The analysis walks
