@@ -3,7 +3,10 @@ Unit tests for checkmk cmk_rules module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
 # pylint: disable=too-many-lines
+import os
+import sys
 import unittest
+from collections import Counter
 from unittest.mock import patch, MagicMock
 
 from types import SimpleNamespace
@@ -25,7 +28,8 @@ from application.plugins.checkmk.cmk_rules import (
 )
 import application.plugins.checkmk.inits as inits  # noqa: E402  pylint: disable=consider-using-from-import
 from application.plugins.checkmk.helpers import project_allows_account
-from tests import base_mock_init, make_checkmk_rule_sync
+from application.plugins.checkmk.rules import CheckmkRulesetRule
+from tests import base_mock_init, make_checkmk_rule_sync, _load_real_module
 
 
 class _FakeMongo:  # pylint: disable=too-few-public-methods
@@ -173,7 +177,7 @@ class TestCheckmkRuleSync(unittest.TestCase):
     """Tests for CheckmkRuleSync class"""
 
     def setUp(self):
-        def mock_init(self_param, account=False):
+        def mock_init(self_param, account=False, **_kwargs):
             base_mock_init(self_param, rulsets_by_type={})
 
         self.init_patcher = patch(
@@ -805,6 +809,257 @@ class TestCleanRulesFolderAndKeepValue(unittest.TestCase):
         self.assertEqual(calls['DELETE'], [])
         self.assertEqual(len(calls['PUT']), 1)
         self.assertTrue(local.get('_skip_create'))
+
+
+class TestSourceRuleTagging(unittest.TestCase):
+    """
+    The analysis needs to know which Setup Rule produced an outcome. That
+    marker must never reach an export: outcomes are cached per host, and
+    it must not change the rule identity either.
+    """
+
+    def setUp(self):
+        self.rule = CheckmkRulesetRule()
+
+    def test_exports_do_not_carry_the_marker(self):
+        outcomes = self.rule.add_outcomes(
+            {'name': 'My Rule'}, [{'ruleset': 'r1'}], {})
+        self.assertNotIn('_syncer_rule', outcomes['r1'][0])
+
+    def test_the_analysis_gets_the_rule_name(self):
+        self.rule.tag_source_rule = True
+        outcomes = self.rule.add_outcomes(
+            {'name': 'My Rule'}, [{'ruleset': 'r1'}], {})
+        self.assertEqual(outcomes['r1'][0]['_syncer_rule'], 'My Rule')
+
+    def test_the_shared_outcome_dict_is_not_touched(self):
+        # The rule engine reuses the prepared outcome dicts for every
+        # host — tagging a copy is the only safe way.
+        self.rule.tag_source_rule = True
+        shared = {'ruleset': 'r1'}
+        self.rule.add_outcomes({'name': 'My Rule'}, [shared], {})
+        self.assertNotIn('_syncer_rule', shared)
+
+
+def _load_rulesets_catalog():
+    """
+    The catalog module is not part of the stubbed package tree, so load
+    it from source once — the analysis imports it the same way.
+    """
+    name = 'application.plugins.checkmk.rulesets_catalog'
+    if name not in sys.modules:
+        _load_real_module(name, os.path.join(
+            'plugins', 'checkmk', 'rulesets_catalog.py'))
+    return sys.modules[name]
+
+
+class _FakeHost:  # pylint: disable=too-few-public-methods
+    """Just enough of a Host document for the analysis loop."""
+    def __init__(self, hostname):
+        self.hostname = hostname
+
+
+class TestRuleOptimizationAnalysis(unittest.TestCase):
+    """
+    A rule whose condition names every host individually is rewritten
+    whenever one host joins or leaves it. The analysis finds those rules
+    and the host label that covers exactly the same hosts.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.debug = False
+        self.sync.actions = MagicMock()
+        self.progress_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.Progress',
+            _FakeCleanProgress())
+        self.progress_patcher.start()
+
+    def tearDown(self):
+        self.progress_patcher.stop()
+
+    @staticmethod
+    def _entry(hostname, rule_hash='h1', optimize=True,
+               syncer_rule='Agent access'):
+        return {
+            'optimize': optimize,
+            'optimize_rule_hash': rule_hash,
+            '_syncer_rule': syncer_rule,
+            'folder': '/', 'comment': 'Agent access',
+            'value': "{'only_from': ['10.0.0.1']}",
+            'condition': {'host_name': {'match_on': [hostname],
+                                        'operator': 'one_of'}},
+        }
+
+    def _wire_inventory(self, inventory, exported=None):
+        """
+        Serve `inventory` ({hostname: labels}) as the export scope.
+        `exported` names the attributes that pass the export filter, i.e.
+        the ones Checkmk sees as a host label. Defaults to all of them.
+        """
+        self.sync.export_hosts = lambda: MagicMock(
+            count=lambda: len(inventory),
+            __iter__=lambda _self=None: iter(
+                [_FakeHost(name) for name in inventory]))
+
+        def attributes(db_host, _type):
+            labels = dict(inventory[db_host.hostname])
+            passing = labels if exported is None else {
+                key: value for key, value in labels.items()
+                if key in exported}
+            return {'all': labels, 'filtered': passing}
+        self.sync.get_attributes = attributes
+        self.sync.calculate_rules = lambda use_cache=True: None
+
+    def test_groups_are_built_per_optimize_hash(self):
+        self.sync.rulsets_by_type = {'ruleset1': [
+            self._entry('h1'), self._entry('h2'),
+            self._entry('other', rule_hash='h2'),
+            self._entry('plain', optimize=False),
+        ]}
+        groups = self.sync._optimized_rule_groups()
+        self.assertEqual(len(groups), 2)
+        self.assertEqual(groups[('ruleset1', 'h1')]['hosts'], {'h1', 'h2'})
+        self.assertEqual(groups[('ruleset1', 'h2')]['hosts'], {'other'})
+        # The report has to name the Setup Rule, not the Checkmk rule.
+        self.assertEqual(groups[('ruleset1', 'h1')]['syncer_rules'],
+                         {'Agent access'})
+
+    def test_label_set_skips_what_cannot_be_a_label(self):
+        labels = self.sync._host_label_set({
+            'env': 'prod',
+            'ports': [1, 2],          # container
+            'empty': '',              # no value
+            'dump': 'x' * 500,        # far too long
+            'count': 3,               # scalar, stringified
+        })
+        self.assertEqual(labels, {('env', 'prod'), ('count', '3')})
+
+    def test_suggestions_are_classified(self):
+        hosts = {f'h{index}' for index in range(10)}
+        group = Counter({('env', 'prod'): 10, ('site', 'hh'): 10,
+                         ('role', 'web'): 9, ('rack', '7'): 2})
+        totals = Counter({('env', 'prod'): 10, ('site', 'hh'): 15,
+                          ('role', 'web'): 9, ('rack', '7'): 2})
+        exact, wider, partial = self.sync._suggest_labels_for_group(
+            hosts, group, totals)
+        self.assertEqual([entry[0] for entry in exact], [('env', 'prod')])
+        self.assertEqual([entry[0] for entry in wider], [('site', 'hh')])
+        self.assertEqual([entry[0] for entry in partial], [('role', 'web')])
+
+    def test_the_exact_label_is_reported(self):
+        inventory = {}
+        for index in range(5):
+            inventory[f'prod{index}'] = {'env': 'prod', 'role': 'web'}
+        for index in range(2):
+            inventory[f'dev{index}'] = {'env': 'dev', 'role': 'web'}
+        self._wire_inventory(inventory)
+        self.sync.rulsets_by_type = {'agent_config:only_from': [
+            self._entry(f'prod{index}') for index in range(5)]}
+
+        results = self.sync.analyse_rule_optimization(min_hosts=3)
+
+        self.assertEqual(len(results), 1)
+        result = results[0]
+        self.assertEqual(result['hosts'], 5)
+        self.assertEqual(result['syncer_rules'], ['Agent access'])
+        self.assertEqual([entry[0] for entry in result['exact']],
+                         [('env', 'prod')])
+        # role:web covers the group but would pull in the two dev hosts.
+        self.assertEqual([(entry[0], entry[2]) for entry in result['wider']],
+                         [(('role', 'web'), 2)])
+
+    def test_an_attribute_the_filter_drops_is_flagged(self):
+        # The label can still be the answer — it just has to be let
+        # through the export filter first, or Checkmk never sees it.
+        inventory = {f'prod{index}': {'env': 'prod', 'role': 'web'}
+                     for index in range(4)}
+        self._wire_inventory(inventory, exported={'role'})
+        self.sync.rulsets_by_type = {'ruleset1': [
+            self._entry(f'prod{index}') for index in range(4)]}
+
+        results = self.sync.analyse_rule_optimization(min_hosts=3)
+
+        suggested = {entry[0][0] for entry in results[0]['exact']}
+        self.assertIn('env', suggested)
+        self.assertNotIn('env', results[0]['exported_keys'])
+        self.assertIn('role', results[0]['exported_keys'])
+
+    def test_offline_item_types_come_from_the_catalog_file(self):
+        # No request may leave the process: the shipped ruleset catalog
+        # carries the same item_type per ruleset.
+        catalog = _load_rulesets_catalog()
+        self.sync.offline = True
+        self.sync._ruleset_item_types = None
+        self.sync.checkmk_version = '2.5.0p8.pro'
+        self.sync.request = MagicMock(
+            side_effect=AssertionError('must not contact Checkmk'))
+
+        item_types = self.sync.ruleset_item_types()
+
+        self.sync.request.assert_not_called()
+        self.assertEqual(item_types,
+                         catalog.item_types_from_files('2.5.0p8.pro'))
+        # A host ruleset carries no service item; a service one does.
+        self.assertIsNone(item_types['agent_config:only_from'])
+        self.assertEqual(item_types['checkgroup_parameters:filesystem'],
+                         'item')
+
+    def test_an_unknown_version_merges_every_catalog_file(self):
+        catalog = _load_rulesets_catalog()
+        merged = catalog.item_types_from_files('9.9.9')
+        self.assertEqual(merged, catalog.item_types_from_files())
+        self.assertIn('agent_config:only_from', merged)
+
+    def test_online_item_types_still_come_from_checkmk(self):
+        self.sync.offline = False
+        self.sync._ruleset_item_types = None
+        self.sync.request = MagicMock(return_value=({'value': [
+            {'id': 'a_ruleset', 'extensions': {'name': 'a_ruleset',
+                                               'item_type': 'item'}}]}, {}))
+        self.assertEqual(self.sync.ruleset_item_types(),
+                         {'a_ruleset': 'item'})
+
+    def test_the_object_filter_is_read_from_the_export_settings(self):
+        # The analysis logs under its own name but has to select the same
+        # hosts the export would.
+        self.sync.name = 'Checkmk: Analyse Rules'
+        self.sync.settings_name = 'Checkmk: Export Rules'
+        self.sync.config = {'settings': {
+            'Checkmk: Export Rules': {'filter': ['host', 'shadow_host']}}}
+        with patch('application.plugins.checkmk.cmk_rules.Host') as host_cls:
+            host_cls.objects_by_filter.return_value = 'scoped'
+            self.assertEqual(self.sync.export_hosts(), 'scoped')
+        host_cls.objects_by_filter.assert_called_once_with(
+            ['host', 'shadow_host'])
+
+    def test_the_analysis_runs_without_an_account(self):
+        # No account means no config at all: no settings block to read an
+        # object filter from, no folder scope. Reported from the field as
+        # a KeyError right at the start of the run.
+        self.sync.config = {}
+        with patch('application.plugins.checkmk.cmk_rules.Host') as host_cls:
+            host_cls.active_non_template.return_value = 'every-host'
+            self.assertEqual(self.sync.export_hosts(), 'every-host')
+
+    def test_small_rules_are_not_reported(self):
+        self._wire_inventory({'h1': {'env': 'prod'}})
+        self.sync.rulsets_by_type = {'ruleset1': [self._entry('h1')]}
+        self.assertEqual(
+            self.sync.analyse_rule_optimization(min_hosts=10), [])
+
+    def test_a_group_sharing_nothing_gets_no_suggestion(self):
+        inventory = {f'h{index}': {'serial': f's{index}'}
+                     for index in range(4)}
+        self._wire_inventory(inventory)
+        self.sync.rulsets_by_type = {'ruleset1': [
+            self._entry(f'h{index}') for index in range(4)]}
+
+        results = self.sync.analyse_rule_optimization(min_hosts=3)
+
+        self.assertEqual(results[0]['exact'], [])
+        self.assertEqual(results[0]['wider'], [])
+        self.assertEqual(results[0]['partial'], [])
 
 
 class TestHostListDrift(unittest.TestCase):

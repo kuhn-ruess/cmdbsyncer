@@ -26,6 +26,7 @@ from .inits import (
     export_bi_rules,
     export_bi_aggregations,
     export_rules,
+    analyse_rules,
     import_project_rules_from_folder,
     assign_cmdb_template_from_folder,
     export_groups,
@@ -471,6 +472,37 @@ def cli_export_rules(account, debug):
         account (string): Name Checkmk Account Config
     """
     export_rules(account, debug)
+
+#.
+#   .-- Command: Analyse Rule Optimization
+
+@cli_cmk.command('analyse_rules')
+@click.argument("account", required=False)
+@click.option("--min-hosts", default=10, show_default=True,
+              help="Only report rules built from at least this many hosts.")
+@click.option("--top", default=20, show_default=True,
+              help="How many of the largest rules to report.")
+@click.option("--debug", is_flag=True)
+def cli_analyse_rules(account, min_hosts, top, debug):
+    """
+    Find rules built from a long list of hostnames and suggest a label
+
+    Rules whose condition names every host individually are rewritten
+    whenever a single host joins or leaves them. This reports the biggest
+    ones and which host label covers exactly the same hosts.
+
+    Reads the Syncer database only, nothing is sent to Checkmk. The
+    account is optional and only narrows the picture to what that account
+    would export.
+
+    ### Example
+    _./cmdbsyncer checkmk analyse_rules SITEACCOUNT --min-hosts 50_
+
+
+    Args:
+        account (string): Name Checkmk Account Config, optional
+    """
+    analyse_rules(account, min_hosts=min_hosts, top=top, debug=debug)
 
 #.
 #   .-- Command: Export Ruleset Catalog for the UI autocomplete

@@ -11,6 +11,12 @@ from application.helpers.plugins import register_cli_group
 
 cli_cmk = register_cli_group(app, 'checkmk', 'checkmk', "Checkmk commands")
 
+# Assumed when nothing asks Checkmk for its version. Only decides the
+# shape of a rule condition (2.2 used a different one), so the newest
+# format is the safe default for anything that does not talk to Checkmk.
+FALLBACK_CMK_VERSION = '2.4.0'
+
+
 class CmkException(Exception):
     """Cmk Errors"""
 
@@ -43,9 +49,14 @@ class CMK2(Plugin):
         return {'extensions': compacted}
 
 
-    def __init__(self, account=False):
+    def __init__(self, account=False, probe_version=True):
         """
         Check for Version
+
+        ``probe_version=False`` keeps the constructor offline. Read-only
+        analyses run against the Syncer database alone and must not need
+        a reachable Checkmk — they fall back to the version the account
+        records, or to the newest condition format.
         """
         super().__init__(account)
         # Reopen the save_log gate while we do the version probe — if
@@ -63,7 +74,13 @@ class CMK2(Plugin):
         self.existing_folders_attributes = {}
         self.custom_folder_attributes = {}
 
-        if self.config and not self.checkmk_version:
+        # Nothing in this run may contact Checkmk. Consumers check it
+        # before any lookup that would otherwise be a live request.
+        self.offline = not probe_version
+        if not probe_version:
+            self.checkmk_version = \
+                self.config.get('checkmk_version') or FALLBACK_CMK_VERSION
+        elif self.config and not self.checkmk_version:
             self.checkmk_version = self._probe_checkmk_version()
 
         self._init_complete = True

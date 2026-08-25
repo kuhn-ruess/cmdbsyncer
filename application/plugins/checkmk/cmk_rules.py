@@ -6,6 +6,7 @@ Export Checkmk Rules
 import ast
 import json
 import re
+from collections import Counter
 from pprint import pformat
 
 
@@ -54,6 +55,24 @@ def normalize_cmk_folder(folder):
     """
     folder = (folder or '/').replace('~', '/')
     return normalize_folder(folder)
+
+
+# A Checkmk host label carries a short scalar; anything longer is a data
+# dump that would never be typed into a rule condition.
+MAX_LABEL_VALUE_LEN = 80
+# How much of a group a label has to cover to be worth reporting as a
+# near miss.
+PARTIAL_LABEL_COVERAGE = 0.8
+
+
+def shorten_value(value, limit=120):
+    """
+    One-line, length-capped rendering of a rule value for reports.
+    """
+    value = str(value).replace('\n', ' ')
+    if len(value) > limit:
+        return value[:limit] + '…'
+    return value
 
 
 def condition_hosts(condition):
@@ -736,8 +755,13 @@ class CheckmkRuleSync(CMK2):
     """
     rulsets_by_type = {}
 
-    def __init__(self, account=False):
-        super().__init__(account)
+    # Which account "Plugin Setting" block holds this run's object
+    # filter. None = the run's own name. The analysis sets it so it can
+    # be logged under its own name and still read the export's filter.
+    settings_name = None
+
+    def __init__(self, account=False, probe_version=True):
+        super().__init__(account, probe_version=probe_version)
         # Tri-state etag probe:
         #   None  = not yet probed
         #   False = wildcard If-Match works → skip the pre-GET
@@ -840,6 +864,18 @@ class CheckmkRuleSync(CMK2):
         ``used=true`` and ``used=false`` (see RulesetCatalog.export_to_file).
         """
         if self._ruleset_item_types is None:
+            if getattr(self, 'offline', False):
+                # Offline analyses read the shipped ruleset catalog
+                # instead of asking Checkmk. It carries the same
+                # item_type per ruleset (see checkmk export_rulesets).
+                # Imported here: the catalog module is only needed on
+                # this path and pulls in the whole plugin package.
+                # pylint: disable=import-outside-toplevel
+                from application.plugins.checkmk.rulesets_catalog import (
+                    item_types_from_files)
+                self._ruleset_item_types = item_types_from_files(
+                    self.checkmk_version)
+                return self._ruleset_item_types
             item_types = {}
             for used in ('true', 'false'):
                 try:
@@ -984,6 +1020,10 @@ class CheckmkRuleSync(CMK2):
         # here (del value_template/condition_* etc.) would break the next
         # host that hits the same rule.
         rule_params = dict(rule_params)
+        # Only set by the optimization analysis. Held aside so it reaches
+        # neither the identity hash nor anything Checkmk sees, and put
+        # back once the rule is fully built.
+        syncer_rule = rule_params.pop('_syncer_rule', None)
 
         # Setup condition template based on Checkmk version
         if self.checkmk_version.startswith('2.2'):
@@ -1080,6 +1120,8 @@ class CheckmkRuleSync(CMK2):
             del rule_params['condition_host']
 
         rule_params['condition'] = condition_tpl
+        if syncer_rule is not None:
+            rule_params['_syncer_rule'] = syncer_rule
         return rule_params
 
     def _apply_host_label_condition(self, rule_params, condition_tpl, context):
@@ -1212,43 +1254,7 @@ class CheckmkRuleSync(CMK2):
         """
         Export config rules to checkmk
         """
-        print(f"\n{CC.HEADER}Build needed Rules{CC.ENDC}")
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
-
-
-        object_filter = self.config['settings'].get(self.name, {}).get('filter')
-        if not object_filter:
-            # Default/ Legacy Behavior. Exclude CMDB template objects:
-            # they are label vehicles for real hosts (applied via
-            # ``cmdb_templates``) and have no business showing up as
-            # condition_host targets — Jinja-rendering ``{{HOSTNAME}}``
-            # against a template would otherwise create a rule pointing
-            # at the template's name (and a folder derived from its
-            # labels), which never matches any real host in CMK.
-            db_objects = Host.active_non_template()
-        else:
-            db_objects = Host.objects_by_filter(object_filter)
-
-        total = db_objects.count()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
-            task1 = progress.add_task("Calculate rules", total=total)
-            object_filter = self.config['settings'].get(self.name, {}).get('filter')
-            for db_host in db_objects:
-                attributes = self.get_attributes(db_host, 'checkmk')
-                if not attributes:
-                    logger.debug("Skipped: %s", db_host.hostname)
-                    progress.advance(task1)
-                    continue
-                # self.actions is injected by the inits.export_rules wiring
-                host_actions = self.actions.get_outcomes(  # pylint: disable=no-member
-                    db_host, attributes['all'])
-                if host_actions:
-                    self.calculate_rules_of_host(host_actions, attributes)
-                progress.advance(task1)
-
+        self.calculate_rules()
         self.calculate_static_rules()
         self.optimize_rules()
         self._sort_rulsets_by_intent()
@@ -1257,6 +1263,254 @@ class CheckmkRuleSync(CMK2):
         self.create_rules()
         self.sort_rules()
 
+    def export_hosts(self):
+        """
+        The hosts this run generates rules for. Honors the account's
+        object filter, and otherwise stays on the host-only default.
+        """
+        # The analysis logs under its own name but has to read the object
+        # filter the export is configured with. And .get all the way
+        # down: without an account there is no settings block at all.
+        settings_key = self.settings_name or self.name
+        object_filter = self.config.get(
+            'settings', {}).get(settings_key, {}).get('filter')
+        if not object_filter:
+            # Default/ Legacy Behavior. Exclude CMDB template objects:
+            # they are label vehicles for real hosts (applied via
+            # ``cmdb_templates``) and have no business showing up as
+            # condition_host targets — Jinja-rendering ``{{HOSTNAME}}``
+            # against a template would otherwise create a rule pointing
+            # at the template's name (and a folder derived from its
+            # labels), which never matches any real host in CMK.
+            return Host.active_non_template()
+        return Host.objects_by_filter(object_filter)
+
+    def calculate_rules(self, use_cache=True):
+        """
+        Render every rule the run generates, per host, into
+        ``rulsets_by_type``. Shared by the export and by the
+        optimization analysis so both judge the same rule set.
+
+        ``use_cache=False`` bypasses the per-host outcome cache: the
+        analysis has to see the rules as they are configured right now,
+        and must not write its own tagged outcomes into the cache the
+        export reads.
+        """
+        print(f"\n{CC.HEADER}Build needed Rules{CC.ENDC}")
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
+        db_objects = self.export_hosts()
+        total = db_objects.count()
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            task1 = progress.add_task("Calculate rules", total=total)
+            for db_host in db_objects:
+                attributes = self.get_attributes(db_host, 'checkmk')
+                if not attributes:
+                    logger.debug("Skipped: %s", db_host.hostname)
+                    progress.advance(task1)
+                    continue
+                # self.actions is injected by the inits.export_rules wiring
+                host_actions = self.actions.get_outcomes(  # pylint: disable=no-member
+                    db_host, attributes['all'], use_cache=use_cache)
+                if host_actions:
+                    self.calculate_rules_of_host(host_actions, attributes)
+                progress.advance(task1)
+
+    def _optimized_rule_groups(self):
+        """
+        The host groups ``optimize_rules`` would coalesce into one rule:
+        ``{(ruleset, hash): {'rule': …, 'hosts': {hostname, …}}}``.
+
+        Call after ``calculate_rules`` and before ``optimize_rules`` —
+        afterwards the per-host entries are already merged away.
+        """
+        groups = {}
+        for ruleset_name, rules in self.rulsets_by_type.items():
+            for rule in rules:
+                if not rule.get('optimize'):
+                    continue
+                key = (ruleset_name, rule['optimize_rule_hash'])
+                group = groups.setdefault(
+                    key, {'rule': rule, 'hosts': set(), 'syncer_rules': set()})
+                group['hosts'].update(condition_hosts(rule['condition']))
+                source = rule.get('_syncer_rule')
+                if source:
+                    group['syncer_rules'].add(source)
+        return groups
+
+    @staticmethod
+    def _host_label_set(attributes):
+        """
+        The host's attributes as a set of hashable ``key:value`` pairs.
+        Values that are not short scalars cannot serve as a Checkmk host
+        label condition, so they are left out.
+        """
+        labels = set()
+        for key, value in (attributes or {}).items():
+            if isinstance(value, (dict, list, tuple, set)):
+                continue
+            value = str(value)
+            if not value or len(value) > MAX_LABEL_VALUE_LEN:
+                continue
+            labels.add((str(key), value))
+        return labels
+
+    def _collect_label_coverage(self, groups):
+        """
+        Count, for every candidate label, how often it occurs inside each
+        group and across the whole export scope.
+
+        The per-group count tells whether a label covers the group; the
+        difference to the total tells whether it would drag in hosts the
+        rule does not currently apply to. One pass, only counters — an
+        inverted index of host names would not survive a large inventory.
+        """
+        totals = Counter()
+        per_group = {key: Counter() for key in groups}
+        # Which attribute names survive the export filter — those are the
+        # ones Checkmk sees as a host label. An attribute that does not
+        # get through can still be suggested; it just has to be let
+        # through first, and the report says so.
+        exported_keys = set()
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Collect labels of all hosts")
+        db_objects = self.export_hosts()
+        with Progress(SpinnerColumn(),
+                      MofNCompleteColumn(),
+                      *Progress.get_default_columns(),
+                      TimeElapsedColumn()) as progress:
+            task1 = progress.add_task("Collect labels",
+                                      total=db_objects.count())
+            for db_host in db_objects:
+                attributes = self.get_attributes(db_host, 'checkmk')
+                progress.advance(task1)
+                if not attributes:
+                    continue
+                labels = self._host_label_set(attributes['all'])
+                totals.update(labels)
+                exported_keys.update(attributes.get('filtered') or {})
+                for key, group in groups.items():
+                    if db_host.hostname in group['hosts']:
+                        per_group[key].update(labels)
+        return totals, per_group, exported_keys
+
+    @staticmethod
+    def _suggest_labels_for_group(hosts, group_counter, totals):
+        """
+        Rank the labels that could replace a group's host list.
+
+        ``exact``   — every host of the group carries it, no other host does.
+        ``wider``   — covers the group, but more hosts would match too.
+        ``partial`` — no host outside carries it, but it misses some of
+                      the group's hosts.
+        """
+        size = len(hosts)
+        exact, wider, partial = [], [], []
+        for label, inside in group_counter.items():
+            outside = totals[label] - inside
+            if inside == size and not outside:
+                exact.append((label, inside, outside))
+            elif inside == size:
+                wider.append((label, inside, outside))
+            elif not outside and inside >= size * PARTIAL_LABEL_COVERAGE:
+                partial.append((label, inside, outside))
+        # Fewest surprises first: a wider label that pulls in two hosts
+        # beats one that pulls in two hundred, and a partial label that
+        # misses the least is the closest to the current rule.
+        wider.sort(key=lambda entry: entry[2])
+        partial.sort(key=lambda entry: -entry[1])
+        return exact, wider, partial
+
+    def analyse_rule_optimization(self, min_hosts=10, top=20):
+        """
+        Report which rules were built from a long list of host names and
+        which host label could take its place.
+
+        A rule that names hundreds of hosts is rewritten on every host
+        that joins or leaves it, is unreadable in Checkmk and slow to
+        match. Usually the hosts share a label already — this finds it.
+        """
+        self.actions.tag_source_rule = True  # pylint: disable=no-member
+        self.calculate_rules(use_cache=False)
+        groups = {key: group for key, group in
+                  self._optimized_rule_groups().items()
+                  if len(group['hosts']) >= min_hosts}
+        print(f"\n{CC.HEADER}Analyse Rule Optimization{CC.ENDC}")
+        if not groups:
+            print(f"{CC.OKGREEN}  ** {CC.ENDC}No rule is built from "
+                  f"{min_hosts} or more host names — nothing to optimize")
+            return []
+        ranked = sorted(groups.items(),
+                        key=lambda item: -len(item[1]['hosts']))
+        if len(ranked) > top:
+            print(f"{CC.WARNING}  ** {CC.ENDC}{len(ranked)} rules qualify, "
+                  f"reporting the {top} largest (raise with --top)")
+            ranked = ranked[:top]
+        selected = dict(ranked)
+        totals, per_group, exported_keys = \
+            self._collect_label_coverage(selected)
+        results = []
+        for key, group in ranked:
+            hosts = group['hosts']
+            exact, wider, partial = self._suggest_labels_for_group(
+                hosts, per_group[key], totals)
+            results.append({
+                'ruleset': key[0],
+                'rule': group['rule'],
+                'syncer_rules': sorted(group['syncer_rules']),
+                'hosts': len(hosts),
+                'exact': exact,
+                'wider': wider,
+                'partial': partial,
+                'exported_keys': exported_keys,
+            })
+        self._print_optimization_report(results)
+        return results
+
+    def _print_optimization_report(self, results):
+        """
+        Print the analysis as a work list on the Syncer rules: which rule
+        to open, and what to put into its outcome so the export stops
+        building a condition out of host names.
+        """
+        for result in results:
+            rule = result['rule']
+            names = ", ".join(result['syncer_rules']) or '<unknown>'
+            print(f"\n{CC.OKBLUE} * {CC.ENDC}Setup Rule "
+                  f"{CC.BOLD}{names}{CC.ENDC} — "
+                  f"{result['hosts']} hosts end up in one condition")
+            print(f"   ruleset: {result['ruleset']}   "
+                  f"folder: {rule.get('folder', '/')}")
+            if rule.get('comment'):
+                print(f"   comment: {rule['comment'].splitlines()[0]}")
+            print(f"   value:   {shorten_value(rule.get('value', ''))}")
+            for label, _inside, _outside in result['exact']:
+                print(f"{CC.OKGREEN}   -> in the outcome set Condition Label "
+                      f"to {label[0]}:{label[1]} and clear Condition Host"
+                      f"{CC.ENDC} — covers all {result['hosts']} hosts "
+                      "and no other host")
+                if label[0] not in result['exported_keys']:
+                    print(f"{CC.WARNING}      note{CC.ENDC}: "
+                          f"'{label[0]}' does not pass the export filter, so "
+                          "Checkmk never sees it as a host label — add it to "
+                          "the filter rules first")
+            for label, _inside, outside in result['wider'][:3]:
+                print(f"{CC.OKCYAN}   ~  {label[0]}:{label[1]}{CC.ENDC} covers "
+                      f"all {result['hosts']} hosts, but {outside} more "
+                      "host(s) would get the rule too")
+            for label, inside, _outside in result['partial'][:3]:
+                print(f"{CC.OKCYAN}   ~  {label[0]}:{label[1]}{CC.ENDC} covers "
+                      f"{inside} of {result['hosts']} hosts, no other host "
+                      f"— {result['hosts'] - inside} would lose the rule")
+            if not (result['exact'] or result['wider'] or result['partial']):
+                print(f"{CC.WARNING}   !! {CC.ENDC}No label comes close; "
+                      "these hosts share nothing the others do not. "
+                      "A label set by a Rewrite rule would do it.")
+        replaceable = sum(1 for result in results if result['exact'])
+        print(f"\n{CC.HEADER}  ** {CC.ENDC}{replaceable} of {len(results)} "
+              "reported Setup Rule(s) can be switched to a single "
+              "Host label condition")
 
     def calculate_rules_of_host(self, host_actions, attributes):
         """

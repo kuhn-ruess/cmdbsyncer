@@ -142,6 +142,10 @@ class CheckmkRulesetRule(Rule):
 
     name = "Checkmk -> CMK Rules Managment"
 
+    # Analysis runs switch this on so every outcome remembers the Syncer
+    # rule it came from. Off for exports on purpose: outcomes are cached
+    # per host, and the name would be written into every host document.
+    tag_source_rule = False
 
     def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
@@ -152,6 +156,11 @@ class CheckmkRulesetRule(Rule):
         # scope (see build_condition_and_update_rule_params).
         project = (_rule or {}).get('project')
         for outcome in rule_outcomes:
+            if self.tag_source_rule:
+                # Copy: the prepared outcome dicts are shared across
+                # hosts by the rule engine's cache.
+                outcome = dict(outcome)
+                outcome['_syncer_rule'] = (_rule or {}).get('name', '')
             if project:
                 outcome['project'] = project
             ruleset_type = outcome['ruleset']

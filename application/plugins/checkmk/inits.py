@@ -312,6 +312,46 @@ def activate_changes(account):
         return False
     return True
 #.
+#   .-- Analyse Rule Optimization
+def analyse_rules(account=None, min_hosts=10, top=20, debug=False):
+    """
+    Report which Setup Rules are built from a long list of host names,
+    and which host label could replace that list.
+
+    Reads the Syncer database only — nothing is sent to Checkmk, and the
+    account is optional. Given one, the analysis sees exactly what that
+    account would export (its project and folder scope, its object
+    filter); without one it looks at every enabled rule.
+    """
+    rules = _load_rules()
+    syncer = CheckmkRuleSync(account or False, probe_version=False)
+    syncer.debug = debug
+    syncer.filter = rules['filter']
+    syncer.rewrite = rules['rewrite']
+
+    actions = CheckmkRulesetRule()
+    actions.cache_name = f'CheckmkRulesetRule_{account}'
+    rule_filter = {'enabled': True, 'static_rule__ne': True}
+    if account:
+        rule_filter['project__in'] = [None, ''] + projects_for_account(account)
+    actions.rules = CheckmkRuleMngmt.objects(
+        **rule_filter).order_by('sort_field')
+    # Report which Setup Rule built a host-name condition, not just which
+    # Checkmk rule came out of it — the fix belongs in the Setup Rule.
+    actions.tag_source_rule = True
+    syncer.actions = actions
+    # Logged as what it is — nothing was exported. The object filter is
+    # still the one configured for the export.
+    syncer.name = 'Checkmk: Analyse Rules'
+    syncer.settings_name = 'Checkmk: Export Rules'
+    syncer.source = "cmk_rule_analysis"
+    if not account:
+        print(f"{ColorCodes.WARNING}  ** {ColorCodes.ENDC}No account given: "
+              "reporting every enabled rule, without an account's project, "
+              "folder or object scope")
+    return syncer.analyse_rule_optimization(min_hosts=min_hosts, top=top)
+
+#.
 #   .-- Export Groups
 def export_groups(account, test_run=False, debug=False):
     """

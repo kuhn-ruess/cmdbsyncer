@@ -740,6 +740,6 @@ def make_checkmk_rule_sync():
     """
     cmk_rules = sys.modules['application.plugins.checkmk.cmk_rules']
     with patch('application.plugins.checkmk.cmk_rules.CMK2.__init__',
-               lambda self_param, account=False: base_mock_init(
+               lambda self_param, account=False, **_kwargs: base_mock_init(
                    self_param, rulsets_by_type={})):
         return cmk_rules.CheckmkRuleSync()

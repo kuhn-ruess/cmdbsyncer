@@ -109,6 +109,38 @@ def _example_for(raw, versions):
     return '', False
 
 
+def item_types_from_files(version=None):
+    """
+    ``{ruleset name: item_type}`` read from the shipped catalog files.
+
+    Lets code that must not contact Checkmk still tell a host ruleset
+    (``item_type`` None) from a service one. The file matching
+    ``version``'s minor release wins; without a match every file is
+    merged, oldest first, so the newest definition of a ruleset is the
+    one that survives.
+    """
+    if not os.path.isdir(DATA_DIR):
+        return {}
+    per_version = {}
+    for fname in os.listdir(DATA_DIR):
+        match = CATALOG_RE.match(fname)
+        if match:
+            per_version[match.group(1)] = _load_json(
+                os.path.join(DATA_DIR, fname)).get('rulesets', {})
+    if not per_version:
+        return {}
+    wanted = _minor_version(version) if version else None
+    if wanted in per_version:
+        chosen = [wanted]
+    else:
+        chosen = sorted(per_version)
+    item_types = {}
+    for minor in chosen:
+        for name, meta in per_version[minor].items():
+            item_types[name] = meta.get('item_type')
+    return item_types
+
+
 def load_catalog():
     """
     Merge every ``data/rulesets_<ver>.json`` with the curated examples into a

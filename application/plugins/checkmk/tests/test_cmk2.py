@@ -7,7 +7,8 @@ from unittest.mock import Mock, patch, MagicMock
 
 import requests
 
-from application.plugins.checkmk.cmk2 import CmkException, CMK2
+from application.plugins.checkmk.cmk2 import (
+    CmkException, CMK2, FALLBACK_CMK_VERSION)
 
 
 class TestCmkException(unittest.TestCase):
@@ -204,6 +205,43 @@ class TestCMK2Request(unittest.TestCase):
             call_url = mock_req.call_args[0][1]
             self.assertIn('/endpoint', call_url)
             self.assertNotIn('api/1.0', call_url)
+
+
+class TestCMK2OfflineInit(unittest.TestCase):
+    """
+    Read-only analyses run against the Syncer database alone. They must
+    not need a reachable Checkmk, so the constructor can skip the version
+    probe — the version only decides the shape of a rule condition.
+    """
+
+    def test_no_probe_means_no_request(self):
+        with patch.object(CMK2, '_probe_checkmk_version') as probe, \
+             patch('application.modules.plugin.Plugin.__init__',
+                   lambda self_param, account=False: None):
+            sync = CMK2(probe_version=False)
+        probe.assert_not_called()
+        self.assertEqual(sync.checkmk_version, FALLBACK_CMK_VERSION)
+
+    def test_the_account_version_wins_over_the_fallback(self):
+        def fake_plugin_init(self_param, account=False):
+            self_param.config = {'checkmk_version': '2.2.0p1'}
+        with patch.object(CMK2, '_probe_checkmk_version') as probe, \
+             patch('application.modules.plugin.Plugin.__init__',
+                   fake_plugin_init):
+            sync = CMK2(probe_version=False)
+        probe.assert_not_called()
+        self.assertEqual(sync.checkmk_version, '2.2.0p1')
+
+    def test_the_probe_still_runs_by_default(self):
+        def fake_plugin_init(self_param, account=False):
+            self_param.config = {'address': 'https://cmk.example.com'}
+        with patch.object(CMK2, '_probe_checkmk_version',
+                          return_value='2.4.0') as probe, \
+             patch('application.modules.plugin.Plugin.__init__',
+                   fake_plugin_init):
+            sync = CMK2()
+        probe.assert_called_once()
+        self.assertEqual(sync.checkmk_version, '2.4.0')
 
 
 class TestCMK2FetchFolders(unittest.TestCase):
