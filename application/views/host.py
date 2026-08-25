@@ -36,6 +36,7 @@ from application.plugins.vmware import get_vmware_debug_data as vmware_host_debu
 from application.plugins.jira_cloud import get_jira_cloud_debug_data as jira_cloud_host_debug
 from application import app, logger
 from application.helpers.get_account import mask_account_secrets
+from application.helpers.sates import add_changes
 from application.views.default import DefaultModelView
 from application.views.host_widgets import (
     StaticLabelField,
@@ -477,12 +478,20 @@ class _LifecycleBulkActionsMixin:
     """
     # pylint: disable=too-few-public-methods
 
+    def on_bulk_lifecycle_change(self, changed):
+        """
+        Hook for subclasses, fired once when a bulk lifecycle action
+        actually moved something. Default is a no-op.
+        """
+
     def _bulk_set_lifecycle(self, ids, new_state):
         changed = 0
         for host in Host.objects(id__in=ids):
             if host.set_lifecycle_state(new_state):
                 host.save()
                 changed += 1
+        if changed:
+            self.on_bulk_lifecycle_change(changed)
         flash(f'Lifecycle state set to "{new_state}" on {changed} object(s).',
               'success')
         return redirect(request.referrer or url_for('.index_view'))
@@ -868,6 +877,15 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
 class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
     """Template Model View for CMDB templates."""
 
+    def on_model_delete(self, model):
+        """Removing a template changes what its hosts export."""
+        add_changes()
+        return super().on_model_delete(model)
+
+    def on_bulk_lifecycle_change(self, changed):
+        """Archiving a template takes its values off the hosts."""
+        add_changes()
+
     def is_accessible(self):
         # Templates only exist for CMDB users — hide menu and route
         # entirely when the install is in plain syncer mode.
@@ -928,6 +946,11 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
 
     def on_model_change(self, form, model, is_created):
         super().on_model_change(form, model, is_created)
+        # A template feeds its values into every host carrying it, so
+        # editing one is a configuration change like a rule edit and
+        # counts for the open changes badge. Hosts and plain objects
+        # deliberately do not — they only invalidate their own cache.
+        add_changes()
         # Editing a template invalidates the rendered Jinja values its
         # consumers carry in `cache`. Wipe those caches in one bulk
         # update so the next sync re-evaluates rules against the new

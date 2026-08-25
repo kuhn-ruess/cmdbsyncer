@@ -241,6 +241,12 @@ def import_host_module():
         ModuleType('application.models.config'),
     )
     config_mod.Config = MagicMock()
+    sates_mod = sys.modules.setdefault(
+        'application.helpers.sates',
+        ModuleType('application.helpers.sates'),
+    )
+    if not hasattr(sates_mod, 'add_changes'):
+        sates_mod.add_changes = MagicMock()
     default_view_mod = sys.modules.setdefault(
         'application.views.default',
         ModuleType('application.views.default'),
