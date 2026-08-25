@@ -634,6 +634,10 @@ class CheckmkRuleSync(CMK2):
         # sort_rules to skip the move chain when CMK already lists the
         # rules in the desired order.
         self._cmk_order_by_ruleset = {}
+        # Rulesets whose current state could not be read this run (timeout,
+        # Checkmk error). Their create step is skipped as well: without
+        # knowing what is already there, creating would duplicate rules.
+        self._failed_rulesets = set()
         # Host-independent rules, wired in by inits.export_rules. Evaluated
         # once in calculate_static_rules instead of per host.
         self.static_rules = []
@@ -1232,6 +1236,12 @@ class CheckmkRuleSync(CMK2):
                 total=len(self.rulsets_by_type),
             )
             for ruleset_name, rules in self.rulsets_by_type.items():
+                if ruleset_name in self._failed_rulesets:
+                    # Cleanup could not read this ruleset, so no rule in it
+                    # carries a _skip_create marker — creating now would
+                    # duplicate every rule that already exists there.
+                    progress.advance(task1)
+                    continue
                 for rule in rules:
                     template = {
                         "ruleset": f"{ruleset_name}",
@@ -1298,7 +1308,19 @@ class CheckmkRuleSync(CMK2):
             )
             for ruleset_name, rules in self.rulsets_by_type.items():
                 url = f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
-                rule_response = self.request(url, method="GET")[0]
+                try:
+                    rule_response = self.request(url, method="GET")[0]
+                except CmkException as error:
+                    # A timeout or error here means we do not know what is
+                    # in this ruleset. Leave it alone for this run — the
+                    # other rulesets are still exported, and the next run
+                    # picks this one up again.
+                    self._failed_rulesets.add(ruleset_name)
+                    self.log_error(
+                        f"Skipped ruleset {ruleset_name}, could not read "
+                        f"its current rules: {error}")
+                    progress.advance(task1)
+                    continue
                 # Capture the order of syncer-owned rule IDs as CMK
                 # currently lists them. sort_rules uses this snapshot to
                 # skip the move chain when the desired order already
@@ -1455,7 +1477,13 @@ class CheckmkRuleSync(CMK2):
                             print(f"{CC.WARNING}   {deletion_details}{CC.ENDC}")
 
                         url = f'/objects/rule/{rule_id}'
-                        self.request(url, method="DELETE")
+                        try:
+                            self.request(url, method="DELETE")
+                        except CmkException as error:
+                            self.log_error(
+                                f"Could not delete Rule {rule_id} in "
+                                f"{ruleset_name}: {error}")
+                            continue
 
                         # Log with details if it's a potential flapping rule
                         log_entry = f"Deleted Rule in {ruleset_name} {rule_id}"
