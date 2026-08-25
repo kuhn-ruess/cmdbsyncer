@@ -56,6 +56,35 @@ def normalize_cmk_folder(folder):
     return normalize_folder(folder)
 
 
+def condition_hosts(condition):
+    """
+    The host list of a rule condition, or an empty list when the condition
+    does not target hosts by name.
+    """
+    host_name = (condition or {}).get('host_name')
+    if isinstance(host_name, dict):
+        return list(host_name.get('match_on') or [])
+    return []
+
+
+def condition_without_hosts(condition):
+    """
+    Copy of a rule condition with the host name match list removed.
+
+    ``optimize_rules`` coalesces every host sharing an outcome into a
+    single rule, so that list is exactly the part which legitimately
+    changes from run to run — a host being added or dropped must adjust
+    the existing rule instead of making it look like a different one.
+    """
+    stripped = dict(condition or {})
+    host_name = stripped.get('host_name')
+    if isinstance(host_name, dict) and 'match_on' in host_name:
+        host_name = dict(host_name)
+        host_name.pop('match_on')
+        stripped['host_name'] = host_name
+    return stripped
+
+
 def scope_folder(folder):
     """
     Normalise a folder for a folder-scope selection.
@@ -1538,10 +1567,17 @@ class CheckmkRuleSync(CMK2):
             return None
         value_match = deep_compare(local_value, remote_value,
                                    strict=bool(rule.get('enforce_value')))
+        condition_match = rule['condition'] == cmk['condition']
         return {
             'local_value': local_value,
             'remote_value': remote_value,
-            'condition': rule['condition'] == cmk['condition'],
+            'condition': condition_match,
+            # Same condition apart from the coalesced host list — the one
+            # part that changes whenever a host enters or leaves the
+            # outcome. Such a rule is adjusted, not replaced.
+            'hosts_only': not condition_match and
+                          condition_without_hosts(rule['condition']) ==
+                          condition_without_hosts(cmk['condition']),
             'comment': rule.get('comment', '') == cmk['comment'],
             'value': value_match,
             # ``keep_value`` outcomes are written once and then left for the
@@ -1581,6 +1617,16 @@ class CheckmkRuleSync(CMK2):
         if best_comparison is None:
             return ('value not parsable',
                     f'No generated rule could be compared: {cmk["value"]}')
+        if best_comparison['hosts_only']:
+            cmk_hosts = condition_hosts(cmk['condition'])
+            local_hosts = condition_hosts(best_rule['condition'])
+            added = [host for host in local_hosts if host not in cmk_hosts]
+            removed = [host for host in cmk_hosts if host not in local_hosts]
+            return ('host list changed',
+                    f'The rule covers {len(cmk_hosts)} host(s) in Checkmk '
+                    f'and {len(local_hosts)} now; added: {added or "-"}, '
+                    f'removed: {removed or "-"}. It could not be adjusted '
+                    'in place because more than one generated rule fits.')
         if not best_comparison['condition']:
             return ('condition no longer generated',
                     'No generated rule carries this condition. Checkmk: '
@@ -1666,6 +1712,9 @@ class CheckmkRuleSync(CMK2):
                         cmk_rule['extensions'].get('folder', '/'))
                     rule_found = False
                     condition_matches = []  # Collect all rules with matching conditions
+                    # Rules that differ from the Checkmk one only in the
+                    # coalesced host list (see optimize_rules).
+                    host_list_matches = []
 
                     cmk_comment = cmk_rule['extensions']['properties'].get(
                         'comment', '')
@@ -1704,6 +1753,14 @@ class CheckmkRuleSync(CMK2):
                         value_match = comparison['value']
                         folder_match = comparison['folder']
                         value_ok = comparison['value_ok']
+
+                        # A rule whose condition differs only in the
+                        # coalesced host list, but which is otherwise the
+                        # very same rule, is a candidate for adjusting the
+                        # host list in place.
+                        if comparison['hosts_only'] and comment_match \
+                                and folder_match and value_ok:
+                            host_list_matches.append(rule)
 
                         # Collect all rules with matching conditions
                         if condition_match:
@@ -1766,6 +1823,48 @@ class CheckmkRuleSync(CMK2):
                             self.log_error(
                                 f"Could not update Rule {rule_id} in "
                                 f"{ruleset_name}: {error}")
+
+                    # A host entering or leaving a coalesced rule changed
+                    # its condition, which used to read as "this rule is
+                    # gone" and cost a delete plus a recreate of a rule
+                    # covering hundreds of hosts. Adjust the host list in
+                    # place instead — same rule, same id, same history.
+                    # Only when exactly one generated rule fits: with
+                    # several candidates we cannot tell which one the
+                    # Checkmk rule grew out of.
+                    if not rule_found and not condition_matches and \
+                            len(host_list_matches) == 1:
+                        our_rule = host_list_matches[0]
+                        rule_id = cmk_rule['id']
+                        cmk_hosts = condition_hosts(cmk_condition)
+                        our_hosts = condition_hosts(our_rule['condition'])
+                        update_payload = {
+                            "properties": {
+                                "disabled": False,
+                                "description": self.rule_marker,
+                                "comment": our_rule['comment'],
+                            },
+                            "conditions": our_rule['condition'],
+                            "value_raw": our_rule['value'],
+                        }
+                        try:
+                            self.update_rule(rule_id, update_payload)
+                            print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE host list of "
+                                  f"Rule in {ruleset_name} {rule_id} "
+                                  f"({len(cmk_hosts)} -> {len(our_hosts)} hosts)")
+                            our_rule['_cmk_id'] = rule_id
+                            our_rule['_skip_create'] = True
+                            rule_found = True
+                            self.log_details.append((
+                                "INFO",
+                                f"Updated host list of Rule in {ruleset_name} "
+                                f"{rule_id}: {len(cmk_hosts)} -> "
+                                f"{len(our_hosts)} hosts",
+                            ))
+                        except CmkException as error:
+                            self.log_error(
+                                f"Could not update host list of Rule {rule_id} "
+                                f"in {ruleset_name}: {error}")
 
                     # Only warn about flapping when there really are multiple
                     # conflicting matches — a single value drift is handled

@@ -807,6 +807,137 @@ class TestCleanRulesFolderAndKeepValue(unittest.TestCase):
         self.assertTrue(local.get('_skip_create'))
 
 
+class TestHostListDrift(unittest.TestCase):
+    """
+    ``optimize_rules`` coalesces every host sharing an outcome into one
+    rule. A host entering or leaving must adjust that rule in place — the
+    old behaviour deleted it and created a new one, which for a rule
+    covering hundreds of hosts reads as "the whole export is obsolete".
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.project = None
+        self.sync.log_details = []
+        self.sync._rule_etag_wildcard_rejected = None
+        self.progress_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.Progress',
+            _FakeCleanProgress())
+        self.progress_patcher.start()
+
+    def tearDown(self):
+        self.progress_patcher.stop()
+
+    @staticmethod
+    def _cmk_rule(hosts, rule_id='r1', value="{'k': 'v'}", comment='c'):
+        return {
+            'id': rule_id,
+            'extensions': {
+                'folder': '/',
+                'value_raw': value,
+                'conditions': {'host_name': {'match_on': list(hosts)}},
+                'properties': {
+                    'description': 'cmdbsyncer_test_account',
+                    'comment': comment,
+                },
+            },
+        }
+
+    @staticmethod
+    def _local(hosts, value="{'k': 'v'}", comment='c'):
+        return {
+            'value': value, 'comment': comment, 'folder': '/',
+            'condition': {'host_name': {'match_on': list(hosts)}},
+        }
+
+    def _wire(self):
+        calls = {'DELETE': [], 'PUT': [], 'GET': []}
+        cmk_rules = []
+
+        def fake_request(url, method='GET', data=None, **_kw):
+            if method == 'GET' and 'ruleset_name' in url:
+                return {'value': cmk_rules}, {}
+            if method == 'GET':
+                return {}, {'etag': 'x'}
+            if method == 'DELETE':
+                calls['DELETE'].append(url)
+            if method == 'PUT':
+                calls['PUT'].append(data)
+            return {}, {'status_code': 200}
+        self.sync.request = MagicMock(side_effect=fake_request)
+        return calls, cmk_rules
+
+    def test_a_dropped_host_updates_the_rule_instead_of_deleting_it(self):
+        calls, cmk_rules = self._wire()
+        cmk_rules.append(self._cmk_rule(['h1', 'h2', 'h3']))
+        local = self._local(['h1', 'h3'])
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertEqual(len(calls['PUT']), 1)
+        self.assertEqual(
+            calls['PUT'][0]['conditions']['host_name']['match_on'],
+            ['h1', 'h3'])
+        # Paired: create_rules must not add a second copy.
+        self.assertTrue(local.get('_skip_create'))
+        self.assertEqual(local.get('_cmk_id'), 'r1')
+
+    def test_an_added_host_updates_the_rule_too(self):
+        calls, cmk_rules = self._wire()
+        cmk_rules.append(self._cmk_rule(['h1']))
+        local = self._local(['h1', 'h2'])
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertEqual(
+            calls['PUT'][0]['conditions']['host_name']['match_on'],
+            ['h1', 'h2'])
+
+    def test_an_unchanged_rule_is_still_left_alone(self):
+        calls, cmk_rules = self._wire()
+        cmk_rules.append(self._cmk_rule(['h1', 'h2']))
+        local = self._local(['h1', 'h2'])
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertEqual(calls['PUT'], [])
+        self.assertTrue(local.get('_skip_create'))
+
+    def test_a_different_value_is_not_treated_as_host_drift(self):
+        # Host list AND value differ: we cannot tell this apart from an
+        # unrelated rule, so the safe delete + recreate stays.
+        calls, cmk_rules = self._wire()
+        cmk_rules.append(self._cmk_rule(['h1', 'h2'], value="{'k': 'v'}"))
+        local = self._local(['h1'], value="{'k': 'other'}")
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], ['/objects/rule/r1'])
+        self.assertEqual(calls['PUT'], [])
+        self.assertFalse(local.get('_skip_create'))
+
+    def test_two_candidates_are_ambiguous_and_left_to_delete(self):
+        # Two generated rules differ from the Checkmk one only in the host
+        # list — we cannot tell which one it grew out of.
+        calls, cmk_rules = self._wire()
+        cmk_rules.append(self._cmk_rule(['h1']))
+        first = self._local(['h1', 'h2'])
+        second = self._local(['h1', 'h3'])
+        self.sync.rulsets_by_type = {'ruleset1': [first, second]}
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], ['/objects/rule/r1'])
+        self.assertEqual(calls['PUT'], [])
+
+
 class TestExplainDeletion(unittest.TestCase):
     """
     Why a rule is deleted. A run that removes hundreds of its own rules
@@ -841,10 +972,23 @@ class TestExplainDeletion(unittest.TestCase):
         self.assertEqual(reason, 'no rule generated for this ruleset any more')
 
     def test_condition_no_longer_generated(self):
-        local = self._local(condition={'host_name': {'match_on': ['other']}})
+        # A genuinely different condition, not just another host list.
+        local = self._local(condition={'host_labels': [{'key': 'k',
+                                                        'operator': 'is',
+                                                        'value': 'v'}]})
         reason, detail = self.sync._explain_deletion([local], self._cmk())
         self.assertEqual(reason, 'condition no longer generated')
-        self.assertIn('other', detail)
+        self.assertIn('host_labels', detail)
+
+    def test_only_the_host_list_changed(self):
+        # optimize_rules coalesces every host sharing an outcome into one
+        # condition, so a host entering or leaving is not a different rule.
+        local = self._local(
+            condition={'host_name': {'match_on': ['h', 'h2']}})
+        reason, detail = self.sync._explain_deletion(
+            [local], self._cmk(condition={'host_name': {'match_on': ['h']}}))
+        self.assertEqual(reason, 'host list changed')
+        self.assertIn('h2', detail)
 
     def test_folder_drift_is_named(self):
         local = self._local(folder='/moved')
