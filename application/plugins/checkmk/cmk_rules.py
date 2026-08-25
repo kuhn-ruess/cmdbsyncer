@@ -1523,6 +1523,91 @@ class CheckmkRuleSync(CMK2):
                 progress.advance(task1)
 
 
+    @staticmethod
+    def _compare_rule(rule, cmk):
+        """
+        Compare one locally generated rule against a Checkmk rule and
+        report every criterion on its own. ``cmk`` carries the Checkmk
+        side as ``condition`` / ``comment`` / ``value`` / ``folder``.
+        Returns None when either value literal cannot be parsed.
+        """
+        try:
+            local_value = ast.literal_eval(rule['value'])
+            remote_value = ast.literal_eval(cmk['value'])
+        except (SyntaxError, KeyError):
+            return None
+        value_match = deep_compare(local_value, remote_value,
+                                   strict=bool(rule.get('enforce_value')))
+        return {
+            'local_value': local_value,
+            'remote_value': remote_value,
+            'condition': rule['condition'] == cmk['condition'],
+            'comment': rule.get('comment', '') == cmk['comment'],
+            'value': value_match,
+            # ``keep_value`` outcomes are written once and then left for the
+            # operator to adjust in Checkmk, so drift is not a mismatch.
+            'value_ok': value_match or bool(rule.get('keep_value')),
+            'folder': cmk['folder'].lower() ==
+                      normalize_cmk_folder(rule['folder']).lower(),
+        }
+
+    def _explain_deletion(self, rules, cmk):
+        """
+        Say why none of the locally generated rules paired with the
+        Checkmk rule that is about to be deleted.
+
+        A run that suddenly wants to delete hundreds of its own rules is
+        almost always one changed criterion — a reworked condition, a
+        renamed folder, a dropped comment — not hundreds of unrelated
+        events. Returns ``(reason, detail)``: the short reason groups the
+        deletions in the summary, the detail is the concrete diff.
+        """
+        if not rules:
+            return ('no rule generated for this ruleset any more',
+                    'The run no longer generates any rule for this ruleset, '
+                    'so every rule the Syncer owns in it is removed.')
+        best_score = -1
+        best_rule = None
+        best_comparison = None
+        for rule in rules:
+            comparison = self._compare_rule(rule, cmk)
+            if comparison is None:
+                continue
+            score = sum((comparison['condition'], comparison['comment'],
+                         comparison['value_ok'], comparison['folder']))
+            if score > best_score:
+                best_score, best_rule, best_comparison = \
+                    score, rule, comparison
+        if best_comparison is None:
+            return ('value not parsable',
+                    f'No generated rule could be compared: {cmk["value"]}')
+        if not best_comparison['condition']:
+            return ('condition no longer generated',
+                    'No generated rule carries this condition. Checkmk: '
+                    f'{pformat(cmk["condition"])} — closest generated rule: '
+                    f'{pformat(best_rule["condition"])}')
+        mismatches = []
+        if not best_comparison['comment']:
+            mismatches.append(
+                f'comment: Checkmk {cmk["comment"]!r} != '
+                f'generated {best_rule.get("comment", "")!r}')
+        if not best_comparison['folder']:
+            mismatches.append(
+                f'folder: Checkmk {cmk["folder"]} != generated '
+                f'{normalize_cmk_folder(best_rule["folder"])}')
+        if not best_comparison['value_ok']:
+            mismatches.append('value: ' + analyze_value_differences(
+                best_comparison['local_value'],
+                best_comparison['remote_value']))
+        if not mismatches:
+            # Every criterion lines up, so the generated rule does exist —
+            # it was just already paired with another Checkmk rule.
+            return ('duplicate in Checkmk',
+                    'An identical rule exists more than once in Checkmk; '
+                    'the generated rule paired with the other copy.')
+        reason = ' and '.join(part.split(':', 1)[0] for part in mismatches)
+        return (f'{reason} changed', '; '.join(mismatches))
+
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def clean_rules(self):
         """
@@ -1539,6 +1624,7 @@ class CheckmkRuleSync(CMK2):
                 f"Cleanup across {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
                 total=len(self.rulsets_by_type),
             )
+            delete_reasons = {}
             for ruleset_name, rules in self.rulsets_by_type.items():
                 url = f"domain-types/rule/collections/all?ruleset_name={ruleset_name}"
                 try:
@@ -1583,6 +1669,12 @@ class CheckmkRuleSync(CMK2):
 
                     cmk_comment = cmk_rule['extensions']['properties'].get(
                         'comment', '')
+                    cmk_facts = {
+                        'condition': cmk_condition,
+                        'comment': cmk_comment,
+                        'value': value,
+                        'folder': cmk_folder,
+                    }
                     for rule in list(rules):
                         # ``sort_rules`` needs every owned rule to keep
                         # its (rulesets_by_type) slot with a captured
@@ -1592,14 +1684,6 @@ class CheckmkRuleSync(CMK2):
                         # only produce duplicates.
                         if rule.get('_skip_create'):
                             continue
-                        try:
-                            cmk_value = ast.literal_eval(rule['value'])
-                            check_value = ast.literal_eval(value)
-                        except (SyntaxError, KeyError):
-                            logger.debug("Invalid Value: '%s' or '%s'", rule['value'], value)
-                            continue
-
-                        condition_match = rule['condition'] == cmk_condition
                         # Comment is admin-supplied free text per outcome
                         # (RuleMngmtOutcome.comment). When several
                         # outcomes share the same condition+value the
@@ -1607,35 +1691,26 @@ class CheckmkRuleSync(CMK2):
                         # — without it ``sort_rules`` ends up pairing
                         # local→cmk in CMK iteration order, silently
                         # cancelling the configured folder_index
-                        # ordering on idempotent re-runs.
-                        comment_match = rule.get('comment', '') == cmk_comment
-                        # ``enforce_value`` outcomes compare the key sets
-                        # strictly, so a key dropped from the value template
-                        # counts as drift instead of being read as a
-                        # Checkmk-side schema default.
-                        value_match = deep_compare(
-                            cmk_value, check_value,
-                            strict=bool(rule.get('enforce_value')))
-                        # A rule that sits in the wrong folder is not a match —
-                        # it has to be recreated in the configured folder.
-                        # Compared case-insensitively: Checkmk stores folder
-                        # path ids lowercased, so "/Server" configured here maps
-                        # to "/server" on the CMK side and must not read as drift.
-                        folder_match = cmk_folder.lower() == \
-                            normalize_cmk_folder(rule['folder']).lower()
-                        # ``keep_value`` outcomes are written once and then left
-                        # for the operator to adjust in Checkmk. Treat the value
-                        # as matching regardless of drift so the rule is neither
-                        # updated nor deleted, as long as condition, comment and
-                        # folder still line up.
-                        value_ok = value_match or rule.get('keep_value')
+                        # ordering on idempotent re-runs. The folder is
+                        # part of the identity too: a rule that drifted
+                        # into another folder has to be recreated in the
+                        # configured one.
+                        comparison = self._compare_rule(rule, cmk_facts)
+                        if comparison is None:
+                            logger.debug("Invalid Value: '%s' or '%s'", rule['value'], value)
+                            continue
+                        condition_match = comparison['condition']
+                        comment_match = comparison['comment']
+                        value_match = comparison['value']
+                        folder_match = comparison['folder']
+                        value_ok = comparison['value_ok']
 
                         # Collect all rules with matching conditions
                         if condition_match:
                             condition_matches.append({
                                 'rule': rule,
-                                'expected_value': cmk_value,
-                                'actual_value': check_value,
+                                'expected_value': comparison['local_value'],
+                                'actual_value': comparison['remote_value'],
                                 'value_match': value_match,
                                 'folder_match': folder_match,
                             })
@@ -1726,7 +1801,21 @@ class CheckmkRuleSync(CMK2):
 
                     if not rule_found: # Not existing any more
                         rule_id = cmk_rule['id']
-                        print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in {ruleset_name} {rule_id}")
+                        # Why this rule is going: without it a run that
+                        # deletes hundreds of its own rules gives the
+                        # operator nothing to act on.
+                        reason, reason_detail = self._explain_deletion(
+                            rules, cmk_facts)
+                        delete_reasons[reason] = \
+                            delete_reasons.get(reason, 0) + 1
+                        print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in "
+                              f"{ruleset_name} {rule_id} ({reason})")
+                        if self.debug:
+                            print(f"{CC.OKCYAN}   {reason_detail}{CC.ENDC}")
+                        self.log_details.append((
+                            "INFO",
+                            f"Delete reason for {rule_id} in {ruleset_name} "
+                            f"({reason}): {reason_detail}"))
 
                         # Show details only for potentially problematic cases
                         if deletion_details:
@@ -1747,6 +1836,26 @@ class CheckmkRuleSync(CMK2):
                             log_entry += f" - {deletion_details}"
                         self.log_details.append(("INFO", log_entry))
                 progress.advance(task1)
+        self._report_delete_reasons(delete_reasons)
+
+    def _report_delete_reasons(self, delete_reasons):
+        """
+        Summarise why the run deleted rules. Hundreds of deletions almost
+        always share one cause, and that cause is what has to be fixed —
+        the per-rule lines scroll past, this line does not.
+        """
+        if not delete_reasons:
+            return
+        total = sum(delete_reasons.values())
+        summary = ", ".join(
+            f"{count}x {reason}" for reason, count
+            in sorted(delete_reasons.items(), key=lambda x: -x[1]))
+        message = f"Removing {total} rule(s) — reasons: {summary}"
+        print(f"{CC.WARNING}  ** {CC.ENDC}{message}")
+        if not self.debug:
+            print(f"{CC.OKCYAN}  ** {CC.ENDC}Run with --debug to see the "
+                  f"difference behind each deletion")
+        self.log_details.append(("INFO", message))
 
     def clean_orphaned_rules(self):
         """

@@ -470,7 +470,7 @@ def cli_export_rules(account, debug):
     Args:
         account (string): Name Checkmk Account Config
     """
-    export_rules(account)
+    export_rules(account, debug)
 
 #.
 #   .-- Command: Export Ruleset Catalog for the UI autocomplete

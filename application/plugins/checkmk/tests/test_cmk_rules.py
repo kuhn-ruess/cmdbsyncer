@@ -807,6 +807,111 @@ class TestCleanRulesFolderAndKeepValue(unittest.TestCase):
         self.assertTrue(local.get('_skip_create'))
 
 
+class TestExplainDeletion(unittest.TestCase):
+    """
+    Why a rule is deleted. A run that removes hundreds of its own rules
+    is one changed criterion, and the operator has to see which one.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+
+    @staticmethod
+    def _cmk(condition=None, comment='c', value="{'k': 'v'}", folder='/'):
+        return {
+            'condition': condition if condition is not None
+                         else {'host_name': {'match_on': ['h']}},
+            'comment': comment,
+            'value': value,
+            'folder': folder,
+        }
+
+    @staticmethod
+    def _local(condition=None, comment='c', value="{'k': 'v'}", folder='/'):
+        return {
+            'condition': condition if condition is not None
+                         else {'host_name': {'match_on': ['h']}},
+            'comment': comment,
+            'value': value,
+            'folder': folder,
+        }
+
+    def test_no_rules_left_for_the_ruleset(self):
+        reason, _detail = self.sync._explain_deletion([], self._cmk())
+        self.assertEqual(reason, 'no rule generated for this ruleset any more')
+
+    def test_condition_no_longer_generated(self):
+        local = self._local(condition={'host_name': {'match_on': ['other']}})
+        reason, detail = self.sync._explain_deletion([local], self._cmk())
+        self.assertEqual(reason, 'condition no longer generated')
+        self.assertIn('other', detail)
+
+    def test_folder_drift_is_named(self):
+        local = self._local(folder='/moved')
+        reason, detail = self.sync._explain_deletion([local], self._cmk())
+        self.assertEqual(reason, 'folder changed')
+        self.assertIn('/moved', detail)
+
+    def test_comment_drift_is_named(self):
+        local = self._local(comment='new comment')
+        reason, detail = self.sync._explain_deletion([local], self._cmk())
+        self.assertEqual(reason, 'comment changed')
+        self.assertIn('new comment', detail)
+
+    def test_value_drift_is_named(self):
+        local = self._local(value="{'k': 'other'}")
+        reason, _detail = self.sync._explain_deletion([local], self._cmk())
+        self.assertEqual(reason, 'value changed')
+
+    def test_two_changed_criteria_are_both_named(self):
+        local = self._local(comment='new comment', folder='/moved')
+        reason, _detail = self.sync._explain_deletion([local], self._cmk())
+        self.assertEqual(reason, 'comment and folder changed')
+
+    def test_an_identical_rule_means_a_duplicate_in_checkmk(self):
+        # Everything lines up: the generated rule exists, it just paired
+        # with another copy of the same rule in Checkmk.
+        local = self._local()
+        local['_skip_create'] = True
+        reason, _detail = self.sync._explain_deletion([local], self._cmk())
+        self.assertEqual(reason, 'duplicate in Checkmk')
+
+    def test_the_closest_rule_wins_the_explanation(self):
+        # A completely unrelated rule must not shadow the one that only
+        # drifted in its folder.
+        unrelated = self._local(condition={'host_name': {'match_on': ['x']}},
+                                comment='z', value="{'a': 1}", folder='/z')
+        close = self._local(folder='/moved')
+        reason, _detail = self.sync._explain_deletion(
+            [unrelated, close], self._cmk())
+        self.assertEqual(reason, 'folder changed')
+
+
+class TestDeleteReasonSummary(unittest.TestCase):
+    """The per-rule lines scroll past; the summary line must not."""
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.log_details = []
+        self.sync.debug = False
+
+    def test_reasons_are_counted_and_sorted(self):
+        with patch('builtins.print') as printed:
+            self.sync._report_delete_reasons(
+                {'folder changed': 2, 'condition no longer generated': 900})
+        output = " ".join(str(call.args[0]) for call in printed.call_args_list)
+        self.assertIn('Removing 902 rule(s)', output)
+        self.assertLess(output.index('900x condition'),
+                        output.index('2x folder'))
+        self.assertTrue(any('Removing 902' in detail
+                            for _level, detail in self.sync.log_details))
+
+    def test_nothing_is_printed_without_deletions(self):
+        with patch('builtins.print') as printed:
+            self.sync._report_delete_reasons({})
+        printed.assert_not_called()
+
+
 class TestExportSurvivesFailedRequests(unittest.TestCase):
     """
     A request that times out (or otherwise errors) must not end the whole

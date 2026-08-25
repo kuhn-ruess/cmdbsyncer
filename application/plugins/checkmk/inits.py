@@ -355,7 +355,7 @@ def projects_for_account(account):
     ]
 
 
-def export_rules(account):
+def export_rules(account, debug=False):
     """
     Create Rules in Checkmk
     """
@@ -363,6 +363,7 @@ def export_rules(account):
     try:
         rules = _load_rules()
         syncer = CheckmkRuleSync(account)
+        syncer.debug = debug
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
 
