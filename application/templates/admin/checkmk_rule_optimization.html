@@ -1,0 +1,192 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Checkmk Rule Optimization</h3>
+    <p>
+        <a href="{{ url_for('checkmkrulemngmt.index_view') }}">&larr; back to the Setup Rules</a>
+    </p>
+    <p>
+        When a Setup Rule outcome matches on <code>Condition Host</code> with
+        <code>{{ '{{HOSTNAME}}' }}</code> and nothing else, the export merges every
+        matching host into <strong>one</strong> Checkmk rule that lists every
+        hostname. Those rules are hard to read, slow to match, and get rewritten
+        whenever a single host joins or leaves. This page finds them and the host
+        attribute that covers exactly the same hosts.
+    </p>
+    <p>
+        The analysis reads the Syncer database only — nothing is sent to Checkmk.
+        It walks every host twice, so it runs in the background.
+    </p>
+
+    <form method="POST" action="{{ url_for('.start') }}" class="card app-card mb-4">
+        <div class="card-body">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="form-row">
+                <div class="form-group col-md-5">
+                    <label for="account">Checkmk account <small>(optional)</small></label>
+                    <select class="form-control" id="account" name="account">
+                        <option value="">— every enabled rule, no account scope —</option>
+                        {% for account in accounts %}
+                        <option value="{{ account }}"
+                                {% if account == selected_account %}selected{% endif %}>
+                            {{ account }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">
+                        With an account the report is narrowed to what that account
+                        would export: its project and folder scope, its object filter.
+                    </small>
+                </div>
+                <div class="form-group col-md-3">
+                    <label for="min_hosts">Report rules from</label>
+                    <input type="number" class="form-control" id="min_hosts"
+                           name="min_hosts" min="2"
+                           value="{{ analysis.min_hosts if analysis else 10 }}"/>
+                    <small class="form-text text-muted">hosts upwards</small>
+                </div>
+                <div class="form-group col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary mb-3">
+                        Run analysis
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if not analysis %}
+    <div class="alert alert-info">
+        No analysis for this scope yet. Start one above.
+    </div>
+    {% elif analysis.state == 'running' and not stale %}
+    <div class="alert alert-info">
+        <span class="spinner-border spinner-border-sm mr-2" role="status"></span>
+        Analysis running since {{ analysis.started_at.strftime('%Y-%m-%d %H:%M') }}.
+        This page refreshes itself every 10 seconds.
+    </div>
+    {# Only while a run is in flight — a finished page must not keep
+       reloading under the operator's hands. #}
+    <script>
+      window.setTimeout(function () { window.location.reload(); }, 10000);
+    </script>
+    {% elif stale %}
+    <div class="alert alert-warning">
+        An analysis has been marked running since
+        {{ analysis.started_at.strftime('%Y-%m-%d %H:%M') }} and never finished —
+        the process was most likely restarted. Start a new one.
+    </div>
+    {% elif analysis.state == 'failed' %}
+    <div class="alert alert-danger">
+        The analysis failed: {{ analysis.error }}
+    </div>
+    {% else %}
+    <p class="text-muted">
+        Analysed {{ analysis.finished_at.strftime('%Y-%m-%d %H:%M') }},
+        rules from {{ analysis.min_hosts }} hosts upwards.
+        The findings describe the rules as they were then.
+    </p>
+
+    {% if not analysis.findings %}
+    <div class="alert alert-success">
+        No Setup Rule builds a condition out of that many hostnames. Nothing to
+        optimize.
+    </div>
+    {% endif %}
+
+    {% for finding in analysis.findings %}
+    {% set finding_index = loop.index0 %}
+    <div class="card app-card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">
+                {% for name, _index in finding.syncer_rules %}
+                <span class="badge badge-primary">{{ name }}</span>
+                {% else %}
+                <span class="badge badge-secondary">unknown Setup Rule</span>
+                {% endfor %}
+                <small class="text-muted">
+                    {{ finding.hosts }} hosts in one condition
+                </small>
+            </h5>
+            <p class="card-text mb-2">
+                <small>
+                    ruleset <code>{{ finding.ruleset }}</code> ·
+                    folder <code>{{ finding.folder }}</code>
+                    {% if finding.comment %} · {{ finding.comment }}{% endif %}
+                    <br/><code>{{ finding.value }}</code>
+                </small>
+            </p>
+
+            {% if not finding.label_condition_kept %}
+            <div class="alert alert-danger mb-0">
+                Checkmk discards host label conditions in this ruleset, so a label
+                cannot replace the host list here — the rule would end up matching
+                every host.
+            </div>
+            {% else %}
+                {% for label in finding.exact %}
+                <div class="alert alert-success">
+                    Use the host label
+                    <strong>{{ label.key }}:{{ label.value }}</strong> —
+                    covers all {{ finding.hosts }} hosts and no other host.
+                    {% if label.source %}
+                    <br/><small>
+                        <code>{{ label.source }}</code> is no usable label on its own,
+                        so <code>{{ label.key }}</code> is a hash of it. Applying
+                        creates the Rewrite rule that builds it.
+                    </small>
+                    {% endif %}
+                    {% if label.needs_filter %}
+                    <br/><small>
+                        <code>{{ label.key }}</code> does not pass the export filter
+                        yet. Applying lets it through.
+                    </small>
+                    {% endif %}
+                    {% if loop.first %}
+                    <form method="POST" action="{{ url_for('.apply_finding') }}"
+                          class="mt-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="account" value="{{ selected_account }}"/>
+                        <input type="hidden" name="finding" value="{{ finding_index }}"/>
+                        <button type="submit" class="btn btn-sm btn-success">
+                            Apply: set the label condition
+                        </button>
+                        <label class="ml-3 mb-0">
+                            <input type="checkbox" name="hash_labels" value="1"/>
+                            <small>match on a hash instead of the raw value</small>
+                        </label>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            {% for label in finding.wider %}
+            <div class="alert alert-secondary mb-1">
+                <strong>{{ label.key }}:{{ label.value }}</strong> covers all
+                {{ finding.hosts }} hosts, but {{ label.outside }} more host(s)
+                would get the rule too.
+            </div>
+            {% endfor %}
+            {% for label in finding.partial %}
+            <div class="alert alert-secondary mb-1">
+                <strong>{{ label.key }}:{{ label.value }}</strong> covers
+                {{ label.inside }} of {{ finding.hosts }} hosts and no other host —
+                {{ finding.hosts - label.inside }} would lose the rule.
+            </div>
+            {% endfor %}
+
+            {% if finding.label_condition_kept and not finding.exact
+                  and not finding.wider and not finding.partial %}
+            <div class="alert alert-warning mb-0">
+                No attribute comes close — these hosts share nothing the others do
+                not. A Rewrite rule setting a label on exactly them would give the
+                Setup Rule something to match on.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+{% endblock %}

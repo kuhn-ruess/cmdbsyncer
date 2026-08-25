@@ -26,6 +26,8 @@ from application.plugins.checkmk.cmk_rules import (
     folder_within_scope,
     cmk_conditions_to_outcome,
     cmk_rule_to_outcome,
+    findings_for_storage,
+    finding_from_storage,
     CheckmkRuleSync,
 )
 import application.plugins.checkmk.inits as inits  # noqa: E402  pylint: disable=consider-using-from-import
@@ -1035,6 +1037,66 @@ class TestApplyFindings(unittest.TestCase):
         # Sorted, so re-runs pick the same one.
         self.assertEqual(self.outcome.condition_label_template, 'env:prod')
         self.assertIn('site:hh', status)
+
+
+class TestFindingStorage(unittest.TestCase):
+    """
+    The findings the web interface stores and applies. The analysis walks
+    every host twice, so the page reads a stored result — which then has
+    to be applicable without re-running anything.
+    """
+
+    def _result(self):
+        return {
+            'ruleset': 'agent_config:only_from',
+            'label_condition_kept': True,
+            'rule': {'folder': '/prod', 'comment': 'Agent access\nsecond line',
+                     'value': "{'only_from': ['10.0.0.1']}"},
+            'syncer_rules': [('Agent Access', 2)],
+            'hosts': 902,
+            'exact': [(('env', 'prod', None), 902, 0)],
+            'wider': [(('site', 'hh', None), 902, 14)],
+            'partial': [(('role', 'web', None), 890, 0)],
+            'exported_keys': {'site', 'role'},
+        }
+
+    def test_a_finding_is_stored_as_plain_data(self):
+        stored = findings_for_storage([self._result()])[0]
+        self.assertEqual(stored['hosts'], 902)
+        self.assertEqual(stored['syncer_rules'], [['Agent Access', 2]])
+        # One line of comment is enough for a card.
+        self.assertEqual(stored['comment'], 'Agent access')
+        self.assertEqual(stored['exact'][0]['key'], 'env')
+        self.assertEqual(stored['exact'][0]['source'], None)
+
+    def test_the_huge_exported_key_set_is_reduced_to_a_flag(self):
+        # It is the same set for every finding — storing it per finding
+        # would blow the document up on a large inventory.
+        stored = findings_for_storage([self._result()])[0]
+        self.assertNotIn('exported_keys', stored)
+        self.assertTrue(stored['exact'][0]['needs_filter'])
+        self.assertFalse(stored['wider'][0]['needs_filter'])
+
+    def test_only_the_first_three_near_misses_are_kept(self):
+        result = self._result()
+        result['wider'] = [((f'k{i}', 'v', None), 902, i) for i in range(6)]
+        stored = findings_for_storage([result])[0]
+        self.assertEqual(len(stored['wider']), 3)
+
+    def test_a_stored_finding_can_be_applied_again(self):
+        stored = findings_for_storage([self._result()])[0]
+        restored = finding_from_storage(stored)
+        self.assertEqual(restored['syncer_rules'], [('Agent Access', 2)])
+        self.assertEqual(restored['exact'], [(('env', 'prod', None), 902, 0)])
+        self.assertTrue(restored['label_condition_kept'])
+        # 'env' still has to be let through, so it must not read as exported.
+        self.assertNotIn('env', restored['exported_keys'])
+
+    def test_a_ruleset_that_cannot_take_a_label_survives_the_round_trip(self):
+        result = self._result()
+        result['label_condition_kept'] = False
+        stored = findings_for_storage([result])[0]
+        self.assertFalse(finding_from_storage(stored)['label_condition_kept'])
 
 
 class _FakeHost:  # pylint: disable=too-few-public-methods

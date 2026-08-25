@@ -27,6 +27,7 @@ from flask_login import current_user
 from application import app
 from application.views.default import DefaultModelView
 from application.models.account import Account, CustomEntry
+from application.models.host import Host
 from application.docu_links import docu_links
 
 from application.modules.rule.views import (
@@ -2161,6 +2162,101 @@ class CheckmkTestFolderScopeView(BaseView):
         flash(f"Saved {len(folders)} folder(s) for account '{account.name}'. "
               f"Its host export is now limited to these folders.", 'success')
         return redirect(self.get_url('.index', account=account.name))
+
+
+class CheckmkRuleOptimizationView(BaseView):
+    """
+    Setup Rules whose export ends up listing hundreds of hostnames in one
+    condition, and the host attribute that could replace that list.
+
+    The analysis walks every host twice, so it runs in the background and
+    this page shows the stored result. Applying a finding rewrites the
+    Setup Rule; nothing is ever sent to Checkmk from here.
+    """
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    def is_visible(self):
+        """
+        Hidden from the menu: the page belongs to the Setup Rules and is
+        linked from their list.
+        """
+        return False
+
+    @staticmethod
+    def _accounts():
+        """Enabled Checkmk (cmkv2) accounts — optional scope for the run."""
+        return [a.name for a in
+                Account.objects(enabled=True, type='cmkv2').order_by('name')]
+
+    def _render(self, account=''):
+        # pylint: disable=import-outside-toplevel
+        from .rule_analysis_runner import get_analysis, is_stale
+        analysis = get_analysis(account)
+        return self.render(
+            'admin/checkmk_rule_optimization.html',
+            accounts=self._accounts(),
+            selected_account=account,
+            analysis=analysis,
+            stale=is_stale(analysis),
+        )
+
+    @expose('/', methods=['GET'])
+    def index(self):
+        """Show the stored analysis for the selected account."""
+        return self._render(request.args.get('account', ''))
+
+    @expose('/start', methods=['POST'])
+    def start(self):
+        """Kick off a background analysis."""
+        # pylint: disable=import-outside-toplevel
+        from .rule_analysis_runner import start_analysis
+        account = request.form.get('account', '')
+        try:
+            min_hosts = max(2, int(request.form.get('min_hosts') or 10))
+        except ValueError:
+            min_hosts = 10
+        if start_analysis(account, min_hosts=min_hosts):
+            flash('Analysis started. It runs in the background — reload '
+                  'this page to see the result.', 'success')
+        else:
+            flash('An analysis is already running for this scope.',
+                  'warning')
+        return redirect(self.get_url('.index', account=account))
+
+    @expose('/apply', methods=['POST'])
+    def apply_finding(self):
+        """Rewrite the Setup Rule of one stored finding."""
+        # pylint: disable=import-outside-toplevel
+        from .cmk_rules import CheckmkRuleSync, finding_from_storage
+        from .rule_analysis_runner import get_analysis
+        account = request.form.get('account', '')
+        analysis = get_analysis(account)
+        try:
+            index = int(request.form.get('finding', ''))
+            finding = analysis.findings[index]
+        except (AttributeError, ValueError, IndexError):
+            flash('That finding is gone — run the analysis again.', 'error')
+            return redirect(self.get_url('.index', account=account))
+
+        syncer = CheckmkRuleSync(account or False, probe_version=False)
+        status = syncer._apply_finding(  # pylint: disable=protected-access
+            finding_from_storage(finding),
+            hash_labels=bool(request.form.get('hash_labels')))
+        if status is None:
+            flash('Nothing to apply for that finding.', 'warning')
+        else:
+            # The outcomes computed from the old condition are cached on
+            # every host — same as a rule edit in the web interface.
+            Host.objects(cache__ne={}).update(set__cache={})
+            flash(status, 'success')
+            # The finding described the rule as it was; it no longer
+            # applies. Drop it so nobody applies it twice.
+            analysis.findings.pop(index)
+            analysis.save()
+        return redirect(self.get_url('.index', account=account))
 
 
 class CheckmkDataQualityView(BaseView):

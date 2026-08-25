@@ -34,6 +34,7 @@ from .views import (
     CheckmkBiRuleView,
     CheckmkCacheView,
     CheckmkDataQualityView,
+    CheckmkRuleOptimizationView,
     CheckmkDCDView,
     CheckmkDowntimeView,
     CheckmkFolderPoolView,
@@ -217,6 +218,14 @@ def register_admin_views(admin):
     admin.add_view(
         CheckmkCacheView(CheckmkObjectCache, name="Cache", category="Checkmk",
                         menu_icon_type='fa', menu_icon_value='fa-th')
+    )
+    # Reachable from the Setup Rules list, not from the menu — it is a
+    # tool for those rules, not a place of its own.
+    admin.add_view(
+        CheckmkRuleOptimizationView(
+            name="Rule Optimization",
+            endpoint="checkmk_rule_optimization",
+        )
     )
     admin.add_view(
         CheckmkDataQualityView(

@@ -126,6 +126,65 @@ def shorten_value(value, limit=120):
     return value
 
 
+def findings_for_storage(results):
+    """
+    The findings as plain documents the web interface can render and
+    apply without re-running an analysis that walks every host twice.
+
+    ``exported_keys`` is deliberately not carried along — it is the same
+    (potentially huge) set for every finding. All that matters per
+    finding is whether its own label still has to be let through the
+    filter, so that is reduced to a flag here.
+    """
+    def labels(entries, exported):
+        return [{
+            'key': label[0], 'value': label[1], 'source': label[2],
+            'inside': inside, 'outside': outside,
+            'needs_filter': label[0] not in exported,
+        } for label, inside, outside in entries]
+
+    stored = []
+    for result in results:
+        exported = result.get('exported_keys') or set()
+        rule = result['rule']
+        comment = (rule.get('comment') or '').splitlines()
+        stored.append({
+            'ruleset': result['ruleset'],
+            'folder': rule.get('folder', '/'),
+            'comment': comment[0] if comment else '',
+            'value': shorten_value(rule.get('value', '')),
+            'hosts': result['hosts'],
+            'syncer_rules': [list(entry) for entry in result['syncer_rules']],
+            'label_condition_kept': result['label_condition_kept'],
+            'exact': labels(result['exact'], exported),
+            'wider': labels(result['wider'][:3], exported),
+            'partial': labels(result['partial'][:3], exported),
+        })
+    return stored
+
+
+def finding_from_storage(finding):
+    """
+    Turn a stored finding back into the shape ``_apply_finding`` expects,
+    so the web interface can apply one without a fresh analysis.
+    """
+    exported = {label['key'] for label in finding.get('exact', [])
+                if not label.get('needs_filter')}
+    return {
+        'ruleset': finding['ruleset'],
+        'rule': {'folder': finding.get('folder', '/')},
+        'syncer_rules': [tuple(entry)
+                         for entry in finding.get('syncer_rules', [])],
+        'hosts': finding.get('hosts', 0),
+        'label_condition_kept': finding.get('label_condition_kept', True),
+        'exact': [((label['key'], label['value'], label['source']),
+                   label['inside'], label['outside'])
+                  for label in finding.get('exact', [])],
+        'wider': [], 'partial': [],
+        'exported_keys': exported,
+    }
+
+
 def condition_hosts(condition):
     """
     The host list of a rule condition, or an empty list when the condition

@@ -1,6 +1,16 @@
 {% extends 'admin/model/list.html' %}
 
 {% block body %}
+<div class="mb-2">
+    <a href="{{ url_for('checkmk_rule_optimization.index') }}"
+       class="btn btn-sm btn-outline-secondary">
+        <i class="fa fa-compress"></i> Rule Optimization
+    </a>
+    <small class="text-muted ml-2">
+        Find rules whose export lists hundreds of hostnames in one condition,
+        and the host label that could replace it.
+    </small>
+</div>
 {{ super() }}
 
 {# Hard cap the rendered-card column so a long ruleset can no longer

@@ -675,6 +675,37 @@ class CheckmkSitePool(db.Document):
     }
 #.
 #   .-- Rewrite Attributes
+analysis_states = [
+    ('running', "Running"),
+    ('done', "Done"),
+    ('failed', "Failed"),
+]
+
+
+class CheckmkRuleAnalysis(db.Document):
+    """
+    State and result of the last 'analyse_rules' run.
+
+    The analysis walks every host twice, far too long for a web request,
+    so the web interface starts it in the background and reads the result
+    from here.
+
+    One document per account (empty name = a run without one), replaced
+    on every run. A snapshot, not a history — it cannot grow.
+    """
+    account = db.StringField(default='', unique=True)
+    state = db.StringField(choices=analysis_states, default='running')
+    error = db.StringField()
+    started_at = db.DateTimeField()
+    finished_at = db.DateTimeField()
+    min_hosts = db.IntField(default=10)
+    findings = db.ListField(field=db.DictField())
+
+    meta = {
+        'strict': False,
+    }
+
+
 class CheckmkRewriteAttributeRule(db.Document):
     """
     Rewrite all Attributes
