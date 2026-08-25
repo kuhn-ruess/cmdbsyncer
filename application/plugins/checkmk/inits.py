@@ -313,8 +313,9 @@ def activate_changes(account):
     return True
 #.
 #   .-- Analyse Rule Optimization
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def analyse_rules(account=None, min_hosts=10, top=20, apply=False,
-                  debug=False):
+                  hash_labels=False, debug=False):
     """
     Report which Setup Rules are built from a long list of host names,
     and which host label could replace that list.
@@ -326,6 +327,9 @@ def analyse_rules(account=None, min_hosts=10, top=20, apply=False,
 
     ``apply=True`` rewrites the Setup Rules whose host list a label
     covers exactly. Everything else is only reported.
+    ``hash_labels=True`` additionally keeps raw values out of Checkmk:
+    an attribute that would have to be newly let through the filter is
+    matched by a hash of it instead.
     """
     rules = _load_rules()
     syncer = CheckmkRuleSync(account or False, probe_version=False)
@@ -354,7 +358,8 @@ def analyse_rules(account=None, min_hosts=10, top=20, apply=False,
               "reporting every enabled rule, without an account's project, "
               "folder or object scope")
     return syncer.analyse_rule_optimization(
-        min_hosts=min_hosts, top=top, apply=apply)
+        min_hosts=min_hosts, top=top, apply=apply,
+        hash_labels=hash_labels)
 
 #.
 #   .-- Export Groups

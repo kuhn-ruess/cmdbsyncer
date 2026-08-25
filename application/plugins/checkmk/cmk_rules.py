@@ -17,6 +17,7 @@ from application import app, logger
 from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
+from application.helpers.label_hash import syncer_hash
 from application.modules.debug import ColorCodes as CC
 
 
@@ -73,6 +74,30 @@ APPLY_FILTER_RULE_NAME = 'Syncer: attributes used by rule conditions'
 # may carry one — values have theirs replaced before the check, the way
 # the export does it.
 INVALID_LABEL_CHARS = set(',:*?^$()[]{}|\\/"\'')
+# Appended to an attribute name when only a hash of its value can be a
+# label. The Rewrite rule 'analyse_rules --apply' writes uses the same
+# name, so the condition and the exported label line up.
+HASHED_LABEL_SUFFIX = '_hash'
+# Rewrite rule that 'analyse_rules --apply' collects its hashes in.
+APPLY_REWRITE_RULE_NAME = 'Syncer: hashed attributes for rule conditions'
+
+
+def _hash_template_filters(transform):
+    """
+    The Jinja filter chain a hash rewrite uses.
+
+    ``transform=True`` hashes the value the way it would have been
+    written as a label (colon replaced, optionally lowercased) — that is
+    the value the analysis hashed for the condition, so both sides have
+    to agree. Without it the raw value is hashed, which is what the
+    analysis does for attributes that cannot be a label at all.
+    """
+    chain = ""
+    if transform:
+        chain += " | replace(':', '-')"
+        if app.config.get('CMK_LOWERCASE_LABEL_VALUES'):
+            chain += " | lower"
+    return chain + " | hash"
 
 
 def _usable_as_label(text):
@@ -1383,19 +1408,30 @@ class CheckmkRuleSync(CMK2):
         lowercase = app.config.get('CMK_LOWERCASE_LABEL_VALUES')
         labels = set()
         for key, value in (attributes or {}).items():
-            if isinstance(value, (dict, list, tuple, set)):
-                continue
             key = str(key)
+            if not _usable_as_label(key):
+                continue
+            if isinstance(value, (dict, list, tuple, set)):
+                if value:
+                    labels.add((f"{key}{HASHED_LABEL_SUFFIX}",
+                                syncer_hash(value), key))
+                continue
             # The export writes ``str(value).replace(':', '-')``, plus the
             # optional lowercasing — see CheckmkHostSync.
-            value = str(value).replace(':', '-')
+            raw = str(value)
+            value = raw.replace(':', '-')
             if lowercase:
                 value = value.lower()
-            if not value or len(value) > MAX_LABEL_VALUE_LEN:
+            if not value.strip():
                 continue
-            if not _usable_as_label(key) or not _usable_as_label(value):
-                continue
-            labels.add((key, value))
+            if _usable_as_label(value) and len(value) <= MAX_LABEL_VALUE_LEN:
+                labels.add((key, value, None))
+            else:
+                # A comma list, a value with spaces, a service pattern, a
+                # long dump: unusable as a label itself, but a hash of it
+                # is — and it groups exactly the same hosts.
+                labels.add((f"{key}{HASHED_LABEL_SUFFIX}",
+                            syncer_hash(raw), key))
         return labels
 
     def _collect_label_coverage(self, groups):
@@ -1463,7 +1499,8 @@ class CheckmkRuleSync(CMK2):
         partial.sort(key=lambda entry: -entry[1])
         return exact, wider, partial
 
-    def analyse_rule_optimization(self, min_hosts=10, top=20, apply=False):
+    def analyse_rule_optimization(self, min_hosts=10, top=20, apply=False,
+                                  hash_labels=False):
         """
         Report which rules were built from a long list of host names and
         which host label could take its place.
@@ -1516,7 +1553,7 @@ class CheckmkRuleSync(CMK2):
             })
         self._print_optimization_report(results)
         if apply:
-            self.apply_findings(results)
+            self.apply_findings(results, hash_labels)
         else:
             replaceable = sum(1 for result in results if result['exact'])
             if replaceable:
@@ -1549,15 +1586,21 @@ class CheckmkRuleSync(CMK2):
                       "would end up matching every host")
                 continue
             for label, _inside, _outside in result['exact']:
+                key, value, source = label
                 print(f"{CC.OKGREEN}   -> in the outcome set Condition Label "
-                      f"to {label[0]}:{label[1]} and clear Condition Host"
+                      f"to {key}:{value} and clear Condition Host"
                       f"{CC.ENDC} — covers all {result['hosts']} hosts "
                       "and no other host")
-                if label[0] not in result['exported_keys']:
+                if source:
+                    print(f"{CC.OKCYAN}      {CC.ENDC}'{source}' is no usable "
+                          f"label on its own, so {key} is a hash of it — "
+                          f"needs a Rewrite rule adding "
+                          f"{key} = {{{{ {source} | hash }}}}")
+                if key not in result['exported_keys']:
                     print(f"{CC.WARNING}      note{CC.ENDC}: "
-                          f"'{label[0]}' does not pass the export filter, so "
-                          "Checkmk never sees it as a host label — add it to "
-                          "the filter rules first")
+                          f"'{key}' does not pass the export filter, so "
+                          "Checkmk never sees it as a host label — it has "
+                          "to be let through first")
             for label, _inside, outside in result['wider'][:3]:
                 print(f"{CC.OKCYAN}   ~  {label[0]}:{label[1]}{CC.ENDC} covers "
                       f"all {result['hosts']} hosts, but {outside} more "
@@ -1575,7 +1618,7 @@ class CheckmkRuleSync(CMK2):
               "reported Setup Rule(s) can be switched to a single "
               "Host label condition")
 
-    def _apply_finding(self, result):
+    def _apply_finding(self, result, hash_labels=False):
         """
         Rewrite one Setup Rule outcome to use the suggested label instead
         of a host condition, and let the attribute through the export
@@ -1597,7 +1640,13 @@ class CheckmkRuleSync(CMK2):
         # correct — pick the first by name so re-runs are stable, and
         # name the alternatives in the report.
         labels = sorted(label for label, _inside, _outside in result['exact'])
-        key, value = labels[0]
+        key, value, source = labels[0]
+        if hash_labels and not source and key not in result['exported_keys']:
+            # The attribute would have to be let through the filter, and
+            # the operator does not want its raw values in Checkmk. Match
+            # on a hash of it instead — same grouping, nothing readable.
+            source, key = key, f"{key}{HASHED_LABEL_SUFFIX}"
+            value = syncer_hash(value)
         try:
             rule = CheckmkRuleMngmt.objects.get(name=rule_name)
         except DoesNotExist:
@@ -1610,6 +1659,8 @@ class CheckmkRuleSync(CMK2):
         outcome.condition_host = ''
         rule.save()
         done = [f"condition is now the label {key}:{value}"]
+        if source:
+            done.append(self._add_hash_rewrite(key, source, hash_labels))
         if key not in result['exported_keys']:
             done.append(self._whitelist_attribute(CheckmkFilterRule, key))
         if len(labels) > 1:
@@ -1617,6 +1668,48 @@ class CheckmkRuleSync(CMK2):
                                for other in labels[1:])
             done.append(f"equally exact alternatives were {others}")
         return "; ".join(done)
+
+    @staticmethod
+    def _add_hash_rewrite(label_key, source_key, transform=False):
+        """
+        Add the Rewrite rule outcome that produces the hashed attribute
+        the condition matches on: ``<source>_hash = {{ <source> | hash }}``.
+
+        Written as a new attribute rather than a rename, so the original
+        value stays available to every other rule. A host that does not
+        carry the source attribute gets nothing — the Jinja render
+        nullifies and the rewrite engine skips an empty value.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.plugins.checkmk.models import (
+            CheckmkRewriteAttributeRule)
+        from application.modules.rule.models import AttributeRewriteAction
+        rule = CheckmkRewriteAttributeRule.objects(
+            name=APPLY_REWRITE_RULE_NAME).first()
+        if not rule:
+            rule = CheckmkRewriteAttributeRule()
+            rule.name = APPLY_REWRITE_RULE_NAME
+            rule.documentation = (
+                "Created by 'checkmk analyse_rules --apply'. Provides a "
+                "hashed copy of attributes whose value cannot be a "
+                "Checkmk label, so a rule can still match on them.")
+            rule.condition_typ = 'anyway'
+            rule.conditions = []
+            rule.outcomes = []
+            rule.enabled = True
+        if any(outcome.old_attribute_name == label_key
+               for outcome in rule.outcomes):
+            return f"'{label_key}' is already built by rule {rule.name}"
+        action = AttributeRewriteAction()
+        action.old_attribute_name = label_key
+        action.overwrite_name = ''
+        action.new_attribute_name = ''
+        action.overwrite_value = 'jinja'
+        action.new_value = f"{{{{ {source_key}{_hash_template_filters(transform)} }}}}"
+        rule.outcomes.append(action)
+        rule.save()
+        return (f"'{label_key}' is now built from '{source_key}' by rule "
+                f"{rule.name}")
 
     @staticmethod
     def _reason_not_to_apply(result):
@@ -1665,7 +1758,7 @@ class CheckmkRuleSync(CMK2):
         rule.save()
         return f"'{key}' whitelisted in filter rule {rule.name}"
 
-    def apply_findings(self, results):
+    def apply_findings(self, results, hash_labels=False):
         """
         Apply every finding that is a straight swap: the label covers
         exactly the hosts of the rule, so the export keeps producing the
@@ -1677,7 +1770,7 @@ class CheckmkRuleSync(CMK2):
         print(f"\n{CC.HEADER}Apply findings{CC.ENDC}")
         applied = 0
         for result in results:
-            status = self._apply_finding(result)
+            status = self._apply_finding(result, hash_labels)
             if status is None:
                 continue
             names = ", ".join(name for name, _i in result['syncer_rules'])

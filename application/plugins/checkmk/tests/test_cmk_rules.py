@@ -12,6 +12,7 @@ from unittest.mock import patch, MagicMock
 from types import ModuleType, SimpleNamespace
 
 from application import app
+from application.helpers.label_hash import syncer_hash
 from application.plugins.checkmk.cmk2 import CmkException
 from application.plugins.checkmk.cmk_rules import (
     clean_postproccessed,
@@ -872,6 +873,9 @@ class TestApplyFindings(unittest.TestCase):
         self.filter_rule = SimpleNamespace(
             name='Syncer: attributes used by rule conditions',
             outcomes=[], save=MagicMock())
+        self.rewrite_rule = SimpleNamespace(
+            name='Syncer: hashed attributes for rule conditions',
+            outcomes=[], save=MagicMock())
 
     def _result(self, exact=None, syncer_rules=None, exported=('env',),
                 label_condition_kept=True):
@@ -883,22 +887,28 @@ class TestApplyFindings(unittest.TestCase):
                             else [('Agent Access', 0)],
             'hosts': 900,
             'exact': exact if exact is not None
-                     else [(('env', 'prod'), 900, 0)],
+                     else [(('env', 'prod', None), 900, 0)],
             'wider': [], 'partial': [],
             'exported_keys': set(exported),
         }
 
     def _models(self):
-        """Stub the two rule documents the apply step writes to."""
+        """Stub the rule documents the apply step writes to."""
         models = ModuleType('application.plugins.checkmk.models')
         models.CheckmkRuleMngmt = MagicMock()
         models.CheckmkRuleMngmt.objects.get.return_value = self.rule
         models.CheckmkFilterRule = MagicMock()
         models.CheckmkFilterRule.objects.return_value.first.return_value = \
             self.filter_rule
+        models.CheckmkRewriteAttributeRule = MagicMock()
+        models.CheckmkRewriteAttributeRule.objects.return_value.first\
+            .return_value = self.rewrite_rule
         rule_models = ModuleType('application.modules.rule.models')
         rule_models.FilterAction = lambda: SimpleNamespace(
             action=None, attribute_name=None)
+        rule_models.AttributeRewriteAction = lambda: SimpleNamespace(
+            old_attribute_name=None, new_attribute_name=None,
+            overwrite_name=None, overwrite_value=None, new_value=None)
         return patch.dict(sys.modules, {
             'application.plugins.checkmk.models': models,
             'application.modules.rule.models': rule_models})
@@ -932,6 +942,73 @@ class TestApplyFindings(unittest.TestCase):
             self.assertIsNone(self.sync._apply_finding(self._result(exact=[])))
         self.rule.save.assert_not_called()
 
+    def test_a_hashed_label_gets_the_rewrite_rule_that_builds_it(self):
+        # The condition matches on an attribute that does not exist yet —
+        # without the Rewrite rule the label would never be there.
+        result = self._result(
+            exact=[(('roles_hash', 'a3f9c1d2', 'roles'), 900, 0)],
+            exported=())
+        with self._models():
+            status = self.sync._apply_finding(result)
+        self.assertEqual(self.outcome.condition_label_template,
+                         'roles_hash:a3f9c1d2')
+        action = self.rewrite_rule.outcomes[0]
+        self.assertEqual(action.old_attribute_name, 'roles_hash')
+        self.assertEqual(action.new_value, '{{ roles | hash }}')
+        self.assertEqual(action.overwrite_value, 'jinja')
+        # Empty: a rename would delete the original attribute.
+        self.assertEqual(action.overwrite_name, '')
+        self.rewrite_rule.save.assert_called_once()
+        # And it has to reach Checkmk, so it is whitelisted too.
+        self.assertEqual(
+            [action.attribute_name for action in self.filter_rule.outcomes],
+            ['roles_hash'])
+        self.assertIn('roles', status)
+
+    def test_a_hash_that_already_exists_is_not_added_twice(self):
+        self.rewrite_rule.outcomes = [
+            SimpleNamespace(old_attribute_name='roles_hash')]
+        result = self._result(
+            exact=[(('roles_hash', 'a3f9c1d2', 'roles'), 900, 0)])
+        with self._models():
+            status = self.sync._apply_finding(result)
+        self.assertEqual(len(self.rewrite_rule.outcomes), 1)
+        self.rewrite_rule.save.assert_not_called()
+        self.assertIn('already built', status)
+
+    def test_hash_labels_keeps_raw_values_out_of_checkmk(self):
+        # --hash-labels: the attribute is not exported yet and the
+        # operator does not want its raw values as Checkmk labels.
+        with self._models():
+            self.sync._apply_finding(self._result(exported=()),
+                                     hash_labels=True)
+        self.assertEqual(self.outcome.condition_label_template,
+                         f'env_hash:{syncer_hash("prod")}')
+        action = self.rewrite_rule.outcomes[0]
+        self.assertEqual(action.old_attribute_name, 'env_hash')
+        # Hashes the value the way it would have been written as a
+        # label, which is the value the condition was built from.
+        self.assertEqual(action.new_value,
+                         "{{ env | replace(':', '-') | hash }}")
+        self.assertEqual(
+            [act.attribute_name for act in self.filter_rule.outcomes],
+            ['env_hash'])
+
+    def test_hash_labels_leaves_an_exported_attribute_alone(self):
+        # It already is a label in Checkmk — hashing it now would only
+        # add a second one.
+        with self._models():
+            self.sync._apply_finding(self._result(exported=('env',)),
+                                     hash_labels=True)
+        self.assertEqual(self.outcome.condition_label_template, 'env:prod')
+        self.assertEqual(self.rewrite_rule.outcomes, [])
+
+    def test_a_plain_label_needs_no_rewrite_rule(self):
+        with self._models():
+            self.sync._apply_finding(self._result())
+        self.assertEqual(self.rewrite_rule.outcomes, [])
+        self.rewrite_rule.save.assert_not_called()
+
     def test_a_ruleset_discarding_host_labels_is_never_rewritten(self):
         # Otherwise the rule loses its condition entirely and applies to
         # every host in the folder.
@@ -951,8 +1028,8 @@ class TestApplyFindings(unittest.TestCase):
         self.rule.save.assert_not_called()
 
     def test_the_first_label_wins_and_the_others_are_named(self):
-        result = self._result(exact=[(('site', 'hh'), 900, 0),
-                                     (('env', 'prod'), 900, 0)])
+        result = self._result(exact=[(('site', 'hh', None), 900, 0),
+                                     (('env', 'prod', None), 900, 0)])
         with self._models():
             status = self.sync._apply_finding(result)
         # Sorted, so re-runs pick the same one.
@@ -964,6 +1041,79 @@ class _FakeHost:  # pylint: disable=too-few-public-methods
     """Just enough of a Host document for the analysis loop."""
     def __init__(self, hostname):
         self.hostname = hostname
+
+
+class TestLabelCandidates(unittest.TestCase):
+    """
+    Which attribute values can serve as a Checkmk label condition,
+    and what the analysis offers for the ones that cannot.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+
+    def test_label_set_skips_what_cannot_be_a_label(self):
+        labels = self.sync._host_label_set({
+            'env': 'prod',
+            'ports': [1, 2],          # container
+            'empty': '',              # no value
+            'dump': 'x' * 500,        # far too long
+            'count': 3,               # scalar, stringified
+        })
+        self.assertEqual(
+            {(key, value) for key, value, _source in labels
+             if _source is None},
+            {('env', 'prod'), ('count', '3')})
+
+
+    def test_values_that_are_not_a_single_label_are_offered_hashed(self):
+        # Used directly these produce a condition that matches nothing or
+        # the wrong hosts. A hash of them is a valid label and groups the
+        # same hosts, so that is what is offered instead.
+        labels = self.sync._host_label_set({
+            'roles': 'web, db',            # really a list
+            'services': 'Interface *',     # wildcard
+            'place': 'Data Center 1',      # whitespace
+            'key:bad': 'v',                # colon in the key, unfixable
+            'env': 'prod',                 # usable as it is
+        })
+        direct = {(key, value) for key, value, source in labels
+                  if source is None}
+        hashed = {(key, source) for key, _value, source in labels if source}
+        self.assertEqual(direct, {('env', 'prod')})
+        self.assertEqual(hashed, {('roles_hash', 'roles'),
+                                  ('services_hash', 'services'),
+                                  ('place_hash', 'place')})
+        # The hash is the one the Rewrite rule would produce.
+        self.assertIn(('roles_hash', syncer_hash('web, db'), 'roles'), labels)
+
+
+    def test_a_container_value_is_offered_hashed(self):
+        labels = self.sync._host_label_set({'roles': ['web', 'db']})
+        self.assertEqual(
+            labels, {('roles_hash', syncer_hash(['web', 'db']), 'roles')})
+
+
+    def test_an_empty_value_is_not_offered_at_all(self):
+        self.assertEqual(
+            self.sync._host_label_set({'a': '', 'b': '   ', 'c': []}), set())
+
+
+    def test_a_colon_in_the_value_becomes_a_dash(self):
+        # The host export stores labels as str(value).replace(':', '-'),
+        # so a suggested condition has to say the same.
+        self.assertEqual(self.sync._host_label_set({'ver': '2:1'}),
+                         {('ver', '2-1', None)})
+
+
+    def test_lowercasing_follows_the_export_setting(self):
+        with patch.dict(app.config, {'CMK_LOWERCASE_LABEL_VALUES': True}):
+            self.assertEqual(self.sync._host_label_set({'env': 'PROD'}),
+                             {('env', 'prod', None)})
+        with patch.dict(app.config, {'CMK_LOWERCASE_LABEL_VALUES': False}):
+            self.assertEqual(self.sync._host_label_set({'env': 'PROD'}),
+                             {('env', 'PROD', None)})
+
 
 
 class TestRuleOptimizationAnalysis(unittest.TestCase):
@@ -1038,55 +1188,18 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         self.assertEqual(groups[('ruleset1', 'h1')]['syncer_rules'],
                          {('Agent access', 0)})
 
-    def test_label_set_skips_what_cannot_be_a_label(self):
-        labels = self.sync._host_label_set({
-            'env': 'prod',
-            'ports': [1, 2],          # container
-            'empty': '',              # no value
-            'dump': 'x' * 500,        # far too long
-            'count': 3,               # scalar, stringified
-        })
-        self.assertEqual(labels, {('env', 'prod'), ('count', '3')})
-
-    def test_values_that_are_not_a_single_label_are_not_suggested(self):
-        # Suggesting these produces a condition that matches nothing or
-        # the wrong hosts, so they never become a candidate.
-        labels = self.sync._host_label_set({
-            'roles': 'web, db',            # really a list
-            'services': 'Interface *',     # wildcard
-            'pattern': '^CPU load$',       # service/regex pattern
-            'place': 'Data Center 1',      # whitespace
-            'padded': '  prod  ',          # whitespace
-            'key:bad': 'v',                # colon in the key
-            'env': 'prod',                 # the only usable one
-        })
-        self.assertEqual(labels, {('env', 'prod')})
-
-    def test_a_colon_in_the_value_becomes_a_dash(self):
-        # The host export stores labels as str(value).replace(':', '-'),
-        # so a suggested condition has to say the same.
-        self.assertEqual(self.sync._host_label_set({'ver': '2:1'}),
-                         {('ver', '2-1')})
-
-    def test_lowercasing_follows_the_export_setting(self):
-        with patch.dict(app.config, {'CMK_LOWERCASE_LABEL_VALUES': True}):
-            self.assertEqual(self.sync._host_label_set({'env': 'PROD'}),
-                             {('env', 'prod')})
-        with patch.dict(app.config, {'CMK_LOWERCASE_LABEL_VALUES': False}):
-            self.assertEqual(self.sync._host_label_set({'env': 'PROD'}),
-                             {('env', 'PROD')})
-
     def test_suggestions_are_classified(self):
         hosts = {f'h{index}' for index in range(10)}
-        group = Counter({('env', 'prod'): 10, ('site', 'hh'): 10,
-                         ('role', 'web'): 9, ('rack', '7'): 2})
-        totals = Counter({('env', 'prod'): 10, ('site', 'hh'): 15,
-                          ('role', 'web'): 9, ('rack', '7'): 2})
+        group = Counter({('env', 'prod', None): 10, ('site', 'hh', None): 10,
+                         ('role', 'web', None): 9, ('rack', '7', None): 2})
+        totals = Counter({('env', 'prod', None): 10, ('site', 'hh', None): 15,
+                          ('role', 'web', None): 9, ('rack', '7', None): 2})
         exact, wider, partial = self.sync._suggest_labels_for_group(
             hosts, group, totals)
-        self.assertEqual([entry[0] for entry in exact], [('env', 'prod')])
-        self.assertEqual([entry[0] for entry in wider], [('site', 'hh')])
-        self.assertEqual([entry[0] for entry in partial], [('role', 'web')])
+        self.assertEqual([entry[0] for entry in exact], [('env', 'prod', None)])
+        self.assertEqual([entry[0] for entry in wider], [('site', 'hh', None)])
+        self.assertEqual([entry[0] for entry in partial],
+                         [('role', 'web', None)])
 
     def test_the_exact_label_is_reported(self):
         inventory = {}
@@ -1105,10 +1218,10 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         self.assertEqual(result['hosts'], 5)
         self.assertEqual(result['syncer_rules'], [('Agent access', 0)])
         self.assertEqual([entry[0] for entry in result['exact']],
-                         [('env', 'prod')])
+                         [('env', 'prod', None)])
         # role:web covers the group but would pull in the two dev hosts.
         self.assertEqual([(entry[0], entry[2]) for entry in result['wider']],
-                         [(('role', 'web'), 2)])
+                         [(('role', 'web', None), 2)])
 
     def test_an_attribute_the_filter_drops_is_flagged(self):
         # The label can still be the answer — it just has to be let

@@ -487,6 +487,13 @@ _load_real_module(
     os.path.join("modules", "rule", "match.py"),
 )
 
+# Pure standard-library helper — loaded for real so the rule analysis
+# hashes attribute values exactly as production does.
+_load_real_module(
+    "application.helpers.label_hash",
+    os.path.join("helpers", "label_hash.py"),
+)
+
 # Loaded for real: it only reads app.config, and the label-history tests
 # exercise its retention clamping through it.
 _load_real_module(

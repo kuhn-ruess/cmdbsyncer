@@ -12,6 +12,7 @@ from jinja2 import StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
 
 from application import logger
+from application.helpers.label_hash import syncer_hash
 from application.helpers.get_account import get_account_variable
 
 
@@ -28,6 +29,7 @@ JINJA_ENV = SandboxedEnvironment(autoescape=False)
 # envs so StrictUndefined and the default undefined don't collide.
 _STRICT_ENV = JINJA_ENV.overlay()
 _TEMPLATE_CACHE = {}
+
 def _cmk_cleanup_tag_id(value):
     """
     Lazily import the Checkmk helper to avoid circular imports while still
@@ -145,8 +147,15 @@ def replace_account_variable(match):
         return account_var
 
 
+# Filters have to be registered on both envs — an overlay copies the
+# filter map at creation time, it does not keep following the parent.
+for _env in (JINJA_ENV, _STRICT_ENV):
+    _env.filters['hash'] = syncer_hash
+
+
 _GLOBALS = {
     'get_list': get_list,
+    'hash_value': syncer_hash,
     'merge_list_of_dicts': merge_list_of_dicts,
     'cmk_cleanup_tag_id': _cmk_cleanup_tag_id,
     'cmk_cleanup_hostname': _cmk_cleanup_hostname,

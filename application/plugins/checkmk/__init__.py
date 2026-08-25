@@ -485,8 +485,12 @@ def cli_export_rules(account, debug):
 @click.option("--apply", "do_apply", is_flag=True,
               help="Rewrite the Setup Rules a label covers exactly. "
                    "Without this flag it is a report only.")
+@click.option("--hash-labels", "hash_labels", is_flag=True,
+              help="With --apply: match on a hash instead of letting raw "
+                   "attribute values through as Checkmk labels.")
 @click.option("--debug", is_flag=True)
-def cli_analyse_rules(account, min_hosts, top, do_apply, debug):
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
+def cli_analyse_rules(account, min_hosts, top, do_apply, hash_labels, debug):
     """
     Find rules built from a long list of hostnames and suggest a label
 
@@ -507,8 +511,8 @@ def cli_analyse_rules(account, min_hosts, top, do_apply, debug):
     Args:
         account (string): Name Checkmk Account Config, optional
     """
-    analyse_rules(account, min_hosts=min_hosts, top=top,
-                  apply=do_apply, debug=debug)
+    analyse_rules(account, min_hosts=min_hosts, top=top, apply=do_apply,
+                  hash_labels=hash_labels, debug=debug)
 
 #.
 #   .-- Command: Export Ruleset Catalog for the UI autocomplete
