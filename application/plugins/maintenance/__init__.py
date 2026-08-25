@@ -433,14 +433,22 @@ def delete_cache(cache_name):
 
 @_cli_sys.command('delete_inventory')
 @click.argument("prefix_only", default="")
-def delete_inventory(prefix_only):
+@click.option('--hostname', default="",
+              help="Limit to this host instead of the whole database.")
+@click.option('--debug', is_flag=True)
+def delete_inventory(prefix_only, hostname, debug):  # pylint: disable=unused-argument
     """
     Delete the inventory of all hosts
 
-    Add a prefix als parameter to limit to only the ones starting with that
+    Add a prefix als parameter to limit to only the ones starting with that.
+    Use --hostname to clean a single host instead of every host.
     """
     print(f"{CC.HEADER} ***** Delete Inventory ***** {CC.ENDC}")
-    for host in Host.objects():
+    db_hosts = Host.objects(hostname=hostname) if hostname else Host.objects()
+    if hostname and not db_hosts:
+        print(f"{CC.FAIL}  ** {CC.ENDC}Host {hostname} not found")
+        return
+    for host in db_hosts:
         logger.debug("Handling Host %s", host.hostname)
         if prefix_only:
             prefix = prefix_only.lower()
@@ -448,7 +456,10 @@ def delete_inventory(prefix_only):
                              if not k.lower().startswith(prefix)}
         else:
             new_inventory = {}
-        host.update(set__inventory=new_inventory)
+        # Inventory values feed the rendered export attributes, so the
+        # cache computed from them has to go with them — otherwise the
+        # next export still ships the values that were just deleted.
+        host.update(set__inventory=new_inventory, set__cache={})
     print(f"{CC.OKGREEN}  ** {CC.ENDC}Done")
 
 #.
