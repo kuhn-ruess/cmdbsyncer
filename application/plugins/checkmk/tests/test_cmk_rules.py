@@ -8,6 +8,7 @@ from unittest.mock import patch, MagicMock
 
 from types import SimpleNamespace
 
+from application.plugins.checkmk.cmk2 import CmkException
 from application.plugins.checkmk.cmk_rules import (
     clean_postproccessed,
     deep_compare,
@@ -806,6 +807,131 @@ class TestCleanRulesFolderAndKeepValue(unittest.TestCase):
         self.assertTrue(local.get('_skip_create'))
 
 
+class TestExportSurvivesFailedRequests(unittest.TestCase):
+    """
+    A request that times out (or otherwise errors) must not end the whole
+    rules export — every other ruleset is still exported and the next run
+    picks the skipped one up again.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.project = None
+        self.sync.log_details = []
+        self.sync.config = {}
+        self.progress_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.Progress',
+            _FakeCleanProgress())
+        self.progress_patcher.start()
+
+    def tearDown(self):
+        self.progress_patcher.stop()
+
+    @staticmethod
+    def _cmk_rule(rule_id):
+        """A syncer-owned rule in Checkmk that no local rule matches."""
+        return {
+            'id': rule_id,
+            'extensions': {
+                'folder': '/',
+                'value_raw': "{'stale': 1}",
+                'conditions': {'host_name': {'match_on': ['gone']}},
+                'properties': {
+                    'description': 'cmdbsyncer_test_account',
+                    'comment': '',
+                },
+            },
+        }
+
+    def test_a_timeout_skips_only_its_ruleset(self):
+        self.sync.rulsets_by_type = {'slow_ruleset': [], 'ok_ruleset': []}
+        deletes = []
+
+        def fake_request(url, method='GET', **_kw):
+            if method == 'GET' and 'slow_ruleset' in url:
+                raise CmkException('Timeout on GET')
+            if method == 'GET':
+                return {'value': [self._cmk_rule('stale1')]}, {}
+            deletes.append(url)
+            return {}, {}
+        self.sync.request = MagicMock(side_effect=fake_request)
+
+        self.sync.clean_rules()
+
+        # The healthy ruleset was still cleaned up ...
+        self.assertEqual(deletes, ['/objects/rule/stale1'])
+        # ... and the failed one is remembered for the create step.
+        self.assertEqual(self.sync._failed_rulesets, {'slow_ruleset'})
+
+    def test_a_ruleset_we_could_not_read_is_not_created_into(self):
+        # Creating without knowing the current state would duplicate every
+        # rule that is already there.
+        self.sync._failed_rulesets = {'slow_ruleset'}
+        self.sync.rulsets_by_type = {
+            'slow_ruleset': [{'value': "{'a': 1}", 'comment': '',
+                              'folder': '/', 'condition': {}}],
+            'ok_ruleset': [{'value': "{'b': 2}", 'comment': '',
+                            'folder': '/', 'condition': {}}],
+        }
+        posted = []
+
+        def fake_request(url, data=None, method='GET', **_kw):
+            posted.append(data['ruleset'])
+            return [{'id': 'new'}], {}
+        self.sync.request = MagicMock(side_effect=fake_request)
+
+        self.sync.create_rules()
+
+        self.assertEqual(posted, ['ok_ruleset'])
+
+    def test_a_failed_delete_does_not_skip_the_next_rule(self):
+        self.sync.rulsets_by_type = {'ruleset1': []}
+        deletes = []
+
+        def fake_request(url, method='GET', **_kw):
+            if method == 'GET':
+                return {'value': [self._cmk_rule('stale1'),
+                                  self._cmk_rule('stale2')]}, {}
+            deletes.append(url)
+            if url.endswith('stale1'):
+                raise CmkException('Timeout on DELETE')
+            return {}, {}
+        self.sync.request = MagicMock(side_effect=fake_request)
+
+        self.sync.clean_rules()
+
+        self.assertEqual(deletes,
+                         ['/objects/rule/stale1', '/objects/rule/stale2'])
+
+    def test_orphan_cleanup_continues_after_a_failed_ruleset(self):
+        self.sync.config = {'remove_orphaned_rules': True}
+        self.sync.rulsets_by_type = {}
+        deletes = []
+
+        def fake_request(url, method='GET', **_kw):
+            if 'ruleset/collections/all?used=true' in url:
+                return {'value': [
+                    {'id': 'slow', 'extensions': {
+                        'name': 'slow', 'number_of_rules': 1}},
+                    {'id': 'ok', 'extensions': {
+                        'name': 'ok', 'number_of_rules': 1}},
+                ]}, {}
+            if method == 'GET' and 'ruleset_name=slow' in url:
+                raise CmkException('Timeout on GET')
+            if method == 'GET':
+                return {'value': [
+                    {'id': 'mine', 'extensions': {'properties': {
+                        'description': 'cmdbsyncer_test_account'}}},
+                ]}, {}
+            deletes.append(url)
+            return {}, {}
+        self.sync.request = MagicMock(side_effect=fake_request)
+
+        self.sync.clean_orphaned_rules()
+
+        self.assertEqual(deletes, ['/objects/rule/mine'])
+
+
 class TestCleanOrphanedRules(unittest.TestCase):
     """clean_orphaned_rules: opt-in removal of no-longer-generated rules."""
 
@@ -1316,7 +1442,6 @@ class TestImportProjectRules(unittest.TestCase):
         """A Checkmk error (e.g. wrong credentials -> 401) must NOT be
         swallowed into a "0 imported" result — it has to reach the caller so
         the CLI/web UI can surface it instead of showing an empty import."""
-        from application.plugins.checkmk.cmk2 import CmkException  # noqa: E402  pylint: disable=import-outside-toplevel
         with patch.object(inits, 'Project') as proj, \
                 patch.object(inits, 'CheckmkRuleSync') as sync:
             proj.objects.return_value.first.return_value = SimpleNamespace(name='P')
