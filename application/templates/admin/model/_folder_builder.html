@@ -1,0 +1,791 @@
+{# Per-folder editor for the Move to Folder / Create Empty Folder actions.
+
+   Those actions take a path whose levels may carry Checkmk attributes as a
+   Python dict after a '|', e.g.
+
+     linux/{{customer}}|{'contactgroups': {'groups': ['team'], 'use': True}}
+
+   Hand-writing that is error-prone (quotes, braces, the contactgroups shape)
+   and unreadable once the path has a few levels. This builds one card per
+   folder level with real input fields for the typical attributes and writes
+   the value back into the original text input, which stays the form's source
+   of truth — nothing about submission or validation changes.
+
+   The builder only takes over what it can round-trip exactly. Jinja blocks are
+   masked before the path is split (so '{{ os|lower }}' does not look like an
+   options separator) and a bare Jinja value is kept verbatim as a raw
+   expression. Anything else that does not parse leaves the level in text mode
+   with a visible reason, so a value is never silently rewritten. #}
+<style>
+.folder-builder-toggle {
+  margin-top: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 8px;
+  background: var(--surface-bg, #f8f9fa);
+  color: var(--surface-text, #2c3e50);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.folder-builder-toggle:hover { border-color: #1abc9c; color: #1abc9c; }
+.folder-builder {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 8px;
+  background: var(--surface-subtle, #f8f9fa);
+  color: var(--surface-text, #2c3e50);
+}
+.folder-builder-hint {
+  font-size: 0.78rem;
+  color: var(--surface-muted, #6c757d);
+  margin-bottom: 8px;
+}
+.folder-builder-error {
+  padding: 6px 10px;
+  border-left: 3px solid #e67e22;
+  border-radius: 4px;
+  background: var(--surface-bg, #fdf3e7);
+  color: var(--surface-text, #8a5a1a);
+  font-size: 0.8rem;
+}
+.fb-level {
+  margin-bottom: 8px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 6px;
+  background: var(--surface-bg, #fff);
+}
+.fb-level-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--surface-divider, #eef0f3);
+}
+.fb-level-head .fb-depth {
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  color: var(--surface-muted, #6c757d);
+  white-space: nowrap;
+}
+.fb-level-head input.fb-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+}
+.fb-level-body { padding: 8px 10px; }
+.fb-attr {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--surface-divider, #f1f3f5);
+}
+.fb-attr:last-of-type { border-bottom: none; }
+.fb-attr > .fb-attr-label {
+  flex: 0 0 190px;
+  padding-top: 5px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.fb-attr > .fb-attr-label small {
+  display: block;
+  font-weight: normal;
+  color: var(--surface-muted, #6c757d);
+}
+.fb-attr > .fb-attr-value { flex: 1 1 auto; min-width: 0; }
+.fb-attr-value .fb-raw-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  background: rgba(102, 16, 242, 0.14);
+  color: #6610f2;
+}
+.fb-flags { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 5px; }
+.fb-flags label {
+  font-size: 0.78rem;
+  font-weight: normal;
+  margin: 0;
+  color: var(--surface-muted, #6c757d);
+}
+.fb-kv {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 4px;
+  align-items: center;
+}
+.fb-btn {
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 6px;
+  background: var(--surface-bg, #fff);
+  color: var(--surface-text, #2c3e50);
+  font-size: 0.78rem;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+.fb-btn:hover { border-color: #1abc9c; color: #1abc9c; }
+.fb-btn.fb-danger:hover { border-color: #e74c3c; color: #e74c3c; }
+.fb-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.fb-actions select { max-width: 260px; }
+.fb-empty {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--surface-muted, #6c757d);
+  padding: 2px 0 4px;
+}
+.fb-level-error {
+  font-size: 0.78rem;
+  color: #b15300;
+  padding: 4px 0;
+}
+</style>
+<script>
+(function() {
+  var ATTR_CATALOG = {{ folder_attribute_catalog|default([])|tojson }};
+  var CG_FLAGS = {{ contactgroup_flags|default([])|tojson }};
+  var FOLDER_ACTIONS = ['move_folder', 'create_folder'];
+{% raw %}
+
+  var ATTR_BY_KEY = {};
+  ATTR_CATALOG.forEach(function(a) { ATTR_BY_KEY[a.value] = a; });
+
+  // -- Jinja masking ------------------------------------------------------
+  // '{{ os|lower }}' must not look like the '|' that separates a folder from
+  // its options, and '{{ groups.split(',') }}' must not look like a literal.
+  // Both are replaced by a placeholder while the value is taken apart.
+  var JINJA_RE = /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g;
+  var JINJA_ONLY_RE = /^(\{\{[\s\S]*\}\}|\{%[\s\S]*%\})$/;
+  var MARK = '';
+
+  function maskJinja(text) {
+    var blocks = [];
+    var masked = String(text || '').replace(JINJA_RE, function(hit) {
+      blocks.push(hit);
+      return MARK + (blocks.length - 1) + MARK;
+    });
+    return { text: masked, blocks: blocks };
+  }
+
+  function unmask(text, blocks) {
+    return String(text).replace(
+      new RegExp(MARK + '(\\d+)' + MARK, 'g'),
+      function(_all, index) { return blocks[Number(index)]; });
+  }
+
+  // -- Python literal parsing --------------------------------------------
+  // Understands exactly what the export's ast.literal_eval accepts, plus a
+  // masked Jinja block as a raw value ({__raw__: '{{ ... }}'}).
+  function parseLiteral(text, blocks) {
+    var pos = 0;
+
+    function fail(message) { throw new Error(message); }
+    function skipWs() { while (pos < text.length && /\s/.test(text[pos])) { pos++; } }
+
+    function parseString() {
+      var quote = text[pos++];
+      var out = '';
+      while (pos < text.length) {
+        var chr = text[pos++];
+        if (chr === '\\') {
+          var next = text[pos++];
+          if (next === 'n') { out += '\n'; }
+          else if (next === 't') { out += '\t'; }
+          else { out += next; }
+          continue;
+        }
+        if (chr === quote) { return out; }
+        out += chr;
+      }
+      fail('unterminated string');
+      return null;
+    }
+
+    function parseSequence(closing) {
+      var items = [];
+      pos++;
+      skipWs();
+      if (text[pos] === closing) { pos++; return items; }
+      while (true) {
+        items.push(parseValue());
+        skipWs();
+        if (text[pos] === ',') { pos++; skipWs(); if (text[pos] === closing) { pos++; return items; } continue; }
+        if (text[pos] === closing) { pos++; return items; }
+        fail("expected ',' or '" + closing + "'");
+      }
+    }
+
+    function parseDict() {
+      var out = {};
+      var order = [];
+      pos++;
+      skipWs();
+      if (text[pos] === '}') { pos++; return { __dict__: out, __order__: order }; }
+      while (true) {
+        skipWs();
+        if (text[pos] !== "'" && text[pos] !== '"') { fail('dict keys must be quoted strings'); }
+        var key = parseString();
+        skipWs();
+        if (text[pos] !== ':') { fail("expected ':' after key '" + key + "'"); }
+        pos++;
+        skipWs();
+        out[key] = parseValue();
+        order.push(key);
+        skipWs();
+        if (text[pos] === ',') { pos++; skipWs(); if (text[pos] === '}') { pos++; return { __dict__: out, __order__: order }; } continue; }
+        if (text[pos] === '}') { pos++; return { __dict__: out, __order__: order }; }
+        fail("expected ',' or '}'");
+      }
+    }
+
+    function parseValue() {
+      skipWs();
+      var chr = text[pos];
+      if (chr === undefined) { fail('unexpected end of value'); }
+      if (chr === '{') { return parseDict(); }
+      if (chr === '[') { return parseSequence(']'); }
+      if (chr === '(') { return parseSequence(')'); }
+      if (chr === "'" || chr === '"') { return parseString(); }
+      if (chr === MARK) {
+        var end = text.indexOf(MARK, pos + 1);
+        if (end === -1) { fail('broken Jinja block'); }
+        var index = Number(text.slice(pos + 1, end));
+        pos = end + 1;
+        return { __raw__: blocks[index] };
+      }
+      var word = /^(True|False|None)\b/.exec(text.slice(pos));
+      if (word) {
+        pos += word[1].length;
+        return word[1] === 'True' ? true : (word[1] === 'False' ? false : null);
+      }
+      var num = /^-?\d+(\.\d+)?/.exec(text.slice(pos));
+      if (num) { pos += num[0].length; return Number(num[0]); }
+      fail('cannot read value at ' + JSON.stringify(text.slice(pos, pos + 20)));
+      return null;
+    }
+
+    var value = parseValue();
+    skipWs();
+    if (pos !== text.length) { fail('unexpected trailing text'); }
+    return value;
+  }
+
+  // -- Python literal serialization --------------------------------------
+  function quote(text) {
+    return "'" + String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+  }
+
+  function dumpValue(value) {
+    if (value === null) { return 'None'; }
+    if (value === true) { return 'True'; }
+    if (value === false) { return 'False'; }
+    if (typeof value === 'number') { return String(value); }
+    if (typeof value === 'string') { return quote(value); }
+    if (Array.isArray(value)) {
+      return '[' + value.map(dumpValue).join(', ') + ']';
+    }
+    if (value && value.__raw__ !== undefined) { return value.__raw__; }
+    if (value && value.__dict__) {
+      var parts = value.__order__.map(function(key) {
+        return quote(key) + ': ' + dumpValue(value.__dict__[key]);
+      });
+      return '{' + parts.join(', ') + '}';
+    }
+    return quote(String(value));
+  }
+
+  function makeDict(pairs) {
+    var out = { __dict__: {}, __order__: [] };
+    pairs.forEach(function(pair) {
+      out.__dict__[pair[0]] = pair[1];
+      out.__order__.push(pair[0]);
+    });
+    return out;
+  }
+
+  // -- Model: the param value <-> a list of levels ------------------------
+  function parseParam(rawValue) {
+    var masked = maskJinja(rawValue);
+    var levels = [];
+    var leadingSlash = masked.text.charAt(0) === '/';
+    masked.text.split('/').forEach(function(part) {
+      var pieces = part.split('|');
+      var name = pieces[0].trim();
+      if (!name && pieces.length < 2) { return; }
+      var level = {
+        name: unmask(name, masked.blocks),
+        attrs: [],
+        error: null
+      };
+      if (pieces.length > 2) {
+        level.error = "more than one '|' on this level";
+      } else if (pieces.length === 2 && pieces[1].trim()) {
+        try {
+          var parsed = parseLiteral(pieces[1].trim(), masked.blocks);
+          if (!parsed || !parsed.__dict__) {
+            level.error = 'the options after | are not a dict like {\'title\': \'X\'}';
+          } else {
+            level.attrs = parsed.__order__.map(function(key) {
+              return { key: key, value: parsed.__dict__[key] };
+            });
+          }
+        } catch (exc) {
+          level.error = exc.message;
+        }
+      }
+      if (level.error) { level.raw = unmask(part, masked.blocks); }
+      levels.push(level);
+    });
+    return { levels: levels, leadingSlash: leadingSlash };
+  }
+
+  function dumpParam(model) {
+    var parts = model.levels.map(function(level) {
+      if (level.error) { return level.raw; }
+      if (!level.attrs.length) { return level.name; }
+      return level.name + '|' + dumpValue(makeDict(level.attrs.map(function(a) {
+        return [a.key, a.value];
+      })));
+    });
+    return (model.leadingSlash ? '/' : '') + parts.join('/');
+  }
+
+  // -- Small DOM helpers --------------------------------------------------
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) { node.className = className; }
+    if (text !== undefined) { node.textContent = text; }
+    return node;
+  }
+
+  function input(value, placeholder) {
+    var node = el('input', 'form-control input-sm');
+    node.type = 'text';
+    node.value = value === undefined || value === null ? '' : value;
+    if (placeholder) { node.placeholder = placeholder; }
+    return node;
+  }
+
+  function textOf(value) {
+    if (value && value.__raw__ !== undefined) { return value.__raw__; }
+    if (value === null || value === undefined) { return ''; }
+    return String(value);
+  }
+
+  function listToText(value) {
+    if (Array.isArray(value)) { return value.map(textOf).join(', '); }
+    return textOf(value);
+  }
+
+  // Jinja in a value is always written as a quoted string ('team_{{x}}'):
+  // the export renders the template first and only then reads the dict, so a
+  // bare expression would leave '{'title': My Title}' behind and the whole
+  // level's options are dropped.
+  function textToList(text) {
+    return String(text).split(',')
+      .map(function(item) { return item.trim(); })
+      .filter(function(item) { return item.length; });
+  }
+
+  // The one place a bare expression is right: it produces the *whole* list
+  // itself, as in {'groups': {{ groups.split(',') }}}. Only a field that
+  // holds nothing but the expression is treated that way.
+  function textToListValue(text) {
+    var trimmed = String(text).trim();
+    if (JINJA_ONLY_RE.test(trimmed)) { return { __raw__: trimmed }; }
+    return textToList(text);
+  }
+
+  // -- The editor ---------------------------------------------------------
+  function buildEditor(target, model, onChange) {
+    function refresh() { onChange(); render(); }
+    function silentChange() { onChange(); }
+
+    function attrRow(level, attr) {
+      var entry = ATTR_BY_KEY[attr.key];
+      var row = el('div', 'fb-attr');
+
+      var label = el('div', 'fb-attr-label');
+      label.appendChild(document.createTextNode(entry ? entry.name : attr.key));
+      var hint = el('small', null, entry ? entry.desc : attr.key);
+      label.appendChild(hint);
+      row.appendChild(label);
+
+      var valueBox = el('div', 'fb-attr-value');
+      var type = entry ? entry.type : 'text';
+      // A raw Jinja value is edited as text whatever the attribute's type is —
+      // the expression is what the operator wants to see and keep.
+      if (attr.value && attr.value.__raw__ !== undefined && type !== 'contactgroups') {
+        type = 'text';
+      }
+
+      if (type === 'contactgroups') {
+        buildContactGroups(valueBox, attr);
+      } else if (type === 'kv') {
+        buildKeyValue(valueBox, attr);
+      } else if (type === 'list') {
+        var listField = input(listToText(attr.value), 'entry1, entry2');
+        listField.addEventListener('input', function() {
+          attr.value = textToListValue(listField.value);
+          silentChange();
+        });
+        valueBox.appendChild(listField);
+      } else if (type === 'bool') {
+        var check = el('input');
+        check.type = 'checkbox';
+        check.checked = attr.value === true;
+        check.addEventListener('change', function() {
+          attr.value = check.checked;
+          silentChange();
+        });
+        valueBox.appendChild(check);
+      } else {
+        var field = input(textOf(attr.value), entry && entry.type === 'choice'
+          ? 'pick or type a value' : '');
+        if (entry && entry.type === 'choice') {
+          field.setAttribute('list', datalistFor(entry));
+        }
+        field.addEventListener('input', function() {
+          attr.value = field.value;
+          silentChange();
+        });
+        valueBox.appendChild(field);
+        if (attr.value && attr.value.__raw__ !== undefined) {
+          valueBox.appendChild(el('span', 'fb-raw-tag', 'jinja'));
+        }
+      }
+      row.appendChild(valueBox);
+
+      var remove = el('button', 'fb-btn fb-danger', '×');
+      remove.type = 'button';
+      remove.title = 'Remove this attribute';
+      remove.addEventListener('click', function() {
+        level.attrs.splice(level.attrs.indexOf(attr), 1);
+        refresh();
+      });
+      row.appendChild(remove);
+      return row;
+    }
+
+    function buildContactGroups(box, attr) {
+      // Shape: {'groups': [...], 'use': True, 'recurse_use': ..., ...}
+      if (!attr.value || !attr.value.__dict__) {
+        attr.value = makeDict([['groups', []], ['use', true]]);
+      }
+      var dict = attr.value.__dict__;
+      var order = attr.value.__order__;
+      if (order.indexOf('groups') === -1) {
+        dict.groups = [];
+        order.unshift('groups');
+      }
+
+      var groupsField = input(listToText(dict.groups), 'team_a, team_b');
+      groupsField.addEventListener('input', function() {
+        dict.groups = textToListValue(groupsField.value);
+        silentChange();
+      });
+      box.appendChild(groupsField);
+
+      var flags = el('div', 'fb-flags');
+      CG_FLAGS.forEach(function(flag) {
+        var current = dict[flag.value];
+        // A flag driven by Jinja has no on/off state to show. Keep the
+        // expression visible and the box locked, so a stray click cannot
+        // replace it with a plain True.
+        var isRaw = current && current.__raw__ !== undefined;
+        var label = el('label');
+        var check = el('input');
+        check.type = 'checkbox';
+        check.checked = current === true;
+        check.disabled = isRaw;
+        check.title = isRaw ? 'Set by Jinja - edit it in the value field above'
+                            : flag.desc;
+        check.addEventListener('change', function() {
+          if (check.checked) {
+            dict[flag.value] = true;
+            if (order.indexOf(flag.value) === -1) { order.push(flag.value); }
+          } else {
+            delete dict[flag.value];
+            var at = order.indexOf(flag.value);
+            if (at !== -1) { order.splice(at, 1); }
+          }
+          silentChange();
+        });
+        label.appendChild(check);
+        label.appendChild(document.createTextNode(
+          ' ' + flag.name + (isRaw ? ' = ' + current.__raw__ : '')));
+        flags.appendChild(label);
+      });
+      box.appendChild(flags);
+    }
+
+    function buildKeyValue(box, attr) {
+      if (!attr.value || !attr.value.__dict__) { attr.value = makeDict([]); }
+      var dict = attr.value.__dict__;
+      var order = attr.value.__order__;
+      var grid = el('div', 'fb-kv');
+      order.slice().forEach(function(key) {
+        var keyField = input(key, 'key');
+        var valueField = input(textOf(dict[key]), 'value');
+        keyField.addEventListener('change', function() {
+          var newKey = keyField.value.trim();
+          var at = order.indexOf(key);
+          if (!newKey || order.indexOf(newKey) !== -1) { render(); return; }
+          dict[newKey] = dict[key];
+          delete dict[key];
+          order[at] = newKey;
+          refresh();
+        });
+        valueField.addEventListener('input', function() {
+          dict[key] = valueField.value;
+          silentChange();
+        });
+        var remove = el('button', 'fb-btn fb-danger', '×');
+        remove.type = 'button';
+        remove.addEventListener('click', function() {
+          delete dict[key];
+          order.splice(order.indexOf(key), 1);
+          refresh();
+        });
+        grid.appendChild(keyField);
+        grid.appendChild(valueField);
+        grid.appendChild(remove);
+      });
+      box.appendChild(grid);
+
+      var add = el('button', 'fb-btn', '+ Add entry');
+      add.type = 'button';
+      add.addEventListener('click', function() {
+        var name = 'key' + (order.length + 1);
+        dict[name] = '';
+        order.push(name);
+        refresh();
+      });
+      box.appendChild(add);
+    }
+
+    function datalistFor(entry) {
+      var id = 'fb-values-' + entry.value;
+      if (!document.getElementById(id)) {
+        var list = el('datalist');
+        list.id = id;
+        (entry.values || []).forEach(function(value) {
+          var option = el('option');
+          option.value = value;
+          list.appendChild(option);
+        });
+        document.body.appendChild(list);
+      }
+      return id;
+    }
+
+    function levelCard(level, index) {
+      var card = el('div', 'fb-level');
+
+      var head = el('div', 'fb-level-head');
+      head.appendChild(el('span', 'fb-depth',
+        (index === 0 ? '/' : '…/')));
+      var nameField = input(level.name, 'folder name, Jinja allowed');
+      nameField.className += ' fb-name';
+      nameField.addEventListener('input', function() {
+        level.name = nameField.value;
+        silentChange();
+      });
+      head.appendChild(nameField);
+      var dropLevel = el('button', 'fb-btn fb-danger', 'Remove level');
+      dropLevel.type = 'button';
+      dropLevel.addEventListener('click', function() {
+        model.levels.splice(index, 1);
+        refresh();
+      });
+      head.appendChild(dropLevel);
+      card.appendChild(head);
+
+      var body = el('div', 'fb-level-body');
+      if (level.error) {
+        body.appendChild(el('div', 'fb-level-error',
+          'Cannot edit this level here: ' + level.error
+          + ' — it is kept exactly as written above.'));
+        card.appendChild(body);
+        return card;
+      }
+
+      if (!level.attrs.length) {
+        body.appendChild(el('div', 'fb-empty', 'No attributes on this level.'));
+      }
+      level.attrs.forEach(function(attr) {
+        body.appendChild(attrRow(level, attr));
+      });
+
+      var actions = el('div', 'fb-actions');
+      var picker = el('select', 'form-control input-sm');
+      var placeholder = el('option', null, '+ Add attribute…');
+      placeholder.value = '';
+      picker.appendChild(placeholder);
+      var used = level.attrs.map(function(a) { return a.key; });
+      ATTR_CATALOG.forEach(function(entry) {
+        if (used.indexOf(entry.value) !== -1) { return; }
+        var option = el('option', null, entry.name);
+        option.value = entry.value;
+        picker.appendChild(option);
+      });
+      var custom = el('option', null, 'Other Checkmk attribute…');
+      custom.value = '__custom__';
+      picker.appendChild(custom);
+      picker.addEventListener('change', function() {
+        var picked = picker.value;
+        picker.value = '';
+        if (!picked) { return; }
+        if (picked === '__custom__') {
+          var key = window.prompt('Checkmk folder attribute name');
+          if (!key) { return; }
+          key = key.trim();
+          if (!key || used.indexOf(key) !== -1) { return; }
+          level.attrs.push({ key: key, value: '' });
+        } else if (picked === 'contactgroups') {
+          level.attrs.push({
+            key: picked,
+            value: makeDict([['groups', []], ['use', true]])
+          });
+        } else if (ATTR_BY_KEY[picked].type === 'list') {
+          level.attrs.push({ key: picked, value: [] });
+        } else if (ATTR_BY_KEY[picked].type === 'kv') {
+          level.attrs.push({ key: picked, value: makeDict([]) });
+        } else if (ATTR_BY_KEY[picked].type === 'bool') {
+          level.attrs.push({ key: picked, value: true });
+        } else {
+          level.attrs.push({ key: picked, value: '' });
+        }
+        refresh();
+      });
+      actions.appendChild(picker);
+      body.appendChild(actions);
+      card.appendChild(body);
+      return card;
+    }
+
+    function render() {
+      target.innerHTML = '';
+      var hint = el('div', 'folder-builder-hint',
+        'One card per folder level. Attributes are written into the '
+        + 'value above as Checkmk folder options — the text field stays '
+        + 'editable and wins if you change it there.');
+      target.appendChild(hint);
+
+      model.levels.forEach(function(level, index) {
+        target.appendChild(levelCard(level, index));
+      });
+
+      var addLevel = el('button', 'fb-btn', '+ Add folder level');
+      addLevel.type = 'button';
+      addLevel.addEventListener('click', function() {
+        model.levels.push({ name: 'new_folder', attrs: [], error: null });
+        refresh();
+      });
+      target.appendChild(addLevel);
+    }
+
+    render();
+  }
+
+  // -- Mounting -----------------------------------------------------------
+  function paramInputFor(sel) {
+    var row = sel.closest('.inline-field') || sel.form;
+    if (!row) { return null; }
+    return row.querySelector('[id$="-action_param"], [name$="-action_param"]');
+  }
+
+  function isActionSelect(sel) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (FOLDER_ACTIONS.indexOf(sel.options[i].value) !== -1) { return true; }
+    }
+    return false;
+  }
+
+  function mount(sel) {
+    var field = paramInputFor(sel);
+    if (!field) { return; }
+    var host = field.parentNode;
+    var toggle = host.querySelector('.folder-builder-toggle');
+    var panel = host.querySelector('.folder-builder');
+
+    if (FOLDER_ACTIONS.indexOf(sel.value) === -1) {
+      if (toggle) { toggle.remove(); }
+      if (panel) { panel.remove(); }
+      return;
+    }
+    if (toggle) { return; }
+
+    toggle = el('button', 'folder-builder-toggle', 'Edit folder attributes');
+    toggle.type = 'button';
+    panel = el('div', 'folder-builder');
+    panel.style.display = 'none';
+
+    // Set while the builder writes the value back, so the 'change' it
+    // dispatches does not re-render the cards under the operator's cursor.
+    var syncing = false;
+
+    function open() {
+      var model = parseParam(field.value);
+      if (!model.levels.length) {
+        model.leadingSlash = true;
+        model.levels.push({ name: 'new_folder', attrs: [], error: null });
+      }
+      panel.innerHTML = '';
+      buildEditor(panel, model, function() {
+        syncing = true;
+        field.value = dumpParam(model);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+        syncing = false;
+      });
+      panel.style.display = '';
+      toggle.textContent = 'Hide folder attributes';
+    }
+
+    function close() {
+      panel.style.display = 'none';
+      toggle.textContent = 'Edit folder attributes';
+    }
+
+    toggle.addEventListener('click', function() {
+      if (panel.style.display === 'none') { open(); } else { close(); }
+    });
+    // Typing in the text field stays authoritative: re-read it on blur so the
+    // cards show what is really in the value.
+    field.addEventListener('change', function() {
+      if (!syncing && panel.style.display !== 'none') { open(); }
+    });
+
+    field.insertAdjacentElement('afterend', panel);
+    field.insertAdjacentElement('afterend', toggle);
+  }
+
+  function scan(root) {
+    root.querySelectorAll('select').forEach(function(sel) {
+      if (isActionSelect(sel)) { mount(sel); }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var form = document.querySelector('form');
+    if (!form) { return; }
+    scan(form);
+    form.addEventListener('change', function(event) {
+      var sel = event.target;
+      if (sel && sel.tagName === 'SELECT' && isActionSelect(sel)) { mount(sel); }
+    });
+    new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+          if (node.nodeType === 1) { scan(node); }
+        });
+      });
+    }).observe(form, { childList: true, subtree: true });
+  });
+{% endraw %}
+})();
+</script>

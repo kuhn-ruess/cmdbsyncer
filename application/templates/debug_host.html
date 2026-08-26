@@ -54,6 +54,44 @@
 .debug-empty { color: var(--surface-muted, #6c757d);
     font-style: italic; padding: 12px; }
 
+/* Folder Options: one row per folder level so a nested path shows which
+   level carries which attribute (a flat path: {attrs} dump does not). */
+.folder-tree { font-size: 0.88rem; }
+.folder-node { padding: 4px 0;
+    border-bottom: 1px solid var(--surface-divider, #f1f3f5); }
+.folder-node:last-child { border-bottom: none; }
+.folder-node .folder-head { display: flex; align-items: baseline;
+    gap: 8px; flex-wrap: wrap; }
+.folder-node .folder-name { font-family: monospace; font-weight: 600; }
+.folder-node .folder-name .prefix { color: var(--surface-muted, #6c757d);
+    font-weight: normal; }
+.folder-node .folder-name .seg { color: var(--debug-key, #1abc9c); }
+.folder-badge { font-size: 0.7rem; font-weight: 700; padding: 1px 7px;
+    border-radius: 999px; background: rgba(40, 167, 69, 0.15);
+    color: #1e7e34; text-transform: uppercase; letter-spacing: 0.4px; }
+.folder-none { color: var(--surface-muted, #6c757d); font-style: italic;
+    font-size: 0.8rem; }
+.folder-attrs { margin: 4px 0 0 6px; padding-left: 12px;
+    border-left: 2px solid var(--surface-divider, #f1f3f5); }
+.folder-attr { display: flex; align-items: baseline; gap: 6px;
+    padding: 1px 0; min-width: 0; }
+.folder-attr > .k { flex: 0 0 auto; font-weight: bold; font-family: monospace;
+    color: var(--debug-key, #1abc9c); }
+.folder-attr > .v { flex: 1 1 auto; min-width: 0; font-family: monospace;
+    color: var(--surface-text, #2c3e50);
+    white-space: pre-wrap; word-wrap: break-word; }
+.folder-subattrs { list-style: none; margin: 0; padding: 0 0 0 10px; }
+.folder-subattrs > li { display: flex; align-items: baseline; gap: 6px;
+    font-family: monospace; }
+.folder-subattrs > li > .k { color: var(--surface-muted, #6c757d);
+    font-weight: 600; }
+.folder-source { margin-top: 8px; font-size: 0.8rem;
+    color: var(--surface-muted, #6c757d); }
+.folder-source pre { margin: 4px 0 0; padding: 6px 8px; overflow-x: auto;
+    background: var(--surface-subtle, #f8f9fa);
+    border: 1px solid var(--surface-border, #e2e6ea); border-radius: 4px;
+    color: var(--surface-text, #2c3e50); }
+
 .rule-acc .rule-tabs { margin: 4px 0 10px; display: flex; gap: 6px;
     flex-wrap: wrap; }
 .rule-acc .rule-tabs .btn { padding: 3px 10px; font-size: 0.85rem; }
@@ -246,6 +284,25 @@
       {% endif %}
     {% endmacro %}
 
+    {# Folder attribute values are plain strings, lists (parents) or nested
+       dicts (contactgroups). Render each shape readably instead of dumping
+       the Python repr. #}
+    {% macro render_folder_value(value) %}
+      {%- if value is mapping -%}
+        <ul class="folder-subattrs">
+          {%- for sub_key, sub_value in value.items() %}
+            <li><span class="k">{{ sub_key }}</span> <span>{{ render_folder_value(sub_value) }}</span></li>
+          {%- endfor %}
+        </ul>
+      {%- elif value is string or value is number or value is boolean or value is none -%}
+        {{ value }}
+      {%- elif value is sequence -%}
+        {{ value|join(', ') }}
+      {%- else -%}
+        {{ value }}
+      {%- endif -%}
+    {% endmacro %}
+
     {# --- Primary summary: Outcomes + Filtered, both expanded --- #}
     <div class="debug-summary">
 
@@ -288,7 +345,13 @@
       <div class="debug-card accent-outcomes" style="margin-bottom: 1rem;">
         <div class="debug-card-head">
           <span><i class="fa fa-folder"></i> Folder Options</span>
-          <span class="muted">Checkmk attributes applied to this host's folder</span>
+          <span class="muted">
+            {%- if folder_options.kind == 'create' -%}
+              Checkmk attributes applied to the created folder
+            {%- else -%}
+              Checkmk attributes applied to this host's folder
+            {%- endif -%}
+          </span>
         </div>
         <div class="debug-card-body">
           {% if folder_options.error %}
@@ -297,15 +360,38 @@
               <code>{{ folder_options.error }}</code>
             </div>
           {% endif %}
-          {% if folder_options.parsed %}
-            <div class="debug-kv">
-              {% for folder, attrs in folder_options.parsed.items() %}
-                <div class="debug-kv-row">
-                  <span class="k">{{ folder }}</span>
-                  <span class="v">{{ attrs }}</span>
+          {% if folder_options.tree %}
+            <div class="folder-tree">
+              {% for node in folder_options.tree %}
+                <div class="folder-node" style="margin-left: {{ node.depth * 16 }}px;">
+                  <div class="folder-head">
+                    <span class="folder-name"><span class="prefix">{{ node.parent }}</span><span class="seg">{{ node.name }}</span></span>
+                    {% if loop.last and folder_options.kind == 'move' %}
+                      <span class="folder-badge">host lands here</span>
+                    {% endif %}
+                    {% if not node.attributes and not node.error %}
+                      <span class="folder-none">no attributes on this level</span>
+                    {% endif %}
+                  </div>
+                  {% if node.error %}
+                    <div class="folder-attrs"><span class="text-danger">{{ node.error }}</span></div>
+                  {% elif node.attributes %}
+                    <div class="folder-attrs">
+                      {% for key, value in node.attributes.items() %}
+                        <div class="folder-attr">
+                          <span class="k">{{ key }}</span>
+                          <span class="v">{{ render_folder_value(value) }}</span>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
                 </div>
               {% endfor %}
             </div>
+            <details class="folder-source">
+              <summary>Raw folder value from the rule outcome</summary>
+              <pre>{{ folder_options.source }}</pre>
+            </details>
           {% elif not folder_options.error %}
             <div class="debug-empty">No folder options for this host.</div>
           {% endif %}

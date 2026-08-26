@@ -314,19 +314,34 @@ def get_debug(hostname, mode, ansible_project=None):
 
 def _checkmk_folder_options_debug(actions):
     """
-    Return ``{'parsed': {folder: attrs}, 'error': msg|None}`` for the Checkmk
-    debug page, or ``None`` when the host has no folder options at all.
+    Build the Checkmk debug page's folder view: one row per folder level with
+    the attributes set on it, so a nested path shows *where* each attribute
+    lands instead of a flat ``{path: attrs}`` dump.
+
+    Returns ``{'tree': [...], 'error': msg|None, 'source': str, 'kind': str,
+    'target': str}``, or ``None`` when the host has no folder options at all.
     """
     if not isinstance(actions, dict):
         return None
     # pylint: disable-next=import-outside-toplevel
-    from application.plugins.checkmk.rules import parse_folder_options_debug
-    source = (actions.get('extra_folder_options')
-              or actions.get('create_folder_extra_folder_options'))
-    parsed, error = parse_folder_options_debug(source)
-    if error or parsed:
-        return {'parsed': parsed, 'error': error}
-    return None
+    from application.plugins.checkmk.rules import folder_options_tree
+    source = actions.get('extra_folder_options')
+    kind = 'move'
+    if not source:
+        source = actions.get('create_folder_extra_folder_options')
+        kind = 'create'
+    tree = folder_options_tree(source)
+    error = next((f"{e['path']}: {e['error']}" for e in tree if e['error']), None)
+    if not error and not any(e['attributes'] for e in tree):
+        return None
+    return {
+        'tree': tree,
+        'error': error,
+        'source': source,
+        'kind': kind,
+        'target': actions.get('move_folder') if kind == 'move'
+                  else actions.get('create_folder'),
+    }
 
 
 def _find_rule_match(rules_by_group, raw_id):

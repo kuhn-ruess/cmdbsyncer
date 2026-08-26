@@ -554,6 +554,14 @@ class PluginViewFormattingTest(unittest.TestCase):
         checkmk_models_mod.CheckmkSite = MagicMock()
         checkmk_models_mod.CheckmkSettings = MagicMock()
         checkmk_models_mod.CheckmkRuleMngmt = MagicMock()
+        # The folder-attribute catalog derives its value lists from
+        # ACTION_CATALOG, which is stubbed empty above.
+        folder_attrs_mod = sys.modules.setdefault(
+            'application.plugins.checkmk.folder_attributes',
+            ModuleType('application.plugins.checkmk.folder_attributes'),
+        )
+        folder_attrs_mod.CONTACTGROUP_FLAGS = []
+        folder_attrs_mod.FOLDER_ATTRIBUTE_CATALOG = []
         project_mod = sys.modules.setdefault(
             'application.models.project',
             ModuleType('application.models.project'),

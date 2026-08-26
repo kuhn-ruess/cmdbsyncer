@@ -105,33 +105,72 @@ def validate_folder_option_param(param):
     return None
 
 
-def parse_folder_options_debug(extra_folder_options):
+def folder_options_tree(extra_folder_options):
     """
-    Parse an already-rendered ``folder|{options}`` string for the debug view.
+    Split an already-rendered ``folder|{options}`` value into one row per
+    folder level.
 
-    ``extra_folder_options`` is the outcome value the export would feed to the
-    folder handler (Jinja already resolved). Returns ``(mapping, error)`` where
-    ``mapping`` is ``{folder_path: attributes}`` for every option that parses,
-    and ``error`` is a human-readable message for the first suffix that does
-    not (else ``None``) — the same failure the export would silently skip.
+    ``extra_folder_options`` is the outcome value the export feeds to the
+    folder handler (Jinja already resolved). A flat ``{path: attributes}``
+    mapping becomes unreadable as soon as the path has a few levels — you
+    cannot see which level actually carries an attribute — so the debug view
+    renders a tree and this builds its rows.
+
+    Returns a list in path order::
+
+        [{'depth': int, 'name': str, 'path': str,
+          'attributes': dict, 'error': str|None}, ...]
+
+    ``attributes`` is empty for a level without options; ``error`` carries the
+    parse message for a level whose options are malformed — exactly the
+    options the export skips.
     """
-    mapping = {}
+    tree = []
     if not extra_folder_options:
-        return mapping, None
+        return tree
     config_path = ""
     for current_path in extra_folder_options.split('/'):
         parts = current_path.split('|')
         folder = parts[0].strip()
         if not folder:
             continue
-        config_path += "/" + folder
+        entry = {
+            'depth': len(tree),
+            'name': folder,
+            # Parent prefix, so the view can grey out everything above this
+            # level and highlight only the segment it adds.
+            'parent': config_path + "/",
+            'path': config_path + "/" + folder,
+            'attributes': {},
+            'error': None,
+        }
+        config_path = entry['path']
         if len(parts) == 2 and parts[1].strip():
             suffix = parts[1].strip()
             try:
-                mapping[config_path] = ast.literal_eval(suffix)
+                entry['attributes'] = ast.literal_eval(suffix)
             except (ValueError, SyntaxError) as exc:
-                return mapping, (f"{config_path}: {suffix} — {exc} "
-                                 "(check for a stray or missing brace)")
+                entry['error'] = (f"{suffix} — {exc} "
+                                  "(check for a stray or missing brace)")
+        tree.append(entry)
+    return tree
+
+
+def parse_folder_options_debug(extra_folder_options):
+    """
+    Parse an already-rendered ``folder|{options}`` string for the debug view.
+
+    Returns ``(mapping, error)`` where ``mapping`` is ``{folder_path:
+    attributes}`` for every option that parses up to the first broken one, and
+    ``error`` is a human-readable message for that suffix (else ``None``) —
+    the same failure the export would silently skip.
+    """
+    mapping = {}
+    for entry in folder_options_tree(extra_folder_options):
+        if entry['error']:
+            return mapping, f"{entry['path']}: {entry['error']}"
+        if entry['attributes']:
+            mapping[entry['path']] = entry['attributes']
     return mapping, None
 
 

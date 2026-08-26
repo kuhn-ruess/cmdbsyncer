@@ -51,6 +51,7 @@ from .models import (
     CheckmkFolderPool,
     CheckmkSitePool,
 )
+from .folder_attributes import CONTACTGROUP_FLAGS, FOLDER_ATTRIBUTE_CATALOG
 from .cmk_rules import label_condition_problems
 
 
@@ -241,6 +242,11 @@ class CheckmkRuleView(RuleModelView):
         kwargs.setdefault('action_catalog', ACTION_CATALOG)
         kwargs.setdefault('deprecated_actions', sorted(DEPRECATED_ACTIONS))
         kwargs.setdefault('deprecation_warning', DEPRECATION_WARNING)
+        # Folder builder: the typical folder attributes and the contactgroups
+        # sub-fields, so move_folder/create_folder can be edited per folder
+        # instead of hand-writing the |{...} dict.
+        kwargs.setdefault('folder_attribute_catalog', FOLDER_ATTRIBUTE_CATALOG)
+        kwargs.setdefault('contactgroup_flags', CONTACTGROUP_FLAGS)
         # Pool actions get live suggestions (the pools already defined) or a
         # "no pools yet" warning, so the operator knows what to type/create.
         kwargs.setdefault('pool_suggestions', {

@@ -11,6 +11,7 @@ from application.plugins.checkmk.rules import (
     DefaultRule,
     CheckmkRule,
     validate_folder_option_param,
+    folder_options_tree,
     parse_folder_options_debug,
 )
 
@@ -483,6 +484,29 @@ class TestFolderOptionValidation(unittest.TestCase):
 
     def test_parse_debug_no_options(self):
         self.assertEqual(parse_folder_options_debug('/berlin/web'), ({}, None))
+
+    def test_tree_has_one_row_per_level(self):
+        # The debug view needs every level, including the ones without
+        # options, so a nested path shows where an attribute actually lands.
+        tree = folder_options_tree(
+            "/berlin/web|{'title': 'Web'}/prod")
+        self.assertEqual([(t['depth'], t['name'], t['parent'], t['path'])
+                          for t in tree],
+                         [(0, 'berlin', '/', '/berlin'),
+                          (1, 'web', '/berlin/', '/berlin/web'),
+                          (2, 'prod', '/berlin/web/', '/berlin/web/prod')])
+        self.assertEqual(tree[0]['attributes'], {})
+        self.assertEqual(tree[1]['attributes'], {'title': 'Web'})
+
+    def test_tree_keeps_going_after_a_broken_level(self):
+        # A malformed level must not hide the levels below it.
+        tree = folder_options_tree("/a|{'x': }/b|{'title': 'B'}")
+        self.assertIsNotNone(tree[0]['error'])
+        self.assertIn('brace', tree[0]['error'])
+        self.assertEqual(tree[1]['attributes'], {'title': 'B'})
+
+    def test_tree_empty_for_empty_value(self):
+        self.assertEqual(folder_options_tree(''), [])
 
 
 if __name__ == '__main__':

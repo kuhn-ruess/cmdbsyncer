@@ -251,6 +251,9 @@ class CheckmkRuleOutcome(db.EmbeddedDocument):
     append `|{...}` (a Python dict) to any folder segment to set that folder's
     Checkmk attributes. Every key is a normal Checkmk folder attribute.
 
+    The button **Edit folder attributes** below the value opens an editor with
+    one card per folder level, so you do not have to write the dict by hand.
+
     Examples (parameter of a `Move to Folder` action):
 
     ```
