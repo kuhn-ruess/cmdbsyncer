@@ -123,6 +123,20 @@
                 cannot replace the host list here — the rule would end up matching
                 every host.
             </div>
+            {% elif finding.outcome_rules and finding.outcome_rules > 1 %}
+            <div class="alert alert-danger mb-0">
+                This Setup Rule outcome produces
+                <strong>{{ finding.outcome_rules }} different Checkmk rules</strong>
+                — its outcome is rendered per host — but it has only one condition.
+                A label here would apply to the other rules as well, and every host
+                carrying it would collect all of their values. Keep the host list,
+                or split the outcome so each group has its own.
+            </div>
+            {% elif not finding.outcome_rules %}
+            <div class="alert alert-warning mb-0">
+                This result predates the check for outcomes that feed several
+                rules. Run the analysis again before applying anything.
+            </div>
             {% else %}
                 {% for label in finding.exact %}
                 <div class="alert alert-success">

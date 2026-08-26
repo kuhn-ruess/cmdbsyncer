@@ -1189,6 +1189,24 @@ class TestFindingStorage(unittest.TestCase):
         # 'env' still has to be let through, so it must not read as exported.
         self.assertNotIn('env', restored['exported_keys'])
 
+    def test_the_number_of_rules_behind_the_outcome_survives_the_round_trip(self):
+        result = self._result()
+        result['outcome_rules'] = 4
+        stored = findings_for_storage([result])[0]
+        self.assertEqual(stored['outcome_rules'], 4)
+        restored = finding_from_storage(stored)
+        self.assertIn('produces 4',
+                      make_checkmk_rule_sync()._reason_not_to_apply(restored))
+
+    def test_a_finding_from_an_older_analysis_is_not_applied(self):
+        # Stored before the analysis counted the rules per outcome — the
+        # one case the check cannot rule out, so it refuses.
+        stored = findings_for_storage([self._result()])[0]
+        del stored['outcome_rules']
+        restored = finding_from_storage(stored)
+        self.assertIn('run the analysis again',
+                      make_checkmk_rule_sync()._reason_not_to_apply(restored))
+
     def test_a_ruleset_that_cannot_take_a_label_survives_the_round_trip(self):
         result = self._result()
         result['label_condition_kept'] = False
@@ -1488,6 +1506,71 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         self.sync.rulsets_by_type = {'ruleset1': [self._entry('h1')]}
         self.assertEqual(
             self.sync.analyse_rule_optimization(min_hosts=10), [])
+
+    def test_an_outcome_feeding_several_rules_is_never_applied(self):
+        """
+        One Setup Rule outcome can produce more than one Checkmk rule —
+        a per-host value (contact group of the host) renders differently
+        for every group of hosts. The outcome has a single condition, so
+        replacing it with one group's label hands that condition to the
+        other groups as well: every host carrying the label then gets
+        every one of the rendered values.
+        """
+        inventory = {}
+        for index in range(3):
+            inventory[f'ops{index}'] = {'kontakt': 'ops',
+                                        'services': 'CPU,Memory,Disk IO'}
+        for index in range(3):
+            inventory[f'dba{index}'] = {'kontakt': 'dba',
+                                        'services': 'CPU,Memory,Disk IO'}
+        self._wire_inventory(inventory)
+        # Same Setup Rule outcome, two rules: the value is rendered per
+        # host, so the hosts end up in two different optimize groups.
+        self.sync.rulsets_by_type = {'ruleset1': [
+            self._entry(f'ops{index}', rule_hash='ops') for index in range(3)
+        ] + [
+            self._entry(f'dba{index}', rule_hash='dba') for index in range(3)
+        ]}
+
+        results = self.sync.analyse_rule_optimization(min_hosts=3)
+
+        self.assertEqual(len(results), 2)
+        for result in results:
+            # Both groups look perfectly replaceable on their own …
+            self.assertEqual([entry[0][0] for entry in result['exact']],
+                             ['kontakt'])
+            # … but the outcome behind them may not be rewritten.
+            self.assertIn('produces 2', self.sync._reason_not_to_apply(result))
+
+    def test_the_shared_outcome_keeps_its_host_condition(self):
+        """The apply step leaves such an outcome untouched."""
+        inventory = {f'ops{index}': {'kontakt': 'ops'} for index in range(3)}
+        inventory.update({f'dba{index}': {'kontakt': 'dba'}
+                          for index in range(3)})
+        self._wire_inventory(inventory)
+        self.sync.rulsets_by_type = {'ruleset1': [
+            self._entry(f'ops{index}', rule_hash='ops') for index in range(3)
+        ] + [
+            self._entry(f'dba{index}', rule_hash='dba') for index in range(3)
+        ]}
+        outcome = SimpleNamespace(condition_label_template='',
+                                  condition_host='{{HOSTNAME}}')
+        rule = SimpleNamespace(name='Agent access', outcomes=[outcome],
+                               save=MagicMock())
+        models = ModuleType('application.plugins.checkmk.models')
+        models.CheckmkRuleMngmt = MagicMock()
+        models.CheckmkRuleMngmt.objects.get.return_value = rule
+        models.CheckmkFilterRule = MagicMock()
+        models.CheckmkRewriteAttributeRule = MagicMock()
+
+        with patch.dict(sys.modules,
+                        {'application.plugins.checkmk.models': models}), \
+                patch('application.plugins.checkmk.cmk_rules.Host'):
+            self.sync.analyse_rule_optimization(min_hosts=3, apply=True)
+
+        self.assertEqual(outcome.condition_host, '{{HOSTNAME}}')
+        self.assertEqual(outcome.condition_label_template, '')
+        rule.save.assert_not_called()
 
     def test_a_group_sharing_nothing_gets_no_suggestion(self):
         inventory = {f'h{index}': {'serial': f's{index}'}

@@ -156,6 +156,7 @@ def findings_for_storage(results):
             'hosts': result['hosts'],
             'syncer_rules': [list(entry) for entry in result['syncer_rules']],
             'label_condition_kept': result['label_condition_kept'],
+            'outcome_rules': result.get('outcome_rules', 1),
             'exact': labels(result['exact'], exported),
             'wider': labels(result['wider'][:3], exported),
             'partial': labels(result['partial'][:3], exported),
@@ -177,6 +178,9 @@ def finding_from_storage(finding):
                          for entry in finding.get('syncer_rules', [])],
         'hosts': finding.get('hosts', 0),
         'label_condition_kept': finding.get('label_condition_kept', True),
+        # 0 = the analysis that produced this finding did not count them
+        # yet; the apply step refuses rather than guessing.
+        'outcome_rules': finding.get('outcome_rules', 0),
         'exact': [((label['key'], label['value'], label['source']),
                    label['inside'], label['outside'])
                   for label in finding.get('exact', [])],
@@ -1458,6 +1462,41 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                         (source, rule.get('_syncer_outcome')))
         return groups
 
+    def _outcome_rule_census(self):
+        """
+        How many distinct Checkmk rules every Setup Rule outcome produced:
+        ``{(syncer_rule, outcome_index): {rule identity, …}}``.
+
+        A single outcome is not necessarily a single rule. Its value is
+        rendered per host, so an outcome whose value carries the host's
+        own contact group produces one rule per contact group — each with
+        its own host list, each looking perfectly replaceable on its own.
+        The outcome has exactly one condition though, so giving it one
+        group's label hands that condition to all the other groups too,
+        and every host carrying the label collects every rendered value.
+        Counting the rules per outcome is what tells the two cases apart.
+
+        Call after ``calculate_rules`` and before ``optimize_rules``.
+        """
+        census = {}
+        for ruleset_name, rules in self.rulsets_by_type.items():
+            for rule in rules:
+                source = rule.get('_syncer_rule')
+                if not source:
+                    continue
+                if rule.get('optimize'):
+                    identity = (ruleset_name, rule['optimize_rule_hash'])
+                else:
+                    # Not coalesced: the same outcome can still emit this
+                    # rule for many hosts, so identify it by what reaches
+                    # Checkmk instead of by host.
+                    identity = (ruleset_name, str(rule.get('folder')),
+                                str(rule.get('condition')),
+                                str(rule.get('value')))
+                outcome = (source, rule.get('_syncer_outcome'))
+                census.setdefault(outcome, set()).add(identity)
+        return census
+
     @staticmethod
     def _host_label_set(attributes):
         """
@@ -1590,6 +1629,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                   f"reporting the {top} largest (raise with --top)")
             ranked = ranked[:top]
         selected = dict(ranked)
+        census = self._outcome_rule_census()
         totals, per_group, exported_keys = \
             self._collect_label_coverage(selected)
         results = []
@@ -1604,9 +1644,16 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             # apply to every host in the folder.
             label_condition_kept = not set(HOST_LABEL_KEYS).intersection(
                 self.unsupported_condition_keys(key[0]))
+            # How many Checkmk rules the outcome behind this group feeds.
+            # More than one means its condition is shared, and swapping
+            # it for this group's label would change the others too.
+            outcome_rules = max(
+                (len(census.get(outcome, ())) for outcome
+                 in group['syncer_rules']), default=1)
             results.append({
                 'ruleset': key[0],
                 'label_condition_kept': label_condition_kept,
+                'outcome_rules': outcome_rules,
                 'rule': group['rule'],
                 'syncer_rules': sorted(group['syncer_rules']),
                 'hosts': len(hosts),
@@ -1648,6 +1695,15 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                       f"conditions in ruleset {result['ruleset']}, so a "
                       "label cannot replace the host list here — the rule "
                       "would end up matching every host")
+                continue
+            if result['exact'] and result.get('outcome_rules', 1) > 1:
+                print(f"{CC.FAIL}   !! {CC.ENDC}This outcome produces "
+                      f"{result['outcome_rules']} different Checkmk rules "
+                      "(its outcome is rendered per host) but has only one "
+                      "condition — a label here would apply to the other "
+                      "rules as well, and every host carrying it would "
+                      "collect all of their values. Leave the host list, or "
+                      "split the outcome per group first")
                 continue
             for label, _inside, _outside in result['exact']:
                 key, value, source = label
@@ -1786,6 +1842,17 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                     f"{result['ruleset']}, not touched")
         if len(result['syncer_rules']) != 1:
             return ("several Setup Rules produce this condition, "
+                    "not touched")
+        outcome_rules = result.get('outcome_rules', 1)
+        if not outcome_rules:
+            return ("this finding comes from an older analysis that did not "
+                    "check how many rules the outcome feeds — run the "
+                    "analysis again")
+        if outcome_rules > 1:
+            return (f"this Setup Rule outcome produces {outcome_rules} "
+                    "different Checkmk rules — its outcome is rendered per "
+                    "host, and the outcome has only one condition, so this "
+                    "group's label would end up on the other rules too, "
                     "not touched")
         if result['syncer_rules'][0][1] is None:
             return "outcome unknown, not touched"
