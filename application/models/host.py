@@ -886,6 +886,12 @@ class Host(db.Document):
             is_object = account_dict.get('is_object', False)
             self.object_type = account_dict.get('object_type', 'auto')
 
+        if account_dict.get('restrict_to') == 'inventorize':
+            # The account is not allowed to own hosts. Raised instead of
+            # skipped so the run stops before the first host is written.
+            raise HostError(f"Account {account_name} is restricted to "
+                            "inventorize and must not import hosts")
+
         self._validate_import_name(account_dict, is_object)
 
         if account_dict['typ'] == 'from_api':

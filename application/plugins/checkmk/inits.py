@@ -5,6 +5,7 @@ from application import log
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 from application.models.host import Host
+from application.helpers.get_account import account_allows
 from application.modules.rule.filter import Filter
 
 from application.plugins.checkmk.tags import CheckmkTagSync
@@ -172,6 +173,11 @@ def inventorize_hosts(account, debug=False):
     """
     Inventorize information from Checkmk Installation
     """
+    # This path does not go through run_inventory, so the account
+    # restriction is checked here
+    if not account_allows(account, 'inventorize'):
+        return
+
     inven = None
     try:
         inven = InventorizeHosts(account)

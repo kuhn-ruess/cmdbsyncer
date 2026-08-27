@@ -3,6 +3,7 @@
 Inventory Helpers
 """
 from application.models.host import Host
+from application.helpers.get_account import account_allows
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.debug import ColorCodes as CC
 from syncerapi.v1.core import (
@@ -63,6 +64,9 @@ def run_inventory(config, objects, sub_key=None):  # pylint: disable=too-many-br
         1. First pass: Process individual hosts and collect grouped hosts
         2. Second pass: Process collected host groups as enumerated collections
     """
+    if not account_allows(config, 'inventorize'):
+        return
+
     inv_key = config['inventorize_key']
     if sub_key:
         inv_key += "_" + sub_key

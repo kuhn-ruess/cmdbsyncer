@@ -169,3 +169,36 @@ def get_account_variable(macro):
         return value
     except (ValueError, KeyError, AccountNotFoundError) as exc:
         raise ValueError("Account Variable not found") from exc
+
+
+def account_allows(account, operation):
+    """
+    Check the `restrict_to` setting of an Account.
+
+    Args:
+        account (dict|str): Account dict as returned by get_account_by_name,
+                            or the name of the account
+        operation (string): 'import' or 'inventorize'
+
+    Returns:
+        allowed (bool): False if the account must not be used this way. The
+        reason is printed and logged, so the caller just returns.
+    """
+    from application import log  # pylint: disable=import-outside-toplevel
+
+    if isinstance(account, str):
+        account = get_account_by_name(account)
+    restriction = account.get('restrict_to')
+    if not restriction or restriction == operation:
+        return True
+
+    name = account.get('name', '')
+    message = f"Account {name} is restricted to {restriction}, {operation} not allowed"
+    print(message)
+    log.log(message, source="account_restriction",
+            details=[
+                ('account', name),
+                ('restrict_to', restriction),
+                ('operation', operation),
+            ])
+    return False

@@ -54,6 +54,12 @@ _HELP_IS_OBJECT = (
     "Objects are never exported as hosts, but all of their attributes stay "
     "available in your rules."
 )
+_HELP_RESTRICT_TO = (
+    "Allow this account to be used in one direction only. \"Only Import\" "
+    "blocks every inventorize run with this account, \"Only Inventorize\" "
+    "keeps it from importing hosts of its own — useful for an account that "
+    "should just enrich hosts another system owns."
+)
 _HELP_CMDB_OBJECT = (
     "Treat this account as a source for your internal CMDB. Imported entries "
     "automatically get your CMDB template and default fields, and are kept "
@@ -107,10 +113,12 @@ class ChildAccountModelView(DefaultModelView):
 
     column_labels = {
         'require_fqdn': 'Require FQDN',
+        'restrict_to': 'Restrict to',
     }
 
     form_args = {
         'require_fqdn': {'label': 'Require FQDN'},
+        'restrict_to': {'label': 'Restrict to'},
     }
 
     form_rules = [
@@ -120,7 +128,9 @@ class ChildAccountModelView(DefaultModelView):
                     'Name, parent account and activation.',
                     [rules.Field('name'),
                      rules.Field('parent'),
-                     rules.Field('enabled')]),
+                     rules.Field('enabled'),
+                     rules.Field('restrict_to'),
+                     _field_help(_HELP_RESTRICT_TO)]),
             section('2', 'cond', 'Object Settings',
                     'Which object types this child account covers and its '
                     'import name checks.',
@@ -196,7 +206,9 @@ class AccountModelView(DefaultModelView):
                      rules.Field('type'),
                      rules.Field('is_master'),
                      _field_help(_HELP_IS_MASTER),
-                     rules.Field('enabled')]),
+                     rules.Field('enabled'),
+                     rules.Field('restrict_to'),
+                     _field_help(_HELP_RESTRICT_TO)]),
             section('2', 'cond', 'Access',
                     'How the syncer connects to this system.',
                     [rules.Field('address'),
@@ -225,11 +237,13 @@ class AccountModelView(DefaultModelView):
         'password': 'Attributes',
         'require_fqdn': 'Require FQDN',
         'cmdb_object': 'CMDB object',
+        'restrict_to': 'Restrict to',
     }
 
     form_args = {
         'require_fqdn': {'label': 'Require FQDN'},
         'cmdb_object': {'label': 'CMDB object'},
+        'restrict_to': {'label': 'Restrict to'},
     }
 
     column_formatters = {

@@ -36,6 +36,17 @@ def get_account_types():
     return account_types
 
 
+# Limit an account to one of the two directions it can be used in. An
+# account restricted to "import" must not be used to write inventory data
+# and the other way round, so a wrong CLI call or cron entry does not put
+# data on hosts the account was never meant to touch.
+account_restrictions = [
+    ('', "No restriction"),
+    ('import', "Only Import"),
+    ('inventorize', "Only Inventorize"),
+]
+
+
 object_types = [
     ('auto', 'Undefined'),
     ('host', 'Host Object'),
@@ -92,6 +103,7 @@ class Account(db.Document):
         username (str): Username for authentication.
         password (str): Plaintext password (for backward compatibility).
         password_crypted (str): Encrypted password.
+        restrict_to (str): Limit the account to 'import' or 'inventorize'.
         custom_fields (list): List of custom fields (CustomEntry).
         plugin_settings (list): List of plugin settings (PluginSettings).
         enabled (bool): Whether the account is enabled.
@@ -184,6 +196,8 @@ class Account(db.Document):
         return ""
 
 
+
+    restrict_to = db.StringField(choices=account_restrictions, default='')
 
     enabled = db.BooleanField(default=True)
 

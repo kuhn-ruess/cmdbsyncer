@@ -24,6 +24,7 @@ def main():
         warnings.filterwarnings("ignore", "Fields missing from ruleset", UserWarning)
         try:
             from application import app, DISPLAY_VERSION  # pylint: disable=import-outside-toplevel
+            from application.models.host import HostError  # pylint: disable=import-outside-toplevel
             from flask.cli import ScriptInfo  # pylint: disable=import-outside-toplevel
         except Exception as exp:  # pylint: disable=broad-except
             print("Cannot load application. Is MongoDB reachable and local_config.py present?")
@@ -37,7 +38,17 @@ def main():
         # otherwise scans for FLASK_APP / app.py / wsgi.py. PyPI installs have
         # none of those in the cwd, so hand Click a ScriptInfo that returns the
         # already-imported app instance directly.
-        app.cli(obj=ScriptInfo(create_app=lambda: app))
+        try:
+            app.cli(obj=ScriptInfo(create_app=lambda: app))
+        except HostError as error:
+            # Raised when the account config forbids what the command tries
+            # to do (restricted account, hostname checks). The run stopped
+            # before anything was written — report it, don't dump a
+            # traceback. --debug still gets the full one.
+            if '--debug' in sys.argv:
+                raise
+            print(f"Error: {error}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
