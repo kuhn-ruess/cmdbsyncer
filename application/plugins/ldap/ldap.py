@@ -194,12 +194,45 @@ def _print_object(number, dn, entry, config):
     return False
 
 
-def ldap_debug_query(account, overrides=None, limit=10, debug=False):
+def _collect_attributes(stats, entry, config):
+    """
+    Count the attributes of one object for the attribute overview
+    """
+    if not isinstance(entry, dict):
+        return
+    for key, content in entry.items():
+        stat = stats.setdefault(key, {'objects': 0, 'multi': 0, 'example': ''})
+        stat['objects'] += 1
+        if len(content) > 1:
+            stat['multi'] += 1
+        if not stat['example'] and content:
+            stat['example'] = content[0].decode(config['encoding'], errors='replace')
+
+
+def _print_attributes(stats, total):
+    """
+    Print which attributes the objects of the result have
+    """
+    overview = {}
+    for name, stat in sorted(stats.items(), key=lambda x: (-x[1]['objects'], x[0])):
+        line = f"in {stat['objects']} of {total} objects"
+        if stat['multi']:
+            line += f", more than one value in {stat['multi']} (only the first is imported)"
+        overview[name] = f"{line}, e.g. {stat['example']}"
+    attribute_table(f"Attributes found in {total} objects", overview)
+    print("Attributes for the account: " + ','.join(sorted(stats)))
+    print()
+
+
+def ldap_debug_query(account, overrides=None, limit=10, debug=False, list_attributes=False):
     """
     Try out Queries and Search Filters of an LDAP Account
     """
     config = get_account_by_name(account)
     config['debug'] = debug
+    if list_attributes:
+        # Attributes can only be shown if the server was asked for all of them
+        config['attributes'] = ''
     config.update({k: v for k, v in (overrides or {}).items() if v is not None})
 
     if not _check_address(config):
@@ -221,9 +254,13 @@ def ldap_debug_query(account, overrides=None, limit=10, debug=False):
 
     total = 0
     usable = 0
+    stats = {}
     try:
         for dn, entry in _search(connect, config, limit=limit):
             total += 1
+            if list_attributes:
+                _collect_attributes(stats, entry, config)
+                continue
             if _print_object(total, dn, entry, config):
                 usable += 1
     except ldap.LDAPError as error:
@@ -232,8 +269,12 @@ def ldap_debug_query(account, overrides=None, limit=10, debug=False):
             raise
         return
 
-    print(f"{ColorCodes.OKGREEN}Found {total} objects, "\
-          f"{usable} of them would be imported{ColorCodes.ENDC}")
+    if list_attributes:
+        _print_attributes(stats, total)
+        print(f"{ColorCodes.OKGREEN}Found {total} objects{ColorCodes.ENDC}")
+    else:
+        print(f"{ColorCodes.OKGREEN}Found {total} objects, "\
+              f"{usable} of them would be imported{ColorCodes.ENDC}")
     if limit and total >= limit:
         print(f"{ColorCodes.WARNING}Output stopped at the limit of {limit} objects, "\
               f"use --limit to see more{ColorCodes.ENDC}")

@@ -28,10 +28,12 @@ def cli_ldap_import(account, debug):
               help="Overwrite the Attributes of the Account, empty string for all")
 @click.option('--limit', '-l', default=10,
               help="Stop after this many objects, 0 for all")
+@click.option('--list-attributes', '-A', default=False, is_flag=True,
+              help="Show which attributes the found objects have instead of the objects")
 @click.option("--debug", default=False, is_flag=True)
-def cli_ldap_debug_query(account, limit, debug, **overrides):
+def cli_ldap_debug_query(account, limit, list_attributes, debug, **overrides):
     """Try out LDAP Queries and Search Filters"""
-    ldap_debug_query(account, overrides, limit, debug)
+    ldap_debug_query(account, overrides, limit, debug, list_attributes)
 
 
 def ldap_inventorize(account, debug=False):
