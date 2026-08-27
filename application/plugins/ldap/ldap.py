@@ -4,7 +4,7 @@
 from application import log
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
-from application.modules.debug import ColorCodes
+from application.modules.debug import ColorCodes, attribute_table
 
 try:
     import ldap
@@ -83,14 +83,65 @@ def _connect(config):
     return connect
 
 
-def _inner_import(config):
+def _check_address(config):
     """
-    Base LDAP Connect and Query
+    Make sure the account points to an ldap server
     """
     if not config['address'].startswith('ldap'):
         print("Error: Address needs to start with ldap:// or ldaps://")
         if config['debug']:
             raise ValueError("Address needs to start with ldap:// or ldaps://")
+        return False
+    return True
+
+
+def _get_attributes(config):
+    """
+    Attributes to request, empty list means all of them
+    """
+    if config['attributes']:
+        return [x.strip() for x in config['attributes'].split(',')]
+    return []
+
+
+def _search(connect, config, limit=0):
+    """
+    Paged LDAP Search, yields the raw (dn, entry) tuples
+    """
+    query = (config['base_dn'], ldap.SCOPE_SUBTREE,
+             config['search_filter'], _get_attributes(config))
+
+    if config['debug']:
+        print(f"INFO: Use Filter: {query[2]}")
+        print(f"INFO: Search the following Attributes: {query[3]}")
+
+    page_control = SimplePagedResultsControl(True, size=1000, cookie='')
+
+    response = connect.search_ext(*query, serverctrls=[page_control])
+    found = 0
+    while True:
+        _rtype, rdata, _rmsgid, srvctrls = connect.result3(response)
+        for result in rdata:
+            yield result
+            found += 1
+            if limit and found >= limit:
+                return
+        controls = [ctl for ctl in srvctrls \
+                       if ctl.controlType == SimplePagedResultsControl.controlType]
+        if not controls:
+            raise ValueError("The server ignores RFC 2696 control")
+        if not controls[0].cookie:
+            break
+
+        page_control.cookie = controls[0].cookie
+        response = connect.search_ext(*query, serverctrls=[page_control])
+
+
+def _inner_import(config):
+    """
+    Base LDAP Connect and Query
+    """
+    if not _check_address(config):
         return
 
     print(f"{ColorCodes.OKBLUE}Started {ColorCodes.ENDC} with account "\
@@ -100,50 +151,7 @@ def _inner_import(config):
     if connect is None:
         return
 
-
-
-    scope = ldap.SCOPE_SUBTREE
-    base_dn = config['base_dn']
-    search_filter = config['search_filter']
-    if config['debug']:
-        print(f"INFO: Use Filter: {search_filter}")
-
-    attributes = []
-    if config['attributes']:
-        attributes = [x.strip() for x in config['attributes'].split(',')]
-
-    if config['debug']:
-        print(f"INFO: Search the following Attributes: {attributes}")
-
-    page_control = SimplePagedResultsControl(True, size=1000, cookie='')
-
-    response = connect.search_ext(base_dn,
-                                  scope,
-                                  search_filter,
-                                  attributes,
-                                  serverctrls=[page_control])
-    results = []
-    pages = 0
-    while True:
-        pages += 1
-        _rtype, rdata, _rmsgid, srvctrls = connect.result3(response)
-        results.extend(rdata)
-        controls = [ctl for ctl in srvctrls \
-                       if ctl.controlType == SimplePagedResultsControl.controlType]
-        if not controls:
-            raise ValueError("The server ignores RFC 2696 control")
-        if not controls[0].cookie:
-            break
-
-        page_control.cookie = controls[0].cookie
-        response = connect.search_ext(base_dn,
-                                      scope,
-                                      search_filter,
-                                      attributes,
-                                      serverctrls=[page_control])
-
-    yield from get_objects(results, config)
-
+    yield from get_objects(_search(connect, config), config)
 
 
 def ldap_import(account, debug=False):
@@ -162,3 +170,70 @@ def ldap_import(account, debug=False):
             host_obj.save()
         else:
             print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
+
+
+def _print_object(number, dn, entry, config):
+    """
+    Print one found LDAP Object, returns if it would be imported
+    """
+    if not isinstance(entry, dict):
+        print(f"{ColorCodes.WARNING} * {ColorCodes.ENDC} Referral, no object: {dn}")
+        return False
+
+    # Same path the import uses, so the output is what would be imported
+    parsed = list(get_objects([(dn, entry)], config))
+    if parsed:
+        hostname, labels = parsed[0]
+        attribute_table(f"{number}: {hostname}", labels)
+        return True
+
+    values = {key: [x.decode(config['encoding'], errors='replace') for x in content]
+              for key, content in entry.items()}
+    values['dn'] = dn
+    attribute_table(f"{number}: IGNORED, no attribute '{config['hostname_field']}'", values)
+    return False
+
+
+def ldap_debug_query(account, overrides=None, limit=10, debug=False):
+    """
+    Try out Queries and Search Filters of an LDAP Account
+    """
+    config = get_account_by_name(account)
+    config['debug'] = debug
+    config.update({k: v for k, v in (overrides or {}).items() if v is not None})
+
+    if not _check_address(config):
+        return
+
+    attribute_table("Query", {
+        'Account': config['name'],
+        'Address': config['address'],
+        'Base DN': config['base_dn'],
+        'Search Filter': config['search_filter'],
+        'Attributes': config['attributes'] or 'all',
+        'Hostname Field': config['hostname_field'],
+        'Limit': str(limit) if limit else 'no limit',
+    })
+
+    connect = _connect(config)
+    if connect is None:
+        return
+
+    total = 0
+    usable = 0
+    try:
+        for dn, entry in _search(connect, config, limit=limit):
+            total += 1
+            if _print_object(total, dn, entry, config):
+                usable += 1
+    except ldap.LDAPError as error:
+        print(f"{ColorCodes.FAIL}LDAP Error: {error}{ColorCodes.ENDC}")
+        if debug:
+            raise
+        return
+
+    print(f"{ColorCodes.OKGREEN}Found {total} objects, "\
+          f"{usable} of them would be imported{ColorCodes.ENDC}")
+    if limit and total >= limit:
+        print(f"{ColorCodes.WARNING}Output stopped at the limit of {limit} objects, "\
+              f"use --limit to see more{ColorCodes.ENDC}")
