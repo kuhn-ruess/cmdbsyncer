@@ -79,7 +79,10 @@ def run_inventory(config, objects, sub_key=None):  # pylint: disable=too-many-br
         if app_config['LOWERCASE_HOSTNAMES']:
             hostname = hostname.lower()
 
-        print(f"{CC.OKGREEN}* {CC.ENDC} Data for {hostname}")
+        # The hostname is usually just one RDN of the source object, so name
+        # the full DN too when the source delivers one (LDAP)
+        origin = f" ({labels['dn']})" if labels.get('dn') else ""
+        print(f"{CC.OKGREEN}* {CC.ENDC} Data for {hostname}{origin}")
         if collect_key := config.get('inventorize_collect_by_key'):
             if value := labels.get(collect_key):
                 if rewrite := config.get('inventorize_rewrite_collect_by_key'):
