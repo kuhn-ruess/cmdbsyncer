@@ -103,6 +103,15 @@
    scrolls (most visibly in Edge). Pin it back to static. */
 .rule-table thead th { position: static; top: auto; z-index: auto; }
 .rule-hit { background: var(--debug-row-hit, #e8f5e8); }
+.rule-outcome { font-family: monospace; font-size: 0.8rem; }
+.rule-outcome-row { display: flex; gap: 6px; align-items: baseline;
+    min-width: 0; }
+.rule-outcome-row .k { flex: 0 0 auto; font-weight: bold;
+    color: var(--debug-key, #1abc9c); }
+.rule-outcome-row .v { flex: 1 1 auto; min-width: 0;
+    color: var(--surface-text, #2c3e50);
+    white-space: pre-wrap; word-break: break-word; }
+.rule-total { margin: 8px 0 16px; }
 
 .preview-card { border-left: 4px solid #6610f2; }
 .preview-outcome { border: 1px solid var(--surface-border, #e2e6ea);
@@ -284,6 +293,21 @@
       {% endif %}
     {% endmacro %}
 
+    {# One rule's contribution to the outcome, and the group total, share
+       this renderer: both are plain key/value data (or a bare value for
+       engines whose outcome is not a dict). #}
+    {% macro render_outcome(data) %}
+      {%- if data is mapping -%}
+        <div class="rule-outcome">
+          {%- for key, value in data.items() %}
+            <div class="rule-outcome-row"><span class="k">{{ key }}</span><span class="v">{{ value }}</span></div>
+          {%- endfor %}
+        </div>
+      {%- else -%}
+        <div class="rule-outcome"><span class="v">{{ data }}</span></div>
+      {%- endif -%}
+    {% endmacro %}
+
     {# Folder attribute values are plain strings, lists (parents) or nested
        dicts (contactgroups). Render each shape readably instead of dumping
        the Python repr. #}
@@ -429,13 +453,13 @@
         <div id="accordion-export">
           <div class="rule-tabs">
             {% for rule_name, rule_raw in rules.items() %}
-              {% set hit_count = rule_raw | selectattr('hit') | list | length %}
+              {% set hit_count = rule_raw['rules'] | selectattr('hit') | list | length %}
               {% set anchor = 'rule_' ~ rule_name | replace(' ', '_') %}
               <a class="btn btn-outline-info" data-toggle="collapse"
                  href="#{{ anchor }}" role="button"
                  aria-expanded="false" aria-controls="{{ anchor }}">
                 {{ rule_name.capitalize() }}
-                <span class="badge badge-light">{{ hit_count }}/{{ rule_raw | length }}</span>
+                <span class="badge badge-light">{{ hit_count }}/{{ rule_raw['rules'] | length }}</span>
               </a>
             {% endfor %}
           </div>
@@ -450,6 +474,7 @@
                     <th style="width: 280px;">Rule</th>
                     <th style="width: 70px;">Hit</th>
                     <th>Matching condition / first reason it won't match</th>
+                    <th style="width: 260px;">Outcome of this rule</th>
                     <th style="width: 120px;">Condition Type</th>
                     <th style="width: 100px;">Last Match</th>
                   </tr>
@@ -473,7 +498,7 @@
                       <span class="badge badge-info">{{ cond['value'] }}</span>
                     {% endif %}
                   {% endmacro %}
-                  {% for rule in rule_raw %}
+                  {% for rule in rule_raw['rules'] %}
                     <tr {% if rule['hit'] %} class="rule-hit" {% endif %}>
                       <td>
                         {% if rule['rule_url'] %}
@@ -503,12 +528,35 @@
                           {{ render_condition(rule['no_match_reason']) }}
                         {% endif %}
                       </td>
+                      <td>
+                        {% if rule['outcome'] %}
+                          {{ render_outcome(rule['outcome']) }}
+                        {% elif rule['hit'] %}
+                          <span class="text-muted">nothing new — an earlier rule already set it</span>
+                        {% else %}
+                          <span class="text-muted">—</span>
+                        {% endif %}
+                      </td>
                       <td>{{ rule['condition_type'] }}</td>
                       <td>{{ rule['last_match'] }}</td>
                     </tr>
                   {% endfor %}
                 </tbody>
               </table>
+
+              <div class="debug-card accent-outcomes rule-total">
+                <div class="debug-card-head">
+                  <span><i class="fa fa-flag-checkered"></i> Total outcome — {{ rule_name.capitalize() }}</span>
+                  <span class="muted">What all matching rules of this group produce together</span>
+                </div>
+                <div class="debug-card-body">
+                  {% if rule_raw['outcomes'] %}
+                    {{ render_outcome(rule_raw['outcomes']) }}
+                  {% else %}
+                    <div class="debug-empty">No outcome — no rule of this group matched.</div>
+                  {% endif %}
+                </div>
+              </div>
             </div>
           {% endfor %}
         </div>

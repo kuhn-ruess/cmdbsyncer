@@ -122,10 +122,10 @@ def get_ansible_debug_data(hostname, project_name=None):
                 value = extra_attributes[key] or ''
                 extra_attributes[key] = f"HIDDEN...{value[-3:]}" if value else 'HIDDEN'
 
-    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_lines
-    rule_logs['filter'] = rules['filter'].debug_lines
-    rule_logs['rewrite'] = rules['rewrite'].debug_lines
-    rule_logs['actions'] = rules['actions'].debug_lines
+    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_result()
+    rule_logs['filter'] = rules['filter'].debug_result()
+    rule_logs['rewrite'] = rules['rewrite'].debug_result()
+    rule_logs['actions'] = rules['actions'].debug_result()
 
     return attributes, extra_attributes, rule_logs
 

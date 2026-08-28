@@ -204,14 +204,14 @@ def _debug_extra_engine(title, engine, rules_queryset, db_host, attributes):
         # short-circuit on a cached result (which would leave the debug
         # table empty).
         engine.get_outcomes(db_host, attributes['all'], use_cache=False)
-        return engine.debug_lines
+        return engine.debug_result()
     except Exception as exp:  # pylint: disable=broad-exception-caught
-        return [{
+        return {'rules': [{
             'name': f'ERROR evaluating {title}',
             'hit': False, 'last_match': '',
             'condition_type': '', 'no_match_reason': None,
             'error': str(exp),
-        }]
+        }], 'outcomes': {}}
 
 
 def get_host_debug_data(hostname):
@@ -271,10 +271,10 @@ def get_host_debug_data(hostname):
         actions = {}
 
 
-    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_lines
-    rule_logs['filter'] = rules['filter'].debug_lines
-    rule_logs['rewrite'] = rules['rewrite'].debug_lines
-    rule_logs['actions'] = rules['actions'].debug_lines
+    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_result()
+    rule_logs['filter'] = rules['filter'].debug_result()
+    rule_logs['rewrite'] = rules['rewrite'].debug_result()
+    rule_logs['actions'] = rules['actions'].debug_result()
 
     if attributes:
         # Also exercise the Setup-Rules engine (CheckmkRuleMngmt → creates
@@ -293,7 +293,7 @@ def get_host_debug_data(hostname):
         # them as host-independent instead.
         static_ids = {str(_id) for _id in CheckmkRuleMngmt.objects(
             enabled=True, static_rule=True).scalar('id')}
-        for line in rule_logs['Setup Rules']:
+        for line in rule_logs['Setup Rules']['rules']:
             if line.get('id') in static_ids:
                 line['static'] = True
                 line['hit'] = True  # always emitted on export

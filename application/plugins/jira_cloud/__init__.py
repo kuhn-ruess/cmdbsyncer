@@ -117,9 +117,9 @@ def get_jira_cloud_debug_data(hostname):
                 outcomes[f"type {type_id} | {field_name}"] = value
 
     rule_logs = {
-        'filter': host_filter.debug_lines,
-        'rewrite': rewrite.debug_lines,
-        'actions': rule_engine.debug_lines,
+        'filter': host_filter.debug_result(),
+        'rewrite': rewrite.debug_result(),
+        'actions': rule_engine.debug_result(),
     }
     return attributes, outcomes, rule_logs
 

@@ -251,6 +251,21 @@ DEBUG_MODE_ROLES = {
 }
 
 
+def _normalize_rule_log(data):
+    """
+    Bring one rule group's debug payload into the shape the page works
+    with: `{'rules': [...], 'outcomes': {...}}`. A rule engine reports
+    that already, but error paths (and custom plugins) may still hand
+    over a plain list of rule lines.
+    """
+    if isinstance(data, dict):
+        return {
+            'rules': data.get('rules') or [],
+            'outcomes': data.get('outcomes') or {},
+        }
+    return {'rules': data or [], 'outcomes': {}}
+
+
 def get_debug(hostname, mode, ansible_project=None):
     """
     Get Output for Host Debug Page
@@ -290,7 +305,7 @@ def get_debug(hostname, mode, ansible_project=None):
                 attributes, actions, debug_log = debug_funcs[mode](hostname)
 
         for type_name, data in debug_log.items():
-            output_rules[type_name] = data
+            output_rules[type_name] = _normalize_rule_log(data)
 
         if attributes:
             output["Full Attribute List"] = attributes['all']
@@ -352,8 +367,8 @@ def _find_rule_match(rules_by_group, raw_id):
     is not present (e.g. a rule type that doesn't appear in this host's
     debug output).
     """
-    for group_rules in rules_by_group.values():
-        for rule_row in group_rules:
+    for group in rules_by_group.values():
+        for rule_row in group['rules']:
             if str(rule_row.get('id')) == raw_id:
                 return {
                     'hit': bool(rule_row.get('hit')),
@@ -1932,14 +1947,15 @@ Impact Chain.
 
         new_rules = {}
         for rule_group, rule_data in output_rules.items():
-            new_rules.setdefault(rule_group, [])
-            for rule in rule_data:
+            group = new_rules.setdefault(
+                rule_group, {'rules': [], 'outcomes': rule_data['outcomes']})
+            for rule in rule_data['rules']:
                 rule_id = rule.get('id')
                 if rule_group in base_urls and rule_id:
                     rule['rule_url'] = f"{base_urls[rule_group]}{rule_id}"
                 else:
                     rule['rule_url'] = ''
-                new_rules[rule_group].append(rule)
+                group['rules'].append(rule)
 
         # Folder options (contact groups, title, tags) are packed into the
         # move_folder/create_folder outcome as a Python dict after a '|'. Show

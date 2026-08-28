@@ -77,8 +77,8 @@ def get_vmware_debug_data(hostname):
         extra_attributes = syncer.get_host_data(db_host, attributes['all']) or {}
 
     rule_logs = {
-        'rewrite': attribute_rewrite.debug_lines,
-        'actions': actions.debug_lines,
+        'rewrite': attribute_rewrite.debug_result(),
+        'actions': actions.debug_result(),
     }
     return attributes, extra_attributes, rule_logs
 

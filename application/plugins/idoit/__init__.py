@@ -121,9 +121,9 @@ def get_idoit_debug_data(hostname):
             extra_attributes[key] = value
 
     rule_logs['CustomAttributes'] = getattr(
-        syncer, 'custom_attributes', rules['rules']).debug_lines
-    rule_logs['rewrite'] = rules['rewrite'].debug_lines
-    rule_logs['actions'] = rules['rules'].debug_lines
+        syncer, 'custom_attributes', rules['rules']).debug_result()
+    rule_logs['rewrite'] = rules['rewrite'].debug_result()
+    rule_logs['actions'] = rules['rules'].debug_result()
 
     return attributes, extra_attributes, rule_logs
 

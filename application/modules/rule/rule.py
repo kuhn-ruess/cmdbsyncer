@@ -6,6 +6,7 @@ Handle Rule Matching
 # pylint: disable=too-many-instance-attributes
 import ast
 import re
+from copy import deepcopy
 from rich.console import Console
 from rich.table import Table
 from rich import box
@@ -42,12 +43,55 @@ def format_condition(condition):
     return (f"hostname {condition.get('hostname_match')}{hostname_negate} "
             f"'{condition.get('hostname', '')}'")
 
+
+_MISSING = object()
+
+
+def debug_copy(data):
+    """
+    Detached copy of outcome data for the debug page. The engines keep
+    mutating the very lists/dicts a rule put into the outcome, so the
+    debug view has to hold a snapshot. Falls back to the original for
+    the rare value that cannot be copied — debug output is never worth
+    an exception.
+    """
+    try:
+        return deepcopy(data)
+    except Exception:  # pylint: disable=broad-exception-caught
+        return data
+
+
+def outcome_delta(before, after):
+    """
+    What a single rule contributed to the accumulated outcomes.
+
+    Rule engines fold every matching rule into one shared outcome
+    object, so the only way to show a per-rule outcome on the debug
+    page is to diff the accumulated result before and after the rule
+    ran. Engine defaults (a key set to an empty placeholder) are not a
+    contribution and are left out.
+    """
+    if isinstance(before, dict) and isinstance(after, dict):
+        delta = {}
+        for key, value in after.items():
+            old = before.get(key, _MISSING)
+            if old is not _MISSING and old == value:
+                continue
+            if not value and old is _MISSING:
+                continue
+            delta[key] = value
+        return debug_copy(delta)
+    if isinstance(before, list) and isinstance(after, list):
+        return debug_copy(after[len(before):])
+    return debug_copy(after)
+
 class Rule():
     """
     Base Rule Class
     """
     debug = False
     debug_lines = []
+    debug_outcomes = {}
     rules = []
     name = ""
     attributes = {}
@@ -65,6 +109,8 @@ class Rule():
         # Reset Debug Lines in Order for each child
         # of this class having a new log
         self.debug_lines = []
+        # Total outcome of the last debug run (see debug_result)
+        self.debug_outcomes = {}
         # Cached (id(self.rules), [rule objs], [rule.to_mongo() docs]).
         # Invalidated automatically when self.rules is reassigned.
         self._rule_docs_cache = None
@@ -272,6 +318,7 @@ class Rule():
                 logger.debug('Check Rule: %s', rule_obj.name)
                 logger.debug('##########################')
             rule_hit = False
+            debug_data = None
             condition_typ = rule['condition_typ']
             conditions = rule['conditions']
 
@@ -334,15 +381,30 @@ class Rule():
             if rule_hit:
                 # outcomes were pre-converted to plain dicts in
                 # _iter_rule_docs so we don't rebuild them per host.
+                before = debug_copy(outcomes) if self.debug else None
                 outcomes = self.add_outcomes(rule, rule['outcomes'], outcomes)
+                if self.debug and debug_data is not None:
+                    debug_data['outcome'] = outcome_delta(before, outcomes)
                 # If rule has matched, and option is set, we are done
                 if rule['last_match']:
                     break
         if self.debug:
+            self.debug_outcomes = debug_copy(outcomes)
             console = Console()
             console.print(table)
             print()
         return outcomes
+
+    def debug_result(self):
+        """
+        Debug payload for the GUI: the per rule match lines plus the
+        total outcome all matching rules of this engine produced
+        together.
+        """
+        return {
+            'rules': self.debug_lines,
+            'outcomes': self.debug_outcomes,
+        }
 
     def handle_fields(self, _field_name, field_value):
         """

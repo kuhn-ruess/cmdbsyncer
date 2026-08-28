@@ -49,11 +49,11 @@ def get_device_debug_data(hostname):
 
     extra_attributes = syncer.get_host_data(db_host, attributes['all'])
 
-    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_lines
+    rule_logs['CustomAttributes'] = syncer.custom_attributes.debug_result()
     if rules['filter']:
-        rule_logs['filter'] = rules['filter'].debug_lines
-    rule_logs['rewrite'] = rules['rewrite'].debug_lines
-    rule_logs['actions'] = rules['actions'].debug_lines
+        rule_logs['filter'] = rules['filter'].debug_result()
+    rule_logs['rewrite'] = rules['rewrite'].debug_result()
+    rule_logs['actions'] = rules['actions'].debug_result()
 
     # Also run the VM + Cluster attribute rule engines against this host
     # so admins can see why a VM ends up in a given cluster / with which
@@ -65,7 +65,7 @@ def get_device_debug_data(hostname):
             vm_rules.rules = NetboxVirtualMachineAttributes.objects(
                 enabled=True).order_by('sort_field')
             vm_rules.get_outcomes(db_host, attributes['all'])
-            rule_logs['VM Attributes'] = vm_rules.debug_lines
+            rule_logs['VM Attributes'] = vm_rules.debug_result()
         except Exception as exp:  # pylint: disable=broad-exception-caught
             rule_logs['VM Attributes'] = [{
                 'name': 'ERROR evaluating VM attribute rules',
@@ -78,7 +78,7 @@ def get_device_debug_data(hostname):
             cluster_rules.rules = NetboxClusterAttributes.objects(
                 enabled=True).order_by('sort_field')
             cluster_rules.get_outcomes(db_host, attributes['all'])
-            rule_logs['Cluster Attributes'] = cluster_rules.debug_lines
+            rule_logs['Cluster Attributes'] = cluster_rules.debug_result()
         except Exception as exp:  # pylint: disable=broad-exception-caught
             rule_logs['Cluster Attributes'] = [{
                 'name': 'ERROR evaluating Cluster attribute rules',

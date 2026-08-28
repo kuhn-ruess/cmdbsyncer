@@ -5,7 +5,7 @@ Unit tests for the Rule base class optimizations.
 import unittest
 from unittest.mock import Mock, patch
 
-from application.modules.rule.rule import Rule
+from application.modules.rule.rule import Rule, outcome_delta
 
 
 class _RuleForTests(Rule):
@@ -90,6 +90,83 @@ class TestRuleOptimizations(unittest.TestCase):
         self.assertEqual(first, {'hits': ['r1']})
         self.assertEqual(second, {'hits': ['r1']})
         rule_doc.to_mongo.assert_called_once()
+
+
+class TestDebugOutcomes(unittest.TestCase):
+    """The debug run reports each rule's own outcome plus the group total."""
+    def setUp(self):
+        self.rule = _RuleForTests()
+        self.rule.name = 'test-rule'
+        self.rule.debug = True
+
+    @staticmethod
+    def _rule_doc(name):
+        doc = Mock()
+        doc.to_mongo.return_value = {
+            'name': name,
+            '_id': name,
+            'condition_typ': 'anyway',
+            'conditions': [],
+            'outcomes': [],
+            'last_match': False,
+        }
+        return doc
+
+    @patch('application.modules.rule.rule.Console')
+    @patch('application.modules.rule.rule.app')
+    def test_per_rule_outcome_and_total(self, mock_app, _console):
+        mock_app.config = {'ADVANCED_RULE_DEBUG': False}
+        self.rule.rules = [self._rule_doc('r1'), self._rule_doc('r2')]
+
+        total = self.rule.check_rules('host-a')
+
+        self.assertEqual(total, {'hits': ['r1', 'r2']})
+        result = self.rule.debug_result()
+        self.assertEqual(result['outcomes'], {'hits': ['r1', 'r2']})
+        # Each line only shows what that rule added, not the whole sum.
+        self.assertEqual(result['rules'][0]['outcome'], {'hits': ['r1']})
+        self.assertEqual(result['rules'][1]['outcome'],
+                         {'hits': ['r1', 'r2']})
+
+    @patch('application.modules.rule.rule.app')
+    def test_no_outcome_key_without_debug(self, mock_app):
+        mock_app.config = {'ADVANCED_RULE_DEBUG': False}
+        self.rule.debug = False
+        self.rule.rules = [self._rule_doc('r1')]
+
+        self.rule.check_rules('host-a')
+
+        self.assertEqual(self.rule.debug_result(),
+                         {'rules': [], 'outcomes': {}})
+
+
+class TestOutcomeDelta(unittest.TestCase):
+    """outcome_delta shows only what a rule really contributed."""
+
+    def test_new_key(self):
+        self.assertEqual(outcome_delta({}, {'a': 1}), {'a': 1})
+
+    def test_unchanged_key_is_dropped(self):
+        self.assertEqual(outcome_delta({'a': 1}, {'a': 1, 'b': 2}), {'b': 2})
+
+    def test_changed_key_is_kept(self):
+        self.assertEqual(outcome_delta({'a': 1}, {'a': 2}), {'a': 2})
+
+    def test_empty_default_placeholder_is_dropped(self):
+        # Engines seed their outcome dict with empty defaults — that is
+        # not something the rule contributed.
+        self.assertEqual(outcome_delta({}, {'folder': '', 'tags': [],
+                                            'dont_move': False, 'a': 1}),
+                         {'a': 1})
+
+    def test_reset_to_empty_is_kept(self):
+        self.assertEqual(outcome_delta({'a': 1}, {'a': ''}), {'a': ''})
+
+    def test_lists(self):
+        self.assertEqual(outcome_delta(['a'], ['a', 'b']), ['b'])
+
+    def test_other_types_return_the_result(self):
+        self.assertEqual(outcome_delta(None, 'x'), 'x')
 
 
 class TestGetOutcomesCache(unittest.TestCase):
