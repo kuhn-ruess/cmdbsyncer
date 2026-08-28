@@ -280,14 +280,32 @@
             </p>
             <form method="POST" action="{{ url_for('.create_missing') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <div class="form-group">
-                    <label for="template">CMDB template (optional)</label>
-                    <select class="form-control" id="template" name="template">
-                        <option value="">— none —</option>
-                        {% for tpl in templates %}
-                        <option value="{{ tpl }}">{{ tpl }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="template">CMDB template (optional)</label>
+                        <input class="form-control" type="text" id="template"
+                               name="template" list="dq_templates" autocomplete="off"
+                               placeholder="type to search — empty for none"/>
+                        <datalist id="dq_templates">
+                            {% for tpl in templates %}
+                            <option value="{{ tpl }}"></option>
+                            {% endfor %}
+                        </datalist>
+                        <small class="form-text text-muted">
+                            Start typing to filter the {{ templates | length }}
+                            available template(s).
+                        </small>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="domain">Domain name (optional)</label>
+                        <input class="form-control" type="text" id="domain"
+                               name="domain" autocomplete="off"
+                               placeholder="example.com"/>
+                        <small class="form-text text-muted">
+                            Appended to every selected host that has no domain
+                            part; hosts already given as an FQDN stay unchanged.
+                        </small>
+                    </div>
                 </div>
                 <div class="mb-2">
                     <button type="button" class="btn btn-sm btn-outline-secondary"

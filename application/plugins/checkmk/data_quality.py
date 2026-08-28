@@ -297,11 +297,25 @@ def cmdb_template_names():
                 .only('hostname').order_by('hostname')]
 
 
-def create_internal_cmdb_hosts(hostnames, template_name=None):
+def apply_domain(hostnames, domain):
+    """
+    Pure: append ``domain`` to every hostname that carries no domain part.
+    Names that already contain a dot keep the domain they came with, so a
+    mixed list of short names and FQDNs can be created in one go. An empty
+    domain leaves the list unchanged.
+    """
+    suffix = (domain or '').strip().strip('.')
+    if not suffix:
+        return list(hostnames)
+    return [name if '.' in name else f'{name}.{suffix}' for name in hostnames]
+
+
+def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None):
     """
     Create the given hostnames as internal CMDB-managed hosts (source ``cmdb``,
     not CMDB objects), optionally assigning a CMDB template so the new hosts
-    inherit its labels/attributes at export time.
+    inherit its labels/attributes at export time. ``domain`` is appended to
+    every name that has no domain part (see :func:`apply_domain`).
 
     Mirrors the internal-CMDB stamping the Host admin view does on save. Hosts
     that already exist are left untouched and reported under ``skipped``.
@@ -312,6 +326,7 @@ def create_internal_cmdb_hosts(hostnames, template_name=None):
     from application.models.account import (
         CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
 
+    hostnames = apply_domain(hostnames, domain)
     template = None
     if template_name:
         template = Host.objects(hostname=template_name, object_type='template',
@@ -344,4 +359,5 @@ def create_internal_cmdb_hosts(hostnames, template_name=None):
         host.set_inventory_attributes(CMDB_SOURCE_ACCOUNT_NAME)
         host.save()
         created.append(host.hostname)
-    return {'created': created, 'skipped': skipped, 'template': template_name}
+    return {'created': created, 'skipped': skipped, 'template': template_name,
+            'domain': domain}

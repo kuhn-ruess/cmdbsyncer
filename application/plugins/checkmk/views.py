@@ -2400,17 +2400,21 @@ class CheckmkDataQualityView(BaseView):
 
         hostnames = [h for h in request.form.getlist('missing_hosts') if h.strip()]
         template_name = (request.form.get('template') or '').strip()
+        domain = (request.form.get('domain') or '').strip()
         if not hostnames:
             flash('No hosts selected to create', 'warning')
             return redirect(self.get_url('.index'))
 
         try:
-            result = create_internal_cmdb_hosts(hostnames, template_name or None)
+            result = create_internal_cmdb_hosts(hostnames, template_name or None,
+                                                domain or None)
         except ValueError as error:
             flash(str(error), 'error')
             return redirect(self.get_url('.index'))
 
         msg = f"Created {len(result['created'])} host(s) in the internal CMDB"
+        if domain:
+            msg += f" in domain '{domain}'"
         if template_name:
             msg += f" with template '{template_name}'"
         if result['skipped']:

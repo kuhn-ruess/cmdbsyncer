@@ -11,6 +11,7 @@ from application.plugins.checkmk.data_quality import (
     build_report,
     filter_uppercase_hostnames,
     filter_non_fqdn_hostnames,
+    apply_domain,
     _fetch_monitored_hosts,
     _fetch_checkmk_services,
 )
@@ -121,6 +122,28 @@ class TestFilterNonFqdnHostnames(unittest.TestCase):
         self.assertEqual(
             [h['name'] for h in filter_non_fqdn_hostnames(['Zeb', 'alpha', 'Beta'])],
             ['alpha', 'Beta', 'Zeb'])
+
+
+class TestApplyDomain(unittest.TestCase):
+    """Tests for apply_domain"""
+
+    def test_empty_domain_keeps_names(self):
+        self.assertEqual(apply_domain(['host1', 'host2'], ''), ['host1', 'host2'])
+        self.assertEqual(apply_domain(['host1'], None), ['host1'])
+
+    def test_domain_appended_to_short_names(self):
+        self.assertEqual(
+            apply_domain(['host1', 'host2'], 'example.com'),
+            ['host1.example.com', 'host2.example.com'])
+
+    def test_existing_fqdn_untouched(self):
+        self.assertEqual(
+            apply_domain(['host1', 'host2.other.net'], 'example.com'),
+            ['host1.example.com', 'host2.other.net'])
+
+    def test_leading_dot_and_whitespace_stripped(self):
+        self.assertEqual(
+            apply_domain(['host1'], '  .example.com '), ['host1.example.com'])
 
 
 class TestBuildReport(unittest.TestCase):
