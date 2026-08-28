@@ -13,12 +13,13 @@ of the Host-action machinery (copy_as_new, bulk-label processors).
 import re
 from datetime import datetime
 
-from flask import request, url_for
+from flask import g, request, url_for
 from markupsafe import Markup, escape
 
 from application import app
 from application.models.host_cleanup import relation_target
 from application.models.host_templates import (active_templates,
+                                               merge_attribute_values,
                                                merged_attribute_keys)
 from application.modules.log.models import LogEntry
 from application.views.host_filters import FilterCmdbTemplate
@@ -338,6 +339,68 @@ _LABEL_GRID_CSS = (
 )
 
 
+def _merged_keys():
+    """
+    The configured merged attribute keys, cached for the request. The
+    host list renders one row per host and each of them asks — without
+    the cache that is one config query per row.
+    """
+    if not hasattr(g, 'syncer_merge_keys'):
+        g.syncer_merge_keys = merged_attribute_keys()
+    return g.syncer_merge_keys
+
+
+def _merged_label_values(model, templates):
+    """
+    The merged attributes of a host: for every configured merged key
+    that more than one source provides, the comma-joined value the
+    export will produce, plus the sources it came from in that order.
+
+    `templates` is the list of (template name, labels) pairs already
+    collected by the caller.
+
+    Returns:
+        dict: key -> (merged value, [source names])
+    """
+    manual = model.labels or {}
+    merged = {}
+    for key in _merged_keys():
+        value = None
+        sources = []
+        if key in manual:
+            value = manual[key]
+            sources.append('manual')
+        for tmpl_name, tmpl_labels in templates:
+            if key in tmpl_labels:
+                value = merge_attribute_values(value, tmpl_labels[key])
+                sources.append(tmpl_name)
+        # A single source is not a merge — leave it to the normal row,
+        # which names its origin instead of a pointless "merged" badge.
+        if len(sources) > 1:
+            merged[key] = (value, sources)
+    return merged
+
+
+def _label_origin_badge(origin, src_name):
+    """The small origin badge in front of a label row."""
+    if origin == 'merged':
+        return (
+            f'<span class="lbl-src src-template" '
+            f'title="Merged attribute, collected from: '
+            f'{escape(src_name)}">merged</span>'
+        )
+    if origin == 'manual':
+        return (
+            '<span class="lbl-src src-manual" '
+            'title="Maintained manually on this host">manual</span>'
+        )
+    return (
+        f'<span class="lbl-src src-template" '
+        f'title="From template {escape(src_name)}">'
+        f'{escape(src_name)}</span>'
+    )
+
+
 def _render_labels_with_origin(_view, _context, model, _name):
     # pylint: disable=too-many-locals
     """
@@ -359,28 +422,26 @@ def _render_labels_with_origin(_view, _context, model, _name):
     if not manual and not templates:
         return Markup('<em class="text-muted">No labels.</em>')
 
+    # A merged attribute is exported as one comma-separated value, so it
+    # gets one row carrying that value instead of one row per source —
+    # otherwise the overview shows a value the host never exports.
+    merged = _merged_label_values(model, templates) if cmdb_mode else {}
+
     rows = []
+    for key in sorted(merged.keys(), key=str.lower):
+        value, sources = merged[key]
+        rows.append(('merged', ', '.join(sources), key, value))
     for key in sorted(manual.keys(), key=str.lower):
-        rows.append(('manual', '', key, manual[key]))
+        if key not in merged:
+            rows.append(('manual', '', key, manual[key]))
     for tmpl_name, tmpl_labels in templates:
         for key in sorted(tmpl_labels.keys(), key=str.lower):
-            rows.append(('template', tmpl_name, key, tmpl_labels[key]))
+            if key not in merged:
+                rows.append(('template', tmpl_name, key, tmpl_labels[key]))
 
     html = [_LABEL_GRID_CSS, '<div class="cmdb-label-grid">']
     for origin, src_name, key, value in rows:
-        if not cmdb_mode:
-            src_badge = ''
-        elif origin == 'manual':
-            src_badge = (
-                '<span class="lbl-src src-manual" '
-                'title="Maintained manually on this host">manual</span>'
-            )
-        else:
-            src_badge = (
-                f'<span class="lbl-src src-template" '
-                f'title="From template {escape(src_name)}">'
-                f'{escape(src_name)}</span>'
-            )
+        src_badge = _label_origin_badge(origin, src_name) if cmdb_mode else ''
         value_str = '' if value is None else str(value)
         type_name = _value_type_name(value)
         html.append(
@@ -408,13 +469,22 @@ def _render_labels(_view, _context, model, _name):
     # own badges (CMDB mode only), skipping keys the host already sets
     # manually — a manual label wins.
     template_labels = {}
+    merged = {}
     if cmdb_mode:
-        for tmpl in active_templates(model):
-            for key, value in (getattr(tmpl, 'labels', None) or {}).items():
+        templates = [(tmpl.hostname, dict(getattr(tmpl, 'labels', None) or {}))
+                     for tmpl in active_templates(model)]
+        # A merged attribute is exported as one comma-separated value,
+        # so it gets one badge with that value — not the host's own and
+        # one per template, none of which the host ever exports.
+        merged = _merged_label_values(model, templates)
+        for tmpl_name, tmpl_labels in templates:
+            for key, value in tmpl_labels.items():
+                if key in merged:
+                    continue
                 if value and key not in (model.labels or {}):
-                    template_labels.setdefault(key, (value, tmpl.hostname))
+                    template_labels.setdefault(key, (value, tmpl_name))
 
-    if not model.labels and not template_labels:
+    if not model.labels and not template_labels and not merged:
         return Markup("")
     # Truncation + `title` tooltip keeps customer hosts with very long
     # label values from stretching the row off-screen; the full value
@@ -424,8 +494,20 @@ def _render_labels(_view, _context, model, _name):
         .get('attributes', {}).get('all', {})
     )
     html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
+    for key, (value, sources) in merged.items():
+        checkmk_labels.pop(key, None)
+        text = f"{key}:{value}"
+        html += (
+            f'<span class="badge badge-info mr-1" '
+            f'style="{_LABEL_BADGE_STYLE}" '
+            f'title="{escape(text)} — merged attribute, collected from: '
+            f'{escape(", ".join(sources))}">'
+            f'<i class="fa fa-clone mr-1" aria-hidden="true"></i>'
+            f'{escape(text)}</span>'
+        )
+
     for key, value in (model.labels or {}).items():
-        if not value:
+        if not value or key in merged:
             continue
         if checkmk_labels.get(key) == value:
             del checkmk_labels[key]
@@ -578,7 +660,7 @@ def _render_cmdb_template(view, _context, model, _name):
     if not model.cmdb_templates:
         return Markup("")
     html = [_LABEL_GRID_CSS]
-    merge_keys = merged_attribute_keys()
+    merge_keys = _merged_keys()
     for tmpl in model.cmdb_templates:
         archived = bool(getattr(tmpl, 'deleted_at', None))
         labels = {} if archived else (getattr(tmpl, 'labels', None) or {})
