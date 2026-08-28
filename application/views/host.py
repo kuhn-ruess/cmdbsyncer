@@ -1250,15 +1250,15 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
 
     page_size = app.config['HOST_PAGESIZE']
 
-    # Labels already carry per-row badges showing the originating
-    # template (see `_render_labels_with_origin`), so the separate
-    # "CMDB" block (cmdb_templates + per-template label dumps) would
-    # duplicate the same information. Keep `cmdb_templates` out of the
-    # detail list.
+    # `cmdb_templates` sits right under Labels and shows the badge row
+    # plus, per template, the values it contributes — the same read-only
+    # template content the edit form carries, in the compact row style
+    # Labels uses. Labels answers "what does the host end up with", this
+    # one "what does each template contribute".
     column_details_list = [
         'hostname', 'folder', 'no_autodelete', 'lifecycle_state',
         'relations',
-        'labels', 'inventory', 'log',
+        'labels', 'cmdb_templates', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
@@ -1394,7 +1394,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
     column_labels = {
         'source_account_name': "Account",
         'folder': "CMK Pool Folder",
-        'cmdb_templates': "CMDB",
+        'cmdb_templates': "CMDB Templates",
         'lifecycle_state': "Lifecycle",
         'relations': "Relations",
     }
@@ -2034,6 +2034,9 @@ Impact Chain.
             # even for import-only installs.
             self.column_exclude_list = list(self.column_exclude_list) + [
                 'cmdb_fields', 'cmdb_templates',
+            ]
+            self.column_details_list = [
+                c for c in self.column_details_list if c != 'cmdb_templates'
             ]
             # The copy-row icon only makes sense when the user is
             # expected to create hosts by hand. The relations-graph

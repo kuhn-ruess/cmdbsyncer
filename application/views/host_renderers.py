@@ -473,25 +473,6 @@ def _render_labels(_view, _context, model, _name):
     html += '</div>'
     return Markup(html)
 
-def _render_cmdb_template(_view, _context, model, _name):
-    """
-    Detail-view rendering of assigned CMDB templates — one
-    Key / Value / Type table per template, headed by the template
-    hostname. Same visual style as Labels and Inventory.
-    """
-    templates = active_templates(model)
-    if not templates:
-        return Markup("")
-    html = ""
-    for tmpl in templates:
-        html += (
-            f'<h6 style="margin-top: 8px; font-weight: bold;">'
-            f'{escape(tmpl.hostname)}</h6>'
-        )
-        html += str(_format_keyvalue_with_type(tmpl.labels or {}))
-    return Markup(html)
-
-
 def _template_edit_url(tmpl):
     """
     Build the admin edit URL for a CMDB template. TemplateModelView
@@ -525,6 +506,44 @@ def _cmdb_template_filter_url(view, tmpl):
     return ''
 
 
+def _cmdb_template_badge(view, tmpl):
+    """
+    One template badge: the name, linked to the template's edit page,
+    followed by the filter icon that shows every host sharing it.
+    An archived template stays assigned — a restore brings it back —
+    but it contributes nothing, so it must not read like the active
+    ones do.
+    """
+    name = escape(tmpl.hostname)
+    archived = bool(getattr(tmpl, 'deleted_at', None))
+    badge = (
+        f'<span class="badge {"badge-secondary" if archived else "badge-dark"}" '
+        f'style="{_LABEL_BADGE_STYLE}'
+        f'{" opacity: 0.6;" if archived else ""}" '
+        f'title="{name}{" (archived — contributes nothing)" if archived else ""}">'
+        f'<i class="fa fa-file"></i> {name}'
+        f'{" (archived)" if archived else ""}</span>'
+    )
+    href = _template_edit_url(tmpl)
+    if href:
+        badge = (
+            f'<a href="{escape(href)}" '
+            f'style="text-decoration: none;">{badge}</a>'
+        )
+
+    filter_href = _cmdb_template_filter_url(view, tmpl)
+    filter_icon = ''
+    if filter_href:
+        filter_icon = (
+            f'<a href="{escape(filter_href)}" '
+            f'style="text-decoration: none; color: #6c757d; '
+            f'margin-left: 4px;" '
+            f'title="Show all hosts using this template">'
+            f'<i class="fa fa-filter"></i></a>'
+        )
+    return badge + filter_icon
+
+
 def _render_cmdb_template_preview(view, _context, model, _name):
     """
     Compact badge preview of assigned CMDB templates for the list
@@ -537,46 +556,60 @@ def _render_cmdb_template_preview(view, _context, model, _name):
         return Markup("")
     html = f'<div style="{_LABEL_WRAPPER_STYLE}">'
     for tmpl in model.cmdb_templates:
-        name = escape(tmpl.hostname)
-        # An archived template stays assigned — a restore brings it back
-        # — but it contributes nothing, so it must not read like the
-        # active ones do.
-        archived = bool(getattr(tmpl, 'deleted_at', None))
-        badge = (
-            f'<span class="badge {"badge-secondary" if archived else "badge-dark"}" '
-            f'style="{_LABEL_BADGE_STYLE}'
-            f'{" opacity: 0.6;" if archived else ""}" '
-            f'title="{name}{" (archived — contributes nothing)" if archived else ""}">'
-            f'<i class="fa fa-file"></i> {name}'
-            f'{" (archived)" if archived else ""}</span>'
-        )
-        href = _template_edit_url(tmpl)
-        if href:
-            badge_html = (
-                f'<a href="{escape(href)}" '
-                f'style="text-decoration: none;">{badge}</a>'
-            )
-        else:
-            badge_html = badge
-
-        filter_href = _cmdb_template_filter_url(view, tmpl)
-        if filter_href:
-            filter_icon = (
-                f'<a href="{escape(filter_href)}" '
-                f'style="text-decoration: none; color: #6c757d; '
-                f'margin-left: 4px;" '
-                f'title="Show all hosts using this template">'
-                f'<i class="fa fa-filter"></i></a>'
-            )
-        else:
-            filter_icon = ''
-
         html += (
             f'<span style="display: inline-block; white-space: nowrap; '
-            f'margin-right: 6px;">{badge_html}{filter_icon}</span>'
+            f'margin-right: 6px;">{_cmdb_template_badge(view, tmpl)}</span>'
         )
     html += '</div>'
     return Markup(html)
+
+def _render_cmdb_template(view, _context, model, _name):
+    """
+    Detail-view rendering of the assigned CMDB templates: one collapsed
+    `<details>` row per template, so the block stays a short list of
+    names and the values a template contributes are one click away —
+    the same read-only content the edit form shows.
+
+    The summary carries the template badge (linked to the template) and
+    the filter icon (all hosts sharing it). An archived template keeps
+    its badge but contributes nothing, so it has nothing to open.
+    """
+    if not model.cmdb_templates:
+        return Markup("")
+    html = [_LABEL_GRID_CSS]
+    for tmpl in model.cmdb_templates:
+        archived = bool(getattr(tmpl, 'deleted_at', None))
+        labels = {} if archived else (getattr(tmpl, 'labels', None) or {})
+        summary = (
+            f'{_cmdb_template_badge(view, tmpl)}'
+            f'<span class="text-muted small" style="margin-left:6px;">'
+            f'{len(labels)} value(s)</span>'
+        )
+        if not labels:
+            html.append(
+                f'<div style="padding:2px 0 2px 18px;">{summary}</div>'
+            )
+            continue
+        html.append(
+            '<details style="margin:0;">'
+            '<summary style="cursor:pointer;padding:2px 0;">'
+            f'{summary}</summary>'
+            '<div class="cmdb-label-grid">'
+        )
+        for key in sorted(labels, key=str.lower):
+            value = labels[key]
+            value_str = '' if value is None else str(value)
+            html.append(
+                '<div class="cmdb-label-row">'
+                f'<span class="lbl-key">{escape(str(key))}</span>'
+                f'<span class="lbl-val" title="{escape(value_str)}">'
+                f'{escape(value_str)}</span>'
+                f'<span class="lbl-type" title="BSON type">'
+                f'{escape(_value_type_name(value))}</span>'
+                '</div>'
+            )
+        html.append('</div></details>')
+    return Markup(''.join(html))
 
 def _render_cmdb_match_label(_view, _context, model, _name):
     """
