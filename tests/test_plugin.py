@@ -12,6 +12,8 @@ from mongoengine.errors import DoesNotExist
 
 from application.modules.plugin import Plugin
 
+from tests.plugin_helpers import plain_plugin
+
 
 # pylint: disable=protected-access
 class TestPlugin(unittest.TestCase):
@@ -500,12 +502,7 @@ class TestPlugin(unittest.TestCase):
         mock_host.inventory = {}
         mock_host.cmdb_templates = []
 
-        plugin = Plugin()
-        plugin.custom_attributes = Mock()
-        plugin.custom_attributes.get_outcomes.return_value = {}
-        plugin.init_custom_attributes = Mock()
-        plugin.rewrite = None
-        plugin.filter = None
+        plugin = plain_plugin()
 
         result = plugin.get_attributes(mock_host, False)
 
@@ -519,6 +516,7 @@ class TestPlugin(unittest.TestCase):
         tmpl = Mock()
         tmpl.hostname = 'web-template'
         tmpl.deleted_at = None  # an archived template contributes nothing
+        tmpl.cmdb_fields = []  # no field merges anything
         tmpl.labels = {
             'environment': 'template-env',  # collides with host label
             'tier': 'template-tier',        # collides with host inventory
@@ -532,12 +530,7 @@ class TestPlugin(unittest.TestCase):
         mock_host.inventory = {'tier': 'frontend'}
         mock_host.cmdb_templates = [tmpl]
 
-        plugin = Plugin()
-        plugin.custom_attributes = Mock()
-        plugin.custom_attributes.get_outcomes.return_value = {}
-        plugin.init_custom_attributes = Mock()
-        plugin.rewrite = None
-        plugin.filter = None
+        plugin = plain_plugin()
 
         result = plugin.get_attributes(mock_host, False)
 
@@ -558,6 +551,7 @@ class TestPlugin(unittest.TestCase):
         tmpl = Mock()
         tmpl.hostname = 'web-template'
         tmpl.deleted_at = None  # an archived template contributes nothing
+        tmpl.cmdb_fields = []  # no field merges anything
         tmpl.labels = {
             'description': 'Server {{ HOSTNAME }}',
             'plain': 'no jinja here',
@@ -570,12 +564,7 @@ class TestPlugin(unittest.TestCase):
         mock_host.inventory = {}
         mock_host.cmdb_templates = [tmpl]
 
-        plugin = Plugin()
-        plugin.custom_attributes = Mock()
-        plugin.custom_attributes.get_outcomes.return_value = {}
-        plugin.init_custom_attributes = Mock()
-        plugin.rewrite = None
-        plugin.filter = None
+        plugin = plain_plugin()
 
         result = plugin.get_attributes(mock_host, False)
 
@@ -600,11 +589,13 @@ class TestPlugin(unittest.TestCase):
         archived = Mock()
         archived.hostname = 'old-template'
         archived.deleted_at = datetime.datetime(2026, 1, 1)
+        archived.cmdb_fields = []  # no field merges anything
         archived.labels = {'owner': 'from-archived-template'}
 
         live = Mock()
         live.hostname = 'web-template'
         live.deleted_at = None
+        live.cmdb_fields = []  # no field merges anything
         live.labels = {'tier': 'from-live-template'}
 
         mock_host = Mock()
@@ -614,12 +605,7 @@ class TestPlugin(unittest.TestCase):
         mock_host.inventory = {}
         mock_host.cmdb_templates = [archived, live]
 
-        plugin = Plugin()
-        plugin.custom_attributes = Mock()
-        plugin.custom_attributes.get_outcomes.return_value = {}
-        plugin.init_custom_attributes = Mock()
-        plugin.rewrite = None
-        plugin.filter = None
+        plugin = plain_plugin()
 
         result = plugin.get_attributes(mock_host, False)
 

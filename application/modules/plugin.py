@@ -18,7 +18,9 @@ import requests
 from application import logger, app, log
 from application.models.account import pop_master_skips
 from application.helpers.syncer_jinja import render_jinja
-from application.models.host_templates import active_templates
+from application.models.host_templates import (active_templates,
+                                               merge_attribute_values,
+                                               template_merge_keys)
 from application.modules.debug import ColorCodes
 from application.modules.custom_attributes.models import CustomAttributeRule as \
     CustomAttributeRuleModel
@@ -461,6 +463,45 @@ class Plugin():
 
 
     # pylint: disable=too-many-branches
+
+    @staticmethod
+    def _apply_template_attributes(db_host, attributes):
+        """
+        Merge the labels of the host's CMDB templates into `attributes`.
+
+        Template labels are merged in virtually and never persisted onto
+        the host document. The host's own data (labels + inventory,
+        already applied by the caller) always wins: a template only
+        contributes keys the host does not provide itself, and never
+        overrides a value an earlier template supplied. The exception
+        are merged keys — one template marking a key as merged makes it
+        a merged key for all of them, so every template appends its
+        value, comma separated, to what is already there.
+        """
+        templates = active_templates(db_host)
+        merge_keys = set()
+        for tmpl in templates:
+            merge_keys |= template_merge_keys(tmpl)
+        for tmpl in templates:
+            for key, value in (tmpl.labels or {}).items():
+                if key in attributes and key not in merge_keys:
+                    continue
+                if isinstance(value, str) and '{{' in value:
+                    try:
+                        value = render_jinja(
+                            value,
+                            HOSTNAME=db_host.hostname,
+                            **attributes,
+                        )
+                    except Exception as exp:  # pylint: disable=broad-exception-caught
+                        logger.debug(
+                            f"CMDB template Jinja render failed for "
+                            f"{tmpl.hostname}.{key}: {exp}"
+                        )
+                if key in attributes:
+                    value = merge_attribute_values(attributes[key], value)
+                attributes[key] = value
+
     def get_attributes(self, db_host, cache, persist_cache=True):
         """
         Retrieve and process host attributes with caching support.
@@ -497,28 +538,7 @@ class Plugin():
         attributes['SOURCE_ACCOUNT'] = db_host.source_account_name or ''
         attributes.update(db_host.labels.items())
         attributes.update(db_host.inventory.items())
-        # Template labels are merged in virtually here and never persisted
-        # onto the host document. The host's own data (labels + inventory,
-        # already applied above) always wins: a template only contributes
-        # keys the host does not provide itself. A template also never
-        # overrides a value an earlier template already supplied.
-        for tmpl in active_templates(db_host):
-            for key, value in (tmpl.labels or {}).items():
-                if key in attributes:
-                    continue
-                if isinstance(value, str) and '{{' in value:
-                    try:
-                        value = render_jinja(
-                            value,
-                            HOSTNAME=db_host.hostname,
-                            **attributes,
-                        )
-                    except Exception as exp:  # pylint: disable=broad-exception-caught
-                        logger.debug(
-                            f"CMDB template Jinja render failed for "
-                            f"{tmpl.hostname}.{key}: {exp}"
-                        )
-                attributes[key] = value
+        self._apply_template_attributes(db_host, attributes)
 
         self.init_custom_attributes()
         attributes.update(

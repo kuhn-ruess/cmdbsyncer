@@ -9,7 +9,8 @@ cleanly into their own file.
 from markupsafe import Markup, escape
 from wtforms import Field
 
-from application.models.host_templates import active_templates
+from application.models.host_templates import (active_templates,
+                                               template_merge_keys)
 
 
 class StaticLabelWidget:  # pylint: disable=too-few-public-methods
@@ -48,7 +49,9 @@ class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
         '<i class="fa fa-info-circle"></i> '
         'These labels originate from the templates assigned above. They '
         'are read-only here and are merged into the host labels at export '
-        'time — manual labels below win on conflicts.'
+        'time — manual labels below win on conflicts, except for values '
+        'marked "merge": those are collected from every template, comma '
+        'separated, and appended to the host value.'
         '</p>'
     )
 
@@ -65,6 +68,9 @@ class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
 
         html = self._INTRO
         had_entries = False
+        merge_keys = set()
+        for template in templates:
+            merge_keys |= template_merge_keys(template)
         for template in templates:
             if not hasattr(template, 'labels') or not template.labels:
                 continue
@@ -72,6 +78,9 @@ class StaticTemplateLabelWidget:  # pylint: disable=too-few-public-methods
             entries = [
                 f'<span class="badge badge-primary">{escape(key)}</span>'
                 f':<span class="badge badge-info">{escape(value)}</span>'
+                + ('<span class="badge badge-success" title="Collected from '
+                   'every template, comma separated">merge</span>'
+                   if key in merge_keys else '')
                 for key, value in template.labels.items()
             ]
             html += (

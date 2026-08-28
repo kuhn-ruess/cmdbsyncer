@@ -210,15 +210,31 @@ def _labels_from_cmdb_form(rows):
     return labels
 
 
-def _cmdb_field(key, value):
+def _merge_keys_from_cmdb_form(rows):
+    """
+    The field names of the submitted cmdb_fields rows whose "merge"
+    checkbox is ticked. Only rows that survive `_labels_from_cmdb_form`
+    can merge, so a blanked row drops its flag with it.
+    """
+    labels = _labels_from_cmdb_form(rows)
+    keys = []
+    for row in rows or []:
+        key = (row.get('field_name') or '').strip()
+        if row.get('merge') and key in labels and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _cmdb_field(key, value, merge=False):
     """Build a single CmdbField row for the edit form."""
     field = CmdbField()
     field.field_name = key
     field.field_value = '' if value is None else str(value)
+    field.merge = merge
     return field
 
 
-def _rebuild_cmdb_fields(model):
+def _rebuild_cmdb_fields(model, merge_keys=()):
     """
     Rebuild `model.cmdb_fields` from what was actually stored: the
     labels the host now has, plus the configured CMDB model fields,
@@ -230,11 +246,14 @@ def _rebuild_cmdb_fields(model):
     a label nor a configured field, so it disappears here too and can
     not come back as an empty label on the next save. Sorted
     alphabetically to match the order the edit view renders.
+
+    `merge_keys` carries the template's merge flags through the rebuild;
+    the rows are the only place they are stored.
     """
     labels = model.labels or {}
     configured = get_cmdb_model_fields(model.object_type)
     model.cmdb_fields = [
-        _cmdb_field(key, labels.get(key))
+        _cmdb_field(key, labels.get(key), merge=key in merge_keys)
         for key in sorted(set(labels) | set(configured), key=str.lower)
     ]
 
@@ -732,6 +751,124 @@ label[for="cmdb_fields"] { display: none !important; }
 '''
 
 
+# Per-row "merge" checkbox for the template edit form. The caption is
+# rendered next to it because the inline-row CSS hides the generated
+# field labels, and the title carries the full explanation.
+_MERGE_CHECKBOX_RULES = [
+    rules.HTML(
+        '<div class="col-auto merge-cell" title="Collect this attribute '
+        'from every template the host carries, comma separated, instead '
+        'of letting the first value win.">'
+    ),
+    rules.Field('merge'),
+    rules.HTML('<span class="merge-caption">merge</span></div>'),
+]
+
+
+# Shown above the attribute rows of the template form so the merge
+# checkbox does not need to be guessed at.
+TEMPLATE_MERGE_FORM_CSS = '''
+<style>
+#cmdb_fields .merge-cell {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+    white-space: nowrap;
+}
+#cmdb_fields .merge-cell input[type="checkbox"] {
+    width: auto !important;
+    margin: 0 !important;
+}
+#cmdb_fields .merge-caption {
+    font-size: 11px;
+    opacity: 0.75;
+}
+</style>
+<p class="text-muted small" style="margin-bottom:6px;">
+Values of this template only apply where the host does not carry the
+attribute itself, and the first template providing an attribute wins.
+Tick <strong>merge</strong> to collect that attribute from every
+template the host carries instead — comma separated, appended to the
+host's own value. Ticking it in one template is enough.
+</p>
+'''
+
+
+def _cmdb_fields_subdocuments(with_merge=False):
+    """
+    Inline-form config for the `cmdb_fields` rows: key, ':' and value on
+    one line. `with_merge` appends the per-row "merge" checkbox, which
+    only templates offer — it turns the attribute into one that collects
+    the values of every template the host carries, comma separated
+    (see `host_templates.template_merge_keys`).
+    """
+    config = {
+        'cmdb_fields': {
+            'form_subdocuments': {
+                '': {
+                    'form_widget_args': {
+                        'field_name': {
+                            'style': (
+                                'background-color: #2EFE9A; '
+                                'border-radius: 5px; '
+                                'padding: 6px 10px; '
+                                'margin-right: 5px; '
+                                'font-weight: bold; '
+                                'border: 1px solid #1abc9c; '
+                                'width: 300px;'
+                            ),
+                            'size': 20,
+                            'placeholder': 'Key'
+                        },
+                        'field_value': {
+                            # No fixed width: the value column grows with
+                            # the form, and attribute values are long —
+                            # a comma-separated service list does not fit
+                            # into a 450px box.
+                            'style': (
+                                'background-color: #81DAF5; '
+                                'border-radius: 5px; '
+                                'padding: 6px 10px; '
+                                'font-family: monospace; '
+                                'margin-left: 5px; '
+                                'border: 1px solid #3498db; '
+                                'width: 100%; '
+                                'box-sizing: border-box;'
+                            ),
+                            'size': 40,
+                            'placeholder': 'Value'
+                        },
+                    },
+                    'form_rules': [
+                        rules.HTML(
+                            '<div class="form-row '
+                            'align-items-center" '
+                            'style="margin-bottom: 5px; '
+                            'margin-top: 0;">'
+                        ),
+                        rules.HTML('<div class="col-auto">'),
+                        rules.Field('field_name'),
+                        rules.HTML('</div>'),
+                        rules.HTML(
+                            '<div class="col-auto">'
+                            '<span style="font-size: 16px;'
+                            ' margin: 0 3px;">:</span>'
+                            '</div>'
+                        ),
+                        rules.HTML('<div class="col">'),
+                        rules.Field('field_value'),
+                        rules.HTML('</div>'),
+                    ] + (_MERGE_CHECKBOX_RULES if with_merge else []) + [
+                        rules.HTML('</div>'),
+                    ]
+                }
+            }
+        }
+    }
+    return config
+
+
 class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestors,too-many-instance-attributes
                       _LifecycleBulkActionsMixin,
                       _TimelineRowActionMixin,
@@ -859,68 +996,7 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         }
     }
 
-    form_subdocuments = {
-        'cmdb_fields': {
-            'form_subdocuments': {
-                '': {
-                    'form_widget_args': {
-                        'field_name': {
-                            'style': (
-                                'background-color: #2EFE9A; '
-                                'border-radius: 5px; '
-                                'padding: 6px 10px; '
-                                'margin-right: 5px; '
-                                'font-weight: bold; '
-                                'border: 1px solid #1abc9c; '
-                                'width: 300px;'
-                            ),
-                            'size': 20,
-                            'placeholder': 'Key'
-                        },
-                        'field_value': {
-                            # No fixed width: the value column grows with
-                            # the form, and attribute values are long —
-                            # a comma-separated service list does not fit
-                            # into a 450px box.
-                            'style': (
-                                'background-color: #81DAF5; '
-                                'border-radius: 5px; '
-                                'padding: 6px 10px; '
-                                'font-family: monospace; '
-                                'margin-left: 5px; '
-                                'border: 1px solid #3498db; '
-                                'width: 100%; '
-                                'box-sizing: border-box;'
-                            ),
-                            'size': 40,
-                            'placeholder': 'Value'
-                        },
-                    },
-                    'form_rules': [
-                        rules.HTML(
-                            '<div class="form-row '
-                            'align-items-center" '
-                            'style="margin-bottom: 5px; '
-                            'margin-top: 0;">'
-                        ),
-                        rules.HTML('<div class="col-auto">'),
-                        rules.Field('field_name'),
-                        rules.HTML('</div>'),
-                        rules.HTML(
-                            '<div class="col-auto">'
-                            '<span style="font-size: 16px;'
-                            ' margin: 0 3px;">:</span>'
-                            '</div>'
-                        ),
-                        rules.HTML('<div class="col">'),
-                        rules.Field('field_value'),
-                        rules.HTML('</div>'),
-                        rules.HTML('</div>'),
-                    ]
-                }
-            }
-        }
-    }
+    form_subdocuments = _cmdb_fields_subdocuments()
 
     def __init__(self, model, **kwargs):
         """
@@ -1021,7 +1097,10 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
             model.object_type = self._force_object_type
         model.update_host(_labels_from_cmdb_form(form.cmdb_fields.data))
         model.set_inventory_attributes('cmdb')
-        _rebuild_cmdb_fields(model)
+        # Only the template form offers the merge checkbox; for hosts
+        # and plain objects the rows carry no flag and this is empty.
+        _rebuild_cmdb_fields(
+            model, _merge_keys_from_cmdb_form(form.cmdb_fields.data))
 
     def is_accessible(self):
         """ Overwrite """
@@ -1171,9 +1250,12 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
 
     form_rules = [
         rules.HTML(CMDB_FIELDS_FORM_CSS),
+        rules.HTML(TEMPLATE_MERGE_FORM_CSS),
         rules.Field('hostname'),
         rules.FieldSet(('cmdb_fields', 'cmdb_match'), "CMDB Fields"),
     ]
+
+    form_subdocuments = _cmdb_fields_subdocuments(with_merge=True)
 
     column_exclude_list = [
         'source_account_id',

@@ -84,6 +84,7 @@ class CmdbField(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     """
     field_name = db.StringField(max_length=255)
     field_value = db.StringField(max_length=255)
+    merge = db.BooleanField(default=False)  # see template_merge_keys()
 
 
 class HostRelation(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods

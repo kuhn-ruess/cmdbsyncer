@@ -40,6 +40,49 @@ def active_templates(host):
             if not getattr(tmpl, 'deleted_at', None)]
 
 
+def template_merge_keys(template):
+    """
+    The label keys of ``template`` that merge instead of colliding.
+
+    A merged key collects the values of every template the host
+    carries — comma separated — instead of the first one winning and
+    the rest being dropped. It is enough that one of the templates
+    marks the key: the flag describes the key, not the single
+    template, so an operator does not have to tick the same box in
+    every template that feeds the attribute.
+
+    The flag rides on the template's ``cmdb_fields`` rows, which is
+    where the edit form offers its checkbox.
+
+    Returns:
+        set: the label keys of the template that merge.
+    """
+    return {entry.field_name
+            for entry in (getattr(template, 'cmdb_fields', None) or [])
+            if getattr(entry, 'merge', False) and entry.field_name}
+
+
+def merge_attribute_values(current, addition):
+    """
+    Comma-join two values of a merged template field. Both sides may
+    already be comma-separated lists; the parts keep their order and
+    duplicates are dropped, so a value cannot grow just because two
+    templates carry the same entry.
+
+    Returns:
+        str: the merged, comma-separated value.
+    """
+    parts = []
+    for chunk in (current, addition):
+        if chunk is None:
+            continue
+        for part in str(chunk).split(','):
+            part = part.strip()
+            if part and part not in parts:
+                parts.append(part)
+    return ','.join(parts)
+
+
 def get_template(template_name):
     """
     Look up an assignable CMDB template by name.
