@@ -371,28 +371,34 @@ def export_all_rules(include_hosts: bool = False,
 
 
 @mcp.tool()
-def create_rule(rule_type: str, rule: dict) -> dict:
+def create_rule(rule_type: str, rule: dict, override: bool = False) -> dict:
     """Create one rule of *rule_type*. The dict shape is the same as the
-    export form (one ``Document.to_json()`` per rule)."""
+    export form (one ``Document.to_json()`` per rule).
+
+    With ``override`` an existing rule with the same id or name is
+    replaced instead of reported as duplicate."""
     _current_user()
     if rule_type not in enabled_rules:
         raise ValueError(f"Unknown rule_type '{rule_type}'")
-    status = import_one_rule(rule, rule_type)
+    status = import_one_rule(rule, rule_type, override=override)
     if status == 'unknown_type':
         raise ValueError(f"Model for '{rule_type}' not loadable")
     return {'rule_type': rule_type, 'status': status}
 
 
 @mcp.tool()
-def import_rules_bulk(payload: dict) -> dict:
+def import_rules_bulk(payload: dict, override: bool = False) -> dict:
     """Bulk import rules.
 
     Accepts ``{"rule_type": "...", "rules": [<dict>, ...]}`` (single
     type) or ``{"rules": {"<rule_type>": [<dict>, ...], ...}}`` (multi
     type, same shape as ``export_all_rules`` output).
+
+    With ``override`` rules which already exist are replaced instead of
+    skipped.
     """
     _current_user()
-    counts = import_json_bundle(payload)
+    counts = import_json_bundle(payload, override=override)
     if not counts and not isinstance(payload.get('rules'), (list, dict)):
         raise ValueError("Payload must contain a 'rules' list or dict")
     return {'imported': counts, 'total': sum(counts.values())}

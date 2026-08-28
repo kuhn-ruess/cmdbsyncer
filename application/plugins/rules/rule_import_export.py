@@ -108,13 +108,42 @@ def iter_all_rules(include_hosts=False, include_accounts=False,
             yield rule_type, rule
 
 
-def _save_rule(json_dict, model_class):
+def _delete_conflicting(json_dict, model_class):
+    """Remove the documents *json_dict* would collide with.
+
+    A rule from an export collides either on its own id or on one of the
+    model's unique fields (usually ``name``), so both are cleared before
+    the import writes the new version.
+    """
+    doc_id = json_dict.get('_id')
+    if isinstance(doc_id, dict):
+        doc_id = doc_id.get('$oid')
+    if doc_id:
+        model_class.objects(id=doc_id).delete()
+    for field_name, field in model_class._fields.items():  # pylint: disable=protected-access
+        if not getattr(field, 'unique', False):
+            continue
+        value = json_dict.get(field.db_field or field_name)
+        if value in (None, ''):
+            continue
+        try:
+            model_class.objects(**{field_name: value}).delete()
+        except (ValidationError, TypeError):
+            continue
+
+
+def _save_rule(json_dict, model_class, override=False):
     """Persist a rule from a parsed JSON dict.
+
+    With *override* an already existing rule with the same id or the same
+    unique field (e.g. the name) is replaced instead of skipped.
 
     Returns one of ``'imported'``, ``'duplicate'``, ``'invalid'``.
     """
     db_ref = model_class()
     new = db_ref.from_json(json.dumps(json_dict))
+    if override:
+        _delete_conflicting(json_dict, model_class)
     try:
         new.save(force_insert=True)
     except NotUniqueError:
@@ -124,7 +153,7 @@ def _save_rule(json_dict, model_class):
     return 'imported'
 
 
-def import_one_rule(json_dict, rule_type):
+def import_one_rule(json_dict, rule_type, override=False):
     """Import a single rule dict for *rule_type*. No printing.
 
     Returns ``'imported'``, ``'duplicate'``, ``'invalid'``, or
@@ -133,13 +162,15 @@ def import_one_rule(json_dict, rule_type):
     model_class = _model_class_for(rule_type)
     if model_class is None:
         return 'unknown_type'
-    return _save_rule(json_dict, model_class)
+    return _save_rule(json_dict, model_class, override=override)
 
 
-def import_rule_lines(lines, default_rule_type=None):
+def import_rule_lines(lines, default_rule_type=None, override=False):
     """Consume an iterable of text lines (or already-parsed dicts) and
     import them. Mirrors the on-disk format: ``{"rule_type": "..."}``
     header lines switch the active rule type for the lines that follow.
+
+    With *override* existing rules are replaced instead of skipped.
 
     Returns ``{rule_type: imported_count}``.
     """
@@ -164,7 +195,7 @@ def import_rule_lines(lines, default_rule_type=None):
             continue
         if model_class is None:
             continue
-        status = _save_rule(json_dict, model_class)
+        status = _save_rule(json_dict, model_class, override=override)
         if status == 'imported':
             counts[rule_type] = counts.get(rule_type, 0) + 1
     return counts
@@ -192,7 +223,7 @@ def grouped_rules_export(include_hosts=False, include_accounts=False,
     }
 
 
-def import_json_bundle(payload):
+def import_json_bundle(payload, override=False):
     """Import a structured JSON payload that mirrors the export shape.
 
     Accepts:
@@ -208,13 +239,15 @@ def import_json_bundle(payload):
     rules_field = payload.get('rules')
     if isinstance(rules_field, list):
         return import_rule_lines(rules_field,
-                                 default_rule_type=payload.get('rule_type'))
+                                 default_rule_type=payload.get('rule_type'),
+                                 override=override)
     if isinstance(rules_field, dict):
         counts = {}
         for rule_type, items in rules_field.items():
             if not isinstance(items, list):
                 continue
-            for k, v in import_rule_lines(items, default_rule_type=rule_type).items():
+            for k, v in import_rule_lines(items, default_rule_type=rule_type,
+                                          override=override).items():
                 counts[k] = counts.get(k, 0) + v
         return counts
     return {}
@@ -271,21 +304,23 @@ def export_all_rules(target_path=None, include_hosts=False,
     print(f"Wrote {total} rules to {target_path}")
 
 
-def import_line(json_dict, model, rule_type):
+def import_line(json_dict, model, rule_type, override=False):
     """CLI helper: import a single line and print progress."""
     print(f"* Import {json_dict['_id']}")
-    status = _save_rule(json_dict, getattr(model, enabled_rules[rule_type][1]))
+    status = _save_rule(json_dict, getattr(model, enabled_rules[rule_type][1]),
+                        override=override)
     if status == 'duplicate':
         print("   Already existed")
     elif status == 'invalid':
         print(f"Problem with entry: {json_dict}")
 
 
-def import_rules(rulefile_path):
+def import_rules(rulefile_path, override=False):
     """
     Import Rules into the CMDB Syncer (CLI).
     Supports single-type files (rule_type guessed from filename) and
     multi-type files with multiple ``{"rule_type": "..."}`` header lines.
+    With *override* existing rules are replaced instead of skipped.
     """
     with open(rulefile_path, encoding='utf-8') as rulefile:
         text = rulefile.read()
@@ -303,6 +338,9 @@ def import_rules(rulefile_path):
             print(f"Currently supported: {', '.join(enabled_rules.keys())}")
             return
 
-    counts = import_rule_lines(text.splitlines(), default_rule_type=default_type)
+    if override:
+        print("* Override enabled: existing rules will be replaced")
+    counts = import_rule_lines(text.splitlines(), default_rule_type=default_type,
+                               override=override)
     for rule_type, count in counts.items():
         print(f"== {rule_type}: imported {count} ==")

@@ -21,11 +21,15 @@ def cli_export_rules(rule_type):
 
 @cli_rules.command('import_rules')
 @click.argument("rulefile_path")
-def cli_import_rules(rulefile_path):
+@click.option("--override", is_flag=True, default=False,
+              help="Replace rules which already exist instead of "
+                   "skipping them.")
+@click.option("--debug", default=False, is_flag=True)
+def cli_import_rules(rulefile_path, override, debug):# pylint: disable=unused-argument
     """
     Import Rules into the CMDB Syncer
     """
-    import_rules(rulefile_path)
+    import_rules(rulefile_path, override=override)
 
 @cli_rules.command('export_all_rules')
 @click.argument("target_path", default="")

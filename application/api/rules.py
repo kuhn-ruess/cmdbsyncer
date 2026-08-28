@@ -65,6 +65,10 @@ RULE_IMPORT_REQUEST = API.model('rule_import_request', {
     'rule_type': fields.String(required=False,
                                description='Default rule_type for items that '
                                            'do not carry a header line.'),
+    'override': fields.Boolean(required=False, default=False,
+                               description='Replace rules which already exist '
+                                           'instead of skipping them. Can also '
+                                           'be given as ``?override=1``.'),
     'rules': fields.Raw(description='Either a list of rule dicts (single '
                                     'type), or an object keyed by rule_type '
                                     'with a list of dicts as value '
@@ -103,6 +107,19 @@ AUTORULES_REQUEST = API.model('autorules_request', {
 AUTORULES_RESPONSE = API.model('autorules_response', {
     'status': fields.String(example='ok'),
 })
+
+
+def _override_requested(payload=None):
+    """True if the request asks for existing rules to be replaced.
+
+    Accepted as ``?override=1`` and, for JSON bodies, as an ``override``
+    key inside the payload.
+    """
+    if request.args.get('override', '').lower() in ('1', 'true', 'yes'):
+        return True
+    if isinstance(payload, dict):
+        return bool(payload.get('override'))
+    return False
 
 
 def _decode_rule_lines(rules):
@@ -167,6 +184,9 @@ class RulesByType(Resource):
     @API.response(400, 'Body was not JSON.', ERROR)
     @API.response(401, 'Authentication failed', ERROR)
     @API.response(404, 'Unknown rule_type.', ERROR)
+    @API.param('override',
+               'Set to ``1`` to replace rules which already exist instead of '
+               'counting them as duplicates.')
     @require_token
     def post(self, rule_type):
         """Create one or many rules of *rule_type*.
@@ -181,13 +201,14 @@ class RulesByType(Resource):
         if payload is None:
             return {'message': 'Request body must be JSON'}, 400
         items = payload if isinstance(payload, list) else [payload]
+        override = _override_requested()
 
         results = {'imported': 0, 'duplicate': 0, 'invalid': 0}
         for item in items:
             if not isinstance(item, dict):
                 results['invalid'] += 1
                 continue
-            status = import_one_rule(item, rule_type)
+            status = import_one_rule(item, rule_type, override=override)
             if status == 'unknown_type':
                 # ``rule_type`` was already validated above, so this only
                 # fires if the model module disappeared mid-request.
@@ -239,6 +260,9 @@ class RulesImport(Resource):
 
     @API.doc(security=['basicAuth', 'apiToken'])
     @API.expect(RULE_IMPORT_REQUEST, validate=False)
+    @API.param('override',
+               'Set to ``1`` to replace rules which already exist instead of '
+               'skipping them.')
     @API.response(200, 'Imported counts keyed by rule_type, plus the total.',
                   RULE_IMPORT_RESPONSE)
     @API.response(400, 'JSON body could not be parsed.', ERROR)
@@ -256,16 +280,21 @@ class RulesImport(Resource):
         * Plain text body in the on-disk JSONL form (``Content-Type:
           text/plain``), with optional ``{"rule_type": "..."}`` header
           lines.
+
+        Pass ``?override=1`` (or ``"override": true`` in a JSON body) to
+        replace rules which already exist instead of skipping them.
         """
         ctype = (request.content_type or '').split(';', 1)[0].strip().lower()
         if ctype == 'application/json':
             payload = request.get_json(silent=True)
             if payload is None:
                 return {'message': 'Body must be JSON'}, 400
-            counts = import_json_bundle(payload)
+            counts = import_json_bundle(payload,
+                                        override=_override_requested(payload))
         else:
             body = request.get_data(as_text=True) or ''
-            counts = import_rule_lines(body.splitlines())
+            counts = import_rule_lines(body.splitlines(),
+                                       override=_override_requested())
         return {'imported': counts, 'total': sum(counts.values())}
 
 
