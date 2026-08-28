@@ -1250,6 +1250,41 @@ class TestSyncCMK2Misc(unittest.TestCase):
         self.assertFalse(f({'use': True}, {'use': False}))
         self.assertFalse(f({'groups': ['a']}, {'groups': ['b']}))
 
+    def test_created_folder_is_not_updated_again(self):
+        # A folder created during this run already carries the attributes
+        # from its POST body. The closing handle_folders() must not PUT
+        # them a second time.
+        self.syncer.custom_folder_attributes['/f'] = {
+            'title': 'F',
+            'tag_agent': 'cmk-agent',
+            'contactgroups': {'groups': ['ops'], 'use': True},
+        }
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.return_value = (None, {})
+            self.syncer._create_folder('/', 'f')
+        with patch.object(self.syncer, 'request') as mock_req:
+            self.syncer.handle_folders()
+            mock_req.assert_not_called()
+
+    def test_create_folder_keeps_title_in_custom_attributes(self):
+        # _create_folder must not eat the title out of the shared
+        # custom_folder_attributes dict.
+        self.syncer.custom_folder_attributes['/f'] = {'title': 'F'}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.return_value = (None, {})
+            self.syncer._create_folder('/', 'f')
+        self.assertEqual(self.syncer.custom_folder_attributes['/f'],
+                         {'title': 'F'})
+
+    def test_failed_folder_create_still_gets_attributes_later(self):
+        # If the POST fails the folder has nothing, so handle_folders has
+        # to try again instead of assuming the attributes are set.
+        self.syncer.custom_folder_attributes['/f'] = {'tag_agent': 'cmk-agent'}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = CmkException('boom')
+            self.syncer._create_folder('/', 'f')
+        self.assertNotIn('/f', self.syncer.existing_folders_attributes)
+
     def test_handle_folders_adds_missing_attribute(self):
         self.syncer.custom_folder_attributes = {'/f': {'new_attr': 'v'}}
         self.syncer.existing_folders_attributes = {'/f': {}}
