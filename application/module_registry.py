@@ -84,6 +84,18 @@ MODULES = {
         ),
         'docs': _docs('jira'),
     },
+    'LDAP': {
+        # No vendor here — LDAP is a protocol, so the directory mark stands
+        # for every server that speaks it
+        'icon': ('fa', 'fa-address-book'),
+        'intro': (
+            "Read objects out of an LDAP directory — Active Directory or "
+            "any other server: import them as objects of the syncer, "
+            "inventorize their attributes, and search the directory to see "
+            "under which name an object really is stored."
+        ),
+        'docs': _docs('ldap'),
+    },
     'VMware': {
         'icon': ('image', 'vendor/vmware.svg'),
         'intro': (
@@ -293,6 +305,13 @@ ENTRIES = {
         'Playbook Fire Rules': (
             "Conditions under which a playbook starts on its own — for "
             "example when an object appears or changes."
+        ),
+    },
+    'LDAP': {
+        'Search Directory': (
+            "Search an LDAP account's directory read only — find an object "
+            "by a hostname with or without domain, by any attribute, or "
+            "with an own filter before it goes into the account."
         ),
     },
     'Jira Cloud': {

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Import LDAP Data"""
 # pylint: disable=no-member
+import re
+
 from application import log
 from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
@@ -9,8 +11,30 @@ from application.modules.debug import ColorCodes, attribute_table
 try:
     import ldap
     from ldap.controls.libldap import SimplePagedResultsControl
+    from ldap.filter import escape_filter_chars
+    LDAP_AVAILABLE = True
 except ImportError:
-    pass
+    LDAP_AVAILABLE = False
+
+
+class LdapSearchError(Exception):
+    """
+    A search could not be executed. The message is meant to be shown to
+    the user, so it carries the reason the server or the account gave.
+    """
+
+
+# Attribute names as LDAP allows them — anything else in a search would
+# end up unescaped in the filter
+ATTRIBUTE_NAME = re.compile(r'^[A-Za-z][A-Za-z0-9-]*$')
+
+
+def _require_ldap():
+    """
+    Stop with a readable message when python-ldap is missing
+    """
+    if not LDAP_AVAILABLE:
+        raise LdapSearchError("The python-ldap module is not installed on this server")
 
 def get_objects(results, config):
     """
@@ -40,6 +64,26 @@ def get_objects(results, config):
             hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
 
         yield hostname, labels
+
+
+def parse_object(dn, entry, config):
+    """
+    One raw LDAP result the way the import sees it.
+
+    Returns (hostname, labels). The hostname is empty when the object has
+    no hostname field — then the labels carry every attribute the object
+    has, so it is visible why it would be skipped.
+    """
+    parsed = list(get_objects([(dn, entry)], config))
+    if parsed:
+        return parsed[0]
+
+    labels = {key: ', '.join(x.decode(config['encoding'], errors='replace')
+                             for x in content)
+              for key, content in entry.items()}
+    labels['dn'] = dn
+    return '', labels
+
 
 def _connect(config):
     """
@@ -137,6 +181,81 @@ def _search(connect, config, limit=0):
         response = connect.search_ext(*query, serverctrls=[page_control])
 
 
+def build_search_filter(config, mode, term, attribute=None, use_account_filter=True):
+    """
+    Build the LDAP filter of a single search.
+
+    Modes:
+        hostname   the hostname field of the account, with or without a
+                   domain: 'srv01' also finds 'srv01.example.com'
+        contains   the hostname field contains the term anywhere
+        attribute  the given attribute contains the term
+        filter     the term already is an LDAP filter and is used as it is
+
+    Unless `use_account_filter` is off, the search filter of the account is
+    combined with the term, so only the objects the account works with are
+    searched.
+    """
+    _require_ldap()
+    term = term.strip()
+    if not term:
+        raise LdapSearchError("Enter something to search for")
+
+    if mode == 'filter':
+        query = term if term.startswith('(') else f"({term})"
+    else:
+        value = escape_filter_chars(term)
+        field = config['hostname_field']
+        if mode == 'hostname':
+            # Either the name itself, or the name with any domain behind it
+            query = f"(|({field}={value})({field}={value}.*))"
+        elif mode == 'contains':
+            query = f"({field}=*{value}*)"
+        elif mode == 'attribute':
+            attribute = (attribute or '').strip()
+            if not ATTRIBUTE_NAME.match(attribute):
+                raise LdapSearchError(f"'{attribute}' is not an attribute name")
+            query = f"({attribute}=*{value}*)"
+        else:
+            raise LdapSearchError(f"Unknown search mode '{mode}'")
+
+    account_filter = (config.get('search_filter') or '').strip()
+    if use_account_filter and account_filter and account_filter != query:
+        query = f"(&{account_filter}{query})"
+    return query
+
+
+def search_objects(config, search_filter, limit=25):
+    """
+    Run one search and return the found objects as
+    [{'dn':, 'hostname':, 'labels':}] — the hostname is empty for objects
+    the import would skip. Raises LdapSearchError with the reason if the
+    search could not be done.
+    """
+    _require_ldap()
+
+    # debug lets the connection errors travel up instead of just being
+    # printed, so the reason can be shown instead of an empty result
+    config = dict(config, debug=True, search_filter=search_filter)
+    try:
+        _check_address(config)
+        connect = _connect(config)
+        if connect is None:
+            raise LdapSearchError("Could not connect to the LDAP server")
+        # The query itself has no console to print its debug output to
+        config['debug'] = False
+        results = []
+        for dn, entry in _search(connect, config, limit=limit):
+            if not isinstance(entry, dict):
+                # Referral, not an object
+                continue
+            hostname, labels = parse_object(dn, entry, config)
+            results.append({'dn': dn, 'hostname': hostname, 'labels': labels})
+        return results
+    except (ldap.LDAPError, ValueError) as error:
+        raise LdapSearchError(str(error)) from error
+
+
 def _inner_import(config):
     """
     Base LDAP Connect and Query
@@ -181,16 +300,12 @@ def _print_object(number, dn, entry, config):
         return False
 
     # Same path the import uses, so the output is what would be imported
-    parsed = list(get_objects([(dn, entry)], config))
-    if parsed:
-        hostname, labels = parsed[0]
+    hostname, labels = parse_object(dn, entry, config)
+    if hostname:
         attribute_table(f"{number}: {hostname}", labels)
         return True
 
-    values = {key: [x.decode(config['encoding'], errors='replace') for x in content]
-              for key, content in entry.items()}
-    values['dn'] = dn
-    attribute_table(f"{number}: IGNORED, no attribute '{config['hostname_field']}'", values)
+    attribute_table(f"{number}: IGNORED, no attribute '{config['hostname_field']}'", labels)
     return False
 
 

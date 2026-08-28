@@ -45,6 +45,7 @@ roles = [
   ('ansible', "Ansible"),
   ('checkmk', "Checkmk"),
   ('i-doit', "I-Doit"),
+  ('ldap', "LDAP"),
   ('netbox', "Netbox"),
   ('vmware', "VMware"),
   ('jira', "Jira"),

@@ -1,0 +1,220 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>LDAP Search</h3>
+    <p>
+        Search the directory of an LDAP account the same way the import
+        reads it — with the connection, base DN and search filter of the
+        account. A search for a hostname without domain also finds the
+        object that carries the domain, so it is visible under which name
+        an object really is in the directory. Nothing is written: neither
+        the directory nor the syncer's objects are changed here.
+    </p>
+
+    {% if not ldap_available %}
+    <div class="alert alert-danger">
+        The <code>python-ldap</code> module is not installed on this server,
+        so no search can be done.
+    </div>
+    {% endif %}
+
+    {% if not accounts %}
+    <div class="alert alert-warning">
+        No enabled LDAP account found. Create one first.
+    </div>
+    {% endif %}
+
+    <form method="GET" action="{{ url_for('.index') }}" class="card app-card mb-4">
+        <div class="card-body">
+            <input type="hidden" name="searched" value="1"/>
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="account">LDAP account</label>
+                    <select class="form-control" id="account" name="account" required>
+                        <option value="">— select account —</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.name }}"
+                                {% if account.name == form.account %}selected{% endif %}>
+                            {{ account.name }} — {{ account.address }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="mode">Search for</label>
+                    <select class="form-control" id="mode" name="mode">
+                        {% for value, label in modes %}
+                        <option value="{{ value }}"
+                                {% if value == form.mode %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="term">Search term</label>
+                    <input type="text" class="form-control" id="term" name="term"
+                           value="{{ form.term }}" required autofocus
+                           placeholder="e.g. srv01"/>
+                    <small class="form-text text-muted" id="term_hint"></small>
+                </div>
+            </div>
+
+            <div class="form-row" id="attribute_row">
+                <div class="form-group col-md-4">
+                    <label for="attribute">Attribute</label>
+                    <input type="text" class="form-control" id="attribute" name="attribute"
+                           value="{{ form.attribute }}" placeholder="e.g. cn"/>
+                    <small class="form-text text-muted">
+                        The attribute the search term is looked for in.
+                    </small>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-5">
+                    <label for="base_dn">Base DN</label>
+                    <input type="text" class="form-control" id="base_dn" name="base_dn"
+                           value="{{ form.base_dn }}"/>
+                    <small class="form-text text-muted">
+                        Empty uses the base DN of the account.
+                    </small>
+                </div>
+                <div class="form-group col-md-5">
+                    <label for="attributes">Attributes</label>
+                    <input type="text" class="form-control" id="attributes" name="attributes"
+                           value="{{ form.attributes }}" placeholder="all attributes"/>
+                    <small class="form-text text-muted">
+                        Comma separated. Empty asks the server for every
+                        attribute of the found objects.
+                    </small>
+                </div>
+                <div class="form-group col-md-2">
+                    <label for="limit">Max. results</label>
+                    <input type="number" class="form-control" id="limit" name="limit"
+                           min="1" max="500" value="{{ limit }}"/>
+                </div>
+            </div>
+
+            <div class="form-group form-check">
+                <input type="checkbox" class="form-check-input" id="use_account_filter"
+                       name="use_account_filter"
+                       {% if form.use_account_filter %}checked{% endif %}/>
+                <label class="form-check-label" for="use_account_filter">
+                    Also use the search filter of the account
+                    <span class="text-muted" id="account_filter_hint"></span>
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary"
+                    {% if not ldap_available or not accounts %}disabled{% endif %}>
+                <i class="fa fa-search"></i> Search
+            </button>
+        </div>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="fa fa-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% endif %}
+
+    {% if query %}
+    <p>
+        Used filter: <code>{{ query }}</code>
+    </p>
+    {% endif %}
+
+    {% if results is not none %}
+    <div class="card app-card mb-4">
+        <div class="card-header">
+            {{ results | length }} object(s) found
+            {% if results | length >= limit %}
+            <span class="badge badge-warning ml-1">limit reached</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if not results %}
+            <p class="text-muted mb-0">
+                Nothing found. Try "Hostname contains", switch off the search
+                filter of the account, or widen the base DN.
+            </p>
+            {% else %}
+            {% for result in results %}
+            <div class="card app-card mb-3">
+                <div class="card-header">
+                    {% if result.hostname %}
+                    <strong>{{ result.hostname }}</strong>
+                    <span class="badge badge-success ml-1">would be imported</span>
+                    {% else %}
+                    <strong class="text-muted">no hostname attribute</strong>
+                    <span class="badge badge-secondary ml-1">would be skipped</span>
+                    {% endif %}
+                    <div><code class="text-muted">{{ result.dn }}</code></div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <tbody>
+                                {% for key, value in result.labels.items() | sort %}
+                                {% if key != 'dn' %}
+                                <tr>
+                                    <th style="width: 25%">{{ key }}</th>
+                                    <td>{{ value }}</td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+        (function () {
+            var accounts = {{ accounts | tojson }};
+            var account = document.getElementById('account');
+            var mode = document.getElementById('mode');
+            var baseDn = document.getElementById('base_dn');
+            var attributeRow = document.getElementById('attribute_row');
+            var attribute = document.getElementById('attribute');
+            var termHint = document.getElementById('term_hint');
+            var filterHint = document.getElementById('account_filter_hint');
+
+            function current() {
+                for (var i = 0; i < accounts.length; i++) {
+                    if (accounts[i].name === account.value) { return accounts[i]; }
+                }
+                return null;
+            }
+
+            function render() {
+                var selected = current();
+                baseDn.placeholder = selected ? selected.base_dn : '';
+                filterHint.textContent = selected && selected.search_filter
+                    ? '(' + selected.search_filter + ')' : '';
+
+                var field = selected && selected.hostname_field
+                    ? selected.hostname_field : 'the hostname field';
+                var hints = {
+                    'hostname': 'Finds ' + field + ' exactly, and with any domain behind it.',
+                    'contains': 'Finds every object whose ' + field + ' contains the term.',
+                    'attribute': 'Finds every object whose attribute contains the term.',
+                    'filter': 'Used as the LDAP filter, e.g. (&(objectClass=computer)(cn=srv*)).'
+                };
+                termHint.textContent = hints[mode.value] || '';
+                attributeRow.style.display = mode.value === 'attribute' ? '' : 'none';
+                attribute.required = mode.value === 'attribute';
+            }
+
+            account.addEventListener('change', render);
+            mode.addEventListener('change', render);
+            render();
+        })();
+    </script>
+</div>
+{% endblock %}
