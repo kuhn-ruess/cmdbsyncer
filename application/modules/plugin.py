@@ -20,7 +20,7 @@ from application.models.account import pop_master_skips
 from application.helpers.syncer_jinja import render_jinja
 from application.models.host_templates import (active_templates,
                                                merge_attribute_values,
-                                               template_merge_keys)
+                                               merged_attribute_keys)
 from application.modules.debug import ColorCodes
 from application.modules.custom_attributes.models import CustomAttributeRule as \
     CustomAttributeRuleModel
@@ -137,6 +137,10 @@ class Plugin():
 
 
     debug_lines = None # Used for GUI Debuging
+
+    # Attribute keys configured as merged in the System Config, loaded
+    # on first use and then kept for the whole run.
+    merged_attributes = None
 
 
 
@@ -464,8 +468,7 @@ class Plugin():
 
     # pylint: disable=too-many-branches
 
-    @staticmethod
-    def _apply_template_attributes(db_host, attributes):
+    def _apply_template_attributes(self, db_host, attributes):
         """
         Merge the labels of the host's CMDB templates into `attributes`.
 
@@ -474,17 +477,21 @@ class Plugin():
         already applied by the caller) always wins: a template only
         contributes keys the host does not provide itself, and never
         overrides a value an earlier template supplied. The exception
-        are merged keys — one template marking a key as merged makes it
-        a merged key for all of them, so every template appends its
-        value, comma separated, to what is already there.
+        are the attributes configured as merged in the System Config:
+        those collect the value of every template, comma separated.
+
+        The configured keys are read once per plugin instance, and only
+        for a host that carries a template at all — an export run must
+        not query the config document per host.
         """
         templates = active_templates(db_host)
-        merge_keys = set()
-        for tmpl in templates:
-            merge_keys |= template_merge_keys(tmpl)
+        if not templates:
+            return
+        if self.merged_attributes is None:
+            self.merged_attributes = merged_attribute_keys()
         for tmpl in templates:
             for key, value in (tmpl.labels or {}).items():
-                if key in attributes and key not in merge_keys:
+                if key in attributes and key not in self.merged_attributes:
                     continue
                 if isinstance(value, str) and '{{' in value:
                     try:

@@ -40,31 +40,31 @@ def active_templates(host):
             if not getattr(tmpl, 'deleted_at', None)]
 
 
-def template_merge_keys(template):
+def merged_attribute_keys():
     """
-    The label keys of ``template`` that merge instead of colliding.
+    The attribute keys configured as merged in the System Config.
 
-    A merged key collects the values of every template the host
-    carries — comma separated — instead of the first one winning and
-    the rest being dropped. It is enough that one of the templates
-    marks the key: the flag describes the key, not the single
-    template, so an operator does not have to tick the same box in
-    every template that feeds the attribute.
+    A merged attribute collects the values of every CMDB template a
+    host carries — comma separated, appended to the host's own value —
+    instead of the first template providing it winning and the rest
+    being dropped. Everything not listed keeps that default.
 
-    The flag rides on the template's ``cmdb_fields`` rows, which is
-    where the edit form offers its checkbox.
+    Configured centrally on purpose: which attributes are lists is a
+    property of the attribute, not of a single template, so no template
+    edit can change how another template behaves.
 
     Returns:
-        set: the label keys of the template that merge.
+        set: the configured attribute keys, empty when nothing is set.
     """
-    return {entry.field_name
-            for entry in (getattr(template, 'cmdb_fields', None) or [])
-            if getattr(entry, 'merge', False) and entry.field_name}
+    # pylint: disable=import-outside-toplevel
+    from application.models.config import Config
+    config = Config.objects().first()
+    return set(config.merge_attributes or []) if config else set()
 
 
 def merge_attribute_values(current, addition):
     """
-    Comma-join two values of a merged template field. Both sides may
+    Comma-join two values of a merged attribute. Both sides may
     already be comma-separated lists; the parts keep their order and
     duplicates are dropped, so a value cannot grow just because two
     templates carry the same entry.

@@ -10,11 +10,15 @@ from unittest.mock import Mock
 from application.modules.plugin import Plugin
 
 
-def plain_plugin():
+def plain_plugin(merged_attributes=()):
     """
     A Plugin whose rule engines contribute nothing: no custom
     attributes, no rewrite rules and no filter. What comes out of
     `get_attributes` is then the host's own data plus its templates.
+
+    `merged_attributes` fills the cache of merged attribute keys, so
+    the plugin never goes looking for the System Config document —
+    there is no database behind the stubbed test environment.
     """
     plugin = Plugin()
     plugin.custom_attributes = Mock()
@@ -22,4 +26,5 @@ def plain_plugin():
     plugin.init_custom_attributes = Mock()
     plugin.rewrite = None
     plugin.filter = None
+    plugin.merged_attributes = set(merged_attributes)
     return plugin

@@ -516,7 +516,6 @@ class TestPlugin(unittest.TestCase):
         tmpl = Mock()
         tmpl.hostname = 'web-template'
         tmpl.deleted_at = None  # an archived template contributes nothing
-        tmpl.cmdb_fields = []  # no field merges anything
         tmpl.labels = {
             'environment': 'template-env',  # collides with host label
             'tier': 'template-tier',        # collides with host inventory
@@ -551,7 +550,6 @@ class TestPlugin(unittest.TestCase):
         tmpl = Mock()
         tmpl.hostname = 'web-template'
         tmpl.deleted_at = None  # an archived template contributes nothing
-        tmpl.cmdb_fields = []  # no field merges anything
         tmpl.labels = {
             'description': 'Server {{ HOSTNAME }}',
             'plain': 'no jinja here',
@@ -589,13 +587,11 @@ class TestPlugin(unittest.TestCase):
         archived = Mock()
         archived.hostname = 'old-template'
         archived.deleted_at = datetime.datetime(2026, 1, 1)
-        archived.cmdb_fields = []  # no field merges anything
         archived.labels = {'owner': 'from-archived-template'}
 
         live = Mock()
         live.hostname = 'web-template'
         live.deleted_at = None
-        live.cmdb_fields = []  # no field merges anything
         live.labels = {'tier': 'from-live-template'}
 
         mock_host = Mock()

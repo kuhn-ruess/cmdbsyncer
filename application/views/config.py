@@ -166,6 +166,39 @@ class ConfigModelView(DefaultModelView):
     can_delete = False
     can_create = False
 
+    column_labels = {
+        'export_labels_list': "Labels in the CSV export",
+        'export_inventory_list': "Inventory fields in the CSV export",
+        'merge_attributes': "Merged attributes",
+    }
+
+    column_descriptions = {
+        'merge_attributes': (
+            "Attributes that collect the values of every CMDB template a "
+            "host carries, comma separated and appended to the host's own "
+            "value. Everything not listed here keeps the default: the "
+            "host wins, and of the templates the first one providing the "
+            "attribute wins."
+        ),
+    }
+
+    form_args = {
+        'merge_attributes': {
+            'label': "Merged attributes",
+            'description': (
+                "One attribute key per entry, e.g. contact_groups."
+            ),
+        },
+    }
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Changing which attributes merge changes what every host with a
+        CMDB template exports, so the cached attributes have to go.
+        """
+        super().on_model_change(form, model, is_created)
+        clear_host_caches()
+
     @expose('/commit_changes', methods=('POST',))
     def commit_changes(self):
         """

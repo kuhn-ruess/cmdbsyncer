@@ -1,50 +1,29 @@
 """
-Merged CMDB template values.
+Merged attributes across CMDB templates.
 
 By default a template only fills gaps: the host's own data wins and the
-first template that provides a key wins over later ones. A field marked
-"merge" in the template form breaks that rule — the attribute is then
+first template that provides a key wins over later ones. An attribute
+listed as merged in the System Config breaks that rule — it is then
 collected from every template the host carries, comma separated, so
 several templates can contribute to one value (contact groups, tags,
-service lists). Marking it in one of the templates is enough.
+service lists). The list is configured centrally, so editing a template
+can never change how another template behaves.
 """
 # pylint: disable=missing-function-docstring,missing-class-docstring
 import unittest
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from application.models.host_templates import (
-    merge_attribute_values, template_merge_keys,
-)
+from application.models.host_templates import merge_attribute_values
+
 from tests.plugin_helpers import plain_plugin
 
 
-def _field(name, merge=False):
-    return SimpleNamespace(field_name=name, field_value='x', merge=merge)
-
-
-def _template(hostname, labels, merge_keys=()):
+def _template(hostname, labels):
     tmpl = Mock()
     tmpl.hostname = hostname
     tmpl.deleted_at = None
     tmpl.labels = labels
-    tmpl.cmdb_fields = [_field(key, key in merge_keys) for key in labels]
     return tmpl
-
-
-class TestTemplateMergeKeys(unittest.TestCase):
-
-    def test_only_ticked_rows_merge(self):
-        tmpl = SimpleNamespace(cmdb_fields=[
-            _field('contact_groups', merge=True),
-            _field('os'),
-        ])
-        self.assertEqual(template_merge_keys(tmpl), {'contact_groups'})
-
-    def test_template_without_rows_merges_nothing(self):
-        self.assertEqual(template_merge_keys(SimpleNamespace()), set())
-        self.assertEqual(template_merge_keys(SimpleNamespace(cmdb_fields=[])),
-                         set())
 
 
 class TestMergeAttributeValues(unittest.TestCase):
@@ -88,77 +67,69 @@ class TestMergedTemplateAttributes(unittest.TestCase):
         host.cmdb_templates = templates
         return host
 
-    @patch('application.modules.plugin.app')
-    def test_merged_field_collects_every_template(self, mock_app):
-        mock_app.config = self.mock_app_config
-        first = _template('base', {'contact_groups': 'ops'},
-                          merge_keys=('contact_groups',))
-        second = _template('db', {'contact_groups': 'dba'},
-                           merge_keys=('contact_groups',))
-        host = self._host({}, [first, second])
+    def _attributes(self, host, merged=()):
+        with patch('application.modules.plugin.app') as mock_app:
+            mock_app.config = self.mock_app_config
+            plugin = plain_plugin(merged_attributes=merged)
+            return plugin.get_attributes(host, False)['all']
 
-        result = plain_plugin().get_attributes(host, False)
+    def test_merged_attribute_collects_every_template(self):
+        host = self._host({}, [_template('a', {'ops': 'a'}),
+                               _template('b', {'ops': 'b'}),
+                               _template('c', {'ops': 'c'})])
 
-        self.assertEqual(result['all']['contact_groups'], 'ops,dba')
+        result = self._attributes(host, merged=('ops',))
 
-    @patch('application.modules.plugin.app')
-    def test_merged_field_appends_to_the_host_value(self, mock_app):
-        mock_app.config = self.mock_app_config
-        tmpl = _template('db', {'contact_groups': 'dba'},
-                         merge_keys=('contact_groups',))
-        host = self._host({'contact_groups': 'ops'}, [tmpl])
+        self.assertEqual(result['ops'], 'a,b,c')
 
-        result = plain_plugin().get_attributes(host, False)
+    def test_merged_attribute_appends_to_the_host_value(self):
+        host = self._host({'contact_groups': 'ops'},
+                          [_template('db', {'contact_groups': 'dba'})])
+
+        result = self._attributes(host, merged=('contact_groups',))
 
         # The host stays in front — merging adds, it never reorders.
-        self.assertEqual(result['all']['contact_groups'], 'ops,dba')
+        self.assertEqual(result['contact_groups'], 'ops,dba')
 
-    @patch('application.modules.plugin.app')
-    def test_unmarked_field_still_collides(self, mock_app):
-        mock_app.config = self.mock_app_config
-        first = _template('base', {'os': 'linux'})
-        second = _template('other', {'os': 'windows'})
-        host = self._host({}, [first, second])
+    def test_unlisted_attribute_still_collides(self):
+        host = self._host({}, [_template('base', {'os': 'linux'}),
+                               _template('other', {'os': 'windows'})])
 
-        result = plain_plugin().get_attributes(host, False)
+        result = self._attributes(host, merged=('contact_groups',))
 
-        self.assertEqual(result['all']['os'], 'linux')
+        self.assertEqual(result['os'], 'linux')
 
-    @patch('application.modules.plugin.app')
-    def test_one_marked_template_merges_all_of_them(self, mock_app):
-        """The flag describes the key, not the template that carries it."""
-        mock_app.config = self.mock_app_config
-        first = _template('a', {'ops': 'a'}, merge_keys=('ops',))
-        second = _template('b', {'ops': 'b'})
-        third = _template('c', {'ops': 'c'})
-        host = self._host({}, [first, second, third])
+    def test_merged_attribute_alone_behaves_like_a_normal_value(self):
+        host = self._host({}, [_template('base', {'ops': 'a'})])
 
-        result = plain_plugin().get_attributes(host, False)
+        result = self._attributes(host, merged=('ops',))
 
-        self.assertEqual(result['all']['ops'], 'a,b,c')
+        self.assertEqual(result['ops'], 'a')
 
-    @patch('application.modules.plugin.app')
-    def test_marking_the_last_template_merges_all_of_them(self, mock_app):
-        mock_app.config = self.mock_app_config
-        first = _template('a', {'ops': 'a'})
-        second = _template('b', {'ops': 'b'})
-        third = _template('c', {'ops': 'c'}, merge_keys=('ops',))
-        host = self._host({}, [first, second, third])
+    def test_the_config_is_read_once_per_plugin(self):
+        host = self._host({}, [_template('base', {'ops': 'a'})])
+        with patch('application.modules.plugin.app') as mock_app, \
+             patch('application.modules.plugin.merged_attribute_keys',
+                   return_value={'ops'}) as keys:
+            mock_app.config = self.mock_app_config
+            plugin = plain_plugin()
+            plugin.merged_attributes = None  # nothing loaded yet
+            plugin.get_attributes(host, False)
+            host.cache = {}
+            plugin.get_attributes(host, False)
 
-        result = plain_plugin().get_attributes(host, False)
+        keys.assert_called_once()
 
-        self.assertEqual(result['all']['ops'], 'a,b,c')
+    def test_a_host_without_templates_never_reads_the_config(self):
+        host = self._host({'os': 'linux'}, [])
+        with patch('application.modules.plugin.app') as mock_app, \
+             patch('application.modules.plugin.merged_attribute_keys') as keys:
+            mock_app.config = self.mock_app_config
+            plugin = plain_plugin()
+            plugin.merged_attributes = None
+            plugin.get_attributes(host, False)
 
-    @patch('application.modules.plugin.app')
-    def test_merged_field_alone_behaves_like_a_normal_value(self, mock_app):
-        mock_app.config = self.mock_app_config
-        tmpl = _template('base', {'contact_groups': 'ops'},
-                         merge_keys=('contact_groups',))
-        host = self._host({}, [tmpl])
-
-        result = plain_plugin().get_attributes(host, False)
-
-        self.assertEqual(result['all']['contact_groups'], 'ops')
+        keys.assert_not_called()
 
 
 if __name__ == '__main__':

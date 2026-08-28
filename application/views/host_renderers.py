@@ -19,7 +19,7 @@ from markupsafe import Markup, escape
 from application import app
 from application.models.host_cleanup import relation_target
 from application.models.host_templates import (active_templates,
-                                               template_merge_keys)
+                                               merged_attribute_keys)
 from application.modules.log.models import LogEntry
 from application.views.host_filters import FilterCmdbTemplate
 
@@ -578,11 +578,7 @@ def _render_cmdb_template(view, _context, model, _name):
     if not model.cmdb_templates:
         return Markup("")
     html = [_LABEL_GRID_CSS]
-    # One template marking a key makes it a merged key for all of them,
-    # so the chip has to follow the union, not the single template.
-    merge_keys = set()
-    for tmpl in active_templates(model):
-        merge_keys |= template_merge_keys(tmpl)
+    merge_keys = merged_attribute_keys()
     for tmpl in model.cmdb_templates:
         archived = bool(getattr(tmpl, 'deleted_at', None))
         labels = {} if archived else (getattr(tmpl, 'labels', None) or {})
@@ -606,8 +602,9 @@ def _render_cmdb_template(view, _context, model, _name):
             value = labels[key]
             value_str = '' if value is None else str(value)
             merged = (
-                '<span class="lbl-src src-template" title="Collected from '
-                'every template, comma separated">merge</span>'
+                '<span class="lbl-src src-template" title="Merged '
+                'attribute: collected from every template, comma '
+                'separated">merge</span>'
             ) if key in merge_keys else ''
             html.append(
                 '<div class="cmdb-label-row">'
