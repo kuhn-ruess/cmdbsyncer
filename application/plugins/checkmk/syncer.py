@@ -952,10 +952,11 @@ class SyncCMK2(CMK2):
             mid_char = '/'
         full_foldername = f'{parent}{mid_char}{subfolder}'
 
-        extra_opts = self.custom_folder_attributes.get(full_foldername, {})
-        if 'title' in extra_opts:
-            title = extra_opts['title']
-            del extra_opts['title']
+        # Copy: the title is taken out of the attributes for the POST body,
+        # and custom_folder_attributes is shared state the closing
+        # handle_folders() run still reads.
+        extra_opts = dict(self.custom_folder_attributes.get(full_foldername, {}))
+        title = extra_opts.pop('title', title)
         body = {
             "name": subfolder,
             "title": title,
@@ -966,6 +967,13 @@ class SyncCMK2(CMK2):
         try:
             self.request(url, method="POST", data=body)
             self.existing_folders.append(full_foldername)
+            # The folder now carries exactly what this POST sent. Recording
+            # it keeps handle_folders() from PUTting the very same
+            # attributes again at the end of the run — it only knows the
+            # folders fetched before the sync started, so a folder created
+            # in this run looked like it had no attributes at all.
+            self.existing_folders_attributes[full_foldername] = \
+                {**extra_opts, 'title': title}
         except CmkException as error:
             logger.debug("Error creating Folder %s", error)
             self.log_details.append(('error', f"Folder create problem {error}"))
