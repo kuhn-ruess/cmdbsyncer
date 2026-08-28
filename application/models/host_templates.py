@@ -40,6 +40,59 @@ def active_templates(host):
             if not getattr(tmpl, 'deleted_at', None)]
 
 
+def get_template(template_name):
+    """
+    Look up an assignable CMDB template by name.
+
+    Returns:
+        Host|None: the template document, or None when there is no active
+        template of that name.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+    return Host.objects(hostname=template_name, object_type='template',
+                        deleted_at__exists=False).first()
+
+
+def assign_template_by_hostname(template, hostnames, dry_run=False):
+    """
+    Give ``template`` to every host of ``hostnames`` that exists in the
+    syncer. The template is appended to the host's existing
+    ``cmdb_templates``, so assignments already on the host are kept and a
+    host that carries it stays untouched.
+
+    Args:
+        template (Host): The template document to assign.
+        hostnames (iterable): Hostnames to give the template to.
+        dry_run (bool): Report what would happen without saving.
+
+    Returns:
+        dict: the hostnames per outcome — ``assigned`` (newly given the
+        template), ``already`` (carried it before) and ``missing`` (no such
+        host in the syncer).
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+    result = {'assigned': [], 'already': [], 'missing': []}
+    for hostname in hostnames:
+        db_host = Host.objects(hostname=hostname).first()
+        if not db_host:
+            result['missing'].append(hostname)
+            continue
+        existing = list(db_host.cmdb_templates or [])
+        if template.id in {entry.id for entry in existing}:
+            result['already'].append(hostname)
+            continue
+        if not dry_run:
+            db_host.cmdb_templates = existing + [template]
+            # Templates feed into the cached host attributes, so drop the
+            # object's cache to force a recompute on the next export.
+            db_host.cache = {}
+            db_host.save()
+        result['assigned'].append(hostname)
+    return result
+
+
 def sync_template_assignment(template, remove_stale=False):
     """
     Re-run one template's label match over the whole database and give

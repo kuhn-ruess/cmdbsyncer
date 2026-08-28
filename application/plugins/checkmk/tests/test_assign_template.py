@@ -9,7 +9,10 @@ from application.plugins.checkmk.inits import assign_cmdb_template_from_folder
 
 
 def _make_host_objects(template, hosts):
-    """Build a Host.objects side effect: template lookup + per-host lookup."""
+    """
+    Build a Host.objects side effect: template lookup + per-host lookup. Both
+    run in application.models.host_templates, which imports Host at call time.
+    """
     def objects_side_effect(**kwargs):
         query = MagicMock()
         if kwargs.get('object_type') == 'template':
@@ -24,7 +27,7 @@ class TestAssignTemplateFromFolder(unittest.TestCase):
     """Tests for assign_cmdb_template_from_folder"""
 
     @patch('application.plugins.checkmk.inits.CMK2')
-    @patch('application.plugins.checkmk.inits.Host')
+    @patch('application.models.host.Host')
     def test_merges_and_skips(self, mock_host, mock_cmk2):
         template = MagicMock(id='tmpl-id')
         host_a = MagicMock(cmdb_templates=[])          # gets the template
@@ -49,7 +52,7 @@ class TestAssignTemplateFromFolder(unittest.TestCase):
         host_b.save.assert_not_called()
 
     @patch('application.plugins.checkmk.inits.CMK2')
-    @patch('application.plugins.checkmk.inits.Host')
+    @patch('application.models.host.Host')
     def test_template_missing_aborts(self, mock_host, mock_cmk2):
         mock_host.objects.side_effect = _make_host_objects(None, {})
 
@@ -60,7 +63,7 @@ class TestAssignTemplateFromFolder(unittest.TestCase):
         mock_cmk2.assert_not_called()
 
     @patch('application.plugins.checkmk.inits.CMK2')
-    @patch('application.plugins.checkmk.inits.Host')
+    @patch('application.models.host.Host')
     def test_dry_run_does_not_save(self, mock_host, mock_cmk2):
         template = MagicMock(id='tmpl-id')
         host_a = MagicMock(cmdb_templates=[])

@@ -56,6 +56,29 @@ def _short_name(hostname):
     return hostname.split('.', 1)[0].lower()
 
 
+def _short_name_index(names):
+    """Index the given names by their short name for the domain-agnostic join."""
+    index = {}
+    for name in names:
+        index.setdefault(_short_name(name), []).append(name)
+    return index
+
+
+def _resolve_name(hostname, names, short_index):
+    """
+    Find ``hostname`` in ``names``: an exact hit first, otherwise every name
+    sharing its short part (the same host under a different domain).
+
+    Returns ``(best_match, all_matches)``, both empty when nothing matches.
+    """
+    if hostname in names:
+        return hostname, [hostname]
+    matches = short_index.get(_short_name(hostname), [])
+    if matches:
+        return matches[0], matches
+    return None, []
+
+
 def parse_hostnames_from_csv(text):
     """
     Extract a de-duplicated, order-preserving list of hostnames from CSV text.
@@ -157,9 +180,7 @@ def build_report(hostnames, monitored_hosts, checkmk_services):
     """
     # Index the monitored hosts by short name so a domain mismatch is a cheap
     # dict lookup instead of an O(hosts) scan per uploaded host.
-    short_index = {}
-    for name in monitored_hosts:
-        short_index.setdefault(_short_name(name), []).append(name)
+    short_index = _short_name_index(monitored_hosts)
 
     results = []
     summary = {
@@ -183,19 +204,18 @@ def build_report(hostnames, monitored_hosts, checkmk_services):
             'agent_state': None,
             'agent_output': '',
         }
-        if hostname in monitored_hosts:
+        match, matches = _resolve_name(hostname, monitored_hosts, short_index)
+        if match == hostname:
             entry['status'] = 'found'
             entry['cmk_name'] = hostname
             summary['found'] += 1
+        elif match:
+            entry['status'] = 'domain_mismatch'
+            entry['cmk_name'] = match
+            entry['matched_names'] = matches
+            summary['domain_mismatch'] += 1
         else:
-            matches = short_index.get(_short_name(hostname), [])
-            if matches:
-                entry['status'] = 'domain_mismatch'
-                entry['cmk_name'] = matches[0]
-                entry['matched_names'] = matches
-                summary['domain_mismatch'] += 1
-            else:
-                summary['missing'] += 1
+            summary['missing'] += 1
 
         cmk_name = entry['cmk_name']
         if cmk_name is not None:
@@ -218,20 +238,95 @@ def build_report(hostnames, monitored_hosts, checkmk_services):
     return {'results': results, 'summary': summary}
 
 
+def cmdb_candidates(report):
+    """
+    Pure: every name a report row could be stored under in the syncer's CMDB —
+    the name that was given plus the name(s) the host carries in Checkmk.
+    """
+    names = set()
+    for entry in report['results']:
+        names.add(entry['hostname'])
+        names.update(entry.get('matched_names') or [])
+    return names
+
+
+def attach_cmdb_info(report, cmdb_hosts):
+    """
+    Enrich every report row with the syncer's own CMDB state: under which name
+    the host is known there (``cmdb_name``, ``None`` when it is not) and which
+    CMDB templates it carries (``cmdb_templates``).
+
+    ``cmdb_hosts`` maps a hostname to its list of template names. A row is
+    matched by the name that was given first and by the Checkmk name(s) second,
+    because the CMDB may know the host under either one.
+
+    Pure function; mutates and returns the given report so the summary gains
+    the ``in_cmdb`` / ``with_template`` / ``without_template`` counts.
+    """
+    summary = report['summary']
+    summary.update({'in_cmdb': 0, 'with_template': 0, 'without_template': 0})
+    for entry in report['results']:
+        entry['cmdb_name'] = None
+        entry['cmdb_templates'] = []
+        candidates = [entry['hostname']] + list(entry.get('matched_names') or [])
+        for candidate in candidates:
+            if candidate not in cmdb_hosts:
+                continue
+            entry['cmdb_name'] = candidate
+            entry['cmdb_templates'] = cmdb_hosts[candidate]
+            summary['in_cmdb'] += 1
+            if entry['cmdb_templates']:
+                summary['with_template'] += 1
+            else:
+                summary['without_template'] += 1
+            break
+    return report
+
+
+def _fetch_cmdb_hosts(names):
+    """
+    Map every given name that exists as a syncer host to its CMDB template
+    names. Archived templates are left out — they no longer contribute to an
+    export — and the template names are resolved from one lookup table instead
+    of dereferencing each host's references one by one.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+    template_names = {
+        template.id: template.hostname
+        for template in Host.objects(object_type='template',
+                                     deleted_at__exists=False).only('hostname')
+    }
+    result = {}
+    hosts = Host.objects(hostname__in=list(names), object_type__ne='template',
+                         deleted_at__exists=False) \
+                .only('hostname', 'cmdb_templates').no_dereference()
+    for host in hosts:
+        assigned = []
+        for reference in host.cmdb_templates or []:
+            name = template_names.get(getattr(reference, 'id', reference))
+            if name:
+                assigned.append(name)
+        result[host.hostname] = assigned
+    return result
+
+
 def run_data_quality_check(account_name, hostnames):
     """
     Run the full data quality check for ``hostnames`` against ``account_name``.
 
     Instantiates the Checkmk client, fetches the monitoring data in two bulk
-    calls and joins it against the uploaded hostnames. The Checkmk import is
-    local so this module stays importable without the request stack.
+    calls, joins it against the uploaded hostnames and adds what the syncer's
+    own CMDB knows about them. The Checkmk import is local so this module stays
+    importable without the request stack.
     """
     # pylint: disable=import-outside-toplevel
     from .cmk2 import CMK2
     cmk = CMK2(account_name)
     monitored_hosts = _fetch_monitored_hosts(cmk)
     checkmk_services = _fetch_checkmk_services(cmk)
-    return build_report(hostnames, monitored_hosts, checkmk_services)
+    report = build_report(hostnames, monitored_hosts, checkmk_services)
+    return attach_cmdb_info(report, _fetch_cmdb_hosts(cmdb_candidates(report)))
 
 
 def filter_uppercase_hostnames(names):
@@ -329,10 +424,7 @@ def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None):
     hostnames = apply_domain(hostnames, domain)
     template = None
     if template_name:
-        template = Host.objects(hostname=template_name, object_type='template',
-                                deleted_at__exists=False).first()
-        if template is None:
-            raise ValueError(f"CMDB template '{template_name}' not found")
+        template = _require_template(template_name)
 
     created = []
     skipped = []
@@ -361,3 +453,25 @@ def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None):
         created.append(host.hostname)
     return {'created': created, 'skipped': skipped, 'template': template_name,
             'domain': domain}
+
+
+def _require_template(template_name):
+    """Look up a CMDB template by name, raising ValueError when it is gone."""
+    # pylint: disable=import-outside-toplevel
+    from application.models.host_templates import get_template
+    template = get_template(template_name)
+    if template is None:
+        raise ValueError(f"CMDB template '{template_name}' not found")
+    return template
+
+
+def assign_cmdb_templates(hostnames, template_name):
+    """
+    Give the CMDB template ``template_name`` to hosts that already exist in the
+    syncer, keeping the templates they carry already. Raises ValueError when
+    the template does not exist. Returns the per-outcome hostname lists of
+    :func:`application.models.host_templates.assign_template_by_hostname`.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host_templates import assign_template_by_hostname
+    return assign_template_by_hostname(_require_template(template_name), hostnames)

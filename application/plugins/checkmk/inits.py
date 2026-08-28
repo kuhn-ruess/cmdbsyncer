@@ -5,6 +5,10 @@ from application import log
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.debug import ColorCodes
 from application.models.host import Host
+from application.models.host_templates import (
+    get_template,
+    assign_template_by_hostname,
+)
 from application.helpers.get_account import account_allows
 from application.modules.rule.filter import Filter
 
@@ -558,7 +562,26 @@ def import_project_rules_from_folder(project_name, account, folder,  # pylint: d
         raise
 #.
 #   .-- Assign a CMDB Template to the hosts of a Checkmk folder
-def assign_cmdb_template_from_folder(account, folder, template_name,  # pylint: disable=too-many-locals
+def _log_template_assignment(result, account, folder, template_name, dry_run):
+    """Print and log the outcome of one folder-wide template assignment."""
+    counts = {key: len(value) for key, value in result.items()}
+    prefix = "[dry-run] " if dry_run else ""
+    message = (f"{prefix}Assigned template '{template_name}' to "
+               f"{counts['assigned']} host(s) in Checkmk folder '{folder}' "
+               f"({counts['already']} already had it, "
+               f"{counts['missing']} not in syncer)")
+    print(f'{ColorCodes.OKGREEN}{message}{ColorCodes.ENDC}')
+    log.log(message, source="cmk_assign_template",
+            details=[('account', account), ('folder', folder),
+                     ('template', template_name),
+                     ('assigned', str(counts['assigned'])),
+                     ('already', str(counts['already'])),
+                     ('missing', str(counts['missing'])),
+                     ('dry_run', str(dry_run))])
+    return counts['assigned']
+
+
+def assign_cmdb_template_from_folder(account, folder, template_name,
                                      dry_run=False, debug=False):
     """
     Read every host directly in the Checkmk ``folder`` on ``account`` and
@@ -571,8 +594,7 @@ def assign_cmdb_template_from_folder(account, folder, template_name,  # pylint: 
     when the template does not exist. Returns the number of hosts the template
     was newly assigned to.
     """
-    template = Host.objects(hostname=template_name, object_type='template',
-                            deleted_at__exists=False).first()
+    template = get_template(template_name)
     if not template:
         message = f"CMDB template '{template_name}' not found"
         print(f'{ColorCodes.FAIL}{message}{ColorCodes.ENDC}')
@@ -586,42 +608,16 @@ def assign_cmdb_template_from_folder(account, folder, template_name,  # pylint: 
         syncer.debug = debug
         cmk_hosts = syncer.get_hosts_of_folder(folder, "")
 
-        assigned = 0
-        already = 0
-        missing = 0
-        for hostname in cmk_hosts:
-            db_host = Host.objects(hostname=hostname).first()
-            if not db_host:
-                missing += 1
-                if debug:
-                    print(f"{ColorCodes.WARNING} - {hostname}: not in syncer"
-                          f"{ColorCodes.ENDC}")
-                continue
-            existing = list(db_host.cmdb_templates or [])
-            if template.id in {entry.id for entry in existing}:
-                already += 1
-                continue
-            if not dry_run:
-                db_host.cmdb_templates = existing + [template]
-                # Templates feed into the cached host attributes, so drop the
-                # object's cache to force a recompute on the next export.
-                db_host.cache = {}
-                db_host.save()
-            assigned += 1
+        result = assign_template_by_hostname(template, cmk_hosts, dry_run=dry_run)
+        for hostname in result['assigned']:
             print(f"{ColorCodes.OKGREEN} *{ColorCodes.ENDC} {hostname}: "
                   f"template '{template_name}' assigned")
-
-        prefix = "[dry-run] " if dry_run else ""
-        message = (f"{prefix}Assigned template '{template_name}' to {assigned} "
-                   f"host(s) in Checkmk folder '{folder}' "
-                   f"({already} already had it, {missing} not in syncer)")
-        print(f'{ColorCodes.OKGREEN}{message}{ColorCodes.ENDC}')
-        log.log(message, source="cmk_assign_template",
-                details=[('account', account), ('folder', folder),
-                         ('template', template_name), ('assigned', str(assigned)),
-                         ('already', str(already)), ('missing', str(missing)),
-                         ('dry_run', str(dry_run))])
-        return assigned
+        if debug:
+            for hostname in result['missing']:
+                print(f"{ColorCodes.WARNING} - {hostname}: not in syncer"
+                      f"{ColorCodes.ENDC}")
+        return _log_template_assignment(result, account, folder, template_name,
+                                        dry_run)
     except CmkException as error_obj:
         if syncer is not None:
             syncer.record_exception(error_obj)

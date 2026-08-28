@@ -12,6 +12,8 @@ from application.plugins.checkmk.data_quality import (
     filter_uppercase_hostnames,
     filter_non_fqdn_hostnames,
     apply_domain,
+    attach_cmdb_info,
+    cmdb_candidates,
     _fetch_monitored_hosts,
     _fetch_checkmk_services,
 )
@@ -235,6 +237,69 @@ class TestBuildReport(unittest.TestCase):
         self.assertEqual(summary['missing'], 1)
         self.assertEqual(summary['agent_ok'], 1)
         self.assertEqual(summary['no_agent'], 1)
+
+
+def _report(*rows):
+    """Minimal build_report-shaped report for the CMDB enrichment tests."""
+    return {'results': list(rows), 'summary': {}}
+
+
+class TestCmdbCandidates(unittest.TestCase):
+    """Tests for cmdb_candidates"""
+
+    def test_given_name_and_checkmk_names_collected(self):
+        report = _report(
+            {'hostname': 'host1', 'matched_names': []},
+            {'hostname': 'host2', 'matched_names': ['host2.example.com']},
+        )
+        self.assertEqual(
+            cmdb_candidates(report),
+            {'host1', 'host2', 'host2.example.com'})
+
+
+class TestAttachCmdbInfo(unittest.TestCase):
+    """Tests for attach_cmdb_info"""
+
+    def test_host_with_template(self):
+        report = _report({'hostname': 'host1', 'matched_names': []})
+        attach_cmdb_info(report, {'host1': ['LinuxTemplate']})
+        row = report['results'][0]
+        self.assertEqual(row['cmdb_name'], 'host1')
+        self.assertEqual(row['cmdb_templates'], ['LinuxTemplate'])
+        self.assertEqual(report['summary'],
+                         {'in_cmdb': 1, 'with_template': 1, 'without_template': 0})
+
+    def test_host_without_template(self):
+        report = _report({'hostname': 'host1', 'matched_names': []})
+        attach_cmdb_info(report, {'host1': []})
+        self.assertEqual(report['results'][0]['cmdb_name'], 'host1')
+        self.assertEqual(report['summary'],
+                         {'in_cmdb': 1, 'with_template': 0, 'without_template': 1})
+
+    def test_host_not_in_cmdb(self):
+        report = _report({'hostname': 'host1', 'matched_names': []})
+        attach_cmdb_info(report, {})
+        row = report['results'][0]
+        self.assertIsNone(row['cmdb_name'])
+        self.assertEqual(row['cmdb_templates'], [])
+        self.assertEqual(report['summary'],
+                         {'in_cmdb': 0, 'with_template': 0, 'without_template': 0})
+
+    def test_falls_back_to_the_checkmk_name(self):
+        # Given without a domain, but the CMDB knows it as the FQDN Checkmk uses
+        report = _report(
+            {'hostname': 'host1', 'matched_names': ['host1.example.com']})
+        attach_cmdb_info(report, {'host1.example.com': ['Tpl']})
+        row = report['results'][0]
+        self.assertEqual(row['cmdb_name'], 'host1.example.com')
+        self.assertEqual(row['cmdb_templates'], ['Tpl'])
+
+    def test_given_name_wins_over_the_checkmk_name(self):
+        report = _report(
+            {'hostname': 'host1', 'matched_names': ['host1.example.com']})
+        attach_cmdb_info(report, {'host1': ['A'], 'host1.example.com': ['B']})
+        self.assertEqual(report['results'][0]['cmdb_name'], 'host1')
+        self.assertEqual(report['results'][0]['cmdb_templates'], ['A'])
 
 
 class TestFetchHelpers(unittest.TestCase):

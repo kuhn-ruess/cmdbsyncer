@@ -2392,6 +2392,36 @@ class CheckmkDataQualityView(BaseView):
         """List the account's monitored hosts that are not an FQDN (no dot)."""
         return self._account_scan('find_non_fqdn_hosts', 'non_fqdn')
 
+    @expose('/assign_template', methods=['POST'])
+    def assign_template(self):
+        """Give a CMDB template to hosts that already exist in the syncer."""
+        # pylint: disable=import-outside-toplevel
+        from .data_quality import assign_cmdb_templates
+
+        hostnames = [h for h in request.form.getlist('existing_hosts') if h.strip()]
+        template_name = (request.form.get('template') or '').strip()
+        if not hostnames:
+            flash('No hosts selected to assign a template to', 'warning')
+            return redirect(self.get_url('.index'))
+        if not template_name:
+            flash('Pick a CMDB template first', 'error')
+            return redirect(self.get_url('.index'))
+
+        try:
+            result = assign_cmdb_templates(hostnames, template_name)
+        except ValueError as error:
+            flash(str(error), 'error')
+            return redirect(self.get_url('.index'))
+
+        msg = (f"Template '{template_name}' assigned to "
+               f"{len(result['assigned'])} host(s)")
+        if result['already']:
+            msg += f"; {len(result['already'])} already had it"
+        if result['missing']:
+            msg += f"; {len(result['missing'])} no longer in the CMDB"
+        flash(msg + '.', 'success')
+        return redirect(self.get_url('.index'))
+
     @expose('/create_missing', methods=['POST'])
     def create_missing(self):
         """Create the selected missing hosts as internal-CMDB objects."""

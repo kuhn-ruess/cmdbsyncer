@@ -8,9 +8,10 @@
         CSV — and check them against a Checkmk account's monitoring data. For
         every host you see whether it is present, whether it exists under a
         different name/domain, whether its agent works (the <code>Check_MK</code>
-        service) and which contact groups may see it. Missing hosts can be
-        created as internal CMDB objects. Checking itself changes nothing in
-        Checkmk.
+        service), which contact groups may see it and which CMDB template it
+        carries in the syncer. Missing hosts can be created as internal CMDB
+        objects, and hosts that are already there can be given a template
+        afterwards. Checking itself changes nothing in Checkmk.
     </p>
 
     {% if not accounts %}
@@ -179,6 +180,10 @@
             <span class="badge badge-success mr-1">Agent OK: {{ s.agent_ok }}</span>
             <span class="badge badge-warning mr-1">Agent problem: {{ s.agent_problem }}</span>
             <span class="badge badge-secondary mr-1">No agent: {{ s.no_agent }}</span>
+            <span class="badge badge-light mr-1">·</span>
+            <span class="badge badge-info mr-1">In CMDB: {{ s.in_cmdb }}</span>
+            <span class="badge badge-success mr-1">With template: {{ s.with_template }}</span>
+            <span class="badge badge-warning mr-1">Without template: {{ s.without_template }}</span>
         </div>
     </div>
 
@@ -200,6 +205,7 @@
                     <th>Name in Checkmk</th>
                     <th>Host state</th>
                     <th>Agent</th>
+                    <th>CMDB template</th>
                     <th>Contact groups</th>
                 </tr>
             </thead>
@@ -249,6 +255,22 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if row.cmdb_name is none %}
+                        <span class="text-muted" title="No host of this name in the syncer CMDB">
+                            not in CMDB
+                        </span>
+                        {% elif row.cmdb_templates %}
+                        {% for tpl in row.cmdb_templates %}
+                        <span class="badge badge-success mr-1">{{ tpl }}</span>
+                        {% endfor %}
+                        {% else %}
+                        <span class="badge badge-warning"
+                              title="Host {{ row.cmdb_name }} exists in the CMDB but carries no template">
+                            no template
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td>
                         {% if row.contact_groups %}
                         {% for group in row.contact_groups %}
                         <span class="badge badge-info mr-1">{{ group }}</span>
@@ -264,6 +286,13 @@
             </tbody>
         </table>
     </div>
+
+    {# One list for every template picker on the page — both forms point at it. #}
+    <datalist id="dq_templates">
+        {% for tpl in templates %}
+        <option value="{{ tpl }}"></option>
+        {% endfor %}
+    </datalist>
 
     {% set missing = report.results | selectattr('status', 'equalto', 'missing') | list %}
     {% if missing %}
@@ -286,11 +315,6 @@
                         <input class="form-control" type="text" id="template"
                                name="template" list="dq_templates" autocomplete="off"
                                placeholder="type to search — empty for none"/>
-                        <datalist id="dq_templates">
-                            {% for tpl in templates %}
-                            <option value="{{ tpl }}"></option>
-                            {% endfor %}
-                        </datalist>
                         <small class="form-text text-muted">
                             Start typing to filter the {{ templates | length }}
                             available template(s).
@@ -308,8 +332,8 @@
                     </div>
                 </div>
                 <div class="mb-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary"
-                            id="dq_toggle_all">Toggle all</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary dq-toggle"
+                            data-target=".dq-missing">Toggle all</button>
                 </div>
                 <div class="mb-3" style="max-height:260px;overflow-y:auto;">
                     {% for row in missing %}
@@ -331,12 +355,69 @@
     </div>
     {% endif %}
 
+    {% set existing = report.results | selectattr('cmdb_name') | list %}
+    {% if existing %}
+    {% set untemplated = existing | rejectattr('cmdb_templates') | list %}
+    <div class="card app-card mb-4">
+        <div class="card-header">
+            Assign a CMDB template to existing host(s)
+            <span class="badge badge-info ml-1">{{ existing | length }} in CMDB</span>
+            <span class="badge badge-warning ml-1">{{ untemplated | length }} without template</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                These hosts are already in the CMDB. The chosen template is
+                added to the templates they carry — nothing is replaced or
+                removed, and hosts that already have it stay untouched. Only
+                the hosts without a template are preselected.
+            </p>
+            <form method="POST" action="{{ url_for('.assign_template') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="form-group">
+                    <label for="assign_template">CMDB template</label>
+                    <input class="form-control" type="text" id="assign_template"
+                           name="template" list="dq_templates" autocomplete="off"
+                           placeholder="type to search" required/>
+                    <small class="form-text text-muted">
+                        Start typing to filter the {{ templates | length }}
+                        available template(s).
+                    </small>
+                </div>
+                <div class="mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary dq-toggle"
+                            data-target=".dq-existing">Toggle all</button>
+                </div>
+                <div class="mb-3" style="max-height:260px;overflow-y:auto;">
+                    {% for row in existing %}
+                    <div class="form-check">
+                        <input class="form-check-input dq-existing" type="checkbox"
+                               name="existing_hosts" id="exist-{{ loop.index }}"
+                               value="{{ row.cmdb_name }}"
+                               {% if not row.cmdb_templates %}checked{% endif %}>
+                        <label class="form-check-label" for="exist-{{ loop.index }}">
+                            <code>{{ row.cmdb_name }}</code>
+                            {% for tpl in row.cmdb_templates %}
+                            <span class="badge badge-success ml-1">{{ tpl }}</span>
+                            {% endfor %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa fa-tags"></i> Assign template
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
     <script type="application/json" id="dq_data">{{ report.results | tojson }}</script>
     <script>
         (function () {
             var rows = JSON.parse(document.getElementById('dq_data').textContent);
             var headers = ['host', 'status', 'name_in_checkmk', 'host_state',
-                           'agent_state', 'agent_output', 'contact_groups'];
+                           'agent_state', 'agent_output', 'contact_groups',
+                           'name_in_cmdb', 'cmdb_templates'];
 
             function cells(row) {
                 return [
@@ -348,7 +429,9 @@
                     row.host_state || '',
                     row.agent_state || '',
                     row.agent_output || '',
-                    (row.contact_groups || []).join(' ')
+                    (row.contact_groups || []).join(' '),
+                    row.cmdb_name || '',
+                    (row.cmdb_templates || []).join(' ')
                 ];
             }
 
@@ -408,18 +491,21 @@
                 });
             }
 
-            var toggle = document.getElementById('dq_toggle_all');
-            if (toggle) {
-                toggle.addEventListener('click', function () {
-                    var boxes = document.querySelectorAll('.dq-missing');
-                    var anyChecked = Array.prototype.some.call(boxes, function (b) {
-                        return b.checked;
-                    });
-                    Array.prototype.forEach.call(boxes, function (b) {
-                        b.checked = !anyChecked;
+            // One handler for every "Toggle all" button; each names the
+            // checkbox class it belongs to via data-target.
+            Array.prototype.forEach.call(
+                document.querySelectorAll('.dq-toggle'), function (toggle) {
+                    toggle.addEventListener('click', function () {
+                        var boxes = document.querySelectorAll(
+                            toggle.getAttribute('data-target'));
+                        var anyChecked = Array.prototype.some.call(boxes, function (b) {
+                            return b.checked;
+                        });
+                        Array.prototype.forEach.call(boxes, function (b) {
+                            b.checked = !anyChecked;
+                        });
                     });
                 });
-            }
         })();
     </script>
     {% endif %}
