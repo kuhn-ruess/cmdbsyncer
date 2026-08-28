@@ -8,7 +8,13 @@ from flask_login import current_user
 from application.models.account import Account
 from application.helpers.get_account import get_account_by_name, AccountNotFoundError
 
-from .ldap import LDAP_AVAILABLE, LdapSearchError, build_search_filter, search_objects
+from .ldap import (
+    LDAP_AVAILABLE,
+    REPLACEMENT_CHARACTER,
+    LdapSearchError,
+    build_search_filter,
+    search_objects,
+)
 
 # Value and label of the search modes, the value is what build_search_filter expects
 SEARCH_MODES = [
@@ -62,6 +68,7 @@ class LdapSearchView(BaseView):
             'address': account.address,
             'base_dn': _custom_field(account, 'base_dn'),
             'search_filter': _custom_field(account, 'search_filter'),
+            'encoding': _custom_field(account, 'encoding'),
             'hostname_field': _custom_field(account, 'hostname_field'),
         } for account in Account.objects(enabled=True, type='ldap').order_by('name')]
 
@@ -74,6 +81,14 @@ class LdapSearchView(BaseView):
             return max(1, min(int(value), MAX_LIMIT))
         except (TypeError, ValueError):
             return DEFAULT_LIMIT
+
+    @staticmethod
+    def _wrong_encoding(results):
+        """
+        True if a value could not be read with the encoding of the account
+        """
+        return any(REPLACEMENT_CHARACTER in value
+                   for result in results for value in result['labels'].values())
 
     def _config(self, form):
         """
@@ -90,6 +105,9 @@ class LdapSearchView(BaseView):
         # what makes a search useful — the account's list is only meant for
         # the import
         config['attributes'] = form['attributes']
+        # A wrong encoding is what a search is used to find out, so it can
+        # be tried here without changing the account
+        config['encoding'] = form['encoding'] or config.get('encoding') or ''
         for field in REQUIRED_FIELDS:
             if not config.get(field):
                 raise LdapSearchError(f"The account has no '{field}' set")
@@ -110,6 +128,7 @@ class LdapSearchView(BaseView):
             'attribute': args.get('attribute', ''),
             'base_dn': args.get('base_dn', '').strip(),
             'attributes': args.get('attributes', '').strip(),
+            'encoding': args.get('encoding', '').strip(),
             'limit': args.get('limit', str(DEFAULT_LIMIT)),
             # Only a submitted form can say the filter is unwanted
             'use_account_filter': args.get('use_account_filter') == 'on' if submitted else True,
@@ -118,6 +137,7 @@ class LdapSearchView(BaseView):
         error = None
         query = ''
         results = None
+        wrong_encoding = ''
         limit = self._limit(form['limit'])
         if submitted:
             try:
@@ -125,6 +145,8 @@ class LdapSearchView(BaseView):
                 query = build_search_filter(config, form['mode'], form['term'],
                                             form['attribute'], form['use_account_filter'])
                 results = search_objects(config, query, limit=limit)
+                if self._wrong_encoding(results):
+                    wrong_encoding = config['encoding']
             except LdapSearchError as search_error:
                 error = str(search_error)
 
@@ -137,5 +159,6 @@ class LdapSearchView(BaseView):
             query=query,
             results=results,
             error=error,
+            wrong_encoding=wrong_encoding,
             ldap_available=LDAP_AVAILABLE,
         )

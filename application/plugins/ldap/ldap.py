@@ -36,6 +36,23 @@ def _require_ldap():
     if not LDAP_AVAILABLE:
         raise LdapSearchError("The python-ldap module is not installed on this server")
 
+
+def decode_value(value, config):
+    """
+    One attribute value as text, with the encoding of the account.
+
+    The import decodes strictly, so a wrong encoding is not silently
+    imported as broken data. The diagnostic paths (search, debug_query)
+    set `encoding_errors` to 'replace' instead: they are the place where
+    the wrong encoding is supposed to become visible, not the place to
+    stop working because of it.
+    """
+    return value.decode(config['encoding'], errors=config.get('encoding_errors', 'strict'))
+
+
+# Character a value carries where it could not be decoded
+REPLACEMENT_CHARACTER = '\ufffd'
+
 def get_objects(results, config):
     """
     Get Host Objects
@@ -53,7 +70,7 @@ def get_objects(results, config):
             # the whole import.
             if not content:
                 continue
-            labels[key] = content[0].decode(config['encoding'])
+            labels[key] = decode_value(content[0], config)
 
         try:
             hostname = labels[config['hostname_field']]
@@ -78,8 +95,7 @@ def parse_object(dn, entry, config):
     if parsed:
         return parsed[0]
 
-    labels = {key: ', '.join(x.decode(config['encoding'], errors='replace')
-                             for x in content)
+    labels = {key: ', '.join(decode_value(x, config) for x in content)
               for key, content in entry.items()}
     labels['dn'] = dn
     return '', labels
@@ -236,7 +252,8 @@ def search_objects(config, search_filter, limit=25):
 
     # debug lets the connection errors travel up instead of just being
     # printed, so the reason can be shown instead of an empty result
-    config = dict(config, debug=True, search_filter=search_filter)
+    config = dict(config, debug=True, search_filter=search_filter,
+                  encoding_errors='replace')
     try:
         _check_address(config)
         connect = _connect(config)
@@ -252,6 +269,8 @@ def search_objects(config, search_filter, limit=25):
             hostname, labels = parse_object(dn, entry, config)
             results.append({'dn': dn, 'hostname': hostname, 'labels': labels})
         return results
+    except LookupError as error:
+        raise LdapSearchError(f"Unknown encoding '{config['encoding']}'") from error
     except (ldap.LDAPError, ValueError) as error:
         raise LdapSearchError(str(error)) from error
 
@@ -321,7 +340,7 @@ def _collect_attributes(stats, entry, config):
         if len(content) > 1:
             stat['multi'] += 1
         if not stat['example'] and content:
-            stat['example'] = content[0].decode(config['encoding'], errors='replace')
+            stat['example'] = decode_value(content[0], config)
 
 
 def _print_attributes(stats, total):
@@ -345,6 +364,9 @@ def ldap_debug_query(account, overrides=None, limit=10, debug=False, list_attrib
     """
     config = get_account_by_name(account)
     config['debug'] = debug
+    # A wrong encoding is one of the things this command is meant to show,
+    # so it may not stop the output
+    config['encoding_errors'] = 'replace'
     if list_attributes:
         # Attributes can only be shown if the server was asked for all of them
         config['attributes'] = ''

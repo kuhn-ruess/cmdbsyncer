@@ -79,13 +79,21 @@
                         Empty uses the base DN of the account.
                     </small>
                 </div>
-                <div class="form-group col-md-5">
+                <div class="form-group col-md-3">
                     <label for="attributes">Attributes</label>
                     <input type="text" class="form-control" id="attributes" name="attributes"
                            value="{{ form.attributes }}" placeholder="all attributes"/>
                     <small class="form-text text-muted">
                         Comma separated. Empty asks the server for every
                         attribute of the found objects.
+                    </small>
+                </div>
+                <div class="form-group col-md-2">
+                    <label for="encoding">Encoding</label>
+                    <input type="text" class="form-control" id="encoding" name="encoding"
+                           value="{{ form.encoding }}"/>
+                    <small class="form-text text-muted">
+                        Empty uses the one of the account.
                     </small>
                 </div>
                 <div class="form-group col-md-2">
@@ -115,6 +123,17 @@
     {% if error %}
     <div class="alert alert-danger">
         <i class="fa fa-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% endif %}
+
+    {% if wrong_encoding %}
+    <div class="alert alert-warning">
+        <i class="fa fa-exclamation-triangle"></i>
+        Some values could not be read with the encoding
+        <code>{{ wrong_encoding }}</code> and show a <code>&#65533;</code>
+        where a character is missing. Search again with <code>utf-8</code>
+        in the Encoding field — if that reads them, set the same value on
+        the account, otherwise the import stops with a decoding error.
     </div>
     {% endif %}
 
@@ -180,6 +199,7 @@
             var account = document.getElementById('account');
             var mode = document.getElementById('mode');
             var baseDn = document.getElementById('base_dn');
+            var encoding = document.getElementById('encoding');
             var attributeRow = document.getElementById('attribute_row');
             var attribute = document.getElementById('attribute');
             var termHint = document.getElementById('term_hint');
@@ -195,6 +215,7 @@
             function render() {
                 var selected = current();
                 baseDn.placeholder = selected ? selected.base_dn : '';
+                encoding.placeholder = selected ? selected.encoding : '';
                 filterHint.textContent = selected && selected.search_filter
                     ? '(' + selected.search_filter + ')' : '';
 
