@@ -686,6 +686,15 @@ _try_load_real_module(
 )
 
 
+# --- ServiceNow plugin modules -----------------------------------------------
+# syncer.py holds the Table API request the import and the query view share.
+_stub_package("application.plugins.servicenow", path=[])
+_try_load_real_module(
+    "application.plugins.servicenow.syncer",
+    os.path.join("plugins", "servicenow", "syncer.py"),
+)
+
+
 # --- Jira Cloud plugin modules -----------------------------------------------
 # jira_cloud.py holds the base class both the import and the export use; it
 # only needs the syncerapi + plugin stubs above.

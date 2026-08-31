@@ -7,6 +7,7 @@
         "address": "https://instance.service-now.com"
     },
     "account_custom_field_presets": {
+        "api_path": "/api/now",
         "tables": "cmdb_ci_server",
         "hostname_field": "name",
         "rewrite_hostname": "",

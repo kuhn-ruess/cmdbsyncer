@@ -265,6 +265,18 @@ class Plugin():
 
         log.log(self.name, source=self.source, details=self.log_details)
 
+    def close(self):
+        """
+        End a run that was started outside a sync — a read only query from
+        the web interface, for example.
+
+        Such a run is not a sync: without this every page view would leave
+        a log entry behind, all of them written at once when the process
+        ends. Drops that entry and releases the HTTP session right away.
+        """
+        atexit.unregister(self.save_log)
+        self._cleanup_resources()
+
     def _cleanup_resources(self):
         """
         Close the requests Session and unlink the CA-cert temp file.

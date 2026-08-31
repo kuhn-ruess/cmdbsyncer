@@ -1,0 +1,228 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>ServiceNow Query</h3>
+    <p>
+        Query the table of a ServiceNow account the same way the import
+        reads it — with the connection, query and field list of the
+        account. The result shows every field a record really has and
+        which name the object would be imported under, so a wrong login,
+        an empty query or the wrong hostname field become visible.
+        Nothing is written: neither ServiceNow nor the syncer's objects
+        are changed here.
+    </p>
+
+    {% if not accounts %}
+    <div class="alert alert-warning">
+        No enabled ServiceNow account found. Create one first.
+    </div>
+    {% endif %}
+
+    <form method="GET" action="{{ url_for('.index') }}" class="card app-card mb-4">
+        <div class="card-body">
+            <input type="hidden" name="searched" value="1"/>
+            <div class="form-row">
+                <div class="form-group col-md-3">
+                    <label for="account">ServiceNow account</label>
+                    <select class="form-control" id="account" name="account" required>
+                        <option value="">— select account —</option>
+                        {% for account in accounts %}
+                        <option value="{{ account.name }}"
+                                {% if account.name == form.account %}selected{% endif %}>
+                            {{ account.name }} — {{ account.address }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group col-md-3">
+                    <label for="table">Table</label>
+                    <input type="text" class="form-control" id="table" name="table"
+                           value="{{ form.table }}" list="tables" required autofocus
+                           placeholder="e.g. cmdb_ci_server"/>
+                    <datalist id="tables"></datalist>
+                    <small class="form-text text-muted">
+                        One table. The account's own tables are offered here.
+                    </small>
+                </div>
+                <div class="form-group col-md-2">
+                    <label for="api_path">API path</label>
+                    <input type="text" class="form-control" id="api_path" name="api_path"
+                           value="{{ form.api_path }}" placeholder="straight behind the address"/>
+                    <small class="form-text text-muted">
+                        In front of <code>/table/&lt;name&gt;</code>.
+                    </small>
+                </div>
+                <div class="form-group col-md-2">
+                    <label for="hostname_field">Hostname field</label>
+                    <input type="text" class="form-control" id="hostname_field"
+                           name="hostname_field" value="{{ form.hostname_field }}"/>
+                    <small class="form-text text-muted">
+                        The field the object name comes from.
+                    </small>
+                </div>
+                <div class="form-group col-md-2">
+                    <label for="limit">Max. results</label>
+                    <input type="number" class="form-control" id="limit" name="limit"
+                           min="1" max="500" value="{{ limit }}"/>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-5">
+                    <label for="sysparm_query">Query (sysparm_query)</label>
+                    <input type="text" class="form-control" id="sysparm_query"
+                           name="sysparm_query" value="{{ form.sysparm_query }}"
+                           placeholder="every record of the table"/>
+                    <small class="form-text text-muted">
+                        Encoded query, e.g. <code>operational_status=1</code>.
+                        Empty asks for every record.
+                    </small>
+                </div>
+                <div class="form-group col-md-5">
+                    <label for="sysparm_fields">Fields (sysparm_fields)</label>
+                    <input type="text" class="form-control" id="sysparm_fields"
+                           name="sysparm_fields" value="{{ form.sysparm_fields }}"
+                           placeholder="all fields"/>
+                    <small class="form-text text-muted">
+                        Comma separated. Empty asks for every field of the
+                        found records.
+                    </small>
+                </div>
+                <div class="form-group col-md-2">
+                    <label for="sysparm_display_value">Display values</label>
+                    <select class="form-control" id="sysparm_display_value"
+                            name="sysparm_display_value">
+                        {% for value in ['true', 'false', 'all'] %}
+                        <option value="{{ value }}"
+                                {% if value == form.sysparm_display_value %}selected{% endif %}>
+                            {{ value }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">
+                        <code>false</code> shows the sys_ids instead.
+                    </small>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary"
+                    {% if not accounts %}disabled{% endif %}>
+                <i class="fa fa-search"></i> Query
+            </button>
+        </div>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="fa fa-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <p>
+        Used request: <code>{{ result.url }}</code><br/>
+        {% for key, value in result.params.items() | sort %}
+        <code>{{ key }}={{ value }}</code>{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    </p>
+
+    <div class="card app-card mb-4">
+        <div class="card-header">
+            {{ result.records | length }} record(s) found
+            {% if result.records | length >= limit %}
+            <span class="badge badge-warning ml-1">limit reached</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if not result.records %}
+            <p class="text-muted mb-0">
+                Nothing found. Empty the query, check the table name, or
+                make sure the account's user may read the table.
+            </p>
+            {% else %}
+            {% for record in result.records %}
+            <div class="card app-card mb-3">
+                <div class="card-header">
+                    {% if record.hostname %}
+                    <strong>{{ record.hostname }}</strong>
+                    <span class="badge badge-success ml-1">would be imported</span>
+                    {% else %}
+                    <strong class="text-muted">no hostname field</strong>
+                    <span class="badge badge-secondary ml-1">would be skipped</span>
+                    {% endif %}
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <tbody>
+                                {% for key, value in record.labels.items() | sort %}
+                                <tr>
+                                    <th style="width: 25%">{{ key }}</th>
+                                    <td>{{ value }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <script>
+        (function () {
+            var accounts = {{ accounts | tojson }};
+            var account = document.getElementById('account');
+            var tables = document.getElementById('tables');
+            var fields = {
+                table: document.getElementById('table'),
+                api_path: document.getElementById('api_path'),
+                hostname_field: document.getElementById('hostname_field'),
+                sysparm_query: document.getElementById('sysparm_query'),
+                sysparm_fields: document.getElementById('sysparm_fields'),
+                sysparm_display_value: document.getElementById('sysparm_display_value')
+            };
+
+            function current() {
+                for (var i = 0; i < accounts.length; i++) {
+                    if (accounts[i].name === account.value) { return accounts[i]; }
+                }
+                return null;
+            }
+
+            function offerTables(selected) {
+                tables.innerHTML = '';
+                if (!selected) { return; }
+                selected.tables.forEach(function (name) {
+                    var option = document.createElement('option');
+                    option.value = name;
+                    tables.appendChild(option);
+                });
+            }
+
+            // Picking an account fills the form with its settings, so a
+            // query starts from what the import would do and every field
+            // can be changed for the try without touching the account.
+            account.addEventListener('change', function () {
+                var selected = current();
+                offerTables(selected);
+                if (!selected) { return; }
+                fields.table.value = selected.tables.length ? selected.tables[0] : '';
+                fields.api_path.value = selected.api_path;
+                fields.hostname_field.value = selected.hostname_field;
+                fields.sysparm_query.value = selected.sysparm_query;
+                fields.sysparm_fields.value = selected.sysparm_fields;
+                fields.sysparm_display_value.value = selected.sysparm_display_value;
+            });
+
+            // On a result page the account is already chosen, only its
+            // table list is missing
+            offerTables(current());
+        })();
+    </script>
+</div>
+{% endblock %}

@@ -154,6 +154,19 @@ class Account(db.Document):
     custom_fields = db.ListField(field=db.EmbeddedDocumentField(document_type="CustomEntry"))
     plugin_settings = db.ListField(field=db.EmbeddedDocumentField(document_type="PluginSettings"))
 
+    def custom_field(self, name, default=''):
+        """
+        Value of one custom field, the default when the account has none.
+
+        Reads the record itself, so it stays free of the secret store
+        round trip get_account_by_name() does — meant for the places
+        which only need to show the settings of an account.
+        """
+        for entry in self.custom_fields:
+            if entry.name == name:
+                return entry.value or default
+        return default
+
     def set_password(self, password, key=False):
         """
         Encrypt Password in Store

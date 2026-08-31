@@ -47,6 +47,7 @@ roles = [
   ('i-doit', "I-Doit"),
   ('ldap', "LDAP"),
   ('netbox', "Netbox"),
+  ('servicenow', "ServiceNow"),
   ('vmware', "VMware"),
   ('jira', "Jira"),
 ]

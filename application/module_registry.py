@@ -96,6 +96,16 @@ MODULES = {
         ),
         'docs': _docs('ldap'),
     },
+    'ServiceNow': {
+        'icon': ('fa', 'fa-cloud'),
+        'intro': (
+            "Import the Configuration Items of a ServiceNow instance into "
+            "the syncer — every record of a table becomes an object whose "
+            "attributes are the record's fields — and query a table read "
+            "only to see what the import would get."
+        ),
+        'docs': _docs('servicenow'),
+    },
     'VMware': {
         'icon': ('image', 'vendor/vmware.svg'),
         'intro': (
@@ -312,6 +322,13 @@ ENTRIES = {
             "Search an LDAP account's directory read only — find an object "
             "by a hostname with or without domain, by any attribute, or "
             "with an own filter before it goes into the account."
+        ),
+    },
+    'ServiceNow': {
+        'Query Table': (
+            "Query the table of a ServiceNow account read only — it shows "
+            "which fields a record really has, which name the objects "
+            "would get, and whether the login and the query work at all."
         ),
     },
     'Jira Cloud': {

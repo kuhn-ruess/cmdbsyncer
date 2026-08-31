@@ -11,7 +11,7 @@ from application.helpers.plugins import register_cli_group
 from .syncer import SyncServiceNow
 
 
-_cli_servicenow = register_cli_group(app, 'ServiceNow', 'servicenow', "ServiceNow Import")
+_cli_servicenow = register_cli_group(app, 'service_now', 'servicenow', "ServiceNow Import")
 
 
 #   .-- Command: import hosts
@@ -25,7 +25,7 @@ def import_hosts(account, debug=False):
 
 
 @_cli_servicenow.command('import_hosts')
-@click.option("--account")
+@click.argument('account')
 @click.option("--debug", default=False, is_flag=True)
 def cli_import_hosts(account, debug):
     """
