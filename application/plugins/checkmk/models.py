@@ -419,7 +419,8 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     ### Keep manual Value
     When enabled the Value is only written once, on rule creation. On later
     syncs the Syncer keeps the rule but no longer overwrites its Value, so an
-    operator can adjust it in Checkmk. A hint is added to the rule comment.
+    operator can adjust it in Checkmk. A hint is added to the rule's
+    description and comment in Checkmk.
 
     ### Enforce exact Value
     By default keys which exist only in Checkmk are accepted as defaults of

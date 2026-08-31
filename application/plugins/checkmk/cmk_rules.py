@@ -25,6 +25,35 @@ from application.modules.debug import ColorCodes as CC
 # adjusted value. Must stay identical between create and compare.
 KEEP_VALUE_HINT = "Value managed manually in Checkmk - Syncer will not overwrite it."
 
+# Appended to the rule description of a ``keep_value`` outcome, so the Checkmk
+# rule list already says the value may be adjusted there.
+KEEP_VALUE_MARK = "(Value editable)"
+
+# Longest Setup Rule name written into the Checkmk rule description. Long
+# enough for real rule names, short enough to keep the rule list readable.
+DESCRIPTION_NAME_LIMIT = 60
+
+# Fields of a ``RuleMngmtOutcome`` that identify the Setup Rule it was
+# configured in. Everything else is bookkeeping (folder_index, loop flags)
+# or a flag that does not tell two rules apart.
+OUTCOME_IDENTITY_KEYS = (
+    'ruleset', 'folder', 'value_template', 'comment',
+    'condition_label_template', 'condition_host',
+    'condition_service', 'condition_service_label',
+)
+
+
+def outcome_signature(outcome):
+    """
+    Stable key of an outcome in the shape it is stored in the rule document.
+
+    The export reads its outcomes from the per-host cache, which does not
+    carry the name of the Setup Rule they came from - writing it there would
+    copy the name into every host document. Matching a cached outcome back
+    onto the loaded rules by content recovers the name without storing it.
+    """
+    return tuple(str(outcome.get(key) or '') for key in OUTCOME_IDENTITY_KEYS)
+
 # Condition keys of the rule payload, per family. Both spellings are listed:
 # Checkmk 2.2 takes flat label lists, 2.3+ label groups (see
 # build_condition_and_update_rule_params).
@@ -910,6 +939,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # (ruleset, condition key) pairs already reported as dropped, so the
         # warning is logged once per run instead of once per host.
         self._dropped_condition_warnings = set()
+        # outcome signature -> Setup Rule name, built on first use by
+        # _source_rule_name(). None until then.
+        self._source_rule_names = None
 
     @property
     def rule_marker(self):
@@ -927,6 +959,56 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                 char if char.isalnum() else "_" for char in self.project)
             return f"cmdbsyncer_{self.account_id}_{slug}"
         return f"cmdbsyncer_{self.account_id}"
+
+    def _owns_rule(self, cmk_rule):
+        """
+        Whether a Checkmk rule belongs to this run.
+
+        The description starts with the ownership marker and continues with
+        the Setup Rule's name (see ``_rule_description``), so ownership is a
+        prefix test. The separating space keeps a project marker
+        (``cmdbsyncer_1_project``) out of the global marker's rules.
+        """
+        description = cmk_rule['extensions']['properties'].get('description', '')
+        return description == self.rule_marker or \
+            description.startswith(f"{self.rule_marker} ")
+
+    def _source_rule_name(self, outcome):
+        """
+        Name of the Setup Rule an outcome was configured in.
+
+        Empty when the outcome cannot be traced back to exactly one rule -
+        two rules carrying identical outcomes, or a caller that did not wire
+        up any rules at all.
+        """
+        if self._source_rule_names is None:
+            self._source_rule_names = {}
+            actions = getattr(self, 'actions', None)
+            rules = list(getattr(actions, 'rules', None) or [])
+            rules += list(self.static_rules or [])
+            for rule in rules:
+                for outcome_doc in rule.outcomes:
+                    key = outcome_signature(dict(outcome_doc.to_mongo()))
+                    known = self._source_rule_names.get(key, rule.name)
+                    # Two rules generate the very same outcome: naming one of
+                    # them in Checkmk would be a guess, so name neither.
+                    self._source_rule_names[key] = \
+                        known if known == rule.name else ''
+        return self._source_rule_names.get(outcome_signature(outcome), '')
+
+    def _rule_description(self, outcome):
+        """
+        Description written onto the Checkmk rule: the ownership marker, the
+        Setup Rule that created it, and - for a ``keep_value`` outcome - the
+        hint that the value may be adjusted right there in Checkmk.
+        """
+        description = self.rule_marker
+        name = self._source_rule_name(outcome)
+        if name:
+            description += f" - {name[:DESCRIPTION_NAME_LIMIT]}"
+        if outcome.get('keep_value'):
+            description += f" {KEEP_VALUE_MARK}"
+        return description
 
     def build_rule_hash(self, rule_template, conditions):
         """
@@ -1144,6 +1226,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # back once the rule is fully built.
         syncer_rule = rule_params.pop('_syncer_rule', None)
         syncer_outcome = rule_params.pop('_syncer_outcome', None)
+        # Before any template is rendered or dropped: the outcome is still in
+        # the shape the rule document stores it, which is what identifies the
+        # Setup Rule it came from.
+        rule_params['description'] = self._rule_description(rule_params)
 
         # Setup condition template based on Checkmk version
         if self.checkmk_version.startswith('2.2'):
@@ -2247,7 +2333,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                         "folder": rule['folder'],
                         "properties": {
                             "disabled": False,
-                            "description": self.rule_marker,
+                            "description": rule.get('description')
+                                           or self.rule_marker,
                             "comment": rule['comment'],
                         },
                         'conditions' : rule['condition'],
@@ -2326,6 +2413,40 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             'folder': cmk['folder'].lower() ==
                       normalize_cmk_folder(rule['folder']).lower(),
         }
+
+    def _sync_description(self, cmk_rule, rule, ruleset_name):
+        """
+        Rewrite the description of a Checkmk rule that matches ours in every
+        other respect but carries an outdated one - a renamed Setup Rule, or
+        a rule created before the description named its source.
+
+        Everything else is sent back exactly as Checkmk has it: a
+        ``keep_value`` rule must keep the value the operator adjusted.
+        """
+        wanted = rule.get('description') or self.rule_marker
+        properties = dict(cmk_rule['extensions']['properties'])
+        if properties.get('description', '') == wanted:
+            return
+        properties['description'] = wanted
+        rule_id = cmk_rule['id']
+        payload = {
+            "properties": properties,
+            "conditions": cmk_rule['extensions']['conditions'],
+            "value_raw": cmk_rule['extensions']['value_raw'],
+        }
+        try:
+            self.update_rule(rule_id, payload)
+            print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE description of Rule in "
+                  f"{ruleset_name} {rule_id}")
+            self.log_details.append((
+                "INFO",
+                f"Updated description of Rule in {ruleset_name} {rule_id}: "
+                f"{wanted}",
+            ))
+        except CmkException as error:
+            self.log_error(
+                f"Could not update description of Rule {rule_id} in "
+                f"{ruleset_name}: {error}")
 
     def _explain_deletion(self, rules, cmk):
         """
@@ -2432,12 +2553,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                 # matches reality.
                 self._cmk_order_by_ruleset[ruleset_name] = [
                     cmk_rule['id'] for cmk_rule in rule_response['value']
-                    if cmk_rule['extensions']['properties'].get('description', '')
-                    == self.rule_marker
+                    if self._owns_rule(cmk_rule)
                 ]
                 for cmk_rule in rule_response['value']:
-                    if cmk_rule['extensions']['properties'].get('description', '') != \
-                        self.rule_marker:
+                    if not self._owns_rule(cmk_rule):
                         continue
 
 
@@ -2524,6 +2643,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             # every owned rule.
                             rule['_cmk_id'] = cmk_rule['id']
                             rule['_skip_create'] = True
+                            self._sync_description(cmk_rule, rule, ruleset_name)
                             break
 
                     # If exactly one of our rules has the same condition but a
@@ -2541,7 +2661,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                         update_payload = {
                             "properties": {
                                 "disabled": False,
-                                "description": self.rule_marker,
+                                "description": our_rule.get('description')
+                                               or self.rule_marker,
                                 "comment": our_rule['comment'],
                             },
                             "conditions": our_rule['condition'],
@@ -2581,7 +2702,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                         update_payload = {
                             "properties": {
                                 "disabled": False,
-                                "description": self.rule_marker,
+                                "description": our_rule.get('description')
+                                               or self.rule_marker,
                                 "comment": our_rule['comment'],
                             },
                             "conditions": our_rule['condition'],
@@ -2731,8 +2853,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                     f"Skipped orphan check for {ruleset_name}: {error}")
                 continue
             for cmk_rule in rule_response['value']:
-                if cmk_rule['extensions']['properties'].get('description', '') \
-                        != self.rule_marker:
+                if not self._owns_rule(cmk_rule):
                     continue
                 rule_id = cmk_rule['id']
                 print(f"{CC.OKBLUE} *{CC.ENDC} DELETE orphaned Rule in "

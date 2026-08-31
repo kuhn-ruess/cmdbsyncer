@@ -2616,5 +2616,142 @@ class TestExportDcdRulesProjectFilter(unittest.TestCase):
             enabled=True, static_rule=True, project__in=[None, '', 'proj_a'])
 
 
+class TestRuleDescription(unittest.TestCase):
+    """The description the export writes onto every Checkmk rule."""
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.project = None
+        self.sync.static_rules = []
+        self.sync._source_rule_names = None
+
+    @staticmethod
+    def _make_outcome(**overrides):
+        outcome = {
+            'ruleset': 'checkgroup_parameters:filesystem',
+            'folder': '/main',
+            'value_template': "{'levels': (80, 90)}",
+            'comment': 'disk levels',
+        }
+        outcome.update(overrides)
+        return outcome
+
+    def _wire_rules(self, *rules):
+        self.sync.actions = SimpleNamespace(rules=[
+            SimpleNamespace(name=name,
+                            outcomes=[_FakeMongo(outcome)
+                                      for outcome in outcomes])
+            for name, outcomes in rules
+        ])
+
+    def test_marker_only_without_a_known_source_rule(self):
+        self.assertEqual(self.sync._rule_description(self._make_outcome()),
+                         'cmdbsyncer_test_account')
+
+    def test_names_the_setup_rule_it_came_from(self):
+        self._wire_rules(('Disk Levels', [self._make_outcome()]))
+        self.assertEqual(self.sync._rule_description(self._make_outcome()),
+                         'cmdbsyncer_test_account - Disk Levels')
+
+    def test_static_rules_are_named_too(self):
+        self.sync.static_rules = [
+            SimpleNamespace(name='Static Levels',
+                            outcomes=[_FakeMongo(self._make_outcome())])]
+        self.assertEqual(self.sync._rule_description(self._make_outcome()),
+                         'cmdbsyncer_test_account - Static Levels')
+
+    def test_keep_value_says_the_value_may_be_edited(self):
+        outcome = self._make_outcome(keep_value=True)
+        self._wire_rules(('Disk Levels', [outcome]))
+        self.assertEqual(
+            self.sync._rule_description(outcome),
+            'cmdbsyncer_test_account - Disk Levels (Value editable)')
+
+    def test_identical_outcomes_in_two_rules_stay_unnamed(self):
+        # Naming one of them would be a guess, so neither name is written.
+        self._wire_rules(('Rule A', [self._make_outcome()]),
+                         ('Rule B', [self._make_outcome()]))
+        self.assertEqual(self.sync._rule_description(self._make_outcome()),
+                         'cmdbsyncer_test_account')
+
+    def test_long_names_are_shortened(self):
+        name = 'X' * 100
+        self._wire_rules((name, [self._make_outcome()]))
+        self.assertEqual(self.sync._rule_description(self._make_outcome()),
+                         f'cmdbsyncer_test_account - {"X" * 60}')
+
+    def test_ownership_covers_marker_and_named_descriptions(self):
+        def cmk_rule(description):
+            return {'extensions': {'properties': {'description': description}}}
+
+        self.assertTrue(self.sync._owns_rule(
+            cmk_rule('cmdbsyncer_test_account')))
+        self.assertTrue(self.sync._owns_rule(
+            cmk_rule('cmdbsyncer_test_account - Disk Levels')))
+        self.assertTrue(self.sync._owns_rule(
+            cmk_rule('cmdbsyncer_test_account (Value editable)')))
+        # A project marker is a different owner, not a named global rule.
+        self.assertFalse(self.sync._owns_rule(
+            cmk_rule('cmdbsyncer_test_account_project - Disk Levels')))
+        self.assertFalse(self.sync._owns_rule(cmk_rule('someone_else')))
+        self.assertFalse(self.sync._owns_rule(cmk_rule('')))
+
+
+class TestSyncDescription(unittest.TestCase):
+    """clean_rules refreshes a stale description on an otherwise equal rule."""
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.project = None
+        self.sync.log_details = []
+        self.sync._rule_etag_wildcard_rejected = None
+
+    @staticmethod
+    def _cmk_rule(description):
+        return {
+            'id': 'r1',
+            'extensions': {
+                'folder': '/main',
+                'value_raw': "{'levels': (99, 99)}",
+                'conditions': {'host_name': {'match_on': ['h']}},
+                'properties': {'description': description, 'comment': 'c'},
+            },
+        }
+
+    def _wire(self):
+        puts = []
+
+        def fake_request(url, method='GET', data=None, **_kw):
+            puts.append((method, url, data))
+            return {}, {'status_code': 200}
+        self.sync.request = MagicMock(side_effect=fake_request)
+        return puts
+
+    def test_stale_description_is_rewritten_without_touching_the_value(self):
+        puts = self._wire()
+        cmk_rule = self._cmk_rule('cmdbsyncer_test_account')
+        local = {'description': 'cmdbsyncer_test_account - Disk Levels'}
+
+        self.sync._sync_description(cmk_rule, local, 'a_ruleset')
+
+        self.assertEqual(len(puts), 1)
+        method, url, data = puts[0]
+        self.assertEqual((method, url), ('PUT', '/objects/rule/r1'))
+        self.assertEqual(data['properties']['description'],
+                         'cmdbsyncer_test_account - Disk Levels')
+        # The operator's value and the rule's comment stay as they are.
+        self.assertEqual(data['value_raw'], "{'levels': (99, 99)}")
+        self.assertEqual(data['properties']['comment'], 'c')
+
+    def test_matching_description_writes_nothing(self):
+        puts = self._wire()
+        cmk_rule = self._cmk_rule('cmdbsyncer_test_account - Disk Levels')
+        local = {'description': 'cmdbsyncer_test_account - Disk Levels'}
+
+        self.sync._sync_description(cmk_rule, local, 'a_ruleset')
+
+        self.assertEqual(puts, [])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
