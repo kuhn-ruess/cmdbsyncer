@@ -17,6 +17,7 @@ from flask import g, request, url_for
 from markupsafe import Markup, escape
 
 from application import app
+from application.models.account import CMDB_SOURCE_ACCOUNT_NAME
 from application.models.host_cleanup import relation_target
 from application.models.host_templates import (active_templates,
                                                merge_attribute_values,
@@ -339,6 +340,19 @@ _LABEL_GRID_CSS = (
 )
 
 
+def _own_label_origin(model):
+    """
+    Origin of the labels stored on the host itself, as the (origin,
+    source) pair `_label_origin_badge` takes. Only a host the syncer
+    owns maintains them by hand — every other one got them from its
+    account, whose next import overwrites an edit made here.
+    """
+    account = getattr(model, 'source_account_name', '')
+    if not account or account == CMDB_SOURCE_ACCOUNT_NAME:
+        return ('manual', '')
+    return ('import', account)
+
+
 def _merged_keys():
     """
     The configured merged attribute keys, cached for the request. The
@@ -362,14 +376,14 @@ def _merged_label_values(model, templates):
     Returns:
         dict: key -> (merged value, [source names])
     """
-    manual = model.labels or {}
+    on_host = model.labels or {}
     merged = {}
     for key in _merged_keys():
         value = None
         sources = []
-        if key in manual:
-            value = manual[key]
-            sources.append('manual')
+        if key in on_host:
+            value = on_host[key]
+            sources.append(_own_label_origin(model)[1] or 'manual')
         for tmpl_name, tmpl_labels in templates:
             if key in tmpl_labels:
                 value = merge_attribute_values(value, tmpl_labels[key])
@@ -390,10 +404,12 @@ def _label_origin_badge(origin, src_name):
             f'{escape(src_name)}">merged</span>'
         )
     if origin == 'manual':
-        return (
-            '<span class="lbl-src src-manual" '
-            'title="Maintained manually on this host">manual</span>'
-        )
+        return ('<span class="lbl-src src-manual" '
+                'title="Maintained manually on this host">manual</span>')
+    if origin == 'import':
+        return (f'<span class="lbl-src src-manual" title="Imported by account '
+                f'{escape(src_name)} — an edit is overwritten by its next import">'
+                f'{escape(src_name)}</span>')
     return (
         f'<span class="lbl-src src-template" '
         f'title="From template {escape(src_name)}">'
@@ -405,21 +421,21 @@ def _render_labels_with_origin(_view, _context, model, _name):
     # pylint: disable=too-many-locals
     """
     Compact read-only detail rendering of a host's labels grouped by
-    origin. In CMDB mode each row carries a small badge (``manual`` or
-    the template hostname) so the admin can tell where a label came
-    from; without CMDB mode there are no templates and the prefix is
-    just visual noise, so it's dropped. Type badge stays in both modes
-    (admins still want to tell a string `"True"` from a BSON bool).
+    origin. In CMDB mode each row carries a small badge — the account
+    that imported the label, ``manual`` on a host the syncer owns, or
+    the template it comes from; without CMDB mode there are no
+    templates and the prefix is just visual noise, so it's dropped.
+    Type badge stays (admins tell a string `"True"` from a BSON bool).
     """
     cmdb_mode = bool(app.config.get('CMDB_MODE'))
-    manual = model.labels or {}
+    on_host = model.labels or {}
     templates = []
     if cmdb_mode:
         for tmpl in active_templates(model):
             if getattr(tmpl, 'labels', None):
                 templates.append((tmpl.hostname, dict(tmpl.labels)))
 
-    if not manual and not templates:
+    if not on_host and not templates:
         return Markup('<em class="text-muted">No labels.</em>')
 
     # A merged attribute is exported as one comma-separated value, so it
@@ -431,9 +447,10 @@ def _render_labels_with_origin(_view, _context, model, _name):
     for key in sorted(merged.keys(), key=str.lower):
         value, sources = merged[key]
         rows.append(('merged', ', '.join(sources), key, value))
-    for key in sorted(manual.keys(), key=str.lower):
+    own = _own_label_origin(model)
+    for key in sorted(on_host.keys(), key=str.lower):
         if key not in merged:
-            rows.append(('manual', '', key, manual[key]))
+            rows.append((*own, key, on_host[key]))
     for tmpl_name, tmpl_labels in templates:
         for key in sorted(tmpl_labels.keys(), key=str.lower):
             if key not in merged:
