@@ -501,6 +501,11 @@ class NotificationRuleOutcome(db.EmbeddedDocument):
     """
     notification_method = db.StringField(default='mail')
 
+    # Loop: build one rule per entry of a list instead of one per host.
+    # The current entry is available to every field below as {{name}}.
+    multiply_by_list = db.BooleanField(default=False)
+    multiply_list = db.StringField()
+
     # Recipients
     contact_group_recipients = db.StringField()
 

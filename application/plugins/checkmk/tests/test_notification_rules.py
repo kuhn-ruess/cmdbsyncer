@@ -2,6 +2,7 @@
 Unit tests for checkmk notification_rules module.
 """
 # pylint: disable=missing-function-docstring,missing-class-docstring,protected-access,unused-argument
+import ast
 import unittest
 from unittest.mock import patch
 
@@ -21,10 +22,25 @@ from application.plugins.checkmk.cmk2 import CmkException
 from tests import base_mock_init
 
 
+def _real_get_list(value):
+    """The shared test bootstrap stubs syncer_jinja, get_list included.
+    Stand in for it with the same behaviour the real helper has for the
+    shapes a loop list arrives in: a list, a list literal, or a comma
+    separated string."""
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        return [entry.strip() for entry in value.split(',') if entry.strip()]
+
+
 def _real_render(template, **context):
     """The shared test bootstrap stubs render_jinja with a MagicMock —
     rendering tests need actual Jinja substitution, so route through a
-    real Jinja2 environment in this test module only."""
+    real Jinja2 environment in this test module only. The Syncer's own
+    Jinja helpers are offered the same way the real environment does."""
+    context.setdefault('get_list', _real_get_list)
     return jinja2.Template(template).render(**context)
 
 
@@ -32,6 +48,8 @@ def _make_outcome(**overrides):
     """Build an outcome dict with sensible defaults for rendering."""
     outcome = {
         'notification_method': 'mail',
+        'multiply_by_list': False,
+        'multiply_list': '',
         'contact_group_recipients': '{{cmk_contact_group}}_ALARM',
         'match_contact_groups': '{{cmk_contact_group}}',
         'match_host_groups': '',
@@ -151,8 +169,8 @@ def _cfg(recipients, plugin='mail'):
     }
 
 
-class TestCheckmkNotificationRuleSync(unittest.TestCase):
-    """Render / build / diff logic on the sync class."""
+class _SyncTestCase(unittest.TestCase):
+    """Bootstrap a sync class instance without touching Checkmk."""
 
     def setUp(self):
         def mock_init(self_param, account=False):
@@ -179,6 +197,10 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
             self.sync._diff_and_apply(desired, existing)
         return created, updated, deleted
 
+
+class TestCheckmkNotificationRuleSync(_SyncTestCase):
+    """Render / build / diff logic on the sync class."""
+
     def test_event_dict_filters_unknown_and_fills_defaults(self):
         result = self.sync._event_dict(
             ['up_down', 'NONSENSE'], HOST_EVENT_FLAGS)
@@ -193,22 +215,22 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
         self.assertEqual(set(result.keys()), set(HOST_EVENT_FLAGS))
         self.assertFalse(any(result.values()))
 
-    def test_render_outcome_returns_none_without_recipients(self):
+    def test_render_rule_returns_none_without_recipients(self):
         outcome = _make_outcome(contact_group_recipients='')
         with patch(
                 'application.plugins.checkmk.notification_rules.render_jinja',
                 side_effect=_real_render):
-            body = self.sync._render_outcome(
+            body = self.sync._render_rule(
                 outcome, {'cmk_contact_group': 'ops'},
                 'cmdbsyncer_42 - DO NOT EDIT')
         self.assertIsNone(body)
 
-    def test_render_outcome_renders_jinja(self):
+    def test_render_rule_renders_jinja(self):
         outcome = _make_outcome()
         with patch(
                 'application.plugins.checkmk.notification_rules.render_jinja',
                 side_effect=_real_render):
-            body = self.sync._render_outcome(
+            body = self.sync._render_rule(
                 outcome, {'cmk_contact_group': 'ops'},
                 'cmdbsyncer_42 - DO NOT EDIT')
         self.assertIsNotNone(body)
@@ -244,7 +266,7 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
             cfg['notification_method']['notification_bulking'],
             {'state': 'disabled'})
 
-    def test_render_outcome_with_all_match_fields(self):
+    def test_render_rule_with_all_match_fields(self):
         # Override the default CG-match template to empty so this test
         # focuses on the other 12+ match fields without tripping the
         # "empty CG match" skip guard.
@@ -269,7 +291,7 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
         with patch(
                 'application.plugins.checkmk.notification_rules.render_jinja',
                 side_effect=_real_render):
-            body = self.sync._render_outcome(
+            body = self.sync._render_rule(
                 outcome, {}, 'cmdbsyncer_42 - DO NOT EDIT')
         cfg = body['rule_config']
         cnd = cfg['conditions']
@@ -313,15 +335,15 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
         self.assertEqual(cnd['match_contacts'],
                          {'state': 'enabled', 'value': ['alice', 'bob']})
 
-    def test_render_outcome_dedup_identical_bodies(self):
+    def test_render_rule_dedup_identical_bodies(self):
         outcome = _make_outcome()
         with patch(
                 'application.plugins.checkmk.notification_rules.render_jinja',
                 side_effect=_real_render):
-            body1 = self.sync._render_outcome(
+            body1 = self.sync._render_rule(
                 outcome, {'cmk_contact_group': 'ops'},
                 'cmdbsyncer_42 - DO NOT EDIT')
-            body2 = self.sync._render_outcome(
+            body2 = self.sync._render_rule(
                 outcome, {'cmk_contact_group': 'ops'},
                 'cmdbsyncer_42 - DO NOT EDIT')
         self.assertEqual(_canonical(body1['rule_config']),
@@ -334,7 +356,7 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
         with patch(
                 'application.plugins.checkmk.notification_rules.render_jinja',
                 side_effect=_real_render):
-            body = self.sync._render_outcome(
+            body = self.sync._render_rule(
                 outcome, {'cmk_contact_group': 'ops'},
                 'cmdbsyncer_42 - DO NOT EDIT')
         cfg = body['rule_config']
@@ -345,7 +367,7 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
         self.assertFalse(svc['value']['ok_crit'])
         self.assertNotIn('BOGUS', svc['value'])
 
-    def test_render_outcome_skips_empty_match_contact_group(self):
+    def test_render_rule_skips_empty_match_contact_group(self):
         """When the admin set a CG-match template but the host's label
         is empty, the rule must not be created — otherwise we'd match
         every host with no CG and ship to a `_ALARM`-only recipient."""
@@ -356,7 +378,7 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
         with patch(
                 'application.plugins.checkmk.notification_rules.render_jinja',
                 side_effect=_real_render):
-            body = self.sync._render_outcome(
+            body = self.sync._render_rule(
                 outcome, {'anwendung_kontaktgruppe': ''},
                 'cmdbsyncer_42 - DO NOT EDIT')
         self.assertIsNone(body)
@@ -498,6 +520,95 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
             desired_cfg['notification_method'])
 
 
+class TestNotificationRuleLoop(_SyncTestCase):
+    """One rule per entry of a list instead of one rule per host."""
+
+    def test_loop_disabled_renders_one_rule(self):
+        outcome = _make_outcome()
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render), \
+             patch('application.plugins.checkmk.notification_rules.get_list',
+                   side_effect=_real_get_list):
+            bodies = self.sync._render_outcome(
+                outcome, {'cmk_contact_group': 'ops'},
+                'cmdbsyncer_42 - DO NOT EDIT')
+        self.assertEqual(len(bodies), 1)
+
+    def test_loop_builds_one_rule_per_list_entry(self):
+        """
+        One attribute holding several contact groups becomes one rule
+        per group, with the entry available to every field as {{name}}.
+        """
+        outcome = _make_outcome(
+            multiply_by_list=True,
+            multiply_list='{{get_list(anwendung_kontaktgruppe)|safe}}',
+            match_contact_groups='{{name}}',
+            contact_group_recipients=(
+                "gro00_cmk_alarm_sms_{{name|replace('grr00_', '')}}, "
+                "gro00_cmk_alarm_email_{{name|replace('grr00_', '')}}"),
+        )
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render), \
+             patch('application.plugins.checkmk.notification_rules.get_list',
+                   side_effect=_real_get_list):
+            bodies = self.sync._render_outcome(
+                outcome,
+                {'anwendung_kontaktgruppe': 'grr00_oracle,grr00_sap'},
+                'cmdbsyncer_42 - DO NOT EDIT')
+
+        self.assertEqual(len(bodies), 2)
+        first, second = (b['rule_config'] for b in bodies)
+        self.assertEqual(first['conditions']['match_contact_groups'],
+                         {'state': 'enabled', 'value': ['grr00_oracle']})
+        self.assertEqual(
+            first['contact_selection']['members_of_contact_groups'],
+            {'state': 'enabled',
+             'value': ['gro00_cmk_alarm_sms_oracle',
+                       'gro00_cmk_alarm_email_oracle']})
+        self.assertEqual(second['conditions']['match_contact_groups'],
+                         {'state': 'enabled', 'value': ['grr00_sap']})
+        self.assertEqual(
+            second['contact_selection']['members_of_contact_groups'],
+            {'state': 'enabled',
+             'value': ['gro00_cmk_alarm_sms_sap',
+                       'gro00_cmk_alarm_email_sap']})
+
+    def test_loop_over_python_list_attribute(self):
+        outcome = _make_outcome(
+            multiply_by_list=True,
+            multiply_list='{{get_list(groups)|safe}}',
+            match_contact_groups='{{name}}',
+            contact_group_recipients='{{name}}_ALARM',
+        )
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render), \
+             patch('application.plugins.checkmk.notification_rules.get_list',
+                   side_effect=_real_get_list):
+            bodies = self.sync._render_outcome(
+                outcome, {'groups': ['db', 'web']},
+                'cmdbsyncer_42 - DO NOT EDIT')
+        self.assertEqual(
+            [b['rule_config']['conditions']['match_contact_groups']['value']
+             for b in bodies],
+            [['db'], ['web']])
+
+    def test_loop_over_empty_list_renders_nothing(self):
+        outcome = _make_outcome(
+            multiply_by_list=True,
+            multiply_list='{{get_list(groups)|safe}}',
+            match_contact_groups='{{name}}',
+        )
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render), \
+             patch('application.plugins.checkmk.notification_rules.get_list',
+                   side_effect=_real_get_list):
+            bodies = self.sync._render_outcome(
+                outcome, {'groups': ''}, 'cmdbsyncer_42 - DO NOT EDIT')
+        self.assertEqual(bodies, [])
 
 if __name__ == '__main__':
     unittest.main()

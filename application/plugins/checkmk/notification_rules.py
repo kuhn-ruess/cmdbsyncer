@@ -14,7 +14,7 @@ from application.models.host import Host
 from application.modules.rule.rule import Rule
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.plugins.checkmk.cmk_rules import deep_compare
-from application.helpers.syncer_jinja import render_jinja
+from application.helpers.syncer_jinja import render_jinja, get_list
 from application.modules.debug import ColorCodes as CC
 
 
@@ -239,19 +239,54 @@ class CheckmkNotificationRuleSync(CMK2):
                 host_actions = self.actions.get_outcomes(  # pylint: disable=no-member
                     db_host, attributes['all'])
                 for outcome in (host_actions or {}).get('rules', []):
-                    body = self._render_outcome(outcome, attributes['all'], marker_full)
-                    if body is None:
-                        continue
-                    key = _canonical(body['rule_config'])
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    rules.append(body)
+                    for body in self._render_outcome(outcome, attributes['all'],
+                                                     marker_full):
+                        key = _canonical(body['rule_config'])
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        rules.append(body)
                 progress.advance(task1)
         return rules
 
-    # pylint: disable=too-many-locals
+    @staticmethod
+    def _loop_contexts(outcome, attributes):
+        """
+        One render context per rule this outcome produces for a host.
+
+        Without the loop that is a single pass with the host's own
+        attributes. With it, the list expression is rendered once and
+        every entry becomes a pass of its own, offered to all other
+        fields as ``{{name}}`` — so one attribute holding several
+        contact groups turns into one rule per group instead of one
+        rule naming them all.
+        """
+        if not outcome.get('multiply_by_list'):
+            return [{}]
+        try:
+            rendered = _render(outcome.get('multiply_list', ''), attributes)
+        except Exception as exp:  # pylint: disable=broad-except
+            logger.warning("Notification loop render error: %s", exp)
+            return []
+        if not rendered:
+            return []
+        return [{'name': entry} for entry in get_list(rendered) if entry]
+
     def _render_outcome(self, outcome, attributes, marker_full):
+        """
+        Turn one matched outcome into rendered API rule bodies — one
+        per loop entry, or a single one when the outcome does not loop.
+        """
+        bodies = []
+        for loop_context in self._loop_contexts(outcome, attributes):
+            body = self._render_rule(
+                outcome, {**attributes, **loop_context}, marker_full)
+            if body is not None:
+                bodies.append(body)
+        return bodies
+
+    # pylint: disable=too-many-locals
+    def _render_rule(self, outcome, attributes, marker_full):
         """
         Turn one matched outcome into a fully rendered API rule body.
         Returns None when:

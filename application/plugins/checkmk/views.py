@@ -1605,6 +1605,8 @@ def _render_notification_rule(_view, _context, model, _name):
     html = [_RULE_MNGMT_CARD_CSS]
     for entry in model.outcomes:
         rows = [('Method', entry.notification_method or 'mail')]
+        if entry.multiply_by_list and entry.multiply_list:
+            rows.append(('One rule per entry of', entry.multiply_list))
         if entry.contact_group_recipients:
             rows.append(('Recipients', entry.contact_group_recipients))
         for field, label in _NOTIFICATION_LIST_LABELS:
@@ -1760,6 +1762,7 @@ class CheckmkNotificationRuleView(RuleModelView):
             field: StringField for field, _label in _NOTIFICATION_LIST_LABELS
         }
         match_field_overrides['contact_group_recipients'] = StringField
+        match_field_overrides['multiply_list'] = StringField
         match_field_overrides['notification_method'] = _StringFieldWithDatalist
         # Multi-select with human-readable labels for the event-type
         # ListFields. wtforms posts a plain list of API-flag strings.
@@ -1774,6 +1777,17 @@ class CheckmkNotificationRuleView(RuleModelView):
         }
         form_args['contact_group_recipients'] = {'label': 'Contact Group Recipients'}
         form_args['notification_method'] = {'label': 'Notification Method'}
+        form_args['multiply_by_list'] = {
+            'label': 'One Rule per List Entry',
+            'description': 'Build one rule per entry of the list below instead '
+                           'of one rule per host. Every other field can use the '
+                           'current entry as {{name}}.',
+        }
+        form_args['multiply_list'] = {
+            'label': 'List to Loop Over',
+            'description': 'Jinja rendering to a list, e.g. '
+                           "{{get_list(anwendung_kontaktgruppe)|safe}}",
+        }
         form_args['match_host_event_types'] = {'label': 'Filter Host Event Types'}
         form_args['match_service_event_types'] = {'label': 'Filter Service Event Types'}
         form_args['disable_rule'] = {'label': 'Disable Rule'}
@@ -1788,6 +1802,11 @@ class CheckmkNotificationRuleView(RuleModelView):
                                 'placeholder': (
                                     'Comma-separated CG names, Jinja. '
                                     'e.g. {{cmk_contact_group}}_ALARM'
+                                )
+                            },
+                            'multiply_list': {
+                                'placeholder': (
+                                    '{{get_list(anwendung_kontaktgruppe)|safe}}'
                                 )
                             },
                             'match_contact_groups': {
