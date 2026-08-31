@@ -127,6 +127,15 @@
         {% endfor %}
     </p>
 
+    {% if result.limits %}
+    <p>
+        Rate limit of the instance:
+        {% for key, value in result.limits.items() | sort %}
+        <code>{{ key }}: {{ value }}</code>{% if not loop.last %}, {% endif %}
+        {% endfor %}
+    </p>
+    {% endif %}
+
     <div class="card app-card mb-4">
         <div class="card-header">
             {{ result.records | length }} record(s) found

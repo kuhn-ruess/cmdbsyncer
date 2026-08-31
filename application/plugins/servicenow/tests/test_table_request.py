@@ -21,10 +21,11 @@ class FakeResponse:
 
     url = 'https://instance.service-now.com/api/now/table/cmdb_ci_server'
 
-    def __init__(self, status_code=200, payload=None, text=''):
+    def __init__(self, status_code=200, payload=None, text='', headers=None):
         self.status_code = status_code
         self.ok = status_code < 400
         self.text = text
+        self.headers = headers or {}
         self._payload = payload
 
     def json(self):
@@ -100,6 +101,14 @@ class TestReadPage(unittest.TestCase):
         self.assertEqual(self._read(FakeResponse(payload={'result': [{'name': 'srv01'}]})),
                          [{'name': 'srv01'}])
 
+    def test_the_remaining_quota_is_kept_for_the_query_view(self):
+        instance = syncer(username='u', password='p')
+        response = FakeResponse(payload={'result': []},
+                                headers={'X-RateLimit-Remaining': '4711'})
+        instance.inner_request = lambda *args, **kwargs: response
+        instance.read_page('cmdb_ci_server', {})
+        self.assertEqual(instance.last_rate_limit, {'X-RateLimit-Remaining': '4711'})
+
     def test_answer_without_json_names_the_url_and_the_answer(self):
         # A gateway with another context path answers with plain text
         with self.assertRaises(ServiceNowError) as caught:
@@ -109,10 +118,30 @@ class TestReadPage(unittest.TestCase):
         self.assertIn('/api/now/table/cmdb_ci_server', str(caught.exception))
         self.assertIn('No context-path matches', str(caught.exception))
 
-    def test_invalid_login_is_named(self):
+    def test_invalid_login_is_named_and_keeps_the_answer(self):
+        # The body is what tells a wrong password from a locked user
         with self.assertRaises(ServiceNowError) as caught:
-            self._read(FakeResponse(status_code=401, text='Required to provide Auth information'))
-        self.assertIn('Invalid login', str(caught.exception))
+            self._read(FakeResponse(status_code=401, text='User Not Authenticated'))
+        self.assertIn('invalid login', str(caught.exception))
+        self.assertIn('User Not Authenticated', str(caught.exception))
+
+    def test_rate_limit_is_not_reported_as_invalid_login(self):
+        with self.assertRaises(ServiceNowError) as caught:
+            self._read(FakeResponse(status_code=429, text='Maximum request limit exceeded',
+                                    headers={'X-RateLimit-Remaining': '0',
+                                             'Retry-After': '60'}))
+        message = str(caught.exception)
+        self.assertIn('rate limiting', message)
+        self.assertNotIn('invalid login', message)
+        self.assertIn('Retry-After: 60', message)
+
+    def test_a_throttling_gateway_answering_401_shows_its_headers(self):
+        # Some gateways throttle with a 401 instead of a 429 — then the
+        # headers are the only thing that says what really happened
+        with self.assertRaises(ServiceNowError) as caught:
+            self._read(FakeResponse(status_code=401, text='rate limit exceeded',
+                                    headers={'X-RateLimit-Remaining': '0'}))
+        self.assertIn('X-RateLimit-Remaining: 0', str(caught.exception))
 
     def test_error_of_the_instance_is_shown(self):
         with self.assertRaises(ServiceNowError) as caught:

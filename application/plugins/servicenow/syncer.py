@@ -13,6 +13,33 @@ class ServiceNowError(Exception):
     """Raised on ServiceNow API errors."""
 
 
+# Headers ServiceNow answers a throttled request with. They also travel
+# on a successful answer, which is what makes a run's remaining quota
+# visible before it runs out.
+RATE_LIMIT_HEADERS = ('X-RateLimit-Limit', 'X-RateLimit-Remaining',
+                      'X-RateLimit-Reset', 'X-RateLimit-Rule', 'Retry-After')
+
+
+def rate_limit_info(response):
+    """
+    The rate limit headers of an answer as {header: value}, empty when
+    the instance sent none.
+    """
+    headers = getattr(response, 'headers', None) or {}
+    return {name: headers[name] for name in RATE_LIMIT_HEADERS if name in headers}
+
+
+def rate_limit_hint(response):
+    """
+    The rate limit headers as one parenthesised line for an error
+    message, empty when there are none.
+    """
+    info = rate_limit_info(response)
+    if not info:
+        return ''
+    return ' (' + ', '.join(f"{name}: {value}" for name, value in info.items()) + ')'
+
+
 def answer_excerpt(response, length=300):
     """
     The beginning of an answer as one readable line.
@@ -112,9 +139,24 @@ class SyncServiceNow(Plugin):
         except RequestException as error:
             raise ServiceNowError(f"Could not reach ServiceNow: {error}") from error
 
-        if response.status_code == 401:
+        # Kept for the query view, which shows what is left of the quota
+        self.last_rate_limit = rate_limit_info(response)
+        limits = rate_limit_hint(response)
+
+        if response.status_code == 429:
             raise ServiceNowError(
-                "Invalid login for ServiceNow, check username/password and roles")
+                f"429 from {response.url}: ServiceNow is rate limiting this account"
+                f"{limits}. Wait for the reset, lower sysparm_limit so a run does "
+                f"fewer requests, or raise the limit of the inbound REST rule. "
+                f"Answer: {answer_excerpt(response)}")
+
+        if response.status_code == 401:
+            # The body is the difference between wrong credentials, a
+            # locked user and a gateway that answers 401 while throttling
+            raise ServiceNowError(
+                f"401 from {response.url}: invalid login for ServiceNow — check "
+                f"username, password and the roles of the user{limits}. "
+                f"Answer: {answer_excerpt(response)}")
 
         try:
             payload = response.json()
@@ -135,12 +177,13 @@ class SyncServiceNow(Plugin):
             message = error_payload.get('message', error_payload) \
                         if isinstance(error_payload, dict) else error_payload
             detail = error_payload.get('detail') if isinstance(error_payload, dict) else ''
-            raise ServiceNowError(f"{response.status_code} from {response.url}: {message}"
-                                  f"{' — ' + detail if detail else ''}")
+            raise ServiceNowError(f"{response.status_code} from {response.url}{limits}: "
+                                  f"{message}{' — ' + detail if detail else ''}")
 
         if not response.ok:
             raise ServiceNowError(
-                f"{response.status_code} from {response.url}: {answer_excerpt(response)}")
+                f"{response.status_code} from {response.url}{limits}: "
+                f"{answer_excerpt(response)}")
 
         return payload.get('result', [])
 
@@ -178,19 +221,23 @@ class SyncServiceNow(Plugin):
 
 #.
 #   .-- Query one table
+    last_rate_limit = None
+
     def query_table(self, table, limit=25):
         """
         Read at most `limit` records of one table the way the import reads
         them, without touching a single object of the syncer. Returns the
-        request it did and its records as
-        {'url':, 'params':, 'records': [{'hostname':, 'labels':}]} — the
-        hostname is empty for records the import would skip.
+        request it did, what the instance said about the rate limit and
+        its records as {'url':, 'params':, 'limits':, 'records':
+        [{'hostname':, 'labels':}]} — the hostname is empty for records
+        the import would skip.
         """
         params = self.table_params(limit)
         records = [self.flatten_record(x) for x in self.read_page(table, params)]
         return {
             'url': self.table_url(table),
             'params': params,
+            'limits': self.last_rate_limit or {},
             'records': [{'hostname': self.record_hostname(x), 'labels': x} for x in records],
         }
 
