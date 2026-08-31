@@ -185,6 +185,15 @@ class CheckmkNotificationRuleSync(CMK2):
     — the diff compares the actual rule_config bodies, so manual
     changes to one of our rules in CMK are detected and corrected on
     the next run.
+
+    The notification method is the one exception: Checkmk stores its
+    parameters in a separate, admin-owned parameter set and binds a
+    rule to it on creation. Since the API offers no way to point a new
+    rule at a specific parameter set, a rule created with just a plugin
+    name lands on Checkmk's first parameter set for that plugin. So we
+    keep the method out of the drift compare and carry Checkmk's method
+    block over when we rewrite a rule — otherwise every content change
+    would reset the admin's notification method settings.
     """
 
     actions = None  # injected by inits
@@ -417,28 +426,77 @@ class CheckmkNotificationRuleSync(CMK2):
             rules.append({'id': rule_id, 'rule_config': rule_config})
         return rules
 
+    @staticmethod
+    def _plugin_name(rule_config):
+        """Notification plugin a rule body uses."""
+        notify_plugin = (rule_config.get('notification_method', {}) or {}).get(
+            'notify_plugin', {}) or {}
+        return (notify_plugin.get('plugin_params', {}) or {}).get('plugin_name')
+
+    @staticmethod
+    def _recipients(rule_config):
+        """
+        Contact groups a rule notifies. Two of our rules that ship to
+        the same groups are the same rule to the admin, so this is what
+        we correlate on when a rule's content changed.
+        """
+        slot = (rule_config.get('contact_selection', {}) or {}).get(
+            'members_of_contact_groups', {}) or {}
+        return tuple(sorted(slot.get('value') or []))
+
+    def _comparable(self, rule_config):
+        """
+        Rule body reduced to what the syncer owns.
+
+        Everything inside ``notification_method`` except the plugin
+        name — the method's parameters and the bulking settings — is
+        the Checkmk admin's, so it must not count as drift.
+        """
+        reduced = dict(rule_config)
+        reduced['notification_method'] = {
+            'plugin_name': self._plugin_name(rule_config)}
+        return reduced
+
     def _diff_and_apply(self, desired, existing):
         unmatched_existing = list(existing)
+        to_update = []
         to_create = []
         for body in desired:
-            our_cfg = body['rule_config']
+            our_cfg = self._comparable(body['rule_config'])
             match = None
             for cmk in unmatched_existing:
-                if deep_compare(our_cfg, cmk['rule_config']):
+                if deep_compare(our_cfg, self._comparable(cmk['rule_config'])):
                     match = cmk
                     break
             if match is not None:
                 unmatched_existing.remove(match)
+                continue
+            # Nothing identical left. Rewrite the rule that ships to the
+            # same recipients instead of deleting it and creating a new
+            # one — a fresh rule would lose the notification method
+            # settings the admin attached to it in Checkmk.
+            for cmk in unmatched_existing:
+                if self._recipients(cmk['rule_config']) == \
+                        self._recipients(body['rule_config']):
+                    match = cmk
+                    break
+            if match is not None:
+                unmatched_existing.remove(match)
+                to_update.append((match, body))
             else:
                 to_create.append(body)
         to_delete = unmatched_existing
 
         print(f"\n{CC.HEADER}Apply Diff{CC.ENDC}")
-        print(f"{CC.OKBLUE} *{CC.ENDC} keep={len(desired) - len(to_create)} "
-              f"create={len(to_create)} delete={len(to_delete)}")
+        print(f"{CC.OKBLUE} *{CC.ENDC} "
+              f"keep={len(desired) - len(to_create) - len(to_update)} "
+              f"update={len(to_update)} create={len(to_create)} "
+              f"delete={len(to_delete)}")
 
         for cmk in to_delete:
             self._delete_rule(cmk['id'])
+        for cmk, body in to_update:
+            self._update_rule(cmk, body)
         for body in to_create:
             self._create_rule(body)
 
@@ -456,6 +514,34 @@ class CheckmkNotificationRuleSync(CMK2):
                 ("ERROR",
                  f"Could not delete notification rule {rule_id}: {error}"))
             print(f"{CC.FAIL} DELETE failed for {rule_id}: {error} {CC.ENDC}")
+
+    def _update_rule(self, current, body):
+        """
+        Rewrite one of our rules in place.
+
+        The notification method block is taken from Checkmk, not from
+        us: its parameters belong to the admin, and pushing our own
+        (which only names the plugin) would rebind the rule to Checkmk's
+        first parameter set for that plugin. Only a changed plugin makes
+        the stored parameters useless, so only then do we push ours.
+        """
+        rule_id = current['id']
+        config = dict(body['rule_config'])
+        stored = current['rule_config']
+        if self._plugin_name(stored) == self._plugin_name(config) and \
+                stored.get('notification_method'):
+            config['notification_method'] = stored['notification_method']
+        url = f"/objects/notification_rule/{rule_id}"
+        try:
+            self.request(url, data={'rule_config': config}, method="PUT")
+            self.log_details.append(
+                ("INFO", f"Updated notification rule {rule_id}"))
+            print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE {rule_id}")
+        except CmkException as error:
+            self.log_details.append(
+                ("ERROR",
+                 f"Could not update notification rule {rule_id}: {error}"))
+            print(f"{CC.FAIL} UPDATE failed for {rule_id}: {error} {CC.ENDC}")
 
     def _create_rule(self, body):
         url = "/domain-types/notification_rule/collections/all"

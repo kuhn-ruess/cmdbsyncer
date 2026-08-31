@@ -129,6 +129,28 @@ class TestEventFlagSets(unittest.TestCase):
         self.assertIn('ok_crit', SERVICE_EVENT_FLAGS)
 
 
+def _cfg(recipients, plugin='mail'):
+    """Minimal rule_config in the shape Checkmk stores it."""
+    return {
+        'rule_properties': {
+            'description': 'cmdbsyncer_test_account - DO NOT EDIT',
+            'do_not_apply_this_rule': {'state': 'disabled'},
+        },
+        'notification_method': {
+            'notify_plugin': {
+                'option': 'create_notification_with_the_following_parameters',
+                'plugin_params': {'plugin_name': plugin},
+            },
+            'notification_bulking': {'state': 'disabled'},
+        },
+        'contact_selection': {
+            'members_of_contact_groups': {
+                'state': 'enabled', 'value': list(recipients)},
+        },
+        'conditions': {},
+    }
+
+
 class TestCheckmkNotificationRuleSync(unittest.TestCase):
     """Render / build / diff logic on the sync class."""
 
@@ -144,6 +166,18 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
 
     def tearDown(self):
         self.init_patcher.stop()
+
+    def _apply(self, desired, existing):
+        """Run the diff with all three apply calls captured."""
+        created, updated, deleted = [], [], []
+        with patch.object(self.sync, '_create_rule',
+                          side_effect=created.append), \
+             patch.object(self.sync, '_update_rule',
+                          side_effect=lambda cmk, body: updated.append((cmk, body))), \
+             patch.object(self.sync, '_delete_rule',
+                          side_effect=deleted.append):
+            self.sync._diff_and_apply(desired, existing)
+        return created, updated, deleted
 
     def test_event_dict_filters_unknown_and_fills_defaults(self):
         result = self.sync._event_dict(
@@ -356,80 +390,113 @@ class TestCheckmkNotificationRuleSync(unittest.TestCase):
         self.assertEqual(ids, ['mine-1'])
 
     def test_diff_creates_new_and_deletes_orphan(self):
-        keep_cfg = {
-            'rule_properties': {
-                'description': 'cmdbsyncer_test_account - DO NOT EDIT',
-                'do_not_apply_this_rule': {'state': 'disabled'},
-            },
-        }
-        new_cfg = {
-            'rule_properties': {
-                'description': 'cmdbsyncer_test_account - DO NOT EDIT',
-                'do_not_apply_this_rule': {'state': 'enabled'},
-            },
-        }
-        orphan_cfg = {
-            'rule_properties': {
-                'description': 'cmdbsyncer_test_account - DO NOT EDIT',
-                'do_not_apply_this_rule': {'state': 'disabled'},
-                'documentation_url': 'orphan',
-            },
-        }
         desired = [
-            {'rule_config': keep_cfg},
-            {'rule_config': new_cfg},
+            {'rule_config': _cfg(['ops'])},
+            {'rule_config': _cfg(['dba'])},
         ]
         existing = [
-            {'id': 'keep-id', 'rule_config': keep_cfg},
-            {'id': 'orphan-id', 'rule_config': orphan_cfg},
+            {'id': 'keep-id', 'rule_config': _cfg(['ops'])},
+            {'id': 'orphan-id', 'rule_config': _cfg(['legacy'])},
         ]
 
-        created = []
-        deleted = []
-        with patch.object(self.sync, '_create_rule',
-                          side_effect=created.append), \
-             patch.object(self.sync, '_delete_rule',
-                          side_effect=deleted.append):
-            self.sync._diff_and_apply(desired, existing)
+        created, updated, deleted = self._apply(desired, existing)
 
         self.assertEqual(deleted, ['orphan-id'])
+        self.assertEqual(updated, [])
         self.assertEqual(len(created), 1)
         self.assertEqual(
-            created[0]['rule_config']['rule_properties']['do_not_apply_this_rule'],
-            {'state': 'enabled'})
+            self.sync._recipients(created[0]['rule_config']), ('dba',))
+
+    def test_diff_keeps_rule_whose_method_the_admin_configured(self):
+        """
+        The admin tuned the notification method of one of our rules in
+        Checkmk. Those parameters are theirs — the rule must be left
+        alone instead of being recreated with our bare plugin name.
+        """
+        admin_cfg = _cfg(['ops'])
+        admin_cfg['notification_method']['notify_plugin']['plugin_params'].update({
+            'from_details': {'state': 'enabled',
+                             'value': {'address': 'admin@example.com'}},
+        })
+        admin_cfg['notification_method']['notification_bulking'] = {
+            'state': 'enabled', 'value': {'time_horizon': 60}}
+
+        created, updated, deleted = self._apply(
+            [{'rule_config': _cfg(['ops'])}],
+            [{'id': 'tuned-id', 'rule_config': admin_cfg}])
+
+        self.assertEqual((created, updated, deleted), ([], [], []))
+
+    def test_diff_updates_in_place_instead_of_recreating(self):
+        """
+        Content of a rule changed. It is rewritten in place so the
+        notification method settings stay attached to it — a delete +
+        create would reset them to Checkmk's first parameter set.
+        """
+        stored_cfg = _cfg(['ops'])
+        stored_cfg['conditions']['match_folder'] = {'state': 'disabled'}
+        desired_cfg = _cfg(['ops'])
+        desired_cfg['conditions']['match_folder'] = {
+            'state': 'enabled', 'value': '/it'}
+
+        created, updated, deleted = self._apply(
+            [{'rule_config': desired_cfg}],
+            [{'id': 'edit-id', 'rule_config': stored_cfg}])
+
+        self.assertEqual((created, deleted), ([], []))
+        self.assertEqual([cmk['id'] for cmk, _body in updated], ['edit-id'])
 
     def test_diff_detects_admin_edit_via_body_compare(self):
         """
-        Admin changed a field on one of our rules in CMK. The body
-        compare no longer matches, so the rule is treated as orphan
-        (DELETE) and the desired one is created (POST), restoring our
-        state.
+        Admin changed one of our fields on a rule in Checkmk. The body
+        compare no longer matches, so the rule is rewritten with our
+        state — in place, keeping its notification method.
         """
-        our_cfg = {
-            'rule_properties': {
-                'description': 'cmdbsyncer_test_account - DO NOT EDIT',
-                'do_not_apply_this_rule': {'state': 'disabled'},
-            },
-        }
-        admin_edited_cfg = {
-            'rule_properties': {
-                'description': 'cmdbsyncer_test_account - DO NOT EDIT',
-                'do_not_apply_this_rule': {'state': 'enabled'},
-            },
-        }
-        desired = [{'rule_config': our_cfg}]
-        existing = [{'id': 'edited-id', 'rule_config': admin_edited_cfg}]
+        admin_edited_cfg = _cfg(['ops'])
+        admin_edited_cfg['rule_properties']['do_not_apply_this_rule'] = {
+            'state': 'enabled'}
 
-        created = []
-        deleted = []
-        with patch.object(self.sync, '_create_rule',
-                          side_effect=created.append), \
-             patch.object(self.sync, '_delete_rule',
-                          side_effect=deleted.append):
-            self.sync._diff_and_apply(desired, existing)
+        created, updated, deleted = self._apply(
+            [{'rule_config': _cfg(['ops'])}],
+            [{'id': 'edited-id', 'rule_config': admin_edited_cfg}])
 
-        self.assertEqual(deleted, ['edited-id'])
-        self.assertEqual(len(created), 1)
+        self.assertEqual((created, deleted), ([], []))
+        self.assertEqual(len(updated), 1)
+        self.assertEqual(
+            updated[0][1]['rule_config']['rule_properties']['do_not_apply_this_rule'],
+            {'state': 'disabled'})
+
+    def test_update_rule_keeps_checkmk_notification_method(self):
+        stored_cfg = _cfg(['ops'])
+        stored_cfg['notification_method']['notify_plugin']['plugin_params'].update({
+            'from_details': {'state': 'enabled',
+                             'value': {'address': 'admin@example.com'}},
+        })
+        sent = []
+        with patch.object(self.sync, 'request',
+                          side_effect=lambda *a, **kw: sent.append((a, kw)) or ({}, {})):
+            self.sync._update_rule({'id': 'rule-id', 'rule_config': stored_cfg},
+                                   {'rule_config': _cfg(['ops'])})
+        (url,), kwargs = sent[0]
+        self.assertEqual(url, '/objects/notification_rule/rule-id')
+        self.assertEqual(kwargs['method'], 'PUT')
+        self.assertEqual(
+            kwargs['data']['rule_config']['notification_method'],
+            stored_cfg['notification_method'])
+
+    def test_update_rule_pushes_own_method_when_plugin_changed(self):
+        stored_cfg = _cfg(['ops'], plugin='slack')
+        desired_cfg = _cfg(['ops'], plugin='mail')
+        sent = []
+        with patch.object(self.sync, 'request',
+                          side_effect=lambda *a, **kw: sent.append((a, kw)) or ({}, {})):
+            self.sync._update_rule({'id': 'rule-id', 'rule_config': stored_cfg},
+                                   {'rule_config': desired_cfg})
+        _args, kwargs = sent[0]
+        self.assertEqual(
+            kwargs['data']['rule_config']['notification_method'],
+            desired_cfg['notification_method'])
+
 
 
 if __name__ == '__main__':
