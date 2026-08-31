@@ -166,18 +166,67 @@ GLOBAL_CUSTOM_FIELD_PRESETS = {
 }
 
 
+# What the fields of the Plugin base class configure. They are on every
+# account, so their help belongs here and not into 22 plugin.json files.
+GLOBAL_CUSTOM_FIELD_HELP = {
+    'custom_headers': (
+        "Extra HTTP headers for every request of this account, as "
+        "`Name: value` pairs separated by a pipe — for an API gateway in "
+        "front of the target system that wants its own key or tenant "
+        "header. Example: X-API-Key: abc123 | X-Tenant: muc"
+    ),
+    'request_timeout': (
+        "Seconds a single request may take before it is given up, for a "
+        "target system slower than the global default of 30."
+    ),
+    'verify_cert': (
+        "False turns off the TLS certificate check for this account. Only "
+        "for a target system with a certificate you cannot fix — it makes "
+        "the connection interceptable."
+    ),
+    'ca_cert_chain': (
+        "Path to a file with the intermediate certificates needed to trust "
+        "the target system, instead of switching the check off."
+    ),
+    'ca_root_cert': (
+        "Path to a file with the root certificate of your own CA, so its "
+        "certificates are trusted for this account."
+    ),
+}
+
+
 def _with_global_presets(data):
     """
     One plugin's data with the global custom fields folded into its
-    presets. The plugin's own value for a key wins, and the cached
-    plugin.json dict is left untouched.
+    presets and their help. The plugin's own value for a key wins, and
+    the cached plugin.json dict is left untouched.
     """
     merged = dict(data)
     merged['account_custom_field_presets'] = {
         **GLOBAL_CUSTOM_FIELD_PRESETS,
         **(data.get('account_custom_field_presets') or {}),
     }
+    merged['account_custom_field_help'] = {
+        **GLOBAL_CUSTOM_FIELD_HELP,
+        **(data.get('account_custom_field_help') or {}),
+    }
     return merged
+
+
+def custom_field_help():
+    """
+    What every account custom field configures, as
+    {plugin type: {field: help}} plus the fields of the base class under
+    the empty key.
+
+    The account form shows the line belonging to a field right under it —
+    a custom field is a bare name/value pair otherwise, and nobody can
+    tell from it what it does.
+    """
+    help_texts = {'': dict(GLOBAL_CUSTOM_FIELD_HELP)}
+    for ident, data in discover_plugins().items():
+        help_texts[ident] = data.get('account_custom_field_help') or {}
+    return help_texts
 
 
 def register_plugin_type(ident, name, account_presets=None,

@@ -56,6 +56,28 @@ class TestGlobalAccountPresets(unittest.TestCase):
         self._discover()
         self.assertNotIn('custom_headers', self.plugin['account_custom_field_presets'])
 
+    def test_every_plugin_offers_the_global_help(self):
+        texts = self._discover()['demo']['account_custom_field_help']
+        self.assertIn('custom_headers', texts)
+
+    def test_the_plugins_own_help_wins(self):
+        self.plugin['account_custom_field_help'] = {'custom_headers': 'own text',
+                                                    'tables': 'the tables'}
+        texts = self._discover()['demo']['account_custom_field_help']
+        self.assertEqual(texts['custom_headers'], 'own text')
+        self.assertEqual(texts['tables'], 'the tables')
+
+    def test_the_help_is_offered_per_plugin_type(self):
+        self.plugin['account_custom_field_help'] = {'tables': 'the tables'}
+        with patch.object(self.helper, '_disabled_idents', return_value=set()), \
+             patch.object(self.helper, '_plugin_data_cache',
+                          return_value={'demo': self.plugin}):
+            texts = self.helper.custom_field_help()
+        self.assertEqual(texts['demo']['tables'], 'the tables')
+        # The fields of the base class stand under the empty key, for a
+        # type the form does not know
+        self.assertIn('custom_headers', texts[''])
+
     def test_a_type_registered_from_code_gets_them_too(self):
         # Enterprise registers its account types this way
         self.helper.register_plugin_type('ent', "Enterprise")

@@ -4,7 +4,7 @@
     "name": "Checkmk Version 2.x",
     "description": "",
     "ident": "cmkv2",
-    "account_presets" : {
+    "account_presets": {
         "address": "https://servername/sitename"
     },
     "account_custom_field_presets": {
@@ -22,5 +22,18 @@
         "ca_cert_chain": "",
         "ca_root_cert": "",
         "import_filter": ""
+    },
+    "account_custom_field_help": {
+        "limit_by_accounts": "Only export hosts coming from these source accounts, comma separated. A name prefixed with ! excludes that account instead. Empty exports the hosts of every account.",
+        "limit_by_hostnames": "Only export these hosts, comma separated — for trying an export out on a few hosts. Empty exports every host.",
+        "limit_by_folders": "Only export hosts whose target folder lies in these folders, e.g. /test. Recursive, so /test also covers /test/linux. Used to fill a test instance with part of the hosts.",
+        "list_disabled_hosts": "Set to True to list, at the end of an export, which hosts were left out because a rule disabled them.",
+        "bakery_key_id": "Number of the Checkmk signing key used to bake and sign agents. Needed together with bakery_passphrase.",
+        "bakery_passphrase": "Passphrase of the signing key named in bakery_key_id.",
+        "dont_delete_hosts_if_more_then": "Stop deleting hosts in Checkmk when a run would delete more than this many — a safety net against a broken import emptying the monitoring. The run reports the refusal as an error.",
+        "dont_activate_changes_if_more_then": "Do not activate changes when Checkmk has more pending changes than this, so a mass change is never activated unnoticed.",
+        "wait_for_activate_changes": "Set to True to wait until Checkmk has finished activating the changes, instead of only starting the activation and moving on.",
+        "remove_orphaned_rules": "Set to True to delete rules in Checkmk that the syncer created earlier but no rule of it produces any more. Only rules carrying this account's marker are touched.",
+        "import_filter": "Hosts whose name starts with one of these prefixes are not imported, comma separated."
     }
 }

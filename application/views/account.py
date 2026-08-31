@@ -14,7 +14,7 @@ from application.models.cron import CronGroup
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 from application.models.account import CustomEntry, Account
-from application.helpers.plugins import discover_plugins
+from application.helpers.plugins import custom_field_help, discover_plugins
 from application.plugins.checkmk.models import CheckmkObjectCache  # TODO: Make Plugin Compatible
 from application.docu_links import docu_links
 
@@ -172,6 +172,17 @@ class AccountModelView(DefaultModelView):
     column_filters = name_and_enabled_filters()
 
     column_exclude_list = ['custom_fields', 'is_child', 'parent', 'password_crypted']
+
+    # The custom fields are name/value pairs, so what they configure is
+    # invisible in the form. These templates add the help of a field
+    # under its row, read from the plugin's plugin.json.
+    edit_template = 'admin/account_edit.html'
+    create_template = 'admin/account_create.html'
+
+    @staticmethod
+    def custom_field_help():
+        """What every account custom field configures, by plugin type."""
+        return custom_field_help()
 
     form_subdocuments = {
         'custom_fields': {

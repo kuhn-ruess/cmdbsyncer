@@ -1,0 +1,57 @@
+{#
+  Inline help for the account custom fields.
+
+  A custom field is a bare name/value pair in the form, so what it
+  configures is invisible. The help of a field is declared next to its
+  preset in the plugin's plugin.json (and, for the fields of the plugin
+  base class, in application/helpers/plugins.py) and shown here under
+  the row it belongs to.
+#}
+<script>
+    (function () {
+        var help = {{ admin_view.custom_field_help() | tojson }};
+        var typeField = document.getElementById('type');
+        var NAME_INPUT = 'input[id^="custom_fields-"][id$="-name"]';
+
+        function texts() {
+            var byType = typeField ? help[typeField.value] : null;
+            return byType || help[''] || {};
+        }
+
+        function apply(nameInput) {
+            var row = nameInput.closest('.form-row');
+            if (!row) { return; }
+            var target = row.querySelector('.col-9') || row;
+            var text = texts()[(nameInput.value || '').trim()] || '';
+            var hint = target.querySelector('.account-field-help');
+            if (!text) {
+                if (hint) { hint.remove(); }
+                return;
+            }
+            if (!hint) {
+                hint = document.createElement('small');
+                hint.className = 'form-text text-muted account-field-help';
+                target.appendChild(hint);
+            }
+            // Only write on a real change: the observer below watches
+            // this element too, and an unconditional write would keep
+            // retriggering itself
+            if (hint.textContent !== text) { hint.textContent = text; }
+        }
+
+        function render() {
+            document.querySelectorAll(NAME_INPUT).forEach(apply);
+        }
+
+        document.addEventListener('input', function (event) {
+            if (event.target.matches && event.target.matches(NAME_INPUT)) {
+                apply(event.target);
+            }
+        });
+
+        // Rows are added by the inline-form widget long after load
+        new MutationObserver(render).observe(document.body,
+                                            {childList: true, subtree: true});
+        render();
+    })();
+</script>

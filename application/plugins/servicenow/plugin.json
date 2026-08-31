@@ -23,5 +23,20 @@
         "verify_cert": "True",
         "ca_cert_chain": "",
         "ca_root_cert": ""
+    },
+    "account_custom_field_help": {
+        "api_path": "Path between the address and /table/<name>. /api/now for a plain instance; for an API gateway in front of it, its own context path — empty if the gateway offers the tables directly under the address.",
+        "tables": "Tables imported as hosts, comma separated. Every record becomes one host. Example: cmdb_ci_unix_server",
+        "hostname_field": "Field of a record its host is named after (default name). A record with nothing in it is skipped.",
+        "rewrite_hostname": "Jinja template that builds the hostname, with HOSTNAME as the value of the hostname field and every field of the record available. Example: {{ HOSTNAME }}{% if fqdn %}.{{ fqdn }}{% endif %}",
+        "sysparm_query": "ServiceNow encoded query limiting which records are read, e.g. operational_status=1. Empty reads every record. It filters records, not fields.",
+        "sysparm_fields": "Comma separated list of the fields to read. Empty asks for every field of a record — normally what you want.",
+        "sysparm_display_value": "true delivers readable values (a reference shows the name), false the raw sys_ids, all delivers both.",
+        "sysparm_limit": "Records per request while paging through a table. Larger means fewer requests, which is what a rate limit cares about.",
+        "inventorize_key": "Prefix of the inventory attributes the inventorized tables are stored under, e.g. snow. The table name is appended, so every table keeps its own attributes.",
+        "inventorize_tables": "Tables attached to an existing host instead of imported as hosts, as table:matcher pairs. The matcher is either the record field naming the server, or rel to look the host up in the relationship table. Example: cmdb_ci_cluster:rel, cmdb_ci_network_adapter:cmdb_ci",
+        "inventorize_relation_types": "Relation types followed by the rel matcher, comma separated, e.g. Contains::Contained by. Empty reads every relation, which is slow on a large instance.",
+        "inventorize_host_label": "Host label holding the ServiceNow name, used to find the host a record references (default name) — a relation names ldom-s02 while the host may be ldom-s02.example.com. Empty matches the hostname directly.",
+        "inventorize_rewrite_parent": "Jinja template adapting the referenced name, used only for a CI no host carries under inventorize_host_label."
     }
 }

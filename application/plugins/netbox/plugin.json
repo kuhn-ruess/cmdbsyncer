@@ -10,5 +10,10 @@
         "ca_root_cert": "",
         "import_filter": "",
         "delete_host_if_not_found_on_import": ""
+    },
+    "account_custom_field_help": {
+        "rewrite_hostname": "Jinja template that builds the hostname of an imported object, with HOSTNAME as the name Netbox delivers and the object's attributes available. Example: {{ HOSTNAME }}.example.com",
+        "import_filter": "Limits the import to matching objects, as key:value pairs the Netbox API understands, comma separated. The same key given more than once is an OR, e.g. role:router,role:firewall.",
+        "delete_host_if_not_found_on_import": "Delete hosts of this account which the import no longer delivers. The value is a Mongoengine filter fieldname:value limiting which hosts may be deleted; combine several with ||."
     }
 }
