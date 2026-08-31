@@ -35,4 +35,26 @@ def cli_import_hosts(account, debug):
 #.
 
 
+#   .-- Command: inventorize data
+def inventorize_data(account, debug=False):
+    """
+    Attach ServiceNow records to the hosts they belong to
+    """
+    syncer = SyncServiceNow(account)
+    syncer.debug = debug
+    syncer.inventorize_data()
+
+
+@_cli_servicenow.command('inventorize_data')
+@click.argument('account')
+@click.option("--debug", default=False, is_flag=True)
+def cli_inventorize_data(account, debug):
+    """
+    Attach ServiceNow records to the hosts they belong to
+    """
+    inventorize_data(account, debug)
+#.
+
+
 register_cronjob('ServiceNow: Import hosts', import_hosts)
+register_cronjob('ServiceNow: Inventorize data', inventorize_data)

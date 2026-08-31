@@ -15,6 +15,11 @@
         "sysparm_fields": "",
         "sysparm_display_value": "true",
         "sysparm_limit": "1000",
+        "inventorize_key": "",
+        "inventorize_tables": "",
+        "inventorize_relation_types": "",
+        "inventorize_host_label": "name",
+        "inventorize_rewrite_parent": "",
         "verify_cert": "True",
         "ca_cert_chain": "",
         "ca_root_cert": ""

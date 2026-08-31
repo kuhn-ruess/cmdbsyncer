@@ -160,6 +160,8 @@
                     <strong class="text-muted">no hostname field</strong>
                     <span class="badge badge-secondary ml-1">would be skipped</span>
                     {% endif %}
+                    <span class="badge badge-light ml-1">
+                        {{ record.labels | length }} field(s)</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -168,7 +170,12 @@
                                 {% for key, value in record.labels.items() | sort %}
                                 <tr>
                                     <th style="width: 25%">{{ key }}</th>
-                                    <td>{{ value }}</td>
+                                    <td>
+                                        {%- if value -%}{{ value }}
+                                        {%- else -%}
+                                        <em class="text-muted">empty on this record</em>
+                                        {%- endif -%}
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

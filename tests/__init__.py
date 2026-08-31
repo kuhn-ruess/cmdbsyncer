@@ -690,6 +690,8 @@ _try_load_real_module(
 
 # --- ServiceNow plugin modules -----------------------------------------------
 # syncer.py holds the Table API request the import and the query view share.
+_helpers_inventory = _stub_package("application.helpers.inventory")
+_helpers_inventory.run_inventory = MagicMock(name="stub.run_inventory")
 _stub_package("application.plugins.servicenow", path=[])
 _try_load_real_module(
     "application.plugins.servicenow.syncer",

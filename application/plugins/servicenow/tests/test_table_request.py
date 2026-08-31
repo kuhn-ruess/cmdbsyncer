@@ -6,13 +6,16 @@ import unittest
 from unittest.mock import patch
 
 import application.plugins.servicenow.syncer as snow
-from application.plugins.servicenow.syncer import ServiceNowError, SyncServiceNow
+from application.plugins.servicenow.syncer import (ServiceNowError, SyncServiceNow,
+                                                  parse_inventorize_tables)
 
 
-def syncer(**config):
+def syncer(hosts=None, **config):
     """A syncer with a config but without a connection behind it."""
     instance = SyncServiceNow.__new__(SyncServiceNow)
     instance.config = {'address': 'https://instance.service-now.com'} | config
+    # The host lookup would go to the database otherwise
+    instance._host_index = hosts if hosts is not None else {}  # pylint: disable=protected-access
     return instance
 
 
@@ -64,6 +67,24 @@ class TestTableUrl(unittest.TestCase):
             syncer(address='https://gateway.example.com',
                    api_path=False).table_url('cmdb_ci_unix_server'),
             'https://gateway.example.com/table/cmdb_ci_unix_server')
+
+
+class TestFlattenRecord(unittest.TestCase):
+    """Tests for SyncServiceNow.flatten_record"""
+
+    RECORD = {'name': 'srv01', 'fqdn': '', 'os': None,
+              'assigned_to': {'display_value': 'Jane', 'value': 'abc'}}
+
+    def test_the_import_drops_the_empty_fields(self):
+        self.assertEqual(SyncServiceNow.flatten_record(self.RECORD),
+                         {'name': 'srv01', 'assigned_to': 'Jane'})
+
+    def test_a_query_keeps_them_so_the_field_is_visible(self):
+        # Hiding them made a record look like it has no fqdn field at
+        # all, instead of an empty one
+        self.assertEqual(SyncServiceNow.flatten_record(self.RECORD, keep_empty=True),
+                         {'name': 'srv01', 'fqdn': '', 'os': '',
+                          'assigned_to': 'Jane'})
 
 
 class TestRecordHostname(unittest.TestCase):
@@ -167,6 +188,229 @@ class TestImportHosts(unittest.TestCase):
         instance = syncer(tables='cmdb_ci_unix_server, cmdb_ci_db_instance')
         instance.log_details = []
         read = []
-        instance.get_table = lambda table: read.append(table) or []
+        instance.get_table = lambda table, query=None: read.append(table) or []
         instance.import_hosts()
         self.assertEqual(read, ['cmdb_ci_unix_server', 'cmdb_ci_db_instance'])
+
+
+class TestInventorizeTables(unittest.TestCase):
+    """Tests for parse_inventorize_tables"""
+
+    def test_pairs_are_read(self):
+        self.assertEqual(
+            parse_inventorize_tables(
+                'cmdb_ci_network_adapter:cmdb_ci, cmdb_ci_db_instance:used_for'),
+            [('cmdb_ci_network_adapter', 'cmdb_ci'),
+             ('cmdb_ci_db_instance', 'used_for')])
+
+    def test_nothing_configured(self):
+        self.assertEqual(parse_inventorize_tables(''), [])
+        # An empty custom field arrives as False
+        self.assertEqual(parse_inventorize_tables(False), [])
+
+    def test_a_typo_is_not_swallowed(self):
+        # Skipping it would drop a whole table without a word
+        with self.assertRaises(ServiceNowError) as caught:
+            parse_inventorize_tables('cmdb_ci_network_adapter')
+        self.assertIn('table:field', str(caught.exception))
+
+
+class TestRecordHosts(unittest.TestCase):
+    """Tests for SyncServiceNow.record_hosts"""
+
+    def test_the_reference_field_names_the_host(self):
+        self.assertEqual(
+            syncer().record_hosts({'name': 'eth0', 'cmdb_ci': 'srv01'}, 'cmdb_ci'),
+            ['srv01'])
+
+    def test_a_record_without_the_reference_has_no_host(self):
+        self.assertEqual(syncer().record_hosts({'name': 'eth0'}, 'cmdb_ci'), [])
+
+    def test_the_rewrite_is_applied(self):
+        labels = {'name': 'eth0', 'cmdb_ci': 'srv01'}
+        with patch.object(snow.Host, 'rewrite_hostname', create=True,
+                          return_value='srv01.example.com') as rewrite:
+            self.assertEqual(
+                syncer(inventorize_rewrite_parent='{{HOSTNAME}}.example.com')
+                .record_hosts(labels, 'cmdb_ci'),
+                ['srv01.example.com'])
+        rewrite.assert_called_once_with('srv01', '{{HOSTNAME}}.example.com', labels)
+
+    @staticmethod
+    def _with_relations(*relations):
+        instance = syncer()
+        instance.get_table = lambda table, query=None: iter(
+            [{'parent': parent, 'child': child, 'type': 'Contains::Contained by'}
+             for parent, child in relations])
+        return instance
+
+    def test_the_relationship_table_finds_the_host(self):
+        instance = self._with_relations(('LDOM-S02-ORA', 'ldom-s02'))
+        self.assertEqual(instance.record_hosts({'name': 'LDOM-S02-ORA'}, 'rel'),
+                         ['ldom-s02'])
+
+    def test_a_record_related_to_two_hosts_lands_on_both(self):
+        instance = self._with_relations(('cluster-db', 'srv02'), ('cluster-db', 'srv01'))
+        self.assertEqual(instance.record_hosts({'name': 'cluster-db'}, 'rel'),
+                         ['srv01', 'srv02'])
+
+    def test_a_record_without_a_relation_has_no_host(self):
+        instance = self._with_relations(('LDOM-S02-ORA', 'ldom-s02'))
+        self.assertEqual(instance.record_hosts({'name': 'lonely'}, 'rel'), [])
+
+
+class TestRelationIndex(unittest.TestCase):
+    """Tests for the relationship table read"""
+
+    RELATIONS = [
+        {'parent': 'LDOM-S02-ORA', 'child': 'ldom-s02', 'type': 'Contains::Contained by'},
+        {'parent': 'VISMAN', 'child': 'ldom-s14', 'type': 'Contains::Contained by'},
+        {'parent': '', 'child': 'ldom-s14', 'type': 'Contains::Contained by'},
+    ]
+
+    def test_both_directions_are_indexed(self):
+        # Whether the host is the parent or the child depends on the
+        # relation type, so neither side may be the only one indexed
+        instance = syncer()
+        instance.get_table = lambda table, query=None: iter(self.RELATIONS)
+        index = instance.relation_index()
+        self.assertEqual(index['ldom-s02-ora'], {'ldom-s02'})
+        self.assertEqual(index['ldom-s02'], {'LDOM-S02-ORA'})
+
+    def test_a_half_empty_relation_is_ignored(self):
+        instance = syncer()
+        instance.get_table = lambda table, query=None: iter(self.RELATIONS)
+        self.assertEqual(len(instance.relation_index()), 4)
+
+    def test_the_table_is_read_once(self):
+        instance = syncer()
+        reads = []
+        instance.get_table = lambda table, query=None: reads.append(table) or iter([])
+        instance.relation_index()
+        instance.relation_index()
+        self.assertEqual(reads, ['cmdb_rel_ci'])
+
+    def test_the_types_narrow_the_read_on_the_instance(self):
+        instance = syncer(inventorize_relation_types='Contains::Contained by, Owns::Owned by')
+        self.assertEqual(instance.relation_query(),
+                         'type.nameINContains::Contained by,Owns::Owned by')
+
+    def test_without_types_the_whole_table_is_read(self):
+        self.assertEqual(syncer().relation_query(), '')
+
+
+class TestInventorizeData(unittest.TestCase):
+    """Tests for SyncServiceNow.inventorize_data"""
+
+    ADAPTERS = [
+        {'name': 'eth0', 'ip_address': '10.0.0.1', 'cmdb_ci': 'srv01'},
+        {'name': 'eth1', 'ip_address': '10.0.0.2', 'cmdb_ci': 'srv01'},
+        {'name': 'eth0', 'ip_address': '10.0.0.3', 'cmdb_ci': 'srv02'},
+        {'name': 'orphan', 'ip_address': '10.0.0.4'},
+    ]
+
+    def _run(self, **config):
+        instance = syncer(inventorize_key='snow',
+                          inventorize_tables='cmdb_ci_network_adapter:cmdb_ci',
+                          **config)
+        instance.log_details = []
+        instance.get_table = lambda table, query=None: iter(self.ADAPTERS)
+        with patch.object(snow, 'run_inventory') as run:
+            instance.inventorize_data()
+        return run
+
+    def test_records_are_grouped_under_their_host(self):
+        run = self._run()
+        config, objects = run.call_args[0]
+        self.assertEqual(run.call_args[1], {'sub_key': 'cmdb_ci_network_adapter'})
+        self.assertEqual(config['inventorize_key'], 'snow')
+        self.assertEqual(dict(objects), {
+            'srv01': {'0_name': 'eth0', '0_ip_address': '10.0.0.1', '0_cmdb_ci': 'srv01',
+                      '1_name': 'eth1', '1_ip_address': '10.0.0.2', '1_cmdb_ci': 'srv01'},
+            'srv02': {'0_name': 'eth0', '0_ip_address': '10.0.0.3', '0_cmdb_ci': 'srv02'},
+        })
+
+    def test_a_table_can_be_matched_through_the_relationship_table(self):
+        instance = syncer(inventorize_key='snow',
+                          inventorize_tables='cmdb_ci_db_instance:rel')
+        instance.log_details = []
+        tables = {
+            'cmdb_rel_ci': [{'parent': 'LDOM-S02-ORA', 'child': 'ldom-s02',
+                             'type': 'Contains::Contained by'}],
+            'cmdb_ci_db_instance': [{'name': 'LDOM-S02-ORA', 'version': '19c'}],
+        }
+        instance.get_table = lambda table, query=None: iter(tables[table])
+        with patch.object(snow, 'run_inventory') as run:
+            instance.inventorize_data()
+        _config, objects = run.call_args[0]
+        self.assertEqual(dict(objects),
+                         {'ldom-s02': {'0_name': 'LDOM-S02-ORA', '0_version': '19c'}})
+
+    def test_a_record_without_a_host_is_logged_not_imported(self):
+        instance = syncer(inventorize_key='snow',
+                          inventorize_tables='cmdb_ci_network_adapter:cmdb_ci')
+        instance.log_details = []
+        instance.get_table = lambda table, query=None: iter(self.ADAPTERS)
+        with patch.object(snow, 'run_inventory'):
+            instance.inventorize_data()
+        self.assertIn(('record_without_host', 'cmdb_ci_network_adapter:cmdb_ci'),
+                      instance.log_details)
+
+    def test_the_import_hostname_rewrite_is_not_applied_a_second_time(self):
+        # run_inventory would rewrite the parent name with the labels of
+        # a child record, which does not carry the server's fields
+        config, _objects = self._run(rewrite_hostname='{{fqdn}}').call_args[0]
+        self.assertEqual(config['rewrite_hostname'], '')
+
+    def test_an_account_without_a_key_says_so(self):
+        instance = syncer(inventorize_tables='cmdb_ci_network_adapter:cmdb_ci')
+        instance.log_details = []
+        with self.assertRaises(ServiceNowError) as caught:
+            instance.inventorize_data()
+        self.assertIn('inventorize_key', str(caught.exception))
+
+    def test_an_account_without_a_table_says_so(self):
+        instance = syncer(inventorize_key='snow')
+        instance.log_details = []
+        with self.assertRaises(ServiceNowError) as caught:
+            instance.inventorize_data()
+        self.assertIn('inventorize_tables', str(caught.exception))
+
+
+class TestHostLookup(unittest.TestCase):
+    """The referenced CI name is resolved to the host it became"""
+
+    def test_the_label_lookup_finds_the_renamed_host(self):
+        # The relation names the CI, the import created the host with
+        # the domain appended
+        instance = syncer(hosts={'ldom-s02': 'ldom-s02.munich-airport.de'})
+        instance.get_table = lambda table, query=None: iter(
+            [{'parent': 'LDOM-S02-ORA', 'child': 'ldom-s02',
+              'type': 'Contains::Contained by'}])
+        self.assertEqual(instance.record_hosts({'name': 'LDOM-S02-ORA'}, 'rel'),
+                         ['ldom-s02.munich-airport.de'])
+
+    def test_it_works_for_a_reference_field_too(self):
+        instance = syncer(hosts={'srv01': 'srv01.example.com'})
+        self.assertEqual(
+            instance.record_hosts({'name': 'eth0', 'cmdb_ci': 'srv01'}, 'cmdb_ci'),
+            ['srv01.example.com'])
+
+    def test_an_unknown_ci_keeps_its_name(self):
+        # run_inventory then reports the host as unknown
+        self.assertEqual(
+            syncer().record_hosts({'name': 'eth0', 'cmdb_ci': 'srv01'}, 'cmdb_ci'),
+            ['srv01'])
+
+    def test_the_rewrite_only_applies_to_an_unknown_ci(self):
+        instance = syncer(hosts={'srv01': 'srv01.example.com'},
+                          inventorize_rewrite_parent='{{HOSTNAME}}.wrong.example.com')
+        with patch.object(snow.Host, 'rewrite_hostname', create=True,
+                          return_value='srv02.wrong.example.com') as rewrite:
+            self.assertEqual(
+                instance.record_hosts({'name': 'eth0', 'cmdb_ci': 'srv01'}, 'cmdb_ci'),
+                ['srv01.example.com'])
+            rewrite.assert_not_called()
+            self.assertEqual(
+                instance.record_hosts({'name': 'eth1', 'cmdb_ci': 'srv02'}, 'cmdb_ci'),
+                ['srv02.wrong.example.com'])
