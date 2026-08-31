@@ -92,6 +92,32 @@ def _redact_payload(payload):
     return redacted
 
 
+def parse_custom_headers(value, account_name=''):
+    """
+    Extra request headers configured on an account, as {name: value}.
+
+    Written as `Name: value` pairs separated by a pipe, e.g.
+    `X-API-Key: abc123 | X-Tenant: muc`. The pipe separates instead of a
+    comma because a header value may well contain one. Values are
+    rendered, so a secret can be referenced as
+    `{{ACCOUNT:<account>:password}}` instead of being kept in clear
+    text here. A pair without a colon is dropped with a warning rather
+    than sent as a broken header.
+    """
+    headers = {}
+    for part in str(value or '').split('|'):
+        part = part.strip()
+        if not part:
+            continue
+        name, separator, header_value = part.partition(':')
+        if not separator or not name.strip():
+            logger.warning(f"Ignoring custom header {part!r} of account "
+                           f"{account_name!r}: expected 'Name: value'")
+            continue
+        headers[name.strip()] = render_jinja(header_value.strip())
+    return headers
+
+
 class ResponseDataException(Exception):
     """
     Raise in case of invalid responses
@@ -138,6 +164,10 @@ class Plugin():
 
     debug_lines = None # Used for GUI Debuging
 
+    # Extra headers of the account, parsed on first use and then kept
+    # for the whole run — every request of it sends the same ones.
+    _account_headers = None
+
     # Attribute keys configured as merged in the System Config, loaded
     # on first use and then kept for the whole run.
     merged_attributes = None
@@ -161,6 +191,7 @@ class Plugin():
         self.start_time = time.time()
         self.log_details = []
         self.debug_lines = []
+        self._account_headers = None
         self._ca_cert_tempfile = None
         self._http_session = None
         self.log_details.append(('started', datetime.now()))
@@ -212,6 +243,17 @@ class Plugin():
         self._init_complete = True
 
         atexit.register(self.save_log)
+
+    def account_headers(self):
+        """
+        The extra headers the account puts on every request — an API key
+        or tenant header an API gateway in front of the target system
+        wants, which the plugins themselves know nothing about.
+        """
+        if self._account_headers is None:
+            self._account_headers = parse_custom_headers(
+                self.config.get('custom_headers'), self.config.get('name', ''))
+        return self._account_headers
 
     def record_exception(self, error_obj):
         """
@@ -357,6 +399,9 @@ class Plugin():
             'timeout': timeout,
         }
 
+        # Headers of the account first, so a header the plugin sets
+        # itself (Accept, Content-Type) keeps winning over them
+        headers = {**self.account_headers(), **(headers or {})}
         if headers:
             payload['headers'] = headers
         if auth:

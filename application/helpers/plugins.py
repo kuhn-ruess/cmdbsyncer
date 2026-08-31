@@ -157,6 +157,29 @@ def register_cli_group(flask_app, name, plugin_dirname, help_text=""):
     return cli_group
 
 
+# Custom fields every account can carry, whatever its type: they are
+# read by the Plugin base class, so they belong to no single plugin.
+# Offered on every account form, otherwise a base feature would only be
+# reachable by knowing the field name by heart.
+GLOBAL_CUSTOM_FIELD_PRESETS = {
+    'custom_headers': '',
+}
+
+
+def _with_global_presets(data):
+    """
+    One plugin's data with the global custom fields folded into its
+    presets. The plugin's own value for a key wins, and the cached
+    plugin.json dict is left untouched.
+    """
+    merged = dict(data)
+    merged['account_custom_field_presets'] = {
+        **GLOBAL_CUSTOM_FIELD_PRESETS,
+        **(data.get('account_custom_field_presets') or {}),
+    }
+    return merged
+
+
 def register_plugin_type(ident, name, account_presets=None,
                          account_custom_field_presets=None,
                          description=''):
@@ -190,6 +213,7 @@ def discover_plugins():
         name = data.get('name')
         if not ident or not name or ident in disabled:
             continue
-        plugins[ident] = data
-    plugins.update(_RUNTIME_PLUGINS)
+        plugins[ident] = _with_global_presets(data)
+    for ident, data in _RUNTIME_PLUGINS.items():
+        plugins[ident] = _with_global_presets(data)
     return plugins

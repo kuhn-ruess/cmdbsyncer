@@ -10,7 +10,7 @@ import time
 import requests
 from mongoengine.errors import DoesNotExist
 
-from application.modules.plugin import Plugin
+from application.modules.plugin import Plugin, parse_custom_headers
 
 from tests.plugin_helpers import plain_plugin
 
@@ -122,6 +122,76 @@ class TestPlugin(unittest.TestCase):
             verify=True,
             timeout=30,
         )
+
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_custom_headers_are_parsed(self, _render):
+        self.assertEqual(
+            parse_custom_headers('X-API-Key: abc123 | X-Tenant: muc'),
+            {'X-API-Key': 'abc123', 'X-Tenant': 'muc'})
+
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_custom_header_value_may_hold_a_comma_and_a_colon(self, _render):
+        # The pipe separates for exactly this reason
+        self.assertEqual(
+            parse_custom_headers('Accept: application/json, text/plain'),
+            {'Accept': 'application/json, text/plain'})
+        self.assertEqual(
+            parse_custom_headers('X-Url: https://gw.example.com:8443/api'),
+            {'X-Url': 'https://gw.example.com:8443/api'})
+
+    @patch('application.modules.plugin.logger')
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_custom_header_without_a_colon_is_dropped(self, _render, mock_logger):
+        # Sending it would produce a broken header instead of an error
+        self.assertEqual(parse_custom_headers('X-API-Key abc123'), {})
+        mock_logger.warning.assert_called_once()
+
+    def test_no_custom_headers_configured(self):
+        self.assertEqual(parse_custom_headers(None), {})
+        # An empty custom field arrives as False
+        self.assertEqual(parse_custom_headers(False), {})
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.requests')
+    @patch('application.modules.plugin.logger')
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_inner_request_sends_the_accounts_headers(
+            self, _render, _logger, mock_requests, mock_app):
+        mock_app.config = self.mock_app_config
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'success'}
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
+
+        plugin = Plugin()
+        plugin.config = {'name': 'gw', 'custom_headers': 'X-API-Key: abc123'}
+        plugin.inner_request('GET', 'http://example.com')
+
+        self.assertEqual(mock_session.request.call_args[1]['headers'],
+                         {'X-API-Key': 'abc123'})
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.requests')
+    @patch('application.modules.plugin.logger')
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_a_plugins_own_header_wins_over_the_accounts(
+            self, _render, _logger, mock_requests, mock_app):
+        mock_app.config = self.mock_app_config
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'success'}
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
+
+        plugin = Plugin()
+        plugin.config = {'name': 'gw',
+                         'custom_headers': 'Accept: text/csv | X-API-Key: abc123'}
+        plugin.inner_request('GET', 'http://example.com',
+                             headers={'Accept': 'application/json'})
+
+        self.assertEqual(mock_session.request.call_args[1]['headers'],
+                         {'Accept': 'application/json', 'X-API-Key': 'abc123'})
 
     @patch('application.modules.plugin.app')
     @patch('application.modules.plugin.requests')
