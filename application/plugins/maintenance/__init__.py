@@ -643,23 +643,31 @@ def lowercase_hostnames(do_apply, debug):  # pylint: disable=unused-argument
 #   .-- Command: Delete all Hosts
 @_cli_sys.command('delete_all_hosts')
 @click.argument("account", default="")
-def delete_all_hosts(account):
+@click.option('--include-protected', is_flag=True,
+              help="Also delete hosts marked as 'no autodelete'.")
+def delete_all_hosts(account, include_protected):
     """
     Deletes All hosts from DB
+
+    Hosts protected against automatic deletion are kept unless
+    --include-protected is given. Templates are never deleted.
     """
     print(f"{CC.HEADER} ***** Delete Hosts ***** {CC.ENDC}")
-    answer = input(f" - Enter 'y' and hit enter to procceed (Account Filter: {account}): ")
+    protected = "deleted too" if include_protected else "kept"
+    answer = input(f" - Enter 'y' and hit enter to procceed (Account Filter: "
+                   f"{account}, 'no autodelete' hosts are {protected}): ")
     if answer.lower() in ['y', 'z']:
-        db_filter = {'no_autodelete__ne': True, 'object_type__ne': "template"}
-        if account:
-            db_filter['source_account_name'] = account
-        print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
-
+        db_filter = {'object_type__ne': "template"}
         raw_match = {
-            "no_autodelete": {"$ne": True},
             "object_type": {"$ne": "template"},
         }
+        if not include_protected:
+            db_filter['no_autodelete__ne'] = True
+            raw_match['no_autodelete'] = {"$ne": True}
+        print(f"{CC.WARNING}  ** {CC.ENDC}Start deletion")
+
         if account:
+            db_filter['source_account_name'] = account
             raw_match['source_account_name'] = account
         pipline = [
             {
@@ -675,7 +683,13 @@ def delete_all_hosts(account):
         for folder_pool in Host.objects.aggregate(*pipline):
             if folder_name := folder_pool['_id']:
                 count = folder_pool['count']
-                folder = CheckmkFolderPool.objects.get(folder_name__iexact=folder_name)
+                # Only pool folders keep a seat count; a host can sit in
+                # any folder, so a folder without a pool is nothing to
+                # give seats back to.
+                folder = CheckmkFolderPool.objects(
+                    folder_name__iexact=folder_name).first()
+                if not folder:
+                    continue
                 if folder.folder_seats_taken > count:
                     folder.folder_seats_taken -= count
                 else:
