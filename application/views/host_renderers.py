@@ -18,6 +18,7 @@ from markupsafe import Markup, escape
 
 from application import app
 from application.models.account import CMDB_SOURCE_ACCOUNT_NAME
+from application.views.host_inventory_grid import _value_type_name
 from application.models.host_cleanup import relation_target
 from application.models.host_templates import (active_templates,
                                                merge_attribute_values,
@@ -938,22 +939,6 @@ def format_cache(_v, _c, m, _p):
 
     return Markup(html)
 
-def _value_type_name(value):
-    """
-    Human-friendly Python type name, treating `bool` as its own type
-    (rather than the `int` subclass it technically is) — that is the
-    distinction users care about when they wonder why
-    `input_monitoring:True` does or doesn't match a filter. ``None``
-    becomes ``empty`` so the badge stays readable when an importer
-    drops a label with no value.
-    """
-    if value is None:
-        return 'empty'
-    if isinstance(value, bool):
-        return 'bool'
-    return type(value).__name__
-
-
 def _format_keyvalue_with_type(items):
     """Shared Key / Value / Type table for the detail view."""
     html = (
@@ -1038,51 +1023,6 @@ def _render_log_grid(_view, _context, model, _name):
     )
     return Markup(''.join(html))
 
-
-_INVENTORY_GRID_CSS = (
-    '<style>'
-    '.cmdb-inv-grid{display:grid;grid-template-columns:1fr;'
-    'gap:2px 0;margin:4px 0;}'
-    '.cmdb-inv-grid .cmdb-label-row{display:flex;align-items:center;gap:6px;'
-    'padding:2px 0;min-width:0;border-bottom:1px solid #f0f0f0;}'
-    '.cmdb-inv-grid .lbl-src{flex:0 0 auto;font-size:0.72rem;'
-    'padding:1px 6px;border-radius:3px;white-space:nowrap;'
-    'background:#f1f3f5;color:#6c757d;}'
-    '.cmdb-inv-grid .lbl-key{flex:0 0 auto;font-weight:bold;color:#1abc9c;}'
-    '.cmdb-inv-grid .lbl-val{flex:1 1 auto;font-family:monospace;'
-    'color:#2c3e50;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
-    '.cmdb-inv-grid .lbl-type{flex:0 0 auto;font-size:0.7rem;'
-    'padding:1px 6px;border-radius:3px;background:#6c757d;color:#fff;'
-    'white-space:nowrap;font-family:monospace;}'
-    '</style>'
-)
-
-
-def _render_inventory_grid(_view, _context, model, _name):
-    """
-    Detail-view inventory rendering — same row styling as labels, but
-    a single full-width column so long inventory values (disk serials,
-    firmware strings, UUIDs) stay readable without truncation.
-    """
-    items = model.inventory or {}
-    if not items:
-        return Markup('<em class="text-muted">No inventory.</em>')
-    html = [_INVENTORY_GRID_CSS, '<div class="cmdb-inv-grid">']
-    for key in sorted(items.keys(), key=str.lower):
-        value = items[key]
-        value_str = '' if value is None else str(value)
-        type_name = _value_type_name(value)
-        html.append(
-            '<div class="cmdb-label-row">'
-            '<span class="lbl-src">inv</span>'
-            f'<span class="lbl-key">{escape(str(key))}</span>'
-            f'<span class="lbl-val" title="{escape(value_str)}">'
-            f'{escape(value_str)}</span>'
-            f'<span class="lbl-type" title="BSON type">{escape(type_name)}</span>'
-            '</div>'
-        )
-    html.append('</div>')
-    return Markup(''.join(html))
 
 def format_labels_export(_v, _c, m, _p):
     """ Format Labels view"""

@@ -36,6 +36,7 @@ from application.plugins.idoit import get_idoit_debug_data as idoit_host_debug
 from application.plugins.vmware import get_vmware_debug_data as vmware_host_debug
 from application.plugins.jira_cloud import get_jira_cloud_debug_data as jira_cloud_host_debug
 from application import app, logger
+from application.views.host_inventory_grid import _render_inventory_grid
 from application.models.account import Account
 from application.helpers.get_account import mask_account_secrets
 from application.helpers.sates import add_changes
@@ -74,7 +75,6 @@ from application.views.host_renderers import (
     _render_cmdb_template_preview,
     _render_datetime,
     _render_hostname_with_location,
-    _render_inventory_grid,
     _render_labels,
     _render_labels_with_origin,
     _render_lifecycle_state,
