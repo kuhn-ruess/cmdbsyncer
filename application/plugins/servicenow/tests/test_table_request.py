@@ -10,12 +10,43 @@ from application.plugins.servicenow.syncer import (ServiceNowError, SyncServiceN
                                                   parse_inventorize_tables)
 
 
+class _FakeProgress:  # pylint: disable=unused-argument
+    """Stand-in for the read spinner — rich's console is stubbed in tests."""
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def add_task(self, *args, **kwargs):
+        """The spinner has exactly one task"""
+        return 1
+
+    def update(self, *args, **kwargs):
+        """Nothing to draw"""
+
+
+def setUpModule():  # pylint: disable=invalid-name
+    """Read every table without a spinner"""
+    patcher = patch.object(snow, 'read_progress', _FakeProgress())
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
+
 def syncer(hosts=None, **config):
     """A syncer with a config but without a connection behind it."""
     instance = SyncServiceNow.__new__(SyncServiceNow)
     instance.config = {'address': 'https://instance.service-now.com'} | config
     # The host lookup would go to the database otherwise
     instance._host_index = hosts if hosts is not None else {}  # pylint: disable=protected-access
+    instance._host_sys_ids = set()  # pylint: disable=protected-access
+    # So would the check which of the named CIs are hosts; the tests
+    # that care about it call the real one
+    instance.drop_unknown_hosts = lambda grouped, table: grouped
     return instance
 
 
@@ -188,7 +219,7 @@ class TestImportHosts(unittest.TestCase):
         instance = syncer(tables='cmdb_ci_unix_server, cmdb_ci_db_instance')
         instance.log_details = []
         read = []
-        instance.get_table = lambda table, query=None: read.append(table) or []
+        instance.get_table = lambda table, query=None, fields=None: read.append(table) or []
         instance.import_hosts()
         self.assertEqual(read, ['cmdb_ci_unix_server', 'cmdb_ci_db_instance'])
 
@@ -239,7 +270,7 @@ class TestRecordHosts(unittest.TestCase):
     @staticmethod
     def _with_relations(*relations):
         instance = syncer()
-        instance.get_table = lambda table, query=None: iter(
+        instance.get_table = lambda table, query=None, fields=None: iter(
             [{'parent': parent, 'child': child, 'type': 'Contains::Contained by'}
              for parent, child in relations])
         return instance
@@ -272,23 +303,56 @@ class TestRelationIndex(unittest.TestCase):
         # Whether the host is the parent or the child depends on the
         # relation type, so neither side may be the only one indexed
         instance = syncer()
-        instance.get_table = lambda table, query=None: iter(self.RELATIONS)
+        instance.get_table = lambda table, query=None, fields=None: iter(self.RELATIONS)
         index = instance.relation_index()
         self.assertEqual(index['ldom-s02-ora'], {'ldom-s02'})
         self.assertEqual(index['ldom-s02'], {'LDOM-S02-ORA'})
 
     def test_a_half_empty_relation_is_ignored(self):
         instance = syncer()
-        instance.get_table = lambda table, query=None: iter(self.RELATIONS)
+        instance.get_table = lambda table, query=None, fields=None: iter(self.RELATIONS)
         self.assertEqual(len(instance.relation_index()), 4)
 
-    def test_the_table_is_read_once(self):
+    def test_the_table_is_read_once_per_inventorized_table(self):
         instance = syncer()
         reads = []
-        instance.get_table = lambda table, query=None: reads.append(table) or iter([])
-        instance.relation_index()
-        instance.relation_index()
+        instance.get_table = lambda table, query=None, fields=None: \
+            reads.append(table) or iter(self.RELATIONS)
+        instance.relation_index('cmdb_ci_db_instance')
+        instance.relation_index('cmdb_ci_db_instance')
         self.assertEqual(reads, ['cmdb_rel_ci'])
+
+    def test_the_class_of_the_table_narrows_the_read(self):
+        # Only a relation with that class on one of its ends can ever be
+        # looked up, so the rest must not be read at all
+        self.assertEqual(
+            syncer().relation_query('cmdb_ci_db_instance'),
+            'child.sys_class_nameINSTANCEOFcmdb_ci_db_instance'
+            '^ORparent.sys_class_nameINSTANCEOFcmdb_ci_db_instance')
+
+    def test_the_types_and_the_class_narrow_it_together(self):
+        instance = syncer(inventorize_relation_types='Contains::Contained by')
+        self.assertEqual(
+            instance.relation_query('cmdb_ci_cluster'),
+            'type.nameINContains::Contained by'
+            '^child.sys_class_nameINSTANCEOFcmdb_ci_cluster'
+            '^ORparent.sys_class_nameINSTANCEOFcmdb_ci_cluster')
+
+    def test_an_empty_answer_falls_back_to_the_whole_table(self):
+        # An instance that does not answer the narrowed query the way it
+        # is meant to would leave every record without a host
+        instance = syncer()
+        queries = []
+
+        def read(table, query=None, fields=None):  # pylint: disable=unused-argument
+            queries.append(query)
+            return iter(self.RELATIONS if len(queries) > 1 else [])
+
+        instance.get_table = read
+        index = instance.relation_index('cmdb_ci_db_instance')
+        self.assertEqual(queries, ['child.sys_class_nameINSTANCEOFcmdb_ci_db_instance'
+                                   '^ORparent.sys_class_nameINSTANCEOFcmdb_ci_db_instance', ''])
+        self.assertEqual(index['ldom-s02'], {'LDOM-S02-ORA'})
 
     def test_the_types_narrow_the_read_on_the_instance(self):
         instance = syncer(inventorize_relation_types='Contains::Contained by, Owns::Owned by')
@@ -314,7 +378,7 @@ class TestInventorizeData(unittest.TestCase):
                           inventorize_tables='cmdb_ci_network_adapter:cmdb_ci',
                           **config)
         instance.log_details = []
-        instance.get_table = lambda table, query=None: iter(self.ADAPTERS)
+        instance.get_table = lambda table, query=None, fields=None: iter(self.ADAPTERS)
         with patch.object(snow, 'run_inventory') as run:
             instance.inventorize_data()
         return run
@@ -330,6 +394,21 @@ class TestInventorizeData(unittest.TestCase):
             'srv02': {'0_name': 'eth0', '0_ip_address': '10.0.0.3', '0_cmdb_ci': 'srv02'},
         })
 
+    def test_the_relations_are_read_before_the_table(self):
+        # Both reads run under a spinner, and rich allows only one live
+        # display at a time — so the lazy read may not happen inside the
+        # spinner of the table
+        instance = syncer(inventorize_key='snow',
+                          inventorize_tables='cmdb_ci_db_instance:rel')
+        instance.log_details = []
+        reads = []
+        instance.get_table = lambda table, query=None, fields=None: \
+            reads.append(table) or iter([])
+        with patch.object(snow, 'run_inventory'):
+            instance.inventorize_data()
+        self.assertEqual(reads[-1], 'cmdb_ci_db_instance')
+        self.assertNotIn('cmdb_ci_db_instance', reads[:-1])
+
     def test_a_table_can_be_matched_through_the_relationship_table(self):
         instance = syncer(inventorize_key='snow',
                           inventorize_tables='cmdb_ci_db_instance:rel')
@@ -339,22 +418,25 @@ class TestInventorizeData(unittest.TestCase):
                              'type': 'Contains::Contained by'}],
             'cmdb_ci_db_instance': [{'name': 'LDOM-S02-ORA', 'version': '19c'}],
         }
-        instance.get_table = lambda table, query=None: iter(tables[table])
+        instance.get_table = lambda table, query=None, fields=None: iter(tables[table])
         with patch.object(snow, 'run_inventory') as run:
             instance.inventorize_data()
         _config, objects = run.call_args[0]
         self.assertEqual(dict(objects),
                          {'ldom-s02': {'0_name': 'LDOM-S02-ORA', '0_version': '19c'}})
 
-    def test_a_record_without_a_host_is_logged_not_imported(self):
+    def test_records_without_a_ci_are_counted_not_logged_one_by_one(self):
+        # One log entry per skipped record let the log of a run against
+        # a large instance grow without an end
         instance = syncer(inventorize_key='snow',
                           inventorize_tables='cmdb_ci_network_adapter:cmdb_ci')
         instance.log_details = []
-        instance.get_table = lambda table, query=None: iter(self.ADAPTERS)
+        instance.get_table = lambda table, query=None, fields=None: iter(self.ADAPTERS)
         with patch.object(snow, 'run_inventory'):
             instance.inventorize_data()
-        self.assertIn(('record_without_host', 'cmdb_ci_network_adapter:cmdb_ci'),
+        self.assertIn(('cmdb_ci_network_adapter_records_without_ci', 1),
                       instance.log_details)
+
 
     def test_the_import_hostname_rewrite_is_not_applied_a_second_time(self):
         # run_inventory would rewrite the parent name with the labels of
@@ -377,6 +459,112 @@ class TestInventorizeData(unittest.TestCase):
         self.assertIn('inventorize_tables', str(caught.exception))
 
 
+class TestInventorizeQuery(unittest.TestCase):
+    """The query an inventorized table is read with"""
+
+    @staticmethod
+    def _syncer(sys_ids=(), **config):
+        instance = syncer(**config)
+        instance._host_sys_ids = set(sys_ids)  # pylint: disable=protected-access
+        return instance
+
+    def test_the_read_is_narrowed_to_the_hosts_of_the_account(self):
+        # The sys_id is what the reference really holds, so this asks
+        # the exact question instead of guessing at the class hierarchy
+        instance = self._syncer(sys_ids=['aaa', 'bbb'])
+        self.assertEqual(instance.inventorize_queries('cmdb_ci'),
+                         (['cmdb_ciINaaa,bbb'], True))
+
+    def test_the_sys_ids_go_out_in_chunks(self):
+        ids = [f'{x:032x}' for x in range(snow.SYS_ID_CHUNK + 1)]
+        queries, derived = self._syncer(sys_ids=ids).inventorize_queries('cmdb_ci')
+        self.assertTrue(derived)
+        self.assertEqual(len(queries), 2)
+        self.assertEqual(sorted(','.join(x.split('IN', 1)[1] for x in queries).split(',')),
+                         sorted(ids))
+
+    def test_the_account_query_wins_and_is_not_a_guess(self):
+        instance = self._syncer(sys_ids=['aaa'], inventorize_query='install_status=1')
+        self.assertEqual(instance.inventorize_queries('cmdb_ci'), (['install_status=1'], False))
+
+    def test_a_relation_is_narrowed_on_the_relationship_table(self):
+        self.assertEqual(self._syncer(sys_ids=['aaa']).inventorize_queries('rel'),
+                         ([''], False))
+
+    def test_hosts_imported_without_a_sys_id_cannot_be_asked_for(self):
+        self.assertEqual(self._syncer().inventorize_queries('cmdb_ci'), ([''], False))
+
+    def test_the_import_query_and_fields_stay_out_of_the_read(self):
+        # They belong to the table imported as hosts; a field list of it
+        # would drop the very field the matcher needs
+        instance = self._syncer(sys_ids=['aaa'], inventorize_key='snow',
+                                sysparm_query='operational_status=1',
+                                sysparm_fields='name,sys_id',
+                                inventorize_tables='cmdb_ci_network_adapter:cmdb_ci')
+        instance.log_details = []
+        calls = []
+
+        def read(table, query=None, fields=None):  # pylint: disable=unused-argument
+            calls.append((query, fields))
+            return iter([{'name': 'eth0', 'cmdb_ci': 'srv01'}])
+
+        instance.get_table = read
+        with patch.object(snow, 'run_inventory'):
+            instance.inventorize_data()
+        self.assertEqual(calls, [('cmdb_ciINaaa', '')])
+
+    def test_a_derived_query_that_finds_nothing_gives_way(self):
+        instance = self._syncer(sys_ids=['aaa'], inventorize_key='snow',
+                                inventorize_tables='cmdb_ci_network_adapter:cmdb_ci')
+        instance.log_details = []
+        queries = []
+
+        def read(table, query=None, fields=None):  # pylint: disable=unused-argument
+            queries.append(query)
+            return iter([] if len(queries) == 1 else [{'name': 'eth0', 'cmdb_ci': 'srv01'}])
+
+        instance.get_table = read
+        with patch.object(snow, 'run_inventory') as run:
+            instance.inventorize_data()
+        self.assertEqual(queries, ['cmdb_ciINaaa', ''])
+        self.assertEqual(dict(run.call_args[0][1]),
+                         {'srv01': {'0_name': 'eth0', '0_cmdb_ci': 'srv01'}})
+
+
+class TestDropUnknownHosts(unittest.TestCase):
+    """A named CI the Syncer has no host for is dropped before the write"""
+
+    @staticmethod
+    def _drop(instance, grouped, known):
+        """The real method, with the database answering `known`"""
+        instance.log_details = []
+        with patch.object(snow.Host, 'objects', create=True) as objects:
+            objects.return_value.distinct.return_value = known
+            return SyncServiceNow.drop_unknown_hosts(instance, grouped,
+                                                     'cmdb_ci_network_adapter')
+
+    def test_only_the_hosts_the_syncer_has_are_kept(self):
+        self.assertEqual(
+            self._drop(syncer(), {'srv01': [{}], 'iphone-se': [{}]}, ['srv01']),
+            {'srv01': [{}]})
+
+    def test_a_lowercased_host_still_counts_as_known(self):
+        self.assertEqual(self._drop(syncer(), {'SRV01': [{}]}, ['srv01']), {'SRV01': [{}]})
+
+    def test_the_dropped_ones_are_counted(self):
+        instance = syncer()
+        self._drop(instance, {'srv01': [], 'iphone-se': []}, ['srv01'])
+        self.assertIn(('cmdb_ci_network_adapter_ci_without_host', 1), instance.log_details)
+
+    def test_a_domain_match_cannot_be_looked_up_exactly(self):
+        grouped = {'srv01': [{}]}
+        instance = syncer(inventorize_match_by_domain=True)
+        with patch.object(snow.Host, 'objects', create=True) as objects:
+            self.assertEqual(
+                SyncServiceNow.drop_unknown_hosts(instance, grouped, 'a_table'), grouped)
+            objects.assert_not_called()
+
+
 class TestHostLookup(unittest.TestCase):
     """The referenced CI name is resolved to the host it became"""
 
@@ -384,7 +572,7 @@ class TestHostLookup(unittest.TestCase):
         # The relation names the CI, the import created the host with
         # the domain appended
         instance = syncer(hosts={'ldom-s02': 'ldom-s02.munich-airport.de'})
-        instance.get_table = lambda table, query=None: iter(
+        instance.get_table = lambda table, query=None, fields=None: iter(
             [{'parent': 'LDOM-S02-ORA', 'child': 'ldom-s02',
               'type': 'Contains::Contained by'}])
         self.assertEqual(instance.record_hosts({'name': 'LDOM-S02-ORA'}, 'rel'),
