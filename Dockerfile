@@ -5,6 +5,7 @@ RUN addgroup -S app && adduser -S app -G app \
  && chown app:app /srv
 
 RUN apk add --no-cache python3 \
+    bash \
     ca-certificates \
     gcc \
     git \
@@ -42,6 +43,8 @@ RUN pip3 install --no-cache-dir -r requirements-ansible-windows.txt
 RUN pip3 install --no-cache-dir gunicorn
 
 COPY ./deploy_configs/run_cron.sh /etc/periodic/15min/
+# Sourced by /etc/profile: tab completion for the cmdbsyncer CLI.
+COPY ./deploy_configs/cmdbsyncer_completion.sh /etc/profile.d/
 
 
 ARG config

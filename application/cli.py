@@ -31,7 +31,12 @@ def main():
             print(exp)
             sys.exit(1)
 
-        if len(sys.argv) == 1:
+        # Click's shell completion runs the CLI with no arguments and reads
+        # nothing but its stdout, so the banner would end up inside the
+        # generated completion script. Stay quiet while completing.
+        completing = any(key.startswith('_') and key.endswith('_COMPLETE')
+                         for key in os.environ)
+        if len(sys.argv) == 1 and not completing:
             print(f"CMDB Syncer Version: {DISPLAY_VERSION}")
             sys.argv.append("--help")
         # AppGroup commands re-resolve the app via ScriptInfo.load_app(), which

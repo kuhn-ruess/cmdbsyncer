@@ -69,7 +69,10 @@ case "${1:-}" in
     ;;
 "shell")
     echo "Start Container Shell"
-    "$RUNTIME" exec -it "$APPLICATION" sh
+    # A login shell so /etc/profile runs — that is what loads tab
+    # completion for the cmdbsyncer CLI. Older images have no bash.
+    "$RUNTIME" exec -it "$APPLICATION" sh -c \
+        'if command -v bash >/dev/null 2>&1; then exec bash -l; else exec sh -l; fi'
     ;;
 "create_user")
     echo "Create User"
