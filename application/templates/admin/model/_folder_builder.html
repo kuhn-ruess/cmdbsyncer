@@ -279,8 +279,15 @@
   }
 
   // -- Python literal serialization --------------------------------------
+  // Only the literal parts are escaped: a quote inside a Jinja block
+  // belongs to the expression ({{ os|default('x') }}) and has to reach the
+  // renderer exactly as it was typed. The export renders the template first
+  // and reads the dict only afterwards, so a backslash in front of that
+  // quote would break the expression instead of protecting the string.
   function quote(text) {
-    return "'" + String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+    var masked = maskJinja(text);
+    var escaped = masked.text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return "'" + unmask(escaped, masked.blocks) + "'";
   }
 
   function dumpValue(value) {

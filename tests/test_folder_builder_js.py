@@ -67,6 +67,18 @@ class FolderBuilderParserTest(unittest.TestCase):
         value = "servers|{'parents': {{ parents.split(',') }}}"
         self.assertEqual(self._round_trip(value), value)
 
+    def test_quotes_inside_a_jinja_block_stay_unescaped(self):
+        # 'default()' carries its own quotes. Escaping them would reach the
+        # renderer as default(\'x\') and break the expression — the export
+        # renders the value before it reads the dict.
+        value = "servers|{'title': '{{ os|default('x') }} Server'}"
+        self.assertEqual(self._round_trip(value), value)
+
+    def test_quotes_outside_a_jinja_block_are_still_escaped(self):
+        # The literal part still has to survive as a Python string.
+        out = self._round_trip("servers|{'title': \"it's {{ os }}\"}")
+        self.assertEqual(out, "servers|{'title': 'it\\'s {{ os }}'}")
+
     def test_plain_value_is_untouched(self):
         value = "servers|{'title': 'Web Servers', 'site': 'main'}"
         self.assertEqual(self._round_trip(value), value)
