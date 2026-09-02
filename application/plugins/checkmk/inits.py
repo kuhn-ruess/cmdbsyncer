@@ -255,7 +255,6 @@ def activate_changes(account):
     # Get current activation etag
     url = "/domain-types/activation_run/collections/pending_changes"
     data, headers = cmk.request(url, "GET")
-    etag = headers.get('ETag')
 
     # Nothing pending: activating would just return a 422 "no changes to
     # activate" which we would otherwise report as a failure below.
@@ -276,7 +275,7 @@ def activate_changes(account):
             return False
 
     update_headers = {
-        'if-match': etag
+        'if-match': headers.get('ETag'),
     }
 
     # Trigger Activate Changes.
@@ -294,7 +293,7 @@ def activate_changes(account):
         'force_foreign_changes': True,
     }
     try:
-        _, resp_header = cmk.request(url,
+        response, resp_header = cmk.request(url,
                     data=data,
                     method="POST",
                     additional_header=update_headers,
@@ -313,7 +312,13 @@ def activate_changes(account):
         if wait_for_completion:
             print(f"{ColorCodes.OKGREEN}Changes activated{ColorCodes.ENDC}")
         else:
-            print(f"{ColorCodes.OKGREEN}Activation started{ColorCodes.ENDC}")
+            # Checkmk activates only the sites which are online and logged
+            # in, skips the rest and answers 200 either way. Naming the
+            # sites of the run is the only way to see that, since the
+            # changes of a skipped site simply stay pending.
+            print(f"{ColorCodes.OKGREEN}Activation started for: "
+                  f"{', '.join(response.get('extensions', {}).get('sites', []))}"
+                  f"{ColorCodes.ENDC}")
     except CmkException as errors:
         print(f"{ColorCodes.FAIL}Activate Changes failed: {errors}{ColorCodes.ENDC}")
         log.log("Checkmk Activate Changes failed",
