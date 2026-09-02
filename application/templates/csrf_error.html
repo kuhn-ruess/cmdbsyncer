@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block page_content %}
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="app-card" style="margin-top: 2rem;">
+      <div class="app-hero" style="margin: -1.5rem -1.5rem 1.25rem; border-radius: 12px 12px 0 0;">
+        <h2>This form is no longer valid</h2>
+        <p>Nothing was saved — the page was open for too long, or you were
+           logged in again in the meantime.</p>
+      </div>
+      <p>
+        Every form carries a token that ties it to your session. This one no
+        longer matches, so the request was rejected before it reached the
+        database: <em>{{ reason }}</em>
+      </p>
+      <p>
+        Open the page again and re-enter your change. If you still have the
+        filled-in form in another tab, copy your values out of it first —
+        going back and submitting again will fail the same way.
+      </p>
+      <p class="text-muted small">
+        Seeing this on a form you just opened usually means the browser is
+        blocking the session cookie, or two tabs are logged in as different
+        users.
+      </p>
+      <a href="{{ url_for('admin.index') }}" class="btn btn-primary">Back to the start page</a>
+      {% if referrer %}
+      <a href="{{ referrer }}" class="btn btn-secondary">Open the page again</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

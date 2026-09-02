@@ -11,13 +11,9 @@ These tests run the real `application` package in a subprocess — the
 package-level test bootstrap stubs `application` out in `sys.modules`,
 and here we specifically need the genuine import-time ordering.
 """
-import os
-import subprocess
-import sys
-import tempfile
 import unittest
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from tests.local_config_helpers import run_with_local_config
 
 
 # Stands in for the enterprise package: `load_package()` imports it by
@@ -34,37 +30,6 @@ def _configure_logging(app, logger):
 register_feature('json_logging')
 register_feature('configure_logging', _configure_logging)
 """
-
-
-def _run_with_local_config(local_config, snippet, with_enterprise=False):
-    """
-    Write `local_config` into a scratch directory, import `application`
-    from there and run `snippet`. `{workdir}` is substituted with the
-    scratch path in both. Returns the CompletedProcess.
-
-    The scratch directory is also the working directory: the repo root
-    usually carries its own `local_config.py`, and cwd wins on sys.path.
-    """
-    with tempfile.TemporaryDirectory() as workdir:
-        with open(os.path.join(workdir, "local_config.py"), "w",
-                  encoding="utf-8") as config_file:
-            config_file.write(local_config.replace("{workdir}", workdir))
-        if with_enterprise:
-            stub_dir = os.path.join(workdir, "cmdbsyncer_enterprise")
-            os.mkdir(stub_dir)
-            with open(os.path.join(stub_dir, "__init__.py"), "w",
-                      encoding="utf-8") as stub_file:
-                stub_file.write(_ENTERPRISE_STUB)
-        env = dict(os.environ)
-        env["PYTHONPATH"] = _REPO_ROOT
-        # CLI mode keeps the import light — no blueprints, no Flask-Admin
-        # scaffolding, and therefore no live MongoDB needed.
-        env["CMDBSYNCER_CLI"] = "1"
-        env["CMDBSYNCER_CONFIG_DIR"] = workdir
-        return subprocess.run(
-            [sys.executable, "-c", snippet.replace("{workdir}", workdir)],
-            cwd=workdir, env=env, capture_output=True, text=True, check=False,
-        )
 
 
 # Emits one entry through the central Log() module with the MongoEngine
@@ -106,7 +71,7 @@ config = {
 
         # The scratch directory is gone once the helper returns, so the
         # snippet reads the file back itself.
-        result = _run_with_local_config(local_config, _EMIT + """
+        result = run_with_local_config(local_config, _EMIT + """
 print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
 """)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -115,7 +80,7 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
 
     def test_log_level_shortcut(self):
         """LOG_LEVEL lifts both loggers without restating LOGGING."""
-        result = _run_with_local_config(
+        result = run_with_local_config(
             "config = {'LOG_LEVEL': 'DEBUG'}\n",
             "import logging, application\n"
             "print(logging.getLogger('debug').level,"
@@ -126,7 +91,7 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
 
     def test_broken_logging_config_does_not_block_startup(self):
         """A malformed LOGGING dict falls back instead of killing the app."""
-        result = _run_with_local_config(
+        result = run_with_local_config(
             "config = {'LOGGING': {'version': 1,\n"
             "    'handlers': {'x': {'class': 'nope.NoSuchHandler'}},\n"
             "    'loggers': {'debug': {'handlers': ['x']}}}}\n",
@@ -140,11 +105,12 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
 
     def test_command_runs_stay_plain_by_default(self):
         """A CLI run does not get the structured pipeline unasked."""
-        result = _run_with_local_config(
+        result = run_with_local_config(
             "config = {}\n",
             "import logging, application\n"
             "print('root', logging.getLogger().level)\n",
-            with_enterprise=True,
+            extra_files={'cmdbsyncer_enterprise/__init__.py':
+                         _ENTERPRISE_STUB},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("CONFIGURE_LOGGING CALLED", result.stdout)
@@ -153,11 +119,12 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
 
     def test_json_logging_cli_opts_command_runs_in(self):
         """JSON_LOGGING_CLI hands CLI runs to the structured pipeline."""
-        result = _run_with_local_config(
+        result = run_with_local_config(
             "config = {'JSON_LOGGING_CLI': True}\n",
             "import logging, application\n"
             "print('root', logging.getLogger().level)\n",
-            with_enterprise=True,
+            extra_files={'cmdbsyncer_enterprise/__init__.py':
+                         _ENTERPRISE_STUB},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("CONFIGURE_LOGGING CALLED", result.stdout)
@@ -205,7 +172,7 @@ record = _Capture.seen[-1]
 print(record.event_details)
 print('TRACEBACK', 'RuntimeError' in getattr(record, 'event_traceback', ''))
 """
-        result = _run_with_local_config("config = {}\n", snippet)
+        result = run_with_local_config("config = {}\n", snippet)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("'num_created': '3'", result.stdout)
         self.assertIn("'error': ['host-a', 'host-b']", result.stdout)

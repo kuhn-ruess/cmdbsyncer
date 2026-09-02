@@ -197,7 +197,12 @@
           else { out += next; }
           continue;
         }
-        if (chr === quote) { return out; }
+        // A masked Jinja block inside a quoted string has to come back
+        // as the block it was — 'team_{{ x }}' is how a value carrying
+        // Jinja is written. Returning the mask left the placeholder's
+        // control characters in the field, and saving wrote them to the
+        // rule.
+        if (chr === quote) { return unmask(out, blocks); }
         out += chr;
       }
       fail('unterminated string');

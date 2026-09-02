@@ -69,7 +69,7 @@ from flask_login import LoginManager
 from flask_mail import Mail
 from flask_bootstrap import Bootstrap
 from flask_mongoengine import MongoEngine
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -200,6 +200,17 @@ if not app.config.get('REQUIRE_HTTPS'):
     app.config['SESSION_COOKIE_SECURE'] = False
 
 
+# A CSRF token must not die before the session it belongs to. Flask-WTF
+# defaults to one hour, counted from the moment the form was rendered, so
+# a form left open longer than that was rejected with "The CSRF token has
+# expired" although the user was still logged in — losing everything typed
+# into it. Tie the token's life to the session length instead; an explicit
+# WTF_CSRF_TIME_LIMIT in local_config.py still wins.
+if 'WTF_CSRF_TIME_LIMIT' not in app.config:
+    app.config['WTF_CSRF_TIME_LIMIT'] = \
+        int(app.config.get('ADMIN_SESSION_HOURS') or 8) * 3600
+
+
 # ProxyFix must be wired up AFTER local_config.py is loaded — TRUSTED_PROXIES
 # is a deployment setting and is almost always set there, not in the base
 # config. Installing it earlier read the default (0) and silently ignored the
@@ -326,6 +337,29 @@ if not CLI_MODE:
             return None
         abort(403, description="This account is read only and may not change data.")
         return None
+
+    @app.errorhandler(CSRFError)
+    def _handle_csrf_error(error):
+        """
+        Answer a rejected CSRF check with something the user can act on.
+
+        Flask's default is a bare 400 page without theme or navigation,
+        which is what an expired form looked like: no explanation, no way
+        back, and no hint that nothing was saved. The check itself runs
+        before any view, so reaching this handler always means the request
+        changed nothing.
+
+        Requests that came from the page's JavaScript (the modal actions,
+        the CSV preview, …) get a short JSON body instead — an HTML page
+        rendered into a modal helps nobody.
+        """
+        # pylint: disable=import-outside-toplevel
+        from flask import jsonify, render_template
+        if _flask_request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'error': 'csrf', 'message': error.description}), 400
+        return render_template('csrf_error.html',
+                               reason=error.description,
+                               referrer=_flask_request.referrer), 400
 
     @app.context_processor
     def _inject_pending_approvals():
