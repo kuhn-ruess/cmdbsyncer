@@ -14,6 +14,7 @@ from mongoengine.errors import DoesNotExist, ValidationError
 from application.models.user import User
 from application.views.default import DefaultModelView
 from application.views.account_select import AccountsMultiSelectField
+from application.views.template_select import TemplatesMultiSelectField
 from application.views._form_sections import modern_form, section
 
 
@@ -88,13 +89,17 @@ class UserView(DefaultModelView):
                 'over the REST API alike. Leave "Restrict to accounts" '
                 'empty for full access, or pick accounts to limit this '
                 'user to hosts of those accounts — both in the REST API '
-                'and in the Host and Objects lists.',
+                'and in the Host and Objects lists. "Restrict to '
+                'templates" works the same way on the CMDB-template side: '
+                'the user only sees hosts carrying one of the picked '
+                'templates and can only assign those templates.',
                 [rules.Field('global_admin'),
                  rules.Field('disabled'),
                  rules.Field('readonly'),
                  rules.Field('roles'),
                  rules.Field('api_roles'),
-                 rules.Field('restrict_to_accounts')]),
+                 rules.Field('restrict_to_accounts'),
+                 rules.Field('restrict_to_templates')]),
         section('3', 'out', 'Credentials',
                 'Password (leave blank to keep), 2FA secret and the '
                 'force-change flag. Timestamps are read-only.',
@@ -113,6 +118,7 @@ class UserView(DefaultModelView):
 
     form_overrides = {
         'restrict_to_accounts': AccountsMultiSelectField,
+        'restrict_to_templates': TemplatesMultiSelectField,
     }
 
     form_widget_args = {

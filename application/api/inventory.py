@@ -15,7 +15,8 @@ from flask import request
 from flask_restx import Namespace, Resource
 
 from application.api import (
-    require_token, get_api_account_scope, hostnames_in_scope,
+    require_token, api_scope_active, get_api_account_scope,
+    hostnames_in_scope,
 )
 from application.modules.inventory import (
     list_inventory_providers,
@@ -26,12 +27,14 @@ API = Namespace('ansible', description='Ansible-side endpoints (inventory provid
 
 
 def _filter_full_inventory(result, scope):
-    """Remove hosts outside *scope* from a full Ansible-format inventory.
+    """Remove hosts outside the user's scope from a full Ansible-format
+    inventory.
 
     Prunes both the ``_meta.hostvars`` map and every group's ``hosts``
-    list so a restricted API user never sees hosts of other accounts.
+    list so a restricted API user never sees hosts of other accounts or
+    outside their CMDB-template scope.
     """
-    if scope is None or not isinstance(result, dict):
+    if not api_scope_active() or not isinstance(result, dict):
         return result
     meta = result.get('_meta') if isinstance(result.get('_meta'), dict) else {}
     hostvars = meta.get('hostvars', {}) if isinstance(meta, dict) else {}
@@ -80,7 +83,7 @@ class AnsibleProviderInventory(Resource):
         scope = get_api_account_scope()
         if host:
             # Single-host query: hide the host entirely if it is out of scope.
-            if scope is not None and \
+            if api_scope_active() and \
                     not hostnames_in_scope([host], scope):
                 return {'message': f'Host not found: {host}'}, 404
             return result

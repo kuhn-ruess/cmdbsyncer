@@ -178,18 +178,22 @@ _HOST_SOURCE_TTL = 60
 _host_source_cache = {}
 
 
-def _host_sources(scope):
+def _host_sources(scope, templates=None):
     """
     ``{source_account_name: {'count': int, 'last_seen': datetime}}`` over
     the hosts the Host list shows (no objects, not archived), limited to
-    the user's account scope.
+    the user's account and CMDB-template scope so the dashboard never
+    counts hosts the Host list itself hides.
 
-    ``scope`` is the user's account allowlist or None for unrestricted.
+    ``scope`` is the user's account allowlist, ``templates`` their CMDB
+    template allowlist — each None for unrestricted.
     """
     # pylint: disable=import-outside-toplevel
     from application.models.host import Host
+    from application.models.host_templates import scope_hosts_to_templates
 
-    key = tuple(sorted(scope)) if scope else None
+    key = (tuple(sorted(scope)) if scope else None,
+           tuple(sorted(templates)) if templates else None)
     cached = _host_source_cache.get(key)
     if cached and time.monotonic() - cached[0] < _HOST_SOURCE_TTL:
         return cached[1]
@@ -197,6 +201,7 @@ def _host_sources(scope):
     query = Host.objects(is_object__ne=True, deleted_at__exists=False)
     if scope:
         query = query.filter(source_account_name__in=list(scope))
+    query = scope_hosts_to_templates(query, templates or None)
     result = {}
     try:
         for row in query.aggregate([
@@ -804,7 +809,9 @@ class IndexView(AdminIndexView):
         from application.models.account import Account
 
         scope = current_user.account_scope() if current_user.is_authenticated else None
-        sources = _host_sources(scope)
+        templates = current_user.template_scope() \
+            if current_user.is_authenticated else None
+        sources = _host_sources(scope, templates)
         now = datetime.now()
 
         jobs, last_runs = IndexView._cron_jobs_by_account()

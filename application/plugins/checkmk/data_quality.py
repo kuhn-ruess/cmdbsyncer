@@ -283,12 +283,41 @@ def attach_cmdb_info(report, cmdb_hosts):
     return report
 
 
-def _fetch_cmdb_hosts(names):
+def visible_cmdb_hosts(names, template_scope=None):
+    """
+    Queryset of the syncer hosts named ``names`` a template-restricted
+    operator may work with: the hosts carrying one of their templates plus
+    the hosts no template has claimed yet — those are the ones the Data
+    Quality page lets them take over. Hosts carrying somebody else's
+    template stay invisible. ``template_scope`` None = every host.
+    """
+    # pylint: disable=import-outside-toplevel
+    from mongoengine import Q
+    from application.models.host import Host
+    from application.models.host_templates import template_ids_for_names
+
+    query = Host.objects(hostname__in=list(names), object_type__ne='template',
+                         deleted_at__exists=False)
+    if template_scope is None:
+        return query
+    own = list(template_ids_for_names(template_scope))
+    # `cmdb_templates.0` misses for every empty shape — field absent, null
+    # and empty list — the same test the host list's template filter uses.
+    return query.filter(
+        Q(cmdb_templates__in=own)
+        | Q(__raw__={'cmdb_templates.0': {'$exists': False}}))
+
+
+def _fetch_cmdb_hosts(names, template_scope=None):
     """
     Map every given name that exists as a syncer host to its CMDB template
     names. Archived templates are left out — they no longer contribute to an
     export — and the template names are resolved from one lookup table instead
     of dereferencing each host's references one by one.
+
+    ``template_scope`` is the caller's CMDB-template allowlist (None for
+    unrestricted); everything it hides counts as "not in the CMDB" for the
+    report (see :func:`visible_cmdb_hosts`).
     """
     # pylint: disable=import-outside-toplevel
     from application.models.host import Host
@@ -298,9 +327,8 @@ def _fetch_cmdb_hosts(names):
                                      deleted_at__exists=False).only('hostname')
     }
     result = {}
-    hosts = Host.objects(hostname__in=list(names), object_type__ne='template',
-                         deleted_at__exists=False) \
-                .only('hostname', 'cmdb_templates').no_dereference()
+    hosts = visible_cmdb_hosts(names, template_scope) \
+        .only('hostname', 'cmdb_templates').no_dereference()
     for host in hosts:
         assigned = []
         for reference in host.cmdb_templates or []:
@@ -311,7 +339,7 @@ def _fetch_cmdb_hosts(names):
     return result
 
 
-def run_data_quality_check(account_name, hostnames):
+def run_data_quality_check(account_name, hostnames, template_scope=None):
     """
     Run the full data quality check for ``hostnames`` against ``account_name``.
 
@@ -319,6 +347,9 @@ def run_data_quality_check(account_name, hostnames):
     calls, joins it against the uploaded hostnames and adds what the syncer's
     own CMDB knows about them. The Checkmk import is local so this module stays
     importable without the request stack.
+
+    ``template_scope`` limits the CMDB side of the report to hosts carrying
+    one of those templates (see :func:`_fetch_cmdb_hosts`).
     """
     # pylint: disable=import-outside-toplevel
     from .cmk2 import CMK2
@@ -326,7 +357,8 @@ def run_data_quality_check(account_name, hostnames):
     monitored_hosts = _fetch_monitored_hosts(cmk)
     checkmk_services = _fetch_checkmk_services(cmk)
     report = build_report(hostnames, monitored_hosts, checkmk_services)
-    return attach_cmdb_info(report, _fetch_cmdb_hosts(cmdb_candidates(report)))
+    return attach_cmdb_info(
+        report, _fetch_cmdb_hosts(cmdb_candidates(report), template_scope))
 
 
 def filter_uppercase_hostnames(names):
@@ -383,12 +415,16 @@ def _scan_account(account_name, name_filter):
     }
 
 
-def cmdb_template_names():
-    """Sorted names of the CMDB templates that can be applied to new hosts."""
+def cmdb_template_names(template_scope=None):
+    """
+    Sorted names of the CMDB templates that can be applied to new hosts,
+    limited to ``template_scope`` when the operator may only use some of
+    them (None = every template).
+    """
     # pylint: disable=import-outside-toplevel
-    from application.models.host import Host
+    from application.models.host_templates import assignable_templates
     return [h.hostname for h in
-            Host.objects(object_type='template', deleted_at__exists=False)
+            assignable_templates(template_scope)
                 .only('hostname').order_by('hostname')]
 
 
@@ -405,7 +441,8 @@ def apply_domain(hostnames, domain):
     return [name if '.' in name else f'{name}.{suffix}' for name in hostnames]
 
 
-def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None):
+def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None,
+                               template_scope=None):
     """
     Create the given hostnames as internal CMDB-managed hosts (source ``cmdb``,
     not CMDB objects), optionally assigning a CMDB template so the new hosts
@@ -424,7 +461,7 @@ def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None):
     hostnames = apply_domain(hostnames, domain)
     template = None
     if template_name:
-        template = _require_template(template_name)
+        template = _require_template(template_name, template_scope)
 
     created = []
     skipped = []
@@ -455,23 +492,41 @@ def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None):
             'domain': domain}
 
 
-def _require_template(template_name):
-    """Look up a CMDB template by name, raising ValueError when it is gone."""
+def _require_template(template_name, template_scope=None):
+    """
+    Look up a CMDB template by name, raising ValueError when it is gone —
+    or when ``template_scope`` says the operator may not use it. Both cases
+    report the same message: a restricted operator learns nothing about the
+    templates other teams work with.
+    """
     # pylint: disable=import-outside-toplevel
     from application.models.host_templates import get_template
-    template = get_template(template_name)
+    template = None
+    if template_scope is None or template_name in template_scope:
+        template = get_template(template_name)
     if template is None:
         raise ValueError(f"CMDB template '{template_name}' not found")
     return template
 
 
-def assign_cmdb_templates(hostnames, template_name):
+def assign_cmdb_templates(hostnames, template_name, template_scope=None):
     """
     Give the CMDB template ``template_name`` to hosts that already exist in the
     syncer, keeping the templates they carry already. Raises ValueError when
-    the template does not exist. Returns the per-outcome hostname lists of
+    the template does not exist or is outside ``template_scope``. Hosts the
+    operator may not work with (see :func:`visible_cmdb_hosts`) are reported
+    as ``missing`` instead of being touched. Returns the per-outcome hostname
+    lists of
     :func:`application.models.host_templates.assign_template_by_hostname`.
     """
     # pylint: disable=import-outside-toplevel
     from application.models.host_templates import assign_template_by_hostname
-    return assign_template_by_hostname(_require_template(template_name), hostnames)
+    template = _require_template(template_name, template_scope)
+    if template_scope is None:
+        return assign_template_by_hostname(template, hostnames)
+    allowed = {host.hostname for host in
+               visible_cmdb_hosts(hostnames, template_scope).only('hostname')}
+    result = assign_template_by_hostname(
+        template, [name for name in hostnames if name in allowed])
+    result['missing'] += [name for name in hostnames if name not in allowed]
+    return result

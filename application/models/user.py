@@ -44,6 +44,7 @@ roles = [
   ('user', "User Management"),
   ('ansible', "Ansible"),
   ('checkmk', "Checkmk"),
+  ('checkmk_data_quality', "Checkmk: Data Quality Check (this area only)"),
   ('i-doit', "I-Doit"),
   ('ldap', "LDAP"),
   ('netbox', "Netbox"),
@@ -116,6 +117,12 @@ class User(db.Document, UserMixin):
     # them, delete only reaches them) AND the web UI Host and Objects lists.
     restrict_to_accounts = db.ListField(field=db.StringField())
 
+    # Optional CMDB-template allowlist, the template-side counterpart of
+    # restrict_to_accounts. Empty = unrestricted. When set the user only
+    # sees hosts carrying one of these templates (REST API and the web UI
+    # Host/Objects/Archive lists) and may only assign these templates.
+    restrict_to_templates = db.ListField(field=db.StringField())
+
     # Personal API access tokens (hashed). See ApiToken.
     api_tokens = db.ListField(field=db.EmbeddedDocumentField(document_type='ApiToken'))
 
@@ -164,6 +171,16 @@ class User(db.Document, UserMixin):
         """
         accounts = {name for name in (self.restrict_to_accounts or []) if name}
         return accounts or None
+
+    def template_scope(self):
+        """
+        CMDB-template allowlist limiting which hosts this user may see and
+        which templates they may assign, or ``None`` when unrestricted.
+        Applied next to :meth:`account_scope` — a user carrying both only
+        reaches hosts that satisfy each of them.
+        """
+        templates = {name for name in (self.restrict_to_templates or []) if name}
+        return templates or None
 
     def create_api_token(self, label=None, expires_at=None):
         """

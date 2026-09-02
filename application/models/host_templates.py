@@ -97,6 +97,62 @@ def get_template(template_name):
                         deleted_at__exists=False).first()
 
 
+def assignable_templates(template_names=None):
+    """
+    Queryset of the active CMDB templates, optionally narrowed to
+    ``template_names`` — the allowlist of a template-restricted user
+    (``User.template_scope()``). ``None`` means unrestricted.
+
+    Returns:
+        QuerySet: the templates the caller may see and assign.
+    """
+    # pylint: disable=import-outside-toplevel
+    from application.models.host import Host
+    query = Host.objects(object_type='template', deleted_at__exists=False)
+    if template_names is not None:
+        query = query.filter(hostname__in=list(template_names))
+    return query
+
+
+def template_ids_for_names(template_names):
+    """
+    Ids of the active templates carrying one of ``template_names``.
+
+    Returns:
+        set: the template ids, empty when none of the names exists (a
+        scope naming only deleted templates therefore matches no host).
+    """
+    return set(assignable_templates(template_names).only('id').scalar('id'))
+
+
+def scope_hosts_to_templates(queryset, template_names):
+    """
+    Restrict a Host queryset to hosts carrying one of ``template_names``.
+    ``None`` leaves the queryset untouched (unrestricted user).
+
+    Returns:
+        QuerySet: the scoped queryset.
+    """
+    if template_names is None:
+        return queryset
+    return queryset.filter(
+        cmdb_templates__in=list(template_ids_for_names(template_names)))
+
+
+def host_in_template_scope(host, template_ids):
+    """
+    True when ``host`` carries one of ``template_ids``. ``None`` means the
+    caller is unrestricted and every host passes. Pass the ids (see
+    :func:`template_ids_for_names`) so a loop over hosts resolves the
+    scope once instead of per host.
+    """
+    if template_ids is None:
+        return True
+    carried = {getattr(entry, 'id', entry)
+               for entry in (getattr(host, 'cmdb_templates', None) or [])}
+    return bool(carried & set(template_ids))
+
+
 def assign_template_by_hostname(template, hostnames, dry_run=False):
     """
     Give ``template`` to every host of ``hostnames`` that exists in the

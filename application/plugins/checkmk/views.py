@@ -2291,18 +2291,38 @@ class CheckmkDataQualityView(BaseView):
     it is present, whether its agent works (the ``Check_MK`` service state) and
     which contact groups are allowed to see it.
 
-    Read-only — this view never changes anything in Checkmk or the syncer.
+    The report itself never changes anything in Checkmk or the syncer; the
+    two actions below it write to the syncer's own CMDB only.
+
+    Its own ``checkmk_data_quality`` role opens exactly this page, so an
+    operator can be given the Data Quality area without any other part of
+    the Checkmk section.
     """
 
     def is_accessible(self):
         """ Overwrite """
-        return current_user.is_authenticated and current_user.has_right('checkmk')
+        if not current_user.is_authenticated:
+            return False
+        return current_user.has_right('checkmk') \
+            or current_user.has_right('checkmk_data_quality')
+
+    @staticmethod
+    def _template_scope():
+        """The current user's CMDB-template allowlist, None = unrestricted."""
+        return current_user.template_scope() \
+            if current_user.is_authenticated else None
 
     @staticmethod
     def _accounts():
-        """Enabled Checkmk (cmkv2) accounts — the pickable targets."""
+        """
+        Enabled Checkmk (cmkv2) accounts the current user may check —
+        an account-restricted user only gets their own.
+        """
+        scope = current_user.account_scope() \
+            if current_user.is_authenticated else None
         return [a.name for a in
-                Account.objects(enabled=True, type='cmkv2').order_by('name')]
+                Account.objects(enabled=True, type='cmkv2').order_by('name')
+                if scope is None or a.name in scope]
 
     def _render(self, accounts, selected_account='', report=None, extra=None):
         """
@@ -2317,7 +2337,8 @@ class CheckmkDataQualityView(BaseView):
             accounts=accounts,
             selected_account=selected_account,
             report=report,
-            templates=cmdb_template_names() if report else [],
+            templates=cmdb_template_names(self._template_scope())
+            if report else [],
             **(extra or {}))
 
     @staticmethod
@@ -2371,7 +2392,8 @@ class CheckmkDataQualityView(BaseView):
             return self._render(accounts, account_name)
 
         try:
-            report = run_data_quality_check(account_name, hostnames)
+            report = run_data_quality_check(account_name, hostnames,
+                                            self._template_scope())
         except CmkException as error:
             flash(f"Checkmk request failed: {error}", 'error')
             return self._render(accounts, account_name)
@@ -2427,7 +2449,8 @@ class CheckmkDataQualityView(BaseView):
             return redirect(self.get_url('.index'))
 
         try:
-            result = assign_cmdb_templates(hostnames, template_name)
+            result = assign_cmdb_templates(hostnames, template_name,
+                                           self._template_scope())
         except ValueError as error:
             flash(str(error), 'error')
             return redirect(self.get_url('.index'))
@@ -2453,10 +2476,17 @@ class CheckmkDataQualityView(BaseView):
         if not hostnames:
             flash('No hosts selected to create', 'warning')
             return redirect(self.get_url('.index'))
+        if not template_name and self._template_scope() is not None:
+            # A template-restricted operator only sees hosts carrying one of
+            # their templates — creating hosts without one would hide them
+            # from their creator the moment they are saved.
+            flash('Pick one of your CMDB templates first', 'error')
+            return redirect(self.get_url('.index'))
 
         try:
             result = create_internal_cmdb_hosts(hostnames, template_name or None,
-                                                domain or None)
+                                                domain or None,
+                                                self._template_scope())
         except ValueError as error:
             flash(str(error), 'error')
             return redirect(self.get_url('.index'))

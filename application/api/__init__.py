@@ -266,19 +266,73 @@ def get_api_account_scope():
     return user.account_scope()
 
 
-def hostnames_in_scope(hostnames, scope):
-    """Subset of *hostnames* whose host is inside the account scope.
-
-    ``scope`` is ``None`` (unrestricted → every name passes) or a set of
-    allowed account names. Resolves the whole batch in a single query so
-    callers never fan out into one lookup per host.
+def get_api_template_scope():
     """
-    if scope is None:
+    CMDB-template allowlist for the authenticated API user, or ``None``
+    when the user may reach hosts regardless of their templates. The
+    template-side counterpart of :func:`get_api_account_scope`.
+    """
+    user = getattr(g, 'api_user', None)
+    if user is None:
+        return None
+    return user.template_scope()
+
+
+def get_api_template_ids():
+    """
+    Ids of the templates the API user is limited to, or ``None`` when
+    unrestricted. Cached on ``flask.g`` so a request looping over hosts
+    resolves the names once instead of per host.
+    """
+    if not hasattr(g, 'api_template_ids'):
+        # Imported here to avoid a heavy model import at package load time.
+        # pylint: disable=import-outside-toplevel
+        from application.models.host_templates import template_ids_for_names
+        names = get_api_template_scope()
+        g.api_template_ids = None if names is None \
+            else template_ids_for_names(names)
+    return g.api_template_ids
+
+
+def api_scope_active():
+    """True when the API user is limited to accounts and/or templates."""
+    return get_api_account_scope() is not None \
+        or get_api_template_ids() is not None
+
+
+def scope_host_query(queryset):
+    """
+    Restrict a Host queryset to what the API user may see: hosts of their
+    accounts, carrying one of their templates. Unrestricted users get the
+    queryset unchanged.
+    """
+    scope = get_api_account_scope()
+    if scope is not None:
+        queryset = queryset.filter(source_account_name__in=list(scope))
+    template_ids = get_api_template_ids()
+    if template_ids is not None:
+        queryset = queryset.filter(cmdb_templates__in=list(template_ids))
+    return queryset
+
+
+def hostnames_in_scope(hostnames, scope):
+    """Subset of *hostnames* whose host is inside the API user's scope.
+
+    ``scope`` is ``None`` (account-unrestricted) or a set of allowed
+    account names; the user's template scope is applied on top of it.
+    Resolves the whole batch in a single query so callers never fan out
+    into one lookup per host.
+    """
+    template_ids = get_api_template_ids()
+    if scope is None and template_ids is None:
         return set(hostnames)
     if not hostnames:
         return set()
     # Imported here to avoid a heavy model import at API-package load time.
     from application.models.host import Host  # pylint: disable=import-outside-toplevel
-    allowed = Host.objects(hostname__in=list(hostnames),
-                           source_account_name__in=list(scope)).only('hostname')
-    return {h.hostname for h in allowed}
+    allowed = Host.objects(hostname__in=list(hostnames))
+    if scope is not None:
+        allowed = allowed.filter(source_account_name__in=list(scope))
+    if template_ids is not None:
+        allowed = allowed.filter(cmdb_templates__in=list(template_ids))
+    return {h.hostname for h in allowed.only('hostname')}

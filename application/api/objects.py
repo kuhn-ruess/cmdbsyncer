@@ -13,11 +13,13 @@ from flask import request, abort
 from flask_restx import Namespace, Resource, reqparse, fields
 from application import app
 from application.api import (
-    require_token, get_api_account_scope, hostnames_in_scope,
+    require_token, get_api_account_scope, get_api_template_ids,
+    hostnames_in_scope, scope_host_query,
 )
 from application.models.host import (
     Host, HostError, RELATION_TYPES, RELATION_INVERSE_LABEL,
 )
+from application.models.host_templates import host_in_template_scope
 # @TODO pre_deletion method for Host so no import needed
 from application.plugins.checkmk.models import CheckmkFolderPool
 
@@ -205,14 +207,35 @@ def _require_cmdb_mode():
         abort(404, 'CMDB_MODE is disabled on this install.')
 
 
-def _host_in_scope(host, scope):
-    """True if *host* belongs to the API user's account scope.
+def _write_blocked_by_scope(host_obj, scope):
+    """True when a restricted API user must not write to *host_obj*.
 
-    ``scope`` is ``None`` for unrestricted users (everything visible) or a
-    set of allowed account names — then the host's ``source_account_name``
-    must be one of them.
+    Only existing hosts can be out of scope — a host this call is about to
+    create belongs to nobody yet. An existing host bound to an account
+    outside the scope must not be re-bound or edited (even if its own
+    account is a master, which ``set_account`` would otherwise let win),
+    and neither must one that carries none of the user's templates.
     """
-    return scope is None or host.source_account_name in scope
+    if not host_obj.id:
+        return False
+    if scope is not None and host_obj.source_account_name \
+            and host_obj.source_account_name not in scope:
+        return True
+    return not host_in_template_scope(host_obj, get_api_template_ids())
+
+
+def _host_in_scope(host, scope):
+    """True if *host* is inside the API user's scope.
+
+    ``scope`` is ``None`` for account-unrestricted users (every account
+    visible) or a set of allowed account names — then the host's
+    ``source_account_name`` must be one of them. The user's CMDB-template
+    scope is applied on top of it: a template-restricted user only reaches
+    hosts carrying one of their templates.
+    """
+    if scope is not None and host.source_account_name not in scope:
+        return False
+    return host_in_template_scope(host, get_api_template_ids())
 
 
 # ---------------------------------------------------------------------------
@@ -264,11 +287,7 @@ class HostDetailApi(Resource):
             abort(400, "Account not found")
         labels = req_json['labels']
         host_obj = Host.get_host(hostname)
-        # An existing host bound to an account outside the scope must not be
-        # re-bound or edited by a restricted user, even if its own account is
-        # a master (which set_account would otherwise let win).
-        if scope is not None and host_obj.source_account_name \
-                and host_obj.source_account_name not in scope:
+        if _write_blocked_by_scope(host_obj, scope):
             return {'status': 'account_conflict'}, 403
         try:
             host_obj.update_host(labels)
@@ -344,10 +363,9 @@ class HostDetailBulkApi(Resource):
             hostname = api_host['hostname']
             labels = api_host['labels']
             host_obj = Host.get_host(hostname)
-            # Skip hosts already owned by an out-of-scope account (see the
-            # single-host POST for why the master-account path is blocked).
-            if scope is not None and host_obj.source_account_name \
-                    and host_obj.source_account_name not in scope:
+            # Skip hosts the user is not allowed to write (see
+            # _write_blocked_by_scope).
+            if _write_blocked_by_scope(host_obj, scope):
                 not_save.append(hostname)
                 continue
             try:
@@ -501,10 +519,7 @@ class HostDetailListApi(Resource):
             abort(400, f"limit must be <= {MAX_PAGE_LIMIT}")
         end = start+limit
 
-        db_objecs = Host.objects(is_object__ne=True)
-        scope = get_api_account_scope()
-        if scope is not None:
-            db_objecs = db_objecs.filter(source_account_name__in=list(scope))
+        db_objecs = scope_host_query(Host.objects(is_object__ne=True))
         total = db_objecs.count()
         for host in db_objecs[start:end]:
             results.append(build_host_dict(host))

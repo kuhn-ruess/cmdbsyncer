@@ -72,9 +72,11 @@ class _FakeUser:  # pylint: disable=too-few-public-methods
     """Minimal stand-in for application.models.user.User instances."""
 
     def __init__(self, api_roles=None, password_ok=True, disabled=False,
-                 restrict_to_accounts=None):
+                 scopes=None):
         self.api_roles = api_roles if api_roles is not None else ['all']
-        self.restrict_to_accounts = restrict_to_accounts or []
+        # {'accounts': [...], 'templates': [...]} — the two allowlists the
+        # real User carries as restrict_to_accounts / restrict_to_templates.
+        self.scopes = scopes or {}
         self.disabled = disabled
         # Set by the read-only tests; a plain attribute keeps the stub's
         # constructor as narrow as the production model's own default.
@@ -88,8 +90,12 @@ class _FakeUser:  # pylint: disable=too-few-public-methods
         return self._password_ok
 
     def account_scope(self):
-        accounts = {a for a in (self.restrict_to_accounts or []) if a}
+        accounts = {a for a in self.scopes.get('accounts') or [] if a}
         return accounts or None
+
+    def template_scope(self):
+        templates = {t for t in self.scopes.get('templates') or [] if t}
+        return templates or None
 
 
 def _readonly_user(**kwargs):
@@ -1385,7 +1391,20 @@ def _scoped_auth_patches(accounts):
         @patch('application.api.User')
         def wrapper(self, user_cls, *args, **kwargs):
             user_cls.objects.get.return_value = _FakeUser(
-                api_roles=['all'], restrict_to_accounts=accounts)
+                api_roles=['all'], scopes={'accounts': accounts})
+            return test_fn(self, *args, **kwargs)
+        wrapper.__name__ = test_fn.__name__
+        return wrapper
+    return deco
+
+
+def _template_scoped_auth_patches(templates):
+    """Decorator: inject a valid user restricted to *templates*."""
+    def deco(test_fn):
+        @patch('application.api.User')
+        def wrapper(self, user_cls, *args, **kwargs):
+            user_cls.objects.get.return_value = _FakeUser(
+                api_roles=['all'], scopes={'templates': templates})
             return test_fn(self, *args, **kwargs)
         wrapper.__name__ = test_fn.__name__
         return wrapper
@@ -1393,7 +1412,7 @@ def _scoped_auth_patches(accounts):
 
 
 class ObjectsAPIScopingTest(unittest.TestCase):
-    """Account-scoping (User.restrict_to_accounts) for /api/v1/objects/*."""
+    """Account and template scoping for /api/v1/objects/*."""
 
     def setUp(self):
         self.app = _build_app()
@@ -1401,10 +1420,11 @@ class ObjectsAPIScopingTest(unittest.TestCase):
         self.headers = _basic_auth()
 
     @staticmethod
-    def _host(account_name, hostname='web01'):
+    def _host(account_name, hostname='web01', templates=None):
         host = MagicMock()
         host.hostname = hostname
         host.source_account_name = account_name
+        host.cmdb_templates = list(templates or [])
         host.get_labels.return_value = {}
         host.get_inventory.return_value = {}
         host.last_import_seen = None
@@ -1505,24 +1525,138 @@ class ObjectsAPIScopingTest(unittest.TestCase):
         resp = self.client.get('/api/v1/objects/web01', headers=self.headers)
         self.assertEqual(resp.status_code, 200)
 
+    @_template_scoped_auth_patches(['linux'])
+    @patch('application.models.host_templates.template_ids_for_names')
+    @patch('application.api.objects.Host')
+    def test_get_host_with_the_users_template_visible(self, host_cls, ids):
+        ids.return_value = {'tpl-1'}
+        host_cls.objects.get.return_value = self._host('acct-a',
+                                                       templates=['tpl-1'])
+        resp = self.client.get('/api/v1/objects/web01', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+    @_template_scoped_auth_patches(['linux'])
+    @patch('application.models.host_templates.template_ids_for_names')
+    @patch('application.api.objects.Host')
+    def test_get_host_with_a_foreign_template_hidden(self, host_cls, ids):
+        # The host exists, but carries none of the user's templates — it is
+        # reported as not found, exactly like an out-of-account host.
+        ids.return_value = {'tpl-1'}
+        host_cls.objects.get.return_value = self._host('acct-a',
+                                                       templates=['tpl-2'])
+        resp = self.client.get('/api/v1/objects/web01', headers=self.headers)
+        self.assertEqual(resp.status_code, 404)
+
+    @_template_scoped_auth_patches(['linux'])
+    @patch('application.models.host_templates.template_ids_for_names')
+    @patch('application.api.objects.Host')
+    def test_get_untemplated_host_hidden(self, host_cls, ids):
+        ids.return_value = {'tpl-1'}
+        host_cls.objects.get.return_value = self._host('acct-a')
+        resp = self.client.get('/api/v1/objects/web01', headers=self.headers)
+        self.assertEqual(resp.status_code, 404)
+
+    @_template_scoped_auth_patches(['linux'])
+    @patch('application.models.host_templates.template_ids_for_names')
+    @patch('application.api.objects.Host')
+    def test_post_to_a_foreign_template_host_refused(self, host_cls, ids):
+        ids.return_value = {'tpl-1'}
+        host = self._host('acct-a', templates=['tpl-2'])
+        host.id = 'host-1'
+        host_cls.get_host.return_value = host
+        resp = self.client.post(
+            '/api/v1/objects/web01',
+            headers=self.headers,
+            json={'account': 'acct-a', 'labels': {'a': 'b'}},
+        )
+        self.assertEqual(resp.status_code, 403)
+        host.save.assert_not_called()
+
+    @_template_scoped_auth_patches(['linux'])
+    @patch('application.models.host_templates.template_ids_for_names')
+    @patch('application.api.objects.Host')
+    def test_list_all_filters_by_template_scope(self, host_cls, ids):
+        ids.return_value = {'tpl-1'}
+        captured = {}
+
+        class _Queryset:  # pylint: disable=too-few-public-methods
+            def __init__(self, items):
+                self._items = items
+
+            def filter(self, **kwargs):
+                captured.update(kwargs)
+                return self
+
+            def count(self):
+                return len(self._items)
+
+            def __getitem__(self, item):
+                return self._items[item]
+
+        host_cls.objects.return_value = _Queryset([])
+        resp = self.client.get('/api/v1/objects/all', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(captured.get('cmdb_templates__in'), ['tpl-1'])
+
+
+class _CountingQueryset:
+    """Records every filter() a scoped counter query applies."""
+
+    def __init__(self, applied):
+        self._applied = applied
+
+    def filter(self, **kwargs):
+        self._applied.append(kwargs)
+        return self
+
+    @staticmethod
+    def count():
+        return 0
+
 
 class SyncerAPIScopingTest(unittest.TestCase):
-    """Account-scoping for /api/v1/syncer/hosts counters."""
+    """Scoping for /api/v1/syncer/hosts counters."""
 
     def setUp(self):
         self.app = _build_app()
         self.client = self.app.test_client()
         self.headers = _basic_auth()
 
+    def _counter_filters(self, host_cls):
+        """Call the counters endpoint, return the filters it applied."""
+        applied = []
+        host_cls.objects.return_value = _CountingQueryset(applied)
+        resp = self.client.get('/api/v1/syncer/hosts', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        return applied
+
     @_scoped_auth_patches(['acct-a'])
     @patch('application.api.syncer.Host')
     def test_hosts_counters_scoped(self, host_cls):
-        host_cls.objects.return_value.count.return_value = 0
-        resp = self.client.get('/api/v1/syncer/hosts', headers=self.headers)
-        self.assertEqual(resp.status_code, 200)
-        # Every counter query must carry the account filter.
-        for call in host_cls.objects.call_args_list:
-            self.assertEqual(call.kwargs.get('source_account_name__in'), ['acct-a'])
+        applied = self._counter_filters(host_cls)
+        # One filter per counter, each carrying the account allowlist.
+        self.assertEqual(len(applied), 3)
+        for kwargs in applied:
+            self.assertEqual(kwargs.get('source_account_name__in'), ['acct-a'])
+
+    @_scoped_auth_patches([])
+    @patch('application.api.syncer.Host')
+    def test_hosts_counters_unrestricted(self, host_cls):
+        # No scope configured → the counters count everything, unfiltered.
+        self.assertEqual(self._counter_filters(host_cls), [])
+
+    @_template_scoped_auth_patches(['linux'])
+    @patch('application.api.syncer.Host')
+    @patch('application.models.host_templates.template_ids_for_names')
+    def test_hosts_counters_template_scoped(self, ids_for_names, host_cls):
+        ids_for_names.return_value = {'tpl-1'}
+        applied = self._counter_filters(host_cls)
+        self.assertEqual(len(applied), 3)
+        for kwargs in applied:
+            # Template-only scope: no account filter, but every counter is
+            # limited to the hosts carrying one of the user's templates.
+            self.assertNotIn('source_account_name__in', kwargs)
+            self.assertEqual(kwargs.get('cmdb_templates__in'), ['tpl-1'])
 
 
 class ApiTokenAuthTest(unittest.TestCase):
@@ -1597,7 +1731,7 @@ class ApiTokenAuthTest(unittest.TestCase):
     @patch('application.api.find_user_by_api_token')
     def test_token_carries_account_scope(self, find_token, _user_cls, host_cls):
         # Token owner is restricted to acct-a → out-of-scope host hidden.
-        user = _FakeUser(api_roles=['all'], restrict_to_accounts=['acct-a'])
+        user = _FakeUser(api_roles=['all'], scopes={'accounts': ['acct-a']})
         find_token.return_value = (user, MagicMock(last_used_at=datetime.utcnow()))
         host = MagicMock()
         host.source_account_name = 'acct-b'

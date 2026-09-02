@@ -89,7 +89,11 @@ from application.models.host import (
     CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME,
     get_cmdb_model_fields,
 )
-from application.models.host_templates import sync_template_assignment
+from application.models.host_templates import (
+    assignable_templates,
+    scope_hosts_to_templates,
+    sync_template_assignment,
+)
 from application.models.host_label_event import HostLabelEvent
 from application.models.config import Config
 # pylint: enable=import-error
@@ -100,17 +104,33 @@ div_close = rules.HTML("</div>")
 
 def _scope_hosts_to_user(queryset):
     """
-    Restrict a Host queryset to the current user's account scope.
+    Restrict a Host queryset to the current user's account and template
+    scope.
 
     When the logged-in user has ``restrict_to_accounts`` set, the Host and
-    Objects lists only show hosts bound to one of those accounts — the same
-    rule the REST API enforces. Unrestricted users (and unauthenticated
-    contexts) get the queryset unchanged.
+    Objects lists only show hosts bound to one of those accounts; with
+    ``restrict_to_templates`` set they only show hosts carrying one of
+    those CMDB templates. Both are the same rules the REST API enforces
+    and a user carrying both must satisfy each of them. Unrestricted users
+    (and unauthenticated contexts) get the queryset unchanged.
     """
     scope = current_user.account_scope() if current_user.is_authenticated else None
     if scope is not None:
-        return queryset.filter(source_account_name__in=list(scope))
-    return queryset
+        queryset = queryset.filter(source_account_name__in=list(scope))
+    return scope_hosts_to_templates(queryset, _allowed_template_names())
+
+
+def _allowed_template_names():
+    """
+    CMDB template names the current user is limited to, or ``None`` when
+    they may see and assign every template.
+    """
+    return current_user.template_scope() if current_user.is_authenticated else None
+
+
+def _template_field_queryset():
+    """Queryset backing the host form's CMDB template picker."""
+    return assignable_templates(_allowed_template_names())
 
 
 def _allowed_account_names():
@@ -1213,10 +1233,15 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
 
     def get_query(self):
         """
-        Limit Objects
+        Limit Objects — a template-restricted user only sees the templates
+        their ``restrict_to_templates`` allowlist names.
         """
-        return Host.objects(is_object=True, object_type="template",
-                            deleted_at__exists=False)
+        query = Host.objects(is_object=True, object_type="template",
+                             deleted_at__exists=False)
+        names = _allowed_template_names()
+        if names is not None:
+            query = query.filter(hostname__in=list(names))
+        return query
 
     def on_model_change(self, form, model, is_created):
         super().on_model_change(form, model, is_created)
@@ -2145,8 +2170,7 @@ Impact Chain.
 
         # Filter cmdb_templates to show only template objects
         if hasattr(form_class, 'cmdb_templates'):
-            form_class.cmdb_templates.kwargs['queryset'] = Host.objects(
-                object_type='template', deleted_at__exists=False)
+            form_class.cmdb_templates.kwargs['queryset'] = assignable_templates()
 
         return form_class
 
@@ -2180,7 +2204,7 @@ Impact Chain.
             form.labels_from_template.object_data = obj
 
         if hasattr(form, 'cmdb_templates'):
-            form.cmdb_templates.queryset = Host.objects(object_type='template')
+            form.cmdb_templates.queryset = _template_field_queryset()
 
         if hasattr(form, 'source_account_name'):
             form.source_account_name.choices = _account_field_choices(
@@ -2206,7 +2230,7 @@ Impact Chain.
         if hasattr(form, 'labels_from_template'):
             form.labels_from_template.object_data = obj
         if hasattr(form, 'cmdb_templates'):
-            form.cmdb_templates.queryset = Host.objects(object_type='template')
+            form.cmdb_templates.queryset = _template_field_queryset()
         if hasattr(form, 'source_account_name'):
             form.source_account_name.choices = _account_field_choices()
         return form
