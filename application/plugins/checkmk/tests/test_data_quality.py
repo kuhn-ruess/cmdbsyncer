@@ -4,8 +4,10 @@ pure join that turns monitoring data into the per-host report.
 """
 # pylint: disable=missing-function-docstring
 import unittest
+from unittest.mock import Mock, patch
 
 from application.plugins.checkmk.data_quality import (
+    create_internal_cmdb_hosts,
     parse_hostnames_from_csv,
     parse_hostnames_from_text,
     build_report,
@@ -300,6 +302,44 @@ class TestAttachCmdbInfo(unittest.TestCase):
         attach_cmdb_info(report, {'host1': ['A'], 'host1.example.com': ['B']})
         self.assertEqual(report['results'][0]['cmdb_name'], 'host1')
         self.assertEqual(report['results'][0]['cmdb_templates'], ['A'])
+
+
+class TestCreateInternalCmdbHosts(unittest.TestCase):
+    """application.plugins.checkmk.data_quality.create_internal_cmdb_hosts"""
+
+    def _create(self, template_names):
+        hosts = {}
+
+        def get_host(hostname):
+            host = Mock()
+            host.hostname = hostname
+            host.id = None  # not in the CMDB yet
+            hosts[hostname] = host
+            return host
+
+        with patch('application.models.host.Host') as host_cls, \
+             patch('application.plugins.checkmk.data_quality._require_template',
+                   side_effect=lambda name, scope=None: f'<{name}>'):
+            host_cls.get_host.side_effect = get_host
+            result = create_internal_cmdb_hosts(['srv1'], template_names)
+        return hosts['srv1'], result
+
+    def test_every_picked_template_lands_on_the_host(self):
+        host, result = self._create(['tpl_a', 'tpl_b'])
+        self.assertEqual(host.cmdb_templates, ['<tpl_a>', '<tpl_b>'])
+        self.assertEqual(result['created'], ['srv1'])
+        self.assertEqual(result['templates'], ['tpl_a', 'tpl_b'])
+
+    def test_no_template_leaves_the_host_untouched(self):
+        host, result = self._create([])
+        # The attribute must not be assigned at all — a host template
+        # list set to [] would look like a deliberate reset.
+        self.assertNotIn('cmdb_templates', host.__dict__)
+        self.assertEqual(result['templates'], [])
+
+    def test_blank_entries_are_dropped(self):
+        _host, result = self._create(['tpl_a', '', '  '])
+        self.assertEqual(result['templates'], ['tpl_a'])
 
 
 class TestFetchHelpers(unittest.TestCase):

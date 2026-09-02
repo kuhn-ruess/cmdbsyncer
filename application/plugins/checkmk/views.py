@@ -2577,12 +2577,13 @@ class CheckmkDataQualityView(BaseView):
         from .data_quality import create_internal_cmdb_hosts
 
         hostnames = [h for h in request.form.getlist('missing_hosts') if h.strip()]
-        template_name = (request.form.get('template') or '').strip()
+        template_names = [t.strip() for t in request.form.getlist('template')
+                          if t.strip()]
         domain = (request.form.get('domain') or '').strip()
         if not hostnames:
             flash('No hosts selected to create', 'warning')
             return redirect(self.get_url('.index'))
-        if not template_name and self._template_scope() is not None:
+        if not template_names and self._template_scope() is not None:
             # A template-restricted operator only sees hosts carrying one of
             # their templates — creating hosts without one would hide them
             # from their creator the moment they are saved.
@@ -2590,7 +2591,7 @@ class CheckmkDataQualityView(BaseView):
             return redirect(self.get_url('.index'))
 
         try:
-            result = create_internal_cmdb_hosts(hostnames, template_name or None,
+            result = create_internal_cmdb_hosts(hostnames, template_names,
                                                 domain or None,
                                                 self._template_scope())
         except ValueError as error:
@@ -2600,8 +2601,9 @@ class CheckmkDataQualityView(BaseView):
         msg = f"Created {len(result['created'])} host(s) in the internal CMDB"
         if domain:
             msg += f" in domain '{domain}'"
-        if template_name:
-            msg += f" with template '{template_name}'"
+        if template_names:
+            msg += (f" with template(s) "
+                    f"{', '.join(repr(t) for t in template_names)}")
         if result['skipped']:
             msg += f"; skipped {len(result['skipped'])} already-existing host(s)"
         flash(msg + '.', 'success')

@@ -441,12 +441,12 @@ def apply_domain(hostnames, domain):
     return [name if '.' in name else f'{name}.{suffix}' for name in hostnames]
 
 
-def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None,
+def create_internal_cmdb_hosts(hostnames, template_names=None, domain=None,
                                template_scope=None):
     """
     Create the given hostnames as internal CMDB-managed hosts (source ``cmdb``,
-    not CMDB objects), optionally assigning a CMDB template so the new hosts
-    inherit its labels/attributes at export time. ``domain`` is appended to
+    not CMDB objects), optionally assigning CMDB templates so the new hosts
+    inherit their labels/attributes at export time. ``domain`` is appended to
     every name that has no domain part (see :func:`apply_domain`).
 
     Mirrors the internal-CMDB stamping the Host admin view does on save. Hosts
@@ -459,9 +459,10 @@ def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None,
         CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
 
     hostnames = apply_domain(hostnames, domain)
-    template = None
-    if template_name:
-        template = _require_template(template_name, template_scope)
+    template_names = [name.strip() for name in (template_names or [])
+                      if (name or '').strip()]
+    templates = [_require_template(name, template_scope)
+                 for name in template_names]
 
     created = []
     skipped = []
@@ -483,12 +484,12 @@ def create_internal_cmdb_hosts(hostnames, template_name=None, domain=None,
         host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
         host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
         host.no_autodelete = True
-        if template is not None:
-            host.cmdb_templates = [template]
+        if templates:
+            host.cmdb_templates = list(templates)
         host.set_inventory_attributes(CMDB_SOURCE_ACCOUNT_NAME)
         host.save()
         created.append(host.hostname)
-    return {'created': created, 'skipped': skipped, 'template': template_name,
+    return {'created': created, 'skipped': skipped, 'templates': template_names,
             'domain': domain}
 
 
