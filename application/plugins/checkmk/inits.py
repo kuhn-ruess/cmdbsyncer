@@ -634,7 +634,7 @@ def assign_cmdb_template_from_folder(account, folder, template_name,
         raise
 #.
 #   .-- Export Notification Rules
-def export_notifications(account, debug=False):
+def export_notifications(account, dry_run=False, debug=False):
     """
     Create / clean Notification Rules in Checkmk
     """
@@ -642,6 +642,7 @@ def export_notifications(account, debug=False):
     try:
         syncer = CheckmkNotificationRuleSync(account)
         syncer.debug = debug
+        syncer.dry_run = dry_run
 
         actions = NotificationRuleAction()
         actions.rules = CheckmkNotificationRule.objects(enabled=True).order_by('sort_field')

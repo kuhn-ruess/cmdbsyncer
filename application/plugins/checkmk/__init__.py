@@ -620,8 +620,9 @@ def cli_export_groups(account, test_run, debug=False):
 #   .-- Command: Export Notification Rules
 @cli_cmk.command('export_notifications')
 @click.argument("account")
+@click.option("--dry-run", default=False, is_flag=True)
 @click.option("--debug", is_flag=True)
-def cli_export_notifications(account, debug=False):
+def cli_export_notifications(account, dry_run=False, debug=False):
     """
     Export configured Notification Rules to a Checkmk Account.
 
@@ -632,8 +633,9 @@ def cli_export_notifications(account, debug=False):
 
     Args:
         account (string): Name Account Config
+        dry_run (bool): Only print what would change ( default is False )
     """
-    export_notifications(account, debug=debug)
+    export_notifications(account, dry_run=dry_run, debug=debug)
 
 #.
 #   .-- Command: Activate Changes

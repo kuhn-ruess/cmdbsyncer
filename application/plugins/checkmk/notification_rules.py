@@ -528,12 +528,38 @@ class CheckmkNotificationRuleSync(CMK2):
               f"update={len(to_update)} create={len(to_create)} "
               f"delete={len(to_delete)}")
 
+        if self.dry_run:
+            self._report_dry_run(to_delete, to_update, to_create)
+            return
+
         for cmk in to_delete:
             self._delete_rule(cmk['id'])
         for cmk, body in to_update:
             self._update_rule(cmk, body)
         for body in to_create:
             self._create_rule(body)
+
+    def _describe(self, rule_config):
+        """
+        Short human identity of a rule body: notification plugin and
+        the contact groups it ships to. The rule id says nothing to an
+        admin reading a dry run.
+        """
+        recipients = ', '.join(self._recipients(rule_config)) or 'no recipients'
+        return f"{self._plugin_name(rule_config)} -> {recipients}"
+
+    def _report_dry_run(self, to_delete, to_update, to_create):
+        """Print the pending changes instead of sending them."""
+        print(f"{CC.WARNING} !{CC.ENDC} Dry run: nothing is sent to Checkmk")
+        for cmk in to_delete:
+            print(f"{CC.OKBLUE} *{CC.ENDC} would DELETE {cmk['id']} "
+                  f"({self._describe(cmk['rule_config'])})")
+        for cmk, body in to_update:
+            print(f"{CC.OKBLUE} *{CC.ENDC} would UPDATE {cmk['id']} "
+                  f"({self._describe(body['rule_config'])})")
+        for body in to_create:
+            print(f"{CC.OKBLUE} *{CC.ENDC} would CREATE "
+                  f"{self._describe(body['rule_config'])}")
 
     def _delete_rule(self, rule_id):
         # CMK 2.4 has no real DELETE for notification rules — use the

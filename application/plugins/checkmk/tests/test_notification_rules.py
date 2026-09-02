@@ -429,6 +429,15 @@ class TestCheckmkNotificationRuleSync(_SyncTestCase):
         self.assertEqual(
             self.sync._recipients(created[0]['rule_config']), ('dba',))
 
+    def test_dry_run_sends_nothing(self):
+        """A dry run computes the same diff but keeps its hands off CMK."""
+        self.sync.dry_run = True
+        created, updated, deleted = self._apply(
+            [{'rule_config': _cfg(['ops'])}, {'rule_config': _cfg(['dba'])}],
+            [{'id': 'orphan-id', 'rule_config': _cfg(['legacy'])}])
+
+        self.assertEqual((created, updated, deleted), ([], [], []))
+
     def test_diff_keeps_rule_whose_method_the_admin_configured(self):
         """
         The admin tuned the notification method of one of our rules in
