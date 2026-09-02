@@ -1590,6 +1590,34 @@ _NOTIFICATION_LIST_LABELS = [
     ('match_contacts', 'Filter Contacts'),
 ]
 
+# Placeholder hints for the Jinja rendered outcome fields. All of them
+# are rendered once per pass of the "One Rule per List Entry" loop, so
+# the loop hint is appended to every one of them.
+_NOTIFICATION_LOOP_HINT = ' | in loop mode {{name}} is the current entry'
+
+_NOTIFICATION_PLACEHOLDERS = {
+    'contact_group_recipients':
+        'Comma-separated CG names, Jinja. e.g. {{cmk_contact_group}}_ALARM',
+    'match_contact_groups':
+        'Comma-separated CG names, Jinja. e.g. {{cmk_contact_group}}',
+    'match_host_groups': 'Comma-separated host group names, Jinja',
+    'match_service_groups': 'Comma-separated service group names, Jinja',
+    'match_sites': 'Comma-separated site IDs, Jinja',
+    'match_folder': 'Single folder path (subfolders matched), Jinja',
+    'match_hosts': 'Comma-separated host names, Jinja',
+    'match_exclude_hosts': 'Comma-separated host names, Jinja',
+    'match_services': 'Comma-separated service descriptions / regex, Jinja',
+    'match_exclude_services': 'Comma-separated service descriptions / regex, Jinja',
+    'match_host_labels': 'Comma-separated key:value pairs, Jinja',
+    'match_service_labels': 'Comma-separated key:value pairs, Jinja',
+    'match_host_tags': 'Comma-separated tag_group:tag_id pairs, Jinja',
+    'match_check_types': 'Comma-separated check plugin names, Jinja',
+    'match_plugin_output': 'Regex against service plugin output, Jinja',
+    'match_only_during_time_period': 'Single time period name, Jinja',
+    'match_service_levels': 'Range "min,max" (numeric), Jinja',
+    'match_contacts': 'Comma-separated user IDs, Jinja',
+}
+
 
 def _render_notification_rule(_view, _context, model, _name):
     """
@@ -1798,72 +1826,14 @@ class CheckmkNotificationRuleView(RuleModelView):
                         'form_overrides': match_field_overrides,
                         'form_args': form_args,
                         'form_widget_args': {
-                            'contact_group_recipients': {
-                                'placeholder': (
-                                    'Comma-separated CG names, Jinja. '
-                                    'e.g. {{cmk_contact_group}}_ALARM'
-                                )
+                            **{
+                                field: {'placeholder': hint + _NOTIFICATION_LOOP_HINT}
+                                for field, hint in _NOTIFICATION_PLACEHOLDERS.items()
                             },
                             'multiply_list': {
                                 'placeholder': (
                                     '{{get_list(anwendung_kontaktgruppe)|safe}}'
                                 )
-                            },
-                            'match_contact_groups': {
-                                'placeholder': (
-                                    'Comma-separated CG names, Jinja. '
-                                    'e.g. {{cmk_contact_group}}'
-                                )
-                            },
-                            'match_host_groups': {
-                                'placeholder': 'Comma-separated host group names, Jinja',
-                            },
-                            'match_service_groups': {
-                                'placeholder': 'Comma-separated service group names, Jinja',
-                            },
-                            'match_sites': {
-                                'placeholder': 'Comma-separated site IDs, Jinja',
-                            },
-                            'match_folder': {
-                                'placeholder': 'Single folder path (subfolders matched), Jinja',
-                            },
-                            'match_hosts': {
-                                'placeholder': 'Comma-separated host names, Jinja',
-                            },
-                            'match_exclude_hosts': {
-                                'placeholder': 'Comma-separated host names, Jinja',
-                            },
-                            'match_services': {
-                                'placeholder': (
-                                    'Comma-separated service descriptions / regex, Jinja'),
-                            },
-                            'match_exclude_services': {
-                                'placeholder': (
-                                    'Comma-separated service descriptions / regex, Jinja'),
-                            },
-                            'match_host_labels': {
-                                'placeholder': 'Comma-separated key:value pairs, Jinja',
-                            },
-                            'match_service_labels': {
-                                'placeholder': 'Comma-separated key:value pairs, Jinja',
-                            },
-                            'match_host_tags': {
-                                'placeholder': 'Comma-separated tag_group:tag_id pairs, Jinja',
-                            },
-                            'match_check_types': {
-                                'placeholder': 'Comma-separated check plugin names, Jinja',
-                            },
-                            'match_plugin_output': {
-                                'placeholder': 'Regex against service plugin output, Jinja',
-                            },
-                            'match_only_during_time_period': {
-                                'placeholder': 'Single time period name, Jinja',
-                            },
-                            'match_service_levels': {
-                                'placeholder': 'Range "min,max" (numeric), Jinja',
-                            },
-                            'match_contacts': {
-                                'placeholder': 'Comma-separated user IDs, Jinja',
                             },
                         },
                     },
