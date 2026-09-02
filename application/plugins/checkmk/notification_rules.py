@@ -7,6 +7,9 @@ disabled ones as ``{"state": "disabled"}``. The event-type values use
 the API's lowercase flag names with every flag spelled out (``False``
 by default, ``True`` for selected ones).
 """
+import ast
+import json
+
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application import logger
@@ -18,12 +21,29 @@ from application.helpers.syncer_jinja import render_jinja, get_list, check_jinja
 from application.modules.debug import ColorCodes as CC
 
 
+# The plug-ins Checkmk ships with. It validates their parameters against
+# a schema of its own, so a rule naming one of them is pushed with the
+# "following parameters" option and Checkmk keeps owning the parameter
+# set. Anything else is a script in the site's notifications directory
+# and has to go out as a custom plug-in — see BUILTIN_PLUGIN_OPTION
+# below. Identical list on Checkmk 2.4 and 2.5.
 NOTIFICATION_METHOD_SUGGESTIONS = [
     'mail', 'asciimail',
-    'cisco_webex_teams', 'jira_issues', 'mkeventd', 'msteams',
-    'opsgenie_issues', 'pagerduty', 'pushover', 'servicenow',
-    'signl4', 'slack', 'sms_api_http', 'spectrum', 'victorops',
+    'cisco_webex_teams', 'ilert', 'jira_issues', 'jsm_operations',
+    'mkeventd', 'msteams', 'opsgenie_issues', 'pagerduty', 'pushover',
+    'servicenow', 'signl4', 'slack', 'sms', 'sms_api', 'spectrum',
+    'victorops',
 ]
+
+BUILTIN_NOTIFICATION_PLUGINS = frozenset(NOTIFICATION_METHOD_SUGGESTIONS)
+
+# Checkmk takes a built-in plug-in and a third-party script through two
+# different options of the same field. Sending a script name under the
+# built-in option is rejected with "Unsupported value: <name>"; the
+# custom option takes the parameter list the script is called with and
+# requires the script to exist in the site.
+BUILTIN_PLUGIN_OPTION = 'create_notification_with_the_following_parameters'
+CUSTOM_PLUGIN_OPTION = 'create_notification_with_custom_parameters'
 
 # (api_flag, human_readable_label) — values are exactly the keys
 # Checkmk's REST API uses inside match_host_event_type.value /
@@ -137,7 +157,8 @@ MATCH_FIELDS = (
     'match_contacts',
 )
 
-JINJA_FIELDS = ('multiply_list', 'contact_group_recipients') + MATCH_FIELDS
+JINJA_FIELDS = ('multiply_list', 'notification_parameters',
+                'contact_group_recipients') + MATCH_FIELDS
 
 
 def _field_value(outcome, field):
@@ -162,6 +183,115 @@ def validate_outcome_jinja(outcome):
         if defect := check_jinja_syntax(_field_value(outcome, field)):
             errors.append((field, defect))
     return errors
+
+
+# Placeholder for the secret of a password that has to be filled in.
+# Kept out of the syncer database itself — the account is where a
+# secret belongs, and an external secret store is honoured there.
+PASSWORD_PLACEHOLDER = '{{ACCOUNT:<account>:password}}'
+
+
+def _is_password_value(value):
+    """Whether a configuration value is one of its password fields."""
+    return (isinstance(value, list) and len(value) == 4
+            and value[0] in ('explicit_password', 'stored_password'))
+
+
+def _password_template(value):
+    """
+    The password shape the notification rule endpoint wants, keeping
+    whatever can be kept.
+
+    A configuration hands its password out the way its own mask posts
+    it back — ``["explicit_password", <id>, <secret>, <encrypted>]`` —
+    and the secret of an existing one arrives encrypted on top. That
+    shape is rejected by the rule endpoint with "No password provided",
+    so it is rewritten; the id survives, because a rule lands on an
+    existing configuration only by repeating its parameters exactly. A
+    password taken from the Checkmk password store carries no secret at
+    all and can therefore be repeated as it is.
+    """
+    ident = value[1] if isinstance(value[1], str) else ''
+    if value[0] == 'stored_password':
+        return ['cmk_postprocessed', 'stored_password', [ident, '']]
+    return ['cmk_postprocessed', 'explicit_password',
+            [ident, PASSWORD_PLACEHOLDER]]
+
+
+def _with_password_template(params):
+    """Rewrite every password field of a parameter set."""
+    return {key: (_password_template(value) if _is_password_value(value) else value)
+            for key, value in params.items()}
+
+
+def parameter_template(form_spec):
+    """
+    Skeleton of the parameters a plug-in declares, taken from the
+    ``form_spec`` collection Checkmk serves for it.
+
+    Checkmk answers a missing parameter with "A required (sub-)field is
+    missing." without ever naming it, so offering the fields beats
+    guessing them.
+    """
+    defaults = (((form_spec or {}).get('extensions', {}) or {})
+                .get('default_values', {}) or {})
+    return _with_password_template(
+        (defaults.get('parameter_properties', {}) or {})
+        .get('method_parameters', {}) or {})
+
+
+def parameters_of_configuration(entity):
+    """
+    The parameters of one notification configuration that already
+    exists in a site.
+
+    A rule cannot name a configuration — the API has no field for its
+    id. It binds to the one whose parameters it repeats, so starting
+    from those is what puts a rule on an existing configuration instead
+    of on a copy Checkmk generates for it.
+    """
+    properties = (((entity or {}).get('extensions', {}) or {})
+                  .get('parameter_properties', {}) or {})
+    return _with_password_template(
+        properties.get('method_parameters', {}) or {})
+
+
+def _custom_plugin_params(value):
+    """
+    The keys to send next to the name of a plug-in Checkmk does not ship.
+
+    Checkmk takes two shapes here and rejects the other one — with a 500
+    for one of the combinations. A plug-in that brings its own
+    configuration, the way the built-in ones do, wants its parameters as
+    named fields; a plain script in the site's notifications directory
+    wants the positional list it is called with.
+
+    A value written as a dict becomes the first, a list or a plain
+    comma-separated list the second. An empty field sends neither, just
+    the plug-in name: which of the two shapes an empty value should mean
+    cannot be guessed, and Checkmk answers a missing parameter with a
+    readable error while it answers the wrong shape with a crash. A
+    script that really takes no parameter is written as ``[]``.
+
+    Raises ValueError when the value is neither.
+    """
+    value = (value or '').strip()
+    if not value:
+        return {}
+    if not value.startswith(('{', '[')):
+        return {'params': _split_csv(value)}
+    try:
+        parsed = json.loads(value)
+    except ValueError:
+        try:
+            parsed = ast.literal_eval(value)
+        except (ValueError, SyntaxError) as error:
+            raise ValueError(f"are not valid: {error}") from error
+    if isinstance(parsed, dict):
+        return parsed
+    if isinstance(parsed, list):
+        return {'params': parsed}
+    raise ValueError("are neither a dict nor a list")
 
 
 def _split_csv(value):
@@ -429,10 +559,18 @@ class CheckmkNotificationRuleSync(CMK2):
             self._note_skip("contact group filter rendered empty", hostname)
             return None
 
+        try:
+            plugin_params = _custom_plugin_params(
+                _render(outcome.get('notification_parameters', ''), attributes))
+        except ValueError as error:
+            self._note_skip(f"custom plug-in parameters {error}", hostname)
+            return None
+
         rule_config = self._build_rule_config(
             marker_full=marker_full,
             disabled=bool(outcome.get('disable_rule')),
             notification_method=outcome.get('notification_method') or 'mail',
+            notification_parameters=plugin_params,
             recipients=recipients,
             rendered=rendered,
             host_event_types=list(outcome.get('match_host_event_types') or []),
@@ -442,8 +580,8 @@ class CheckmkNotificationRuleSync(CMK2):
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     def _build_rule_config(self, marker_full, disabled,
-                           notification_method, recipients,
-                           rendered,
+                           notification_method, notification_parameters,
+                           recipients, rendered,
                            host_event_types,
                            service_event_types):
         """
@@ -520,14 +658,36 @@ class CheckmkNotificationRuleSync(CMK2):
                 'allow_users_to_deactivate': {'state': 'disabled'},
             },
             'notification_method': {
-                'notify_plugin': {
-                    'option': 'create_notification_with_the_following_parameters',
-                    'plugin_params': {'plugin_name': notification_method},
-                },
+                'notify_plugin': self._notify_plugin(
+                    notification_method, notification_parameters),
                 'notification_bulking': {'state': 'disabled'},
             },
             'contact_selection': contact_selection,
             'conditions': conditions,
+        }
+
+    @staticmethod
+    def _notify_plugin(notification_method, notification_parameters):
+        """
+        The notification method block for one rule.
+
+        A built-in plug-in goes out under the "following parameters"
+        option and Checkmk keeps owning its parameter set. Everything
+        else is rejected under that option ("Unsupported value") and has
+        to be sent as a custom plug-in, with the parameters shaped by
+        `_custom_plugin_params`.
+        """
+        if notification_method in BUILTIN_NOTIFICATION_PLUGINS:
+            return {
+                'option': BUILTIN_PLUGIN_OPTION,
+                'plugin_params': {'plugin_name': notification_method},
+            }
+        return {
+            'option': CUSTOM_PLUGIN_OPTION,
+            'plugin_params': {
+                'plugin_name': notification_method,
+                **(notification_parameters or {}),
+            },
         }
 
     @staticmethod
@@ -556,10 +716,15 @@ class CheckmkNotificationRuleSync(CMK2):
         return rules
 
     @staticmethod
-    def _plugin_name(rule_config):
-        """Notification plugin a rule body uses."""
-        notify_plugin = (rule_config.get('notification_method', {}) or {}).get(
+    def _notify_plugin_block(rule_config):
+        """The notify_plugin block of a rule body, never None."""
+        return (rule_config.get('notification_method', {}) or {}).get(
             'notify_plugin', {}) or {}
+
+    @classmethod
+    def plugin_name(cls, rule_config):
+        """Notification plugin a rule body uses."""
+        notify_plugin = cls._notify_plugin_block(rule_config)
         return (notify_plugin.get('plugin_params', {}) or {}).get('plugin_name')
 
     @staticmethod
@@ -579,11 +744,18 @@ class CheckmkNotificationRuleSync(CMK2):
 
         Everything inside ``notification_method`` except the plugin
         name — the method's parameters and the bulking settings — is
-        the Checkmk admin's, so it must not count as drift.
+        the Checkmk admin's, so it must not count as drift. The
+        parameters of a custom plug-in are the exception: those are the
+        ones the syncer itself sends, so a change to them is drift.
         """
+        notify_plugin = self._notify_plugin_block(rule_config)
+        method = {'plugin_name': self.plugin_name(rule_config)}
+        if notify_plugin.get('option') == CUSTOM_PLUGIN_OPTION:
+            params = dict(notify_plugin.get('plugin_params') or {})
+            params.pop('plugin_name', None)
+            method['plugin_params'] = params
         reduced = dict(rule_config)
-        reduced['notification_method'] = {
-            'plugin_name': self._plugin_name(rule_config)}
+        reduced['notification_method'] = method
         return reduced
 
     def _diff_and_apply(self, desired, existing):
@@ -640,7 +812,7 @@ class CheckmkNotificationRuleSync(CMK2):
         admin reading a dry run.
         """
         recipients = ', '.join(self._recipients(rule_config)) or 'no recipients'
-        return f"{self._plugin_name(rule_config)} -> {recipients}"
+        return f"{self.plugin_name(rule_config)} -> {recipients}"
 
     def _report_dry_run(self, to_delete, to_update, to_create):
         """Print the pending changes instead of sending them."""
@@ -679,11 +851,15 @@ class CheckmkNotificationRuleSync(CMK2):
         (which only names the plugin) would rebind the rule to Checkmk's
         first parameter set for that plugin. Only a changed plugin makes
         the stored parameters useless, so only then do we push ours.
+
+        A custom plug-in is the other way round — the syncer sends its
+        parameters, so ours have to win.
         """
         rule_id = current['id']
         config = dict(body['rule_config'])
         stored = current['rule_config']
-        if self._plugin_name(stored) == self._plugin_name(config) and \
+        if self._notify_plugin_block(config).get('option') != CUSTOM_PLUGIN_OPTION and \
+                self.plugin_name(stored) == self.plugin_name(config) and \
                 stored.get('notification_method'):
             config['notification_method'] = stored['notification_method']
         url = f"/objects/notification_rule/{rule_id}"

@@ -1633,6 +1633,8 @@ def _render_notification_rule(_view, _context, model, _name):
     html = [_RULE_MNGMT_CARD_CSS]
     for entry in model.outcomes:
         rows = [('Method', entry.notification_method or 'mail')]
+        if entry.notification_parameters:
+            rows.append(('Parameters', entry.notification_parameters))
         if entry.multiply_by_list and entry.multiply_list:
             rows.append(('One rule per entry of', entry.multiply_list))
         if entry.contact_group_recipients:
@@ -1682,7 +1684,8 @@ class _NotificationMethodWidget:
             f'id="{kwargs["id"]}" class="{kwargs["class"]}" '
             f'list="{list_id}" value="{escape(value)}" '
             f'placeholder="mail, slack, msteams, custom_script_name, …">'
-            f'<datalist id="{list_id}">{options}</datalist>'
+            f'<datalist id="{list_id}" class="notification-method-suggestions">'
+            f'{options}</datalist>'
         )
 
 
@@ -1747,6 +1750,96 @@ class CheckmkNotificationRuleView(RuleModelView):
     """
     Custom Notification Rule Model View
     """
+    edit_template = 'admin/model/checkmk_notification_rule_edit.html'
+    create_template = 'admin/model/checkmk_notification_rule_create.html'
+
+    @expose('/_notification_plugins')
+    def notification_plugins(self):
+        """
+        Plug-in names to offer in the Notification Method field.
+
+        Checkmk's REST API has no endpoint that lists the notification
+        scripts installed in a site, so the names used by the
+        notification rules that already exist there are read instead —
+        that is where a third-party script shows up — and merged with
+        the plug-ins Checkmk ships with.
+        """
+        # pylint: disable-next=import-outside-toplevel
+        from .notification_rules import NOTIFICATION_METHOD_SUGGESTIONS
+        accounts = [account.name for account in
+                    Account.objects(enabled=True, type='cmkv2').order_by('name')]
+        answer = {'accounts': accounts, 'plugins': [], 'from_site': []}
+        account_name = request.args.get('account', '')
+        if not account_name:
+            return answer
+        if account_name not in accounts:
+            return {**answer, 'error': 'Unknown Checkmk account'}
+        plugin = request.args.get('plugin', '')
+        try:
+            if plugin:
+                answer.update(self._parameter_template(account_name, plugin))
+                return answer
+            from_site = self._plugins_in_use(account_name)
+        except Exception as error:  # pylint: disable=broad-except
+            return {**answer, 'error': str(error)}
+        answer['from_site'] = sorted(from_site)
+        answer['plugins'] = sorted(
+            from_site | set(NOTIFICATION_METHOD_SUGGESTIONS))
+        return answer
+
+    @staticmethod
+    def _parameter_template(account_name, plugin):
+        """
+        Parameters to offer for one plug-in, and where they come from.
+
+        A rule cannot name an existing notification configuration — the
+        API has no field for its id — it binds to the one whose
+        parameters it repeats. So the parameters of a configuration
+        that is already on the site win, and only when there is none
+        does the empty skeleton from the plug-in's own form spec stand
+        in.
+        """
+        # pylint: disable-next=import-outside-toplevel
+        from .cmk2 import CMK2
+        # pylint: disable-next=import-outside-toplevel
+        from .notification_rules import (
+            parameter_template, parameters_of_configuration)
+        cmk = CMK2(account_name, probe_version=False)
+        listing, _headers = cmk.request(
+            f"/domain-types/notification_parameter/collections/{plugin}",
+            method="GET")
+        existing = (listing or {}).get('value') or []
+        if existing:
+            entity, _headers = cmk.request(
+                f"/objects/notification_parameter/{existing[0]['id']}",
+                method="GET", params={'entity_type_specifier': plugin})
+            return {'template': parameters_of_configuration(entity),
+                    'source': existing[0].get('title') or '',
+                    'others': [entry.get('title') for entry in existing[1:]]}
+        form_spec, _headers = cmk.request(
+            "/domain-types/form_spec/collections/notification_parameter",
+            method="GET", params={'entity_type_specifier': plugin})
+        return {'template': parameter_template(form_spec),
+                'source': '', 'others': []}
+
+    @staticmethod
+    def _plugins_in_use(account_name):
+        """Notification plug-in names the rules of one site use."""
+        # pylint: disable-next=import-outside-toplevel
+        from .cmk2 import CMK2
+        # pylint: disable-next=import-outside-toplevel
+        from .notification_rules import CheckmkNotificationRuleSync
+        cmk = CMK2(account_name, probe_version=False)
+        data, _headers = cmk.request(
+            "/domain-types/notification_rule/collections/all", method="GET")
+        names = set()
+        for entry in (data or {}).get('value', []) or []:
+            config = (entry.get('extensions', {}) or {}).get('rule_config', {}) or {}
+            name = CheckmkNotificationRuleSync.plugin_name(config)
+            if name:
+                names.add(name)
+        return names
+
     form_rules = _modern_rule_form(
         main_fields=[
             rules.Field('name'),
@@ -1791,6 +1884,7 @@ class CheckmkNotificationRuleView(RuleModelView):
         }
         match_field_overrides['contact_group_recipients'] = StringField
         match_field_overrides['multiply_list'] = StringField
+        match_field_overrides['notification_parameters'] = StringField
         match_field_overrides['notification_method'] = _StringFieldWithDatalist
         # Multi-select with human-readable labels for the event-type
         # ListFields. wtforms posts a plain list of API-flag strings.
@@ -1805,6 +1899,17 @@ class CheckmkNotificationRuleView(RuleModelView):
         }
         form_args['contact_group_recipients'] = {'label': 'Contact Group Recipients'}
         form_args['notification_method'] = {'label': 'Notification Method'}
+        form_args['notification_parameters'] = {
+            'label': 'Custom Plug-in Parameters',
+            'description': 'Only for a method that is not one of the built-in '
+                           'Checkmk plug-ins; those keep the parameters you '
+                           'configured for them in Checkmk. A plug-in that '
+                           'brings its own configuration takes its parameters '
+                           'as a dict of the fields it declares, e.g. '
+                           '{"api_host": "https://…"}. A plain notification '
+                           'script takes the comma-separated list it is '
+                           'called with, or [] for none. Jinja.',
+        }
         form_args['multiply_by_list'] = {
             'label': 'One Rule per List Entry',
             'description': 'Build one rule per entry of the list below instead '
@@ -1833,6 +1938,12 @@ class CheckmkNotificationRuleView(RuleModelView):
                             'multiply_list': {
                                 'placeholder': (
                                     '{{get_list(anwendung_kontaktgruppe)|safe}}'
+                                )
+                            },
+                            'notification_parameters': {
+                                'placeholder': (
+                                    '{"api_host": "https://…"} or '
+                                    'param1, param2'
                                 )
                             },
                         },

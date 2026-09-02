@@ -1,0 +1,6 @@
+{% extends 'admin/model/edit.html' %}
+
+{% block tail %}
+  {{ super() }}
+  {% include 'admin/model/_notification_plugin_picker.html' %}
+{% endblock %}

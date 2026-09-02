@@ -1,0 +1,193 @@
+
+(function () {
+  "use strict";
+
+  var ENDPOINT = "/admin/checkmknotificationrule/_notification_plugins";
+  // Kept so outcomes added after the load get the same list: Flask-Admin
+  // injects a new outcome from an escaped template, so its datalist does
+  // not exist yet while the names are being fetched.
+  var loaded = null;
+
+  function datalists(root) {
+    return (root || document).querySelectorAll(
+      "datalist.notification-method-suggestions");
+  }
+
+  function fill(list, names) {
+    list.innerHTML = "";
+    names.forEach(function (name) {
+      var option = document.createElement("option");
+      option.value = name;
+      list.appendChild(option);
+    });
+  }
+
+  function fillAll(names) {
+    loaded = names;
+    datalists().forEach(function (list) { fill(list, names); });
+  }
+
+  function watchForNewOutcomes(scope) {
+    var observer = new MutationObserver(function (mutations) {
+      if (!loaded) {
+        return;
+      }
+      mutations.forEach(function (mutation) {
+        Array.prototype.forEach.call(mutation.addedNodes, function (node) {
+          if (node.nodeType !== 1) {
+            return;
+          }
+          if (node.matches && node.matches("datalist.notification-method-suggestions")) {
+            fill(node, loaded);
+          }
+          datalists(node).forEach(function (list) { fill(list, loaded); });
+        });
+      });
+    });
+    observer.observe(scope, { childList: true, subtree: true });
+  }
+
+  function bar(accounts) {
+    var wrap = document.createElement("div");
+    wrap.className = "nplug-bar";
+
+    var label = document.createElement("label");
+    label.textContent = "Notification plug-ins";
+    wrap.appendChild(label);
+
+    var select = document.createElement("select");
+    select.className = "form-control";
+    accounts.forEach(function (name) {
+      var option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+    wrap.appendChild(select);
+
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-default btn-sm";
+    button.textContent = "Read from Checkmk";
+    wrap.appendChild(button);
+
+    var template = document.createElement("button");
+    template.type = "button";
+    template.className = "btn btn-default btn-sm";
+    template.textContent = "Parameter template";
+    template.title = "Fill an empty Custom Plug-in Parameters field with "
+      + "the fields that plug-in declares";
+    wrap.appendChild(template);
+
+    var status = document.createElement("span");
+    status.className = "nplug-status";
+    status.textContent = "Suggests the plug-ins in use on that site.";
+    wrap.appendChild(status);
+
+    template.addEventListener("click", function () {
+      var methods = document.querySelectorAll(
+        "input[name$='-notification_method']");
+      if (!methods.length) {
+        status.className = "nplug-status is-error";
+        status.textContent = "No outcome yet — add one first";
+        return;
+      }
+      template.disabled = true;
+      status.className = "nplug-status";
+      status.textContent = "Reading parameters …";
+      var pending = [];
+      var sources = [];
+      methods.forEach(function (method) {
+        var target = document.querySelector(
+          "[name='" + method.name.replace(/-notification_method$/,
+            "-notification_parameters") + "']");
+        if (!target || target.value.trim() || !method.value.trim()) {
+          return;
+        }
+        pending.push(
+          fetch(ENDPOINT + "?account=" + encodeURIComponent(select.value)
+                + "&plugin=" + encodeURIComponent(method.value.trim()),
+                { credentials: "same-origin" })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+              if (data.error || !data.template
+                  || !Object.keys(data.template).length) {
+                return 0;
+              }
+              target.value = JSON.stringify(data.template);
+              if (data.source) {
+                sources.push(data.source);
+              }
+              return 1;
+            })
+        );
+      });
+      if (!pending.length) {
+        template.disabled = false;
+        status.textContent =
+          "Nothing to fill — every parameter field already has a value";
+        return;
+      }
+      Promise.all(pending).then(function (filled) {
+        template.disabled = false;
+        var count = filled.reduce(function (a, b) { return a + b; }, 0);
+        if (!count) {
+          status.textContent = "That plug-in declares no parameters here";
+          return;
+        }
+        status.textContent = sources.length
+          ? count + " field(s) filled from \u201c" + sources[0]
+            + "\u201d — fill in the secret to land on that configuration"
+          : count + " field(s) filled — replace the placeholders";
+      });
+    });
+
+    button.addEventListener("click", function () {
+      button.disabled = true;
+      status.className = "nplug-status";
+      status.textContent = "Reading " + select.value + " \u2026";
+      fetch(ENDPOINT + "?account=" + encodeURIComponent(select.value), {
+        credentials: "same-origin"
+      }).then(function (response) {
+        return response.json();
+      }).then(function (data) {
+        button.disabled = false;
+        if (data.error) {
+          status.className = "nplug-status is-error";
+          status.textContent = data.error;
+          return;
+        }
+        fillAll(data.plugins || []);
+        var found = (data.from_site || []).length;
+        status.textContent = found
+          ? found + " plug-in(s) in use on that site, now suggested"
+          : "That site uses no notification plug-in yet \u2014 built-ins only";
+      }).catch(function (error) {
+        button.disabled = false;
+        status.className = "nplug-status is-error";
+        status.textContent = String(error);
+      });
+    });
+
+    return wrap;
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    // The outcome card always exists, an outcome (and with it a
+    // Notification Method field) does not — a new rule starts empty.
+    var scope = document.querySelector(".rule-section-out .rule-section-body");
+    if (!scope) {
+      return;
+    }
+    watchForNewOutcomes(scope);
+    fetch(ENDPOINT, { credentials: "same-origin" })
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        if (!data.accounts || !data.accounts.length) {
+          return;
+        }
+        scope.insertBefore(bar(data.accounts), scope.firstChild);
+      })
+      .catch(function () { /* suggestions are optional, stay quiet */ });
+  });
+}());

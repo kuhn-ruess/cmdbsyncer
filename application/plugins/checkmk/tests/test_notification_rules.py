@@ -17,6 +17,8 @@ from application.plugins.checkmk.notification_rules import (
     _split_kv_list,
     _split_range,
     _split_tag_list,
+    parameter_template,
+    parameters_of_configuration,
     validate_outcome_jinja,
 )
 from application.plugins.checkmk.cmk2 import CmkException
@@ -49,6 +51,7 @@ def _make_outcome(**overrides):
     """Build an outcome dict with sensible defaults for rendering."""
     outcome = {
         'notification_method': 'mail',
+        'notification_parameters': '',
         'multiply_by_list': False,
         'multiply_list': '',
         'contact_group_recipients': '{{cmk_contact_group}}_ALARM',
@@ -170,6 +173,16 @@ def _cfg(recipients, plugin='mail'):
     }
 
 
+def _custom_cfg(params):
+    """A rule body for a third-party script, the way Checkmk stores it."""
+    cfg = _cfg(['ops'], plugin='my_custom_script')
+    cfg['notification_method']['notify_plugin'] = {
+        'option': 'create_notification_with_custom_parameters',
+        'plugin_params': {'plugin_name': 'my_custom_script', 'params': params},
+    }
+    return cfg
+
+
 class TestOutcomeJinjaValidation(unittest.TestCase):
     """Templates are compiled at save time / before a run starts."""
 
@@ -189,6 +202,73 @@ class TestOutcomeJinjaValidation(unittest.TestCase):
         fields = [field for field, _msg in validate_outcome_jinja(outcome)]
         self.assertEqual(sorted(fields),
                          ['contact_group_recipients', 'match_hosts'])
+
+
+class TestParameterTemplate(unittest.TestCase):
+    """The skeleton offered for a plug-in Checkmk does not ship."""
+
+    # What Checkmk serves for the notify_sms_eagle MKP, on 2.4 and 2.5.
+    FORM_SPEC = {
+        'extensions': {
+            'default_values': {
+                'general': {'description': '', 'comment': '', 'docu_url': ''},
+                'parameter_properties': {
+                    'method_parameters': {
+                        'api_host': '',
+                        'api_token': ['explicit_password', '', '', False],
+                    },
+                },
+            },
+        },
+    }
+
+    # What Checkmk answers for a configuration that already exists —
+    # the password id is readable, the secret is not.
+    ENTITY = {
+        'extensions': {
+            'general': {'description': 'Eagle Prod'},
+            'parameter_properties': {
+                'method_parameters': {
+                    'api_host': 'https://eagle.example',
+                    'api_token': ['explicit_password', 'pid', 'MFcYZaT7==', True],
+                },
+            },
+        },
+    }
+
+    def test_password_field_gets_the_shape_the_rule_endpoint_wants(self):
+        """The form spec hands out the shape its own mask posts back;
+        the notification rule endpoint answers that one with "No
+        password provided"."""
+        self.assertEqual(
+            parameter_template(self.FORM_SPEC),
+            {'api_host': '',
+             'api_token': ['cmk_postprocessed', 'explicit_password',
+                           ['', '{{ACCOUNT:<account>:password}}']]})
+
+    def test_existing_configuration_keeps_its_values_and_password_id(self):
+        """A rule lands on an existing configuration only by repeating
+        its parameters — so everything but the unreadable secret has to
+        survive, the password id included."""
+        self.assertEqual(
+            parameters_of_configuration(self.ENTITY),
+            {'api_host': 'https://eagle.example',
+             'api_token': ['cmk_postprocessed', 'explicit_password',
+                           ['pid', '{{ACCOUNT:<account>:password}}']]})
+
+    def test_stored_password_survives_completely(self):
+        """It carries no secret, so the configuration can be matched
+        without knowing one."""
+        entity = {'extensions': {'parameter_properties': {'method_parameters': {
+            'api_token': ['stored_password', 'eagle_token', '', False]}}}}
+        self.assertEqual(
+            parameters_of_configuration(entity),
+            {'api_token': ['cmk_postprocessed', 'stored_password',
+                           ['eagle_token', '']]})
+
+    def test_empty_form_spec_yields_nothing(self):
+        self.assertEqual(parameter_template({}), {})
+        self.assertEqual(parameter_template(None), {})
 
 
 class _SyncTestCase(unittest.TestCase):
@@ -549,6 +629,135 @@ class TestCheckmkNotificationRuleSync(_SyncTestCase):
         self.assertEqual(
             kwargs['data']['rule_config']['notification_method'],
             desired_cfg['notification_method'])
+
+
+class TestNotificationPluginSelection(_SyncTestCase):
+    """Built-in plug-in vs. third-party script."""
+
+    def test_builtin_plugin_uses_the_parameter_option(self):
+        outcome = _make_outcome(notification_method='mail')
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render):
+            body = self.sync._render_rule(
+                outcome, {'cmk_contact_group': 'ops'},
+                'cmdbsyncer_42 - DO NOT EDIT')
+        notify = body['rule_config']['notification_method']['notify_plugin']
+        self.assertEqual(notify['option'],
+                         'create_notification_with_the_following_parameters')
+        self.assertEqual(notify['plugin_params'], {'plugin_name': 'mail'})
+
+    def test_third_party_plugin_uses_the_custom_option(self):
+        """Checkmk rejects a script name under the built-in option with
+        'Unsupported value' — it has to go out as a custom plug-in."""
+        outcome = _make_outcome(
+            notification_method='my_custom_script',
+            notification_parameters='https://hook, {{cmk_contact_group}}')
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render):
+            body = self.sync._render_rule(
+                outcome, {'cmk_contact_group': 'ops'},
+                'cmdbsyncer_42 - DO NOT EDIT')
+        notify = body['rule_config']['notification_method']['notify_plugin']
+        self.assertEqual(notify['option'],
+                         'create_notification_with_custom_parameters')
+        self.assertEqual(notify['plugin_params'],
+                         {'plugin_name': 'my_custom_script',
+                          'params': ['https://hook', 'ops']})
+
+    def test_integrated_plugin_sends_its_own_fields(self):
+        """A plug-in that brings its own configuration is rejected when
+        it gets the positional list — Checkmk 2.4 answers that with a
+        500, KeyError 'params'. Its fields go next to the name."""
+        outcome = _make_outcome(
+            notification_method='claude_notify',
+            notification_parameters=(
+                '{"webhook_url": "https://hook", "channel": '
+                '"{{cmk_contact_group}}"}'))
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render):
+            body = self.sync._render_rule(
+                outcome, {'cmk_contact_group': 'ops'},
+                'cmdbsyncer_42 - DO NOT EDIT')
+        notify = body['rule_config']['notification_method']['notify_plugin']
+        self.assertEqual(notify['option'],
+                         'create_notification_with_custom_parameters')
+        self.assertEqual(notify['plugin_params'],
+                         {'plugin_name': 'claude_notify',
+                          'webhook_url': 'https://hook',
+                          'channel': 'ops'})
+
+    def test_broken_parameter_dict_skips_the_rule(self):
+        outcome = _make_outcome(notification_method='claude_notify',
+                                notification_parameters='{"webhook_url": ')
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render):
+            body = self.sync._render_rule(
+                outcome, {'cmk_contact_group': 'ops'},
+                'cmdbsyncer_42 - DO NOT EDIT', 'host_a')
+        self.assertIsNone(body)
+        reasons = list(self.sync._skips)
+        self.assertEqual(len(reasons), 1)
+        self.assertIn('custom plug-in parameters', reasons[0])
+
+    def test_empty_parameters_send_the_name_alone(self):
+        """Which of the two shapes an empty value means cannot be
+        guessed — sending neither lets Checkmk answer readably."""
+        outcome = _make_outcome(notification_method='my_custom_script')
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render):
+            body = self.sync._render_rule(
+                outcome, {'cmk_contact_group': 'ops'},
+                'cmdbsyncer_42 - DO NOT EDIT')
+        notify = body['rule_config']['notification_method']['notify_plugin']
+        self.assertEqual(notify['plugin_params'],
+                         {'plugin_name': 'my_custom_script'})
+
+    def test_explicit_empty_list_sends_an_empty_param_list(self):
+        """A script that takes no parameter at all."""
+        outcome = _make_outcome(notification_method='my_custom_script',
+                                notification_parameters='[]')
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render):
+            body = self.sync._render_rule(
+                outcome, {'cmk_contact_group': 'ops'},
+                'cmdbsyncer_42 - DO NOT EDIT')
+        notify = body['rule_config']['notification_method']['notify_plugin']
+        self.assertEqual(notify['plugin_params']['params'], [])
+
+    def test_changed_custom_plugin_params_count_as_drift(self):
+        """The parameters of a custom plug-in are the syncer's, so a
+        change to them has to reach Checkmk — unlike the parameters of a
+        built-in plug-in, which belong to the Checkmk admin."""
+        created, updated, deleted = self._apply(
+            [{'rule_config': _custom_cfg(['new'])}],
+            [{'id': 'custom-id', 'rule_config': _custom_cfg(['old'])}])
+
+        self.assertEqual((created, deleted), ([], []))
+        self.assertEqual(len(updated), 1)
+        pushed = updated[0][1]['rule_config']
+        self.assertEqual(
+            pushed['notification_method']['notify_plugin']['plugin_params'],
+            {'plugin_name': 'my_custom_script', 'params': ['new']})
+
+    def test_update_pushes_our_own_params_for_a_custom_plugin(self):
+        """The stored method block must not be carried over here — it
+        would put the old parameters back."""
+        sent = []
+        with patch.object(self.sync, 'request',
+                          side_effect=lambda *a, **kw: sent.append((a, kw)) or ({}, {})):
+            self.sync._update_rule(
+                {'id': 'rule-id', 'rule_config': _custom_cfg(['old'])},
+                {'rule_config': _custom_cfg(['new'])})
+        _args, kwargs = sent[0]
+        notify = (kwargs['data']['rule_config']['notification_method']
+                  ['notify_plugin'])
+        self.assertEqual(notify['plugin_params']['params'], ['new'])
 
 
 class TestNotificationRuleLoop(_SyncTestCase):

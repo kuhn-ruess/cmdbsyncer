@@ -500,6 +500,11 @@ class NotificationRuleOutcome(db.EmbeddedDocument):
     attributes. Empty fields disable the corresponding condition.
     """
     notification_method = db.StringField(default='mail')
+    # Parameter list a third-party notification script is called with.
+    # Checkmk requires it for a custom plug-in; a built-in plug-in takes
+    # its parameters from its own, admin-owned parameter set instead and
+    # ignores this field.
+    notification_parameters = db.StringField()
 
     # Loop: build one rule per entry of a list instead of one per host.
     # The current entry is available to every field below as {{name}}.
