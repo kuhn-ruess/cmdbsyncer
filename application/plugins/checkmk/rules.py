@@ -6,10 +6,8 @@ Checkmk Rules
 # pylint: disable=too-many-nested-blocks,logging-fstring-interpolation
 import ast
 import re
-from jinja2.exceptions import TemplateSyntaxError
-from jinja2.sandbox import SandboxedEnvironment
 from application import app
-from application.helpers.syncer_jinja import render_jinja
+from application.helpers.syncer_jinja import check_jinja_syntax, render_jinja
 from application import logger, log
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
@@ -33,13 +31,6 @@ def _maybe_render(value, **context):
 
 
 _JINJA_BLOCK_RE = re.compile(r'\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}')
-# {{ACCOUNT:name:field}} macros are resolved before Jinja compiles; their bare
-# colons are not valid Jinja, so neutralise them before the syntax check.
-_ACCOUNT_MACRO_RE = re.compile(r'\{\{\s*ACCOUNT:[^}]+\}\}')
-# Own environment for the compile-only syntax check — mirrors syncer_jinja's
-# SandboxedEnvironment so parsing matches the real render, without importing it
-# (keeps the validator free of any render-time/DB dependency).
-_SYNTAX_CHECK_ENV = SandboxedEnvironment(autoescape=False)
 
 
 def validate_folder_option_param(param):
@@ -71,10 +62,8 @@ def validate_folder_option_param(param):
         return None
     # 1. The Jinja must at least compile. A syntax error otherwise renders to
     #    an empty string at export and drops the entire folder path silently.
-    try:
-        _SYNTAX_CHECK_ENV.from_string(_ACCOUNT_MACRO_RE.sub('x', param))
-    except TemplateSyntaxError as exc:
-        return (f"The Jinja in the folder value is not valid: {exc.message}. "
+    if defect := check_jinja_syntax(param):
+        return (f"The Jinja in the folder value is not valid: {defect}. "
                 "Check filters and method calls — e.g. you cannot chain "
                 "'.replace(...)' directly after a '|join(...)' filter.")
     if '|' not in param:

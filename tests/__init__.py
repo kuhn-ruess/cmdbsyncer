@@ -15,9 +15,13 @@ statements resolve from the sys.modules cache without ever touching MongoDB.
 """
 import importlib.util
 import os
+import re
 import sys
 import types
 from unittest.mock import MagicMock, patch
+
+from jinja2.exceptions import TemplateSyntaxError
+from jinja2.sandbox import SandboxedEnvironment
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _APP_ROOT = os.path.join(_REPO_ROOT, "application")
@@ -34,6 +38,26 @@ def _stub_package(name, path=None):
         mod.__path__ = path
     sys.modules[name] = mod
     return mod
+
+
+_ACCOUNT_MACRO_RE = re.compile(r"\{\{\s*ACCOUNT:[^}]+\}\}")
+_JINJA_SYNTAX_ENV = SandboxedEnvironment(autoescape=False)
+
+
+def _check_jinja_syntax(value):
+    """Mirror application.helpers.syncer_jinja.check_jinja_syntax. It is a
+    compile-only check with no app or DB dependency, and the folder-option
+    and notification-rule validators are tested against real Jinja syntax —
+    a MagicMock would make every template look valid."""
+    if not isinstance(value, str) or not value:
+        return None
+    if "{{" not in value and "{%" not in value:
+        return None
+    try:
+        _JINJA_SYNTAX_ENV.from_string(_ACCOUNT_MACRO_RE.sub("x", value))
+    except TemplateSyntaxError as exc:
+        return exc.message
+    return None
 
 
 class _StubApp:  # pylint: disable=too-few-public-methods
@@ -526,6 +550,7 @@ _load_real_module(
 _syncer_jinja_early = _stub_package("application.helpers.syncer_jinja")
 _syncer_jinja_early.render_jinja = MagicMock(name="stub.render_jinja")
 _syncer_jinja_early.get_list = MagicMock(name="stub.get_list")
+_syncer_jinja_early.check_jinja_syntax = _check_jinja_syntax
 
 _try_load_real_module(
     "application.modules.plugin",
@@ -569,6 +594,7 @@ _try_load_real_module(
 _syncer_jinja = _stub_package("application.helpers.syncer_jinja")
 _syncer_jinja.render_jinja = MagicMock(name="stub.render_jinja")
 _syncer_jinja.get_list = MagicMock(name="stub.get_list")
+_syncer_jinja.check_jinja_syntax = _check_jinja_syntax
 
 # application.helpers.get_account
 _get_account = _stub_package("application.helpers.get_account")

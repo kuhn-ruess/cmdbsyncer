@@ -1844,6 +1844,31 @@ class CheckmkNotificationRuleView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def validate_form(self, form):
+        """
+        Reject a save whose outcome carries Jinja that does not compile.
+        Such a field renders to an empty string at export time, and an
+        outcome without recipients is dropped altogether — so the rule
+        would silently produce nothing at all.
+        """
+        if not super().validate_form(form):
+            return False
+        # pylint: disable-next=import-outside-toplevel
+        from .notification_rules import JINJA_FIELDS, validate_outcome_jinja
+        outcomes = getattr(form, 'outcomes', None)
+        for entry in getattr(outcomes, 'entries', None) or []:
+            entry_form = getattr(entry, 'form', None)
+            if entry_form is None:
+                continue
+            fields = {name: getattr(entry_form, name)
+                      for name in JINJA_FIELDS if hasattr(entry_form, name)}
+            values = {name: field.data for name, field in fields.items()}
+            for name, error in validate_outcome_jinja(values):
+                flash(f"{fields[name].label.text}: the Jinja is not valid "
+                      f"— {error}", 'danger')
+                return False
+        return True
+
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')

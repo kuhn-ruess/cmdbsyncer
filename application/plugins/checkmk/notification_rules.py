@@ -14,7 +14,7 @@ from application.models.host import Host
 from application.modules.rule.rule import Rule
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.plugins.checkmk.cmk_rules import deep_compare
-from application.helpers.syncer_jinja import render_jinja, get_list
+from application.helpers.syncer_jinja import render_jinja, get_list, check_jinja_syntax
 from application.modules.debug import ColorCodes as CC
 
 
@@ -114,6 +114,56 @@ class NotificationRuleAction(Rule):
         return outcomes
 
 
+# Outcome fields rendered as Jinja against the host's attributes. The
+# export walks them to build the rule conditions; the template check
+# walks the same list, so a new field cannot be forgotten in one place.
+MATCH_FIELDS = (
+    'match_contact_groups',
+    'match_host_groups',
+    'match_service_groups',
+    'match_sites',
+    'match_folder',
+    'match_hosts',
+    'match_exclude_hosts',
+    'match_services',
+    'match_exclude_services',
+    'match_host_labels',
+    'match_service_labels',
+    'match_host_tags',
+    'match_check_types',
+    'match_plugin_output',
+    'match_only_during_time_period',
+    'match_service_levels',
+    'match_contacts',
+)
+
+JINJA_FIELDS = ('multiply_list', 'contact_group_recipients') + MATCH_FIELDS
+
+
+def _field_value(outcome, field):
+    """Read one outcome field — an outcome is a dict during the export
+    and an embedded document when it comes straight from the rule."""
+    if isinstance(outcome, dict):
+        return outcome.get(field)
+    return getattr(outcome, field, None)
+
+
+def validate_outcome_jinja(outcome):
+    """
+    Check every template field of one outcome for Jinja syntax errors.
+
+    Broken Jinja renders to an empty string, and an outcome without
+    recipients is dropped — so a single typo costs the whole rule with
+    nothing to look at afterwards. Returns ``[(field, message), …]``,
+    empty when everything compiles.
+    """
+    errors = []
+    for field in JINJA_FIELDS:
+        if defect := check_jinja_syntax(_field_value(outcome, field)):
+            errors.append((field, defect))
+    return errors
+
+
 def _split_csv(value):
     """Trim+split a comma-separated string; empty input → []."""
     if not value:
@@ -201,6 +251,10 @@ class CheckmkNotificationRuleSync(CMK2):
     DESCRIPTION_PREFIX = "cmdbsyncer_"
     DESCRIPTION_SUFFIX = " - DO NOT EDIT"
 
+    # {reason: {'count': int, 'hosts': [sample hostnames]}} — filled while
+    # the rules are built, reported once afterwards.
+    _skips = None
+
     def export_notification_rules(self):
         """Build, dedup, diff and push notification rules to Checkmk."""
         if not self.checkmk_version.startswith(('2.4', '2.5')):
@@ -212,15 +266,65 @@ class CheckmkNotificationRuleSync(CMK2):
             f"{self.DESCRIPTION_PREFIX}{self.account_id}{self.DESCRIPTION_SUFFIX}")
         marker_match = f"{self.DESCRIPTION_PREFIX}{self.account_id}"
 
+        print(f"\n{CC.HEADER}Check Rule Templates{CC.ENDC}")
+        self._check_rule_templates()
+
         print(f"\n{CC.HEADER}Build needed Notification Rules{CC.ENDC}")
+        self._skips = {}
         desired = self._collect_desired_rules(marker_full)
         print(f"{CC.OKGREEN} -- {CC.ENDC} {len(desired)} rule(s) configured")
+        self._report_skips()
 
         print(f"\n{CC.HEADER}Read Checkmk Configuration{CC.ENDC}")
         existing = self._fetch_existing_rules(marker_match)
         print(f"{CC.OKGREEN} -- {CC.ENDC} {len(existing)} syncer-owned rule(s) in CMK")
 
         self._diff_and_apply(desired, existing)
+
+    def _check_rule_templates(self):
+        """
+        Compile every template field of every configured rule before the
+        run starts. Invalid Jinja renders to an empty string, which
+        normally costs the recipients and drops the whole rule — the run
+        would otherwise just end with nothing built and no reason given.
+        """
+        defects = 0
+        for rule in getattr(self.actions, 'rules', None) or []:
+            for outcome in rule.outcomes:
+                for field, error in validate_outcome_jinja(outcome):
+                    defects += 1
+                    print(f"{CC.FAIL} !! {CC.ENDC}{rule.name}: field "
+                          f"'{field}' is not valid Jinja: {error}")
+                    self.log_details.append(
+                        ("ERROR",
+                         f"{rule.name}: field '{field}' is not valid Jinja: {error}"))
+        if not defects:
+            print(f"{CC.OKGREEN} -- {CC.ENDC} all templates compile")
+        return defects
+
+    def _note_skip(self, reason, hostname=''):
+        """
+        Record why an outcome produced no rule. Each skip path is silent
+        on its own — the host simply drops out — which leaves an empty
+        export with nothing to look at.
+        """
+        if self._skips is None:
+            self._skips = {}
+        entry = self._skips.setdefault(reason, {'count': 0, 'hosts': []})
+        entry['count'] += 1
+        if hostname and len(entry['hosts']) < 3:
+            entry['hosts'].append(hostname)
+
+    def _report_skips(self):
+        """Print and log what `_note_skip` collected during the build."""
+        for reason, entry in sorted(self._skips.items()):
+            hosts = ', '.join(entry['hosts'])
+            sample = f" (e.g. {hosts})" if hosts else ""
+            print(f"{CC.WARNING} !! {CC.ENDC}{entry['count']} outcome(s) "
+                  f"skipped: {reason}{sample}")
+            self.log_details.append(
+                ("WARNING",
+                 f"{entry['count']} outcome(s) skipped: {reason}{sample}"))
 
     def _collect_desired_rules(self, marker_full):
         rules = []
@@ -240,7 +344,8 @@ class CheckmkNotificationRuleSync(CMK2):
                     db_host, attributes['all'])
                 for outcome in (host_actions or {}).get('rules', []):
                     for body in self._render_outcome(outcome, attributes['all'],
-                                                     marker_full):
+                                                     marker_full,
+                                                     db_host.hostname):
                         key = _canonical(body['rule_config'])
                         if key in seen:
                             continue
@@ -249,8 +354,7 @@ class CheckmkNotificationRuleSync(CMK2):
                 progress.advance(task1)
         return rules
 
-    @staticmethod
-    def _loop_contexts(outcome, attributes):
+    def _loop_contexts(self, outcome, attributes, hostname=''):
         """
         One render context per rule this outcome produces for a host.
 
@@ -267,26 +371,31 @@ class CheckmkNotificationRuleSync(CMK2):
             rendered = _render(outcome.get('multiply_list', ''), attributes)
         except Exception as exp:  # pylint: disable=broad-except
             logger.warning("Notification loop render error: %s", exp)
+            self._note_skip(f"loop list render error: {exp}", hostname)
             return []
         if not rendered:
+            self._note_skip("loop list rendered empty", hostname)
             return []
-        return [{'name': entry} for entry in get_list(rendered) if entry]
+        entries = [{'name': entry} for entry in get_list(rendered) if entry]
+        if not entries:
+            self._note_skip("loop list rendered empty", hostname)
+        return entries
 
-    def _render_outcome(self, outcome, attributes, marker_full):
+    def _render_outcome(self, outcome, attributes, marker_full, hostname=''):
         """
         Turn one matched outcome into rendered API rule bodies — one
         per loop entry, or a single one when the outcome does not loop.
         """
         bodies = []
-        for loop_context in self._loop_contexts(outcome, attributes):
+        for loop_context in self._loop_contexts(outcome, attributes, hostname):
             body = self._render_rule(
-                outcome, {**attributes, **loop_context}, marker_full)
+                outcome, {**attributes, **loop_context}, marker_full, hostname)
             if body is not None:
                 bodies.append(body)
         return bodies
 
     # pylint: disable=too-many-locals
-    def _render_rule(self, outcome, attributes, marker_full):
+    def _render_rule(self, outcome, attributes, marker_full, hostname=''):
         """
         Turn one matched outcome into a fully rendered API rule body.
         Returns None when:
@@ -303,36 +412,21 @@ class CheckmkNotificationRuleSync(CMK2):
             ]
             rendered = {
                 key: _render(outcome.get(key, ''), attributes)
-                for key in [
-                    'match_contact_groups',
-                    'match_host_groups',
-                    'match_service_groups',
-                    'match_sites',
-                    'match_folder',
-                    'match_hosts',
-                    'match_exclude_hosts',
-                    'match_services',
-                    'match_exclude_services',
-                    'match_host_labels',
-                    'match_service_labels',
-                    'match_host_tags',
-                    'match_check_types',
-                    'match_plugin_output',
-                    'match_only_during_time_period',
-                    'match_service_levels',
-                    'match_contacts',
-                ]
+                for key in MATCH_FIELDS
             }
         except Exception as exp:  # pylint: disable=broad-except
             logger.warning("Notification render error: %s", exp)
+            self._note_skip(f"render error: {exp}", hostname)
             return None
 
         if not recipients:
+            self._note_skip("no contact group recipients rendered", hostname)
             return None
         # If the admin specified a contact-group match template but it
         # renders empty (host missing the label), skip — otherwise the
         # rule would match every host with no CG.
         if outcome.get('match_contact_groups') and not rendered['match_contact_groups']:
+            self._note_skip("contact group filter rendered empty", hostname)
             return None
 
         rule_config = self._build_rule_config(

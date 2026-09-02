@@ -191,6 +191,35 @@ def _compile_template(source, strict):
 _STRICT_ENV.undefined = StrictUndefined
 
 
+# {{ACCOUNT:name:field}} macros are resolved before Jinja ever compiles;
+# their bare colons are not valid Jinja, so they get neutralised before a
+# syntax check looks at a template.
+_ACCOUNT_MACRO_RE = re.compile(r'\{\{\s*ACCOUNT:[^}]+\}\}')
+
+
+def check_jinja_syntax(value):
+    """
+    Compile a template without rendering it and report a syntax error.
+
+    A template that does not compile renders to an empty string in every
+    mode, so whatever it was meant to fill is silently lost at export
+    time. Checking it while the value is being saved (or before a run
+    starts) turns that into a visible error.
+
+    Returns the error message, or None when the value compiles or holds
+    no template at all.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    if '{{' not in value and '{%' not in value:
+        return None
+    try:
+        JINJA_ENV.from_string(_ACCOUNT_MACRO_RE.sub('x', value))
+    except jinja2.exceptions.TemplateSyntaxError as exc:
+        return exc.message
+    return None
+
+
 def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     """
     Render given string

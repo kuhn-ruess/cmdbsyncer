@@ -17,6 +17,7 @@ from application.plugins.checkmk.notification_rules import (
     _split_kv_list,
     _split_range,
     _split_tag_list,
+    validate_outcome_jinja,
 )
 from application.plugins.checkmk.cmk2 import CmkException
 from tests import base_mock_init
@@ -167,6 +168,27 @@ def _cfg(recipients, plugin='mail'):
         },
         'conditions': {},
     }
+
+
+class TestOutcomeJinjaValidation(unittest.TestCase):
+    """Templates are compiled at save time / before a run starts."""
+
+    def test_valid_outcome_reports_nothing(self):
+        self.assertEqual(validate_outcome_jinja(_make_outcome()), [])
+
+    def test_broken_jinja_is_reported_with_its_field(self):
+        outcome = _make_outcome(
+            multiply_by_list=True,
+            multiply_list="{{ get_list(groups)|join(',').replace('a','b') }}")
+        errors = validate_outcome_jinja(outcome)
+        self.assertEqual([field for field, _msg in errors], ['multiply_list'])
+
+    def test_every_template_field_is_checked(self):
+        outcome = _make_outcome(match_hosts='{{ hostname',
+                                contact_group_recipients='{% for x in %}')
+        fields = [field for field, _msg in validate_outcome_jinja(outcome)]
+        self.assertEqual(sorted(fields),
+                         ['contact_group_recipients', 'match_hosts'])
 
 
 class _SyncTestCase(unittest.TestCase):
@@ -603,6 +625,25 @@ class TestNotificationRuleLoop(_SyncTestCase):
             [b['rule_config']['conditions']['match_contact_groups']['value']
              for b in bodies],
             [['db'], ['web']])
+
+    def test_skipped_host_is_recorded_with_its_reason(self):
+        """An outcome that yields nothing must say why, otherwise the
+        run just ends with no rules and no explanation."""
+        outcome = _make_outcome(
+            multiply_by_list=True,
+            multiply_list='{{get_list(groups)|safe}}',
+            match_contact_groups='{{name}}',
+        )
+        with patch(
+                'application.plugins.checkmk.notification_rules.render_jinja',
+                side_effect=_real_render), \
+             patch('application.plugins.checkmk.notification_rules.get_list',
+                   side_effect=_real_get_list):
+            self.sync._render_outcome(
+                outcome, {'groups': ''}, 'cmdbsyncer_42 - DO NOT EDIT',
+                'host_a')
+        self.assertEqual(self.sync._skips['loop list rendered empty'],
+                         {'count': 1, 'hosts': ['host_a']})
 
     def test_loop_over_empty_list_renders_nothing(self):
         outcome = _make_outcome(
