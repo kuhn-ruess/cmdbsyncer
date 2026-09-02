@@ -85,6 +85,8 @@ from application._version import __version__ as VERSION, get_display_version
 
 DISPLAY_VERSION = get_display_version()
 
+from application.config import BaseConfig
+
 CONFIG_MAP = {
     'prod': 'application.config.ProductionConfig',
     'compose': 'application.config.ComposeConfig',
@@ -132,9 +134,6 @@ if os.path.isfile(_buildinfo_path):
 else:
     app.config.setdefault("BUILD_DATE", "unknown")
 
-log_config.dictConfig(app.config['LOGGING'])
-logger = logging.getLogger('debug')
-
 # Hook registry is always safe to import — the enterprise package itself
 # is loaded later via enterprise.load_package(), after `db` exists, to
 # avoid a circular import (enterprise models → application.models.* →
@@ -150,10 +149,42 @@ from application.enterprise import run_hook as enterprise_hook  # noqa: E402
 # entries add their own dir from ``app.wsgi``. A missing file is logged
 # (was a silent ``pass``) so a misplaced deployment surfaces immediately
 # instead of leaving CRYPTOGRAPHY_KEY at None.
+#
+# This has to run *before* the logging pipeline is built below. Configuring
+# logging first meant a ``LOGGING`` / ``LOG_LEVEL`` override in
+# local_config.py was silently discarded — the handlers from BaseConfig
+# always won, so neither a syslog target nor a log file ever received a
+# single record.
+_local_config_missing = False
 try:
     from local_config import config
     app.config.update(config)
 except ModuleNotFoundError:
+    _local_config_missing = True
+
+
+# Build the logging pipeline from the merged config. A malformed LOGGING
+# dict in local_config.py must not stop the app from booting — fall back
+# to the built-in pipeline and say why on stderr.
+try:
+    log_config.dictConfig(app.config['LOGGING'])
+except (AttributeError, ImportError, TypeError, ValueError) as log_error:
+    print(
+        f"[cmdbsyncer] Invalid LOGGING config ({log_error}) — "
+        "falling back to the built-in defaults",
+        file=sys.stderr, flush=True,
+    )
+    log_config.dictConfig(BaseConfig.LOGGING)
+logger = logging.getLogger('debug')
+
+# Documented shortcut for "just make it louder" without restating the
+# whole LOGGING dict. Applies to both loggers the central Log() module
+# writes to.
+if log_level := app.config.get('LOG_LEVEL'):
+    for _logger_name in ('debug', 'syslog'):
+        logging.getLogger(_logger_name).setLevel(log_level)
+
+if _local_config_missing:
     logger.warning(
         "local_config.py not importable — sys.path=%s cwd=%s",
         sys.path, os.getcwd(),

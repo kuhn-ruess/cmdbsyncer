@@ -45,6 +45,19 @@ class BaseConfig():
     # (see ALLOW_INSECURE_API_AUTH).
     REQUIRE_HTTPS = True
 
+    # Quick shortcut to raise/lower the log level without replacing the
+    # whole LOGGING dict below. Accepts a level name ("DEBUG", "INFO", …)
+    # or a numeric level and is applied to both loggers after dictConfig.
+    # None leaves the levels from LOGGING untouched.
+    LOG_LEVEL = None
+
+    # Both loggers below receive every entry the central Log() module
+    # writes (see application/modules/log/log.py):
+    #   debug  — human/console output, muted by default (level 100),
+    #            switched on per run with `--debug` or via LOG_LEVEL.
+    #   syslog — the external sink. Point its handler wherever your log
+    #            pipeline lives (syslog, file, …). It does not propagate,
+    #            so the external copy never doubles up on the console.
     LOGGING = {
         "version": 1,
         "disable_existing_loggers": "False",
@@ -63,7 +76,8 @@ class BaseConfig():
             },
             "syslog": {
                 "class": "logging.handlers.SysLogHandler",
-                "address": ["127.0.0.1", 514],
+                # Tuple, not list — socket.sendto() rejects a list.
+                "address": ("127.0.0.1", 514),
                 #"address": "/dev/log",
                 "facility": "local6",
                 "formatter": "syslog"
@@ -73,12 +87,12 @@ class BaseConfig():
             "debug": {
                 "handlers": ["console"],
                 "level": 100,
-                "propagate": "True"
+                "propagate": True
             },
             "syslog": {
                 "handlers": ["syslog"],
                 "level": "INFO",
-                "propagate": "True"
+                "propagate": False
             }
         }
     }

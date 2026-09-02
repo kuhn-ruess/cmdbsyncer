@@ -6,6 +6,12 @@ from datetime import datetime
 from application import logger
 from application.modules.log.models import LogEntry, DetailEntry
 
+# The external sink. Every entry written through this module goes to the
+# 'debug' logger (human console, muted by default) *and* here, so an admin
+# only has to point this logger's handler at their log pipeline — syslog,
+# a file, a collector — via LOGGING in local_config.py.
+syslog_logger = logging.getLogger('syslog')
+
 class Log():
     """
     General Logging Module
@@ -60,16 +66,15 @@ class Log():
         # Emit a single structured record instead of one line per detail.
         # The JSON formatter picks up `extra` and maps it to ECS fields;
         # the default text formatter drops these cleanly.
-        logger.log(
-            logging.ERROR if has_error else logging.INFO,
-            message['message'],
-            extra={
-                'event_source': message['source'],
-                'event_details': details_struct,
-                'event_affected_hosts': affected_hosts,
-                'event_has_error': has_error,
-            },
-        )
+        level = logging.ERROR if has_error else logging.INFO
+        extra = {
+            'event_source': message['source'],
+            'event_details': details_struct,
+            'event_affected_hosts': affected_hosts,
+            'event_has_error': has_error,
+        }
+        for target in (logger, syslog_logger):
+            target.log(level, message['message'], extra=extra)
 
         # Fan the entry into the notification dispatcher directly.
         # We do *not* go through Python logging because the syncer's
