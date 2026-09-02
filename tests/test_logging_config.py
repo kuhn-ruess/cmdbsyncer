@@ -165,6 +165,52 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
         # which propagate regardless of the root level, reach the handler.
         self.assertIn("root 30", result.stdout)
 
+    def test_structured_record_matches_the_web_log(self):
+        """Every detail row and the traceback reach the structured record.
+
+        `event_details` is a dict, so a key that occurs more than once —
+        an export appends one ('error', …) per failed host — used to
+        overwrite itself down to the last one while the Log view kept
+        them all.
+        """
+        snippet = """
+import logging
+from unittest.mock import patch
+import application
+import application.modules.log.log as logmod
+
+
+class _Capture(logging.Handler):
+    seen = []
+
+    def emit(self, record):
+        _Capture.seen.append(record)
+
+
+syslog = logging.getLogger('syslog')
+syslog.handlers = [_Capture()]
+syslog.setLevel(logging.INFO)
+
+with patch.object(logmod, 'LogEntry'), patch.object(logmod, 'DetailEntry'):
+    try:
+        raise RuntimeError('connection reset')
+    except RuntimeError:
+        logmod.Log().log('Export', source='cmk_export', details=[
+            ('num_created', '3'),
+            ('error', 'host-a'),
+            ('error', 'host-b'),
+        ])
+
+record = _Capture.seen[-1]
+print(record.event_details)
+print('TRACEBACK', 'RuntimeError' in getattr(record, 'event_traceback', ''))
+"""
+        result = _run_with_local_config("config = {}\n", snippet)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("'num_created': '3'", result.stdout)
+        self.assertIn("'error': ['host-a', 'host-b']", result.stdout)
+        self.assertIn("TRACEBACK True", result.stdout)
+
     def test_default_syslog_handler_address_is_sendable(self):
         """The shipped SysLogHandler address must be a tuple, not a list."""
         from application.config import BaseConfig  # pylint: disable=import-outside-toplevel

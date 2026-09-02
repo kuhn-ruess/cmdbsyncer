@@ -49,6 +49,9 @@ def _email_html(payload):
                 f"<td style='padding:4px 8px;'><code>{value}</code></td></tr>"
             )
     for key, value in (payload.get('details') or {}).items():
+        # A key that occurred more than once arrives as a list.
+        if isinstance(value, list):
+            value = ', '.join(value)
         rows.append(
             f"<tr><td style='padding:4px 8px;color:#666;'>{key}</td>"
             f"<td style='padding:4px 8px;'><code>{value}</code></td></tr>"
