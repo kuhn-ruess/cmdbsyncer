@@ -436,14 +436,20 @@ enterprise.load_package()
 from application.models.account import Account, get_account_types  # noqa: E402
 # pylint: disable-next=no-member,protected-access
 Account._fields['type'].choices = get_account_types()
-# CLI invocations (``./cmdbsyncer <command>``) set CMDBSYNCER_CLI so the
-# ECS JSON pipeline stays off — otherwise every command would print pages
-# of blueprint/audit INFO lines before its own output. Web/worker startup
-# leaves the env var unset and keeps structured logging.
-if os.environ.get('CMDBSYNCER_CLI') == '1':
-    logging.getLogger().setLevel(logging.WARNING)
-else:
+# Structured (JSON) logging. Web/worker startup always gets it.
+# ``./cmdbsyncer <command>`` runs keep their plain output by default —
+# a JSON banner in front of an interactive command helps nobody — but
+# imports, exports and cron runs *are* command runs, and they are the
+# events a log collector actually wants. JSON_LOGGING_CLI opts them in.
+if not CLI_MODE or app.config.get('JSON_LOGGING_CLI'):
     enterprise_hook('configure_logging', app, logger)
+if CLI_MODE:
+    # Keep third-party chatter (mongoengine, urllib3, …) away from the
+    # command's own output. This only filters records logged straight to
+    # the root logger: propagation from the syncer's own loggers does not
+    # re-check ancestor levels, so every sync entry still reaches the
+    # handlers above.
+    logging.getLogger().setLevel(logging.WARNING)
 
 
 def _iter_enabled_plugin_modules(package):

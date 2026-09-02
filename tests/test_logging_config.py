@@ -20,7 +20,23 @@ import unittest
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _run_with_local_config(local_config, snippet):
+# Stands in for the enterprise package: `load_package()` imports it by
+# name, and it registers the same hook the real one does, so the OSS side
+# of the wiring can be tested without the enterprise package installed.
+_ENTERPRISE_STUB = """
+from application.enterprise import register_feature
+
+
+def _configure_logging(app, logger):
+    print("CONFIGURE_LOGGING CALLED")
+
+
+register_feature('json_logging')
+register_feature('configure_logging', _configure_logging)
+"""
+
+
+def _run_with_local_config(local_config, snippet, with_enterprise=False):
     """
     Write `local_config` into a scratch directory, import `application`
     from there and run `snippet`. `{workdir}` is substituted with the
@@ -33,6 +49,12 @@ def _run_with_local_config(local_config, snippet):
         with open(os.path.join(workdir, "local_config.py"), "w",
                   encoding="utf-8") as config_file:
             config_file.write(local_config.replace("{workdir}", workdir))
+        if with_enterprise:
+            stub_dir = os.path.join(workdir, "cmdbsyncer_enterprise")
+            os.mkdir(stub_dir)
+            with open(os.path.join(stub_dir, "__init__.py"), "w",
+                      encoding="utf-8") as stub_file:
+                stub_file.write(_ENTERPRISE_STUB)
         env = dict(os.environ)
         env["PYTHONPATH"] = _REPO_ROOT
         # CLI mode keeps the import light — no blueprints, no Flask-Admin
@@ -115,6 +137,33 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("falling back to the built-in defaults", result.stderr)
         self.assertIn("SysLogHandler", result.stdout)
+
+    def test_command_runs_stay_plain_by_default(self):
+        """A CLI run does not get the structured pipeline unasked."""
+        result = _run_with_local_config(
+            "config = {}\n",
+            "import logging, application\n"
+            "print('root', logging.getLogger().level)\n",
+            with_enterprise=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("CONFIGURE_LOGGING CALLED", result.stdout)
+        # Third-party chatter stays out of the command's own output.
+        self.assertIn("root 30", result.stdout)
+
+    def test_json_logging_cli_opts_command_runs_in(self):
+        """JSON_LOGGING_CLI hands CLI runs to the structured pipeline."""
+        result = _run_with_local_config(
+            "config = {'JSON_LOGGING_CLI': True}\n",
+            "import logging, application\n"
+            "print('root', logging.getLogger().level)\n",
+            with_enterprise=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CONFIGURE_LOGGING CALLED", result.stdout)
+        # Still no third-party chatter — only the syncer's own loggers,
+        # which propagate regardless of the root level, reach the handler.
+        self.assertIn("root 30", result.stdout)
 
     def test_default_syslog_handler_address_is_sendable(self):
         """The shipped SysLogHandler address must be a tuple, not a list."""
