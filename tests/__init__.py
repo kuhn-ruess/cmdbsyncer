@@ -298,7 +298,19 @@ _models_saved_search.SavedSearch = _SavedSearch
 _mongoengine = _stub_package("mongoengine", path=[])
 _mongoengine.Document = type("Document", (), {})
 _mongoengine.ValidationError = type("ValidationError", (Exception,), {})
-_mongoengine.Q = type("Q", (), {})
+
+
+class _Q:  # pylint: disable=too-few-public-methods
+    """Mirror mongoengine.Q far enough for tests that assert on the
+    condition a filter builds: the real one keeps its keywords in
+    `.query`. Combining is not modelled — a test that needs real
+    combination semantics has to run against real mongoengine."""
+
+    def __init__(self, **query):
+        self.query = query
+
+
+_mongoengine.Q = _Q
 _mongoengine.get_db = MagicMock(name="stub.get_db")
 _mongoengine.DENY = 3
 

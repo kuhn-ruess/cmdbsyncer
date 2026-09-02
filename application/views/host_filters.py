@@ -11,6 +11,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from flask import flash
 from flask_admin.contrib.mongoengine.filters import BaseMongoEngineFilter
+from mongoengine import Q
 
 from application.models.host import Host
 from application.modules.rule.match import MAX_REGEX_LENGTH
@@ -178,9 +179,14 @@ class FilterCmdbTemplate(BaseMongoEngineFilter):
     template ObjectId (24-char hex — used by the click-to-filter icon
     next to each template badge) or a case-insensitive substring of a
     template hostname. The click case is exact; the typed case is
-    fuzzy. Uses a `__raw__` `$in` query because mongoengine's
-    `cmdb_templates__in=[oid]` keyword form has bitten us before with
-    `ListField(ReferenceField)` storage.
+    fuzzy.
+
+    The condition has to be a field query, not the `__raw__` form it
+    used to be: a template-restricted user already carries a
+    `cmdb_templates` condition from their scope, and mongoengine merges
+    a raw query into the query dict by key — the two silently collapsed
+    into one and the filter did nothing. Two field queries on the same
+    field combine into `$and` instead.
     """
 
     def apply(self, query, value):
@@ -201,7 +207,7 @@ class FilterCmdbTemplate(BaseMongoEngineFilter):
         if not ids:
             # No template matched — short-circuit to an empty result.
             return query.filter(hostname=None)
-        return query.filter(__raw__={'cmdb_templates': {'$in': ids}})
+        return query.filter(Q(cmdb_templates__in=ids))
 
     def operation(self):
         return "contains"
