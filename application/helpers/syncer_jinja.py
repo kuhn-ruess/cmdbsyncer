@@ -108,7 +108,14 @@ def get_list(input_list):
     """
     Convert a List which is a
     string to real object
+
+    A missing attribute is a list of nothing: Jinja hands an undefined
+    variable in here, and returning it unchanged made the caller fail
+    on the next operation — a template that merely names an attribute
+    not every host carries would take the whole rule down with it.
     """
+    if input_list is None or isinstance(input_list, jinja2.Undefined):
+        return []
     if isinstance(input_list, list):
         return input_list
     if isinstance(input_list, tuple):
