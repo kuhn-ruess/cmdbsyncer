@@ -1,3 +1,6 @@
+"""
+Flask-Admin views of the VMware plugin
+"""
 from application.modules.rule.views import RewriteAttributeView
 
 from .models import VMwareRewriteAttributes, VMwareCustomAttributes

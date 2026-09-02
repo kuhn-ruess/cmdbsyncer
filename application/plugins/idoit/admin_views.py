@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+Flask-Admin views of the i-doit plugin
+"""
 
 from application.modules.rule.views import RewriteAttributeView
 from .views import IdoitCustomAttributesView

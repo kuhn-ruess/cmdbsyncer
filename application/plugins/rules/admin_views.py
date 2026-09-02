@@ -1,3 +1,6 @@
+"""
+Flask-Admin views of the Syncer Rules plugin
+"""
 from .models import SyncerRuleAutomation
 from .views import SyncerRuleAutomationView
 

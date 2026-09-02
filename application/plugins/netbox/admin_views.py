@@ -1,4 +1,7 @@
-from application.modules.rule.views import FiltereModelView, RewriteAttributeView
+"""
+Flask-Admin views of the Netbox plugin
+"""
+from application.modules.rule.views import RewriteAttributeView
 
 from .views import (
                   NetboxCustomAttributesView,
