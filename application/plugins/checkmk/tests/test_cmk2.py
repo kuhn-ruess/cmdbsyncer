@@ -449,5 +449,61 @@ class TestCMK2FetchHosts(unittest.TestCase):
         self.assertEqual(mock_pool.apply_async.call_count, 2)
 
 
+class TestCMK2AttributeRules(unittest.TestCase):
+    """
+    Every Checkmk export shares one attribute cache per host, so an
+    export that computes it without the filter and rewrite rules would
+    store attributes with an empty ``filtered`` set — and the host
+    export, which builds the Checkmk labels out of it, would then wipe
+    the host's labels in Checkmk.
+    """
+
+    def setUp(self):
+        def mock_init(self_param, account=False):
+            self_param.config = {}
+
+        self.init_patcher = patch.object(CMK2, '__init__', mock_init)
+        self.init_patcher.start()
+        self.cmk = CMK2()
+
+    def tearDown(self):
+        self.init_patcher.stop()
+
+    def test_loads_filter_and_rewrite_when_unset(self):
+        self.assertFalse(self.cmk.filter)
+        self.assertFalse(self.cmk.rewrite)
+
+        with patch('application.plugins.checkmk.models.CheckmkFilterRule'), \
+             patch('application.plugins.checkmk.models.CheckmkRewriteAttributeRule'):
+            self.cmk._load_attribute_rules()
+
+        self.assertTrue(self.cmk.filter)
+        self.assertTrue(self.cmk.rewrite)
+        self.assertEqual(self.cmk.filter.cache_name, 'checkmk_filter')
+        self.assertEqual(self.cmk.rewrite.cache_name, 'checkmk_rewrite')
+
+    def test_keeps_the_engines_the_caller_set(self):
+        preset_filter = Mock()
+        preset_rewrite = Mock()
+        self.cmk.filter = preset_filter
+        self.cmk.rewrite = preset_rewrite
+
+        with patch('application.plugins.checkmk.models.CheckmkFilterRule'), \
+             patch('application.plugins.checkmk.models.CheckmkRewriteAttributeRule'):
+            self.cmk._load_attribute_rules()
+
+        self.assertIs(self.cmk.filter, preset_filter)
+        self.assertIs(self.cmk.rewrite, preset_rewrite)
+
+    def test_get_attributes_loads_the_rules_first(self):
+        with patch.object(CMK2, '_load_attribute_rules') as mock_load, \
+             patch('application.modules.plugin.Plugin.get_attributes',
+                   return_value={'all': {}, 'filtered': {}}) as mock_super:
+            self.cmk.get_attributes('db_host', 'checkmk')
+
+        mock_load.assert_called_once_with()
+        mock_super.assert_called_once_with('db_host', 'checkmk', persist_cache=True)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

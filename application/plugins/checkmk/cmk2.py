@@ -14,9 +14,13 @@ cli_cmk = register_cli_group(app, 'checkmk', 'checkmk', "Checkmk commands")
 class CmkException(Exception):
     """Cmk Errors"""
 
-class CMK2(Plugin):
+class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
     """
     Get Data from CMK
+
+    Carries the per-run Checkmk state (version, hosts, folders) plus the
+    two attribute rule engines every export needs — one more than pylint's
+    default attribute budget allows.
     """
 
     @staticmethod
@@ -67,6 +71,55 @@ class CMK2(Plugin):
             self.checkmk_version = self._probe_checkmk_version()
 
         self._init_complete = True
+
+
+    def _load_attribute_rules(self):
+        """
+        Load the Checkmk filter and rewrite engines when nobody set them.
+
+        Every Checkmk export shares one attribute cache per host
+        (``checkmk_hostattribute``). Whoever computes it first writes the
+        entry all the others then read unchanged. The rule, tag, DCD,
+        downtime, BI and notification exports never set ``filter`` and
+        ``rewrite``, so when one of them fills the cache first, the entry
+        holds attributes without any rewrite and an empty ``filtered``
+        set. The host export builds the Checkmk labels out of exactly
+        that set, so it then sends a host whose only label is
+        ``cmdb_syncer`` and Checkmk drops all the others.
+
+        Loading the engines here makes the cached attributes the same
+        whichever export computes them first — and the same the host
+        debug page shows.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.modules.rule.filter import Filter
+        from application.modules.rule.rewrite import Rewrite
+        from application.plugins.checkmk.models import (
+            CheckmkFilterRule, CheckmkRewriteAttributeRule)
+
+        if not self.filter:
+            attribute_filter = Filter()
+            attribute_filter.cache_name = "checkmk_filter"
+            attribute_filter.rules = \
+                CheckmkFilterRule.objects(enabled=True).order_by('sort_field')
+            self.filter = attribute_filter
+        if not self.rewrite:
+            attribute_rewrite = Rewrite()
+            attribute_rewrite.cache_name = 'checkmk_rewrite'
+            attribute_rewrite.rules = \
+                CheckmkRewriteAttributeRule.objects(enabled=True).order_by('sort_field')
+            self.rewrite = attribute_rewrite
+
+
+    def get_attributes(self, db_host, cache, persist_cache=True):
+        """
+        Attributes of a host for every Checkmk export.
+
+        Ensures the filter and rewrite rules are in place before the
+        shared attribute cache is computed (see ``_load_attribute_rules``).
+        """
+        self._load_attribute_rules()
+        return super().get_attributes(db_host, cache, persist_cache=persist_cache)
 
 
     def version_at_least(self, major, minor):
