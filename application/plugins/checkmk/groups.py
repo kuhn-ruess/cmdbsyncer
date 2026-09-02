@@ -208,14 +208,17 @@ class CheckmkGroupSync(CMK2):
 
             cmks_groups = self.request(url, method="GET")
             syncers_groups_in_cmk = []
-            syncers_groups_needing_update = []
             yet_external_groups_in_cmk = []
+            # Alias each of our groups currently carries in Checkmk. The
+            # cache says which groups are ours, this says what they look
+            # like — an alias is only correct when it matches the one
+            # configured now, no matter whether it was changed here or
+            # in Checkmk.
+            titles_in_cmk = {}
 
             group_cache = self.get_cache_object(group=group_type)
 
-            cached_group_list = group_cache.content.get('list', [])
-
-
+            cached_group_names = [x[1] for x in group_cache.content.get('list', [])]
 
             # Check which CMK Groups are in our CACHE
             for cmk_group in cmks_groups[0]['value']:
@@ -224,14 +227,10 @@ class CheckmkGroupSync(CMK2):
                 else:
                     # Support Checkmk 2.1x
                     cmk_name = cmk_group['href'].split('/')[-1]
-                cmk_title = cmk_group['title']
+                titles_in_cmk[cmk_name] = cmk_group['title']
 
-
-                # From Cache we get Lists not tuple
-                if [cmk_title, cmk_name] in cached_group_list:
+                if cmk_name in cached_group_names:
                     syncers_groups_in_cmk.append(cmk_name)
-                elif cmk_name in [x[1] for x in cached_group_list]:
-                    syncers_groups_needing_update.append(cmk_name)
                 else:
                     # The Group is not known yet, but maybe we need to controll it
                     yet_external_groups_in_cmk.append(cmk_name)
@@ -252,13 +251,13 @@ class CheckmkGroupSync(CMK2):
                     continue
                 if "None" in (alias, name):
                     continue
-                if name not in syncers_groups_in_cmk and name not in syncers_groups_needing_update:
+                if name not in syncers_groups_in_cmk:
                     print(f"{CC.OKBLUE}  *{CC.ENDC} Added {new_group}")
                     new_entries.append({
                         'alias' : alias,
                         'name' : name,
                     })
-                elif name in syncers_groups_needing_update:
+                elif titles_in_cmk.get(name) != alias:
                     print(f"{CC.OKBLUE}  *{CC.ENDC} Updated {new_group}")
                     update_entries.append({
                         'name' : name,
@@ -324,5 +323,5 @@ class CheckmkGroupSync(CMK2):
                     # Keep them in the cache, otherwise the next run would
                     # treat them as foreign groups and never retry the delete.
                     group_cache.content['list'] = configured_groups + \
-                        [x for x in cached_group_list if x[1] in undeletable]
+                        [[titles_in_cmk.get(x, x), x] for x in undeletable]
                     group_cache.save()

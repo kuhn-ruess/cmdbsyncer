@@ -229,5 +229,54 @@ class TestCheckmkGroupSync(unittest.TestCase):
         self.assertNotIn(['gone', 'gone'], cache.content['list'])
 
 
+    def _run_alias_export(self, cmk_title, rewrite_title=None):
+        """One export of a single label-driven group, with the alias
+        Checkmk currently has for it."""
+        outcome = Mock()
+        outcome.group_name = 'host_groups'
+        outcome.foreach_type = 'label'
+        outcome.foreach = 'site'
+        outcome.rewrite = None
+        outcome.rewrite_title = rewrite_title
+        rule = Mock()
+        rule.outcome = outcome
+
+        self.sync.parse_attributes = Mock(return_value=({'site': ['muc']}, {}))
+        cache = Mock()
+        cache.content = {'list': [['muc', 'muc']]}
+        self.sync.get_cache_object = Mock(return_value=cache)
+        self.sync.log_details = []
+        self.sync.request = Mock(return_value=(
+            {'value': [{'id': 'muc', 'title': cmk_title}]}, {}))
+
+        with patch('application.plugins.checkmk.groups.str_replace',
+                   lambda value, exceptions: value), \
+             patch('application.plugins.checkmk.groups.CheckmkGroupRule') as rules:
+            rules.objects.return_value = [rule]
+            self.sync.export_cmk_groups(False)
+        return [call for call in self.sync.request.call_args_list
+                if call.kwargs.get('method') == 'PUT']
+
+    def test_changed_alias_is_pushed(self):
+        """The alias was changed in the rule. Comparing against the
+        cache alone said "unchanged" and never sent it."""
+        with patch('application.plugins.checkmk.groups.render_jinja',
+                   return_value='Munich'):
+            puts = self._run_alias_export('muc', rewrite_title='Munich')
+        self.assertEqual(len(puts), 1)
+        self.assertEqual(puts[0].kwargs['data']['entries'],
+                         [{'name': 'muc', 'attributes': {'alias': 'Munich'}}])
+
+    def test_alias_changed_in_checkmk_is_corrected(self):
+        """Drift the other way round: someone renamed it in Checkmk."""
+        puts = self._run_alias_export('Hand edited')
+        self.assertEqual(len(puts), 1)
+        self.assertEqual(puts[0].kwargs['data']['entries'],
+                         [{'name': 'muc', 'attributes': {'alias': 'muc'}}])
+
+    def test_matching_alias_sends_nothing(self):
+        self.assertEqual(self._run_alias_export('muc'), [])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
