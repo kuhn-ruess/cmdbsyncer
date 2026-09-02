@@ -49,7 +49,7 @@ class CheckmkTagSync(CMK2):
 
         cache_name = 'cmk_tags_tag_choices'
         if cache_name not in db_host.cache:
-            logger.debug(f" -- Build Tag Cache {cache_name}")
+            logger.debug(" -- Build Tag Cache %s", cache_name)
             hosts_tags = self.get_tags_for_host(db_host, object_attributes,
                                                       groups, tags_of_host)
             db_host.cache[cache_name] = hosts_tags
@@ -86,6 +86,7 @@ class CheckmkTagSync(CMK2):
         """
         Export Tags to Checkmk
         """
+        # pylint: disable=too-many-locals
         base_groups, multiply_expressions = self.calculate_rules()
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
@@ -128,7 +129,7 @@ class CheckmkTagSync(CMK2):
         # Delete Templates
         for group_id, group in list(groups.items()):
             if group.get('is_template'):
-                logger.debug(f"Delete Template {group_id}")
+                logger.debug("Delete Template %s", group_id)
                 del groups[group_id]
 
         tags = list(set(tags))
@@ -160,18 +161,18 @@ class CheckmkTagSync(CMK2):
         hosts_tags = db_host.cache[cache_name]
 
         for group_id, tags in hosts_tags.items():
-            logger.debug(f"Check Group {group_id} with {tags}")
+            logger.debug("Check Group %s with %s", group_id, tags)
             tag_id, tag_title = tags
             tag_tuple = (group_id, tag_id, tag_title)
             if tag_tuple not in global_tags:
-                logger.debug(f" - Add {tag_tuple}")
+                logger.debug(" - Add %s", tag_tuple)
                 global_tags.append(tag_tuple)
 
     def create_inital_groups(self, rule, groups, multiply_expressions):
         """
         Create inital group Object
         """
-        logger.debug(f"Get Rule {rule.group_id}")
+        logger.debug("Get Rule %s", rule.group_id)
         group_id = rule.group_id
         groups[group_id] =  {
             'tags': [],
@@ -195,6 +196,7 @@ class CheckmkTagSync(CMK2):
         Update the Group Config to,
         render special options
         """
+        # pylint: disable=too-many-locals
 
         tags_of_host = {}
         addional_groups = {}
@@ -233,7 +235,9 @@ class CheckmkTagSync(CMK2):
                     }
 
                     tags_of_host[new_group_id] = (rw_id, rw_title)
-            except Exception as _error:
+            except Exception:  # pylint: disable=broad-exception-caught
+                # The expressions come from the user; any rendering error
+                # just means this group does not apply to the host.
                 continue
         return tags_of_host, addional_groups
 
@@ -244,8 +248,8 @@ class CheckmkTagSync(CMK2):
         """
         hostname = db_object.hostname
         tags = {}
-        logger.info(f"Update Tags from {hostname}")
-        logger.debug(f"{groups} {tags_of_host}")
+        logger.info("Update Tags from %s", hostname)
+        logger.debug("%s %s", groups, tags_of_host)
 
 
         for group_id, group_data in groups.items():
@@ -260,7 +264,7 @@ class CheckmkTagSync(CMK2):
                 # Check if we use data from the object
                 if object_filter := group_data.get('object_filter'):
                     if db_object.get_inventory().get('syncer_account') != object_filter:
-                        logger.debug(f" --- Not matching object filter: {object_filter}")
+                        logger.debug(" --- Not matching object filter: %s", object_filter)
                         continue
 
 
@@ -278,8 +282,8 @@ class CheckmkTagSync(CMK2):
 
                     new_tag_title = render_jinja(rewrite_title, **object_attributes['all'])
                     new_tag_title.strip()
-                except Exception as exp:
-                    logger.debug(f"Exception: {exp}")
+                except Exception as exp:  # pylint: disable=broad-exception-caught
+                    logger.debug("Exception: %s", exp)
                     new_tag_id, new_tag_title = False, False
 
             if new_tag_id and new_tag_title:
@@ -324,7 +328,7 @@ class CheckmkTagSync(CMK2):
                 found_ids.append(x)
 
         if not tags or len(tags) == 0:
-            logger.debug(f"{CC.WARNING} *{CC.ENDC} Group has no tags")
+            logger.debug("%s *%s Group has no tags", CC.WARNING, CC.ENDC)
             return False
         return tags
 
@@ -341,10 +345,11 @@ class CheckmkTagSync(CMK2):
         Use generated configuration to Sync
         Everhting to Checkmk
         """
+        # pylint: disable=too-many-locals,too-many-branches
         etag, checkmk_ids = self.get_checkmk_tags()
 
         create_url = "/domain-types/host_tag_group/collections/all"
-        logger.debug(f"All Groups: {groups}")
+        logger.debug("All Groups: %s", groups)
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
@@ -394,8 +399,8 @@ class CheckmkTagSync(CMK2):
                         progress.console.print(f" * Group {syncer_group_id} already up to date.")
                     else:
                         logger.debug("NEED TO UPDATE TAGS")
-                        logger.debug(f"Checkmk Tags: {checkmk_tags_frozen}")
-                        logger.debug(f"Syncer Tags: {syncer_tags_frozen}")
+                        logger.debug("Checkmk Tags: %s", checkmk_tags_frozen)
+                        logger.debug("Syncer Tags: %s", syncer_tags_frozen)
                         url = f"/objects/host_tag_group/{syncer_group_id}"
                         update_headers = {
                             'if-match': etag
@@ -406,7 +411,7 @@ class CheckmkTagSync(CMK2):
                             self.request(
                                 url, method="PUT", data=payload,
                                 additional_header=update_headers)
-                        except Exception as error:
+                        except Exception as error:  # pylint: disable=broad-exception-caught
                             progress.console.print(f" ! Group {syncer_group_id} can't be updated.")
                             logger.debug(error)
                         else:
