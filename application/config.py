@@ -398,8 +398,12 @@ class BaseConfig():
     JSON_LOGGING_ENABLED = False
     # Adds `cmdbsyncer <command>` runs (imports, exports, cron) to what
     # the web application and its workers already emit. A run printing
-    # to a terminal stays plain text either way.
+    # to a terminal stays plain text, unless the records go to a file.
     JSON_LOGGING_CLI = False
+    # A path here takes the records instead of the stream: for runs
+    # whose output nobody collects — started from outside the container,
+    # for instance — the file is where a collector can still find them.
+    JSON_LOGGING_FILE = ''
     JSON_LOGGING_STREAM = 'stdout'
     JSON_LOGGING_LEVEL = 'INFO'
 

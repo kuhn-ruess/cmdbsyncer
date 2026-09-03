@@ -168,6 +168,35 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("CONFIGURE_LOGGING CALLED", result.stdout)
 
+    def test_file_target_survives_a_terminal_run(self):
+        """A file target is not the terminal, so the run keeps both.
+
+        The readability rule exists because JSON on a terminal is
+        unreadable. Records going to a log file are not on the terminal
+        at all, so they are produced there as well — and the plain
+        output the person is watching stays plain.
+        """
+        result = run_with_local_config(
+            "config = {'JSON_LOGGING_CLI': True,\n"
+            "          'JSON_LOGGING_FILE': '{workdir}/syncer.jsonl'}\n",
+            "import sys\n"
+            "class _Tty:\n"
+            "    def __getattr__(self, name):\n"
+            "        return getattr(sys.__stdout__, name)\n"
+            "    def isatty(self):\n"
+            "        return True\n"
+            "sys.stdout = _Tty()\n"
+            "import application\n"
+            "print('Try 1 of 2 failed')\n",
+            extra_files={'cmdbsyncer_enterprise/__init__.py':
+                         _ENTERPRISE_STUB},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CONFIGURE_LOGGING CALLED", result.stdout)
+        # The person's own output is theirs to read, not a record.
+        self.assertIn("Try 1 of 2 failed", result.stdout)
+        self.assertNotIn("RECORD: Try 1 of 2 failed", result.stdout)
+
     def test_printed_progress_becomes_a_record(self):
         """What a command prints reaches the collector as a record.
 
