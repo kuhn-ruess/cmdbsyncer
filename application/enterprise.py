@@ -17,16 +17,43 @@ _features = set()
 _hooks = {}
 
 load_status = None  # pylint: disable=invalid-name
+_pending_report = None  # pylint: disable=invalid-name
 
 
 def _report(message):
-    """Write enterprise load status to stderr so Docker/container logs see it."""
+    """Hold the load status until there is somewhere good to put it.
+
+    ``load_package()`` runs before the log pipeline is configured — it
+    has to, the pipeline itself is one of the things a license unlocks —
+    so writing here would always produce a plain line, whatever the
+    deployment asked for. ``emit_load_status()`` writes it afterwards.
+    """
     # ``./cmdbsyncer <command>`` sets CMDBSYNCER_CLI so command output isn't
     # preceded by a banner line — the web/worker processes keep the banner.
     import os  # pylint: disable=import-outside-toplevel
     if os.environ.get("CMDBSYNCER_CLI") == "1":
         return
-    print(f"[cmdbsyncer-enterprise] {message}", file=sys.stderr, flush=True)
+    global _pending_report  # pylint: disable=global-statement
+    _pending_report = message
+
+
+def emit_load_status(logger=None):
+    """Write the held status line, once.
+
+    With a `logger` the line becomes an ordinary record, so a deployment
+    collecting structured logs gets it in the shape it configured.
+    Without one it goes to stderr, where it stays visible even on an
+    install whose logging is not set up at all — which is exactly the
+    install most likely to be asking whether the package loaded.
+    """
+    global _pending_report  # pylint: disable=global-statement
+    if _pending_report is None:
+        return
+    message, _pending_report = _pending_report, None
+    if logger is not None:
+        logger.info(message, extra={'event_source': 'enterprise'})
+    else:
+        print(f"[cmdbsyncer-enterprise] {message}", file=sys.stderr, flush=True)
 
 
 def register_feature(name, hook_fn=None):

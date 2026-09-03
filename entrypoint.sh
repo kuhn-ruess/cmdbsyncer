@@ -11,13 +11,25 @@ else
     as_app=""
 fi
 
-echo "Starting Cron"
-crond
-echo "-> Done"
+# No progress echoes of our own around the two steps below. crond
+# reports its own start, and `sys self_configure` reports every check it
+# runs — as records once a log pipeline is configured. Repeating that
+# from the shell only puts lines on the container's stdout that no
+# collector can parse.
+# Without -L, crond logs to syslog, and there is no syslogd in this
+# image — so every line it wrote was dropped, and a daemonised crond has
+# its own stdout and stderr on /dev/null anyway. Log to PID 1's stderr,
+# which the container runtime captures, so at least the daemon reports
+# that it came up.
+#
+# The default level, not a louder one: crond is a C daemon and cannot
+# produce a log record, so each job it announced was a plain line in the
+# middle of the stream. `cron run_jobs` reports every pass itself, in
+# the configured shape, including the passes with nothing to do — which
+# is the same information from a side that can be parsed.
+crond -L /proc/1/fd/2
 
-echo "Preconfigure..."
 $as_app /srv/cmdbsyncer sys self_configure
-echo "-> Done"
 
 # Optional MCP server (SSE transport) — opt in by setting
 # MCPSERVER_ENABLED=1. Authenticates per request via the same User
@@ -34,6 +46,5 @@ if [ "${MCPSERVER_ENABLED:-}" = "1" ]; then
     echo "-> MCP listening at :${MCP_PORT}/sse"
 fi
 
-echo "Container Started"
 exec $as_app "$@"
 

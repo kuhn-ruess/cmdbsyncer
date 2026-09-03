@@ -24,7 +24,19 @@ from application.enterprise import register_feature
 
 
 def _configure_logging(app, logger):
+    import logging
+    import sys
     print("CONFIGURE_LOGGING CALLED")
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("RECORD: %(message)s"))
+    root = logging.getLogger()
+    for existing in list(root.handlers):
+        root.removeHandler(existing)
+    root.addHandler(handler)
+    logger.handlers.clear()
+    logger.propagate = True
+    logger.setLevel(logging.INFO)
+    return handler.stream
 
 
 register_feature('json_logging')
@@ -130,7 +142,71 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
         self.assertIn("CONFIGURE_LOGGING CALLED", result.stdout)
         # Still no third-party chatter — only the syncer's own loggers,
         # which propagate regardless of the root level, reach the handler.
-        self.assertIn("root 30", result.stdout)
+        # The print itself now arrives as a record rather than raw text.
+        self.assertIn("RECORD: root 30", result.stdout)
+
+    def test_terminal_run_stays_readable(self):
+        """A person at a terminal gets plain text, never the JSON.
+
+        JSON_LOGGING_CLI is meant for cron runs and pipes feeding a
+        collector. On a terminal the same stream is unreadable — one
+        record carries a whole stack trace on a single line.
+        """
+        result = run_with_local_config(
+            "config = {'JSON_LOGGING_CLI': True}\n",
+            "import sys\n"
+            "class _Tty:\n"
+            "    def __getattr__(self, name):\n"
+            "        return getattr(sys.__stdout__, name)\n"
+            "    def isatty(self):\n"
+            "        return True\n"
+            "sys.stdout = _Tty()\n"
+            "import application\n",
+            extra_files={'cmdbsyncer_enterprise/__init__.py':
+                         _ENTERPRISE_STUB},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("CONFIGURE_LOGGING CALLED", result.stdout)
+
+    def test_printed_progress_becomes_a_record(self):
+        """What a command prints reaches the collector as a record.
+
+        The progress of a run is written with `print()` in hundreds of
+        places. Left alone it lands between the records unformatted,
+        and the retries and errors it carries never reach the pipeline.
+        """
+        result = run_with_local_config(
+            "config = {'JSON_LOGGING_CLI': True}\n",
+            "import application\n"
+            "print('\\033[94mTry 1 of 2 failed\\033[0m')\n"
+            "print('-------------------')\n",
+            extra_files={'cmdbsyncer_enterprise/__init__.py':
+                         _ENTERPRISE_STUB},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # Formatted by the handler, with the colour escapes stripped.
+        self.assertIn("RECORD: Try 1 of 2 failed", result.stdout)
+        # A rule of dashes is not an event.
+        self.assertNotIn("-------------------", result.stdout)
+
+    def test_shell_completion_run_gets_no_structured_pipeline(self):
+        """Completion parses stdout, so nothing may be written to it.
+
+        Click builds the completion script by running the CLI and
+        reading its stdout. A marker line from the structured pipeline
+        landed inside that script, and the shell sourcing it then tried
+        to run the JSON as a command.
+        """
+        result = run_with_local_config(
+            "config = {'JSON_LOGGING_CLI': True}\n",
+            "import os\n"
+            "os.environ['_CMDBSYNCER_COMPLETE'] = 'bash_source'\n"
+            "import application\n",
+            extra_files={'cmdbsyncer_enterprise/__init__.py':
+                         _ENTERPRISE_STUB},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("CONFIGURE_LOGGING CALLED", result.stdout)
 
     def test_structured_record_matches_the_web_log(self):
         """Every detail row and the traceback reach the structured record.

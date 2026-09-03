@@ -1,6 +1,7 @@
 """ Main entry """
 # Flask app factory with intentional deferred imports to avoid circular imports.
 # pylint: disable=wrong-import-position,import-outside-toplevel,ungrouped-imports
+import atexit
 import os
 import sys
 import logging
@@ -19,6 +20,21 @@ if os.path.basename(sys.argv[0] or '').removesuffix('.py') in _CLI_ENTRYPOINTS:
 # never serve HTTP, and the ``admin.add_view(...)`` calls each scaffold a
 # form via Mongo — together they account for the bulk of CLI startup time.
 CLI_MODE = os.environ.get('CMDBSYNCER_CLI') == '1'
+# Click's shell completion runs the CLI and reads nothing but its stdout,
+# so whatever is written there ends up inside the generated completion
+# script and is executed by the shell that sources it.
+COMPLETION_MODE = any(key.startswith('_') and key.endswith('_COMPLETE')
+                      for key in os.environ)
+
+
+def _stdout_is_terminal():
+    """True when a person is watching. Never raises: stdout may be any
+    object by the time this runs, and a wrong guess must not abort the
+    import."""
+    try:
+        return bool(sys.stdout.isatty())
+    except (AttributeError, ValueError, OSError):
+        return False
 
 # Pip console scripts (``cmdbsyncer …``) trigger this module via
 # ``from application.cli import main`` and don't put cwd on ``sys.path``
@@ -475,8 +491,33 @@ Account._fields['type'].choices = get_account_types()
 # a JSON banner in front of an interactive command helps nobody — but
 # imports, exports and cron runs *are* command runs, and they are the
 # events a log collector actually wants. JSON_LOGGING_CLI opts them in.
-if not CLI_MODE or app.config.get('JSON_LOGGING_CLI'):
-    enterprise_hook('configure_logging', app, logger)
+#
+# Not while a person is watching, though. On a terminal the JSON is
+# unreadable — a stack trace arrives as one very long line — and no
+# collector is reading there anyway. A cron run, a pipe or a redirect
+# is not a terminal, and that is exactly where the stream belongs, so
+# the same setting serves both without a second switch.
+if CLI_MODE:
+    JSON_FOR_THIS_RUN = bool(app.config.get('JSON_LOGGING_CLI')) and not _stdout_is_terminal()
+else:
+    JSON_FOR_THIS_RUN = True
+json_stream = None
+if JSON_FOR_THIS_RUN and not COMPLETION_MODE:
+    json_stream = enterprise_hook('configure_logging', app, logger)
+    if CLI_MODE and json_stream is sys.stdout:
+        # The handler holds the real stdout from here on. What a command
+        # still prints — the retries, the timeouts, the per-host results
+        # — is the detail the collector is after, so route it through
+        # the pipeline as well instead of letting it land unformatted
+        # between the records.
+        from application.modules.log.command_output import (  # noqa: E402  pylint: disable=import-outside-toplevel
+            CommandOutputToLog,
+        )
+        sys.stdout = CommandOutputToLog(logger)
+        atexit.register(sys.stdout.flush)
+# Held back until here so it is a record wherever there is a pipeline to
+# carry one, rather than a plain line in front of everything else.
+enterprise.emit_load_status(logger if json_stream is not None else None)
 if CLI_MODE:
     # Keep third-party chatter (mongoengine, urllib3, …) away from the
     # command's own output. This only filters records logged straight to
