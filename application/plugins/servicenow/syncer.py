@@ -350,30 +350,37 @@ class SyncServiceNow(Plugin):
               f"{len(index)} object(s) with a relation")
         return index
 
+    def _relations_for(self, query):
+        """
+        The relationship index of one query, read once per run and then
+        kept. Keyed by the query and not by the table so that every
+        table narrowing the same way shares the read — above all the
+        unnarrowed fallback below, which is the expensive one.
+        """
+        if self._relation_index is None:
+            self._relation_index = {}
+        if query not in self._relation_index:
+            if query:
+                print(f"{CC.OKGREEN} -- {CC.ENDC}ServiceNow: Reading {RELATION_TABLE} "
+                      f"with '{query}'")
+            self._relation_index[query] = self._read_relations(query)
+        return self._relation_index[query]
+
     def relation_index(self, table=None):
         """
-        The relationship index used for one inventorized table, read
-        once per table and then kept.
+        The relationship index used for one inventorized table.
 
         An instance that does not answer the narrowed query the way it
         is meant to would leave every record of the table without a
         host. So an empty answer is not believed: the table is then read
         the unnarrowed way once, which is slow but never wrong.
         """
-        if self._relation_index is None:
-            self._relation_index = {}
-        if table not in self._relation_index:
-            query = self.relation_query(table)
-            if query:
-                print(f"{CC.OKGREEN} -- {CC.ENDC}ServiceNow: Reading {RELATION_TABLE} "
-                      f"with '{query}'")
-            index = self._read_relations(query)
-            if not index and table:
-                print(f"{CC.WARNING} -- {CC.ENDC}No relation matched — reading "
-                      f"{RELATION_TABLE} without the class of {table}")
-                index = self._read_relations(self.relation_query())
-            self._relation_index[table] = index
-        return self._relation_index[table]
+        index = self._relations_for(self.relation_query(table))
+        if not index and table:
+            print(f"{CC.WARNING} -- {CC.ENDC}No relation matched — reading "
+                  f"{RELATION_TABLE} without the class of {table}")
+            index = self._relations_for(self.relation_query())
+        return index
 
 #.
 #   .-- Hosts of this account by their ServiceNow name
@@ -634,8 +641,8 @@ class SyncServiceNow(Plugin):
 #   .-- Query one table
     last_rate_limit = None
 
-    # The relationship index of every inventorized table matched
-    # through it, read once per table
+    # The relationship index of every query an inventorized table
+    # matched through, read once per query
     _relation_index = None
 
     # The account's hosts by the label carrying their ServiceNow name,

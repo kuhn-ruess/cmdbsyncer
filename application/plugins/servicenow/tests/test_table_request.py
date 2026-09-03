@@ -354,6 +354,21 @@ class TestRelationIndex(unittest.TestCase):
                                    '^ORparent.sys_class_nameINSTANCEOFcmdb_ci_db_instance', ''])
         self.assertEqual(index['ldom-s02'], {'LDOM-S02-ORA'})
 
+    def test_the_fallback_read_is_shared_by_every_table(self):
+        # The unnarrowed read is the expensive one, so two tables both
+        # falling back to it must not page through the whole table twice
+        instance = syncer()
+        queries = []
+
+        def read(table, query=None, fields=None):  # pylint: disable=unused-argument
+            queries.append(query)
+            return iter([] if query else self.RELATIONS)
+
+        instance.get_table = read
+        instance.relation_index('cmdb_ci_db_instance')
+        instance.relation_index('cmdb_ci_appl')
+        self.assertEqual(queries.count(''), 1)
+
     def test_the_types_narrow_the_read_on_the_instance(self):
         instance = syncer(inventorize_relation_types='Contains::Contained by, Owns::Owned by')
         self.assertEqual(instance.relation_query(),
