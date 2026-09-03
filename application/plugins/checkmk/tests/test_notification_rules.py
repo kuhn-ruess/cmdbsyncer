@@ -2,11 +2,9 @@
 Unit tests for checkmk notification_rules module.
 """
 # pylint: disable=missing-function-docstring,missing-class-docstring,protected-access,unused-argument
-import ast
 import unittest
 from unittest.mock import patch
 
-import jinja2
 
 from application.plugins.checkmk.notification_rules import (
     CheckmkNotificationRuleSync,
@@ -22,29 +20,13 @@ from application.plugins.checkmk.notification_rules import (
     validate_outcome_jinja,
 )
 from application.plugins.checkmk.cmk2 import CmkException
-from tests import base_mock_init
+from tests import base_mock_init, real_get_list, real_render_jinja
 
 
-def _real_get_list(value):
-    """The shared test bootstrap stubs syncer_jinja, get_list included.
-    Stand in for it with the same behaviour the real helper has for the
-    shapes a loop list arrives in: a list, a list literal, or a comma
-    separated string."""
-    if isinstance(value, (list, tuple)):
-        return list(value)
-    try:
-        return ast.literal_eval(value)
-    except (ValueError, SyntaxError):
-        return [entry.strip() for entry in value.split(',') if entry.strip()]
-
-
-def _real_render(template, **context):
-    """The shared test bootstrap stubs render_jinja with a MagicMock —
-    rendering tests need actual Jinja substitution, so route through a
-    real Jinja2 environment in this test module only. The Syncer's own
-    Jinja helpers are offered the same way the real environment does."""
-    context.setdefault('get_list', _real_get_list)
-    return jinja2.Template(template).render(**context)
+# The shared bootstrap stubs syncer_jinja; these route the rendering tests
+# through a real Jinja environment again.
+_real_get_list = real_get_list
+_real_render = real_render_jinja
 
 
 def _make_outcome(**overrides):

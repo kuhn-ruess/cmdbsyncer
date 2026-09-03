@@ -13,6 +13,7 @@ are then loaded directly via `importlib.util` and registered under their
 canonical names, so the test files' normal `from application... import ...`
 statements resolve from the sys.modules cache without ever touching MongoDB.
 """
+import ast
 import importlib.util
 import os
 import re
@@ -572,6 +573,12 @@ _try_load_real_module(
     "application.plugins.checkmk.cmk2",
     os.path.join("plugins", "checkmk", "cmk2.py"),
 )
+# cmk_rules imports the loop-list resolver from the plugin helpers, so those
+# have to be registered first (they are cheap: re + the stubbed app).
+_try_load_real_module(
+    "application.plugins.checkmk.helpers",
+    os.path.join("plugins", "checkmk", "helpers.py"),
+)
 # cmk_rules provides folder_in_scope, imported by syncer at module load, so it
 # must be registered before the syncer module is loaded below.
 _try_load_real_module(
@@ -680,7 +687,7 @@ _try_load_real_module(
     os.path.join("modules", "rule", "rewrite.py"),
 )
 for _mod_name, _mod_path in [
-    ("helpers", "helpers.py"),
+    # helpers is loaded earlier (before cmk_rules) — see above.
     ("poolfolder", "poolfolder.py"),
     ("sitepool", "sitepool.py"),
     ("rules", "rules.py"),
@@ -771,6 +778,29 @@ _try_load_real_module(
 
 # --- Shared test helper ------------------------------------------------------
 # Avoids duplicate setUp code across checkmk test files (pylint R0801).
+
+def real_get_list(value):
+    """The bootstrap above stubs syncer_jinja, get_list included. Stand in
+    for it with the same behaviour the real helper has for the shapes a
+    loop list arrives in: a list, a list literal, or a comma separated
+    string."""
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    try:
+        return ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        return [entry.strip() for entry in value.split(',') if entry.strip()]
+
+
+def real_render_jinja(template, **context):
+    """The bootstrap stubs render_jinja with a MagicMock — rendering tests
+    need actual Jinja substitution, so route through a real Jinja2
+    environment. The Syncer's own Jinja helpers are offered the same way
+    the real environment does."""
+    context.setdefault('get_list', real_get_list)
+    return SandboxedEnvironment(autoescape=False).from_string(
+        template).render(**context).strip()
+
 
 def base_mock_init(self_param, **overrides):
     """Common mock __init__ for CMK2 subclasses in tests."""

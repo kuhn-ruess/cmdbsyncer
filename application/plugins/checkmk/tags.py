@@ -1,16 +1,18 @@
 """
 Checkmk Tag Syncronize
 """
-import ast
 import multiprocessing
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import logger, init_db, app
 from application.plugins.checkmk.cmk2 import CMK2
 from application.modules.debug import ColorCodes as CC
 from application.plugins.checkmk.models import CheckmkTagMngmt
 from application.models.host import Host
 from application.helpers.syncer_jinja import render_jinja
-from application.plugins.checkmk.helpers import cmk_cleanup_tag_id
+from application.plugins.checkmk.helpers import (
+    cmk_cleanup_tag_id,
+    make_progress,
+    resolve_loop_list,
+)
 
 
 class CheckmkTagSync(CMK2):
@@ -64,10 +66,7 @@ class CheckmkTagSync(CMK2):
         """
         db_objects = CheckmkTagMngmt.objects(enabled=True)
         total = db_objects.count()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             task1 = progress.add_task("Calculating Needed Rules", total=total)
             manager = multiprocessing.Manager()
             base_groups = manager.dict()
@@ -92,10 +91,7 @@ class CheckmkTagSync(CMK2):
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             manager = multiprocessing.Manager()
             groups = manager.dict()
             groups.update(base_groups)
@@ -204,11 +200,13 @@ class CheckmkTagSync(CMK2):
         data = object_attributes['all']
         for group_id_org, expression in multiply_expressions:
             try:
-                rendering = render_jinja(expression, mode="raise", **data)
-                if not rendering:
+                # Same spellings as the Setup rules' loop field: a plain
+                # attribute name, or Jinja rendering to a list literal or
+                # a comma separated string.
+                new_choices, error = resolve_loop_list(expression, data)
+                if error:
+                    logger.debug(" --- Loop list error: %s", error)
                     continue
-
-                new_choices = ast.literal_eval(rendering)
                 if not new_choices:
                     logger.debug(" --- No Choices")
                     continue
@@ -350,10 +348,7 @@ class CheckmkTagSync(CMK2):
 
         create_url = "/domain-types/host_tag_group/collections/all"
         logger.debug("All Groups: %s", groups)
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             task1 = progress.add_task("Sending to Checkmk", total=len(groups))
             # Checkmk renamed the tag group id field 'ident' -> 'id' in 2.4.
             id_field = self._tag_id_field()
