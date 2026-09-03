@@ -480,6 +480,36 @@ PRESETS = [
                      'from the notice files shipped with a release.'},
         ],
     },
+    {
+        'ident': 'json_logging',
+        'name': 'JSON log stream',
+        'description': (
+            "One-line structured logs in Elastic Common Schema, ready "
+            "for Loki, Elastic / OpenSearch, CloudWatch, Datadog and "
+            "Splunk without a parser. The web application and its "
+            "workers emit them whenever a license carries the feature."
+        ),
+        'note': (
+            "Without such a license none of these keys do anything — "
+            "the application keeps its plain text output."
+        ),
+        'keys': [
+            {'key': 'JSON_LOGGING_ENABLED', 'type': 'bool', 'default': False,
+             'hint': 'The main switch. Turn this on first — without it '
+                     'the application keeps its plain text output, '
+                     'whatever the other three say.'},
+            {'key': 'JSON_LOGGING_CLI', 'type': 'bool', 'default': False,
+             'hint': 'Also emit records for command runs — imports, '
+                     'exports, cron. A run printing to a terminal stays '
+                     'plain text either way, so this is about the runs '
+                     'feeding a collector.'},
+            {'key': 'JSON_LOGGING_STREAM', 'type': 'str', 'default': 'stdout',
+             'hint': "Where the records go: 'stdout' or 'stderr'."},
+            {'key': 'JSON_LOGGING_LEVEL', 'type': 'str', 'default': 'INFO',
+             'hint': 'Any standard Python level name. DEBUG also brings '
+                     'back the web request log.'},
+        ],
+    },
 ]
 
 

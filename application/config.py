@@ -392,6 +392,17 @@ class BaseConfig():
 
     NETBOX_IMPORT_NESTED = False
 
+    # Structured (JSON) log stream. Needs a license carrying the
+    # feature; without one these are inert.
+    # The main switch — False keeps plain text everywhere.
+    JSON_LOGGING_ENABLED = False
+    # Adds `cmdbsyncer <command>` runs (imports, exports, cron) to what
+    # the web application and its workers already emit. A run printing
+    # to a terminal stays plain text either way.
+    JSON_LOGGING_CLI = False
+    JSON_LOGGING_STREAM = 'stdout'
+    JSON_LOGGING_LEVEL = 'INFO'
+
     PROCESS_TIMEOUT = 15
 
     # Email / SMTP (used for password-reset mails and other notifications).
