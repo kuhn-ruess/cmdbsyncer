@@ -11,12 +11,12 @@ from pprint import pformat
 
 
 from mongoengine.errors import DoesNotExist
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application import app, logger
 from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
+from application.plugins.checkmk.helpers import make_progress, resolve_loop_list
 from application.helpers.label_hash import syncer_hash
 from application.modules.debug import ColorCodes as CC
 
@@ -552,7 +552,14 @@ def preview_rule_for_attributes(rule, attributes):
     results = []
     for outcome in rule.outcomes:
         if outcome.loop_over_list and outcome.list_to_loop:
-            loop_list = get_list(attributes.get(outcome.list_to_loop, ''))
+            loop_list, error = resolve_loop_list(outcome.list_to_loop, attributes)
+            if error:
+                results.append(_render_outcome_preview(
+                    outcome, attributes,
+                    note=(f"loop list '{outcome.list_to_loop}' could not be "
+                          f"rendered: {error}"),
+                ))
+                continue
             if not loop_list:
                 results.append(_render_outcome_preview(
                     outcome, attributes,
@@ -1176,10 +1183,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         collected = []
         rulesets = list(self.list_used_rulesets())
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             task1 = progress.add_task(
                 f"Scan {len(rulesets)} rulesets for folder {folder}",
                 total=len(rulesets))
@@ -1507,10 +1511,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         print(f"{CC.OKGREEN} -- {CC.ENDC} Loop over Hosts and collect distinct rules")
         db_objects = self._export_hosts()
         total = db_objects.count()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             task1 = progress.add_task("Calculate rules", total=total)
             for db_host in db_objects:
                 attributes = self.get_attributes(db_host, 'checkmk')
@@ -1642,10 +1643,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         exported_keys = set()
         print(f"{CC.OKGREEN} -- {CC.ENDC} Collect labels of all hosts")
         db_objects = self._export_hosts()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             task1 = progress.add_task("Collect labels",
                                       total=db_objects.count())
             for db_host in db_objects:
@@ -2019,7 +2017,14 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                 # on the empty attribute lookup.
                 if rule_params.get('loop_over_list') and \
                         rule_params.get('list_to_loop'):
-                    loop_list = get_list(attributes['all'][rule_params['list_to_loop']])
+                    loop_list, error = resolve_loop_list(
+                        rule_params['list_to_loop'], attributes['all'])
+                    if error:
+                        self.log_error(
+                            f"Loop list '{rule_params['list_to_loop']}' of "
+                            f"{rule_params.get('ruleset')} could not be "
+                            f"rendered: {error}")
+                        continue
                     for loop_idx, loop_value in enumerate(loop_list):
                         loop_rule_params = dict(rule_params)
                         loop_rule_params.pop('loop_over_list', None)
@@ -2183,10 +2188,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         rulesets = len({entry[0] for entry in planned})
         print(f"{CC.OKBLUE}  * {CC.ENDC}{len(planned)} rule(s) to move "
               f"across {rulesets} ruleset(s)")
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             # One step per move, not per ruleset: a single ruleset can
             # hold hundreds of moves, and a bar that only ticks when it
             # is finished looks like the export has hung.
@@ -2310,10 +2312,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         Create needed Rules in Checkmk
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC} Create new Rules")
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
 
             total_rules = sum(len(r) for r in self.rulsets_by_type.values())
             task1 = progress.add_task(
@@ -2521,10 +2520,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         Clean not longer needed Rules from Checkmk
         """
         print(f"{CC.OKGREEN} -- {CC.ENDC} Clean existing CMK configuration")
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
 
             total_rules = sum(len(r) for r in self.rulsets_by_type.values())
             task1 = progress.add_task(

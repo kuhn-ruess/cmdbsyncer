@@ -40,6 +40,7 @@ from application.modules.rule.views import (
 )
 from application.views._form_sections import modern_form, section
 from application.models.project import Project
+from application.helpers.syncer_jinja import check_jinja_syntax
 from .models import (
     action_outcome_types,
     ACTION_CATALOG,
@@ -808,12 +809,19 @@ class CheckmkMngmtRuleView(RuleModelView):
                                 ),
                             },
                             'list_to_loop': {
-                                'label': 'Loop over Attribute (List)',
+                                'label': 'Loop over List (Attribute or Jinja)',
                                 'description': (
-                                    'Optional. Name a Host Attribute that holds a'
-                                    ' list to create one rule per entry. In every'
-                                    ' template below use {{ loop }} for the current'
-                                    ' entry and {{ loop_idx }} for its 0-based index.'
+                                    'Optional. Creates one rule per list entry.'
+                                    ' Either the plain name of a Host Attribute'
+                                    ' holding the list, or — as soon as it contains'
+                                    ' Jinja — any expression rendering to a list or'
+                                    ' a comma separated string, with all host'
+                                    ' attributes and filters available, e.g.'
+                                    ' {{ get_list(services)|reject("equalto",'
+                                    ' "web")|join(",") }}. In every template'
+                                    ' below use'
+                                    ' {{ loop }} for the current entry and'
+                                    ' {{ loop_idx }} for its 0-based index.'
                                     ' Leave empty to create a single rule.'
                                 ),
                             },
@@ -865,7 +873,8 @@ class CheckmkMngmtRuleView(RuleModelView):
                         'form_widget_args': {
                             'list_to_loop': {
                                 'placeholder': (
-                                    'e.g. some_list_attribute'
+                                    'some_list_attribute or'
+                                    ' {{ get_list(services)|join(",") }}'
                                     ' — one rule per entry, empty = single rule'
                                 )
                             },
@@ -949,11 +958,30 @@ class CheckmkMngmtRuleView(RuleModelView):
                 )
                 return False
         label_errors = self._condition_label_errors(outcomes)
-        if label_errors:
-            for message in label_errors:
+        loop_errors = self._loop_list_errors(outcomes)
+        if label_errors or loop_errors:
+            for message in label_errors + loop_errors:
                 flash(message, 'danger')
             return False
         return True
+
+    @staticmethod
+    def _loop_list_errors(outcomes):
+        """
+        Report a loop list whose Jinja does not compile. Such a template
+        renders to an empty string at export time, so the outcome would
+        silently create no rule at all — say it while it is being saved.
+        """
+        errors = []
+        for pos, entry in enumerate(getattr(outcomes, 'entries', None) or [], start=1):
+            subform = getattr(entry, 'form', None)
+            if subform is None:
+                continue
+            if defect := check_jinja_syntax(_subform_data(subform, 'list_to_loop')):
+                errors.append(
+                    f"Outcome {pos}: the Jinja of 'Loop over List' is not "
+                    f"valid: {defect}.")
+        return errors
 
     @staticmethod
     def _condition_label_errors(outcomes):
@@ -1077,9 +1105,29 @@ class CheckmkTagMngmtView(DefaultModelView):
         },
         'group_multiply_list': {
             'placeholder': (
-                'Name of Attribute containing the list of values to '
-                'create multiple groups'
+                'some_list_attribute or {{ get_list(sites)|join(",") }}'
             )
+        },
+    }
+
+    form_args = {
+        'group_multiply_by_list': {
+            'label': 'Create one Group per List Entry',
+            'description': (
+                'Build one tag group per entry of the list below instead of'
+                ' a single group. Every field above can use the current'
+                ' entry as {{ name }}.'
+            ),
+        },
+        'group_multiply_list': {
+            'label': 'List to Loop over (Attribute or Jinja)',
+            'description': (
+                'Either the plain name of a Host Attribute holding the'
+                ' list, or — as soon as it contains Jinja — any expression'
+                ' rendering to a list or a comma separated string, with all'
+                ' host attributes and filters available, e.g.'
+                ' {{ get_list(sites)|reject("equalto", "test")|join(",") }}.'
+            ),
         },
     }
 

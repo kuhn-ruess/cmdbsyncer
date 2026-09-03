@@ -31,9 +31,18 @@ from application.plugins.checkmk.cmk_rules import (
     CheckmkRuleSync,
 )
 import application.plugins.checkmk.inits as inits  # noqa: E402  pylint: disable=consider-using-from-import
-from application.plugins.checkmk.helpers import project_allows_account
+from application.plugins.checkmk.helpers import (
+    project_allows_account,
+    resolve_loop_list,
+)
 from application.plugins.checkmk.rules import CheckmkRulesetRule
-from tests import base_mock_init, make_checkmk_rule_sync, _load_real_module
+from tests import (
+    base_mock_init,
+    make_checkmk_rule_sync,
+    real_get_list,
+    real_render_jinja,
+    _load_real_module,
+)
 
 
 class _FakeMongo:  # pylint: disable=too-few-public-methods
@@ -474,29 +483,6 @@ class TestCheckmkRuleSync(unittest.TestCase):
         self.assertEqual(len(self.sync.rulsets_by_type['ruleset1']), 2)
 
     @patch('application.plugins.checkmk.cmk_rules.render_jinja')
-    @patch('application.plugins.checkmk.cmk_rules.get_list')
-    def test_calculate_rules_of_host_with_loop(self, mock_get_list, mock_render):
-        mock_render.side_effect = lambda tpl, **kw: tpl
-        mock_get_list.return_value = ['item1', 'item2']
-
-        host_actions = {
-            'ruleset1': [{
-                'loop_over_list': True,
-                'list_to_loop': 'my_list',
-                'value_template': "{'k': 'v'}",
-                'folder': '/',
-                'comment': 'test',
-            }]
-        }
-        attributes = {
-            'all': {'HOSTNAME': 'host1', 'my_list': 'item1,item2'}
-        }
-
-        self.sync.calculate_rules_of_host(host_actions, attributes)
-
-        self.assertIn('ruleset1', self.sync.rulsets_by_type)
-
-    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
     def test_rule_params_not_mutated_across_hosts(self, mock_render):
         # Regression: the rule-engine caches prepared outcome dicts and
         # hands the same reference to every host. build_condition_...
@@ -661,7 +647,7 @@ class TestCleanRulesFolderAndKeepValue(unittest.TestCase):
         self.sync._rule_etag_wildcard_rejected = None
         self.sync.log_details = []
         self.progress_patcher = patch(
-            'application.plugins.checkmk.cmk_rules.Progress',
+            'application.plugins.checkmk.cmk_rules.make_progress',
             _FakeCleanProgress())
         self.progress_patcher.start()
 
@@ -1130,7 +1116,7 @@ class TestRuleMoveePlanning(unittest.TestCase):
     def test_each_planned_move_is_one_request(self):
         self._wire_ruleset(['a', 'b', 'c'], ['c', 'b', 'a'])
         self.sync.request = MagicMock(return_value=({}, {}))
-        with patch('application.plugins.checkmk.cmk_rules.Progress',
+        with patch('application.plugins.checkmk.cmk_rules.make_progress',
                    _FakeCleanProgress()), patch('builtins.print'):
             self.sync.sort_rules()
         self.assertEqual(self.sync.request.call_count, 2)
@@ -1310,7 +1296,7 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         self.sync.offline = True
         self.sync._ruleset_item_types = None
         self.progress_patcher = patch(
-            'application.plugins.checkmk.cmk_rules.Progress',
+            'application.plugins.checkmk.cmk_rules.make_progress',
             _FakeCleanProgress())
         self.progress_patcher.start()
 
@@ -1600,7 +1586,7 @@ class TestHostListDrift(unittest.TestCase):
         self.sync.log_details = []
         self.sync._rule_etag_wildcard_rejected = None
         self.progress_patcher = patch(
-            'application.plugins.checkmk.cmk_rules.Progress',
+            'application.plugins.checkmk.cmk_rules.make_progress',
             _FakeCleanProgress())
         self.progress_patcher.start()
 
@@ -1848,7 +1834,7 @@ class TestExportSurvivesFailedRequests(unittest.TestCase):
         self.sync.log_details = []
         self.sync.config = {}
         self.progress_patcher = patch(
-            'application.plugins.checkmk.cmk_rules.Progress',
+            'application.plugins.checkmk.cmk_rules.make_progress',
             _FakeCleanProgress())
         self.progress_patcher.start()
 
@@ -2012,6 +1998,136 @@ class TestCleanOrphanedRules(unittest.TestCase):
         self.assertEqual(deletes, ['/objects/rule/mine'])
 
 
+class TestCalculateRulesOfHostLoop(unittest.TestCase):
+    """The loop over a list of an outcome (one Checkmk rule per entry)"""
+
+    def setUp(self):
+        def mock_init(self_param, account=False, **_kwargs):
+            base_mock_init(self_param, rulsets_by_type={})
+
+        self.init_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.CMK2.__init__', mock_init)
+        self.init_patcher.start()
+        self.sync = CheckmkRuleSync()
+
+    def tearDown(self):
+        self.init_patcher.stop()
+
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja')
+    @patch('application.plugins.checkmk.helpers.get_list')
+    def test_calculate_rules_of_host_with_loop(self, mock_get_list, mock_render):
+        mock_render.side_effect = lambda tpl, **kw: tpl
+        mock_get_list.return_value = ['item1', 'item2']
+
+        host_actions = {
+            'ruleset1': [{
+                'loop_over_list': True,
+                'list_to_loop': 'my_list',
+                'value_template': "{'k': 'v'}",
+                'folder': '/',
+                'comment': 'test',
+            }]
+        }
+        attributes = {
+            'all': {'HOSTNAME': 'host1', 'my_list': 'item1,item2'}
+        }
+
+        self.sync.calculate_rules_of_host(host_actions, attributes)
+
+        self.assertIn('ruleset1', self.sync.rulsets_by_type)
+
+    @patch('application.plugins.checkmk.helpers.get_list',
+           side_effect=real_get_list)
+    @patch('application.plugins.checkmk.helpers.render_jinja',
+           side_effect=real_render_jinja)
+    @patch('application.plugins.checkmk.cmk_rules.render_jinja',
+           side_effect=real_render_jinja)
+    def test_calculate_rules_of_host_with_jinja_loop(
+            self, mock_render, mock_helper_render, mock_helper_list):
+        # The loop field may hold Jinja instead of a bare attribute name;
+        # it is rendered against the host attributes and the result is
+        # split like any other list, so one rule per entry is created.
+        self.sync._ruleset_item_types = {}
+
+        host_actions = {
+            'ruleset1': [{
+                'loop_over_list': True,
+                'list_to_loop': '{{ get_list(services)|join(",") }}',
+                'value_template': "{'svc': '{{ loop }}'}",
+                'folder': '/',
+                'folder_index': 0,
+                'comment': '',
+                'condition_label_template': '',
+                'condition_host': '',
+                'condition_service': '',
+                'condition_service_label': '',
+            }]
+        }
+        attributes = {'all': {'HOSTNAME': 'host1', 'services': 'web,db'}}
+
+        self.sync.calculate_rules_of_host(host_actions, attributes)
+
+        values = [r['value'] for r in self.sync.rulsets_by_type['ruleset1']]
+        self.assertEqual(values, ["{'svc': 'web'}", "{'svc': 'db'}"])
+
+
+class TestResolveLoopList(unittest.TestCase):
+    """Tests for resolve_loop_list (the "Loop over List" outcome field)"""
+
+    def setUp(self):
+        # The bootstrap stubs syncer_jinja — the loop field is all about
+        # real Jinja, so put the real helpers back for these tests.
+        self.patchers = [
+            patch('application.plugins.checkmk.helpers.render_jinja',
+                  side_effect=real_render_jinja),
+            patch('application.plugins.checkmk.helpers.get_list',
+                  side_effect=real_get_list),
+        ]
+        for patcher in self.patchers:
+            patcher.start()
+
+    def tearDown(self):
+        for patcher in self.patchers:
+            patcher.stop()
+
+    def test_attribute_name_with_list(self):
+        entries, error = resolve_loop_list('services', {'services': ['web', 'db']})
+        self.assertEqual(entries, ['web', 'db'])
+        self.assertIsNone(error)
+
+    def test_attribute_name_with_comma_string(self):
+        entries, error = resolve_loop_list('services', {'services': 'web, db,'})
+        self.assertEqual(entries, ['web', 'db'])
+        self.assertIsNone(error)
+
+    def test_missing_attribute_is_empty(self):
+        entries, error = resolve_loop_list('services', {'HOSTNAME': 'srv01'})
+        self.assertEqual(entries, [])
+        self.assertIsNone(error)
+
+    def test_jinja_renders_comma_list(self):
+        entries, error = resolve_loop_list(
+            '{{ services }},{{ HOSTNAME }}',
+            {'HOSTNAME': 'srv01', 'services': 'web,db'})
+        self.assertEqual(entries, ['web', 'db', 'srv01'])
+        self.assertIsNone(error)
+
+    def test_jinja_with_filters(self):
+        entries, error = resolve_loop_list(
+            '{{ get_list(services)|reject("equalto", "web")|join(",") }}',
+            {'services': 'web,db1,db2'})
+        self.assertEqual(entries, ['db1', 'db2'])
+        self.assertIsNone(error)
+
+    def test_jinja_on_missing_attribute_is_empty(self):
+        entries, error = resolve_loop_list('{{ nothing_here }}', {'HOSTNAME': 'srv01'})
+        self.assertEqual(entries, [])
+        self.assertIsNone(error)
+
+    def test_empty_field(self):
+        self.assertEqual(resolve_loop_list('', {'a': 'b'}), ([], None))
+
+
 def _outcome(**fields):
     """Build a minimal RuleMngmtOutcome stand-in for preview tests."""
     defaults = {
@@ -2064,7 +2180,7 @@ class TestPreviewRuleForAttributes(unittest.TestCase):
             'application.plugins.checkmk.cmk_rules.render_jinja',
             side_effect=_fake_render_jinja)
         self.list_patcher = patch(
-            'application.plugins.checkmk.cmk_rules.get_list',
+            'application.plugins.checkmk.helpers.get_list',
             side_effect=_fake_get_list)
         self.render_patcher.start()
         self.list_patcher.start()
@@ -2374,7 +2490,7 @@ class TestFetchRulesInFolder(unittest.TestCase):
     def setUp(self):
         self.sync = make_checkmk_rule_sync()
         self.progress_patcher = patch(
-            'application.plugins.checkmk.cmk_rules.Progress', _FakeProgress())
+            'application.plugins.checkmk.cmk_rules.make_progress', _FakeProgress())
         self.progress_patcher.start()
 
     def tearDown(self):

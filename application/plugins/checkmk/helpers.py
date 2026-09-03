@@ -2,7 +2,17 @@
 Checkmk Helpers
 """
 import re
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import app
+from application.helpers.syncer_jinja import render_jinja, get_list
+
+
+def make_progress():
+    """Return the Syncer's standard rich Progress bar."""
+    return Progress(SpinnerColumn(),
+                    MofNCompleteColumn(),
+                    *Progress.get_default_columns(),
+                    TimeElapsedColumn())
 
 def cmk_cleanup_tag_id(input_str):
     """
@@ -64,3 +74,33 @@ def project_allows_account(project, account_name, kind='host'):
     if account_name in denied:
         return False
     return not allowed or account_name in allowed
+
+
+def resolve_loop_list(list_to_loop, attributes):
+    """
+    Resolve the "Loop over" field of an outcome into its entries.
+
+    A single brace decides how the value is read. Without one it is a
+    plain host attribute name — the only spelling this field ever
+    accepted — and is looked up in the host's attributes unchanged.
+    With one it is a Jinja template rendered against those attributes,
+    like the list field of the notification export, so the entries can
+    be built, filtered or combined instead of having to exist as an
+    attribute of their own. Both spellings end in ``get_list``, which
+    also splits a plain comma separated string.
+
+    Returns ``(entries, error)``; ``error`` carries the message when the
+    Jinja could not be rendered.
+    """
+    if not list_to_loop:
+        return [], None
+    if '{' in list_to_loop:
+        try:
+            rendered = render_jinja(list_to_loop, **attributes)
+        except Exception as exp:  # pylint: disable=broad-except
+            return [], f"{type(exp).__name__}: {exp}"
+    else:
+        # .get, not [] — an attribute not every host carries must not
+        # abort the whole export with a KeyError.
+        rendered = attributes.get(list_to_loop, '')
+    return [x for x in get_list(rendered) if x], None
