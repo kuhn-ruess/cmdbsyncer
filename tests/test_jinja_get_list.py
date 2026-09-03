@@ -69,10 +69,33 @@ class JinjaGetListTest(unittest.TestCase):
         self.assertEqual(self.render(template, a='x, y'), 'x,y,')
         self.assertEqual(self.render(template), '')
 
+    def test_a_single_entry_is_still_a_list(self):
+        # A {% for %} loop that writes quoted entries produces '"web",'
+        # for a one element list. That parses as the bare string 'web',
+        # and the caller looping over the result got its letters.
+        self.assertEqual(self.get_list('"web",'), ['web'])
+        self.assertEqual(self.get_list("'web'"), ['web'])
+        template = ('{% for entry in get_list(services) %}'
+                    '"{{ entry }}",{% endfor %}')
+        self.assertEqual(
+            self.get_list(self.render(template, services="['web']")), ['web'])
+        self.assertEqual(
+            self.get_list(self.render(template, services="['web','db']")),
+            ['web', 'db'])
+
+    def test_a_literal_that_is_no_list_is_wrapped(self):
+        # Anything else that parses to a single object is one entry, not
+        # something to iterate over: a number has no letters to hand out,
+        # it made the caller fail outright.
+        self.assertEqual(self.get_list('5'), [5])
+        self.assertEqual(self.get_list('True'), [True])
+        self.assertEqual(self.get_list("{'a': 1}"), [{'a': 1}])
+
     def test_the_known_shapes_still_work(self):
         self.assertEqual(self.get_list(['a', 'b']), ['a', 'b'])
         self.assertEqual(self.get_list(('a', 'b')), ['a', 'b'])
         self.assertEqual(self.get_list("['a', 'b']"), ['a', 'b'])
         self.assertEqual(self.get_list('a, b'), ['a', 'b'])
         self.assertEqual(self.get_list('a, b,'), ['a', 'b'])
+        self.assertEqual(self.get_list('1, 2'), [1, 2])
         self.assertEqual(self.get_list(''), [])
