@@ -190,6 +190,26 @@ _GLOBALS = {
 }
 
 
+# The three sequences that make a string a Jinja template. Everything
+# else renders to itself, so it never has to reach the compiler at all.
+_JINJA_MARKERS = ('{{', '{%', '{#')
+
+
+def is_template(source):
+    """
+    True when the string holds Jinja at all.
+
+    Most values handed to ``render_jinja`` are plain literals — a fixed
+    comment, a folder path, an already rendered value passed through a
+    second time. Rendering those still cost a context build and a render
+    call per host, which is the bulk of what a big export spends in Jinja.
+    """
+    # Every marker starts with a brace, so one scan settles the common case.
+    if '{' not in source:
+        return False
+    return any(marker in source for marker in _JINJA_MARKERS)
+
+
 def _compile_template(source, strict):
     """
     Compile and cache a template. Sync runs reuse the same handful of
@@ -203,6 +223,11 @@ def _compile_template(source, strict):
     env = _STRICT_ENV if strict else JINJA_ENV
     tpl = env.from_string(source)
     tpl.globals.update(_GLOBALS)
+    # from_string hands back a ChainMap over the environment globals, and
+    # every single render copies that mapping into the new context. A
+    # ChainMap copies an order of magnitude slower than a plain dict, and
+    # the contents never change after this point.
+    tpl.globals = dict(tpl.globals)
     _TEMPLATE_CACHE[key] = tpl
     return tpl
 
@@ -241,7 +266,7 @@ def check_jinja_syntax(value):
     return None
 
 
-def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
+def render_jinja(value, mode="ignore", replace_newlines=True, _ctx=None, **kwargs):
     """
     Render given string
 
@@ -249,7 +274,16 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     - ignore: Just ingnore missing Variables
     - raise: Raise Error if missing Variables
     - nullify: Nullify string in nase of missing Variables
+
+    ``_ctx`` is the same context the keyword arguments carry, handed over
+    as one dict. Spelling a host's attributes out as keywords copies the
+    whole set on the way in, and the per-host exports pay that several
+    times for every rule, so their hot loops pass the dict they already
+    hold. The name is underscored because every other keyword of this
+    function is a host attribute — one that happens to be called ``_ctx``
+    would be read as the context.
     """
+    context = kwargs if _ctx is None else _ctx
     # Process ACCOUNT variables anywhere in the string. Whitespace after
     # `{{`, around the colons and before `}}` is tolerated so the natural
     # Jinja spelling `{{ ACCOUNT:name:field }}` resolves like the compact
@@ -261,6 +295,11 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         value = value.replace('\n', '')
 
     source = str(value)
+    if not is_template(source):
+        # Nothing to render: a literal is its own result. Jinja would
+        # return the same string after a compile, a context build and a
+        # render call.
+        return source.strip()
     strict = mode in ("raise", "nullify")
     try:
         value_tpl = _compile_template(source, strict)
@@ -274,9 +313,13 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
         logger.debug(f"Jinja Exception: Syntax error in {value!r}: {exc}")
         return ""
 
+    # The context is handed over as one mapping instead of as keyword
+    # arguments: Jinja turns it back into a dict either way, and the
+    # keyword detour copies the host's whole attribute set a second time
+    # on every render.
     if mode == 'nullify':
         try:
-            final = value_tpl.render(**kwargs)
+            final = value_tpl.render(context)
         except (jinja2.exceptions.UndefinedError, TypeError):
             logger.debug(f"JINJA Exception: String {value} full nullifyed")
             return ""
@@ -284,5 +327,5 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
             logger.debug(f"Jinja Exception: Syntax error: {exc}")
             return ""
     else:
-        final = value_tpl.render(**kwargs)
+        final = value_tpl.render(context)
     return final.strip()

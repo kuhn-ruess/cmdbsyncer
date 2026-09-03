@@ -57,6 +57,18 @@ class JinjaGetListTest(unittest.TestCase):
     def render(self, template, **context):
         return self.module.render_jinja(template, **context)
 
+    def test_a_literal_is_its_own_result(self):
+        # Values without Jinja skip the compile/render pipeline. Whatever
+        # they return has to stay what Jinja returned for them.
+        for value in ('plain literal', '  padded  ', "{'a': 1, 'b': (2, 3)}",
+                      '100%', 'a{b}c', '}}', '%}', '', 'with\nnewline'):
+            self.assertEqual(self.render(value), str(value).replace(
+                '\n', '').strip())
+        self.assertFalse(self.module.is_template('no jinja here'))
+        self.assertFalse(self.module.is_template("{'a': 1}"))
+        for template in ('{{ x }}', '{% if x %}y{% endif %}', '{# c #}'):
+            self.assertTrue(self.module.is_template(template))
+
     def test_an_undefined_variable_is_an_empty_list(self):
         self.assertEqual(self.get_list(jinja2.Undefined(name='x')), [])
         self.assertEqual(self.get_list(jinja2.StrictUndefined(name='x')), [])

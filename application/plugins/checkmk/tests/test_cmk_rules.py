@@ -1355,7 +1355,7 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
             __iter__=lambda _self=None: iter(
                 [_FakeHost(name) for name in inventory]))
 
-        def attributes(db_host, _type):
+        def attributes(db_host, _type, persist_cache=True):
             labels = dict(inventory[db_host.hostname])
             passing = labels if exported is None else {
                 key: value for key, value in labels.items()
@@ -2023,6 +2023,61 @@ class TestCleanOrphanedRules(unittest.TestCase):
         deletes = self._wire()
         self.sync.clean_orphaned_rules()
         self.assertEqual(deletes, ['/objects/rule/mine'])
+
+
+class TestRuleCalculationHostSaves(unittest.TestCase):
+    """calculate_rules writes each host's caches once, not once per engine"""
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        # _FakeProgress is defined further down; rich's console is stubbed.
+        self.progress_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.make_progress',
+            _FakeProgress())
+        self.progress_patcher.start()
+
+    def tearDown(self):
+        self.progress_patcher.stop()
+
+    def test_the_host_is_saved_once_per_run(self):
+        # Filling a host's caches touches five slots (custom attributes,
+        # rewrite, filter, the attribute set, the export's outcomes) and
+        # every one of them used to save the host on its own.
+        saves = Counter()
+
+        class _Host:  # pylint: disable=too-few-public-methods
+            def __init__(self, name):
+                self.hostname = name
+                self.cache = {}
+
+            def save(self_inner):  # pylint: disable=no-self-argument
+                saves[self_inner.hostname] += 1
+
+        hosts = [_Host('h1'), _Host('h2')]
+        self.sync._export_hosts = lambda: MagicMock(
+            count=lambda: len(hosts),
+            __iter__=lambda _self=None: iter(hosts))
+
+        def attributes(db_host, _type, persist_cache=True):
+            # What the engines do: mark dirty instead of saving.
+            self.assertFalse(persist_cache)
+            setattr(db_host, '_cache_dirty', True)
+            return {'all': {'HOSTNAME': db_host.hostname}, 'filtered': {}}
+
+        self.sync.get_attributes = attributes
+
+        def outcomes(db_host, _attributes, persist_cache=True, use_cache=True):
+            self.assertFalse(persist_cache)
+            setattr(db_host, '_cache_dirty', True)
+            return {}
+
+        self.sync.actions = SimpleNamespace(get_outcomes=outcomes)
+
+        self.sync.calculate_rules()
+
+        self.assertEqual(dict(saves), {'h1': 1, 'h2': 1})
+        for host in hosts:
+            self.assertFalse(getattr(host, '_cache_dirty'))
 
 
 class TestCalculateRulesOfHostLoop(unittest.TestCase):

@@ -792,11 +792,14 @@ def real_get_list(value):
         return [entry.strip() for entry in value.split(',') if entry.strip()]
 
 
-def real_render_jinja(template, **context):
+def real_render_jinja(template, _ctx=None, **context):
     """The bootstrap stubs render_jinja with a MagicMock — rendering tests
     need actual Jinja substitution, so route through a real Jinja2
     environment. The Syncer's own Jinja helpers are offered the same way
-    the real environment does."""
+    the real environment does. ``_ctx`` is the real helper's dict spelling
+    of the same context."""
+    if _ctx is not None:
+        context = dict(_ctx)
     context.setdefault('get_list', real_get_list)
     return SandboxedEnvironment(autoescape=False).from_string(
         template).render(**context).strip()

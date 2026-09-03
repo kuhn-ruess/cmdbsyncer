@@ -96,7 +96,7 @@ def resolve_loop_list(list_to_loop, attributes):
         return [], None
     if '{' in list_to_loop:
         try:
-            rendered = render_jinja(list_to_loop, **attributes)
+            rendered = render_jinja(list_to_loop, _ctx=attributes)
         except Exception as exp:  # pylint: disable=broad-except
             return [], f"{type(exp).__name__}: {exp}"
     else:

@@ -952,6 +952,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # rule_type -> set of content signatures already collected into
         # rulsets_by_type, so the duplicate check does not rescan the list.
         self._rule_signatures = {}
+        # ruleset name -> the condition keys Checkmk discards for it. Only
+        # depends on the ruleset, and it is asked once per rule per host.
+        self._unsupported_conditions = {}
 
     @property
     def rule_marker(self):
@@ -1126,6 +1129,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         if not ruleset_name:
             return set()
+        cached = self._unsupported_conditions.get(ruleset_name)
+        if cached is not None:
+            return cached
         item_types = self.ruleset_item_types()
         keys = set()
         if ruleset_name in item_types and item_types[ruleset_name] is None:
@@ -1134,6 +1140,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             keys.update(SERVICE_LABEL_KEYS)
         if ruleset_name == 'host_label_rules':
             keys.update(HOST_LABEL_KEYS)
+        self._unsupported_conditions[ruleset_name] = keys
         return keys
 
     def drop_unsupported_conditions(self, ruleset_name, condition_tpl,
@@ -1147,7 +1154,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         keys only present when configured are removed entirely. The admin is
         told once per ruleset and key that the condition has no effect.
         """
-        for key in sorted(self.unsupported_condition_keys(ruleset_name)):
+        unsupported = self.unsupported_condition_keys(ruleset_name)
+        if not unsupported:
+            return
+        for key in sorted(unsupported):
             if not condition_tpl.get(key):
                 continue
             if (ruleset_name, key) not in self._dropped_condition_warnings:
@@ -1249,16 +1259,21 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # condition has to be cleared (see drop_unsupported_conditions).
         base_condition_keys = set(condition_tpl)
 
-        # Prepare context for Jinja rendering
-        context = dict(attributes['all'])
+        # Prepare context for Jinja rendering. The copy exists only to
+        # carry the loop variables — nothing below writes to the context,
+        # so without them the host's attribute dict is handed over as it is
+        # instead of being duplicated once per rule and host.
         if loop_value is not None:
+            context = dict(attributes['all'])
             context['loop'] = loop_value
             context['loop_idx'] = loop_idx
+        else:
+            context = attributes['all']
 
         # Render value and folder
-        value = render_jinja(rule_params['value_template'], **context)
+        value = render_jinja(rule_params['value_template'], _ctx=context)
         rule_params['folder'] = normalize_folder(
-            render_jinja(rule_params['folder'], **context))
+            render_jinja(rule_params['folder'], _ctx=context))
         # Respect the account's folder scope (limit_by_folders): a scoped
         # account only receives rules whose target folder is in scope, just
         # like the host export only pushes hosts of those folders. A rule
@@ -1291,7 +1306,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # Handle condition_service (legacy support)
         if 'condition_service' in rule_params:
             if rule_params['condition_service']:
-                service_condition = render_jinja(rule_params['condition_service'], **context)
+                service_condition = render_jinja(
+                    rule_params['condition_service'], _ctx=context)
                 condition_tpl['service_description'] = {
                     "match_on": get_list(service_condition),
                     "operator": "one_of"
@@ -1315,7 +1331,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # Handle condition_host. It's always at the end to calculate correct
         # identification hash of entry
         if rule_params.get('condition_host'):
-            host_condition = render_jinja(rule_params['condition_host'], **context)
+            host_condition = render_jinja(
+                rule_params['condition_host'], _ctx=context)
             owner_hostname = context['HOSTNAME']
 
             if host_condition:
@@ -1348,7 +1365,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         template = rule_params.pop('condition_label_template', None)
         if not template:
             return True
-        rendered = render_jinja(template, **context)
+        rendered = render_jinja(template, _ctx=context)
         parsed = parse_label(rendered)
         if not parsed:
             self.log_error(
@@ -1385,7 +1402,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         if not template:
             return True
         labels = []
-        for entry in get_list(render_jinja(template, **context)):
+        for entry in get_list(render_jinja(template, _ctx=context)):
             parsed = parse_label(entry)
             if not parsed:
                 self.log_error(
@@ -1517,14 +1534,21 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         with make_progress() as progress:
             task1 = progress.add_task("Calculate rules", total=total)
             for db_host in db_objects:
-                attributes = self.get_attributes(db_host, 'checkmk')
+                # persist_cache=False + one flush: the attribute and
+                # outcome caches are filled in five steps, and saving the
+                # host after each of them meant five writes per host.
+                attributes = self.get_attributes(db_host, 'checkmk',
+                                                 persist_cache=False)
                 if not attributes:
                     logger.debug("Skipped: %s", db_host.hostname)
+                    self.flush_host_cache(db_host)
                     progress.advance(task1)
                     continue
                 # self.actions is injected by the inits.export_rules wiring
                 host_actions = self.actions.get_outcomes(  # pylint: disable=no-member
-                    db_host, attributes['all'], use_cache=use_cache)
+                    db_host, attributes['all'], persist_cache=False,
+                    use_cache=use_cache)
+                self.flush_host_cache(db_host)
                 if host_actions:
                     self.calculate_rules_of_host(host_actions, attributes)
                 progress.advance(task1)
@@ -1650,7 +1674,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             task1 = progress.add_task("Collect labels",
                                       total=db_objects.count())
             for db_host in db_objects:
-                attributes = self.get_attributes(db_host, 'checkmk')
+                attributes = self.get_attributes(db_host, 'checkmk',
+                                                 persist_cache=False)
+                self.flush_host_cache(db_host)
                 progress.advance(task1)
                 if not attributes:
                     continue
