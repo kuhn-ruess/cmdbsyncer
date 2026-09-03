@@ -23,7 +23,7 @@ def main():
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", "Fields missing from ruleset", UserWarning)
         try:
-            from application import app, DISPLAY_VERSION  # pylint: disable=import-outside-toplevel
+            from application import app, DISPLAY_VERSION, COMPLETION_MODE  # pylint: disable=import-outside-toplevel
             from application.models.host import HostError  # pylint: disable=import-outside-toplevel
             from flask.cli import ScriptInfo  # pylint: disable=import-outside-toplevel
         except Exception as exp:  # pylint: disable=broad-except
@@ -34,9 +34,7 @@ def main():
         # Click's shell completion runs the CLI with no arguments and reads
         # nothing but its stdout, so the banner would end up inside the
         # generated completion script. Stay quiet while completing.
-        completing = any(key.startswith('_') and key.endswith('_COMPLETE')
-                         for key in os.environ)
-        if len(sys.argv) == 1 and not completing:
+        if len(sys.argv) == 1 and not COMPLETION_MODE:
             print(f"CMDB Syncer Version: {DISPLAY_VERSION}")
             sys.argv.append("--help")
         # AppGroup commands re-resolve the app via ScriptInfo.load_app(), which
