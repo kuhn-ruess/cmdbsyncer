@@ -104,6 +104,27 @@ def get_ip_interface(ip_string):
     net = ipaddress.ip_interface(ip_string.strip())
     return net
 
+def _string_to_list(input_list):
+    """
+    The entries a string holds: a Python list literal, or comma separated.
+    """
+    # fix malformated inputs:
+    if input_list.endswith(','):
+        input_list = input_list[:-1]
+    try:
+        # Try a string witch looks like a list
+        parsed = ast.literal_eval(input_list.replace('\n',''))
+    except (ValueError, SyntaxError):
+        return [x.strip() for x in input_list.split(',') if x ]
+    if isinstance(parsed, (list, tuple)):
+        return list(parsed)
+    # A literal that is not a list at all: a single quoted entry
+    # ('"web",' — what a {% for %} loop writing quoted entries produces
+    # for a one element list) or a number. Handing that back unchanged
+    # made the caller iterate a string letter by letter.
+    return [parsed]
+
+
 def get_list(input_list):
     """
     Convert a List which is a
@@ -121,14 +142,7 @@ def get_list(input_list):
     if isinstance(input_list, tuple):
         return list(input_list)
     if isinstance(input_list, str):
-        # fix malformated inputs:
-        if input_list.endswith(','):
-            input_list = input_list[:-1]
-        try:
-            # Try a string witch looks like a list
-            input_list = ast.literal_eval(input_list.replace('\n',''))
-        except (ValueError, SyntaxError):
-            input_list = [x.strip() for x in input_list.split(',') if x ]
+        return _string_to_list(input_list)
     return input_list
 
 
