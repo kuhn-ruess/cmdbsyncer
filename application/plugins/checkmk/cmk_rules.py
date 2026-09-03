@@ -949,6 +949,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # outcome signature -> Setup Rule name, built on first use by
         # _source_rule_name(). None until then.
         self._source_rule_names = None
+        # rule_type -> set of content signatures already collected into
+        # rulsets_by_type, so the duplicate check does not rescan the list.
+        self._rule_signatures = {}
 
     @property
     def rule_marker(self):
@@ -2005,6 +2008,47 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                   "on its own")
         return applied
 
+    @staticmethod
+    def _rule_signature(rule):
+        """
+        Content key of a built rule, used to keep ``rulsets_by_type`` free
+        of duplicates.
+        """
+        return json.dumps(rule, sort_keys=True, default=repr)
+
+    def _collect_rule(self, rule_type, updated_rule):
+        """
+        Append a built rule to ``rulsets_by_type[rule_type]`` unless an
+        identical one is already there.
+
+        The duplicate check runs against a set of content signatures, not
+        against the list itself: every host contributes rules to the same
+        list, and a ``not in`` scan over it compares the new rule with
+        every rule collected so far. That is quadratic in the number of
+        rules, which stayed unnoticed while a rule meant one entry per
+        host and turned "Loop over Hosts and collect distinct rules" into
+        minutes as soon as a looping outcome multiplies that by the length
+        of its list.
+        """
+        if updated_rule is None:
+            return
+        rules = self.rulsets_by_type.setdefault(rule_type, [])
+        # The index is seeded from whatever the list already holds and
+        # re-seeded whenever the list was replaced or written to from
+        # somewhere else (rulsets_by_type is a class attribute, and
+        # optimize_rules swaps whole lists), so it can never claim a rule
+        # the list does not actually contain.
+        cached = self._rule_signatures.get(rule_type)
+        if cached is None or cached[0] is not rules or cached[2] != len(rules):
+            cached = [rules, {self._rule_signature(rule) for rule in rules}, len(rules)]
+            self._rule_signatures[rule_type] = cached
+        signature = self._rule_signature(updated_rule)
+        if signature in cached[1]:
+            return
+        cached[1].add(signature)
+        rules.append(updated_rule)
+        cached[2] = len(rules)
+
     def calculate_rules_of_host(self, host_actions, attributes):
         """
         Calculate rules by Attribute of Host
@@ -2032,20 +2076,12 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                         updated_rule = self.build_condition_and_update_rule_params(
                             loop_rule_params, attributes, loop_value, loop_idx
                         )
-                        if updated_rule is None:
-                            continue
-                        self.rulsets_by_type.setdefault(rule_type, [])
-                        if updated_rule not in self.rulsets_by_type[rule_type]:
-                            self.rulsets_by_type[rule_type].append(updated_rule)
+                        self._collect_rule(rule_type, updated_rule)
                 else:
                     updated_rule = self.build_condition_and_update_rule_params(
                         rule_params, attributes
                     )
-                    if updated_rule is None:
-                        continue
-                    self.rulsets_by_type.setdefault(rule_type, [])
-                    if updated_rule not in self.rulsets_by_type[rule_type]:
-                        self.rulsets_by_type[rule_type].append(updated_rule)
+                    self._collect_rule(rule_type, updated_rule)
 
 
 

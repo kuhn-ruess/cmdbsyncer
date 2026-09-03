@@ -372,6 +372,33 @@ class TestCheckmkRuleSync(unittest.TestCase):
         self.assertEqual(
             rules[0]['condition']['host_name']['match_on'], ['fmg-host01'])
 
+    def test_collect_rule_dedupes_without_rescanning(self):
+        # Every host feeds the same list, so the duplicate check used to
+        # compare each new rule against everything collected so far —
+        # quadratic, and painfully visible once a looping outcome emits a
+        # whole list of rules per host. The signature index has to keep
+        # the exact same result: identical rules collapse, rules that
+        # differ in any field stay.
+        def _rule(value):
+            return {'folder': '/', 'value': value, 'optimize': False,
+                    'condition': {'host_tags': []}}
+
+        for _ in range(3):
+            self.sync._collect_rule('ruleset1', _rule("{'k': 'a'}"))
+        self.sync._collect_rule('ruleset1', _rule("{'k': 'b'}"))
+        # A rule that was skipped upstream must not be collected at all.
+        self.sync._collect_rule('ruleset1', None)
+
+        self.assertEqual(len(self.sync.rulsets_by_type['ruleset1']), 2)
+
+        # rulsets_by_type is a class attribute and gets replaced wholesale
+        # (tests, optimize_rules): the index must notice and re-seed from
+        # the list that is actually there now.
+        self.sync.rulsets_by_type = {'ruleset1': [_rule("{'k': 'c'}")]}
+        self.sync._collect_rule('ruleset1', _rule("{'k': 'c'}"))
+        self.sync._collect_rule('ruleset1', _rule("{'k': 'a'}"))
+        self.assertEqual(len(self.sync.rulsets_by_type['ruleset1']), 2)
+
     @patch('application.plugins.checkmk.cmk_rules.get_list',
            side_effect=lambda v: v if isinstance(v, list) else [v])
     @patch('application.plugins.checkmk.cmk_rules.render_jinja')
