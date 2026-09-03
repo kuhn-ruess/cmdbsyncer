@@ -117,7 +117,10 @@ def _create_legacy_config(csv_path, inventorize_key=None, hostname_field="host")
     config = {
         'name': csv_filename,
         'id': 'legacy_csv',
-        '_id': 'legacy_csv', 
+        '_id': 'legacy_csv',
+        # The import path reads the account type off this dict, so a
+        # config standing in for an account needs to name one.
+        'typ': 'csv',
         'path': csv_path,
         'encoding': 'utf-8',
         'delimiter': ';',
