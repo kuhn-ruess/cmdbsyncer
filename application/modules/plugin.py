@@ -566,6 +566,22 @@ class Plugin():
                     value = merge_attribute_values(attributes[key], value)
                 attributes[key] = value
 
+    @staticmethod
+    def flush_host_cache(db_host):
+        """
+        Write the caches collected with ``persist_cache=False`` in one go.
+
+        Computing a host's attributes fills up to five cache slots — the
+        custom attributes, the rewrite, the filter, the attribute set
+        itself and the export's own outcomes — and each of them saved the
+        host document on its own. That is five round trips per host on a
+        cold run for one document. The engines mark the host dirty
+        instead, and the caller flushes once it has everything.
+        """
+        if getattr(db_host, '_cache_dirty', False):
+            db_host.save()
+            setattr(db_host, '_cache_dirty', False)
+
     def get_attributes(self, db_host, cache, persist_cache=True):
         """
         Retrieve and process host attributes with caching support.

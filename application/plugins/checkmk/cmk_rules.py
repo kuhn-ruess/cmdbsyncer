@@ -1517,14 +1517,21 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         with make_progress() as progress:
             task1 = progress.add_task("Calculate rules", total=total)
             for db_host in db_objects:
-                attributes = self.get_attributes(db_host, 'checkmk')
+                # persist_cache=False + one flush: the attribute and
+                # outcome caches are filled in five steps, and saving the
+                # host after each of them meant five writes per host.
+                attributes = self.get_attributes(db_host, 'checkmk',
+                                                 persist_cache=False)
                 if not attributes:
                     logger.debug("Skipped: %s", db_host.hostname)
+                    self.flush_host_cache(db_host)
                     progress.advance(task1)
                     continue
                 # self.actions is injected by the inits.export_rules wiring
                 host_actions = self.actions.get_outcomes(  # pylint: disable=no-member
-                    db_host, attributes['all'], use_cache=use_cache)
+                    db_host, attributes['all'], persist_cache=False,
+                    use_cache=use_cache)
+                self.flush_host_cache(db_host)
                 if host_actions:
                     self.calculate_rules_of_host(host_actions, attributes)
                 progress.advance(task1)
@@ -1650,7 +1657,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             task1 = progress.add_task("Collect labels",
                                       total=db_objects.count())
             for db_host in db_objects:
-                attributes = self.get_attributes(db_host, 'checkmk')
+                attributes = self.get_attributes(db_host, 'checkmk',
+                                                 persist_cache=False)
+                self.flush_host_cache(db_host)
                 progress.advance(task1)
                 if not attributes:
                     continue

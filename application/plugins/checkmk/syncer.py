@@ -570,18 +570,14 @@ class SyncCMK2(CMK2):
         """
         attributes = self.get_attributes(db_host, 'checkmk', persist_cache=False)
         if not attributes:
-            if getattr(db_host, '_cache_dirty', False):
-                db_host.save()
-                setattr(db_host, '_cache_dirty', False)
+            self.flush_host_cache(db_host)
             return db_host.hostname, False, None
         next_actions = self.get_host_actions(
             db_host,
             attributes['all'],
             persist_cache=False,
         )
-        if getattr(db_host, '_cache_dirty', False):
-            db_host.save()
-            setattr(db_host, '_cache_dirty', False)
+        self.flush_host_cache(db_host)
         return db_host.hostname, True, (next_actions, attributes)
 
 
