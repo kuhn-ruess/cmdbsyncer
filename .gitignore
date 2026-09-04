@@ -13,6 +13,7 @@ local_*
 !application/helpers/local_config_file.py
 !application/helpers/local_config_presets.py
 !application/templates/admin/local_config_editor.html
+!tests/local_config_helpers.py
 .obsidian*
 .claude*
 CLAUDE.md
