@@ -10,7 +10,7 @@ from flask_admin.base import expose
 from flask_admin.form import rules
 from wtforms import StringField
 from wtforms.validators import ValidationError
-from application.models.cron import CronGroup
+from application.models.cron import CronGroup, job_account
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 from application.models.account import CustomEntry, Account
@@ -435,7 +435,7 @@ class AccountModelView(DefaultModelView):
         # Problem: Reverse Delete Rules not woking for EmbeddedDocument
         for group in CronGroup.objects():
             for job in group.jobs:
-                if job.account == model:
+                if job_account(job) == model:
                     raise ValidationError(f"Can't delete: Used by Cronjob '{group.name}'")
 
         for entry in CheckmkObjectCache.objects():

@@ -2,13 +2,14 @@
 Cron Model View
 """
 from datetime import datetime
-from flask import flash
+from flask import flash, request
 from flask_admin.actions import action
 from flask_admin.form import rules
 from flask_login import current_user
 from markupsafe import Markup, escape
 from wtforms import BooleanField, HiddenField
 
+from application.models.cron import job_account, job_account_id
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 
@@ -66,8 +67,25 @@ _CRONJOB_TABLE_STYLE = (
     '.cron-jobs-table .cj-name{font-weight:600;}'
     '.cron-jobs-table .cj-cmd{font-family:monospace;}'
     '.cron-jobs-table .cj-acc{color:var(--surface-muted,#6c757d)!important;}'
+    '.cron-jobs-table .cj-gone{color:var(--danger,#c0392b)!important;}'
     '</style>'
 )
+
+
+def _account_cell(entry):
+    """Account column of one job row. A reference whose Account is gone
+    is named as such instead of raising — the group is still editable,
+    which is where the operator fixes it."""
+    account = job_account(entry)
+    if account is not None:
+        return escape(account)
+    if job_account_id(entry):
+        return Markup(
+            '<span class="cj-gone" title="This account no longer exists. '
+            'Edit the group and pick a valid one.">'
+            '<i class="fa fa-warning"></i> account missing</span>'
+        )
+    return ''
 
 
 def _render_cronjob(_view, _context, model, _name):
@@ -81,12 +99,11 @@ def _render_cronjob(_view, _context, model, _name):
         return ''
     rows = []
     for idx, entry in enumerate(model.jobs):
-        account = entry['account'] or ''
         rows.append(
             f'<tr><td class="cj-idx">{idx}</td>'
             f'<td class="cj-name">{escape(entry["name"])}</td>'
             f'<td class="cj-cmd">{escape(entry["command"])}</td>'
-            f'<td class="cj-acc">{escape(account)}</td></tr>'
+            f'<td class="cj-acc">{_account_cell(entry)}</td></tr>'
         )
     return Markup(
         f'{_CRONJOB_TABLE_STYLE}'
@@ -215,6 +232,32 @@ class CronGroupView(DefaultModelView):
             },
         },
     }
+
+    def get_one(self, id):  # pylint: disable=redefined-builtin
+        """Drop job references to Accounts that no longer exist so the
+        edit form opens instead of raising.
+
+        A group imported without its accounts carries ids that match no
+        Account row; dereferencing one while the form is built raises
+        `DoesNotExist`, so the operator could never reach the page that
+        fixes it. Only the in-memory copy is cleared — saving the form
+        with the right account is what writes the correction.
+        """
+        model = super().get_one(id)
+        if model is None:
+            return model
+        broken = []
+        for entry in model.jobs:
+            if job_account(entry) is None and job_account_id(entry):
+                broken.append(entry.name)
+                entry.account = None
+        if broken and request.method == 'GET':
+            flash(
+                f"The account of these jobs no longer exists: "
+                f"{', '.join(broken)}. Pick the right account and save.",
+                'warning',
+            )
+        return model
 
     def on_model_change(self, form, model, is_created):
         """Allocate or rotate the webhook token. Plaintext is flashed

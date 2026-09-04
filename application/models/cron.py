@@ -4,7 +4,33 @@ Cron Jobs
 import hashlib
 import hmac
 import secrets
+from mongoengine.errors import DoesNotExist
 from application import db, cron_register
+
+
+def job_account(job):
+    """Return the Account a `GroupEntry` points at, or None when the
+    reference is dangling.
+
+    A cron group that arrives through the rule import without its
+    accounts keeps an account id that no Account row matches.
+    Dereferencing it raises `DoesNotExist`, which would take down every
+    page listing cron jobs instead of letting the operator correct the
+    reference."""
+    try:
+        return job.account
+    except DoesNotExist:
+        return None
+
+
+def job_account_id(job):
+    """The stored account id of *job* as a string, without dereferencing
+    it. Empty when the entry has no account at all — which is what tells
+    a dangling reference apart from a job that never had one."""
+    reference = job.to_mongo().get('account')
+    if not reference:
+        return ''
+    return str(getattr(reference, 'id', reference))
 
 
 def _generate_webhook_token():

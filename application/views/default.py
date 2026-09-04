@@ -772,7 +772,7 @@ class IndexView(AdminIndexView):
         run})`` over every cron group — what actually drives each account.
         """
         # pylint: disable=import-outside-toplevel
-        from application.models.cron import CronGroup, CronStats
+        from application.models.cron import CronGroup, CronStats, job_account
         jobs = {}
         last_runs = {}
         try:
@@ -781,9 +781,10 @@ class IndexView(AdminIndexView):
                 started = stats[group.name].last_start \
                     if group.name in stats else None
                 for job in group.jobs:
-                    if not job.account:
+                    account = job_account(job)
+                    if not account:
                         continue
-                    name = job.account.name
+                    name = account.name
                     entry = (group.name, str(group.id))
                     if entry not in jobs.setdefault(name, []):
                         jobs[name].append(entry)
