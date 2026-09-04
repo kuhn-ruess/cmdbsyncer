@@ -14,6 +14,7 @@ from application.plugins.checkmk.data_quality import (
     filter_uppercase_hostnames,
     filter_non_fqdn_hostnames,
     apply_domain,
+    apply_lowercase,
     attach_cmdb_info,
     cmdb_candidates,
     _fetch_monitored_hosts,
@@ -148,6 +149,18 @@ class TestApplyDomain(unittest.TestCase):
     def test_leading_dot_and_whitespace_stripped(self):
         self.assertEqual(
             apply_domain(['host1'], '  .example.com '), ['host1.example.com'])
+
+
+class TestApplyLowercase(unittest.TestCase):
+    """Tests for apply_lowercase"""
+
+    def test_off_keeps_names(self):
+        self.assertEqual(apply_lowercase(['SRV1', 'srv2'], False),
+                         ['SRV1', 'srv2'])
+
+    def test_on_lowercases_every_name(self):
+        self.assertEqual(apply_lowercase(['SRV1', 'Srv2.Example.COM'], True),
+                         ['srv1', 'srv2.example.com'])
 
 
 class TestBuildReport(unittest.TestCase):
@@ -307,7 +320,7 @@ class TestAttachCmdbInfo(unittest.TestCase):
 class TestCreateInternalCmdbHosts(unittest.TestCase):
     """application.plugins.checkmk.data_quality.create_internal_cmdb_hosts"""
 
-    def _create(self, template_names):
+    def _create(self, template_names, names=('srv1',), **kwargs):
         hosts = {}
 
         def get_host(hostname):
@@ -321,25 +334,41 @@ class TestCreateInternalCmdbHosts(unittest.TestCase):
              patch('application.plugins.checkmk.data_quality._require_template',
                    side_effect=lambda name, scope=None: f'<{name}>'):
             host_cls.get_host.side_effect = get_host
-            result = create_internal_cmdb_hosts(['srv1'], template_names)
-        return hosts['srv1'], result
+            result = create_internal_cmdb_hosts(list(names), template_names,
+                                                **kwargs)
+        return hosts, result
 
     def test_every_picked_template_lands_on_the_host(self):
-        host, result = self._create(['tpl_a', 'tpl_b'])
-        self.assertEqual(host.cmdb_templates, ['<tpl_a>', '<tpl_b>'])
+        hosts, result = self._create(['tpl_a', 'tpl_b'])
+        self.assertEqual(hosts['srv1'].cmdb_templates, ['<tpl_a>', '<tpl_b>'])
         self.assertEqual(result['created'], ['srv1'])
         self.assertEqual(result['templates'], ['tpl_a', 'tpl_b'])
 
     def test_no_template_leaves_the_host_untouched(self):
-        host, result = self._create([])
+        hosts, result = self._create([])
         # The attribute must not be assigned at all — a host template
         # list set to [] would look like a deliberate reset.
-        self.assertNotIn('cmdb_templates', host.__dict__)
+        self.assertNotIn('cmdb_templates', hosts['srv1'].__dict__)
         self.assertEqual(result['templates'], [])
 
     def test_blank_entries_are_dropped(self):
-        _host, result = self._create(['tpl_a', '', '  '])
+        _hosts, result = self._create(['tpl_a', '', '  '])
         self.assertEqual(result['templates'], ['tpl_a'])
+
+    def test_lowercase_off_keeps_the_reported_spelling(self):
+        _hosts, result = self._create([], names=('SRV1',))
+        self.assertEqual(result['created'], ['SRV1'])
+        self.assertFalse(result['lowercase'])
+
+    def test_lowercase_creates_the_host_lowercased(self):
+        _hosts, result = self._create([], names=('SRV1',), lowercase=True)
+        self.assertEqual(result['created'], ['srv1'])
+        self.assertTrue(result['lowercase'])
+
+    def test_lowercase_covers_the_appended_domain(self):
+        _hosts, result = self._create([], names=('SRV1',), domain='Example.COM',
+                                      lowercase=True)
+        self.assertEqual(result['created'], ['srv1.example.com'])
 
 
 class TestFetchHelpers(unittest.TestCase):
