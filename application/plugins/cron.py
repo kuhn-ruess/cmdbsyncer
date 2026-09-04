@@ -8,7 +8,17 @@ from mongoengine.errors import DoesNotExist
 
 from application import app, cron_register, log
 from application.modules.debug import ColorCodes as CC
-from application.models.cron import CronStats, CronGroup
+from application.models.cron import (CronStats, CronGroup, job_account,
+                                    job_account_id)
+
+
+def _missing_account_message(task):
+    """A job whose Account was never imported keeps an id that matches no
+    Account. Say so plainly instead of letting the raw dereference error
+    reach the run log."""
+    return (f"Task '{task.name}': the assigned account no longer exists "
+            f"(id {job_account_id(task)}). Edit the cron group and pick a "
+            f"valid account.")
 
 
 def _pid_alive(pid):
@@ -138,9 +148,11 @@ def run_job(group_name):
         job = CronGroup.objects.get(enabled=True, name=group_name)
         for task in job.jobs:
             print(f"{CC.UNDERLINE}{CC.OKBLUE}Task: {task.name} {CC.ENDC}")
-            if task.account:
-                account_name = task.account.name
-                cron_register[task.command](account=account_name)
+            account = job_account(task)
+            if account:
+                cron_register[task.command](account=account.name)
+            elif job_account_id(task):
+                raise ValueError(_missing_account_message(task))
             else:
                 cron_register[task.command]()
     except DoesNotExist:
@@ -202,8 +214,11 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
                     f"{now}: Started Task: {task.name} (PID: {os.getpid()})\n"
                 stats.save()
                 try:
-                    if task.account:
-                        cron_register[task.command](account=task.account.name)
+                    account = job_account(task)
+                    if account:
+                        cron_register[task.command](account=account.name)
+                    elif job_account_id(task):
+                        raise ValueError(_missing_account_message(task))
                     else:
                         cron_register[task.command]()
                 except Exception as exp:  # pylint: disable=broad-except
