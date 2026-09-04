@@ -495,12 +495,12 @@ PRESETS = [
         ),
         'keys': [
             {'key': 'JSON_LOGGING_ENABLED', 'type': 'bool', 'default': False,
-             'hint': 'The main switch. Turn this on first — without it '
-                     'the application keeps its plain text output, '
-                     'whatever the other keys say.'},
+             'hint': 'Records for the web application and its workers. '
+                     'Takes effect when the application restarts.'},
             {'key': 'JSON_LOGGING_CLI', 'type': 'bool', 'default': False,
-             'hint': 'Also emit records for command runs — imports, '
-                     'exports, cron. A run printing to a terminal keeps '
+             'hint': 'Records for command runs — imports, exports, '
+                     'cron. Stands on its own, the key above is not '
+                     'needed for it. A run printing to a terminal keeps '
                      'its plain text, unless the records go to the file '
                      'below.'},
             {'key': 'JSON_LOGGING_FILE', 'type': 'str', 'default': '',
