@@ -393,13 +393,19 @@ class BaseConfig():
     NETBOX_IMPORT_NESTED = False
 
     # Structured (JSON) log stream. Needs a license carrying the
-    # feature; without one these are inert.
-    # The main switch — False keeps plain text everywhere.
+    # feature; without one these are inert. One switch per thing that
+    # logs, and neither needs the other: wanting the imports in the
+    # collector says nothing about wanting the web log there too.
+    # The web application and its workers:
     JSON_LOGGING_ENABLED = False
-    # Adds `cmdbsyncer <command>` runs (imports, exports, cron) to what
-    # the web application and its workers already emit. A run printing
-    # to a terminal stays plain text either way.
+    # `cmdbsyncer <command>` runs — imports, exports, cron. A run
+    # printing to a terminal stays plain text, unless the records go to
+    # a file.
     JSON_LOGGING_CLI = False
+    # A path here takes the records instead of the stream: for runs
+    # whose output nobody collects — started from outside the container,
+    # for instance — the file is where a collector can still find them.
+    JSON_LOGGING_FILE = ''
     JSON_LOGGING_STREAM = 'stdout'
     JSON_LOGGING_LEVEL = 'INFO'
 

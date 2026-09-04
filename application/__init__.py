@@ -498,18 +498,30 @@ Account._fields['type'].choices = get_account_types()
 # is not a terminal, and that is exactly where the stream belongs, so
 # the same setting serves both without a second switch.
 if CLI_MODE:
-    JSON_FOR_THIS_RUN = bool(app.config.get('JSON_LOGGING_CLI')) and not _stdout_is_terminal()
+    JSON_FOR_THIS_RUN = bool(app.config.get('JSON_LOGGING_CLI')) and (
+        # A log file of its own is never the terminal, so the
+        # readability argument does not apply there: the records go to
+        # the file and the person keeps the plain output in front of them.
+        bool(app.config.get('JSON_LOGGING_FILE')) or not _stdout_is_terminal()
+    )
 else:
     JSON_FOR_THIS_RUN = True
 json_stream = None
 if JSON_FOR_THIS_RUN and not COMPLETION_MODE:
     json_stream = enterprise_hook('configure_logging', app, logger)
-    if CLI_MODE and json_stream is sys.stdout:
-        # The handler holds the real stdout from here on. What a command
-        # still prints — the retries, the timeouts, the per-host results
-        # — is the detail the collector is after, so route it through
-        # the pipeline as well instead of letting it land unformatted
-        # between the records.
+    if (CLI_MODE and json_stream is not None
+            and json_stream is not sys.stderr
+            and not _stdout_is_terminal()):
+        # The pipeline holds the real stdout from here on — or a log file
+        # of its own, which leaves stdout to print past the records. What
+        # a command still prints — the retries, the timeouts, the
+        # per-host results — is the detail the collector is after, so
+        # route it through the pipeline as well instead of letting it
+        # land unformatted between the records.
+        #
+        # Not with stderr as the target, where the two streams are
+        # already apart, and not while a person is watching a run whose
+        # records go to a file: that output is theirs to read.
         from application.modules.log.command_output import (  # noqa: E402  pylint: disable=import-outside-toplevel
             CommandOutputToLog,
         )

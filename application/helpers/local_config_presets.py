@@ -495,14 +495,20 @@ PRESETS = [
         ),
         'keys': [
             {'key': 'JSON_LOGGING_ENABLED', 'type': 'bool', 'default': False,
-             'hint': 'The main switch. Turn this on first — without it '
-                     'the application keeps its plain text output, '
-                     'whatever the other three say.'},
+             'hint': 'Records for the web application and its workers. '
+                     'Takes effect when the application restarts.'},
             {'key': 'JSON_LOGGING_CLI', 'type': 'bool', 'default': False,
-             'hint': 'Also emit records for command runs — imports, '
-                     'exports, cron. A run printing to a terminal stays '
-                     'plain text either way, so this is about the runs '
-                     'feeding a collector.'},
+             'hint': 'Records for command runs — imports, exports, '
+                     'cron. Stands on its own, the key above is not '
+                     'needed for it. A run printing to a terminal keeps '
+                     'its plain text, unless the records go to the file '
+                     'below.'},
+            {'key': 'JSON_LOGGING_FILE', 'type': 'str', 'default': '',
+             'hint': 'Write the records into this file instead of the '
+                     'stream — for runs whose output nobody collects, '
+                     'started from outside the container for example. '
+                     'The directory has to exist and be writable (in a '
+                     'container: mounted). Leave empty for the stream.'},
             {'key': 'JSON_LOGGING_STREAM', 'type': 'str', 'default': 'stdout',
              'hint': "Where the records go: 'stdout' or 'stderr'."},
             {'key': 'JSON_LOGGING_LEVEL', 'type': 'str', 'default': 'INFO',
