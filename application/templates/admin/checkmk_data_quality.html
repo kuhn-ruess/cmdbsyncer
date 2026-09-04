@@ -343,6 +343,19 @@
                             Appended to every selected host that has no domain
                             part; hosts already given as an FQDN stay unchanged.
                         </small>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox"
+                                   name="lowercase" id="dq_lowercase" value="1">
+                            <label class="form-check-label" for="dq_lowercase">
+                                Create the names in lowercase
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">
+                            Checkmk tells <code>SRV1</code> and <code>srv1</code>
+                            apart, so a name the uppercase check reports is best
+                            put into the syncer lowercased. Applies to the domain
+                            above as well.
+                        </small>
                     </div>
                 </div>
                 <div class="mb-2">

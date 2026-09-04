@@ -441,13 +441,25 @@ def apply_domain(hostnames, domain):
     return [name if '.' in name else f'{name}.{suffix}' for name in hostnames]
 
 
+def apply_lowercase(hostnames, lowercase):
+    """
+    Pure: lowercase every hostname when *lowercase* is set, otherwise return
+    the list unchanged. Checkmk treats hostnames case-sensitively, so a name
+    the uppercase check reported is best carried into the syncer lowercased.
+    """
+    if not lowercase:
+        return list(hostnames)
+    return [name.lower() for name in hostnames]
+
+
 def create_internal_cmdb_hosts(hostnames, template_names=None, domain=None,
-                               template_scope=None):
+                               template_scope=None, lowercase=False):
     """
     Create the given hostnames as internal CMDB-managed hosts (source ``cmdb``,
     not CMDB objects), optionally assigning CMDB templates so the new hosts
     inherit their labels/attributes at export time. ``domain`` is appended to
-    every name that has no domain part (see :func:`apply_domain`).
+    every name that has no domain part (see :func:`apply_domain`), and
+    ``lowercase`` lowercases the result including that domain.
 
     Mirrors the internal-CMDB stamping the Host admin view does on save. Hosts
     that already exist are left untouched and reported under ``skipped``.
@@ -458,7 +470,7 @@ def create_internal_cmdb_hosts(hostnames, template_names=None, domain=None,
     from application.models.account import (
         CMDB_SOURCE_ACCOUNT_ID, CMDB_SOURCE_ACCOUNT_NAME)
 
-    hostnames = apply_domain(hostnames, domain)
+    hostnames = apply_lowercase(apply_domain(hostnames, domain), lowercase)
     template_names = [name.strip() for name in (template_names or [])
                       if (name or '').strip()]
     templates = [_require_template(name, template_scope)
@@ -490,7 +502,7 @@ def create_internal_cmdb_hosts(hostnames, template_names=None, domain=None,
         host.save()
         created.append(host.hostname)
     return {'created': created, 'skipped': skipped, 'templates': template_names,
-            'domain': domain}
+            'domain': domain, 'lowercase': bool(lowercase)}
 
 
 def _require_template(template_name, template_scope=None):

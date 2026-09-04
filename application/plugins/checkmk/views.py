@@ -2628,6 +2628,7 @@ class CheckmkDataQualityView(BaseView):
         template_names = [t.strip() for t in request.form.getlist('template')
                           if t.strip()]
         domain = (request.form.get('domain') or '').strip()
+        lowercase = bool(request.form.get('lowercase'))
         if not hostnames:
             flash('No hosts selected to create', 'warning')
             return redirect(self.get_url('.index'))
@@ -2641,7 +2642,8 @@ class CheckmkDataQualityView(BaseView):
         try:
             result = create_internal_cmdb_hosts(hostnames, template_names,
                                                 domain or None,
-                                                self._template_scope())
+                                                self._template_scope(),
+                                                lowercase=lowercase)
         except ValueError as error:
             flash(str(error), 'error')
             return redirect(self.get_url('.index'))
@@ -2649,6 +2651,8 @@ class CheckmkDataQualityView(BaseView):
         msg = f"Created {len(result['created'])} host(s) in the internal CMDB"
         if domain:
             msg += f" in domain '{domain}'"
+        if lowercase:
+            msg += " with lowercased names"
         if template_names:
             msg += (f" with template(s) "
                     f"{', '.join(repr(t) for t in template_names)}")
