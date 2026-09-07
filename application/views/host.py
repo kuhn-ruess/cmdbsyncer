@@ -942,6 +942,25 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         }
     }
 
+    # ``DefaultModelView`` publishes these three as properties so a
+    # read-only user cannot write anywhere. They are data descriptors, so
+    # ``self.can_edit = False`` in __init__ would raise — narrow them with
+    # a property of our own instead.
+    @property
+    def can_create(self):
+        """Objects are only made by hand when the syncer is a CMDB."""
+        return bool(app.config['CMDB_MODE']) and super().can_create
+
+    @property
+    def can_edit(self):
+        """Same for editing one."""
+        return bool(app.config['CMDB_MODE']) and super().can_edit
+
+    @property
+    def can_delete(self):
+        """Same for removing one."""
+        return bool(app.config['CMDB_MODE']) and super().can_delete
+
     def __init__(self, model, **kwargs):
         """
         Overwrite based on status
@@ -949,9 +968,6 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         """
 
         if not app.config['CMDB_MODE']:
-            self.can_edit = False
-            self.can_create = False
-            self.can_delete = False
             self.column_exclude_list.append('CMDB Attributes')
             self.column_exclude_list.append('cmdb_fields')
             self._strip_cmdb_only_ui()
@@ -2046,17 +2062,28 @@ Impact Chain.
         'copy_as_new', 'bulk_label_edit', 'set_template',
     })
 
+    # ``DefaultModelView`` publishes these as properties so a read-only
+    # user cannot write anywhere. They are data descriptors, so assigning
+    # them per instance would raise — narrow them with a property here.
+    # can_delete stays untouched: the host list's delete is a soft-delete
+    # (archive via _SoftDeleteHostMixin), which is safe to allow even for
+    # import-only installs.
+    @property
+    def can_create(self):
+        """Hosts are only made by hand when the syncer is a CMDB."""
+        return bool(app.config['CMDB_MODE']) and super().can_create
+
+    @property
+    def can_edit(self):
+        """Same for editing one."""
+        return bool(app.config['CMDB_MODE']) and super().can_edit
+
     def __init__(self, model, **kwargs):
         """
         Overwrite based on status
         """
 
         if not app.config['CMDB_MODE']:
-            self.can_edit = False
-            self.can_create = False
-            # can_delete stays on: the host list's delete is a soft-delete
-            # (archive via _SoftDeleteHostMixin), which is safe to allow
-            # even for import-only installs.
             self.column_exclude_list = list(self.column_exclude_list) + [
                 'cmdb_fields', 'cmdb_templates',
             ]
