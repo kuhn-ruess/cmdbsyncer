@@ -1,0 +1,8 @@
+# Test-only dependencies. Not shipped in the wheel, not needed to run the
+# syncer — install them before running the suite:
+#     venv/bin/pip install -r requirements-dev.txt
+#
+# mongomock backs tests/test_web_boot_smoke.py, which boots the real web
+# application in a subprocess to prove it still starts. Without it that
+# test skips and a non-booting app passes the suite unnoticed.
+mongomock==4.3.0
