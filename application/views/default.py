@@ -260,6 +260,14 @@ class DefaultModelView(ModelView):
     # property. Assigning ``False`` is harmless (it stays False for
     # everyone), assigning ``True`` would hand the right back to read-only
     # users, which is why no subclass does it.
+    #
+    # Assigning one on the *instance* (``self.can_edit = False`` in an
+    # ``__init__``) does not work at all: a property is a data descriptor
+    # and raises ``AttributeError: ... has no setter``, which takes the
+    # whole web app down at startup. A view that wants to narrow a flag
+    # further overrides it with a property of its own and ands its own
+    # condition onto ``super()`` — see ``HostModelView``.
+    # ``tests/test_view_permission_flags.py`` keeps this honest.
     @property
     def can_create(self):
         """Flask-Admin's create flag, off for read-only users."""
