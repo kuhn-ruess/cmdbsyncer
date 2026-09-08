@@ -478,8 +478,8 @@ def _process_copy_as_new(label):
     clone.cmdb_templates = list(source.cmdb_templates or [])
     clone.cmdb_match = source.cmdb_match
     clone.lifecycle_state = source.lifecycle_state or 'active'
-    clone.last_import_sync = datetime.now()
-    clone.last_import_seen = datetime.now()
+    clone.last_import_sync = datetime.utcnow()
+    clone.last_import_seen = datetime.utcnow()
     clone.save()
 
     flash(f'Copied to new {label.lower()} {new_name!r}.', 'success')
@@ -1046,8 +1046,8 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         """
         Model Changes when saved in GUI -> CMDB Mode
         """
-        model.last_import_sync = datetime.now()
-        model.last_import_seen = datetime.now()
+        model.last_import_sync = datetime.utcnow()
+        model.last_import_seen = datetime.utcnow()
         model.cache = {}
         model.is_object = True
         model.source_account_id = CMDB_SOURCE_ACCOUNT_ID
@@ -2282,8 +2282,8 @@ Impact Chain.
         """
         Model Changes when saved in GUI -> CMDB Mode
         """
-        model.last_import_sync = datetime.now()
-        model.last_import_seen = datetime.now()
+        model.last_import_sync = datetime.utcnow()
+        model.last_import_seen = datetime.utcnow()
         model.cache = {}
         # Account comes from the form's dropdown now (no longer forced to the
         # CMDB sentinel). Derive the id from the chosen name; keep the CMDB
@@ -2693,8 +2693,8 @@ Impact Chain.
                     host.cmdb_templates.append(template)
 
                 # Apply the same logic as on_model_change
-                host.last_import_sync = datetime.now()
-                host.last_import_seen = datetime.now()
+                host.last_import_sync = datetime.utcnow()
+                host.last_import_seen = datetime.utcnow()
                 host.cache = {}
                 host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
                 host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
@@ -3004,8 +3004,8 @@ Impact Chain.
         host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
         host.no_autodelete = True
         host.cache = {}
-        host.last_import_sync = datetime.now()
-        host.last_import_seen = datetime.now()
+        host.last_import_sync = datetime.utcnow()
+        host.last_import_seen = datetime.utcnow()
         # Tag the label mutation so the Timeline shows who ran the import.
         host._label_change_source = 'manual'  # pylint: disable=protected-access
         host._label_change_user = actor_email  # pylint: disable=protected-access

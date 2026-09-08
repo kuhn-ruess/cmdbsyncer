@@ -485,7 +485,7 @@ def create_internal_cmdb_hosts(hostnames, template_names=None, domain=None,
         if host.id:  # already exists — never overwrite a foreign object
             skipped.append(host.hostname)
             continue
-        now = datetime.now()
+        now = datetime.utcnow()
         host.last_import_sync = now
         host.last_import_seen = now
         # CMDB-managed *host*, not a CMDB object: keep is_object False so the

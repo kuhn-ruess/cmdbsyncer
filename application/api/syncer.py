@@ -371,7 +371,7 @@ class SyncerHostsApi(Resource):
     @require_token
     def get(self):
         """Return totals plus a 24-hour staleness counter."""
-        ago_24h = datetime.now() - timedelta(hours=24)
+        ago_24h = datetime.utcnow() - timedelta(hours=24)
         # Restricted API users only see counters for the hosts they may
         # reach — their accounts, carrying their templates.
         return {

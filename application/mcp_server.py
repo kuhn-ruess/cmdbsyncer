@@ -473,7 +473,7 @@ def trigger_cron_group(group_name: str) -> dict:
 def host_stats() -> dict:
     """Aggregate host counters: total, objects, stale (no import seen in 24h)."""
     _current_user()
-    ago_24h = datetime.now() - timedelta(hours=24)
+    ago_24h = datetime.utcnow() - timedelta(hours=24)
     return {
         '24h_checkpoint': ago_24h.strftime('%Y-%m-%dT%H:%M:%SZ'),
         'num_hosts': Host.objects(is_object=False).count(),

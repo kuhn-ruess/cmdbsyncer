@@ -126,7 +126,7 @@ def _archive_unseen_hosts(days, account_filter, account_filter_name,
     print(f"{CC.UNDERLINE}Cleanup Hosts not found for {days} days, " \
           f"Filter: {account_filter_name}{CC.ENDC}")
 
-    cutoff = datetime.datetime.now() - datetime.timedelta(days)
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(days)
     db_filter = {
         'last_import_seen__lte': cutoff,
         'no_autodelete__ne': True,
@@ -880,7 +880,9 @@ def self_configure():
         'CRYPTOGRAPHY_KEY' : Fernet.generate_key(),
         'SESSION_COOKIE_NAME': "cmdb-syncer",
     }
-    from local_config import config  # pylint: disable=import-outside-toplevel
+    # local_config.py is deployment-local and never in the repo, so the
+    # import cannot be resolved at lint time.
+    from local_config import config  # pylint: disable=import-outside-toplevel,import-error
     _warn_migrated_account_settings(config)
     for key, value in values.items():
         if key not in config:
