@@ -475,8 +475,9 @@ class CheckmkRuleMngmt(db.Document):
     # Name of the Project this rule belongs to (or empty for a
     # free/global rule). Referenced by name — not as a ReferenceField — so a
     # project and its rules survive a JSON im-/export between separate syncer
-    # instances without ObjectId remapping. Project rules are excluded from
-    # the global ``export_rules`` and only pushed through the project workflow.
+    # instances without ObjectId remapping. Project rules take part in the
+    # normal ``export_rules`` run, but only for the accounts the project
+    # allows (see ``projects_for_account`` in inits.py).
     project = db.StringField()
     enabled = db.BooleanField()
     meta = {
