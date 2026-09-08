@@ -263,7 +263,7 @@ class Host(db.Document):
             & Q(last_import_id__ne=import_id)
             & Q(deleted_at__exists=False)
         )
-        user_filters = raw_filter.split('||')
+        user_filters = (raw_filter or '').split('||')
         extra_filter = False
         for user_filter in user_filters:
             user_filter = user_filter.split(':', 1)
@@ -359,9 +359,10 @@ class Host(db.Document):
         Args:
             create (bool): Create a object if not yet existing (default)
         """
-        hostname = hostname.strip()
+        # Type check first: a non-string must raise HostError, not AttributeError.
         if not isinstance(hostname, str):
             raise HostError("Hostname field does not contain a string")
+        hostname = hostname.strip()
         if app.config['LOWERCASE_HOSTNAMES']:
             hostname = hostname.lower()
         if not hostname:
@@ -374,7 +375,7 @@ class Host(db.Document):
         if create:
             new_host = Host()
             new_host.hostname = hostname
-            new_host.create_time = datetime.datetime.now()
+            new_host.create_time = datetime.datetime.utcnow()
             return new_host
         return False
 
@@ -436,7 +437,11 @@ class Host(db.Document):
                                  deleted_at__exists=False)
                         .only('id', 'cmdb_match')
                 )
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception as exp:  # pylint: disable=broad-exception-caught
+                # Never break the enclosing import, but say so — otherwise a
+                # database hiccup looks exactly like "no template matched".
+                logger.warning("Could not load CMDB templates for %s: %s",
+                               getattr(self, 'hostname', '?'), exp)
                 return False
 
         matched = []
@@ -517,7 +522,10 @@ class Host(db.Document):
         Overwrite all Labels on Hosts,
         but checks first if needed and also sets
         set_import_sync and import_seen as needed
+
+        Copies the incoming dict: the caller keeps using it after the call.
         """
+        labels = dict(labels or {})
         if app.config['LABELS_ITERATE_FIRST_LEVEL']:
             for key, value in list(labels.items()):
                 if isinstance(value, dict):
@@ -689,17 +697,19 @@ class Host(db.Document):
 
     def set_inventory_attribute(self, key, value):
         """
-        Set a Singe Attribute to the Inventory and Save it
+        Set a Singe Attribute to the Inventory and Save it.
+
+        Saves (and returns True) only on a real change — the inventorize
+        plugins call this per attribute in a loop, so an unconditional write
+        costs one database roundtrip per unchanged attribute.
         """
         validate_mongo_key(key, "inventory")
-        if key in self.inventory:
-            if self.inventory[key] != value:
-                self.inventory[key] = value
-                self.cache = {}
-        else:
-            self.inventory[key] = value
-            self.cache = {}
+        if key in self.inventory and self.inventory[key] == value:
+            return False
+        self.inventory[key] = value
+        self.cache = {}
         self.save()
+        return True
 
 
     def _inventory_match_passes(self, new_data, config):
@@ -807,7 +817,7 @@ class Host(db.Document):
             entry (string): Message
         """
         entries = self.log[:app.config['HOST_LOG_LENGTH']-1]
-        date = datetime.datetime.now().strftime(app.config['TIME_STAMP_FORMAT'])
+        date = datetime.datetime.utcnow().strftime(app.config['TIME_STAMP_FORMAT'])
         self.log = [f"{date} {entry}"] + entries
 
     def set_inventory_attributes(self, account_name):
@@ -851,16 +861,14 @@ class Host(db.Document):
                 new_field.field_name = key
                 self.cmdb_fields.append(new_field)
 
-    def set_account(self, account_id=False, account_name=False,
-                    account_dict=False, import_id="N/A"):
+    def set_account(self, account_dict, import_id="N/A"):
         """
         Mark Host with Account he was fetched with.
         Prevent Overwrites if Host is importet from multiple sources.
 
         Args:
-            account_id (string): UUID of Account entry
-            account_name (string): Name of account
-            account_dict (dict): New: pass full Account Information
+            account_dict (dict): Full Account Information
+            import_id (string): Id of the current import run
 
         Returns:
             status (bool): Should Object be saved or not
@@ -871,20 +879,13 @@ class Host(db.Document):
            (self.source_account_name == CMDB_SOURCE_ACCOUNT_NAME and not self.source_account_id):
             print("Host is locked since in CMDB Mode")
             return False
-        if not account_id and not account_dict:
-            raise ValueError("Either Set account_id or pass account_dict")
-
-        is_object = False
-        # That is the legacy behavior: Raise if not equal
         if not account_dict:
-            if self.source_account_id and self.source_account_id != account_id:
-                raise HostError(f"Host already importet by account {self.source_account_name}")
-        else:
-            # Get Name from Full dict
-            account_id = account_dict['id']
-            account_name = account_dict['name']
-            is_object = account_dict.get('is_object', False)
-            self.object_type = account_dict.get('object_type', 'auto')
+            raise ValueError("account_dict is required")
+
+        account_id = account_dict['id']
+        account_name = account_dict['name']
+        is_object = account_dict.get('is_object', False)
+        self.object_type = account_dict.get('object_type', 'auto')
 
         if account_dict.get('restrict_to') == 'inventorize':
             # The account is not allowed to own hosts. Raised instead of
@@ -934,7 +935,7 @@ class Host(db.Document):
         """
         Mark that a sync for this host was needed to import
         """
-        self.last_import_sync = datetime.datetime.now()
+        self.last_import_sync = datetime.datetime.utcnow()
         # Delete Cache if new Data is imported
         self.cache = {}
 
@@ -949,7 +950,7 @@ class Host(db.Document):
         the primary import source archived or flip its stale flag. The
         cache is already invalidated by update_inventory() on change.
         """
-        now = datetime.datetime.now()
+        now = datetime.datetime.utcnow()
         self.last_import_seen = now
         if changed:
             self.last_import_sync = now
@@ -964,7 +965,7 @@ class Host(db.Document):
         (decommissioned, manually archived) is left alone so a fresh
         import can't undo an operator decision.
         """
-        self.last_import_seen = datetime.datetime.now()
+        self.last_import_seen = datetime.datetime.utcnow()
         if self.deleted_at and self._was_auto_archived():
             self.restore('active')
         if not self.lifecycle_state:
