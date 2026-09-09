@@ -79,6 +79,12 @@ PREAMBLE = textwrap.dedent('''\
         return match.group(1)
 
 
+    def eq(actual, expected, what):
+        """Fail unless ``actual`` equals ``expected``."""
+        if actual != expected:
+            fail(f'{what}: got {actual!r}, expected {expected!r}')
+
+
     def check(url, expected, method='get', **kwargs):
         """Request ``url``; fail unless it answers ``expected``."""
         response = getattr(client, method)(url, **kwargs)
