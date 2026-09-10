@@ -163,6 +163,7 @@ def register_cli_group(flask_app, name, plugin_dirname, help_text=""):
 # reachable by knowing the field name by heart.
 GLOBAL_CUSTOM_FIELD_PRESETS = {
     'custom_headers': '',
+    'http_proxy': '',
 }
 
 
@@ -174,6 +175,13 @@ GLOBAL_CUSTOM_FIELD_HELP = {
         "`Name: value` pairs separated by a pipe — for an API gateway in "
         "front of the target system that wants its own key or tenant "
         "header. Example: X-API-Key: abc123 | X-Tenant: muc"
+    ),
+    'http_proxy': (
+        "Proxy for every request of this account, as a URL like "
+        "http://proxy.example.com:3128 — for a target system reachable "
+        "only through the corporate proxy. Used for http and https "
+        "alike. `direct` sends this account past a proxy the "
+        "environment sets for everything else."
     ),
     'request_timeout': (
         "Seconds a single request may take before it is given up, for a "

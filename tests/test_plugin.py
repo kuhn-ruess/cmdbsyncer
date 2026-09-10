@@ -10,7 +10,7 @@ import time
 import requests
 from mongoengine.errors import DoesNotExist
 
-from application.modules.plugin import Plugin, parse_custom_headers
+from application.modules.plugin import Plugin, parse_custom_headers, parse_proxy
 
 from tests.plugin_helpers import plain_plugin
 
@@ -192,6 +192,66 @@ class TestPlugin(unittest.TestCase):
 
         self.assertEqual(mock_session.request.call_args[1]['headers'],
                          {'Accept': 'application/json', 'X-API-Key': 'abc123'})
+
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_proxy_is_parsed(self, _render):
+        self.assertEqual(
+            parse_proxy('http://proxy.example.com:3128'),
+            {'http': 'http://proxy.example.com:3128',
+             'https': 'http://proxy.example.com:3128'})
+
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_proxy_direct_switches_the_environment_proxy_off(self, _render):
+        self.assertEqual(parse_proxy('direct'), {'http': None, 'https': None})
+
+    @patch('application.modules.plugin.logger')
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_proxy_without_scheme_is_ignored(self, _render, mock_logger):
+        self.assertIsNone(parse_proxy('proxy.example.com:3128'))
+        mock_logger.warning.assert_called_once()
+
+    def test_no_proxy_configured(self):
+        self.assertIsNone(parse_proxy(None))
+        # An empty custom field arrives as False
+        self.assertIsNone(parse_proxy(False))
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.requests')
+    @patch('application.modules.plugin.logger')
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_inner_request_sends_the_accounts_proxy(
+            self, _render, _logger, mock_requests, mock_app):
+        mock_app.config = self.mock_app_config
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'success'}
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
+
+        plugin = Plugin()
+        plugin.config = {'name': 'snow', 'http_proxy': 'http://proxy:3128'}
+        plugin.inner_request('GET', 'http://example.com')
+
+        self.assertEqual(mock_session.request.call_args[1]['proxies'],
+                         {'http': 'http://proxy:3128', 'https': 'http://proxy:3128'})
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.requests')
+    @patch('application.modules.plugin.logger')
+    def test_inner_request_without_proxy_leaves_requests_alone(
+            self, _logger, mock_requests, mock_app):
+        mock_app.config = self.mock_app_config
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'success'}
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_requests.Session.return_value = mock_session
+
+        plugin = Plugin()
+        plugin.config = {'name': 'snow'}
+        plugin.inner_request('GET', 'http://example.com')
+
+        self.assertNotIn('proxies', mock_session.request.call_args[1])
 
     @patch('application.modules.plugin.app')
     @patch('application.modules.plugin.requests')

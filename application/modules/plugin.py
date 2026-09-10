@@ -8,6 +8,7 @@ import json as mod_json
 import atexit
 import uuid
 import os
+import re
 import tempfile
 
 from pprint import pformat
@@ -55,6 +56,17 @@ _SENSITIVE_BODY_KEYS = frozenset({
 })
 
 
+# "Nothing configured", as distinct from a configured "no proxy".
+_UNSET = object()
+
+
+def _redact_proxy_url(url):
+    """A proxy URL without its credentials, host and port kept readable."""
+    if not isinstance(url, str):
+        return url
+    return re.sub(r'//[^/@]+@', f'//{_REDACTION}@', url)
+
+
 def _redact_body(obj):
     """Recursively mask sensitive keys in dict/list bodies."""
     if isinstance(obj, dict):
@@ -89,6 +101,9 @@ def _redact_payload(payload):
                             else _REDACTION)
     if 'params' in redacted:
         redacted['params'] = _redact_body(redacted['params'])
+    if 'proxies' in redacted and isinstance(redacted['proxies'], dict):
+        redacted['proxies'] = {k: _redact_proxy_url(v)
+                               for k, v in redacted['proxies'].items()}
     return redacted
 
 
@@ -116,6 +131,36 @@ def parse_custom_headers(value, account_name=''):
             continue
         headers[name.strip()] = render_jinja(header_value.strip())
     return headers
+
+
+def parse_proxy(value, account_name=''):
+    """
+    The HTTP proxy of an account, as a requests `proxies` dict.
+
+    One URL — `http://proxy.example.com:3128` — is used for http and
+    https alike, which is what a corporate proxy in front of an external
+    target system like ServiceNow needs. The value is rendered, so proxy
+    credentials can be referenced as `{{ACCOUNT:<account>:password}}`
+    instead of standing here in clear text. The literal `direct` sends
+    this account past a proxy that the environment sets for everything
+    else.
+
+    Returns None when nothing is configured, so requests keeps handling
+    the http_proxy/https_proxy/no_proxy environment variables itself.
+    """
+    proxy = str(value or '').strip()
+    if not proxy:
+        return None
+    proxy = render_jinja(proxy).strip()
+    if not proxy:
+        return None
+    if proxy.lower() == 'direct':
+        return {'http': None, 'https': None}
+    if '://' not in proxy:
+        logger.warning(f"Ignoring proxy {proxy!r} of account {account_name!r}: "
+                       f"expected a URL like 'http://proxy.example.com:3128'")
+        return None
+    return {'http': proxy, 'https': proxy}
 
 
 class ResponseDataException(Exception):
@@ -168,6 +213,11 @@ class Plugin():
     # for the whole run — every request of it sends the same ones.
     _account_headers = None
 
+    # Proxy of the account, parsed on first use and then kept for the
+    # whole run. _UNSET means "not looked at yet"; None means "the
+    # account configures none".
+    _proxies = _UNSET
+
     # Attribute keys configured as merged in the System Config, loaded
     # on first use and then kept for the whole run.
     merged_attributes = None
@@ -192,6 +242,7 @@ class Plugin():
         self.log_details = []
         self.debug_lines = []
         self._account_headers = None
+        self._proxies = _UNSET
         self._ca_cert_tempfile = None
         self._http_session = None
         self.log_details.append(('started', datetime.now()))
@@ -254,6 +305,16 @@ class Plugin():
             self._account_headers = parse_custom_headers(
                 self.config.get('custom_headers'), self.config.get('name', ''))
         return self._account_headers
+
+    def account_proxies(self):
+        """
+        The proxy every request of this account goes through, or None
+        when the account configures none.
+        """
+        if self._proxies is _UNSET:
+            self._proxies = parse_proxy(
+                self.config.get('http_proxy'), self.config.get('name', ''))
+        return self._proxies
 
     def record_exception(self, error_obj):
         """
@@ -414,6 +475,11 @@ class Plugin():
             payload['params'] = params
         if cert:
             payload['cert'] = cert
+        # A proxy the account configures beats the environment, in both
+        # directions: it routes through one where the environment sets
+        # none, and 'direct' sends this account past a global one.
+        if (proxies := self.account_proxies()) is not None:
+            payload['proxies'] = proxies
 
         log_dict = _redact_payload(payload)
         if 'json' in log_dict:
