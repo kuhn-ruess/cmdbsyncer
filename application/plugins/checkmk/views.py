@@ -62,6 +62,23 @@ def _subform_data(subform, name):
     return (field.data or '').strip() if field is not None else ''
 
 
+def _ldap_account_choices():
+    """Blank + every enabled LDAP account — feeds the group lookup picker."""
+    names = [a.name for a in
+             Account.objects(enabled=True, type='ldap').order_by('name')]
+    return [('', '— none, users get no mail address —'), *((n, n) for n in names)]
+
+
+class LdapAccountSelectField(SelectField):  # pylint: disable=too-few-public-methods
+    """Dropdown of the LDAP accounts, resolved at render time."""
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('choices', _ldap_account_choices)
+        # A saved account that was since disabled or removed must not
+        # block editing the rest of the rule.
+        kwargs.setdefault('validate_choice', False)
+        super().__init__(*args, **kwargs)
+
+
 def _project_choices():
     """Blank + every existing project — feeds the rule's project picker."""
     names = [p.name for p in Project.objects.order_by('name')]
@@ -486,6 +503,232 @@ class CheckmkGroupRuleView(RuleModelView):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
 
+
+
+def _render_user_generation_outcome(_view, _context, model, _name):
+    """
+    Render User Generation Outcome
+    """
+    entry = model.outcome
+    ldap = escape(entry.ldap_account) if entry.ldap_account \
+            else '— none, users get no mail address —'
+    html = f'''
+        <div class="card">
+            <div class="card-body">
+            <p class="card-text">
+            <ul>
+            <li>Foreach: {escape(entry.foreach_type)}</li>
+            <li>Value: {escape(entry.foreach)}</li>
+            <li>Jinja User ID: {escape(entry.rewrite_user_id)}</li>
+            <li>Jinja Full Name: {escape(entry.rewrite_full_name)}</li>
+            <li>Jinja Mail: {escape(entry.rewrite_email)}</li>
+            <li>Group Data from LDAP Account: {ldap}</li>
+            </ul>
+            </p>
+            </div>
+        </div>
+    '''
+    return Markup(html)
+
+
+class CheckmkUserGenerationRuleView(RuleModelView):
+    """
+    Custom User Generation Model View
+    """
+    column_default_sort = "name"
+
+    column_exclude_list = [
+        'conditions', 'outcomes', 'outcome',
+    ]
+
+    form_subdocuments = {
+        'outcome': {
+            'form_overrides': {
+                'foreach': StringField,
+                'rewrite_user_id': StringField,
+                'rewrite_full_name': StringField,
+                'rewrite_email': StringField,
+                'rewrite_pager_address': StringField,
+                'ldap_account': LdapAccountSelectField,
+                'ldap_base_dn': StringField,
+                'ldap_group_filter': StringField,
+                'ldap_name_attribute': StringField,
+                'ldap_attributes': StringField,
+            },
+            'form_args': {
+                'foreach_type': {
+                    'label': '1. Where the group names sit',
+                    'description': (
+                        'Attribute Name: your hosts carry something like'
+                        ' ldap_group: grp-dba \u2014 pick this one.'
+                        ' Attribute Value: they carry grp-dba: ldap_group.'
+                        ' Value in List: one attribute holds several'
+                        ' groups, comma separated.'
+                    ),
+                },
+                'foreach': {
+                    'label': '2. Name of that attribute',
+                    'description': (
+                        'For example ldap_group. A trailing * takes every'
+                        ' attribute starting with it, so ldap_group* also'
+                        ' reads ldap_group_second.'
+                    ),
+                },
+                'ldap_account': {
+                    'label': '3. Look the groups up in this LDAP account',
+                    'description': (
+                        'The account contributes the address and the'
+                        ' credentials, nothing else \u2014 where the groups'
+                        ' are and how they are read is the four fields'
+                        ' below. Everything a group carries then becomes a'
+                        ' variable of the Jinja fields further down. Leave'
+                        ' empty to create the users from the group names'
+                        ' alone, without any directory data.'
+                    ),
+                },
+                'ldap_base_dn': {
+                    'label': 'Group base DN',
+                    'description': (
+                        'The subtree the groups live in, for example'
+                        ' ou=groups,dc=example,dc=com. Empty falls back to'
+                        ' the base DN of the account.'
+                    ),
+                },
+                'ldap_group_filter': {
+                    'label': 'Group search filter',
+                    'description': (
+                        'LDAP filter picking the group objects, for example'
+                        ' (objectClass=group). The search filter of the'
+                        ' account is never used here \u2014 it matches the'
+                        ' imported hosts, not their groups.'
+                    ),
+                },
+                'ldap_name_attribute': {
+                    'label': 'Group name attribute',
+                    'description': (
+                        'The attribute your host attribute values are'
+                        ' matched against. cn in most directories,'
+                        ' sAMAccountName in some Active Directories.'
+                    ),
+                },
+                'ldap_attributes': {
+                    'label': 'Attributes to read',
+                    'description': (
+                        'Comma separated. Empty reads everything the group'
+                        ' has \u2014 narrow it when your groups carry large'
+                        ' multi-valued attributes such as member.'
+                    ),
+                },
+                'rewrite_user_id': {
+                    'label': '4. Checkmk user ID',
+                    'description': (
+                        'Jinja. {{name}} names the user after the group,'
+                        ' cg_{{name}} or {{sAMAccountName}} work just as'
+                        ' well.'
+                    ),
+                },
+                'rewrite_full_name': {
+                    'label': 'Full name',
+                    'description': (
+                        'Jinja. What Checkmk shows in its user list, for'
+                        ' example {{description}}.'
+                    ),
+                },
+                'rewrite_email': {
+                    'label': 'Mail address',
+                    'description': (
+                        'Jinja, usually {{mail}}. A template that renders'
+                        ' to nothing leaves the field as it is instead of'
+                        ' emptying it.'
+                    ),
+                },
+                'rewrite_pager_address': {
+                    'label': 'Pager address',
+                    'description': (
+                        'Jinja, for a group carrying a second contact'
+                        ' route. Leave empty if you do not use it.'
+                    ),
+                },
+                'roles': {
+                    'label': 'Checkmk roles',
+                    'description': 'Roles every generated user is given.',
+                },
+                'contact_groups': {
+                    'label': 'Contact groups',
+                    'description': (
+                        'Contact groups every generated user is put into.'
+                    ),
+                },
+                'disable_login': {
+                    'label': 'No login',
+                    'description': (
+                        'Generated users are notification contacts, not'
+                        ' people logging in. Uncheck only if they should'
+                        ' be able to log into Checkmk.'
+                    ),
+                },
+            },
+            'form_widget_args': {
+                'foreach': {'placeholder': 'ldap_group'},
+                'ldap_base_dn': {'placeholder': 'ou=groups,dc=example,dc=com'},
+                'ldap_group_filter': {'placeholder': '(objectClass=group)'},
+                'ldap_name_attribute': {'placeholder': 'cn'},
+                'ldap_attributes': {'placeholder': 'all attributes'},
+                'rewrite_user_id': {'placeholder': '{{name}}'},
+                'rewrite_full_name': {'placeholder': '{{name}}'},
+                'rewrite_email': {'placeholder': '{{mail}}'},
+                'rewrite_pager_address': {'placeholder': '{{telephoneNumber}}'},
+            }
+        },
+    }
+
+    form_rules = [
+        rules.HTML(f'<a href="{docu_links["cmk_user_generation"]}" target="_blank" '
+                   f'class="badge badge-light" style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-info-circle"></i> Documentation</a> '
+                   f'<a href="/admin/ldap_search/?mode=group" target="_blank" '
+                   f'class="badge badge-light" style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-search"></i> Look up what a group carries '
+                   f'in the directory</a>'),
+        *modern_form(
+            section('1', 'main', 'Main Options',
+                    'Name, description and activation.',
+                    [rules.Field('name'),
+                     rules.Field('documentation'),
+                     rules.Field('enabled')]),
+            section('2', 'out', 'One User per LDAP Group',
+                    'Your hosts carry LDAP group names in an attribute. This '
+                    'creates one Checkmk user per group found. Every Jinja '
+                    'field below sees the same variables: {{name}} for the '
+                    'group name, plus every attribute the group itself has in '
+                    'the directory \u2014 {{mail}}, {{description}}, {{dn}} '
+                    'and whatever else the attribute list below reads.',
+                    [rules.Field('outcome')]),
+        ),
+    ]
+
+    def __init__(self, model, **kwargs):
+        """
+        Update elements
+        """
+        self.column_formatters.update({
+            'render_checkmk_user_generation_outcome': _render_user_generation_outcome,
+        })
+
+        self.form_overrides.update({
+            'render_checkmk_user_generation_outcome': HiddenField,
+            'name': StringField,
+        })
+
+        self.column_labels.update({
+            'render_checkmk_user_generation_outcome': "Create following Users",
+        })
+
+        super().__init__(model, **kwargs)
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
 
 
 bi_rule_template = form_subdocuments_template.copy()

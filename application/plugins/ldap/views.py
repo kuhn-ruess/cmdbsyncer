@@ -19,6 +19,7 @@ from .ldap import (
 # Value and label of the search modes, the value is what build_search_filter expects
 SEARCH_MODES = [
     ('hostname', "Hostname — with or without domain"),
+    ('group', "Group by name — what a group carries"),
     ('contains', "Hostname contains"),
     ('attribute', "Attribute contains"),
     ('filter', "Own LDAP filter"),

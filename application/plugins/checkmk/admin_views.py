@@ -26,8 +26,12 @@ from .models import (
     CheckmkSite,
     CheckmkSitePool,
     CheckmkTagMngmt,
-    CheckmkUserMngmt,
     CheckmkGroupRule,
+)
+
+from .user_models import (
+    CheckmkUserMngmt,
+    CheckmkUserGenerationRule,
 )
 
 from .views import (
@@ -49,6 +53,7 @@ from .views import (
     CheckmkTagMngmtView,
     CheckmkTestFolderScopeView,
     CheckmkUserMngmtView,
+    CheckmkUserGenerationRuleView,
     CheckmkGroupRuleView,
 )
 
@@ -128,6 +133,15 @@ def register_admin_views(admin):
             category="Checkmk",
             menu_icon_type='fa',
             menu_icon_value='fa-user-circle',
+        )
+    )
+    admin.add_view(
+        CheckmkUserGenerationRuleView(
+            CheckmkUserGenerationRule,
+            name="Generate Checkmk Users",
+            category="Checkmk",
+            menu_icon_type='fa',
+            menu_icon_value='fa-user-plus',
         )
     )
     admin.add_view(

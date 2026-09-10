@@ -35,6 +35,7 @@ from .inits import (
     inventorize_hosts,
     show_missing,
     export_users,
+    generate_users,
     export_tags,
     export_downtimes,
     export_dcd_rules,
@@ -742,6 +743,18 @@ def cli_cmk_users(account):
     """
     export_users(account)
 #.
+#   .-- Command: Generate Users
+@cli_cmk.command('generate_users')
+@click.option("--debug", is_flag=True)
+def cli_cmk_generate_users(debug=False):
+    """
+    Create Checkmk Users out of Host Attributes
+
+    ### Example
+    _./cmdbsyncer checkmk generate_users_
+    """
+    generate_users(debug=debug)
+#.
 #   .-- Command: Export DCD Rules
 @cli_cmk.command('export_dcd_rules')
 @click.option("--debug-rules", default="")
@@ -881,6 +894,7 @@ register_cronjob('Checkmk: Inventorize', inventorize_hosts)
 register_cronjob('Checkmk: Activate Changes', activate_changes)
 register_cronjob('Checkmk: Bake and Sign Agents', bake_and_sign_agents)
 register_cronjob('Checkmk: Export Users', export_users)
+register_cronjob('Checkmk: Generate Users', generate_users)
 register_cronjob('Checkmk: Export Tags', export_tags)
 register_cronjob('Checkmk: Export Downtimes', export_downtimes)
 register_cronjob('Checkmk: Export DCD Rules', export_dcd_rules)

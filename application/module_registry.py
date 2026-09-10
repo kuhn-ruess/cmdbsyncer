@@ -209,6 +209,11 @@ ENTRIES = {
             "Create and update Checkmk users together with their roles and "
             "contact groups."
         ),
+        'Generate Checkmk Users': (
+            "Turn the LDAP groups your hosts belong to into Checkmk users "
+            "instead of maintaining the list by hand, each one filled with "
+            "the mail address that group carries in the directory."
+        ),
         'Manage Downtimes': (
             "Set and remove downtimes in Checkmk by rule — for example for "
             "hosts in a maintenance state."

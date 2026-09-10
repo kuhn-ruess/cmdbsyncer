@@ -204,6 +204,8 @@ def build_search_filter(config, mode, term, attribute=None, use_account_filter=T
     Modes:
         hostname   the hostname field of the account, with or without a
                    domain: 'srv01' also finds 'srv01.example.com'
+        group      the given attribute matches the term exactly, the way
+                   the Checkmk user generation looks a group up
         contains   the hostname field contains the term anywhere
         attribute  the given attribute contains the term
         filter     the term already is an LDAP filter and is used as it is
@@ -225,6 +227,11 @@ def build_search_filter(config, mode, term, attribute=None, use_account_filter=T
         if mode == 'hostname':
             # Either the name itself, or the name with any domain behind it
             query = f"(|({field}={value})({field}={value}.*))"
+        elif mode == 'group':
+            field = (attribute or 'cn').strip()
+            if not ATTRIBUTE_NAME.match(field):
+                raise LdapSearchError(f"'{field}' is not an attribute name")
+            query = f"({field}={value})"
         elif mode == 'contains':
             query = f"({field}=*{value}*)"
         elif mode == 'attribute':
@@ -273,6 +280,84 @@ def search_objects(config, search_filter, limit=25):
         raise LdapSearchError(f"Unknown encoding '{config['encoding']}'") from error
     except (ldap.LDAPError, ValueError) as error:
         raise LdapSearchError(str(error)) from error
+
+
+# One filter must not grow unbounded — servers reject overlong search
+# filters, so group names are looked up in chunks.
+GROUP_LOOKUP_CHUNK = 50
+
+
+def _name_filter(config, name_attribute, names):
+    """
+    Filter matching any of the given names, narrowed by the config's own
+    search filter when it has one.
+    """
+    query = ''.join(f"({name_attribute}={escape_filter_chars(x)})" for x in names)
+    if len(names) > 1:
+        query = f"(|{query})"
+    if extra_filter := (config.get('search_filter') or '').strip():
+        query = f"(&{extra_filter}{query})"
+    return query
+
+
+def get_group_attributes(config, group_names, name_attribute='cn', attributes=None):
+    """
+    Attributes of LDAP group objects, looked up by their name.
+
+    `base_dn` and `search_filter` of the given config are used as they
+    are, so a caller looking for something else than the objects of the
+    host import passes a config with those two overwritten — the search
+    filter of an account usually only matches its hosts.
+
+    `attributes` limits what is read; empty reads everything the group
+    has. Returns {group_name: {attribute: value}} with the names spelled
+    the way the caller asked for them. A name the server does not know
+    simply has no entry.
+    """
+    _require_ldap()
+
+    for attribute in [name_attribute, *(attributes or [])]:
+        if not ATTRIBUTE_NAME.match(attribute):
+            raise LdapSearchError(f"'{attribute}' is not an attribute name")
+
+    # dict.fromkeys keeps the order and drops the duplicates a host
+    # attribute shared by many hosts would otherwise produce
+    names = [x for x in dict.fromkeys(group_names) if x]
+    if not names:
+        return {}
+
+    # An empty list asks the server for everything the group has; a
+    # given list always carries the name attribute, it is matched on.
+    if attributes:
+        attributes = list(dict.fromkeys([name_attribute, *attributes]))
+    config = dict(config, debug=False, encoding_errors='replace',
+                  attributes=', '.join(attributes or []))
+    if not _check_address(config):
+        raise LdapSearchError("Address needs to start with ldap:// or ldaps://")
+    connect = _connect(config)
+    if connect is None:
+        raise LdapSearchError("Could not connect to the LDAP server")
+
+    found = {}
+    try:
+        for start in range(0, len(names), GROUP_LOOKUP_CHUNK):
+            query = _name_filter(config, name_attribute,
+                                 names[start:start + GROUP_LOOKUP_CHUNK])
+            for dn, entry in _search(connect, dict(config, search_filter=query)):
+                if not isinstance(entry, dict):
+                    # Referral, not an object
+                    continue
+                values = {key: decode_value(content[0], config)
+                          for key, content in entry.items() if content}
+                values['dn'] = dn
+                if group_name := values.get(name_attribute):
+                    found[group_name.lower()] = values
+    except LookupError as error:
+        raise LdapSearchError(f"Unknown encoding '{config['encoding']}'") from error
+    except (ldap.LDAPError, ValueError) as error:
+        raise LdapSearchError(str(error)) from error
+
+    return {name: found[name.lower()] for name in names if name.lower() in found}
 
 
 def _inner_import(config):

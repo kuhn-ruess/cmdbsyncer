@@ -104,3 +104,64 @@ def resolve_loop_list(list_to_loop, attributes):
         # abort the whole export with a KeyError.
         rendered = attributes.get(list_to_loop, '')
     return [x for x in get_list(rendered) if x], None
+
+
+def collect_attribute_index(plugin, db_hosts, cache='cmk_conf'):
+    """
+    Index the attributes of every given host twice: once by attribute
+    name (``key -> [values]``) and once by attribute value
+    (``value -> [keys]``).
+
+    Both directions are needed because a "Foreach" selection can name
+    either side: `service:Firewall` is found by value, `Firewall:service`
+    by name. Shared by every export that turns host attributes into
+    objects of their own (groups, users).
+    """
+    collection_keys = {}
+    collection_values = {}
+    for db_host in db_hosts:
+        if attributes := plugin.get_attributes(db_host, cache):
+            for key, value in attributes['all'].items():
+                key, value = str(key), str(value)
+                # Add the Keys
+                collection_keys.setdefault(key, [])
+                if value not in collection_keys[key]:
+                    collection_keys[key].append(value)
+                # Add the Values
+                collection_values.setdefault(value, [])
+                if key not in collection_values[value]:
+                    collection_values[value].append(key)
+    return collection_keys, collection_values
+
+
+def foreach_attribute_items(attribute_index, foreach_type, foreach):
+    """
+    The raw items a "Foreach" selection yields from an attribute index
+    built by :func:`collect_attribute_index`.
+
+    `label` reads the values behind an attribute name, `value` the names
+    carrying a value, and `list` splits the values behind an attribute
+    name into their entries. A trailing ``*`` makes the name a prefix and
+    collects the values of every attribute starting with it.
+    """
+    collection_keys, collection_values = attribute_index
+    foreach = foreach or ''
+
+    if foreach.endswith('*') and foreach_type in ('label', 'value'):
+        search = foreach[:-1]
+        items = []
+        for key, values in collection_keys.items():
+            if key.startswith(search):
+                items += values
+        return items
+
+    if foreach_type == 'value':
+        return collection_values.get(foreach, [])
+    if foreach_type == 'label':
+        return collection_keys.get(foreach, [])
+    if foreach_type == 'list':
+        items = []
+        for entry in collection_keys.get(foreach, []):
+            items += get_list(entry)
+        return items
+    return []

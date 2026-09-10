@@ -7,7 +7,10 @@ from mongoengine.errors import DoesNotExist
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
 from application.modules.rule.rule import Rule
 from application.plugins.checkmk.models import CheckmkGroupRule
-from application.helpers.syncer_jinja import get_list
+from application.plugins.checkmk.helpers import (
+    collect_attribute_index,
+    foreach_attribute_items,
+)
 
 from application.plugins.checkmk.models import CheckmkObjectCache
 
@@ -37,8 +40,6 @@ class CheckmkGroupSync(CMK2):
         """
         Create dict with list of all possible attributes
         """
-        collection_keys = {}
-        collection_values = {}
         # Default stays host-only (is_object=True documents, e.g. shadow
         # hosts, are excluded). If the account — or a child account — defines
         # an object filter for this export, honor it so the configured
@@ -49,21 +50,9 @@ class CheckmkGroupSync(CMK2):
             db_hosts = Host.objects_by_filter(object_filter)
         else:
             db_hosts = Host.get_export_hosts()
-        for db_host in db_hosts:
-            if attributes := self.get_attributes(db_host, 'cmk_conf'):
-                for key, value in attributes['all'].items():
-                    key, value = str(key), str(value)
-                    # Add the Keys
-                    collection_keys.setdefault(key, [])
-                    if value not in collection_keys[key]:
-                        collection_keys[key].append(value)
-                    # Add the Values
-                    collection_values.setdefault(value, [])
-                    if key not in collection_values[value]:
-                        collection_values[value].append(key)
         # [0] All Values behind Label
         # [1] All Keys which have value
-        return collection_keys, collection_values
+        return collect_attribute_index(self, db_hosts)
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments,line-too-long,redefined-outer-name
     def _add_group_entries(self, items, rewrite_name, rewrite_title, outcome, group_type, groups, str_replace, replace_exceptions):
@@ -103,48 +92,7 @@ class CheckmkGroupSync(CMK2):
                 rewrite_name = True
             if outcome.rewrite_title:
                 rewrite_title = True
-            if outcome.foreach_type == 'value':
-
-                if outcome.foreach.endswith('*'):
-                    keys = []
-                    search = outcome.foreach[:-1]
-                    for key, keys_values in attributes[0].items():
-                        if key.startswith(search):
-                            keys += keys_values
-                else:
-                    keys = attributes[1].get(outcome.foreach, [])
-                self._add_group_entries(
-                    keys,
-                    rewrite_name,
-                    rewrite_title,
-                    outcome,
-                    group_type,
-                    groups,
-                    str_replace,
-                    replace_exceptions
-                )
-
-            elif outcome.foreach_type == 'label':
-                if outcome.foreach.endswith('*'):
-                    values = []
-                    search = outcome.foreach[:-1]
-                    for label, label_values in attributes[0].items():
-                        if label.startswith(search):
-                            values += label_values
-                else:
-                    values = attributes[0].get(outcome.foreach, [])
-                self._add_group_entries(
-                    values,
-                    rewrite_name,
-                    rewrite_title,
-                    outcome,
-                    group_type,
-                    groups,
-                    str_replace,
-                    replace_exceptions
-                )
-
-            elif outcome.foreach_type == "object":
+            if outcome.foreach_type == "object":
                 # Outbound — only ship objects whose lifecycle is active
                 # and that are not soft-deleted.
                 db_filter = Host.active_q() & Q(deleted_at__exists=False) & \
@@ -152,33 +100,21 @@ class CheckmkGroupSync(CMK2):
                 object_filter = outcome.foreach
                 if object_filter:
                     db_filter &= Q(inventory__syncer_account=object_filter)
-                hostnames = [entry.hostname for entry in Host.objects(db_filter)]
-                self._add_group_entries(
-                    hostnames,
-                    rewrite_name,
-                    rewrite_title,
-                    outcome,
-                    group_type,
-                    groups,
-                    str_replace,
-                    replace_exceptions
-                )
-
-            elif outcome.foreach_type == "list":
-                total_list = []
-                list_of = attributes[0].get(outcome.foreach, [])
-                for entry in list_of:
-                    total_list += get_list(entry)
-                self._add_group_entries(
-                    total_list,
-                    rewrite_name,
-                    rewrite_title,
-                    outcome,
-                    group_type,
-                    groups,
-                    str_replace,
-                    replace_exceptions
-                )
+                items = [entry.hostname for entry in Host.objects(db_filter)]
+            else:
+                items = foreach_attribute_items(attributes,
+                                                outcome.foreach_type,
+                                                outcome.foreach)
+            self._add_group_entries(
+                items,
+                rewrite_name,
+                rewrite_title,
+                outcome,
+                group_type,
+                groups,
+                str_replace,
+                replace_exceptions
+            )
 
 
         print(f"\n{CC.HEADER}Start Sync{CC.ENDC}")

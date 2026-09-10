@@ -4,7 +4,7 @@ Checkmk Users Sync
 from application import logger
 from application.plugins.checkmk.cmk2 import CMK2
 from application.modules.rule.rule import Rule
-from application.plugins.checkmk.models import CheckmkUserMngmt
+from application.plugins.checkmk.user_models import CheckmkUserMngmt
 
 from syncerapi.v1 import cc as CC
 
@@ -18,15 +18,36 @@ class CheckmkUserSync(CMK2):
     name = "Synce Users to Checkmk"
     source = "cmk_user_sync"
 
-    def export_users(self):
+    @staticmethod
+    def has_changes(cmk_data, user_template):
         """
-        Export Checkmk Users
+        True when Checkmk's version of the user differs from what the
+        Syncer would send. Only the fields the Syncer manages are
+        compared, dotted names reach into the nested blocks.
         """
         checks = [
             'fullname', 'disable_login',
             'pager_address', 'contactgroups',
             'roles', 'contact_options.email',
         ]
+        changed = False
+        for check in checks:
+            if '.' in check:
+                first_level, second_level = check.split('.')
+                cmk_current = cmk_data.get(first_level, {}).get(second_level)
+                tmpl_current = user_template[first_level][second_level]
+            else:
+                cmk_current = cmk_data.get(check)
+                tmpl_current = user_template[check]
+            if cmk_current != tmpl_current:
+                changed = True
+                logger.debug("%s: %s vs %s", check, tmpl_current, cmk_current)
+        return changed
+
+    def export_users(self):
+        """
+        Export Checkmk Users
+        """
         for user in CheckmkUserMngmt.objects(disabled__ne=True):
             url = f"/objects/user_config/{user.user_id}"
             cmk_user = self.request(url, method="GET")
@@ -67,7 +88,7 @@ class CheckmkUserSync(CMK2):
                 print(f"{CC.OKGREEN} *{CC.ENDC} {user.user_id}: Created")
                 url = "/domain-types/user_config/collections/all"
                 response = self.request(url, data=user_template, method="POST")
-                logger.debug(f"Response {response}")
+                logger.debug("Response %s", response)
             else:
                 # We May Update the User (or delete him)
                 if user.remove_if_found:
@@ -76,19 +97,7 @@ class CheckmkUserSync(CMK2):
                     continue
 
                 etag = cmk_user[1]['ETag']
-                cmk_data = cmk_user[0]['extensions']
-                changed = False
-                for check in checks:
-                    if '.' in check:
-                        first_level, second_level = check.split('.')
-                        cmk_current = cmk_data.get(first_level,{}).get(second_level)
-                        tmpl_current = user_template[first_level][second_level]
-                    else:
-                        cmk_current = cmk_data.get(check)
-                        tmpl_current = user_template[check]
-                    if cmk_current != tmpl_current:
-                        changed = True
-                        logger.debug(f"{check}: {tmpl_current} vs {cmk_current}")
+                changed = self.has_changes(cmk_user[0]['extensions'], user_template)
                 if changed or user.overwrite_password:
                     if not user.overwrite_password:
                         del user_template['auth_option']

@@ -26,6 +26,7 @@ from application.plugins.checkmk.rule_passwords import (
 )
 from application.plugins.checkmk.groups import CheckmkGroupSync
 from application.plugins.checkmk.users import CheckmkUserSync
+from application.plugins.checkmk.user_generation import CheckmkUserGeneration
 from application.plugins.checkmk.bi import BI
 from application.plugins.checkmk.sites import CheckmkSites
 from application.plugins.checkmk.notification_rules import (
@@ -818,6 +819,18 @@ def export_users(account):
             log.log(f"Export Users to Account {account} not started",
                     source="cmk_user_sync",
                     details=[('error', str(error_obj))])
+#.
+#   .-- Generate Users
+def generate_users(_account=False, debug=False):
+    """
+    Create Checkmk User entries out of Host Attributes
+    """
+    rules = _load_rules()
+    syncer = CheckmkUserGeneration()
+    syncer.debug = debug
+    syncer.rewrite = rules['rewrite']
+    syncer.filter = rules['filter']
+    syncer.generate_users()
 #.
 #   . Sync Folder Pools
 def sync_folderpools(_account=False, _debug=False):

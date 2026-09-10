@@ -2,7 +2,7 @@
     "version": "1.0.0",
     "author": "Kuhn & Rueß GmbH",
     "name": "LDAP Server",
-    "description": "",
+    "description": "Import Hosts and Objects from an LDAP Directory, inventorize their Attributes and look up Group Mail Addresses",
     "ident": "ldap",
     "account_presets" : {
     },
@@ -19,6 +19,20 @@
         "inventorize_match_attribute": "",
         "inventorize_collect_by_key": "",
         "inventorize_rewrite_collect_by_key": ""
+    },
+    "account_custom_field_help": {
+        "base_dn": "Where the import starts searching, e.g. ou=servers,dc=example,dc=com",
+        "search_filter": "LDAP filter picking the objects to import, e.g. (objectClass=computer)",
+        "attributes": "Comma separated attributes to read, empty for all of them",
+        "hostname_field": "Attribute whose value becomes the hostname in the Syncer",
+        "encoding": "Character encoding the server answers in, e.g. utf-8",
+        "allow_unencrypted": "yes continues on a plain ldap:// connection when StartTLS fails",
+        "rewrite_hostname": "Jinja template rewriting the hostname, e.g. {{host}}.example.com",
+        "inventorize_key": "Prefix the inventorized attributes are stored under",
+        "inventorize_match_by_domain": "yes matches the object to a host including its domain",
+        "inventorize_match_attribute": "Attribute matched against the hostname of the Syncer",
+        "inventorize_collect_by_key": "Attribute whose objects are collected into one list",
+        "inventorize_rewrite_collect_by_key": "Jinja template rewriting each collected entry"
     },
     "depends_on_py_modules": [ "ldap"]
 }

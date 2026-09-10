@@ -108,6 +108,7 @@ _stub_package("application.modules.rule", path=[])
 _stub_package("application.models", path=[])
 _stub_package("application.plugins", path=[])
 _stub_package("application.plugins.checkmk", path=[])
+_stub_package("application.plugins.ldap", path=[])
 sys.modules["application.plugins.checkmk"].get_rule_preview = MagicMock(
     name="stub.get_rule_preview")
 # Stubs for the plugin modules the host view imports debug entry points
@@ -672,10 +673,24 @@ _models_host.get_cmdb_model_fields = _stub_get_cmdb_model_fields
 # application.init_db
 _application.init_db = MagicMock(name="stub.init_db")
 
+# application.plugins.checkmk.user_models
+# The Checkmk user documents live next to models.py and are stubbed the
+# same way — the tests never touch a real mongoengine document.
+_cmk_user_models = _stub_package("application.plugins.checkmk.user_models")
+for _name in ("CheckmkUserMngmt", "CheckmkUserGenerationRule",
+              "CmkUserGenerationOutcome"):
+    setattr(_cmk_user_models, _name, MagicMock(name=f"stub.{_name}"))
+
 # Load real plugin modules
 _try_load_real_module(
     "application.modules.rule.rule",
     os.path.join("modules", "rule", "rule.py"),
+)
+# The Checkmk user generation reads its groups from LDAP, so the LDAP
+# module has to be registered before it — and therefore before inits.
+_try_load_real_module(
+    "application.plugins.ldap.ldap",
+    os.path.join("plugins", "ldap", "ldap.py"),
 )
 # checkmk/inits.py imports Filter and Rewrite at module import time.
 _try_load_real_module(
@@ -700,6 +715,7 @@ for _mod_name, _mod_path in [
     ("sites", "sites.py"),
     ("tags", "tags.py"),
     ("users", "users.py"),
+    ("user_generation", "user_generation.py"),
     ("inventorize", "inventorize.py"),
     ("import_v1", "import_v1.py"),
     ("import_v2", "import_v2.py"),

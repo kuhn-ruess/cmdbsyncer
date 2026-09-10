@@ -11,6 +11,16 @@
         an object really is in the directory. Nothing is written: neither
         the directory nor the syncer's objects are changed here.
     </p>
+    <p class="text-muted">
+        Pick <strong>Group by name</strong> to see what a group carries: give
+        the base DN the groups live under, the attribute holding their name
+        (<code>cn</code> by default) and the group's name. Leave Attributes
+        empty and the result lists everything the group has — exactly the
+        variables the Checkmk user generation offers as
+        <code>{{ '{{ mail }}' }}</code>, <code>{{ '{{ description }}' }}</code>
+        and so on. The search filter of the account stays off here; it
+        matches the imported hosts, never a group.
+    </p>
 
     {% if not ldap_available %}
     <div class="alert alert-danger">
@@ -103,7 +113,7 @@
                 </div>
             </div>
 
-            <div class="form-group form-check">
+            <div class="form-group form-check" id="account_filter_row">
                 <input type="checkbox" class="form-check-input" id="use_account_filter"
                        name="use_account_filter"
                        {% if form.use_account_filter %}checked{% endif %}/>
@@ -204,6 +214,8 @@
             var attribute = document.getElementById('attribute');
             var termHint = document.getElementById('term_hint');
             var filterHint = document.getElementById('account_filter_hint');
+            var filterRow = document.getElementById('account_filter_row');
+            var accountFilter = document.getElementById('use_account_filter');
 
             function current() {
                 for (var i = 0; i < accounts.length; i++) {
@@ -214,10 +226,16 @@
 
             function render() {
                 var selected = current();
+                var groupMode = mode.value === 'group';
                 baseDn.placeholder = selected ? selected.base_dn : '';
                 encoding.placeholder = selected ? selected.encoding : '';
                 filterHint.textContent = selected && selected.search_filter
                     ? '(' + selected.search_filter + ')' : '';
+                // The account's filter matches the imported hosts, so it can
+                // only ever exclude a group. Disabled, not just hidden, so a
+                // checked box does not travel with the form.
+                filterRow.style.display = groupMode ? 'none' : '';
+                accountFilter.disabled = groupMode;
 
                 var field = selected && selected.hostname_field
                     ? selected.hostname_field : 'the hostname field';
@@ -225,11 +243,16 @@
                     'hostname': 'Finds ' + field + ' exactly, and with any domain behind it.',
                     'contains': 'Finds every object whose ' + field + ' contains the term.',
                     'attribute': 'Finds every object whose attribute contains the term.',
+                    'group': 'Finds the object whose attribute below is exactly the term, '
+                        + 'and lists everything it carries — those are the Jinja variables '
+                        + 'of the Checkmk user generation.',
                     'filter': 'Used as the LDAP filter, e.g. (&(objectClass=computer)(cn=srv*)).'
                 };
                 termHint.textContent = hints[mode.value] || '';
-                attributeRow.style.display = mode.value === 'attribute' ? '' : 'none';
+                attributeRow.style.display =
+                    (mode.value === 'attribute' || groupMode) ? '' : 'none';
                 attribute.required = mode.value === 'attribute';
+                attribute.placeholder = groupMode ? 'cn' : 'e.g. cn';
             }
 
             account.addEventListener('change', render);
