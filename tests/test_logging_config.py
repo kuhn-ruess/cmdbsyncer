@@ -44,13 +44,25 @@ register_feature('configure_logging', _configure_logging)
 """
 
 
-# Emits one entry through the central Log() module with the MongoEngine
-# documents patched out, which is exactly the path every import/export
-# takes at the end of a run.
-_EMIT = """
+# Log() also fans every entry into the notification dispatcher, which
+# reads its rules from MongoDB. A test run has no database, so pymongo
+# waits out its full server selection timeout — half a minute per test —
+# before the dispatcher swallows the error. The entries themselves are
+# what these tests are about, so the fan-out is patched out with the
+# documents.
+_NO_DB = """
 from unittest.mock import patch
 import application
 import application.modules.log.log as logmod
+import application.helpers.notification_dispatch as dispatch
+patch.object(dispatch, 'dispatch_log_entry').start()
+"""
+
+
+# Emits one entry through the central Log() module with the MongoEngine
+# documents patched out, which is exactly the path every import/export
+# takes at the end of a run.
+_EMIT = _NO_DB + """
 with patch.object(logmod, 'LogEntry'), patch.object(logmod, 'DetailEntry'):
     logmod.Log().log('Checkmk Host Export', source='TEST',
                      details=[('created', '3')])
@@ -245,11 +257,8 @@ print(open('{workdir}/cmdbsyncer.log', encoding='utf-8').read())
         overwrite itself down to the last one while the Log view kept
         them all.
         """
-        snippet = """
+        snippet = _NO_DB + """
 import logging
-from unittest.mock import patch
-import application
-import application.modules.log.log as logmod
 
 
 class _Capture(logging.Handler):
