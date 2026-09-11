@@ -120,9 +120,19 @@ rule.outcome = CmkUserGenerationOutcome(
 rule.save()
 
 body = check(page + '?preview=1', 200).get_data(as_text=True)
-for needle in ('grp-dba', 'create', 'cg_grp-dba'):
+for needle in ('grp-dba', 'new in Checkmk', 'cg_grp-dba',
+               # email and pager are shown even when their template is
+               # empty, and the run's own bookkeeping is not an error
+               'pager_address', 'stays empty'):
     if needle not in body:
         fail(f'the preview page does not show {needle!r}')
+if 'started' in body:
+    fail('the preview page shows the run bookkeeping as an error')
+
+# The rule list carries the link to it
+listing = check('/admin/checkmkusergenerationrule/', 200).get_data(as_text=True)
+if 'checkmk_user_generation_preview' not in listing:
+    fail('the rule list does not link the preview')
 print('USER_GENERATION_PREVIEW_OK')
 '''
 

@@ -70,10 +70,14 @@
             <div class="card-body">
                 <p class="text-muted">
                     {{ rows|length }} group(s).
-                    <strong>create</strong> = no such Checkmk user yet,
-                    <strong>update</strong> = the listed fields would change,
-                    <strong>unchanged</strong> = nothing to do,
-                    <strong>skipped</strong> = no user is written, with the reason.
+                    <strong>new in Checkmk</strong> = no user with this ID exists
+                    yet and one would be created,
+                    <strong>update</strong> = the user exists and the marked
+                    fields would change,
+                    <strong>already correct</strong> = the user exists and
+                    nothing would change,
+                    <strong>skipped</strong> = no user is written, with the
+                    reason next to it.
                 </p>
                 <div style="overflow-x: auto;">
                 <table class="table table-sm table-striped">
@@ -82,10 +86,10 @@
                             <th>Rule</th>
                             <th>Host value</th>
                             <th>Searched as</th>
-                            <th>Directory</th>
-                            <th>User ID</th>
-                            <th>Would</th>
-                            <th>Result</th>
+                            <th>In the directory</th>
+                            <th>Checkmk user ID</th>
+                            <th>In Checkmk</th>
+                            <th>Fields of that user</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -101,50 +105,90 @@
                             </td>
                             <td>
                                 {% if not row.searched %}
-                                <span class="text-muted">not asked</span>
+                                <span class="text-muted">
+                                    no LDAP account on the rule, not looked up
+                                </span>
                                 {% elif row.found %}
-                                {{ row.attributes|length }} attribute(s)
+                                found, {{ row.attributes|length }} attribute(s)
                                 {% else %}
-                                <span class="badge badge-warning">not found</span>
+                                <span class="badge badge-warning">
+                                    no such group in the directory
+                                </span>
                                 {% endif %}
                             </td>
                             <td><code>{{ row.user_id or '—' }}</code></td>
                             <td>
-                                <span class="badge badge-{{ 'success' if row.action == 'create'
-                                    else 'info' if row.action == 'update'
-                                    else 'secondary' }}">{{ row.action }}</span>
+                                {% if row.action == 'create' %}
+                                <span class="badge badge-success">new in Checkmk</span>
+                                {% elif row.action == 'update' %}
+                                <span class="badge badge-info">update</span>
+                                {% elif row.action == 'unchanged' %}
+                                <span class="badge badge-secondary">already correct</span>
+                                {% else %}
+                                <span class="badge badge-warning">skipped</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if row.note %}
                                 <span class="text-muted">{{ row.note }}</span>
                                 {% else %}
-                                <dl class="row mb-0">
-                                    {% for field, value in row.fields.items() %}
-                                    <dt class="col-sm-4">{{ field }}</dt>
-                                    <dd class="col-sm-8">
-                                        {% if value is string or value is number
-                                              or value is sameas true or value is sameas false %}
-                                        {{ value }}
-                                        {% else %}
-                                        {{ value|join(', ') or '—' }}
-                                        {% endif %}
-                                        {% if field in row.changed and row.action == 'update' %}
-                                        <span class="badge badge-info">changes</span>
-                                        {% endif %}
-                                    </dd>
+                                <table class="table table-sm mb-0">
+                                    <tbody>
+                                    {% for field in ['full_name', 'email',
+                                                     'pager_address', 'roles',
+                                                     'contact_groups',
+                                                     'disable_login'] %}
+                                    {% set value = row.rendered.get(field) %}
+                                    <tr>
+                                        <td class="text-muted"
+                                            style="width: 12em;">{{ field }}</td>
+                                        <td>
+                                            {% if value is sameas true
+                                                  or value is sameas false %}
+                                            {{ value }}
+                                            {% elif value is string %}
+                                                {% if value %}{{ value }}
+                                                {% elif field in row.fields %}
+                                                <span class="text-muted">
+                                                    renders to nothing, keeps
+                                                    <code>{{ row.fields[field] }}</code>
+                                                </span>
+                                                {% else %}
+                                                <span class="text-muted">
+                                                    renders to nothing, stays empty
+                                                </span>
+                                                {% endif %}
+                                            {% elif value %}
+                                            {{ value|join(', ') }}
+                                            {% else %}
+                                            <span class="text-muted">
+                                                no entry left after rendering
+                                            </span>
+                                            {% endif %}
+                                            {% if field in row.changed
+                                                  and row.action == 'update' %}
+                                            <span class="badge badge-info">changes</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
                                     {% endfor %}
-                                </dl>
+                                    </tbody>
+                                </table>
                                 {% if row.attributes %}
                                 <details>
                                     <summary class="text-muted">
                                         Variables the group carries
                                     </summary>
-                                    <dl class="row mb-0">
+                                    <table class="table table-sm mb-0">
+                                        <tbody>
                                         {% for key, value in row.attributes.items() %}
-                                        <dt class="col-sm-4"><code>{{ '{{' }} {{ key }} {{ '}}' }}</code></dt>
-                                        <dd class="col-sm-8">{{ value }}</dd>
+                                        <tr>
+                                            <td style="width: 12em;"><code>{{ '{{' }}{{ key }}{{ '}}' }}</code></td>
+                                            <td>{{ value }}</td>
+                                        </tr>
                                         {% endfor %}
-                                    </dl>
+                                        </tbody>
+                                    </table>
                                 </details>
                                 {% endif %}
                                 {% endif %}

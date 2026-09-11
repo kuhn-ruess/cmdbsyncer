@@ -1,0 +1,15 @@
+{% extends 'admin/model/list.html' %}
+
+{% block body %}
+<p>
+    <a href="/admin/checkmk_user_generation_preview/" class="btn btn-sm btn-primary">
+        <i class="fa fa-eye"></i> Preview what these rules would create
+    </a>
+    <span class="text-muted ml-2">
+        Runs the rules against the hosts you have right now — which groups they
+        carry, what the directory returns and which Checkmk user each one
+        becomes. Nothing is written.
+    </span>
+</p>
+{{ super() }}
+{% endblock %}

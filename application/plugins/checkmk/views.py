@@ -535,6 +535,10 @@ class CheckmkUserGenerationRuleView(RuleModelView):
     """
     Custom User Generation Model View
     """
+    # The preview belongs to the rules as a whole, not into one of them:
+    # it answers what the enabled rules together would create.
+    list_template = 'admin/checkmk_user_generation_rule_list.html'
+
     column_default_sort = "name"
 
     column_exclude_list = [
@@ -711,11 +715,7 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                    f'<a href="/admin/ldap_search/?mode=group" target="_blank" '
                    f'class="badge badge-light" style="margin-bottom: 8px;">'
                    f'<i class="fa fa-search"></i> Look up what a group carries '
-                   f'in the directory</a> '
-                   f'<a href="/admin/checkmk_user_generation_preview/" target="_blank" '
-                   f'class="badge badge-light" style="margin-bottom: 8px;">'
-                   f'<i class="fa fa-eye"></i> Preview what these rules would '
-                   f'create</a>'),
+                   f'in the directory</a>'),
         *modern_form(
             section('1', 'main', 'Main Options',
                     'Name, description and activation.',

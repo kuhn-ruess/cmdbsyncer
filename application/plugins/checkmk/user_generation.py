@@ -132,6 +132,11 @@ def user_fields(rule, context, user_id, current=None):
     rendering to nothing can leave its field as it is instead of
     emptying it. Without one — the preview, a user about to be created —
     those fields simply stay out.
+
+    Returns (wanted, rendered): the fields to write, and what each
+    template produced on its own. A template that produced nothing is
+    missing from the first and empty in the second, which is what a
+    preview has to show instead of quietly leaving the field out.
     """
     outcome = rule.outcome
     wanted = {
@@ -142,17 +147,18 @@ def user_fields(rule, context, user_id, current=None):
         'contact_groups': render_entries(outcome.contact_groups, context),
         'disable_login': bool(outcome.disable_login),
     }
+    rendered = dict(wanted)
     # A template that renders to nothing — the group has no such
     # attribute — leaves the field as it is instead of emptying it.
     for field, template in (('email', outcome.rewrite_email),
                             ('pager_address', outcome.rewrite_pager_address)):
-        if not template:
-            continue
-        if value := render_jinja(template, _ctx=context).strip():
+        value = render_jinja(template, _ctx=context).strip() if template else ''
+        rendered[field] = value
+        if value:
             wanted[field] = value
         elif current is not None and getattr(current, field, None):
             wanted[field] = getattr(current, field)
-    return wanted
+    return wanted, rendered
 
 
 class CheckmkUserGeneration(Plugin):
@@ -291,6 +297,7 @@ class CheckmkUserGeneration(Plugin):
             'attributes': dict(group),
             'user_id': '',
             'fields': {},
+            'rendered': {},
             'changed': [],
             'action': 'skipped',
             'note': '',
@@ -312,7 +319,7 @@ class CheckmkUserGeneration(Plugin):
             return plan
 
         plan['user'] = user
-        plan['fields'] = user_fields(rule, context, user_id, user)
+        plan['fields'], plan['rendered'] = user_fields(rule, context, user_id, user)
         plan['changed'] = [field for field, value in plan['fields'].items()
                            if getattr(user, field, None) != value] \
             if user else list(plan['fields'])
@@ -384,4 +391,9 @@ class CheckmkUserGeneration(Plugin):
                 plan['found'] = bool(attributes)
                 plan.pop('user', None)
                 rows.append(plan)
-        return rows, list(self.log_details)
+        # log_details also carries the run's own bookkeeping — when it
+        # started, how long it took. Only the failures are of interest
+        # to somebody looking at a preview.
+        errors = [(level, message) for level, message in self.log_details
+                  if str(level).lower() == 'error']
+        return rows, errors

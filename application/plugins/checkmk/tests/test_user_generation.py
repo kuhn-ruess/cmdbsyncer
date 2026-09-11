@@ -591,6 +591,19 @@ class TestCheckmkUserGeneration(_SyncerTestCase):
 
     @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
     @patch('builtins.print')
+    def test_an_empty_pager_is_still_shown(self, mock_print, mock_model):
+        # The write path leaves the field alone, but somebody looking at a
+        # preview has to see that the template produced nothing
+        mock_model.objects.return_value.first.return_value = None
+
+        plan = self.syncer.plan_user(
+            make_rule(rewrite_pager_address='{{telephoneNumber}}'), 'dba', {})
+
+        self.assertEqual(plan['rendered']['pager_address'], '')
+        self.assertNotIn('pager_address', plan['fields'])
+
+    @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
+    @patch('builtins.print')
     def test_a_hand_made_user_is_a_skipped_plan(self, mock_print, mock_model):
         mock_model.objects.return_value.first.return_value = StoredUser(
             user_id='dba', generated_by_rule=None)
