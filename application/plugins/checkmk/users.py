@@ -31,26 +31,31 @@ class CheckmkUserSync(CMK2):
             url = f"/objects/user_config/{user.user_id}"
             cmk_user = self.request(url, method="GET")
             # ({}, {'status_code': 404})
+            # A field never filled in is None on the document, and the
+            # Checkmk API rejects null for every one of these ("pager
+            # address may not be null"). Checkmk itself answers with the
+            # empty value, so sending that is also what keeps has_changes
+            # from reporting a difference on every single run.
             user_template = {
               "username": user.user_id,
-              "fullname": user.full_name,
+              "fullname": user.full_name or user.user_id,
               "auth_option": {
                 "auth_type": "password",
                 "password": user.password
               },
-              "disable_login": user.disable_login,
+              "disable_login": bool(user.disable_login),
               "contact_options": {
-                "email": user.email
+                "email": user.email or ''
               },
-              "pager_address": user.pager_address,
+              "pager_address": user.pager_address or '',
               "idle_timeout": {
                 "option": "global"
               },
-              "roles": user.roles,
+              "roles": list(user.roles or []),
               #"authorized_sites": [
               #  "heute"
               #],
-              "contactgroups": user.contact_groups,
+              "contactgroups": list(user.contact_groups or []),
               "disable_notifications": {
                 "disable": False
               },
