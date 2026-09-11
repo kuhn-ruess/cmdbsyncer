@@ -79,7 +79,7 @@
                     <strong>skipped</strong> = no user is written, with the
                     reason next to it.
                 </p>
-                <div style="overflow-x: auto;">
+                <div class="table-scroll">
                 <table class="table table-sm table-striped">
                     <thead>
                         <tr>
@@ -174,11 +174,30 @@
                                     {% endfor %}
                                     </tbody>
                                 </table>
-                                {% if row.attributes %}
                                 <details>
                                     <summary class="text-muted">
                                         Variables the group carries
+                                        ({{ row.attributes|length }})
                                     </summary>
+                                    {% if not row.attributes %}
+                                    <p class="text-muted mb-0">
+                                        {% if not row.searched %}
+                                        The rule has no LDAP account, so the
+                                        directory was never asked and no
+                                        variable exists. Every Jinja field can
+                                        only use
+                                        <code>{{ '{{name}}' }}</code> and
+                                        <code>{{ '{{original_name}}' }}</code>.
+                                        {% else %}
+                                        The directory returned nothing for this
+                                        group, so no variable exists. Check the
+                                        group base DN, the group search filter
+                                        and the group name attribute of the
+                                        rule.
+                                        {% endif %}
+                                    </p>
+                                    {% endif %}
+                                    {% if row.attributes %}
                                     <table class="table table-sm mb-0">
                                         <tbody>
                                         {% for key, value in row.attributes.items() %}
@@ -189,8 +208,8 @@
                                         {% endfor %}
                                         </tbody>
                                     </table>
+                                    {% endif %}
                                 </details>
-                                {% endif %}
                                 {% endif %}
                             </td>
                         </tr>

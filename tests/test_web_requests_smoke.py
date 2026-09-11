@@ -128,6 +128,12 @@ for needle in ('grp-dba', 'new in Checkmk', 'cg_grp-dba',
         fail(f'the preview page does not show {needle!r}')
 if 'started' in body:
     fail('the preview page shows the run bookkeeping as an error')
+# A wide table scrolls in its own container, and its sticky header has to
+# stick to that container instead of 60px into it, on top of the first row
+if 'table-scroll' not in body:
+    fail('the result table is not in its own scroll container')
+if 'style="overflow-x: auto;"' in body:
+    fail('the result table still carries the inline overflow that breaks sticky')
 
 # The rule list carries the link to it
 listing = check('/admin/checkmkusergenerationrule/', 200).get_data(as_text=True)
