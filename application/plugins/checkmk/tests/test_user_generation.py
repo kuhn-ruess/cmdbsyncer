@@ -178,6 +178,32 @@ class TestReadLdapGroups(unittest.TestCase):
         # No list configured reads every attribute the group has
         self.assertEqual(mock_lookup.call_args[1]['attributes'], [])
 
+    @patch('application.plugins.checkmk.user_generation.get_group_attributes')
+    @patch('application.plugins.checkmk.user_generation.get_account_by_name')
+    def test_a_given_filter_replaces_the_one_of_the_rule(self, mock_account,
+                                                         mock_lookup):
+        mock_account.return_value = {'address': 'ldaps://srv', 'base_dn': 'dc=acc'}
+        mock_lookup.return_value = {}
+
+        read_ldap_groups(group_search(
+            make_outcome(ldap_account='ldap',
+                         ldap_group_filter='(objectClass=group)'),
+            '(objectClass=posixGroup)'), ['dba'])
+
+        self.assertEqual(mock_lookup.call_args[0][0]['search_filter'],
+                         '(objectClass=posixGroup)')
+
+    @patch('application.plugins.checkmk.user_generation.get_group_attributes')
+    @patch('application.plugins.checkmk.user_generation.get_account_by_name')
+    def test_debug_reaches_the_lookup(self, mock_account, mock_lookup):
+        mock_account.return_value = {'address': 'ldaps://srv', 'base_dn': 'dc=acc'}
+        mock_lookup.return_value = {}
+
+        read_ldap_groups(group_search(make_outcome(ldap_account='ldap')),
+                         ['dba'], debug=True)
+
+        self.assertTrue(mock_lookup.call_args[1]['debug'])
+
     @patch('application.plugins.checkmk.user_generation.get_account_by_name')
     def test_unknown_account_is_reported(self, mock_account):
         mock_account.return_value = False
@@ -323,6 +349,31 @@ class TestCheckmkUserGeneration(unittest.TestCase):
         ])
 
         self.assertEqual(mock_lookup.call_count, 2)
+
+    @patch('application.plugins.checkmk.user_generation.read_ldap_groups')
+    @patch('builtins.print')
+    def test_the_given_filter_beats_every_rule(self, mock_print, mock_lookup):
+        mock_lookup.return_value = {}
+        self.syncer.override_group_filter = '(objectClass=posixGroup)'
+        self.syncer.lookup_groups([
+            (make_rule('A', ldap_account='ldap',
+                       ldap_group_filter='(objectClass=group)'), ['dba']),
+        ])
+
+        self.assertEqual(mock_lookup.call_args[0][0].group_filter,
+                         '(objectClass=posixGroup)')
+
+    @patch('application.plugins.checkmk.user_generation.read_ldap_groups')
+    @patch('builtins.print')
+    def test_debug_names_the_groups_the_directory_does_not_have(self, mock_print,
+                                                                mock_lookup):
+        mock_lookup.return_value = {'dba': {'cn': 'dba'}}
+        self.syncer.debug = True
+        self.syncer.lookup_groups(
+            [(make_rule('A', ldap_account='ldap'), ['dba', 'linux'])])
+
+        printed = ' '.join(str(call) for call in mock_print.call_args_list)
+        self.assertIn('Not in the directory: linux', printed)
 
     @patch('application.plugins.checkmk.user_generation.read_ldap_groups')
     @patch('builtins.print')

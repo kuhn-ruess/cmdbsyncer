@@ -33,21 +33,26 @@ GroupSearch = namedtuple(
     'GroupSearch', 'account base_dn group_filter name_attribute attributes')
 
 
-def group_search(outcome):
+def group_search(outcome, group_filter=''):
     """
     The group search of one rule, normalised.
+
+    `group_filter` overrules the filter the rule carries — that is the
+    one filter a debug run tries out against every rule without anybody
+    editing the rules first.
     """
     return GroupSearch(
         account=outcome.ldap_account,
         base_dn=(outcome.ldap_base_dn or '').strip(),
-        group_filter=(outcome.ldap_group_filter or '').strip(),
+        group_filter=(group_filter or '').strip()
+                     or (outcome.ldap_group_filter or '').strip(),
         name_attribute=(outcome.ldap_name_attribute or 'cn').strip(),
         attributes=tuple(x.strip() for x
                          in str(outcome.ldap_attributes or '').split(',') if x.strip()),
     )
 
 
-def read_ldap_groups(search, group_names):
+def read_ldap_groups(search, group_names, debug=False):
     """
     Every attribute the LDAP groups carry, keyed by group name.
 
@@ -66,7 +71,8 @@ def read_ldap_groups(search, group_names):
 
     return get_group_attributes(config, group_names,
                                 name_attribute=search.name_attribute,
-                                attributes=list(search.attributes))
+                                attributes=list(search.attributes),
+                                debug=debug)
 
 
 class CheckmkUserGeneration(Plugin):
@@ -75,6 +81,10 @@ class CheckmkUserGeneration(Plugin):
     """
     name = "Checkmk: Generate Users"
     source = "cmk_user_generation"
+
+    # Set by --search-filter: tries one group filter against every rule
+    # without anybody editing the rules first
+    override_group_filter = ''
 
     def generate_users(self):
         """
@@ -96,7 +106,7 @@ class CheckmkUserGeneration(Plugin):
 
         print(f"\n{CC.HEADER}Generate Users{CC.ENDC}")
         for rule, group_names in rule_groups:
-            search = group_search(rule.outcome)
+            search = group_search(rule.outcome, self.override_group_filter)
             if search.account and search not in directory:
                 # The lookup failed and said so — creating the users now
                 # would leave them without their directory data.
@@ -132,7 +142,7 @@ class CheckmkUserGeneration(Plugin):
         """
         wanted = {}
         for rule, group_names in rule_groups:
-            search = group_search(rule.outcome)
+            search = group_search(rule.outcome, self.override_group_filter)
             if not search.account:
                 continue
             names = wanted.setdefault(search, [])
@@ -144,13 +154,21 @@ class CheckmkUserGeneration(Plugin):
         for search, names in wanted.items():
             print(f"{CC.OKGREEN} -- {CC.ENDC} Ask {search.account} for "
                   f"{len(names)} group(s)")
+            if self.debug:
+                print(f"INFO: Base DN: {search.base_dn or 'the one of the account'}")
+                print(f"INFO: Group search filter: {search.group_filter or 'none'}")
+                print(f"INFO: Group name attribute: {search.name_attribute}")
             try:
-                found[search] = read_ldap_groups(search, names)
+                found[search] = read_ldap_groups(search, names, debug=self.debug)
             except LdapSearchError as error:
                 print(f"{CC.FAIL} * {search.account}: LDAP lookup failed: "
                       f"{error}{CC.ENDC}")
                 self.log_details.append(
                     ("ERROR", f"{search.account}: LDAP lookup failed: {error}"))
+            else:
+                if self.debug and (missing := [x for x in names
+                                               if x not in found[search]]):
+                    print(f"INFO: Not in the directory: {', '.join(missing)}")
         return found
 
     def sync_user(self, rule, group_name, group):

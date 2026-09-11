@@ -300,7 +300,31 @@ def _name_filter(config, name_attribute, names):
     return query
 
 
-def get_group_attributes(config, group_names, name_attribute='cn', attributes=None):
+def _find_groups(connect, config, names, name_attribute):
+    """
+    The found group objects keyed by their lowercased name.
+
+    The names are looked up in chunks, one query each, so the filter
+    stays short enough for the server to accept it.
+    """
+    found = {}
+    for start in range(0, len(names), GROUP_LOOKUP_CHUNK):
+        query = _name_filter(config, name_attribute,
+                             names[start:start + GROUP_LOOKUP_CHUNK])
+        for dn, entry in _search(connect, dict(config, search_filter=query)):
+            if not isinstance(entry, dict):
+                # Referral, not an object
+                continue
+            values = {key: decode_value(content[0], config)
+                      for key, content in entry.items() if content}
+            values['dn'] = dn
+            if group_name := values.get(name_attribute):
+                found[group_name.lower()] = values
+    return found
+
+
+def get_group_attributes(config, group_names, name_attribute='cn', attributes=None,
+                         debug=False):
     """
     Attributes of LDAP group objects, looked up by their name.
 
@@ -313,6 +337,10 @@ def get_group_attributes(config, group_names, name_attribute='cn', attributes=No
     has. Returns {group_name: {attribute: value}} with the names spelled
     the way the caller asked for them. A name the server does not know
     simply has no entry.
+
+    `debug` prints the filter and the attributes of every query, so a
+    lookup that finds nothing can be compared with what the directory
+    really holds.
     """
     _require_ldap()
 
@@ -338,20 +366,13 @@ def get_group_attributes(config, group_names, name_attribute='cn', attributes=No
     if connect is None:
         raise LdapSearchError("Could not connect to the LDAP server")
 
-    found = {}
+    # Connecting stays quiet whatever the caller asked for, so its errors
+    # keep travelling as LdapSearchError instead of escaping raw. From
+    # here on debug prints the queries.
+    config['debug'] = debug
+
     try:
-        for start in range(0, len(names), GROUP_LOOKUP_CHUNK):
-            query = _name_filter(config, name_attribute,
-                                 names[start:start + GROUP_LOOKUP_CHUNK])
-            for dn, entry in _search(connect, dict(config, search_filter=query)):
-                if not isinstance(entry, dict):
-                    # Referral, not an object
-                    continue
-                values = {key: decode_value(content[0], config)
-                          for key, content in entry.items() if content}
-                values['dn'] = dn
-                if group_name := values.get(name_attribute):
-                    found[group_name.lower()] = values
+        found = _find_groups(connect, config, names, name_attribute)
     except LookupError as error:
         raise LdapSearchError(f"Unknown encoding '{config['encoding']}'") from error
     except (ldap.LDAPError, ValueError) as error:

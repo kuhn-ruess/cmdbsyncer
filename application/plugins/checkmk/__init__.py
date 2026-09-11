@@ -745,15 +745,18 @@ def cli_cmk_users(account):
 #.
 #   .-- Command: Generate Users
 @cli_cmk.command('generate_users')
+@click.option('--search-filter', '-f', default='',
+              help="Overwrite the group search filter of every rule. The users are "
+                   "still written, so try a filter out before it goes into a rule")
 @click.option("--debug", is_flag=True)
-def cli_cmk_generate_users(debug=False):
+def cli_cmk_generate_users(search_filter, debug=False):
     """
     Create Checkmk Users out of Host Attributes
 
     ### Example
     _./cmdbsyncer checkmk generate_users_
     """
-    generate_users(debug=debug)
+    generate_users(debug=debug, search_filter=search_filter)
 #.
 #   .-- Command: Export DCD Rules
 @cli_cmk.command('export_dcd_rules')

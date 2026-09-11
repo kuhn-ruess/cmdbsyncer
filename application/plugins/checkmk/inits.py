@@ -821,13 +821,14 @@ def export_users(account):
                     details=[('error', str(error_obj))])
 #.
 #   .-- Generate Users
-def generate_users(_account=False, debug=False):
+def generate_users(_account=False, debug=False, search_filter=''):
     """
     Create Checkmk User entries out of Host Attributes
     """
     rules = _load_rules()
     syncer = CheckmkUserGeneration()
     syncer.debug = debug
+    syncer.override_group_filter = search_filter
     syncer.rewrite = rules['rewrite']
     syncer.filter = rules['filter']
     syncer.generate_users()
