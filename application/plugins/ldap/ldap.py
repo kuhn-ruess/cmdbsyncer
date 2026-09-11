@@ -197,6 +197,24 @@ def _search(connect, config, limit=0):
         response = connect.search_ext(*query, serverctrls=[page_control])
 
 
+# Search modes that start without the search filter of the account: their
+# term already describes the objects that are looked for, while the
+# account's filter matches the hosts of the import and could only exclude
+# them
+MODES_WITHOUT_ACCOUNT_FILTER = ('group', 'filter')
+
+
+def default_account_filter(mode):
+    """
+    Whether a search of this mode starts with the filter of the account.
+
+    An own LDAP filter and a group name say themselves what is searched
+    for, so the filter of the account — written for the host import — is
+    off until it is asked for. It stays switchable in the form.
+    """
+    return mode not in MODES_WITHOUT_ACCOUNT_FILTER
+
+
 def build_search_filter(config, mode, term, attribute=None, use_account_filter=True):
     """
     Build the LDAP filter of a single search.

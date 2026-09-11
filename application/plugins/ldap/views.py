@@ -10,9 +10,11 @@ from application.helpers.get_account import get_account_by_name, AccountNotFound
 
 from .ldap import (
     LDAP_AVAILABLE,
+    MODES_WITHOUT_ACCOUNT_FILTER,
     REPLACEMENT_CHARACTER,
     LdapSearchError,
     build_search_filter,
+    default_account_filter,
     search_objects,
 )
 
@@ -122,17 +124,20 @@ class LdapSearchView(BaseView):
         # A search is read only, so it travels in the URL and stays linkable
         args = request.args
         submitted = bool(args.get('searched'))
+        mode = args.get('mode', 'hostname')
         form = {
             'account': args.get('account', ''),
-            'mode': args.get('mode', 'hostname'),
+            'mode': mode,
             'term': args.get('term', ''),
             'attribute': args.get('attribute', ''),
             'base_dn': args.get('base_dn', '').strip(),
             'attributes': args.get('attributes', '').strip(),
             'encoding': args.get('encoding', '').strip(),
             'limit': args.get('limit', str(DEFAULT_LIMIT)),
-            # Only a submitted form can say the filter is unwanted
-            'use_account_filter': args.get('use_account_filter') == 'on' if submitted else True,
+            # Only a submitted form can say whether the filter is wanted,
+            # an unsubmitted one shows the default of its mode
+            'use_account_filter': (args.get('use_account_filter') == 'on' if submitted
+                                   else default_account_filter(mode)),
         }
 
         error = None
@@ -155,6 +160,7 @@ class LdapSearchView(BaseView):
             'admin/ldap_search.html',
             accounts=self._accounts(),
             modes=SEARCH_MODES,
+            modes_without_account_filter=list(MODES_WITHOUT_ACCOUNT_FILTER),
             form=form,
             limit=limit,
             query=query,
