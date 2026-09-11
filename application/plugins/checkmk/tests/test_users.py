@@ -46,6 +46,53 @@ class TestCheckmkUserSync(unittest.TestCase):
 
     @patch('application.plugins.checkmk.users.CheckmkUserMngmt')
     @patch('builtins.print')
+    def test_a_never_filled_field_is_sent_empty_not_null(self, mock_print,
+                                                         mock_mngmt):
+        # Checkmk answers "pager address may not be null" for every one of
+        # these, and a field nobody ever filled in is None on the document
+        user = self._make_user(pager_address=None, email=None,
+                               disable_login=None, roles=None,
+                               contact_groups=None, full_name=None)
+        mock_mngmt.objects.return_value = [user]
+
+        with patch.object(self.sync, 'request') as mock_req:
+            mock_req.side_effect = [({}, {'status_code': 404}),
+                                    ({'id': 'testuser'}, {})]
+            self.sync.export_users()
+
+        sent = mock_req.call_args_list[1][1]['data']
+        self.assertEqual(sent['pager_address'], '')
+        self.assertEqual(sent['contact_options']['email'], '')
+        self.assertEqual(sent['disable_login'], False)
+        self.assertEqual(sent['roles'], [])
+        self.assertEqual(sent['contactgroups'], [])
+        # A user without a full name is still a user Checkmk accepts
+        self.assertEqual(sent['fullname'], 'testuser')
+
+    @patch('application.plugins.checkmk.users.CheckmkUserMngmt')
+    @patch('builtins.print')
+    def test_an_empty_field_is_not_a_change(self, mock_print, mock_mngmt):
+        # Checkmk answers with the empty value, so a None on our side used
+        # to look different on every run and rewrote the user each time
+        user = self._make_user(pager_address=None, email=None)
+        mock_mngmt.objects.return_value = [user]
+        cmk_side = {
+            'fullname': 'Test User', 'disable_login': False,
+            'pager_address': '', 'contactgroups': ['all'],
+            'roles': ['user'], 'contact_options': {'email': ''},
+        }
+
+        with patch.object(self.sync, 'request') as mock_req:
+            mock_req.side_effect = [
+                ({'extensions': cmk_side}, {'ETag': 'x'}),
+            ]
+            self.sync.export_users()
+
+        # Only the GET happened, nothing was written back
+        self.assertEqual(mock_req.call_count, 1)
+
+    @patch('application.plugins.checkmk.users.CheckmkUserMngmt')
+    @patch('builtins.print')
     def test_export_users_creates_new(self, mock_print, mock_mngmt):
         user = self._make_user()
         mock_mngmt.objects.return_value = [user]
