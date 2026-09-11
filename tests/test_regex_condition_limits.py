@@ -19,7 +19,7 @@ from application.views import host_filters
 
 def _alternation(count, name_length=31):
     """`count` distinct FQDN-ish names joined into one alternation."""
-    names = [f"fmg-srv-app{i:03d}".ljust(name_length, 'x') for i in range(count)]
+    names = [f"srv-app{i:03d}".ljust(name_length, 'x') for i in range(count)]
     return names, '(' + '|'.join(names) + ')'
 
 
