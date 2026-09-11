@@ -416,16 +416,14 @@ def cli_ansible_list_providers(debug):  # pylint: disable=unused-argument
         print(name)
 
 
-# Run the one-time migration & default-project bootstrap. Idempotent:
-# subsequent app starts notice the Default project already exists and
-# stop touching it. Safety-netted because admin views register before
-# the full app is up; we don't want a transient connection blip to
-# block startup of the Ansible plugin.
-try:
-    ensure_default_project()
-except Exception as _exc:  # pylint: disable=broad-except
-    logger = __import__('logging').getLogger(__name__)
-    logger.warning("Could not ensure Ansible Default project: %s", _exc)
+# The one-time migration & default-project bootstrap used to run right
+# here, on import. That made every single CLI call open a connection and
+# write to the database before doing anything else, and an import that
+# touches the database blocks for the full server-selection timeout when
+# there is none. It lives in `admin_views.register_admin_views` now: the
+# web layer is the only place that needs the project to exist before
+# anybody asks for it, and it needs a database anyway. Every code path
+# that works with projects calls `ensure_default_project()` itself.
 # .---
 
 
