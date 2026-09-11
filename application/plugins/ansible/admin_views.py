@@ -2,8 +2,10 @@
 Flask-Admin view registration for the Ansible plugin.
 """
 # pylint: disable=too-few-public-methods
+from application import logger
 from application.views.module_overview import register_module_menu
 from .models import (
+    ensure_default_project,
     AnsibleCustomVariablesRule,
     AnsibleFilterRule,
     AnsiblePlaybookFireRule,
@@ -20,6 +22,23 @@ from .views import (
     AnsibleRewriteRuleView,
     AnsibleRunStatsView,
 )
+
+
+def bootstrap_default_project():
+    """
+    Create the auto-managed Default project and adopt legacy rules that
+    still carry no project.
+
+    Runs when the web layer is registered, not on import: a plain
+    ``import application`` — every CLI call — must not open a database
+    connection, and one that does blocks for the whole server-selection
+    timeout when the database is down. Safety-netted, because a transient
+    connection blip must not stop the plugin from registering its views.
+    """
+    try:
+        ensure_default_project()
+    except Exception as error:  # pylint: disable=broad-except
+        logger.warning("Could not ensure Ansible Default project: %s", error)
 
 
 def register_admin_views(admin):
@@ -110,3 +129,5 @@ def register_admin_views(admin):
             menu_icon_value='fa-bolt',
         )
     )
+
+    bootstrap_default_project()
