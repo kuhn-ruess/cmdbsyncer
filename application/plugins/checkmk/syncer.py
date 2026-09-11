@@ -1094,6 +1094,51 @@ class SyncCMK2(CMK2):
 #   .-- Create Host
 
 
+    def _retry_bulk_single(self, chunk, what, bulk_error):
+        """
+        Send the entries of a failed bulk request one by one.
+
+        Checkmk rejects the complete bulk request as soon as one single entry
+        is invalid, for example because a host uses a tag value which does not
+        exist yet. Sending them one by one keeps the healthy hosts of the batch.
+
+        A request which ran into a timeout is not repeated: Checkmk may have
+        applied it already, and we would create or update everything twice.
+
+        Args:
+            chunk (list): Entries of the failed bulk request
+            what (str): 'create' or 'update'
+            bulk_error (Exception): The error the bulk request failed with
+
+        Returns:
+            list: Hostnames which are still failing
+        """
+        hostnames = [x['host_name'] for x in chunk]
+        if not app.config['CMK_BULK_FALLBACK_SINGLE'] or 'Timeout on' in str(bulk_error):
+            return hostnames
+
+        self.console(f" * Bulk {what} failed, sending {len(chunk)} hosts one by one")
+        failed = []
+        for entry in chunk:
+            hostname = entry['host_name']
+            try:
+                if what == 'create':
+                    self.request("/domain-types/host_config/collections/all",
+                                 method="POST", data=entry)
+                    self.num_created += 1
+                else:
+                    body = {x: y for x, y in entry.items() if x != 'host_name'}
+                    self.request(f"objects/host_config/{hostname}", method="PUT",
+                                 data=body,
+                                 additional_header={'if-match': self.get_etag(hostname)})
+                    self.num_updated += 1
+            except CmkException as error:
+                failed.append(hostname)
+                logger.debug("Single %s of %s failed: %s", what, hostname, error)
+        if failed:
+            self.console(f" * {len(failed)} of {len(chunk)} hosts still not working")
+        return failed
+
     def send_bulk_create_host(self, entries):
         """
         Send bulk host creation requests to CheckMK API.
@@ -1114,9 +1159,9 @@ class SyncCMK2(CMK2):
                 self.num_created += len(chunk)
             except CmkException as error:
                 self.log_details.append((f'error_bulk_{count}', f"Bulk Create Error: {error}"))
-                affected = str([x['host_name'] for x in chunk])
-                self.log_details.append((f'error_affected_{count}', affected))
                 self.console(f" * CMK API ERROR {error}")
+                affected = str(self._retry_bulk_single(chunk, 'create', error))
+                self.log_details.append((f'error_affected_{count}', affected))
 
     def add_bulk_create_host(self, body):
         """
@@ -1293,8 +1338,9 @@ class SyncCMK2(CMK2):
                 self.num_updated += len(chunk)
             except CmkException as error:
                 self.log_details.append(('error', f"CMK API Error: {error}"))
-                self.log_details.append(('error_affected', str([x['host_name'] for x in chunk])))
                 self.console(f" * CMK API ERROR {error}")
+                self.log_details.append(('error_affected',
+                                         str(self._retry_bulk_single(chunk, 'update', error))))
 
     def add_bulk_update_host(self, body):
         """
