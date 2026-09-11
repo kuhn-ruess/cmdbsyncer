@@ -115,18 +115,33 @@ class CheckmkUserGeneration(Plugin):
             for group_name in group_names:
                 self.sync_user(rule, group_name, groups.get(group_name, {}))
 
-    @staticmethod
-    def group_names(rule, attribute_index):
+    def group_names(self, rule, attribute_index):
         """
-        The group names a single rule selects, each one only once
+        The group names a single rule selects, each one only once.
+
+        `rewrite_group_name` turns the value a host carries into the name
+        the directory really knows — a prefix cut off, a domain dropped.
+        A template that renders to nothing skips that value: an empty
+        name would be searched as whatever the group filter alone
+        matches, and the user of the first object found would be created
+        under a name nobody asked for.
         """
         outcome = rule.outcome
+        template = getattr(outcome, 'rewrite_group_name', '')
         group_names = []
         for item in foreach_attribute_items(attribute_index,
                                             outcome.foreach_type, outcome.foreach):
             item = str(item).strip()
-            if item and item not in group_names:
-                group_names.append(item)
+            name = item
+            if template:
+                name = render_jinja(template,
+                                    _ctx={'name': item, 'result': item}).strip()
+            if not name:
+                if self.debug and item:
+                    print(f"INFO: '{item}' rewrote to nothing, no group searched")
+                continue
+            if name not in group_names:
+                group_names.append(name)
         return group_names
 
     def lookup_groups(self, rule_groups):

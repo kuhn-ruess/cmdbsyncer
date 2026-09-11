@@ -66,6 +66,7 @@ class CmkUserGenerationOutcome(db.EmbeddedDocument):
     # then build the user out of what they carry.
     foreach_type = db.StringField(choices=user_foreach_types)
     foreach = db.StringField(required=False)
+    rewrite_group_name = db.StringField()
 
     ldap_account = db.StringField()
     ldap_base_dn = db.StringField()

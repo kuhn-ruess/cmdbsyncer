@@ -55,6 +55,7 @@ def make_outcome(**overrides):
     defaults = {
         'foreach_type': 'label',
         'foreach': 'ldap_group',
+        'rewrite_group_name': '',
         'rewrite_user_id': '{{name}}',
         'rewrite_full_name': '{{name}}',
         'rewrite_email': '{{mail}}',
@@ -322,6 +323,38 @@ class TestCheckmkUserGeneration(unittest.TestCase):
         self.syncer.sync_user(make_rule(), 'dba', {'mail': 'dba@example.com'})
 
         self.assertEqual(existing.saved, 0)
+
+    def test_without_a_rewrite_the_attribute_value_is_the_group(self):
+        index = ({'ldap_group': ['dba', 'linux']}, {})
+
+        self.assertEqual(self.syncer.group_names(make_rule(), index),
+                         ['dba', 'linux'])
+
+    def test_the_group_name_can_be_rewritten_before_it_is_searched(self):
+        index = ({'ldap_group': ['dba', 'linux']}, {})
+
+        names = self.syncer.group_names(
+            make_rule(rewrite_group_name='grp-{{name}}'), index)
+
+        self.assertEqual(names, ['grp-dba', 'grp-linux'])
+
+    def test_a_value_rewriting_to_nothing_is_skipped(self):
+        # Searching for an empty name would match whatever the group
+        # filter alone matches, and create a user nobody asked for
+        index = ({'ldap_group': ['dba', 'linux']}, {})
+
+        names = self.syncer.group_names(
+            make_rule(rewrite_group_name='{{the_hosts_do_not_carry_this}}'), index)
+
+        self.assertEqual(names, [])
+
+    def test_the_rewrite_cannot_produce_the_same_group_twice(self):
+        index = ({'ldap_group': ['dba', 'linux']}, {})
+
+        names = self.syncer.group_names(
+            make_rule(rewrite_group_name='one-team'), index)
+
+        self.assertEqual(names, ['one-team'])
 
     @patch('application.plugins.checkmk.user_generation.read_ldap_groups')
     @patch('builtins.print')

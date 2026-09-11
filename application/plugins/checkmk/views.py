@@ -545,6 +545,7 @@ class CheckmkUserGenerationRuleView(RuleModelView):
         'outcome': {
             'form_overrides': {
                 'foreach': StringField,
+                'rewrite_group_name': StringField,
                 'rewrite_user_id': StringField,
                 'rewrite_full_name': StringField,
                 'rewrite_email': StringField,
@@ -572,6 +573,19 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                         'For example ldap_group. A trailing * takes every'
                         ' attribute starting with it, so ldap_group* also'
                         ' reads ldap_group_second.'
+                    ),
+                },
+                'rewrite_group_name': {
+                    'label': 'Rewrite the group name (optional)',
+                    'description': (
+                        'Jinja, run before the group is searched, for'
+                        ' hosts that carry the name in a different shape'
+                        ' than the directory uses. {{name}} is the value'
+                        ' of the attribute, so'
+                        ' {{name|replace("grp-", "")}} drops a prefix and'
+                        ' {{name.split("@")[0]}} cuts off a domain.'
+                        ' Renders to nothing \u2014 no group is searched'
+                        ' and no user is created for that value.'
                     ),
                 },
                 'ldap_account': {
@@ -670,6 +684,7 @@ class CheckmkUserGenerationRuleView(RuleModelView):
             },
             'form_widget_args': {
                 'foreach': {'placeholder': 'ldap_group'},
+                'rewrite_group_name': {'placeholder': '{{name}}'},
                 'ldap_base_dn': {'placeholder': 'ou=groups,dc=example,dc=com'},
                 'ldap_group_filter': {'placeholder': '(objectClass=group)'},
                 'ldap_name_attribute': {'placeholder': 'cn'},
