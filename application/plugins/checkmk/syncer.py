@@ -158,6 +158,8 @@ class SyncCMK2(CMK2):
         self.num_created = 0
         self.num_updated = 0
         self.num_deleted = 0
+        # Set when sending a failed bulk request host by host did not help
+        self.bulk_fallback_stopped = False
         # Lazy per-run map of Project name -> allows this
         # account (see project_denied_for_account).
         self._project_allows_account = None
@@ -1097,6 +1099,8 @@ class SyncCMK2(CMK2):
         self.num_created = 0
         self.num_updated = 0
         self.num_deleted = 0
+        # Set when sending a failed bulk request host by host did not help
+        self.bulk_fallback_stopped = False
         self.dropped_folder_values = {}
         self.folder_listing_failed = False
 
@@ -1313,6 +1317,10 @@ class SyncCMK2(CMK2):
         A request which ran into a timeout is not repeated: Checkmk may have
         applied it already, and we would create or update everything twice.
 
+        If not a single host of a batch works, the problem is not one broken
+        entry but Checkmk itself. Retrying every following batch one by one
+        would only make a failing run slow, so the fallback stops for this run.
+
         Args:
             chunk (list): Entries of the failed bulk request
             what (str): 'create' or 'update'
@@ -1322,7 +1330,8 @@ class SyncCMK2(CMK2):
             list: Hostnames which are still failing
         """
         hostnames = [x['host_name'] for x in chunk]
-        if not app.config['CMK_BULK_FALLBACK_SINGLE'] or 'Timeout on' in str(bulk_error):
+        if not app.config['CMK_BULK_FALLBACK_SINGLE'] or self.bulk_fallback_stopped \
+                or 'Timeout on' in str(bulk_error):
             return hostnames
 
         self.console(f" * Bulk {what} failed, sending {len(chunk)} hosts one by one")
@@ -1343,7 +1352,11 @@ class SyncCMK2(CMK2):
             except CmkException as error:
                 failed.append(hostname)
                 logger.debug("Single %s of %s failed: %s", what, hostname, error)
-        if failed:
+        if len(failed) == len(chunk):
+            self.bulk_fallback_stopped = True
+            self.console(" * Not a single host of this batch worked, "
+                         "the next ones are only tried in bulk")
+        elif failed:
             self.console(f" * {len(failed)} of {len(chunk)} hosts still not working")
         return failed
 
