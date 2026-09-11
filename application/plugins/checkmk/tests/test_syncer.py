@@ -690,6 +690,60 @@ class TestSyncCMK2(unittest.TestCase):
             )
             self.assertEqual(self.syncer.num_updated, 2)
 
+    @patch('application.plugins.checkmk.syncer.app')
+    def test_bulk_update_falls_back_to_single(self, mock_app):
+        """One invalid host must not take its whole batch down"""
+        mock_app.config = {**self.mock_app_config, 'CMK_BULK_FALLBACK_SINGLE': True}
+
+        entries = [
+            {'host_name': 'host1', 'update_attributes': {'attr1': 'value1'}},
+            {'host_name': 'broken', 'update_attributes': {'attr1': 'value1'}},
+        ]
+
+        def answer(url, **_kwargs):
+            if 'bulk-update' in url or url.endswith('broken'):
+                raise CmkException("Bad Request")
+            return (None, {})
+
+        with patch.object(self.syncer, 'request', side_effect=answer):
+            self.syncer.send_bulk_update_host(entries)
+
+        self.assertEqual(self.syncer.num_updated, 1)
+        self.assertFalse(self.syncer.bulk_fallback_stopped)
+        affected = dict(self.syncer.log_details)['error_affected']
+        self.assertIn('broken', affected)
+        self.assertNotIn('host1', affected)
+
+    @patch('application.plugins.checkmk.syncer.app')
+    def test_bulk_update_stops_fallback_if_nothing_works(self, mock_app):
+        """If not one host works, the next batches stay in bulk"""
+        mock_app.config = {**self.mock_app_config,
+                           'CMK_BULK_FALLBACK_SINGLE': True,
+                           'CMK_BULK_UPDATE_OPERATIONS': 2}
+
+        entries = [{'host_name': f'host{x}', 'update_attributes': {}} for x in range(4)]
+
+        with patch.object(self.syncer, 'request',
+                          side_effect=CmkException("Can't connect to Checkmk")) as mock_request:
+            self.syncer.send_bulk_update_host(entries)
+
+        self.assertTrue(self.syncer.bulk_fallback_stopped)
+        # 2 bulk requests, and only the hosts of the first batch one by one
+        self.assertEqual(mock_request.call_count, 4)
+
+    @patch('application.plugins.checkmk.syncer.app')
+    def test_bulk_update_no_fallback_after_timeout(self, mock_app):
+        """A timed out request may have been applied, so it is not repeated"""
+        mock_app.config = {**self.mock_app_config, 'CMK_BULK_FALLBACK_SINGLE': True}
+
+        entries = [{'host_name': 'host1', 'update_attributes': {}}]
+        error = CmkException("Timeout on PUT https://cmk/bulk-update")
+
+        with patch.object(self.syncer, 'request', side_effect=error) as mock_request:
+            self.syncer.send_bulk_update_host(entries)
+
+        self.assertEqual(mock_request.call_count, 1)
+
     @patch('application.plugins.checkmk.syncer.logger')
     def test_update_host_no_changes(self, mock_logger):
         """Test update_host when no changes are needed"""
