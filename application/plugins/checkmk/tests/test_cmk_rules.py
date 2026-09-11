@@ -351,7 +351,7 @@ class TestCheckmkRuleSync(unittest.TestCase):
             'loop_over_list': False,
             'list_to_loop': '',
             'condition_label_template': '',
-            'condition_host': 'fmg-host01',
+            'condition_host': 'host01',
             'condition_service': '',
             'condition_service_label': '',
         }
@@ -359,7 +359,7 @@ class TestCheckmkRuleSync(unittest.TestCase):
         # Owner host: HOSTNAME == condition_host → optimize path.
         self.sync.calculate_rules_of_host(
             {'agent_config:mrpe': [dict(outcome)]},
-            {'all': {'HOSTNAME': 'fmg-host01'}})
+            {'all': {'HOSTNAME': 'host01'}})
         # Foreign host: HOSTNAME != condition_host → plain variant.
         self.sync.calculate_rules_of_host(
             {'agent_config:mrpe': [dict(outcome)]},
@@ -370,7 +370,7 @@ class TestCheckmkRuleSync(unittest.TestCase):
         rules = self.sync.rulsets_by_type['agent_config:mrpe']
         self.assertEqual(len(rules), 1)
         self.assertEqual(
-            rules[0]['condition']['host_name']['match_on'], ['fmg-host01'])
+            rules[0]['condition']['host_name']['match_on'], ['host01'])
 
     def test_collect_rule_dedupes_without_rescanning(self):
         # Every host feeds the same list, so the duplicate check used to
@@ -420,7 +420,7 @@ class TestCheckmkRuleSync(unittest.TestCase):
                 'loop_over_list': False,
                 'list_to_loop': '',
                 'condition_label_template': '',
-                'condition_host': 'fmg-host01',
+                'condition_host': 'host01',
                 'condition_service': '',
                 'condition_service_label': '',
             })
