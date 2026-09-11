@@ -711,7 +711,11 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                    f'<a href="/admin/ldap_search/?mode=group" target="_blank" '
                    f'class="badge badge-light" style="margin-bottom: 8px;">'
                    f'<i class="fa fa-search"></i> Look up what a group carries '
-                   f'in the directory</a>'),
+                   f'in the directory</a> '
+                   f'<a href="/admin/checkmk_user_generation_preview/" target="_blank" '
+                   f'class="badge badge-light" style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-eye"></i> Preview what these rules would '
+                   f'create</a>'),
         *modern_form(
             section('1', 'main', 'Main Options',
                     'Name, description and activation.',
@@ -2703,6 +2707,62 @@ class CheckmkRuleOptimizationView(BaseView):
             analysis.findings.pop(index)
             analysis.save()
         return redirect(self.get_url('.index', account=account))
+
+
+class CheckmkUserGenerationPreviewView(BaseView):
+    """
+    What the user generation rules would make of the current hosts.
+
+    The page runs the real thing with the writing left out: the same host
+    attributes, the same LDAP lookup, the same Jinja. It answers the
+    question a rule form cannot — which groups the hosts actually carry,
+    what the directory returns for them, and which Checkmk user each one
+    ends up as.
+    """
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    @staticmethod
+    def _rules():
+        """The enabled generation rules, for the selector"""
+        # pylint: disable=import-outside-toplevel
+        from .user_models import CheckmkUserGenerationRule
+        return [(str(rule.id), rule.name)
+                for rule in CheckmkUserGenerationRule.objects(enabled=True)
+                .order_by('name')]
+
+    @expose('/', methods=['GET'])
+    def index(self):
+        """Show the selector and, when one was asked for, the preview"""
+        # pylint: disable=import-outside-toplevel
+        from .inits import preview_generated_users
+        from application.plugins.ldap.ldap import LdapSearchError
+
+        rules_available = self._rules()
+        rule_id = request.args.get('rule_id', '')
+        search_filter = request.args.get('search_filter', '').strip()
+        rows, errors, error = None, [], None
+
+        if request.args.get('preview'):
+            try:
+                rows, errors = preview_generated_users(rule_id or None, search_filter)
+            except LdapSearchError as exp:
+                error = str(exp)
+            except Exception as exp:  # pylint: disable=broad-exception-caught
+                error = f"{type(exp).__name__}: {exp}"
+
+        return self.render(
+            'admin/checkmk_user_generation_preview.html',
+            rules=rules_available,
+            rule_id=rule_id,
+            search_filter=search_filter,
+            rows=rows,
+            errors=errors,
+            error=error,
+            docu_link=docu_links['cmk_user_generation'],
+        )
 
 
 class CheckmkDataQualityView(BaseView):

@@ -1,0 +1,162 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Preview Generated Checkmk Users</h3>
+    <p>
+        What the generation rules would make of the hosts you have right now.
+        The same host attributes are read, the same groups are looked up in the
+        directory and the same Jinja is rendered as in a real run — only the
+        writing is left out. Nothing is created, updated or deleted here.
+        <a href="{{ docu_link }}" target="_blank" class="badge badge-light">
+            <i class="fa fa-info-circle"></i> Documentation</a>
+    </p>
+
+    {% if not rules %}
+    <div class="alert alert-warning">
+        No enabled generation rule found. Create one under
+        <em>Generate Checkmk Users</em> first.
+    </div>
+    {% endif %}
+
+    <form method="GET" action="{{ url_for('.index') }}" class="card app-card mb-4">
+        <div class="card-body">
+            <input type="hidden" name="preview" value="1"/>
+            <div class="form-row">
+                <div class="form-group col-md-5">
+                    <label for="rule_id">Rule</label>
+                    <select class="form-control" id="rule_id" name="rule_id">
+                        <option value="">— every enabled rule —</option>
+                        {% for value, label in rules %}
+                        <option value="{{ value }}"
+                                {% if value == rule_id %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group col-md-5">
+                    <label for="search_filter">Try another group search filter</label>
+                    <input type="text" class="form-control" id="search_filter"
+                           name="search_filter" value="{{ search_filter }}"
+                           placeholder="(objectClass=group)"/>
+                    <small class="form-text text-muted">
+                        Optional. Replaces the group search filter of every rule
+                        for this preview only.
+                    </small>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary"
+                    {% if not rules %}disabled{% endif %}>
+                <i class="fa fa-eye"></i> Preview
+            </button>
+        </div>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% for level, message in errors %}
+    <div class="alert alert-danger">{{ level }}: {{ message }}</div>
+    {% endfor %}
+
+    {% if rows is not none %}
+        {% if not rows %}
+        <div class="alert alert-info">
+            No group selected by these rules. The hosts carry nothing in the
+            attribute the rule reads, or every value was skipped by the rewrite.
+        </div>
+        {% else %}
+        <div class="card app-card">
+            <div class="card-body">
+                <p class="text-muted">
+                    {{ rows|length }} group(s).
+                    <strong>create</strong> = no such Checkmk user yet,
+                    <strong>update</strong> = the listed fields would change,
+                    <strong>unchanged</strong> = nothing to do,
+                    <strong>skipped</strong> = no user is written, with the reason.
+                </p>
+                <div style="overflow-x: auto;">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr>
+                            <th>Rule</th>
+                            <th>Host value</th>
+                            <th>Searched as</th>
+                            <th>Directory</th>
+                            <th>User ID</th>
+                            <th>Would</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td>{{ row.rule }}</td>
+                            <td><code>{{ row.original_name }}</code></td>
+                            <td>
+                                <code>{{ row.name }}</code>
+                                {% if row.name != row.original_name %}
+                                <span class="badge badge-light">rewritten</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if not row.searched %}
+                                <span class="text-muted">not asked</span>
+                                {% elif row.found %}
+                                {{ row.attributes|length }} attribute(s)
+                                {% else %}
+                                <span class="badge badge-warning">not found</span>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ row.user_id or '—' }}</code></td>
+                            <td>
+                                <span class="badge badge-{{ 'success' if row.action == 'create'
+                                    else 'info' if row.action == 'update'
+                                    else 'secondary' }}">{{ row.action }}</span>
+                            </td>
+                            <td>
+                                {% if row.note %}
+                                <span class="text-muted">{{ row.note }}</span>
+                                {% else %}
+                                <dl class="row mb-0">
+                                    {% for field, value in row.fields.items() %}
+                                    <dt class="col-sm-4">{{ field }}</dt>
+                                    <dd class="col-sm-8">
+                                        {% if value is string or value is number
+                                              or value is sameas true or value is sameas false %}
+                                        {{ value }}
+                                        {% else %}
+                                        {{ value|join(', ') or '—' }}
+                                        {% endif %}
+                                        {% if field in row.changed and row.action == 'update' %}
+                                        <span class="badge badge-info">changes</span>
+                                        {% endif %}
+                                    </dd>
+                                    {% endfor %}
+                                </dl>
+                                {% if row.attributes %}
+                                <details>
+                                    <summary class="text-muted">
+                                        Variables the group carries
+                                    </summary>
+                                    <dl class="row mb-0">
+                                        {% for key, value in row.attributes.items() %}
+                                        <dt class="col-sm-4"><code>{{ '{{' }} {{ key }} {{ '}}' }}</code></dt>
+                                        <dd class="col-sm-8">{{ value }}</dd>
+                                        {% endfor %}
+                                    </dl>
+                                </details>
+                                {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

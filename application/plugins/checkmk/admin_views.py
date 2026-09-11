@@ -54,6 +54,7 @@ from .views import (
     CheckmkTestFolderScopeView,
     CheckmkUserMngmtView,
     CheckmkUserGenerationRuleView,
+    CheckmkUserGenerationPreviewView,
     CheckmkGroupRuleView,
 )
 
@@ -239,6 +240,15 @@ def register_admin_views(admin):
         CheckmkRuleOptimizationView(
             name="Rule Optimization",
             endpoint="checkmk_rule_optimization",
+        )
+    )
+    admin.add_view(
+        CheckmkUserGenerationPreviewView(
+            name="Preview Generated Users",
+            category="Checkmk",
+            endpoint="checkmk_user_generation_preview",
+            menu_icon_type='fa',
+            menu_icon_value='fa-eye',
         )
     )
     admin.add_view(

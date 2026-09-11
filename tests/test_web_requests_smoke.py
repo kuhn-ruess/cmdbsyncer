@@ -87,6 +87,46 @@ print('HOST_CREATE_GATE_OK')
 '''
 
 
+# The preview runs the whole generation with the writing left out. A rule
+# without an LDAP account asks no directory, so the full path — host
+# attributes, group selection, rendered user fields, rendered table — runs
+# here without a server to talk to.
+USER_GENERATION_PREVIEW = LOGIN + '''
+from application.models.host import Host
+from application.plugins.checkmk.user_models import (
+    CheckmkUserGenerationRule,
+    CmkUserGenerationOutcome,
+)
+
+page = '/admin/checkmk_user_generation_preview/'
+check(page, 200)
+# Nothing configured yet: the page says so instead of breaking
+check(page + '?preview=1', 200)
+
+host = Host.get_host('smoke-host')
+host.update_host({'ldap_group': 'grp-dba'})
+host.save()
+
+rule = CheckmkUserGenerationRule(name='smoke-generation', enabled=True)
+rule.outcome = CmkUserGenerationOutcome(
+    foreach_type='label',
+    foreach='ldap_group',
+    rewrite_group_name='{{name}}',
+    rewrite_user_id='{{name}}',
+    rewrite_full_name='{{name}}',
+    roles=['user'],
+    contact_groups=['cg_{{name}}'],
+)
+rule.save()
+
+body = check(page + '?preview=1', 200).get_data(as_text=True)
+for needle in ('grp-dba', 'create', 'cg_grp-dba'):
+    if needle not in body:
+        fail(f'the preview page does not show {needle!r}')
+print('USER_GENERATION_PREVIEW_OK')
+'''
+
+
 @unittest.skipUnless(HAVE_MONGOMOCK, SKIP_REASON)
 class TestWebRequestsSmoke(unittest.TestCase):
     """Walk the real request paths in both CMDB modes."""
@@ -116,6 +156,10 @@ class TestWebRequestsSmoke(unittest.TestCase):
     def test_host_create_follows_cmdb_mode(self):
         """Hand-made hosts are offered in CMDB mode and only there."""
         self._run(HOST_CREATE_GATE, 'HOST_CREATE_GATE_OK')
+
+    def test_user_generation_preview_renders(self):
+        """The preview shows what a generation run would create."""
+        self._run(USER_GENERATION_PREVIEW, 'USER_GENERATION_PREVIEW_OK')
 
 
 if __name__ == '__main__':

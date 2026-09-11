@@ -17,6 +17,8 @@ from application.plugins.checkmk.user_models import (
 )
 from application.plugins.ldap.ldap import LdapSearchError, get_group_attributes
 
+from application.helpers.syncer_jinja import get_list
+
 from syncerapi.v1 import render_jinja, cc as CC, Host
 
 
@@ -96,6 +98,61 @@ def read_ldap_groups(search, group_names, debug=False):
                                 name_attribute=search.name_attribute,
                                 attributes=list(search.attributes),
                                 debug=debug)
+
+
+def render_entries(templates, context):
+    """
+    The entries of a list field, every one of them a Jinja template.
+
+    Roles and contact groups are names, but which names a group deserves
+    is often what the group itself says — a `{{cmk_roles}}` attribute, a
+    contact group named after the team. An entry that renders to nothing
+    is dropped instead of writing an empty name, and one that renders to
+    several names, comma separated or as a list, becomes all of them.
+    A plain name without a template is its own result.
+    """
+    entries = []
+    for template in templates or []:
+        try:
+            rendered = render_jinja(str(template), mode='nullify', _ctx=context)
+        except Exception:  # pylint: disable=broad-exception-caught
+            continue
+        for entry in get_list(rendered):
+            entry = str(entry).strip()
+            if entry and entry not in entries:
+                entries.append(entry)
+    return entries
+
+
+def user_fields(rule, context, user_id, current=None):
+    """
+    What the Checkmk user of one group should look like.
+
+    `current` is the stored user a former run created, so a template
+    rendering to nothing can leave its field as it is instead of
+    emptying it. Without one — the preview, a user about to be created —
+    those fields simply stay out.
+    """
+    outcome = rule.outcome
+    wanted = {
+        'generated_by_rule': rule.name,
+        'full_name': render_jinja(outcome.rewrite_full_name or '',
+                                  _ctx=context).strip() or user_id,
+        'roles': render_entries(outcome.roles, context),
+        'contact_groups': render_entries(outcome.contact_groups, context),
+        'disable_login': bool(outcome.disable_login),
+    }
+    # A template that renders to nothing — the group has no such
+    # attribute — leaves the field as it is instead of emptying it.
+    for field, template in (('email', outcome.rewrite_email),
+                            ('pager_address', outcome.rewrite_pager_address)):
+        if not template:
+            continue
+        if value := render_jinja(template, _ctx=context).strip():
+            wanted[field] = value
+        elif current is not None and getattr(current, field, None):
+            wanted[field] = getattr(current, field)
+    return wanted
 
 
 class CheckmkUserGeneration(Plugin):
@@ -207,65 +264,124 @@ class CheckmkUserGeneration(Plugin):
                     print(f"INFO: Not in the directory: {', '.join(missing)}")
         return found
 
-    def sync_user(self, rule, group_name, group, original_name=None):
+    def plan_user(self, rule, group_name, group, original_name=None):
         """
-        Create the Checkmk user of one group, or update the one a former
-        run created. A user someone made by hand is never touched.
+        What would become of the Checkmk user of one group.
 
         Every attribute of the LDAP group is a Jinja variable of the
         rule's templates; `name` is the name the group was searched under
         and `original_name` the attribute value it was built from — the
         same thing unless a rewrite changed it. Both win over an
         attribute of the same name.
+
+        Returns the rendered fields, the user id they belong to and
+        whether that user would be created, updated or left alone.
+        Nothing is written: `sync_user` carries the plan out, the GUI
+        preview only shows it.
         """
-        outcome = rule.outcome
         context = dict(group)
         context['name'] = group_name
         context['original_name'] = group_name if original_name is None else original_name
         context['result'] = group_name
 
-        user_id = str_replace(render_jinja(outcome.rewrite_user_id or '', _ctx=context),
+        plan = {
+            'rule': rule.name,
+            'name': group_name,
+            'original_name': context['original_name'],
+            'attributes': dict(group),
+            'user_id': '',
+            'fields': {},
+            'changed': [],
+            'action': 'skipped',
+            'note': '',
+            'user': None,
+        }
+
+        user_id = str_replace(render_jinja(rule.outcome.rewrite_user_id or '',
+                                           _ctx=context),
                               REPLACE_EXCEPTIONS).strip()
+        plan['user_id'] = user_id
         if not user_id:
-            return
+            plan['note'] = 'the user ID renders to nothing'
+            return plan
 
         # pylint: disable=no-member
         user = CheckmkUserMngmt.objects(user_id=user_id).first()
         if user and not user.generated_by_rule:
-            print(f"{CC.WARNING}  * {user_id}: exists and was created by hand, "
-                  f"not touched{CC.ENDC}")
-            return
+            plan['note'] = 'exists and was created by hand'
+            return plan
+
+        plan['user'] = user
+        plan['fields'] = user_fields(rule, context, user_id, user)
+        plan['changed'] = [field for field, value in plan['fields'].items()
+                           if getattr(user, field, None) != value] \
+            if user else list(plan['fields'])
         if not user:
-            user = CheckmkUserMngmt(user_id=user_id,
-                                    # Generated users are contacts, not logins.
-                                    # A random secret keeps the entry valid
-                                    # without anybody knowing a password.
-                                    password=secrets.token_urlsafe(32))
+            plan['action'] = 'create'
+        elif plan['changed']:
+            plan['action'] = 'update'
+        else:
+            plan['action'] = 'unchanged'
+        return plan
 
-        wanted = {
-            'generated_by_rule': rule.name,
-            'full_name': render_jinja(outcome.rewrite_full_name or '',
-                                      _ctx=context).strip() or user_id,
-            'roles': list(outcome.roles),
-            'contact_groups': list(outcome.contact_groups),
-            'disable_login': bool(outcome.disable_login),
-        }
-        # A template that renders to nothing — the group has no such
-        # attribute — leaves the field as it is instead of emptying it.
-        for field, template in (('email', outcome.rewrite_email),
-                                ('pager_address', outcome.rewrite_pager_address)):
-            if not template:
-                continue
-            if value := render_jinja(template, _ctx=context).strip():
-                wanted[field] = value
+    def sync_user(self, rule, group_name, group, original_name=None):
+        """
+        Create the Checkmk user of one group, or update the one a former
+        run created. A user someone made by hand is never touched.
+        """
+        plan = self.plan_user(rule, group_name, group, original_name)
+        user_id = plan['user_id']
 
-        changed = [field for field, value in wanted.items()
-                   if getattr(user, field, None) != value]
-        if not changed:
+        if plan['action'] == 'skipped':
+            if user_id:
+                print(f"{CC.WARNING}  * {user_id}: {plan['note']}, "
+                      f"not touched{CC.ENDC}")
+            return
+        if plan['action'] == 'unchanged':
             print(f"{CC.OKGREEN}  *{CC.ENDC} {user_id}: Nothing to do")
             return
 
-        for field, value in wanted.items():
+        user = plan['user'] or CheckmkUserMngmt(
+            user_id=user_id,
+            # Generated users are contacts, not logins. A random secret
+            # keeps the entry valid without anybody knowing a password.
+            password=secrets.token_urlsafe(32))
+        for field, value in plan['fields'].items():
             setattr(user, field, value)
         user.save()
-        print(f"{CC.OKGREEN}  *{CC.ENDC} {user_id}: Saved ({', '.join(changed)})")
+        print(f"{CC.OKGREEN}  *{CC.ENDC} {user_id}: "
+              f"Saved ({', '.join(plan['changed'])})")
+
+    def preview(self, rule_id=None):
+        """
+        What a run would make of the current hosts and the directory,
+        without writing a single user.
+
+        Reads the same host attributes and asks the directory the same
+        questions a real run does, so the answer is what would happen —
+        not what the rule looks like on paper. `rule_id` limits it to one
+        rule. Returns (rows, errors).
+        """
+        attribute_index = collect_attribute_index(self, Host.get_export_hosts())
+        rule_groups = []
+        for rule in CheckmkUserGenerationRule.objects(enabled=True):
+            if rule_id and str(rule.id) != str(rule_id):
+                continue
+            rule_groups.append((rule, self.group_names(rule, attribute_index)))
+
+        directory = self.lookup_groups(rule_groups)
+
+        rows = []
+        for rule, selected in rule_groups:
+            search = group_search(rule.outcome, self.override_group_filter)
+            groups = directory.get(search, {})
+            for group in selected:
+                attributes = groups.get(group.name, {})
+                plan = self.plan_user(rule, group.name, attributes, group.original)
+                # Without an account no directory is asked at all, so the
+                # group is not "missing" — it simply has no attributes.
+                plan['searched'] = bool(search.account)
+                plan['found'] = bool(attributes)
+                plan.pop('user', None)
+                rows.append(plan)
+        return rows, list(self.log_details)

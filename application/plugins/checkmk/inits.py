@@ -821,9 +821,9 @@ def export_users(account):
                     details=[('error', str(error_obj))])
 #.
 #   .-- Generate Users
-def generate_users(_account=False, debug=False, search_filter=''):
+def _user_generation_syncer(debug=False, search_filter=''):
     """
-    Create Checkmk User entries out of Host Attributes
+    A CheckmkUserGeneration with the attribute rules of the export
     """
     rules = _load_rules()
     syncer = CheckmkUserGeneration()
@@ -831,7 +831,21 @@ def generate_users(_account=False, debug=False, search_filter=''):
     syncer.override_group_filter = search_filter
     syncer.rewrite = rules['rewrite']
     syncer.filter = rules['filter']
-    syncer.generate_users()
+    return syncer
+
+
+def generate_users(_account=False, debug=False, search_filter=''):
+    """
+    Create Checkmk User entries out of Host Attributes
+    """
+    _user_generation_syncer(debug, search_filter).generate_users()
+
+
+def preview_generated_users(rule_id=None, search_filter=''):
+    """
+    What a user generation run would create, without writing anything
+    """
+    return _user_generation_syncer(False, search_filter).preview(rule_id)
 #.
 #   . Sync Folder Pools
 def sync_folderpools(_account=False, _debug=False):

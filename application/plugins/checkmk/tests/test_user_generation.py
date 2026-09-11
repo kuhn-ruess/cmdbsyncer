@@ -13,6 +13,7 @@ from application.plugins.checkmk.user_generation import (
     group_search,
     read_ldap_groups,
     rewritten_group_name,
+    render_entries,
     SelectedGroup,
 )
 from application.plugins.ldap.ldap import LdapSearchError
@@ -183,6 +184,42 @@ class TestRewrittenGroupName(unittest.TestCase):
             self.assertEqual(rewritten_group_name('{{name}}', 'dba'), '')
 
 
+class TestRenderEntries(unittest.TestCase):
+    """Roles and contact groups are Jinja too"""
+
+    def setUp(self):
+        patcher = patch('application.plugins.checkmk.user_generation.render_jinja',
+                        side_effect=fake_render)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # get_list comes from the stubbed syncer_jinja
+        patcher = patch('application.plugins.checkmk.user_generation.get_list',
+                        side_effect=split_on_comma)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_plain_name_stays_what_it_is(self):
+        self.assertEqual(render_entries(['all', 'linux'], {}),
+                         ['all', 'linux'])
+
+    def test_an_attribute_of_the_group_can_name_it(self):
+        self.assertEqual(render_entries(['cg_{{name}}'], {'name': 'dba'}),
+                         ['cg_dba'])
+
+    def test_one_entry_can_produce_several(self):
+        self.assertEqual(
+            render_entries(['{{cmk_contactgroups}}'],
+                           {'cmk_contactgroups': 'dba, linux'}),
+            ['dba', 'linux'])
+
+    def test_an_entry_rendering_to_nothing_is_dropped(self):
+        self.assertEqual(render_entries(['all', '{{not_carried}}'], {}), ['all'])
+
+    def test_the_same_name_is_only_taken_once(self):
+        self.assertEqual(render_entries(['all', '{{name}}'], {'name': 'all'}),
+                         ['all'])
+
+
 class TestReadLdapGroups(unittest.TestCase):
     """The LDAP side of the generation"""
 
@@ -278,16 +315,19 @@ class _SyncerTestCase(unittest.TestCase):
     def setUp(self):
         self.syncer = CheckmkUserGeneration.__new__(CheckmkUserGeneration)
         self.syncer.log_details = []
-        # The bootstrap stubs both out; the rules only make sense with a
-        # renderer that actually resolves the context.
+        # The bootstrap stubs all three out; the rules only make sense
+        # with a renderer that resolves the context and a get_list that
+        # really splits.
         for target, replacement in (
                 ('render_jinja', fake_render),
+                ('get_list', split_on_comma),
                 ('str_replace', lambda value, _exceptions=None: str(value))):
             patcher = patch(
                 f'application.plugins.checkmk.user_generation.{target}',
                 side_effect=replacement)
             patcher.start()
             self.addCleanup(patcher.stop)
+
 
 class TestGroupSelection(_SyncerTestCase):
     """Which groups a rule selects out of the host attributes"""
@@ -536,6 +576,29 @@ class TestCheckmkUserGeneration(_SyncerTestCase):
         # The searched name and the value the host carried
         self.assertEqual(mock_sync.call_args[0][1], 'grp-dba')
         self.assertEqual(mock_sync.call_args[0][3], 'dba')
+
+    @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
+    @patch('builtins.print')
+    def test_a_preview_plan_does_not_write(self, mock_print, mock_model):
+        mock_model.objects.return_value.first.return_value = None
+
+        plan = self.syncer.plan_user(make_rule(), 'dba', {'mail': 'dba@example.com'})
+
+        self.assertEqual(plan['action'], 'create')
+        self.assertEqual(plan['user_id'], 'dba')
+        self.assertEqual(plan['fields']['contact_groups'], ['all'])
+        mock_model.return_value.save.assert_not_called()
+
+    @patch('application.plugins.checkmk.user_generation.CheckmkUserMngmt')
+    @patch('builtins.print')
+    def test_a_hand_made_user_is_a_skipped_plan(self, mock_print, mock_model):
+        mock_model.objects.return_value.first.return_value = StoredUser(
+            user_id='dba', generated_by_rule=None)
+
+        plan = self.syncer.plan_user(make_rule(), 'dba', {})
+
+        self.assertEqual(plan['action'], 'skipped')
+        self.assertIn('by hand', plan['note'])
 
     def test_the_user_context_carries_the_original_name(self):
         rendered = {}
