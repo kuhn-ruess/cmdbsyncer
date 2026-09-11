@@ -128,7 +128,7 @@ class TestInventorizeHosts(unittest.TestCase):
                 'extensions': {
                     'effective_attributes': None,
                     'labels': {
-                        'piggyback_source_vc-prd-w-mgmt.services.p.rz.drv': 'yes',
+                        'piggyback_source_srv01.mgmt.dc1.example.com': 'yes',
                         'plain_label': 'value',
                     },
                 },
@@ -140,9 +140,9 @@ class TestInventorizeHosts(unittest.TestCase):
             self.inv.get_attr_labels()
 
         inv = self.inv.config_inventory['host1']
-        self.assertIn('label_piggyback_source_vc-prd-w-mgmt_services_p_rz_drv', inv)
+        self.assertIn('label_piggyback_source_srv01_mgmt_dc1_example_com', inv)
         self.assertNotIn(
-            'label_piggyback_source_vc-prd-w-mgmt.services.p.rz.drv', inv,
+            'label_piggyback_source_srv01.mgmt.dc1.example.com', inv,
         )
         self.assertIn('label_plain_label', inv)
 
