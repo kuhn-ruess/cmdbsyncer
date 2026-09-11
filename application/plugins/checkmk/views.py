@@ -572,7 +572,9 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                     'description': (
                         'For example ldap_group. A trailing * takes every'
                         ' attribute starting with it, so ldap_group* also'
-                        ' reads ldap_group_second.'
+                        ' reads ldap_group_second \u2014 with Value in List'
+                        ' as well, where the entries of all of them are'
+                        ' collected.'
                     ),
                 },
                 'rewrite_group_name': {
@@ -584,8 +586,11 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                         ' of the attribute, so'
                         ' {{name|replace("grp-", "")}} drops a prefix and'
                         ' {{name.split("@")[0]}} cuts off a domain.'
-                        ' Renders to nothing \u2014 no group is searched'
-                        ' and no user is created for that value.'
+                        ' Anything it cannot produce for a value \u2014 a'
+                        ' variable the hosts do not carry, an expression'
+                        ' that fails on it \u2014 counts as empty, and an'
+                        ' empty result skips that value: no group is'
+                        ' searched and no user is created for it.'
                     ),
                 },
                 'ldap_account': {
@@ -636,7 +641,9 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                 'rewrite_user_id': {
                     'label': '4. Checkmk user ID',
                     'description': (
-                        'Jinja. {{name}} names the user after the group,'
+                        'Jinja. {{name}} names the user after the group as'
+                        ' it was searched, {{original_name}} after the'
+                        ' value the host carried before the rewrite.'
                         ' cg_{{name}} or {{sAMAccountName}} work just as'
                         ' well.'
                     ),
@@ -715,9 +722,11 @@ class CheckmkUserGenerationRuleView(RuleModelView):
                     'Your hosts carry LDAP group names in an attribute. This '
                     'creates one Checkmk user per group found. Every Jinja '
                     'field below sees the same variables: {{name}} for the '
-                    'group name, plus every attribute the group itself has in '
-                    'the directory \u2014 {{mail}}, {{description}}, {{dn}} '
-                    'and whatever else the attribute list below reads.',
+                    'group name as it was searched, {{original_name}} for the '
+                    'value the host carried, plus every attribute the group '
+                    'itself has in the directory \u2014 {{mail}}, '
+                    '{{description}}, {{dn}} and whatever else the attribute '
+                    'list below reads.',
                     [rules.Field('outcome')]),
         ),
     ]

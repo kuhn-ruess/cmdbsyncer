@@ -33,6 +33,29 @@ GroupSearch = namedtuple(
     'GroupSearch', 'account base_dn group_filter name_attribute attributes')
 
 
+# One group a rule selected: the name that is searched in the directory
+# and the attribute value it was built from. A rewrite may have changed
+# the one, so both are Jinja variables of the user fields.
+SelectedGroup = namedtuple('SelectedGroup', 'name original')
+
+
+def rewritten_group_name(template, value):
+    """
+    The name a rewrite makes out of one attribute value.
+
+    Whatever the template cannot produce for this value — a variable it
+    does not carry, an expression that blows up on it, a filter chain
+    ending in nothing — is an empty name, and an empty name means the
+    value is skipped. Rendering it into the search instead would ask the
+    directory for whatever the group filter alone matches.
+    """
+    try:
+        return render_jinja(template, mode='nullify',
+                            _ctx={'name': value, 'result': value}).strip()
+    except Exception:  # pylint: disable=broad-exception-caught
+        return ''
+
+
 def group_search(outcome, group_filter=''):
     """
     The group search of one rule, normalised.
@@ -105,44 +128,42 @@ class CheckmkUserGeneration(Plugin):
         directory = self.lookup_groups(rule_groups)
 
         print(f"\n{CC.HEADER}Generate Users{CC.ENDC}")
-        for rule, group_names in rule_groups:
+        for rule, selected in rule_groups:
             search = group_search(rule.outcome, self.override_group_filter)
             if search.account and search not in directory:
                 # The lookup failed and said so — creating the users now
                 # would leave them without their directory data.
                 continue
             groups = directory.get(search, {})
-            for group_name in group_names:
-                self.sync_user(rule, group_name, groups.get(group_name, {}))
+            for group in selected:
+                self.sync_user(rule, group.name, groups.get(group.name, {}),
+                               group.original)
 
     def group_names(self, rule, attribute_index):
         """
-        The group names a single rule selects, each one only once.
+        The groups a single rule selects, each searched name only once.
 
         `rewrite_group_name` turns the value a host carries into the name
         the directory really knows — a prefix cut off, a domain dropped.
-        A template that renders to nothing skips that value: an empty
-        name would be searched as whatever the group filter alone
-        matches, and the user of the first object found would be created
-        under a name nobody asked for.
+        The value it was made from travels along, so the user fields can
+        still name the group the way the host spells it.
         """
         outcome = rule.outcome
         template = getattr(outcome, 'rewrite_group_name', '')
-        group_names = []
+        groups = []
+        seen = set()
         for item in foreach_attribute_items(attribute_index,
                                             outcome.foreach_type, outcome.foreach):
             item = str(item).strip()
-            name = item
-            if template:
-                name = render_jinja(template,
-                                    _ctx={'name': item, 'result': item}).strip()
+            name = rewritten_group_name(template, item) if template else item
             if not name:
                 if self.debug and item:
                     print(f"INFO: '{item}' rewrote to nothing, no group searched")
                 continue
-            if name not in group_names:
-                group_names.append(name)
-        return group_names
+            if name not in seen:
+                seen.add(name)
+                groups.append(SelectedGroup(name=name, original=item))
+        return groups
 
     def lookup_groups(self, rule_groups):
         """
@@ -156,14 +177,14 @@ class CheckmkUserGeneration(Plugin):
         users without their directory data.
         """
         wanted = {}
-        for rule, group_names in rule_groups:
+        for rule, selected in rule_groups:
             search = group_search(rule.outcome, self.override_group_filter)
             if not search.account:
                 continue
             names = wanted.setdefault(search, [])
-            for group_name in group_names:
-                if group_name not in names:
-                    names.append(group_name)
+            for group in selected:
+                if group.name not in names:
+                    names.append(group.name)
 
         found = {}
         for search, names in wanted.items():
@@ -186,18 +207,21 @@ class CheckmkUserGeneration(Plugin):
                     print(f"INFO: Not in the directory: {', '.join(missing)}")
         return found
 
-    def sync_user(self, rule, group_name, group):
+    def sync_user(self, rule, group_name, group, original_name=None):
         """
         Create the Checkmk user of one group, or update the one a former
         run created. A user someone made by hand is never touched.
 
         Every attribute of the LDAP group is a Jinja variable of the
-        rule's templates; `name` is the group name and wins over an
+        rule's templates; `name` is the name the group was searched under
+        and `original_name` the attribute value it was built from — the
+        same thing unless a rewrite changed it. Both win over an
         attribute of the same name.
         """
         outcome = rule.outcome
         context = dict(group)
         context['name'] = group_name
+        context['original_name'] = group_name if original_name is None else original_name
         context['result'] = group_name
 
         user_id = str_replace(render_jinja(outcome.rewrite_user_id or '', _ctx=context),

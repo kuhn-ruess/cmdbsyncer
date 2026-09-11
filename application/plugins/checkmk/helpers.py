@@ -141,18 +141,23 @@ def foreach_attribute_items(attribute_index, foreach_type, foreach):
 
     `label` reads the values behind an attribute name, `value` the names
     carrying a value, and `list` splits the values behind an attribute
-    name into their entries. A trailing ``*`` makes the name a prefix and
-    collects the values of every attribute starting with it.
+    name into their entries — a comma separated string as well as a list
+    literal. A trailing ``*`` makes the name a prefix and collects the
+    values of every attribute starting with it, for `list` too: one
+    attribute per team, each holding several entries, is the same shape
+    as one attribute holding all of them.
     """
     collection_keys, collection_values = attribute_index
     foreach = foreach or ''
 
-    if foreach.endswith('*') and foreach_type in ('label', 'value'):
+    if foreach.endswith('*'):
         search = foreach[:-1]
         items = []
         for key, values in collection_keys.items():
             if key.startswith(search):
                 items += values
+        if foreach_type == 'list':
+            return [entry for value in items for entry in get_list(value)]
         return items
 
     if foreach_type == 'value':
