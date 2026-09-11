@@ -314,6 +314,7 @@ class CheckmkTagSync(CMK2):
             config_tags.insert(0, (None, "Not set"))
         id_field = self._tag_id_field()
         found_ids = []
+        found_titles = set()
         tags = []
         for x, y in config_tags:
             if x:
@@ -321,9 +322,18 @@ class CheckmkTagSync(CMK2):
             y = y.strip()
             if not y:
                 continue
-            if x not in found_ids:
-                tags.append({id_field: x, 'title': y})
-                found_ids.append(x)
+            if x in found_ids:
+                continue
+            if y in found_titles:
+                # Checkmk detects renamed tags by their title. Two tags sharing
+                # one title therefore look like a rename of a tag which is in
+                # use, and Checkmk then refuses the whole group update unless
+                # it is repaired. Keep every title unique to avoid that.
+                logger.debug("Tag title '%s' used twice, adding id '%s' to it", y, x)
+                y = f"{y} ({x})"
+            tags.append({id_field: x, 'title': y})
+            found_ids.append(x)
+            found_titles.add(y)
 
         if not tags or len(tags) == 0:
             logger.debug("%s *%s Group has no tags", CC.WARNING, CC.ENDC)
@@ -373,42 +383,62 @@ class CheckmkTagSync(CMK2):
                     self.request(create_url, method="POST", data=payload)
                     progress.console.print(f" * Group {syncer_group_id} created.")
                 else:
-                    # Check if we need to update it
-                    checkmk_tags = checkmk_ids[syncer_group_id]
-                    checkmk_tags_flat = \
-                            [{id_field: x['id'], 'title': x['title']} \
-                            for x in checkmk_tags if x['title'].strip()]
-
-                    if app.config['CMK_DONT_DELETE_TAGS']:
-                        # In this case, we merge only the new dicts into the existing ones
-                        found = set()
-                        new_tags = []
-                        for tag in payload['tags'] + checkmk_tags_flat:
-                            if tag[id_field] not in found:
-                                found.add(tag[id_field])
-                                new_tags.append(tag)
-                        payload['tags'] = sorted(new_tags, key=lambda x: str(x[id_field]))
-                    checkmk_tags_frozen = {frozenset(d.items()) for d in checkmk_tags_flat}
-                    syncer_tags_frozen = {frozenset(d.items()) for d in payload['tags']}
-                    if checkmk_tags_frozen == syncer_tags_frozen:
-                        progress.console.print(f" * Group {syncer_group_id} already up to date.")
-                    else:
-                        logger.debug("NEED TO UPDATE TAGS")
-                        logger.debug("Checkmk Tags: %s", checkmk_tags_frozen)
-                        logger.debug("Syncer Tags: %s", syncer_tags_frozen)
-                        url = f"/objects/host_tag_group/{syncer_group_id}"
-                        update_headers = {
-                            'if-match': etag
-                        }
-                        del payload[id_field]
-                        payload['repair'] = False
-                        try:
-                            self.request(
-                                url, method="PUT", data=payload,
-                                additional_header=update_headers)
-                        except Exception as error:  # pylint: disable=broad-exception-caught
-                            progress.console.print(f" ! Group {syncer_group_id} can't be updated.")
-                            logger.debug(error)
-                        else:
-                            progress.console.print(f" - Group {syncer_group_id} updated.")
+                    self.update_tag_group(progress, syncer_group_id, payload,
+                                          checkmk_ids[syncer_group_id], etag)
                 progress.update(task1, advance=1)
+
+    @staticmethod
+    def _merge_existing_tags(syncer_tags, checkmk_tags_flat, id_field):
+        """
+        Keep the tags which only exist in Checkmk, ours win on the same id
+        """
+        found = set()
+        new_tags = []
+        for tag in syncer_tags + checkmk_tags_flat:
+            if tag[id_field] not in found:
+                found.add(tag[id_field])
+                new_tags.append(tag)
+        return sorted(new_tags, key=lambda x: str(x[id_field]))
+
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
+    def update_tag_group(self, progress, syncer_group_id, payload, checkmk_tags, etag):
+        """
+        Update one existing Tag Group in Checkmk, if it differs from ours
+        """
+        id_field = self._tag_id_field()
+        checkmk_tags_flat = \
+                [{id_field: x['id'], 'title': x['title']} \
+                for x in checkmk_tags if x['title'].strip()]
+
+        if app.config['CMK_DONT_DELETE_TAGS']:
+            # In this case, we merge only the new dicts into the existing ones
+            payload['tags'] = self._merge_existing_tags(payload['tags'],
+                                                        checkmk_tags_flat, id_field)
+        checkmk_tags_frozen = {frozenset(d.items()) for d in checkmk_tags_flat}
+        syncer_tags_frozen = {frozenset(d.items()) for d in payload['tags']}
+        if checkmk_tags_frozen == syncer_tags_frozen:
+            progress.console.print(f" * Group {syncer_group_id} already up to date.")
+            return
+
+        logger.debug("NEED TO UPDATE TAGS")
+        logger.debug("Checkmk Tags: %s", checkmk_tags_frozen)
+        logger.debug("Syncer Tags: %s", syncer_tags_frozen)
+        url = f"/objects/host_tag_group/{syncer_group_id}"
+        update_headers = {
+            'if-match': etag
+        }
+        del payload[id_field]
+        payload['repair'] = bool(app.config['CMK_TAG_REPAIR'])
+        try:
+            self.request(
+                url, method="PUT", data=payload,
+                additional_header=update_headers)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            progress.console.print(f" ! Group {syncer_group_id} can't be updated.")
+            if 'repair' in str(error):
+                progress.console.print(
+                    "   Checkmk asks for permission to update the objects "
+                    "which use this group. Set CMK_TAG_REPAIR = True to give it.")
+            logger.debug(error)
+        else:
+            progress.console.print(f" - Group {syncer_group_id} updated.")

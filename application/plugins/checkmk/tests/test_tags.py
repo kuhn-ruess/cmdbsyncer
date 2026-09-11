@@ -9,8 +9,8 @@ from application.plugins.checkmk.tags import CheckmkTagSync
 from tests import base_mock_init
 
 
-class TestCheckmkTagSync(unittest.TestCase):
-    """Tests for CheckmkTagSync"""
+class TagSyncTestCase(unittest.TestCase):
+    """Setup shared by the tag sync tests"""
 
     def setUp(self):
         def mock_init(self_param, account=False):
@@ -23,6 +23,10 @@ class TestCheckmkTagSync(unittest.TestCase):
 
     def tearDown(self):
         self.init_patcher.stop()
+
+
+class TestCheckmkTagSync(TagSyncTestCase):
+    """Tests for CheckmkTagSync"""
 
     def test_create_inital_groups_basic(self):
         rule = Mock()
@@ -67,44 +71,6 @@ class TestCheckmkTagSync(unittest.TestCase):
         self.assertTrue(groups['grp1']['is_template'])
         self.assertEqual(len(multiply_expressions), 1)
         self.assertEqual(multiply_expressions[0], ('grp1', '{{ sites }}'))
-
-    def test_prepare_tags_for_checkmk_empty(self):
-        result = self.sync.prepare_tags_for_checkmk([])
-        self.assertFalse(result)
-
-    def test_prepare_tags_for_checkmk_none(self):
-        result = self.sync.prepare_tags_for_checkmk(None)
-        self.assertFalse(result)
-
-    def test_prepare_tags_for_checkmk_single(self):
-        tags = [('id1', 'Title 1')]
-        result = self.sync.prepare_tags_for_checkmk(tags)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0], {'ident': 'id1', 'title': 'Title 1'})
-
-    def test_prepare_tags_for_checkmk_multiple_adds_not_set(self):
-        tags = [('id1', 'Title 1'), ('id2', 'Title 2')]
-        result = self.sync.prepare_tags_for_checkmk(tags)
-        # First entry should be "Not set"
-        self.assertEqual(result[0], {'ident': None, 'title': 'Not set'})
-        self.assertEqual(len(result), 3)
-
-    def test_prepare_tags_for_checkmk_deduplicates(self):
-        tags = [('id1', 'Title 1'), ('id1', 'Title 1 Dup')]
-        result = self.sync.prepare_tags_for_checkmk(tags)
-        idents = [t['ident'] for t in result if t['ident'] is not None]
-        self.assertEqual(len(idents), 1)
-
-    def test_prepare_tags_for_checkmk_strips(self):
-        tags = [('  id1  ', '  Title 1  ')]
-        result = self.sync.prepare_tags_for_checkmk(tags)
-        self.assertEqual(result[0]['ident'], 'id1')
-        self.assertEqual(result[0]['title'], 'Title 1')
-
-    def test_prepare_tags_skips_empty_title(self):
-        tags = [('id1', '  ')]
-        result = self.sync.prepare_tags_for_checkmk(tags)
-        self.assertFalse(result)
 
     def test_get_checkmk_tags(self):
         response = ({
@@ -236,20 +202,61 @@ class TestCheckmkTagSync(unittest.TestCase):
         self.assertEqual(result['grp1'], ('pre_id', 'Pre Title'))
 
 
-class TestTagIdFieldSwitch(unittest.TestCase):
+class TestPrepareTags(TagSyncTestCase):
+    """The tag payload sent to Checkmk"""
+
+    def test_prepare_tags_for_checkmk_empty(self):
+        result = self.sync.prepare_tags_for_checkmk([])
+        self.assertFalse(result)
+
+    def test_prepare_tags_for_checkmk_none(self):
+        result = self.sync.prepare_tags_for_checkmk(None)
+        self.assertFalse(result)
+
+    def test_prepare_tags_for_checkmk_single(self):
+        tags = [('id1', 'Title 1')]
+        result = self.sync.prepare_tags_for_checkmk(tags)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], {'ident': 'id1', 'title': 'Title 1'})
+
+    def test_prepare_tags_for_checkmk_multiple_adds_not_set(self):
+        tags = [('id1', 'Title 1'), ('id2', 'Title 2')]
+        result = self.sync.prepare_tags_for_checkmk(tags)
+        # First entry should be "Not set"
+        self.assertEqual(result[0], {'ident': None, 'title': 'Not set'})
+        self.assertEqual(len(result), 3)
+
+    def test_prepare_tags_for_checkmk_deduplicates(self):
+        tags = [('id1', 'Title 1'), ('id1', 'Title 1 Dup')]
+        result = self.sync.prepare_tags_for_checkmk(tags)
+        idents = [t['ident'] for t in result if t['ident'] is not None]
+        self.assertEqual(len(idents), 1)
+
+    def test_prepare_tags_for_checkmk_unique_titles(self):
+        # Checkmk reads two tags with the same title as a rename and then
+        # refuses the whole group update, so the title needs to stay unique
+        tags = [('id1', 'Same Title'), ('id2', 'Same Title')]
+        result = self.sync.prepare_tags_for_checkmk(tags)
+        idents = [t['ident'] for t in result if t['ident'] is not None]
+        titles = [t['title'] for t in result]
+        self.assertEqual(sorted(idents), ['id1', 'id2'])
+        self.assertEqual(len(titles), len(set(titles)))
+        self.assertIn('Same Title (id2)', titles)
+
+    def test_prepare_tags_for_checkmk_strips(self):
+        tags = [('  id1  ', '  Title 1  ')]
+        result = self.sync.prepare_tags_for_checkmk(tags)
+        self.assertEqual(result[0]['ident'], 'id1')
+        self.assertEqual(result[0]['title'], 'Title 1')
+
+    def test_prepare_tags_skips_empty_title(self):
+        tags = [('id1', '  ')]
+        result = self.sync.prepare_tags_for_checkmk(tags)
+        self.assertFalse(result)
+
+
+class TestTagIdFieldSwitch(TagSyncTestCase):
     """The host tag group id field switch (ident vs id) by Checkmk version."""
-
-    def setUp(self):
-        def mock_init(self_param, account=False):
-            base_mock_init(self_param, groups={})
-
-        self.init_patcher = patch(
-            'application.plugins.checkmk.tags.CMK2.__init__', mock_init)
-        self.init_patcher.start()
-        self.sync = CheckmkTagSync()
-
-    def tearDown(self):
-        self.init_patcher.stop()
 
     def test_tag_id_field_by_version(self):
         cases = {
