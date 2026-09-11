@@ -204,6 +204,8 @@
             var attribute = document.getElementById('attribute');
             var termHint = document.getElementById('term_hint');
             var filterHint = document.getElementById('account_filter_hint');
+            var accountFilter = document.getElementById('use_account_filter');
+            var modesWithoutAccountFilter = {{ modes_without_account_filter | tojson }};
 
             function current() {
                 for (var i = 0; i < accounts.length; i++) {
@@ -225,7 +227,8 @@
                     'hostname': 'Finds ' + field + ' exactly, and with any domain behind it.',
                     'contains': 'Finds every object whose ' + field + ' contains the term.',
                     'attribute': 'Finds every object whose attribute contains the term.',
-                    'filter': 'Used as the LDAP filter, e.g. (&(objectClass=computer)(cn=srv*)).'
+                    'filter': 'Used as the LDAP filter, e.g. (&(objectClass=computer)(cn=srv*)). '
+                        + 'It replaces the filter of the account unless the box below is ticked.'
                 };
                 termHint.textContent = hints[mode.value] || '';
                 attributeRow.style.display = mode.value === 'attribute' ? '' : 'none';
@@ -233,7 +236,17 @@
             }
 
             account.addEventListener('change', render);
-            mode.addEventListener('change', render);
+            // Every mode starts at its own default: a term that already
+            // describes the objects does not want the account's filter,
+            // which was written for the host import, on top of it.
+            var lastMode = mode.value;
+            mode.addEventListener('change', function () {
+                if (mode.value !== lastMode) {
+                    accountFilter.checked = modesWithoutAccountFilter.indexOf(mode.value) < 0;
+                    lastMode = mode.value;
+                }
+                render();
+            });
             render();
         })();
     </script>

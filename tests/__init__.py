@@ -108,6 +108,7 @@ _stub_package("application.modules.rule", path=[])
 _stub_package("application.models", path=[])
 _stub_package("application.plugins", path=[])
 _stub_package("application.plugins.checkmk", path=[])
+_stub_package("application.plugins.ldap", path=[])
 sys.modules["application.plugins.checkmk"].get_rule_preview = MagicMock(
     name="stub.get_rule_preview")
 # Stubs for the plugin modules the host view imports debug entry points
@@ -676,6 +677,11 @@ _application.init_db = MagicMock(name="stub.init_db")
 _try_load_real_module(
     "application.modules.rule.rule",
     os.path.join("modules", "rule", "rule.py"),
+)
+# The LDAP search of the web interface builds its filters in ldap.py.
+_try_load_real_module(
+    "application.plugins.ldap.ldap",
+    os.path.join("plugins", "ldap", "ldap.py"),
 )
 # checkmk/inits.py imports Filter and Rewrite at module import time.
 _try_load_real_module(
