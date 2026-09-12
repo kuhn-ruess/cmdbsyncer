@@ -365,15 +365,21 @@ class BaseConfig():
     CMK_BULK_DELETE_OPERATIONS = 50
 
     CMK_DONT_DELETE_TAGS = True
-    # Allow Checkmk to update hosts and rules which use a changed tag group
+    # Allow Checkmk to update hosts and rules which use a changed tag group.
+    # WARNING: Checkmk repairs a removed tag by deleting the condition from
+    # every rule which uses it. The rule stays, but without that condition it
+    # matches more hosts than before. Combined with CMK_DONT_DELETE_TAGS = False
+    # every value which disappears from the source can silently widen a rule.
+    # A renamed tag is uncritical, there the condition gets the new id.
     CMK_TAG_REPAIR = False
 
     CMK_BULK_UPDATE_HOSTS = True
     CMK_BULK_UPDATE_OPERATIONS = 50
 
-    # Retry the hosts of a failed bulk request one by one,
-    # so that one broken host does not block its whole batch
-    CMK_BULK_FALLBACK_SINGLE = True
+    # Retry the hosts of a failed bulk request one by one, so that one broken
+    # host does not block its whole batch. Costs one request per host of a
+    # failed batch, therefore off by default.
+    CMK_BULK_FALLBACK_SINGLE = False
 
     CMK_LOWERCASE_FOLDERNAMES = True
     CMK_LOWERCASE_LABEL_VALUES = False

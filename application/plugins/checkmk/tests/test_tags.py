@@ -234,14 +234,29 @@ class TestPrepareTags(TagSyncTestCase):
 
     def test_prepare_tags_for_checkmk_unique_titles(self):
         # Checkmk reads two tags with the same title as a rename and then
-        # refuses the whole group update, so the title needs to stay unique
+        # refuses the whole group update, so the title needs to stay unique.
+        # No tag may keep the title: Checkmk would read that as the rename
+        # of the other one and move the hosts and rules which use it.
         tags = [('id1', 'Same Title'), ('id2', 'Same Title')]
         result = self.sync.prepare_tags_for_checkmk(tags)
         idents = [t['ident'] for t in result if t['ident'] is not None]
         titles = [t['title'] for t in result]
         self.assertEqual(sorted(idents), ['id1', 'id2'])
         self.assertEqual(len(titles), len(set(titles)))
+        self.assertNotIn('Same Title', titles)
+        self.assertIn('Same Title (id1)', titles)
         self.assertIn('Same Title (id2)', titles)
+
+    def test_unique_titles_leaves_single_titles_alone(self):
+        tags = [{'ident': 'id1', 'title': 'One'}, {'ident': 'id2', 'title': 'Two'}]
+        result = self.sync.unique_titles(tags, 'ident')
+        self.assertEqual([x['title'] for x in result], ['One', 'Two'])
+
+    def test_unique_titles_is_stable_on_a_second_run(self):
+        tags = [{'ident': 'id1', 'title': 'Same'}, {'ident': 'id2', 'title': 'Same'}]
+        once = self.sync.unique_titles(tags, 'ident')
+        twice = self.sync.unique_titles([dict(x) for x in once], 'ident')
+        self.assertEqual([x['title'] for x in twice], [x['title'] for x in once])
 
     def test_unique_titles_after_merge(self):
         # A tag which only exists in Checkmk can carry the title of one of ours
@@ -251,6 +266,7 @@ class TestPrepareTags(TagSyncTestCase):
         result = self.sync.unique_titles(merged, 'ident')
         titles = [t['title'] for t in result]
         self.assertEqual(len(titles), len(set(titles)))
+        self.assertNotIn('Same Title', titles)
         self.assertEqual(sorted(t['ident'] for t in result), ['id1', 'id2'])
 
     def test_prepare_tags_for_checkmk_strips(self):
