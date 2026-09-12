@@ -2,6 +2,7 @@
 Checkmk Tag Syncronize
 """
 import multiprocessing
+from collections import Counter
 from application import logger, init_db, app
 from application.plugins.checkmk.cmk2 import CMK2
 from application.modules.debug import ColorCodes as CC
@@ -339,14 +340,20 @@ class CheckmkTagSync(CMK2):
         Checkmk detects renamed tags by their title. Two tags sharing one title
         therefore look like a rename of a tag which is in use, and Checkmk then
         refuses the update of the whole group unless it is repaired.
+
+        Every tag of a duplicated title gets the id added, not only the second
+        one. Would one of them keep the title, Checkmk would still read that as
+        the rename of the other one and move the hosts and rules which use it.
+        A title none of them carries any more is simply gone for Checkmk, and
+        since all ids stay, nothing is renamed and nothing is removed.
         """
-        found_titles = set()
+        counted = Counter(x['title'] for x in tags)
+        doubled = {x for x, y in counted.items() if y > 1}
         for tag in tags:
-            if tag['title'] in found_titles:
+            if tag['title'] in doubled:
                 logger.debug("Tag title '%s' used twice, adding id '%s' to it",
                              tag['title'], tag[id_field])
                 tag['title'] = f"{tag['title']} ({tag[id_field]})"
-            found_titles.add(tag['title'])
         return tags
 
     def _tag_id_field(self):

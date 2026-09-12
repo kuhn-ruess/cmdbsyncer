@@ -163,9 +163,10 @@ PRESETS = [
              'hint': 'Use bulk-update for label changes.'},
             {'key': 'CMK_BULK_UPDATE_OPERATIONS', 'type': 'int',
              'default': 50, 'hint': 'Hosts per bulk-update batch.'},
-            {'key': 'CMK_BULK_FALLBACK_SINGLE', 'type': 'bool', 'default': True,
+            {'key': 'CMK_BULK_FALLBACK_SINGLE', 'type': 'bool', 'default': False,
              'hint': 'Retry the hosts of a failed bulk request one by one, so '
-                     'that one broken host does not block its whole batch.'},
+                     'that one broken host does not block its whole batch. '
+                     'Costs one request per host of a failed batch.'},
             {'key': 'CMK_BULK_DELETE_HOSTS', 'type': 'bool', 'default': True,
              'hint': 'Use bulk-delete.'},
             {'key': 'CMK_BULK_DELETE_OPERATIONS', 'type': 'int',
@@ -178,7 +179,10 @@ PRESETS = [
             {'key': 'CMK_TAG_REPAIR', 'type': 'bool', 'default': False,
              'hint': 'Let Checkmk update the hosts and rules which use a '
                      'changed tag group. Needed when Checkmk refuses a tag '
-                     'group update and asks for the repair flag.'},
+                     'group update and asks for the repair flag. Careful: a '
+                     'removed tag is repaired by deleting the condition from '
+                     'every rule using it, so the rule then matches more '
+                     'hosts than before.'},
             {'key': 'CMK_LOWERCASE_FOLDERNAMES', 'type': 'bool',
              'default': True,
              'hint': 'Normalise Checkmk folder names to lowercase.'},
