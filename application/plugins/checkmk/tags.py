@@ -314,7 +314,6 @@ class CheckmkTagSync(CMK2):
             config_tags.insert(0, (None, "Not set"))
         id_field = self._tag_id_field()
         found_ids = []
-        found_titles = set()
         tags = []
         for x, y in config_tags:
             if x:
@@ -324,20 +323,30 @@ class CheckmkTagSync(CMK2):
                 continue
             if x in found_ids:
                 continue
-            if y in found_titles:
-                # Checkmk detects renamed tags by their title. Two tags sharing
-                # one title therefore look like a rename of a tag which is in
-                # use, and Checkmk then refuses the whole group update unless
-                # it is repaired. Keep every title unique to avoid that.
-                logger.debug("Tag title '%s' used twice, adding id '%s' to it", y, x)
-                y = f"{y} ({x})"
             tags.append({id_field: x, 'title': y})
             found_ids.append(x)
-            found_titles.add(y)
 
         if not tags or len(tags) == 0:
             logger.debug("%s *%s Group has no tags", CC.WARNING, CC.ENDC)
             return False
+        return self.unique_titles(tags, id_field)
+
+    @staticmethod
+    def unique_titles(tags, id_field):
+        """
+        Keep the title of every tag of a group unique.
+
+        Checkmk detects renamed tags by their title. Two tags sharing one title
+        therefore look like a rename of a tag which is in use, and Checkmk then
+        refuses the update of the whole group unless it is repaired.
+        """
+        found_titles = set()
+        for tag in tags:
+            if tag['title'] in found_titles:
+                logger.debug("Tag title '%s' used twice, adding id '%s' to it",
+                             tag['title'], tag[id_field])
+                tag['title'] = f"{tag['title']} ({tag[id_field]})"
+            found_titles.add(tag['title'])
         return tags
 
     def _tag_id_field(self):
@@ -411,9 +420,12 @@ class CheckmkTagSync(CMK2):
                 for x in checkmk_tags if x['title'].strip()]
 
         if app.config['CMK_DONT_DELETE_TAGS']:
-            # In this case, we merge only the new dicts into the existing ones
-            payload['tags'] = self._merge_existing_tags(payload['tags'],
-                                                        checkmk_tags_flat, id_field)
+            # In this case, we merge only the new dicts into the existing ones.
+            # A tag which only exists in Checkmk can carry the title of one of
+            # ours, so the titles have to be checked again after the merge.
+            payload['tags'] = self.unique_titles(
+                self._merge_existing_tags(payload['tags'], checkmk_tags_flat, id_field),
+                id_field)
         checkmk_tags_frozen = {frozenset(d.items()) for d in checkmk_tags_flat}
         syncer_tags_frozen = {frozenset(d.items()) for d in payload['tags']}
         if checkmk_tags_frozen == syncer_tags_frozen:

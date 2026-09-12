@@ -243,6 +243,16 @@ class TestPrepareTags(TagSyncTestCase):
         self.assertEqual(len(titles), len(set(titles)))
         self.assertIn('Same Title (id2)', titles)
 
+    def test_unique_titles_after_merge(self):
+        # A tag which only exists in Checkmk can carry the title of one of ours
+        merged = self.sync._merge_existing_tags(
+            [{'ident': 'id1', 'title': 'Same Title'}],
+            [{'ident': 'id2', 'title': 'Same Title'}], 'ident')
+        result = self.sync.unique_titles(merged, 'ident')
+        titles = [t['title'] for t in result]
+        self.assertEqual(len(titles), len(set(titles)))
+        self.assertEqual(sorted(t['ident'] for t in result), ['id1', 'id2'])
+
     def test_prepare_tags_for_checkmk_strips(self):
         tags = [('  id1  ', '  Title 1  ')]
         result = self.sync.prepare_tags_for_checkmk(tags)
