@@ -1,0 +1,197 @@
+# Publish the release image to the GitHub Container Registry.
+#
+# Pushing a tag `vX.Y.Z` builds that tag and publishes it as
+# ghcr.io/kuhn-ruess/cmdbsyncer:X.Y.Z plus the moving X.Y tag, and `latest`
+# when it is the newest release there is — a backport tag on an older line
+# never takes `latest` away from a newer release.
+#
+# amd64 and arm64 are built on their own runners and joined into one
+# manifest afterwards. Emulating the other architecture would mean
+# compiling lxml, krb5 and the ODBC bindings under QEMU, which turns a
+# ten-minute release into an hour.
+name: Publish Docker image
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to (re)build, e.g. v4.4.0'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  check:
+    name: Check the release is consistent
+    runs-on: ubuntu-24.04
+    outputs:
+      ref: ${{ steps.release.outputs.ref }}
+      version: ${{ steps.release.outputs.version }}
+      tags: ${{ steps.release.outputs.tags }}
+    steps:
+      - name: Resolve the tag to build
+        id: tag
+        run: |
+          ref="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.ref }}
+          # The whole tag list — deciding whether this release is the newest
+          # one needs to see the others.
+          fetch-depth: 0
+
+      - name: Derive the image tags and verify the version is in sync
+        id: release
+        run: |
+          set -euo pipefail
+          ref="${{ steps.tag.outputs.ref }}"
+          version="${ref#v}"
+
+          # pyproject.toml and application/_version.py are bumped by hand at
+          # release time (see RELEASE.md). A mismatch means the image would
+          # report a version nobody can pip-install, so stop before building.
+          pyproject_version=$(grep -E '^version[[:space:]]*=' pyproject.toml \
+                              | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          runtime_version=$(python3 -c \
+            "import runpy; print(runpy.run_path('application/_version.py')['__version__'])")
+          if [ "$pyproject_version" != "$version" ]; then
+            echo "::error::tag $ref says $version, pyproject.toml says $pyproject_version"
+            exit 1
+          fi
+          if [ "$runtime_version" != "$version" ]; then
+            echo "::error::tag $ref says $version, the changelog says $runtime_version"
+            exit 1
+          fi
+
+          # The pinned add-on has to exist on PyPI — otherwise the failure
+          # shows up twenty minutes into the build instead of now.
+          enterprise=$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' enterprise-version.txt \
+                       | head -1 | tr -d '[:space:]')
+          if [ -n "$enterprise" ] && [ "$enterprise" != "none" ]; then
+            if ! curl -sfI "https://pypi.org/pypi/cmdbsyncer-enterprise/$enterprise/json" \
+                 >/dev/null; then
+              echo "::error::cmdbsyncer-enterprise $enterprise is not on PyPI"
+              exit 1
+            fi
+            echo "Enterprise add-on pinned to $enterprise"
+          fi
+
+          tags="${{ env.IMAGE }}:$version"
+          tags="$tags,${{ env.IMAGE }}:$(echo "$version" | cut -d. -f1,2)"
+          # `latest` only for a plain X.Y.Z that is the highest tag in the
+          # repository: pre-releases never take it, and neither does a fix
+          # backported to an older line after a newer release went out.
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            highest=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+                      | sort -V | tail -1)
+            if [ "$highest" = "$ref" ]; then
+              tags="$tags,${{ env.IMAGE }}:latest"
+            fi
+          fi
+
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "Publishing as: $tags"
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: check
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check.outputs.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pushed without a tag — the digests of both architectures are joined
+      # into the tagged manifest by the job below.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          labels: |
+            org.opencontainers.image.title=CMDBsyncer
+            org.opencontainers.image.description=Synchronise hosts between CMDBs and monitoring systems
+            org.opencontainers.image.version=${{ needs.check.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=GPL-3.0
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+
+      - name: Hand the digest to the manifest job
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${{ steps.build.outputs.digest }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ strategy.job-index }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  publish:
+    name: Publish the manifest
+    needs: [check, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Join both architectures under the release tags
+        run: |
+          set -euo pipefail
+          tag_args=""
+          for tag in $(echo "${{ needs.check.outputs.tags }}" | tr ',' ' '); do
+            tag_args="$tag_args --tag $tag"
+          done
+          # shellcheck disable=SC2046
+          docker buildx imagetools create $tag_args \
+            $(printf "${{ env.IMAGE }}@%s " $(basename -a /tmp/digests/*))
+
+      - name: Show what was published
+        run: |
+          for tag in $(echo "${{ needs.check.outputs.tags }}" | tr ',' ' '); do
+            docker buildx imagetools inspect "$tag" | head -20
+          done

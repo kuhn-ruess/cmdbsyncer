@@ -1,0 +1,52 @@
+# Keep the build context to what the image actually runs.
+#
+# `COPY . /srv` takes everything that is not listed here, so anything
+# deployment-local that happens to sit in a working copy would end up in a
+# published image. Two of those are secrets: `.pypirc` holds the PyPI upload
+# token, `local_config.py` holds SECRET_KEY and CRYPTOGRAPHY_KEY. The
+# container writes its own `local_config.py` on first boot anyway.
+
+# Secrets and deployment-local state
+.pypirc
+local_config.py
+local_*
+license.jwt
+*.syncerplugin
+disabled_plugins.json
+
+# Version control and editor/agent scratch
+.git
+.gitignore
+.githooks
+.github
+.claude*
+.vscode
+.obsidian*
+**/.DS_Store
+**/*.swp
+
+# Virtualenvs and build artefacts — several hundred MB that the image
+# rebuilds from requirements.txt anyway.
+venv
+.venv
+ENV
+env
+build
+dist
+**/*.egg-info
+**/__pycache__
+**/*.py[cod]
+
+# Test and lint leftovers
+.pytest_cache
+.mypy_cache
+htmlcov
+.coverage
+.coverage.*
+coverage.xml
+
+# Compose overrides for local development — the image is built from the
+# plain Dockerfile and never reads these.
+docker-compose.local.yml
+docker-compose.pentest.yml
+Dockerfile.local

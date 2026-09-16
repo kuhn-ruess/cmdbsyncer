@@ -42,6 +42,20 @@ RUN pip3 install --no-cache-dir -r requirements-ansible.txt
 RUN pip3 install --no-cache-dir -r requirements-ansible-windows.txt
 RUN pip3 install --no-cache-dir gunicorn
 
+# The enterprise add-on ships in every image so a customer who buys one only
+# has to drop in their license.jwt — no rebuild, no different tag. Without a
+# license it never activates and never says anything: the Community Edition
+# behaves exactly as it does on an install that has no add-on at all.
+# The pinned version is part of the release (see enterprise-version.txt).
+COPY enterprise-version.txt ./
+ARG ENTERPRISE_VERSION=
+RUN ev="${ENTERPRISE_VERSION:-$(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' enterprise-version.txt | head -1 | tr -d '[:space:]')}"; \
+    if [ "$ev" = "none" ] || [ -z "$ev" ]; then \
+        echo "Building without the enterprise add-on."; \
+    else \
+        pip3 install --no-cache-dir "cmdbsyncer-enterprise==$ev"; \
+    fi
+
 COPY ./deploy_configs/run_cron.sh /etc/periodic/15min/
 # Sourced by /etc/profile: tab completion for the cmdbsyncer CLI.
 COPY ./deploy_configs/cmdbsyncer_completion.sh /etc/profile.d/

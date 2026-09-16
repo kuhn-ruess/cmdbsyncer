@@ -27,7 +27,30 @@ The two sources are kept in sync by the maintainer at release time — there is 
 
 ### Docker / Docker Compose
 
-The Docker image is built from the repo source (`Dockerfile`), so the version you run is determined by the branch or tag you cloned. Check out `lts/3.12` (or a specific tag) **before** building the image:
+Every release is published to the GitHub Container Registry, so the usual way to run it is to pull an image rather than build one:
+
+```bash
+curl -O https://raw.githubusercontent.com/kuhn-ruess/cmdbsyncer/main/docker-compose.registry.yml
+docker compose -f docker-compose.registry.yml up -d
+docker compose -f docker-compose.registry.yml exec api \
+    ./cmdbsyncer sys create_user you@example.com
+```
+
+Available tags:
+
+| Tag | Moves | Use it for |
+| --- | ----- | ---------- |
+| `4.4.0` | never | a pinned deployment |
+| `4.4` | with each patch of that line | staying on one minor version |
+| `latest` | with each new release | test systems that should follow along |
+
+Upgrade by editing the tag in the compose file (or `docker compose pull` on a moving tag) and running `up -d` again. The `config` volume in that compose file has to survive the upgrade: `SECRET_KEY` and `CRYPTOGRAPHY_KEY` are generated on first boot and every stored account password is encrypted with that key. Back it up together with the database.
+
+The images are multi-architecture (`linux/amd64` and `linux/arm64`) and carry the enterprise add-on that belongs to the release. Without a license file it never activates and never announces itself — a Community Edition install looks the same as one that has no add-on installed at all.
+
+#### Building the image yourself
+
+The `Dockerfile` still builds from the repo source, so the version you get is determined by the branch or tag you cloned. Check out `lts/3.12` (or a specific tag) **before** building the image:
 
 ```bash
 git clone https://github.com/kuhn-ruess/cmdbsyncer.git
@@ -90,6 +113,20 @@ make release   # clean + build + check + upload + tag
 ```
 
 (`make release` already builds from the synced version and re-pushes the tag if needed.)
+
+### 5. The container image publishes itself
+
+Pushing the `vX.Y.Z` tag starts `.github/workflows/docker-publish.yml`, which builds `linux/amd64` and `linux/arm64` and pushes `ghcr.io/kuhn-ruess/cmdbsyncer` as `X.Y.Z`, `X.Y` and — when the tag is the newest release in the repository — `latest`. A backport tag on an older line therefore never takes `latest` away from a newer release.
+
+Nothing has to be configured for it: the workflow authenticates with the repository's own `GITHUB_TOKEN`.
+
+The build stops before it starts when `pyproject.toml` or the changelog disagrees with the tag, which is the one place where the manual version bump above gets checked. Re-run a build for an existing tag from the Actions tab ("Publish Docker image" → Run workflow → tag).
+
+#### The enterprise pin
+
+`enterprise-version.txt` names the `cmdbsyncer-enterprise` release that goes into the image. Bump it in the same commit as `pyproject.toml` whenever a release should ship a newer add-on, and make sure that version is on PyPI **before** pushing the tag — the workflow checks and refuses otherwise.
+
+The add-on is in every image, including the ones Community Edition users run. Without a license it does not activate, does not log anything and adds no menu entry, so this is invisible to anybody who has not bought one. Build without it with `--build-arg ENTERPRISE_VERSION=none`.
 
 ## For maintainers — the LTS branch
 

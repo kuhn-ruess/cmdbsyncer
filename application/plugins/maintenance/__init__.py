@@ -3,6 +3,7 @@
 Maintenance Module
 """
 import os
+import importlib
 import datetime
 import shutil
 import string
@@ -759,19 +760,43 @@ def migrate_accounts(old_key, new_key):
             account.set_password(password, new_key)
 
 
+def _local_config_path():
+    """Where this deployment keeps its local_config.py.
+
+    ``$CMDBSYNCER_CONFIG_DIR`` first, matching the search order the app
+    factory uses to import it, then the working directory as before. The
+    distinction matters for container installs: the working directory is a
+    layer of the image and is replaced on every upgrade, so a SECRET_KEY and
+    CRYPTOGRAPHY_KEY written there are regenerated with the next pull —
+    which leaves every stored account password undecryptable. Pointing the
+    variable at a mounted directory keeps them.
+    """
+    config_dir = os.environ.get('CMDBSYNCER_CONFIG_DIR')
+    if config_dir:
+        os.makedirs(config_dir, exist_ok=True)
+        return os.path.join(config_dir, 'local_config.py')
+    return 'local_config.py'
+
+
 def _ensure_local_config():
     """Create a stub local_config.py if missing."""
     print("Check for local_config.py File")
-    if os.path.isfile('local_config.py'):
+    path = _local_config_path()
+    if os.path.isfile(path):
         print(" -> Existed")
         return
-    with open('local_config.py', 'w', encoding="utf-8") as lf:
+    with open(path, 'w', encoding="utf-8") as lf:
         lf.write("#!/usr/bin/env python3\n")
         lf.write('"""\nLocal Config File\n"""\n')
         lf.write("import logging\n")
         lf.write("# Only Update from here inside the config = {} object\n")
         lf.write("config = {}\n")
-    print(" -> Created new local_config.py")
+    # The directory may have been put on sys.path while it was still empty
+    # (a fresh mounted config volume), in which case the import system has
+    # cached it as holding nothing. The `from local_config import config`
+    # further down runs in this same process.
+    importlib.invalidate_caches()
+    print(f" -> Created new local_config.py at {path}")
 
 
 def _ensure_plugins_dir():
@@ -893,12 +918,21 @@ def self_configure():
         migrate_accounts(old_key, new_key)
 
         config['CRYPTOGRAPHY_KEY'] = new_key
-    with open('local_config.py', 'w', encoding="utf-8") as lf:
+    with open(_local_config_path(), 'w', encoding="utf-8") as lf:
         lf.write("#!/usr/bin/env python3\n")
         lf.write('"""\nLocal Config File\n"""\n')
         lf.write("import logging\n")
         lf.write("# Only Update from here inside the config = {} object\n")
         lf.write(f"config = {pformat(config)}\n")
+
+    # What was just written has to reach the running process as well. On a
+    # fresh install the app factory found no local_config.py to import, so
+    # app.config still carries BaseConfig's defaults — CRYPTOGRAPHY_KEY
+    # among them, as None. The migrations below this line read from
+    # app.config, as does anything an operator runs in the same call, and a
+    # key of None fails them with "no CRYPTOGRAPHY_KEY configured" while the
+    # file on disk has had one all along.
+    app.config.update(config)
 
     # Migrate Users
     print("Migrate users")

@@ -1,0 +1,43 @@
+# Run CMDBsyncer from the published image — no checkout, no build.
+#
+#   docker compose -f docker-compose.registry.yml up -d
+#   docker compose -f docker-compose.registry.yml exec api \
+#       ./cmdbsyncer sys create_user you@example.com
+#
+# Upgrading means changing the tag below and running `up -d` again. Pin a
+# version (4.4.0) rather than tracking `latest` if the deployment must not
+# move on its own.
+#
+# The `config` volume is what makes that upgrade safe: SECRET_KEY and
+# CRYPTOGRAPHY_KEY are generated on first boot and every stored account
+# password is encrypted with that key. Kept inside the container they would
+# be thrown away with the old image, and no account password could be read
+# afterwards. Back this volume up together with the database.
+
+services:
+
+  mongo:
+    image: mongo:8.0.4
+    restart: unless-stopped
+    volumes:
+      - data_db:/data/db
+
+  api:
+    image: ghcr.io/kuhn-ruess/cmdbsyncer:latest
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      config: compose
+      # local_config.py and, on enterprise installs, license.jwt live here.
+      CMDBSYNCER_CONFIG_DIR: /srv/etc
+    volumes:
+      - config:/srv/etc
+    ports:
+      - 8080:9090
+
+volumes:
+  data_db:
+  config:
