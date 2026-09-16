@@ -29,6 +29,19 @@ fi
 # is the same information from a side that can be parsed.
 crond -L /proc/1/fd/2
 
+# A published image is replaced on every upgrade, and /srv goes with it. A
+# deployment that keeps its configuration across upgrades points
+# CMDBSYNCER_CONFIG_DIR at a mounted directory instead; self_configure then
+# writes local_config.py there, and an uploaded license.jwt lands next to
+# it. A fresh volume belongs to root while self_configure runs as 'app', so
+# hand it over here — this is the last moment we are still root.
+if [ -n "${CMDBSYNCER_CONFIG_DIR:-}" ]; then
+    mkdir -p "$CMDBSYNCER_CONFIG_DIR"
+    if [ -n "$as_app" ]; then
+        chown -R app:app "$CMDBSYNCER_CONFIG_DIR"
+    fi
+fi
+
 $as_app /srv/cmdbsyncer sys self_configure
 
 # Optional MCP server (SSE transport) — opt in by setting

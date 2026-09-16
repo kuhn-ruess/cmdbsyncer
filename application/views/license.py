@@ -2,7 +2,6 @@
 License Information View
 """
 import importlib.util
-import os
 from datetime import datetime
 from pathlib import Path
 
@@ -21,13 +20,7 @@ _MAX_LICENSE_BYTES = 16 * 1024
 
 def _resolve_destination():
     """Pick the same destination the enterprise loader reads from."""
-    env_path = os.environ.get('CMDBSYNCER_LICENSE')
-    if env_path:
-        return env_path
-    spec = importlib.util.find_spec('local_config')
-    if spec and spec.origin:
-        return str(Path(spec.origin).parent / 'license.jwt')
-    return None
+    return enterprise.license_path()
 
 
 def _enterprise_pubkey_path():
@@ -83,11 +76,19 @@ class LicenseView(BaseView):
         return current_user.is_authenticated and current_user.global_admin
 
     def is_visible(self):
-        # Community Edition installs (no enterprise package on disk) have
-        # nothing useful on the License page — no upload form, no feature
-        # table — so hide the menu entry to avoid pointing admins at a
-        # dead end. The route stays reachable via direct URL for support.
-        return importlib.util.find_spec('cmdbsyncer_enterprise') is not None
+        # The package alone says nothing any more: the Docker image ships it
+        # to everybody, so keying the menu entry off its presence would put
+        # an Enterprise item in front of every Community Edition admin. A
+        # license file is what makes the page worth opening — it is either
+        # working, and the page shows the features and the expiry, or it is
+        # broken, and the page is where it gets replaced. Without one there
+        # is nothing to show, so the entry stays hidden.
+        #
+        # The route itself stays reachable at /admin/license/ — that is how
+        # a first license gets uploaded, and it is what support asks for.
+        if importlib.util.find_spec('cmdbsyncer_enterprise') is None:
+            return False
+        return enterprise.load_status == 'active' or enterprise.license_file_present()
 
     @expose('/')
     def index(self):

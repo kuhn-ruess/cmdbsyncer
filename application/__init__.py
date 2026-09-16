@@ -70,6 +70,13 @@ for _candidate in _config_candidates:
         break
 if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
+# A directory named by the operator goes on the path even when it holds no
+# ``local_config.py`` yet: on a container install the first boot is what
+# creates that file, and ``sys self_configure`` has to be able to import it
+# in the same run. An empty directory in front changes nothing otherwise —
+# the import simply falls through to the next entry.
+if _env_dir and _env_dir not in sys.path:
+    sys.path.insert(0, _env_dir)
 
 import importlib
 import pkgutil
