@@ -34,31 +34,24 @@ CMDBsyncer is a powerful, web-based tool designed to solve the complex challenge
 
 ## ⚡ Quick Start
 
-Get started quickly using Docker Compose:
+Every release is published as a container image — nothing to clone, nothing to build:
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/cmdbsyncer.git
-cd cmdbsyncer
-
-# For production: check out the last released version.
-# For testing the bleeding edge: stay on main.
-git checkout stable
-
-# Start the application
-./helper up
-
-# Access the container
-./helper shell
+# Fetch the compose file and start CMDBsyncer together with its MongoDB
+curl -O https://raw.githubusercontent.com/kuhn-ruess/cmdbsyncer/main/docker-compose.registry.yml
+docker compose -f docker-compose.registry.yml up -d
 
 # Create your first user
-./helper create_user 'your-email@example.com'
+docker compose -f docker-compose.registry.yml exec api \
+    ./cmdbsyncer sys create_user 'your-email@example.com'
 
-# Access the web interface
-# Open http://your-host:5003 in your browser
+# Open http://your-host:8080 in your browser
 ```
 
-This runs a development version that you can use to test everything.
+The compose file tracks `latest`. Replace the tag with `4.3.3` to pin a release
+or with `4.3` to stay on a minor line; the images cover `linux/amd64` and
+`linux/arm64`. Full walkthrough — configuration volume, upgrades, reverse proxy
+— in [Installation with Docker](https://docs.cmdbsyncer.de/installation/setup_docker/).
 
 ## 📸 Screenshots
 
@@ -189,34 +182,42 @@ This runs a development version that you can use to test everything.
 
 ### Production Installation
 
-1. **Clone the repository and pick a version**
+1. **Fetch the compose file**
    ```bash
-   git clone https://github.com/your-username/cmdbsyncer.git
-   cd cmdbsyncer
-
-   # Use the stable branch (last released version) for production:
-   git checkout stable
-   # …or pin to a specific release tag for reproducible deployments:
-   # git checkout v3.12.12
+   curl -O https://raw.githubusercontent.com/kuhn-ruess/cmdbsyncer/main/docker-compose.registry.yml
    ```
+
+2. **Pick a version**
+
+   Edit the `image:` line. `ghcr.io/kuhn-ruess/cmdbsyncer:latest` follows every
+   release, `:4.3.3` pins one, `:4.3` stays on a minor line.
    See [RELEASE.md](RELEASE.md) for the full branching/versioning policy.
-
-2. **Configure environment**
-   ```bash
-   # Copy and edit configuration files
-   cp docker-compose.prod.yml docker-compose.yml
-   # Edit the configuration as needed
-   ```
 
 3. **Start the application**
    ```bash
-   docker-compose up -d
+   docker compose -f docker-compose.registry.yml up -d
    ```
 
 4. **Create admin user**
    ```bash
-   ./helper create_user 'admin@your-domain.com'
+   docker compose -f docker-compose.registry.yml exec api \
+       ./cmdbsyncer sys create_user 'admin@your-domain.com'
    ```
+
+The `config` volume in that file holds `local_config.py`, and with it the key
+every stored account password is encrypted with. Keep it across upgrades and
+back it up together with the database.
+
+#### Building the image yourself
+
+For a fork, a custom base image or a preinstalled plugin:
+
+```bash
+git clone https://github.com/kuhn-ruess/cmdbsyncer.git
+cd cmdbsyncer
+git checkout lts/3.12        # or a release tag: git checkout v4.3.3
+docker compose up -d
+```
 
 ### Development Installation
 
