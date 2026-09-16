@@ -152,7 +152,11 @@ jobs:
       - name: Hand the digest to the manifest job
         run: |
           mkdir -p /tmp/digests
-          touch "/tmp/digests/${{ steps.build.outputs.digest }}"
+          # The digest becomes the file name, minus its "sha256:" prefix —
+          # an artifact path may not contain a colon. The job below puts the
+          # prefix back.
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -188,7 +192,7 @@ jobs:
           done
           # shellcheck disable=SC2046
           docker buildx imagetools create $tag_args \
-            $(printf "${{ env.IMAGE }}@%s " $(basename -a /tmp/digests/*))
+            $(printf "${{ env.IMAGE }}@sha256:%s " $(basename -a /tmp/digests/*))
 
       - name: Show what was published
         run: |
