@@ -122,6 +122,20 @@ Nothing has to be configured for it: the workflow authenticates with the reposit
 
 The build stops before it starts when `pyproject.toml` or the changelog disagrees with the tag, which is the one place where the manual version bump above gets checked. Re-run a build for an existing tag from the Actions tab ("Publish Docker image" → Run workflow → tag).
 
+#### A workflow fix has to reach the branch before the tag
+
+A tag push runs the workflow **as it exists in the tagged commit**, not as it
+exists on `main`. Repairing `.github/workflows/docker-publish.yml` on `main`
+therefore does nothing for a tag cut from `release/x.y` — cherry-pick it to the
+release branch first, then tag. A release branch without the workflow file
+(`release/4.2` and older, `lts/3.12`) produces no image at all: the tag push
+has nothing to trigger.
+
+A tag already pushed against a broken workflow does not have to be moved. Run
+the workflow by hand instead: it takes its definition from the default branch
+but still checks out the tag, so the image is still built from exactly the
+tagged source. Actions → "Publish Docker image" → Run workflow → enter the tag.
+
 #### The enterprise pin
 
 `enterprise-version.txt` names the `cmdbsyncer-enterprise` release that goes into the image. Bump it in the same commit as `pyproject.toml` whenever a release should ship a newer add-on, and make sure that version is on PyPI **before** pushing the tag — the workflow checks and refuses otherwise.
