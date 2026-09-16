@@ -76,19 +76,14 @@ class LicenseView(BaseView):
         return current_user.is_authenticated and current_user.global_admin
 
     def is_visible(self):
-        # The package alone says nothing any more: the Docker image ships it
-        # to everybody, so keying the menu entry off its presence would put
-        # an Enterprise item in front of every Community Edition admin. A
-        # license file is what makes the page worth opening — it is either
-        # working, and the page shows the features and the expiry, or it is
-        # broken, and the page is where it gets replaced. Without one there
-        # is nothing to show, so the entry stays hidden.
-        #
-        # The route itself stays reachable at /admin/license/ — that is how
-        # a first license gets uploaded, and it is what support asks for.
-        if importlib.util.find_spec('cmdbsyncer_enterprise') is None:
-            return False
-        return enterprise.load_status == 'active' or enterprise.license_file_present()
+        # Shown whenever the package is on disk — which, with the Docker
+        # image, is everywhere. That is deliberate: the page is where a
+        # license gets uploaded, so hiding it until a license exists leaves
+        # a customer who just bought one with nowhere to go. It is not a
+        # dead end for a Community Edition install either; it names the
+        # destination path, reports why nothing is active, and carries the
+        # upload form. `is_accessible` keeps all of it to global admins.
+        return importlib.util.find_spec('cmdbsyncer_enterprise') is not None
 
     @expose('/')
     def index(self):
