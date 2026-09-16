@@ -159,8 +159,17 @@ class User(db.Document, UserMixin):
 
     def check_password(self, password):
         """
-        Password checker
+        Password checker.
+
+        A user who only ever authenticated against a directory has no local
+        hash at all. The login view asks every user for one before it decides
+        — it has to, a directory answer of "no" must still allow a local
+        password — so without this guard that question reached werkzeug with
+        None and raised, turning a successful LDAP bind into a server error.
+        No hash simply means no local password, which never matches.
         """
+        if not self.pwdhash:
+            return False
         return check_password_hash(self.pwdhash, password)
 
     def account_scope(self):
