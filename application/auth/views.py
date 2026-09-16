@@ -166,8 +166,17 @@ def login():  # pylint: disable=too-many-return-statements,too-many-branches,too
                 if ldap_user:
                     existing_user = ldap_user
                     ldap_authenticated = True
-            except Exception:  # pylint: disable=broad-exception-caught
-                log.log("LDAP login failed", source="AUTH")
+            except Exception as exp:  # pylint: disable=broad-exception-caught
+                # `log.log` already files the traceback, but it sits
+                # collapsed in the detail view of a single entry and reads
+                # like a crash report. The reason belongs in the record
+                # itself, next to the AUTH entries the login handler writes
+                # either side of it, so a list of them tells an unreachable
+                # server apart from a service account with the wrong
+                # password. The person logging in still sees the generic
+                # message; the directory's answer is not theirs to read.
+                log.log("LDAP login failed", source="AUTH",
+                        details=[('email', email), ('error', str(exp))])
                 flash('LDAP Error', 'danger')
                 return render_template('login.html', **context)
 
