@@ -2576,6 +2576,25 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         reason = ' and '.join(part.split(':', 1)[0] for part in mismatches)
         return (f'{reason} changed', '; '.join(mismatches))
 
+    @staticmethod
+    def _keep_after_failed_update(our_rule, rule_id):
+        """
+        Pair a rule Checkmk refused to update with the existing Checkmk rule
+        instead of deleting it.
+
+        A rejected update means Checkmk does not accept the value we send —
+        a create of the very same value fails for the same reason. Deleting
+        the rule and letting the create fail afterwards leaves the target
+        without any rule at all, and every following run repeats it. Keeping
+        both sides untouched loses nothing: the error is reported, the
+        existing rule keeps working, and the next run retries the update.
+
+        Returns True so the caller treats the rule as found.
+        """
+        our_rule['_cmk_id'] = rule_id
+        our_rule['_skip_create'] = True
+        return True
+
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def clean_rules(self):
         """
@@ -2742,6 +2761,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             self.log_error(
                                 f"Could not update Rule {rule_id} in "
                                 f"{ruleset_name}: {error}")
+                            rule_found = self._keep_after_failed_update(
+                                our_rule, rule_id)
 
                     # A host entering or leaving a coalesced rule changed
                     # its condition, which used to read as "this rule is
@@ -2785,6 +2806,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             self.log_error(
                                 f"Could not update host list of Rule {rule_id} "
                                 f"in {ruleset_name}: {error}")
+                            rule_found = self._keep_after_failed_update(
+                                our_rule, rule_id)
 
                     # Only warn about flapping when there really are multiple
                     # conflicting matches — a single value drift is handled
