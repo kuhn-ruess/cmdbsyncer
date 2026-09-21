@@ -1730,6 +1730,103 @@ class TestHostListDrift(unittest.TestCase):
         self.assertEqual(calls['PUT'], [])
 
 
+class TestRefusedUpdateKeepsTheRule(unittest.TestCase):
+    """
+    Checkmk refusing our value (an outdated password-store reference, a
+    ruleset whose format changed with an upgrade, ...) used to cost the
+    rule: the in-place update failed, the rule was deleted as "not needed
+    any more", and the recreate failed for exactly the same reason. The
+    target was left without the rule, and every following run repeated it.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.project = None
+        self.sync.log_details = []
+        self.sync._rule_etag_wildcard_rejected = None
+        self.progress_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.make_progress',
+            _FakeCleanProgress())
+        self.progress_patcher.start()
+
+    def tearDown(self):
+        self.progress_patcher.stop()
+
+    @staticmethod
+    def _cmk_rule(hosts, value):
+        return {
+            'id': 'r1',
+            'extensions': {
+                'folder': '/',
+                'value_raw': value,
+                'conditions': {'host_name': {'match_on': list(hosts)}},
+                'properties': {
+                    'description': 'cmdbsyncer_test_account',
+                    'comment': 'c',
+                },
+            },
+        }
+
+    @staticmethod
+    def _local(hosts, value):
+        return {
+            'value': value, 'comment': 'c', 'folder': '/',
+            'condition': {'host_name': {'match_on': list(hosts)}},
+        }
+
+    def _wire(self, cmk_rules):
+        calls = {'DELETE': [], 'PUT': []}
+
+        def fake_request(url, method='GET', data=None, **_kw):
+            if method == 'GET' and 'ruleset_name' in url:
+                return {'value': cmk_rules}, {}
+            if method == 'GET':
+                return {}, {'etag': 'x'}
+            if method == 'DELETE':
+                calls['DELETE'].append(url)
+                return {}, {'status_code': 200}
+            calls['PUT'].append(data)
+            raise CmkException(
+                'Problem in field secret: No password provided')
+        self.sync.request = MagicMock(side_effect=fake_request)
+        return calls
+
+    def test_a_refused_value_update_does_not_delete_the_rule(self):
+        calls = self._wire([self._cmk_rule(['h1'], "{'secret': 'old'}")])
+        local = self._local(['h1'], "{'secret': 'new'}")
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        # Paired with the existing rule, so create_rules does not POST the
+        # same refused value again.
+        self.assertTrue(local.get('_skip_create'))
+        self.assertEqual(local.get('_cmk_id'), 'r1')
+
+    def test_a_refused_host_list_update_does_not_delete_the_rule(self):
+        calls = self._wire([self._cmk_rule(['h1', 'h2'], "{'k': 'v'}")])
+        local = self._local(['h1'], "{'k': 'v'}")
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        self.assertTrue(local.get('_skip_create'))
+        self.assertEqual(local.get('_cmk_id'), 'r1')
+
+    def test_the_failure_is_reported(self):
+        self._wire([self._cmk_rule(['h1'], "{'secret': 'old'}")])
+        self.sync.rulsets_by_type = {
+            'ruleset1': [self._local(['h1'], "{'secret': 'new'}")]}
+
+        self.sync.clean_rules()
+
+        self.assertTrue(any(
+            'Could not update Rule r1' in str(entry)
+            for entry in self.sync.log_details))
+
+
 class TestExplainDeletion(unittest.TestCase):
     """
     Why a rule is deleted. A run that removes hundreds of its own rules
