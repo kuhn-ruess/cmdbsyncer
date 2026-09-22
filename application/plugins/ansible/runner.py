@@ -263,6 +263,66 @@ def _write_run_inventory_spec(directory: str, provider: str, mode: str,
     return spec_path
 
 
+def _apply_ssh_env(env: dict, run_tmp: str) -> None:
+    """
+    Point OpenSSH at a writable known_hosts file inside the run's temp dir.
+
+    Setting $HOME (see `_execute`) covers Ansible's own scratch files but
+    does not reach ssh: OpenSSH expands the `~` of `~/.ssh` and
+    `known_hosts` through the passwd database, not $HOME. Under mod_wsgi /
+    gunicorn the process runs as the web user, whose home (e.g.
+    `/usr/share/httpd`) is not writable, so every host fails with
+
+        Could not create directory '/usr/share/httpd/.ssh'.
+        Failed to add the host to the list of known hosts
+
+    and with a password sshpass exits 5, which Ansible reports as
+    "Invalid/incorrect password" — hiding the real cause entirely.
+
+    Host key checking is turned off because an unknown host key makes ssh
+    ask a question nobody can answer in a background run (the run would
+    hang or fail instead of reporting anything useful). Operator settings
+    win: ANSIBLE_HOST_KEY_CHECKING is only defaulted, and our ssh options
+    are appended *after* any configured ANSIBLE_SSH_EXTRA_ARGS — ssh keeps
+    the first value it is given for an option, so an own
+    `-o UserKnownHostsFile=...` (a persistent known_hosts) takes precedence.
+    """
+    env.setdefault('ANSIBLE_HOST_KEY_CHECKING', 'False')
+    known_hosts = os.path.join(run_tmp, 'known_hosts')
+    configured = (env.get('ANSIBLE_SSH_EXTRA_ARGS') or '').strip()
+    ours = f'-o UserKnownHostsFile={known_hosts} -o StrictHostKeyChecking=no'
+    env['ANSIBLE_SSH_EXTRA_ARGS'] = f'{configured} {ours}'.strip()
+
+
+def _connection_hint(log: str) -> str:
+    """
+    Explain an "Invalid/incorrect password" that is not one.
+
+    sshpass reports every failure it cannot classify as a wrong password,
+    and Ansible prints ssh's stderr behind that message. When that stderr
+    says ssh could not write into the home directory of the user the
+    application runs as, the password is a red herring — so say that in
+    the log instead of sending the next reader hunting for credentials.
+    Returns an empty string when the log shows no such combination.
+    """
+    if 'Invalid/incorrect password' not in log:
+        return ''
+    if not any(marker in log for marker in (
+            "Could not create directory",
+            "Failed to add the host to the list of known hosts",
+    )):
+        return ''
+    return (
+        "\n--- CMDBsyncer ---\n"
+        "This is most likely NOT a wrong password. The ssh output above shows "
+        "that ssh could not write into the home directory of the user this "
+        "application runs as (no writable ~/.ssh), and sshpass reports that as "
+        "'Invalid/incorrect password'. Give the process a writable home "
+        "directory, or set ANSIBLE_SSH_EXTRA_ARGS with "
+        "-o UserKnownHostsFile=<writable file> in its environment.\n"
+    )
+
+
 def cancel_run(stats) -> bool:
     """
     Stop a still-running playbook by signalling its process group.
@@ -361,6 +421,7 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         # local-delegated tasks work; real SSH hosts just create this path
         # under their own /tmp.
         env['ANSIBLE_REMOTE_TEMP'] = run_tmp
+        _apply_ssh_env(env, run_tmp)
         inventory_path = _write_run_inventory_spec(
             run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
             cmdbsyncer_bin=_cmdbsyncer_bin(),
@@ -387,7 +448,8 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
             )
             stats.pid = proc.pid
             stats.save()
-            stats.log = _stream_output(proc, stats)
+            captured = _stream_output(proc, stats)
+            stats.log = captured + _connection_hint(captured)
             stats.exit_code = proc.returncode
             # A negative return code means the process was killed by a signal
             # — that is how cancel_run() stops a run, so report it as
