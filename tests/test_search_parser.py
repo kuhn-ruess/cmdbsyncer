@@ -1,6 +1,7 @@
 """Tests for the Lucene-flavoured host search parser."""
 # pylint: disable=missing-function-docstring,missing-class-docstring,too-many-public-methods
 
+import datetime
 import importlib.util
 import os
 import sys
@@ -261,6 +262,86 @@ class RegexValueTests(unittest.TestCase):
         self.assertEqual(result['hostname']['$regex'], 'srv/data')
         self.assertEqual(parse_search('hostname:/srv/data')['hostname']['$regex'],
                          '/srv/data')
+
+
+
+class CreatedDateTests(unittest.TestCase):
+    """`created:` selects hosts by the day they were created."""
+
+    def _bounds(self, condition):
+        """(create_time bounds, _id-fallback bounds) of a created: filter."""
+        create_time, fallback = condition['$or']
+        return create_time['create_time'], fallback['$and'][1]['_id']
+
+    def test_exact_date_is_a_full_day(self):
+        result = parse_search('created:2026-09-22')
+        times, _ = self._bounds(result)
+        self.assertEqual(times['$gte'], datetime.datetime(2026, 9, 22))
+        self.assertEqual(times['$lt'], datetime.datetime(2026, 9, 23))
+
+    def test_today_is_the_current_utc_day(self):
+        today = datetime.datetime.utcnow().date()
+        times, _ = self._bounds(parse_search('created:today'))
+        self.assertEqual(times['$gte'].date(), today)
+        self.assertEqual(times['$lt'].date(), today + datetime.timedelta(days=1))
+
+    def test_yesterday(self):
+        yesterday = datetime.datetime.utcnow().date() - datetime.timedelta(days=1)
+        times, _ = self._bounds(parse_search('created:yesterday'))
+        self.assertEqual(times['$gte'].date(), yesterday)
+
+    def test_hosts_without_the_field_fall_back_to_the_object_id(self):
+        # Hosts created in the GUI and every host older than the field
+        # carry no create_time; their _id generation time answers instead.
+        result = parse_search('created:2026-09-22')
+        times, ids = self._bounds(result)
+        self.assertEqual(result['$or'][1]['$and'][0], {'create_time': None})
+        self.assertEqual(ids['$gte'].generation_time.replace(tzinfo=None),
+                         times['$gte'])
+        self.assertEqual(ids['$lt'].generation_time.replace(tzinfo=None),
+                         times['$lt'])
+
+    def test_operators_leave_the_open_end_out(self):
+        times, ids = self._bounds(parse_search('created:>=2026-09-01'))
+        self.assertEqual(times, {'$gte': datetime.datetime(2026, 9, 1)})
+        self.assertEqual(list(ids), ['$gte'])
+
+        times, _ = self._bounds(parse_search('created:>2026-09-01'))
+        self.assertEqual(times, {'$gte': datetime.datetime(2026, 9, 2)})
+
+        times, _ = self._bounds(parse_search('created:<2026-09-01'))
+        self.assertEqual(times, {'$lt': datetime.datetime(2026, 9, 1)})
+
+        times, _ = self._bounds(parse_search('created:<=2026-09-01'))
+        self.assertEqual(times, {'$lt': datetime.datetime(2026, 9, 2)})
+
+    def test_range_from_two_terms(self):
+        result = parse_search('created:>=2026-09-01 created:<=2026-09-07')
+        self.assertEqual(len(result['$and']), 2)
+
+    def test_create_time_and_created_at_are_the_same_field(self):
+        self.assertEqual(parse_search('create_time:2026-09-22'),
+                         parse_search('created_at:2026-09-22'))
+
+    def test_quoted_date_still_reads_as_a_date(self):
+        self.assertEqual(parse_search('created:"2026-09-22"'),
+                         parse_search('created:2026-09-22'))
+
+    def test_combines_with_other_terms(self):
+        result = parse_search('h:web AND created:today')
+        self.assertIn('$and', result)
+        self.assertEqual(result['$and'][0],
+                         {'hostname': {'$regex': 'web', '$options': 'i'}})
+
+    def test_a_label_named_created_is_still_reachable(self):
+        self.assertEqual(parse_search('labels.created:foo'),
+                         {'labels.created': {'$regex': 'foo', '$options': 'i'}})
+
+    def test_non_dates_are_an_error_instead_of_an_empty_result(self):
+        for term in ('created:web*', 'created:tomorrow', 'created:2026-13-01',
+                     'created:/^2026/'):
+            with self.assertRaises(SearchSyntaxError):
+                parse_search(term)
 
 
 if __name__ == '__main__':

@@ -500,6 +500,8 @@
     '  h:/^web[0-9]+$/   — slashes make the value a regex (no * / ? globbing)',
     '  env:prod          — value under labels.env or inventory.env',
     '  labels.env:prod   — only labels.env (l.env: and i.cpu: are the short forms)',
+    '  created:today     — created today (also yesterday, 2026-09-22; dates are UTC)',
+    '  created:>=2026-09-01 created:<=2026-09-07  — created in that range',
     '  basti_test*       — keys starting with basti_test (e.g. basti_test2)',
     '  "foo bar"         — quote to keep spaces and disable * / ?'
   ].join('\n');

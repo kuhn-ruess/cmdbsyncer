@@ -16,8 +16,17 @@ wildcards behave intuitively; quoted values (`"foo bar"`) are escaped
 literally so spaces survive tokenisation. A value written between
 slashes (`h:/^web\\d+$/`) is taken as a regular expression as-is — no
 wildcard translation — for the cases where globbing is not enough.
+
+`created:` is the one field that is not matched as a regex: it takes a
+date (`today`, `yesterday` or `YYYY-MM-DD`), optionally prefixed with
+`>=`, `>`, `<=` or `<`, and selects the hosts whose creation timestamp
+falls in that day or range. Dates are UTC, the timezone the syncer
+stores its timestamps in.
 """
+import datetime
 import re
+
+from bson import ObjectId
 
 
 class SearchSyntaxError(ValueError):
@@ -47,6 +56,8 @@ _VALUE_MODES = {'WORD': 'plain', 'QUOTED': 'quoted', 'REGEX': 'regex'}
 _FIELD_ALIASES = {
     'h': 'hostname',
     'host': 'hostname',
+    'created': 'create_time',
+    'created_at': 'create_time',
 }
 _FIELD_PREFIX_ALIASES = (
     ('l.', 'labels.'),
@@ -276,8 +287,105 @@ def _dict_match_expr(field_name, regex_str, target):
     }}
 
 
+_DATE_TERM_RE = re.compile(r'^(?P<operator>>=|<=|>|<)?\s*(?P<date>\S+)$')
+_ISO_DATE_RE = re.compile(r'^(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})$')
+
+# operator -> (lower bound, upper bound) picked from (day start, next day)
+_DATE_BOUNDS = {
+    None: ('start', 'next'),
+    '>=': ('start', None),
+    '>':  ('next', None),
+    '<=': (None, 'next'),
+    '<':  (None, 'start'),
+}
+
+
+def _parse_date(text):
+    """
+    Turn `today`, `yesterday` or `YYYY-MM-DD` into the UTC day it names.
+    Everything else is a syntax error — a date field silently matching
+    nothing would look like "no host was created then".
+    """
+    lowered = text.strip().lower()
+    if lowered == 'today':
+        return datetime.datetime.utcnow().date()
+    if lowered == 'yesterday':
+        return datetime.datetime.utcnow().date() - datetime.timedelta(days=1)
+    match = _ISO_DATE_RE.fullmatch(lowered)
+    if match:
+        try:
+            return datetime.date(int(match.group('year')),
+                                 int(match.group('month')),
+                                 int(match.group('day')))
+        except ValueError as error:
+            raise SearchSyntaxError(f"{text!r} is not a valid date: {error}") from error
+    raise SearchSyntaxError(
+        f"{text!r} is not a date — use today, yesterday or YYYY-MM-DD")
+
+
+def _range_condition(field, lower, upper):
+    """`{field: {'$gte': lower, '$lt': upper}}` with the open ends left out."""
+    bounds = {}
+    if lower is not None:
+        bounds['$gte'] = lower
+    if upper is not None:
+        bounds['$lt'] = upper
+    return {field: bounds}
+
+
+def _created_to_mongo(value, mode):
+    """
+    Translate `created:<date>` into a Mongo predicate on the creation
+    time of the host.
+
+    `create_time` is only written by the import path that creates a host
+    (`Host.get_host`); hosts created in the GUI, clones, and every host
+    that predates the field have none. For those the generation time of
+    the Mongo `_id` is used instead — it is the moment the document was
+    written, which is the same event, and it is covered by the `_id`
+    index. Both branches are combined so one search answers for the
+    whole database.
+    """
+    if mode == 'regex':
+        raise SearchSyntaxError(
+            "created: takes a date (today, yesterday, YYYY-MM-DD), not a regex")
+    match = _DATE_TERM_RE.fullmatch(value.strip())
+    if not match:
+        raise SearchSyntaxError(f"Expected a date after 'created:', got {value!r}")
+    day = _parse_date(match.group('date'))
+    edges = {
+        'start': datetime.datetime(day.year, day.month, day.day),
+        'next': datetime.datetime(day.year, day.month, day.day)
+                + datetime.timedelta(days=1),
+    }
+    lower_name, upper_name = _DATE_BOUNDS[match.group('operator')]
+    lower = edges[lower_name] if lower_name else None
+    upper = edges[upper_name] if upper_name else None
+    # `{'create_time': None}` matches both a missing field and an
+    # explicit null, which is exactly the set the _id fallback answers.
+    return {'$or': [
+        _range_condition('create_time', lower, upper),
+        {'$and': [
+            {'create_time': None},
+            _range_condition(
+                '_id',
+                ObjectId.from_datetime(lower) if lower else None,
+                ObjectId.from_datetime(upper) if upper else None),
+        ]},
+    ]}
+
+
 def _leaf_to_mongo(field, value, mode):
     """Translate a single TERM into a Mongo predicate dict."""
+    if field is not None:
+        if not _FIELD_KEY_RE.fullmatch(field):
+            raise SearchSyntaxError(f"Invalid field name {field!r}")
+        field = _resolve_field(field)
+        # Resolved before the value is turned into a regex: a date field
+        # reads its value as a date, not as a pattern.
+        if field == 'create_time':
+            return _created_to_mongo(value, mode)
+
     regex_str = _value_to_regex(value, mode)
     # Keys are matched as full strings — `basti_test` does NOT match a
     # label called `basti_test2`. Wildcards (`*`, `?`) expand the
@@ -295,11 +403,6 @@ def _leaf_to_mongo(field, value, mode):
             _dict_match_expr('inventory', key_regex_str, 'k'),
             _dict_match_expr('inventory', regex_str, 'v'),
         ]}
-
-    if not _FIELD_KEY_RE.fullmatch(field):
-        raise SearchSyntaxError(f"Invalid field name {field!r}")
-
-    field = _resolve_field(field)
 
     if field == 'hostname':
         return {'hostname': {'$regex': regex_str, '$options': 'i'}}
