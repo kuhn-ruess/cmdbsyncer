@@ -467,6 +467,17 @@ if not CLI_MODE:
             insecure = False
         return {'show_https_warning': insecure}
 
+    @app.template_filter('localtime')
+    def _localtime(value, fmt='%Y-%m-%d %H:%M:%S'):
+        """
+        Render a stored (UTC) timestamp in the timezone of the browser
+        that asked for the page: ``{{ job.last_start|localtime }}``.
+        Storage stays UTC everywhere — this is presentation only.
+        """
+        # pylint: disable=import-outside-toplevel
+        from application.helpers.timezone import format_local
+        return format_local(value, fmt)
+
     bootstrap = Bootstrap(app)
 
     login_manager = LoginManager()

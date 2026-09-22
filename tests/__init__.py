@@ -14,6 +14,7 @@ canonical names, so the test files' normal `from application... import ...`
 statements resolve from the sys.modules cache without ever touching MongoDB.
 """
 import ast
+import datetime as _datetime
 import importlib.util
 import os
 import re
@@ -144,6 +145,37 @@ class _SearchSyntaxError(Exception):  # pylint: disable=missing-class-docstring
 
 _search_parser.parse_search = MagicMock(name="stub.parse_search", return_value=None)
 _search_parser.SearchSyntaxError = _SearchSyntaxError
+
+
+# The host views ask `application.helpers.timezone` which clock the
+# reader uses. `application.helpers` is stubbed with an empty __path__,
+# so the submodule needs a stub too. It keeps the real behaviour for a
+# request-less run — UTC, formatted as it is stored — because that is
+# what the renderer tests assert on.
+_timezone = _stub_package("application.helpers.timezone")
+_timezone.UTC = _datetime.timezone.utc
+_timezone.user_timezone = lambda: _datetime.timezone.utc
+
+
+def _stub_to_local(value, tzinfo=None):
+    """Mirror application.helpers.timezone.to_local without a request."""
+    if not isinstance(value, _datetime.datetime):
+        return value
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=_datetime.timezone.utc)
+    return value.astimezone(tzinfo or _datetime.timezone.utc)
+
+
+def _stub_format_local(value, fmt='%Y-%m-%d %H:%M:%S'):
+    """Mirror application.helpers.timezone.format_local without a request."""
+    local = _stub_to_local(value)
+    if not isinstance(local, _datetime.datetime):
+        return '' if value is None else str(value)
+    return local.strftime(fmt)
+
+
+_timezone.to_local = _stub_to_local
+_timezone.format_local = _stub_format_local
 
 
 # --- application.modules.custom_attributes.models ----------------------------

@@ -20,8 +20,9 @@ wildcard translation — for the cases where globbing is not enough.
 `created:` is the one field that is not matched as a regex: it takes a
 date (`today`, `yesterday` or `YYYY-MM-DD`), optionally prefixed with
 `>=`, `>`, `<=` or `<`, and selects the hosts whose creation timestamp
-falls in that day or range. Dates are UTC, the timezone the syncer
-stores its timestamps in.
+falls in that day or range. The day is read in the timezone the caller
+passes — the browser's, so `created:today` is the user's day — and
+converted to the UTC the timestamps are stored in.
 """
 import datetime
 import re
@@ -300,17 +301,18 @@ _DATE_BOUNDS = {
 }
 
 
-def _parse_date(text):
+def _parse_date(text, tzinfo):
     """
-    Turn `today`, `yesterday` or `YYYY-MM-DD` into the UTC day it names.
-    Everything else is a syntax error — a date field silently matching
-    nothing would look like "no host was created then".
+    Turn `today`, `yesterday` or `YYYY-MM-DD` into the day it names in
+    the user's timezone. Everything else is a syntax error — a date
+    field silently matching nothing would look like "no host was
+    created then".
     """
     lowered = text.strip().lower()
     if lowered == 'today':
-        return datetime.datetime.utcnow().date()
+        return datetime.datetime.now(tzinfo).date()
     if lowered == 'yesterday':
-        return datetime.datetime.utcnow().date() - datetime.timedelta(days=1)
+        return datetime.datetime.now(tzinfo).date() - datetime.timedelta(days=1)
     match = _ISO_DATE_RE.fullmatch(lowered)
     if match:
         try:
@@ -333,18 +335,28 @@ def _range_condition(field, lower, upper):
     return {field: bounds}
 
 
-def _created_to_mongo(value, mode):
+def _to_naive_utc(value):
+    """
+    The UTC instant a timezone-aware value names, as the naive datetime
+    the syncer stores its timestamps as.
+    """
+    return value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
+def _created_to_mongo(value, mode, tzinfo):
     """
     Translate `created:<date>` into a Mongo predicate on the creation
     time of the host.
 
-    `create_time` is only written by the import path that creates a host
-    (`Host.get_host`); hosts created in the GUI, clones, and every host
-    that predates the field have none. For those the generation time of
-    the Mongo `_id` is used instead — it is the moment the document was
-    written, which is the same event, and it is covered by the `_id`
-    index. Both branches are combined so one search answers for the
-    whole database.
+    The day is the user's local day — `created:today` asks about the
+    date on their wall clock — while `create_time` is stored in UTC, so
+    the two local midnights are converted before they are compared.
+
+    Hosts that carry no `create_time` (everything created before the
+    syncer wrote that field) are answered by the generation time of
+    their Mongo `_id`: the moment the document was written, which is
+    the same event, and covered by the `_id` index. Both branches are
+    combined so one search answers for the whole database.
     """
     if mode == 'regex':
         raise SearchSyntaxError(
@@ -352,11 +364,14 @@ def _created_to_mongo(value, mode):
     match = _DATE_TERM_RE.fullmatch(value.strip())
     if not match:
         raise SearchSyntaxError(f"Expected a date after 'created:', got {value!r}")
-    day = _parse_date(match.group('date'))
+    day = _parse_date(match.group('date'), tzinfo)
+    local_midnight = datetime.datetime(day.year, day.month, day.day, tzinfo=tzinfo)
     edges = {
-        'start': datetime.datetime(day.year, day.month, day.day),
-        'next': datetime.datetime(day.year, day.month, day.day)
-                + datetime.timedelta(days=1),
+        # Adding a day to the aware value moves to the next local
+        # midnight, so a day that a DST switch makes 23 or 25 hours long
+        # is still exactly that one day.
+        'start': _to_naive_utc(local_midnight),
+        'next': _to_naive_utc(local_midnight + datetime.timedelta(days=1)),
     }
     lower_name, upper_name = _DATE_BOUNDS[match.group('operator')]
     lower = edges[lower_name] if lower_name else None
@@ -375,7 +390,7 @@ def _created_to_mongo(value, mode):
     ]}
 
 
-def _leaf_to_mongo(field, value, mode):
+def _leaf_to_mongo(field, value, mode, tzinfo):
     """Translate a single TERM into a Mongo predicate dict."""
     if field is not None:
         if not _FIELD_KEY_RE.fullmatch(field):
@@ -384,7 +399,7 @@ def _leaf_to_mongo(field, value, mode):
         # Resolved before the value is turned into a regex: a date field
         # reads its value as a date, not as a pattern.
         if field == 'create_time':
-            return _created_to_mongo(value, mode)
+            return _created_to_mongo(value, mode, tzinfo)
 
     regex_str = _value_to_regex(value, mode)
     # Keys are matched as full strings — `basti_test` does NOT match a
@@ -416,26 +431,31 @@ def _leaf_to_mongo(field, value, mode):
     ]}
 
 
-def _ast_to_mongo(node):
+def _ast_to_mongo(node, tzinfo):
     op = node[0]
     if op == 'TERM':
         _, field, value, mode = node
-        return _leaf_to_mongo(field, value, mode)
+        return _leaf_to_mongo(field, value, mode, tzinfo)
     if op == 'AND':
-        return {'$and': [_ast_to_mongo(child) for child in node[1]]}
+        return {'$and': [_ast_to_mongo(child, tzinfo) for child in node[1]]}
     if op == 'OR':
-        return {'$or': [_ast_to_mongo(child) for child in node[1]]}
+        return {'$or': [_ast_to_mongo(child, tzinfo) for child in node[1]]}
     if op == 'NOT':
-        return {'$nor': [_ast_to_mongo(node[1])]}
+        return {'$nor': [_ast_to_mongo(node[1], tzinfo)]}
     raise SearchSyntaxError(f"Internal: unknown AST node {op!r}")
 
 
-def parse_search(text):
+def parse_search(text, tzinfo=None):
     """
     Parse the user-typed search expression and return a MongoDB
     `__raw__` filter dict. Returns None for an empty expression.
     Raises SearchSyntaxError on any malformed input — callers are
     expected to surface the message and fall back to an empty result.
+
+    `tzinfo` is the timezone the dates of a `created:` term are read in
+    — the user's, so `created:today` means their day. It defaults to
+    UTC, which is what the stored timestamps use and therefore the
+    right answer for anything that runs without a browser.
     """
     text = (text or '').strip()
     if not text:
@@ -444,4 +464,4 @@ def parse_search(text):
     if not tokens:
         return None
     ast = _Parser(tokens).parse()
-    return _ast_to_mongo(ast)
+    return _ast_to_mongo(ast, tzinfo or datetime.timezone.utc)

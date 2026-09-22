@@ -59,14 +59,14 @@
 
     {% set ns = namespace(prev_day='') %}
     {% for event in events %}
-        {% set day = event.changed_at.strftime('%Y-%m-%d') %}
+        {% set day = event.changed_at|localtime('%Y-%m-%d') %}
         {% if day != ns.prev_day %}
         <div class="tl-day">{{ day }}</div>
         {% set ns.prev_day = day %}
         {% endif %}
         <div class="tl-event">
             <div class="tl-event-head">
-                <span class="tl-time">{{ event.changed_at.strftime('%H:%M:%S') }}</span>
+                <span class="tl-time">{{ event.changed_at|localtime('%H:%M:%S') }}</span>
                 <span class="tl-source {{ event.source or 'import' }}">{{ event.source or 'import' }}</span>
                 {% if event.user_email %}
                 <span class="tl-user">{{ event.user_email }}</span>

@@ -35,7 +35,12 @@ def format_messages(_v, _c, m, p):
 
 
 def format_date(_v, _c, m, p):
-    """ Format Date Field"""
+    """
+    Format Date Field.
+
+    Cron timestamps are written with ``datetime.now()`` — the server's
+    local time, not UTC — so they are printed as they are stored.
+    """
     if value := getattr(m, p):
         return datetime.strftime(value, "%d.%m.%Y %H:%M")
     return ""

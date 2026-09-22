@@ -203,7 +203,7 @@
             {{ view.source }}
             <span class="tree-meta">
                 {{ view.entries|length }} entries
-                {% if view.last_update %}· updated {{ view.last_update.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+                {% if view.last_update %}· updated {{ view.last_update|localtime('%Y-%m-%d %H:%M') }}{% endif %}
             </span>
         </summary>
 
@@ -211,7 +211,7 @@
         <div class="tree-diff">
             <h4>Changes since last import
                 {% if view.previous_update %}
-                ({{ view.previous_update.strftime('%Y-%m-%d %H:%M') }})
+                ({{ view.previous_update|localtime('%Y-%m-%d %H:%M') }})
                 {% endif %}
             </h4>
             <div class="tree-diff-summary">

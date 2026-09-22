@@ -16,6 +16,7 @@ from mongoengine import Q
 from application.models.host import Host
 from application.modules.rule.match import MAX_REGEX_LENGTH
 from application.modules.search_parser import parse_search, SearchSyntaxError
+from application.helpers.timezone import user_timezone
 
 FILTER_KEY_RE = re.compile(r'^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$')
 
@@ -355,13 +356,16 @@ class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods
         Run the user-typed expression through the Lucene-flavoured
         search parser. A bare term still matches hostname/labels/
         inventory like before; boolean operators (AND/OR/NOT, `!`,
-        parentheses) and `field:value` pairs extend that. Malformed
+        parentheses) and `field:value` pairs extend that, and
+        `created:` selects by the day a host was created. Malformed
         input flashes a message and yields an empty result instead of
         raising — the form re-renders with the user's expression intact
         so they can fix it.
         """
         try:
-            pipeline = parse_search(search_term)
+            # The user's timezone, so `created:today` means the day on
+            # their clock and not the one in UTC.
+            pipeline = parse_search(search_term, user_timezone())
         except SearchSyntaxError as error:
             flash(f"Search syntax error: {error}", 'danger')
             return query.filter(hostname=None)

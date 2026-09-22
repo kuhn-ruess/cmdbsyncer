@@ -26,6 +26,7 @@
 {% block styles %}
    {{super()}}
 {% include '_theme.html' %}
+{% include '_timezone.html' %}
 <link rel="stylesheet" href="{{ config['BASE_PREFIX'] }}static/css/cmdbsyncer.css">
 <style>
        /* Public-template-specific styles: login form layout and the

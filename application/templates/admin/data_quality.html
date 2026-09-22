@@ -62,7 +62,7 @@
         <i class="fa fa-stethoscope"></i> Data Quality
     </h1>
     <p class="text-muted" style="margin-bottom: 1rem;">
-        Snapshot generated {{ now.strftime('%Y-%m-%d %H:%M UTC') }}.
+        Snapshot generated {{ now|localtime('%Y-%m-%d %H:%M') }}.
         Counts cover non-template, non-object hosts; archived rows are
         listed separately so they don't inflate the live counts.
     </p>
@@ -264,7 +264,7 @@
                             </td>
                             <td>
                                 {% if row.last_seen %}
-                                    {{ row.last_seen.strftime('%Y-%m-%d %H:%M') }}
+                                    {{ row.last_seen|localtime('%Y-%m-%d %H:%M') }}
                                 {% else %}
                                     <span class="text-muted">never</span>
                                 {% endif %}

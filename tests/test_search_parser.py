@@ -6,6 +6,7 @@ import importlib.util
 import os
 import sys
 import unittest
+from zoneinfo import ZoneInfo
 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -342,6 +343,60 @@ class CreatedDateTests(unittest.TestCase):
                      'created:/^2026/'):
             with self.assertRaises(SearchSyntaxError):
                 parse_search(term)
+
+
+class CreatedTimezoneTests(unittest.TestCase):
+    """
+    `created:` reads the date in the user's timezone; the stored
+    timestamps stay UTC, so the day boundaries are converted.
+    """
+
+    BERLIN = ZoneInfo('Europe/Berlin')
+
+    def _times(self, condition):
+        return condition['$or'][0]['create_time']
+
+    def test_default_is_utc(self):
+        times = self._times(parse_search('created:2026-09-22'))
+        self.assertEqual(times['$gte'], datetime.datetime(2026, 9, 22, 0, 0))
+
+    def test_summer_day_starts_two_hours_earlier_in_utc(self):
+        times = self._times(parse_search('created:2026-09-22', self.BERLIN))
+        self.assertEqual(times['$gte'], datetime.datetime(2026, 9, 21, 22, 0))
+        self.assertEqual(times['$lt'], datetime.datetime(2026, 9, 22, 22, 0))
+
+    def test_winter_day_uses_the_winter_offset(self):
+        # The zone name is what makes this right: a fixed offset would
+        # shift a January date by the summer hour.
+        times = self._times(parse_search('created:2026-01-15', self.BERLIN))
+        self.assertEqual(times['$gte'], datetime.datetime(2026, 1, 14, 23, 0))
+        self.assertEqual(times['$lt'], datetime.datetime(2026, 1, 15, 23, 0))
+
+    def test_a_dst_day_is_still_exactly_one_day(self):
+        # 2026-03-29 is 23 hours long in Berlin.
+        times = self._times(parse_search('created:2026-03-29', self.BERLIN))
+        self.assertEqual(times['$lt'] - times['$gte'],
+                         datetime.timedelta(hours=23))
+
+    def test_today_is_the_users_day_not_the_utc_one(self):
+        kiritimati = datetime.timezone(datetime.timedelta(hours=14))
+        expected = datetime.datetime.now(kiritimati).date()
+        times = self._times(parse_search('created:today', kiritimati))
+        self.assertEqual(
+            (times['$gte'] + datetime.timedelta(hours=14)).date(), expected)
+
+    def test_the_object_id_fallback_uses_the_same_bounds(self):
+        result = parse_search('created:2026-09-22', self.BERLIN)
+        times = self._times(result)
+        ids = result['$or'][1]['$and'][1]['_id']
+        self.assertEqual(ids['$gte'].generation_time.replace(tzinfo=None),
+                         times['$gte'])
+        self.assertEqual(ids['$lt'].generation_time.replace(tzinfo=None),
+                         times['$lt'])
+
+    def test_timezone_only_touches_dates(self):
+        self.assertEqual(parse_search('h:web', self.BERLIN),
+                         parse_search('h:web'))
 
 
 if __name__ == '__main__':

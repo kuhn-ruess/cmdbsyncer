@@ -10,6 +10,7 @@ from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.models.host_cleanup import HostQuerySet, relation_target
+from application.models.host_create_time import stamp_create_time
 from application.models.host_labels import HostLabelsMixin
 from application.models.host_templates import parse_cmdb_match, clear_consumer_cache
 from application.models.account import (
@@ -371,7 +372,8 @@ class Host(HostLabelsMixin, db.Document):
         if create:
             new_host = Host()
             new_host.hostname = hostname
-            new_host.create_time = datetime.datetime.utcnow()
+            # create_time is stamped by the pre_save receiver below, so
+            # a host created anywhere else gets one too.
             return new_host
         return False
 
@@ -900,6 +902,9 @@ class Host(HostLabelsMixin, db.Document):
             'type': rtype, 'target_host': self.pk,
         }}}))
 
+
+# A host records when it was created, no matter which path saved it.
+signals.pre_save.connect(stamp_create_time, sender=Host)
 
 # Template values live in every consumer's attribute cache, so editing a
 # template has to invalidate it — no matter which entry point wrote it.

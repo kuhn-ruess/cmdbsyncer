@@ -95,11 +95,11 @@
                     <tr>
                         <td>{{ token.label }}</td>
                         <td><code>{{ token.prefix }}…</code></td>
-                        <td>{{ token.created_at.strftime('%Y-%m-%d %H:%M') if token.created_at else '—' }}</td>
-                        <td>{{ token.last_used_at.strftime('%Y-%m-%d %H:%M') if token.last_used_at else 'never' }}</td>
+                        <td>{{ token.created_at|localtime('%Y-%m-%d %H:%M') if token.created_at else '—' }}</td>
+                        <td>{{ token.last_used_at|localtime('%Y-%m-%d %H:%M') if token.last_used_at else 'never' }}</td>
                         <td>
                             {% if token.expires_at %}
-                                {{ token.expires_at.strftime('%Y-%m-%d') }}
+                                {{ token.expires_at|localtime('%Y-%m-%d') }}
                                 {% if token.is_expired() %}
                                     <span class="label label-danger">expired</span>
                                 {% endif %}

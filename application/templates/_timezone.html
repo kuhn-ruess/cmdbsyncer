@@ -1,0 +1,28 @@
+{# Tell the server which clock the user reads the page by.
+
+   Timestamps are stored in UTC; the GUI shows them local, and
+   `created:` in the host search means the user's day. The browser is
+   the only place that knows the timezone, so it writes the IANA name
+   plus the current UTC offset into a cookie that
+   `application.helpers.timezone` reads back. Nothing breaks without
+   it — the page then renders in UTC, as it always did. #}
+<script>
+(function () {
+  try {
+    var resolved = Intl.DateTimeFormat().resolvedOptions();
+    var name = (resolved && resolved.timeZone) ? resolved.timeZone : '';
+    // `Europe/Berlin|-120`. The offset is the fallback for a server
+    // without a timezone database; it is written unencoded because
+    // every character of both halves is a legal cookie character.
+    var value = name.replace(/[^A-Za-z0-9_+\/-]/g, '') + '|'
+                + new Date().getTimezoneOffset();
+    if (document.cookie.indexOf('syncer_tz=' + value) === -1) {
+      document.cookie = 'syncer_tz=' + value
+        + ';path=/;max-age=31536000;SameSite=Lax'
+        + (location.protocol === 'https:' ? ';Secure' : '');
+    }
+  } catch (err) {
+    /* No Intl, no cookies, no problem — the page stays on UTC. */
+  }
+})();
+</script>

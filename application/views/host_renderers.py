@@ -17,6 +17,7 @@ from flask import g, request, url_for
 from markupsafe import Markup, escape
 
 from application import app
+from application.helpers.timezone import format_local
 from application.models.account import CMDB_SOURCE_ACCOUNT_NAME
 from application.views.host_inventory_grid import _value_type_name
 from application.models.host_cleanup import relation_target
@@ -230,13 +231,14 @@ def _render_relations_preview(_view, _context, model, _name):
 
 def _render_datetime(_view, _context, model, name):
     """
-    Render datetime fields in a human-readable format.
+    Render datetime fields in a human-readable format, in the timezone
+    of the browser reading the page — stored is UTC, shown is local.
     """
     value = getattr(model, name, None)
     if not value:
         return Markup('<span class="text-muted">N/A</span>')
     if isinstance(value, datetime):
-        return Markup(value.strftime('%Y-%m-%d %H:%M:%S'))
+        return Markup(escape(format_local(value)))
     return Markup(escape(str(value)))
 
 _LABEL_BADGE_STYLE = (
@@ -812,6 +814,9 @@ def format_log(_v, _c, m, _p):
             )
             for log_entry in related_log_entries[:50]:
                 escaped_message = escape(str(log_entry.message))
+                # LogEntry timestamps are written with datetime.now(),
+                # i.e. already in the server's local time — converting
+                # them as if they were UTC would shift them twice.
                 timestamp = (
                     log_entry.datetime.strftime(
                         '%Y-%m-%d %H:%M:%S'
