@@ -3,10 +3,12 @@ Unit tests for checkmk cmk_rules module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
 # pylint: disable=too-many-lines
+import io
 import os
 import sys
 import unittest
 from collections import Counter
+from contextlib import redirect_stdout
 from unittest.mock import patch, MagicMock
 
 from types import ModuleType, SimpleNamespace
@@ -1825,6 +1827,167 @@ class TestRefusedUpdateKeepsTheRule(unittest.TestCase):
         self.assertTrue(any(
             'Could not update Rule r1' in str(entry)
             for entry in self.sync.log_details))
+
+
+class TestDryRunSendsNothing(unittest.TestCase):
+    """
+    ``export_rules --dry-run``: the run reads Checkmk, works out what it
+    would create, update and delete — and issues not a single mutating
+    request. Before that flag existed a rule export could only be judged
+    after it had already happened.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.project = None
+        self.sync.log_details = []
+        self.sync.dry_run = True
+        self.sync.dry_run_plan = []
+        self.sync._cmk_order_by_ruleset = {}
+        self.sync._rule_etag_wildcard_rejected = None
+        self.methods = []
+        self.progress_patcher = patch(
+            'application.plugins.checkmk.cmk_rules.make_progress',
+            _FakeCleanProgress())
+        self.progress_patcher.start()
+
+    def tearDown(self):
+        self.progress_patcher.stop()
+
+    @staticmethod
+    def _cmk_rule(hosts, value, rule_id='r1'):
+        return {
+            'id': rule_id,
+            'extensions': {
+                'folder': '/',
+                'value_raw': value,
+                'conditions': {'host_name': {'match_on': list(hosts)}},
+                'properties': {
+                    'description': 'cmdbsyncer_test_account',
+                    'comment': 'c',
+                },
+            },
+        }
+
+    @staticmethod
+    def _local(hosts, value):
+        return {
+            'value': value, 'comment': 'c', 'folder': '/',
+            'condition': {'host_name': {'match_on': list(hosts)}},
+        }
+
+    def _wire(self, cmk_rules):
+        """Answer every read with ``cmk_rules`` and record each method used."""
+        def fake_request(url, method='GET', data=None, **_kw):
+            self.methods.append(method.upper())
+            if method.upper() == 'GET':
+                return {'value': cmk_rules}, {'etag': 'x'}
+            return {}, {'status_code': 200}
+        self.sync.request = MagicMock(side_effect=fake_request)
+
+    def _assert_read_only(self):
+        self.assertEqual(set(self.methods) - {'GET'}, set(),
+                         f"dry run issued mutating requests: {self.methods}")
+
+    def test_a_changed_value_is_planned_not_pushed(self):
+        self._wire([self._cmk_rule(['h1'], "{'secret': 'old'}")])
+        local = self._local(['h1'], "{'secret': 'new'}")
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+
+        self.sync.clean_rules()
+        self.sync.create_rules()
+
+        self._assert_read_only()
+        self.assertEqual(
+            [(action, target) for action, target, _detail
+             in self.sync.dry_run_plan],
+            [('UPDATE', 'ruleset1 r1')])
+        self.assertIn("value: {'secret': 'new'}",
+                      self.sync.dry_run_plan[0][2])
+        # Paired with the existing rule, so the create step does not plan
+        # a second rule for the same outcome on top of the update.
+        self.assertTrue(local.get('_skip_create'))
+
+    def test_a_rule_no_longer_generated_is_planned_not_deleted(self):
+        self._wire([self._cmk_rule(['gone'], "{'k': 'v'}")])
+        self.sync.rulsets_by_type = {
+            'ruleset1': [self._local(['h1'], "{'k': 'other'}")]}
+
+        self.sync.clean_rules()
+
+        self._assert_read_only()
+        actions = [entry[0] for entry in self.sync.dry_run_plan]
+        self.assertEqual(actions, ['DELETE'])
+        self.assertEqual(self.sync.dry_run_plan[0][1], 'ruleset1 r1')
+        self.assertIn("value: {'k': 'v'}", self.sync.dry_run_plan[0][2])
+
+    def test_a_new_rule_is_planned_not_created(self):
+        self._wire([])
+        self.sync.rulsets_by_type = {
+            'ruleset1': [self._local(['h1'], "{'k': 'v'}")]}
+
+        self.sync.clean_rules()
+        self.sync.create_rules()
+
+        self._assert_read_only()
+        self.assertEqual([entry[0] for entry in self.sync.dry_run_plan],
+                         ['CREATE'])
+        self.assertIn("value: {'k': 'v'}", self.sync.dry_run_plan[0][2])
+        self.assertIn('folder: /', self.sync.dry_run_plan[0][2])
+
+    def test_an_orphaned_rule_is_planned_not_deleted(self):
+        self._wire([self._cmk_rule(['h1'], "{'k': 'v'}", rule_id='orphan')])
+        self.sync.config = {'settings': {}, 'remove_orphaned_rules': True}
+        self.sync.rulsets_by_type = {}
+        self.sync.list_used_rulesets = MagicMock(return_value=['gone_ruleset'])
+
+        self.sync.clean_orphaned_rules()
+
+        self._assert_read_only()
+        self.assertEqual(
+            [(action, target) for action, target, _detail
+             in self.sync.dry_run_plan],
+            [('DELETE', 'gone_ruleset orphan')])
+
+    def test_the_reorder_step_is_skipped(self):
+        self._wire([])
+        self.sync.rulsets_by_type = {
+            'ruleset1': [self._local(['h1'], "{'k': 'v'}")]}
+
+        self.sync.sort_rules()
+
+        self.assertEqual(self.methods, [])
+
+    def test_the_report_names_the_values(self):
+        self._wire([])
+        self.sync.rulsets_by_type = {
+            'ruleset1': [self._local(['h1'], "{'k': 'v'}")]}
+        self.sync.create_rules()
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.sync._report_dry_run()
+        printed = output.getvalue()
+
+        self.assertIn('would CREATE', printed)
+        self.assertIn("value: {'k': 'v'}", printed)
+        self.assertIn('1 change(s) pending', printed)
+
+    def test_a_real_run_does_write(self):
+        """
+        Negative control: without the flag the very same fixture pushes
+        the changed value to Checkmk. Otherwise the tests above would
+        also pass on an export that silently does nothing.
+        """
+        self.sync.dry_run = False
+        self._wire([self._cmk_rule(['h1'], "{'secret': 'old'}")])
+        self.sync.rulsets_by_type = {
+            'ruleset1': [self._local(['h1'], "{'secret': 'new'}")]}
+
+        self.sync.clean_rules()
+
+        self.assertIn('PUT', self.methods)
+        self.assertEqual(self.sync.dry_run_plan, [])
 
 
 class TestExplainDeletion(unittest.TestCase):
