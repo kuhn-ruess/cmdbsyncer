@@ -421,7 +421,7 @@ def projects_for_account(account):
     ]
 
 
-def export_rules(account, debug=False):
+def export_rules(account, dry_run=False, debug=False):
     """
     Create Rules in Checkmk
     """
@@ -430,6 +430,7 @@ def export_rules(account, debug=False):
         rules = _load_rules()
         syncer = CheckmkRuleSync(account)
         syncer.debug = debug
+        syncer.dry_run = dry_run
         syncer.filter = rules['filter']
         syncer.rewrite = rules['rewrite']
 
@@ -463,7 +464,12 @@ def export_rules(account, debug=False):
         syncer.source = "cmk_rule_sync"
         syncer.export_cmk_rules()
     except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        # Same contract as the other export commands: --debug gives the
+        # traceback instead of the one-line message, so a failing export
+        # can be debugged without editing code.
+        if debug:
+            raise
+        print(f'{ColorCodes.FAIL}CMK Connection Error: {error_obj} {ColorCodes.ENDC}')
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:

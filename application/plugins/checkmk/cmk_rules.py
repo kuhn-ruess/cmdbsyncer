@@ -955,6 +955,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # ruleset name -> the condition keys Checkmk discards for it. Only
         # depends on the ruleset, and it is asked once per rule per host.
         self._unsupported_conditions = {}
+        # Changes a dry run decided on but did not send, as
+        # (action, target, detail lines). Filled by _plan, printed by
+        # _report_dry_run at the end of the run.
+        self.dry_run_plan = []
 
     @property
     def rule_marker(self):
@@ -1484,7 +1488,15 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
     def export_cmk_rules(self):
         """
         Export config rules to checkmk
+
+        With ``dry_run`` set, every step still runs and still reads
+        Checkmk, but no create, update, delete or move is sent: the
+        decisions are collected and printed instead, so the run can be
+        read before it is made for real.
         """
+        if self.dry_run:
+            print(f"{CC.WARNING} !! {CC.ENDC}Dry run: nothing will be sent "
+                  "to Checkmk")
         self.calculate_rules()
         self.calculate_static_rules()
         self.optimize_rules()
@@ -1493,6 +1505,45 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         self.clean_orphaned_rules()
         self.create_rules()
         self.sort_rules()
+        if self.dry_run:
+            self._report_dry_run()
+
+    def _plan(self, action, target, *lines):
+        """
+        Record a change a dry run does not send.
+
+        ``target`` names the ruleset and, for a rule Checkmk already
+        has, its rule id. ``lines`` carry what an operator has to see
+        before the run happens for real — the value above everything
+        else.
+        """
+        detail = [str(line) for line in lines]
+        self.dry_run_plan.append((action, target, detail))
+        self.log_details.append(
+            ("INFO", f"[dry-run] would {action} {target}: {'; '.join(detail)}"))
+
+    def _report_dry_run(self):
+        """
+        Print what the run would have changed, values included.
+
+        A dry run is only worth something if the value is in the output:
+        the point of it is to read the rule Checkmk would receive before
+        Checkmk receives it.
+        """
+        print(f"\n{CC.HEADER}Dry run — nothing was sent to Checkmk{CC.ENDC}")
+        if not self.dry_run_plan:
+            print(f"{CC.OKGREEN}  ** {CC.ENDC}Checkmk already matches the "
+                  "generated rules — nothing would change")
+            return
+        for action, target, detail in self.dry_run_plan:
+            print(f"{CC.OKBLUE} *{CC.ENDC} would {action} {target}")
+            for line in detail:
+                print(f"{CC.OKCYAN}   {line}{CC.ENDC}")
+        counts = Counter(entry[0] for entry in self.dry_run_plan)
+        summary = ", ".join(f"{count}x {action}" for action, count
+                            in sorted(counts.items()))
+        print(f"{CC.WARNING}  ** {CC.ENDC}{len(self.dry_run_plan)} "
+              f"change(s) pending: {summary}")
 
     def _export_hosts(self):
         """
@@ -2237,6 +2288,13 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         a pending change, and on a large ruleset that is the slowest
         part of the export by far.
         """
+        if self.dry_run:
+            # Every move is a POST, and the move chain is built from the
+            # ids Checkmk hands back for the rules created in this run —
+            # which a dry run never creates. There is nothing truthful to
+            # plan here.
+            print(f"{CC.OKGREEN} -- {CC.ENDC} Reorder skipped (dry run)")
+            return
         if self.config.get('skip_rule_reorder'):
             print(f"{CC.OKGREEN} -- {CC.ENDC} Reorder skipped "
                   "(skip_rule_reorder is set on the account)")
@@ -2409,6 +2467,12 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                         # place update). No POST needed; the captured
                         # ``_cmk_id`` is what ``sort_rules`` will move.
                         continue
+                    if self.dry_run:
+                        self._plan('CREATE', f"a rule in {ruleset_name}",
+                                   f"folder: {rule['folder']}",
+                                   f"condition: {rule['condition']}",
+                                   f"value: {rule['value']}")
+                        continue
                     print(f"{CC.OKBLUE} *{CC.ENDC} Create Rule in {ruleset_name} " \
                           f"({rule['condition']})")
                     url = "domain-types/rule/collections/all"
@@ -2486,7 +2550,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         wanted = rule.get('description') or self.rule_marker
         properties = dict(cmk_rule['extensions']['properties'])
-        if properties.get('description', '') == wanted:
+        current = properties.get('description', '')
+        if current == wanted:
             return
         properties['description'] = wanted
         rule_id = cmk_rule['id']
@@ -2495,6 +2560,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             "conditions": cmk_rule['extensions']['conditions'],
             "value_raw": cmk_rule['extensions']['value_raw'],
         }
+        if self.dry_run:
+            self._plan('UPDATE', f"{ruleset_name} {rule_id}",
+                       f"description: {current!r} -> {wanted!r}")
+            return
         try:
             self.update_rule(rule_id, payload)
             print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE description of Rule in "
@@ -2745,6 +2814,19 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             "conditions": our_rule['condition'],
                             "value_raw": our_rule['value'],
                         }
+                        if self.dry_run:
+                            self._plan(
+                                'UPDATE', f"{ruleset_name} {rule_id}",
+                                f"value: {our_rule['value']}",
+                                "changed: " + analyze_value_differences(
+                                    condition_matches[0]['expected_value'],
+                                    condition_matches[0]['actual_value']))
+                            # Pair it with the Checkmk rule the same way a
+                            # real update does, so the create step does not
+                            # plan a second rule for the same outcome.
+                            our_rule['_cmk_id'] = rule_id
+                            our_rule['_skip_create'] = True
+                            continue
                         try:
                             self.update_rule(rule_id, update_payload)
                             print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE Rule in "
@@ -2788,6 +2870,15 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             "conditions": our_rule['condition'],
                             "value_raw": our_rule['value'],
                         }
+                        if self.dry_run:
+                            self._plan(
+                                'UPDATE', f"{ruleset_name} {rule_id}",
+                                f"host list: {len(cmk_hosts)} -> "
+                                f"{len(our_hosts)} hosts",
+                                f"value: {our_rule['value']}")
+                            our_rule['_cmk_id'] = rule_id
+                            our_rule['_skip_create'] = True
+                            continue
                         try:
                             self.update_rule(rule_id, update_payload)
                             print(f"{CC.OKBLUE} *{CC.ENDC} UPDATE host list of "
@@ -2850,6 +2941,15 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                             rules, cmk_facts)
                         delete_reasons[reason] = \
                             delete_reasons.get(reason, 0) + 1
+                        if self.dry_run:
+                            detail = [f"reason: {reason}",
+                                      f"detail: {reason_detail}",
+                                      f"value: {value}"]
+                            if deletion_details:
+                                detail.append(deletion_details)
+                            self._plan('DELETE', f"{ruleset_name} {rule_id}",
+                                       *detail)
+                            continue
                         print(f"{CC.OKBLUE} *{CC.ENDC} DELETE Rule in "
                               f"{ruleset_name} {rule_id} ({reason})")
                         if self.debug:
@@ -2892,9 +2992,12 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         summary = ", ".join(
             f"{count}x {reason}" for reason, count
             in sorted(delete_reasons.items(), key=lambda x: -x[1]))
-        message = f"Removing {total} rule(s) — reasons: {summary}"
+        verb = "Would remove" if self.dry_run else "Removing"
+        message = f"{verb} {total} rule(s) — reasons: {summary}"
         print(f"{CC.WARNING}  ** {CC.ENDC}{message}")
-        if not self.debug:
+        if not self.debug and not self.dry_run:
+            # A dry run already prints the difference behind every
+            # planned deletion in its report.
             print(f"{CC.OKCYAN}  ** {CC.ENDC}Run with --debug to see the "
                   f"difference behind each deletion")
         self.log_details.append(("INFO", message))
@@ -2937,6 +3040,11 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                 if not self._owns_rule(cmk_rule):
                     continue
                 rule_id = cmk_rule['id']
+                if self.dry_run:
+                    self._plan('DELETE', f"{ruleset_name} {rule_id}",
+                               "reason: orphaned, this ruleset is not "
+                               "generated any more")
+                    continue
                 print(f"{CC.OKBLUE} *{CC.ENDC} DELETE orphaned Rule in "
                       f"{ruleset_name} {rule_id}")
                 try:

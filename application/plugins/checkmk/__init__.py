@@ -460,19 +460,22 @@ def cli_missing_hosts(account):
 
 @cli_cmk.command('export_rules')
 @click.argument("account")
+@click.option("--dry-run", default=False, is_flag=True)
 @click.option("--debug", is_flag=True)
-def cli_export_rules(account, debug):
+def cli_export_rules(account, dry_run, debug):
     """
     Export all configured Rules to given Checkmk Installations
 
     ### Example
     _./cmdbsyncer checkmk export_rules SITEACCOUNT_
+    _./cmdbsyncer checkmk export_rules SITEACCOUNT --dry-run_
 
 
     Args:
         account (string): Name Checkmk Account Config
+        dry_run (bool): Only print what would change ( default is False )
     """
-    export_rules(account, debug)
+    export_rules(account, dry_run=dry_run, debug=debug)
 
 #.
 #   .-- Command: Analyse Rule Optimization
