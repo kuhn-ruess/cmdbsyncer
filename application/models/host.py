@@ -36,13 +36,6 @@ AUTO_ARCHIVE_REASON_PREFIXES = (
     'maintenance: not seen for ',
 )
 
-# Cache slot holding the names of the other slots whose content was
-# rendered from an import timestamp. The rule engines write it (see
-# Rule.depends_on_seen_timestamps), refresh_cached_seen_timestamps() reads
-# it: those, and only those, are the slots a refreshed timestamp can make
-# wrong.
-SEEN_DEPENDENT_CACHE_SLOTS = '_seen_dependent_slots'
-
 RELATION_TYPES = (
     ('depends_on', 'Depends on'),
     ('runs_on', 'Runs on'),
@@ -769,11 +762,6 @@ class Host(HostLabelsMixin, db.Document):
         changed. Only these two values age on their own, so only they are
         written back — every other cache slot is left untouched.
 
-        A value *rendered* from those timestamps is a different matter:
-        writing the fresh timestamp next to a rule outcome that still says
-        'offline' would keep serving the old verdict. Those slots are
-        dropped instead — see _drop_seen_dependent_cache_slots().
-
         Indexes into the cache step by step on purpose: MongoEngine only
         marks a ``DictField`` as changed when a nested dict is reached
         through ``__getitem__``, so a write via ``values()`` would never be
@@ -795,48 +783,6 @@ class Host(HostLabelsMixin, db.Document):
                 all_attributes['syncer_last_seen'] = self.last_import_seen
             if self.last_import_sync:
                 all_attributes['syncer_last_sync'] = self.last_import_sync
-        self._drop_seen_dependent_cache_slots()
-
-    def set_cache_slot_seen_dependent(self, slot_name, depends):
-        """
-        Remember whether a cache slot was rendered from an import
-        timestamp.
-
-        The rule engines know this, the host does not: only the engine can
-        see that one of its rules asks how long ago the host was last
-        seen. It tells the host when it fills the slot, so the next import
-        knows which slots it has to throw away — and, just as important,
-        which it may keep.
-        """
-        slots = list(self.cache.get(SEEN_DEPENDENT_CACHE_SLOTS, []))
-        if depends and slot_name not in slots:
-            slots.append(slot_name)
-        elif not depends and slot_name in slots:
-            # The rule that read the timestamp is gone; stop invalidating
-            # this slot on every import.
-            slots.remove(slot_name)
-        else:
-            return
-        self.cache[SEEN_DEPENDENT_CACHE_SLOTS] = slots
-
-    def _drop_seen_dependent_cache_slots(self):
-        """
-        Throw away the cached results that the refreshed timestamps just
-        made wrong.
-
-        Exactly the registered slots, nothing else: a host that comes back
-        after days of absence has to have its rules recomputed, because
-        the outcome it carries was rendered while it was still missing.
-        Installations whose rules never read the timestamps register
-        nothing and keep every slot, which is the whole point of writing
-        the timestamps in place instead of clearing the cache.
-
-        The register itself is kept: the same rules will fill the same
-        slots again on the next export.
-        """
-        for slot_name in self.cache.get(SEEN_DEPENDENT_CACHE_SLOTS, []):
-            if slot_name in self.cache:
-                del self.cache[slot_name]
 
     def mark_inventorized(self, changed=False):
         """

@@ -24,13 +24,6 @@ _RULE_DESCRIPTIONS = {
     'anyway': "ALWAYS match",
 }
 
-# The two attributes that age on their own. Every other value a rule reads
-# only changes when the host data changes, and that already drops the whole
-# host cache. These two are stamped by every import without the data
-# changing, so an outcome rendered from them can go stale while the host
-# document stands still — see Host.refresh_cached_seen_timestamps().
-SEEN_TIMESTAMP_ATTRIBUTES = ('syncer_last_seen', 'syncer_last_sync')
-
 
 def format_condition(condition):
     """
@@ -118,8 +111,7 @@ class Rule():
         self.debug_lines = []
         # Total outcome of the last debug run (see debug_result)
         self.debug_outcomes = {}
-        # Cached (id(self.rules), [rule objs], [rule.to_mongo() docs],
-        # depends-on-the-import-timestamps flag).
+        # Cached (id(self.rules), [rule objs], [rule.to_mongo() docs]).
         # Invalidated automatically when self.rules is reassigned.
         self._rule_docs_cache = None
         # Default cache key derived from the concrete rule-engine class.
@@ -269,10 +261,6 @@ class Rule():
         - rule objects (kept for .name access during debug)
         - prepared rule dicts with plain-dict conditions and outcomes so
           the hot loop does cheap dict access instead of SON lookups.
-
-        Whether any of those rules reads one of the import timestamps is
-        answered here too (see depends_on_seen_timestamps), because this
-        is the one place that already pays for materialising the rule set.
         """
         current_key = id(self.rules)
         cache = self._rule_docs_cache
@@ -294,31 +282,8 @@ class Rule():
                 # the project's account lists instead of the folder scope.
                 'project': doc.get('project'),
             })
-        # One scan over the whole rule set, once per rule set: conditions
-        # and outcomes both count, a rule may as well match on the
-        # timestamp as render it.
-        rules_text = str(prepared)
-        seen_dependent = any(attribute in rules_text
-                             for attribute in SEEN_TIMESTAMP_ATTRIBUTES)
-        self._rule_docs_cache = (current_key, objs, prepared, seen_dependent)
+        self._rule_docs_cache = (current_key, objs, prepared)
         return objs, prepared
-
-    def depends_on_seen_timestamps(self):
-        """
-        Does any rule of this engine read syncer_last_seen /
-        syncer_last_sync?
-
-        An outcome that does is only valid for the timestamp it was
-        rendered with: a host that was away long enough to be given
-        'offline' and then comes back keeps that rendered verdict, because
-        nothing about the host document changed when it reappeared — only
-        the timestamp did. The answer decides whether this engine's cache
-        slot is dropped when an import refreshes the timestamps, so an
-        installation whose rules never look at them keeps its cache as it
-        was.
-        """
-        self._iter_rule_docs()
-        return self._rule_docs_cache[3]
 
     # pylint: disable=too-many-branches,too-many-statements
     def check_rules(self, hostname):
@@ -564,10 +529,6 @@ class Rule():
         rules = self.check_rule_match(db_host)
         if use_cache:
             db_host.cache[cache] = rules
-            # Time-dependent outcomes have to be recomputed when the
-            # import stamps the host again; everything else stays cached.
-            db_host.set_cache_slot_seen_dependent(
-                cache, self.depends_on_seen_timestamps())
             if persist_cache:
                 db_host.save()
             else:

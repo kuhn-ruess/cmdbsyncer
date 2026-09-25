@@ -380,124 +380,6 @@ print('IMPORT_SEEN_CACHE_OK')
 '''
 
 
-# A host that was away long enough to be rendered 'offline' and then shows
-# up again: the timestamp in the cache is correct after the import, but the
-# rule outcome next to it still carries the verdict from the days it was
-# missing. Only the slots a rule built from those timestamps may be thrown
-# away — the rest of the cache is what keeps the export fast.
-REAPPEARING_HOST_RULES = '''
-import datetime
-
-from application.models.host import Host
-from application.modules.rule.rule import Rule
-
-
-class SeenRuleDoc:
-    """One rule whose outcome is rendered from syncer_last_seen."""
-
-    def to_mongo(self):
-        return {
-            'name': 'offline-when-unseen',
-            '_id': 'r1',
-            'condition_typ': 'anyway',
-            'conditions': [],
-            'outcomes': [{
-                'action': 'set_criticality',
-                'param': "{{ 'offline' if (datetime.datetime.utcnow() "
-                         "- syncer_last_seen).days > 2 else 'prod' }}",
-            }],
-            'last_match': False,
-        }
-
-
-class PlainRuleDoc:
-    """One rule that has nothing to do with the import timestamps."""
-
-    def to_mongo(self):
-        return {
-            'name': 'always-muc',
-            '_id': 'r2',
-            'condition_typ': 'anyway',
-            'conditions': [],
-            'outcomes': [{'action': 'set_folder', 'param': '/muc'}],
-            'last_match': False,
-        }
-
-
-class RuleForTest(Rule):
-    def add_outcomes(self, rule, rule_outcomes, outcomes):
-        outcomes['criticality'] = 'offline'
-        return outcomes
-
-
-host = Host.get_host('gone-and-back.example.com')
-host.update_host({'site': 'muc'})
-host.save()
-
-# What the export left behind while the host was missing.
-old = datetime.datetime(2026, 1, 1, 0, 0, 0)
-host.cache = {
-    'checkmk_hostattribute': {
-        'attributes': {
-            'all': {'syncer_last_seen': old, 'site': 'muc'},
-            'filtered': {},
-        },
-    },
-    'cmk_tags_tag_choices': {'criticality': ['prod']},
-}
-host.save()
-
-time_rule = RuleForTest()
-time_rule.cache_name = 'CheckmkAttributeRule'
-time_rule.rules = [SeenRuleDoc()]
-eq(time_rule.get_outcomes(host, {'syncer_last_seen': old}),
-   {'criticality': 'offline'}, 'the outcome the export cached')
-
-plain_rule = RuleForTest()
-plain_rule.cache_name = 'CheckmkRulesetRule_cmk'
-plain_rule.rules = [PlainRuleDoc()]
-plain_rule.get_outcomes(host, {'syncer_last_seen': old})
-host.reload()
-
-eq(host.cache.get('_seen_dependent_slots'), ['CheckmkAttributeRule'],
-   'the cache slots the engines flagged as time dependent')
-
-# The host is back in the source: an import that changes no label at all.
-host.update_host({'site': 'muc'})
-host.save()
-host.reload()
-
-if 'CheckmkAttributeRule' in host.cache:
-    fail('the reappeared host still carries the rule outcome from its '
-         'absence')
-eq(sorted(host.cache.keys()),
-   ['CheckmkRulesetRule_cmk', '_seen_dependent_slots',
-    'checkmk_hostattribute', 'cmk_tags_tag_choices'],
-   'the cache slots the import left behind')
-eq(host.cache['checkmk_hostattribute']['attributes']['all']['site'], 'muc',
-   'the cached attribute set of a reappeared host')
-if host.cache['checkmk_hostattribute']['attributes']['all']\
-        ['syncer_last_seen'] == old:
-    fail('the import left a stale syncer_last_seen in the cache')
-
-# Recomputed with the fresh timestamp, the outcome is cached again — and a
-# rule set that stops reading the timestamp is deregistered.
-time_rule.rules = [PlainRuleDoc()]
-time_rule.get_outcomes(host, {'syncer_last_seen': host.last_import_seen})
-host.reload()
-eq(host.cache.get('_seen_dependent_slots'), [],
-   'the register after the rule stopped reading the timestamp')
-
-host.update_host({'site': 'muc'})
-host.save()
-host.reload()
-eq(host.cache['CheckmkAttributeRule'], {'criticality': 'offline'},
-   'the outcome cache of a rule that does not read the timestamps')
-
-print('REAPPEARING_HOST_RULES_OK')
-'''
-
-
 # What the syncers ask for before they talk to a target system. Every
 # consumer test mocks these away, so this is the only place the queries
 # themselves run.
@@ -609,10 +491,6 @@ class TestHostRoundtripSmoke(unittest.TestCase):
     def test_import_refreshes_the_cached_seen_timestamps(self):
         """An import keeps syncer_last_seen current inside the cache it keeps."""
         self._run(IMPORT_SEEN_CACHE, 'IMPORT_SEEN_CACHE_OK')
-
-    def test_a_reappearing_host_recomputes_its_time_rules(self):
-        """The verdict a host got while it was missing does not survive."""
-        self._run(REAPPEARING_HOST_RULES, 'REAPPEARING_HOST_RULES_OK')
 
     def test_export_selects_the_right_hosts(self):
         """Only hosts that may leave the syncer reach a target system."""

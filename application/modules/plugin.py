@@ -739,8 +739,6 @@ class Plugin():
             data['filtered'] = attributes_filtered
             if attributes_filtered.get('ignore_host') and cache:
                 db_host.cache[cache]['attributes'] = data
-                db_host.set_cache_slot_seen_dependent(
-                    cache, self._attributes_depend_on_seen_timestamps())
                 if persist_cache:
                     db_host.save()
                 else:
@@ -749,29 +747,11 @@ class Plugin():
 
         if cache:
             db_host.cache[cache]['attributes'] = data
-            db_host.set_cache_slot_seen_dependent(
-                cache, self._attributes_depend_on_seen_timestamps())
             if persist_cache:
                 db_host.save()
             else:
                 setattr(db_host, '_cache_dirty', True)
         return data
-
-    def _attributes_depend_on_seen_timestamps(self):
-        """
-        Does the cached attribute set carry a value that was rendered from
-        one of the import timestamps?
-
-        The engines each register their own outcome slot, but their
-        results are folded into this attribute set as well — and it is
-        read first, before any of them is asked again. So a custom
-        attribute or a rewrite reading syncer_last_seen makes this slot
-        age with the timestamp too.
-        """
-        for rule_engine in (self.custom_attributes, self.rewrite, self.filter):
-            if rule_engine and rule_engine.depends_on_seen_timestamps():
-                return True
-        return False
 
 #   .-- Get Host Data
     def get_host_data(self, db_host, attributes):
