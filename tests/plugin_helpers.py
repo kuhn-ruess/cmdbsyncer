@@ -23,6 +23,9 @@ def plain_plugin(merged_attributes=()):
     plugin = Plugin()
     plugin.custom_attributes = Mock()
     plugin.custom_attributes.get_outcomes.return_value = {}
+    # No rule of it works with a timestamp, so the attribute cache is used
+    # as usual — a bare Mock would answer yes and skip the cache.
+    plugin.custom_attributes.depends_on_time.return_value = False
     plugin.init_custom_attributes = Mock()
     plugin.rewrite = None
     plugin.filter = None

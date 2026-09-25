@@ -203,6 +203,13 @@ class _CustomAttributeRule:  # pylint: disable=too-few-public-methods
         self.debug = False
         self.rules = []
 
+    @staticmethod
+    def depends_on_time():
+        """Mirror Rule.depends_on_time: the stub carries no rules, so no
+        rule of it can work with a timestamp and the attribute cache stays
+        in use."""
+        return False
+
 
 _cust_rules.CustomAttributeRule = _CustomAttributeRule
 

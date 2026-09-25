@@ -648,6 +648,21 @@ class Plugin():
             db_host.save()
             setattr(db_host, '_cache_dirty', False)
 
+    @staticmethod
+    def _persist_cache(db_host, persist_cache):
+        """
+        Save what was just written into the host's cache — unless the
+        caller collects the writes and flushes them itself.
+
+        Computing a host's attributes touches several cache slots, and
+        saving after each of them is one round trip per slot. See
+        _flush_cache() for the other half of that deal.
+        """
+        if persist_cache:
+            db_host.save()
+        else:
+            setattr(db_host, '_cache_dirty', True)
+
     def get_attributes(self, db_host, cache, persist_cache=True):
         """
         Retrieve and process host attributes with caching support.
@@ -668,14 +683,26 @@ class Plugin():
             bool: False if host should be ignored based on filter rules
         """
         # Get Attributes
+        self.init_custom_attributes()
         if cache:
             cache += "_hostattribute"
-            db_host.cache.setdefault(cache, {})
-            if 'attributes' in db_host.cache[cache]:
-                logger.debug(f"Using Attribute Cache for {db_host.hostname}")
-                if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
-                    return False
-                return db_host.cache[cache]['attributes']
+            if self._attributes_depend_on_time():
+                # One of the engines feeding this attribute set works with
+                # a timestamp, and its rendered value is part of the set —
+                # which is handed out before any engine is asked again. So
+                # this slot is skipped too: not read, not written. What an
+                # earlier run left in it goes, or it would be served again
+                # the day the timestamp leaves the rules.
+                if db_host.cache.pop(cache, None) is not None:
+                    self._persist_cache(db_host, persist_cache)
+                cache = False
+            else:
+                db_host.cache.setdefault(cache, {})
+                if 'attributes' in db_host.cache[cache]:
+                    logger.debug(f"Using Attribute Cache for {db_host.hostname}")
+                    if 'ignore_host' in db_host.cache[cache]['attributes']['filtered']:
+                        return False
+                    return db_host.cache[cache]['attributes']
         attributes = {}
         # The account which imported the host is a field of the host document,
         # not a label, so rules had no way to match on it. Seed it as an
@@ -699,7 +726,6 @@ class Plugin():
             attributes['syncer_last_sync'] = db_host.last_import_sync
         self._apply_template_attributes(db_host, attributes)
 
-        self.init_custom_attributes()
         attributes.update(
             self.custom_attributes.get_outcomes(
                 db_host,
@@ -739,19 +765,30 @@ class Plugin():
             data['filtered'] = attributes_filtered
             if attributes_filtered.get('ignore_host') and cache:
                 db_host.cache[cache]['attributes'] = data
-                if persist_cache:
-                    db_host.save()
-                else:
-                    setattr(db_host, '_cache_dirty', True)
+                self._persist_cache(db_host, persist_cache)
                 return False
 
         if cache:
             db_host.cache[cache]['attributes'] = data
-            if persist_cache:
-                db_host.save()
-            else:
-                setattr(db_host, '_cache_dirty', True)
+            self._persist_cache(db_host, persist_cache)
         return data
+
+    def _attributes_depend_on_time(self):
+        """
+        Does one of the engines feeding the attribute set work with a
+        timestamp?
+
+        Each engine keeps its own outcomes out of the cache by itself, but
+        what they produce is folded into this attribute set — and the set
+        is served from the cache before any of them is asked again. So a
+        custom attribute comparing the sighting date, a rewrite rendering
+        it, or a filter dropping hosts that were not seen for a month
+        keeps this slot out of the cache as well.
+        """
+        for rule_engine in (self.custom_attributes, self.rewrite, self.filter):
+            if rule_engine and rule_engine.depends_on_time():
+                return True
+        return False
 
 #   .-- Get Host Data
     def get_host_data(self, db_host, attributes):

@@ -571,6 +571,10 @@ class TestPlugin(unittest.TestCase):
         plugin.rewrite.get_outcomes.return_value = {'add_extra': 'y'}
         plugin.filter = Mock()
         plugin.filter.get_outcomes.return_value = {'filtered': 'z'}
+        # None of these rule sets works with a timestamp, so the attribute
+        # slot is cached — a bare Mock would answer yes and skip it.
+        for engine in (plugin.custom_attributes, plugin.rewrite, plugin.filter):
+            engine.depends_on_time.return_value = False
 
         result = plugin.get_attributes(mock_host, 'test_cache', persist_cache=False)
 
@@ -588,6 +592,47 @@ class TestPlugin(unittest.TestCase):
             plugin.rewrite.get_outcomes.call_args.kwargs['persist_cache'], False,
         )
         self.assertEqual(plugin.filter.get_outcomes.call_args.kwargs['persist_cache'], False)
+
+    @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.logger')
+    def test_get_attributes_skips_the_cache_for_a_time_rule(self, _logger, mock_app):
+        """A rule working with a timestamp takes the attribute set out of
+        the cache: its rendered value is part of that set, and the set is
+        served before any engine is asked again."""
+        mock_app.config = self.mock_app_config
+
+        mock_host = Mock()
+        mock_host.hostname = 'test-host'
+        mock_host.cache = {
+            'test_cache_hostattribute': {
+                'attributes': {
+                    'all': {'disabled': 'disabled'},
+                    'filtered': {},
+                }
+            }
+        }
+        mock_host.labels = {'label1': 'value1'}
+        mock_host.inventory = {}
+        mock_host.cmdb_templates = []
+        mock_host.last_import_seen = None
+        mock_host.last_import_sync = None
+
+        plugin = Plugin()
+        plugin.custom_attributes = Mock()
+        plugin.custom_attributes.depends_on_time.return_value = True
+        plugin.custom_attributes.get_outcomes.return_value = {'disabled': 'active'}
+        plugin.init_custom_attributes = Mock()
+        plugin.rewrite = None
+        plugin.filter = None
+        plugin.merged_attributes = set()
+
+        result = plugin.get_attributes(mock_host, 'test_cache')
+
+        # Computed, not served from the slot ...
+        self.assertEqual(result['all']['disabled'], 'active')
+        plugin.custom_attributes.get_outcomes.assert_called_once()
+        # ... and the stale slot is gone instead of written again.
+        self.assertNotIn('test_cache_hostattribute', mock_host.cache)
 
     @patch('application.modules.plugin.app')
     def test_get_attributes_exposes_source_account(self, mock_app):

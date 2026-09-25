@@ -2,6 +2,7 @@
 Unit tests for the Rule base class optimizations.
 """
 # pylint: disable=missing-function-docstring,protected-access
+import datetime
 import unittest
 from unittest.mock import Mock, patch
 
@@ -167,6 +168,162 @@ class TestOutcomeDelta(unittest.TestCase):
 
     def test_other_types_return_the_result(self):
         self.assertEqual(outcome_delta(None, 'x'), 'x')
+
+
+
+class TestTimeDependentRules(unittest.TestCase):
+    """
+    A rule working with a timestamp answers differently tomorrow, so its
+    rule set never goes through the outcome cache.
+    """
+    OFFLINE_PARAM = ("{{ 'offline' if syncer_last_seen is defined and "
+                     "syncer_last_seen and (datetime.datetime.utcnow() - "
+                     "syncer_last_seen).days > 2 else 'prod' }}")
+
+    def setUp(self):
+        self.rule = _RuleForTests()
+        self.rule.check_rule_match = Mock(return_value={'hits': ['fresh']})
+        self.db_host = Mock()
+        self.db_host.hostname = 'host-a'
+        self.db_host.cache = {}
+
+    @staticmethod
+    def _rule_doc(outcomes=None, conditions=None):
+        doc = Mock()
+        doc.to_mongo.return_value = {
+            'name': 'r1',
+            '_id': '1',
+            'condition_typ': 'all',
+            'conditions': conditions or [],
+            'outcomes': outcomes or [],
+            'last_match': False,
+        }
+        return doc
+
+    # -- what counts as working with a timestamp --
+
+    def test_an_age_condition_counts(self):
+        # The way it is meant to be written since this release.
+        self.rule.rules = [self._rule_doc(conditions=[{
+            'match_type': 'tag',
+            'tag': 'syncer_last_seen',
+            'tag_match': 'equal',
+            'value': '2d',
+            'value_match': 'older_than',
+        }])]
+        self.assertTrue(self.rule.depends_on_time())
+
+    def test_a_rendered_timestamp_counts(self):
+        # The Jinja form that predates the conditions has to keep working.
+        self.rule.rules = [self._rule_doc(
+            [{'action': 'set_criticality', 'param': self.OFFLINE_PARAM}])]
+        self.assertTrue(self.rule.depends_on_time())
+
+    def test_an_ordinary_rule_does_not(self):
+        self.rule.rules = [self._rule_doc(
+            [{'action': 'set_criticality', 'param': 'prod'}],
+            conditions=[{
+                'match_type': 'tag',
+                'tag': 'environment',
+                'tag_match': 'equal',
+                'value': 'prod',
+                'value_match': 'equal',
+            }])]
+        self.assertFalse(self.rule.depends_on_time())
+
+    def test_the_answer_comes_with_the_rule_documents(self):
+        # One scan per rule set, not per host.
+        doc = self._rule_doc(
+            [{'action': 'set_criticality', 'param': self.OFFLINE_PARAM}])
+        self.rule.rules = [doc]
+        self.assertTrue(self.rule.depends_on_time())
+        self.assertTrue(self.rule.depends_on_time())
+        doc.to_mongo.assert_called_once()
+
+    # -- what that does to the cache --
+
+    def test_the_outcome_is_not_read_from_the_cache(self):
+        # This is the customer's case: the host was away, was given
+        # 'offline', and is back. Nothing about it changed except the
+        # sighting date, so a cached verdict would be served forever.
+        self.rule.rules = [self._rule_doc(
+            [{'action': 'set_criticality', 'param': self.OFFLINE_PARAM}])]
+        self.db_host.cache['_RuleForTests'] = {'hits': ['offline']}
+
+        result = self.rule.get_outcomes(self.db_host, {})
+
+        self.assertEqual(result, {'hits': ['fresh']})
+
+    def test_the_outcome_is_not_written_to_the_cache(self):
+        self.rule.rules = [self._rule_doc(
+            [{'action': 'set_criticality', 'param': self.OFFLINE_PARAM}])]
+
+        self.rule.get_outcomes(self.db_host, {})
+
+        self.assertEqual(self.db_host.cache, {})
+
+    def test_a_slot_from_before_is_thrown_away(self):
+        # Otherwise it would sit there unread until the timestamp leaves
+        # the rule set, and then answer with a verdict from months ago.
+        self.rule.rules = [self._rule_doc(
+            [{'action': 'set_criticality', 'param': self.OFFLINE_PARAM}])]
+        self.db_host.cache['_RuleForTests'] = {'hits': ['offline']}
+
+        self.rule.get_outcomes(self.db_host, {})
+
+        self.assertNotIn('_RuleForTests', self.db_host.cache)
+        self.db_host.save.assert_called_once()
+
+    def test_a_deferred_run_only_marks_the_host_dirty(self):
+        self.rule.rules = [self._rule_doc(
+            [{'action': 'set_criticality', 'param': self.OFFLINE_PARAM}])]
+        self.db_host.cache['_RuleForTests'] = {'hits': ['offline']}
+
+        self.rule.get_outcomes(self.db_host, {}, persist_cache=False)
+
+        self.assertNotIn('_RuleForTests', self.db_host.cache)
+        self.db_host.save.assert_not_called()
+        self.assertTrue(getattr(self.db_host, '_cache_dirty', False))
+
+    def test_an_ordinary_rule_set_still_caches(self):
+        # The whole point of asking per rule set: an installation whose
+        # rules never mention a time keeps its cache and its export speed.
+        self.rule.rules = [self._rule_doc(
+            [{'action': 'set_criticality', 'param': 'prod'}])]
+
+        self.rule.get_outcomes(self.db_host, {})
+
+        self.assertEqual(self.db_host.cache['_RuleForTests'],
+                         {'hits': ['fresh']})
+
+    # -- the condition inside the engine --
+
+    @patch('application.modules.rule.rule.app')
+    def test_a_host_not_seen_for_long_enough_matches(self, mock_app):
+        mock_app.config = {'ADVANCED_RULE_DEBUG': False}
+        condition = {
+            'match_type': 'tag',
+            'tag': 'syncer_last_seen',
+            'tag_match': 'equal',
+            'tag_match_negate': False,
+            'value': '2d',
+            'value_match': 'older_than',
+            'value_match_negate': False,
+        }
+        self.rule.rules = [self._rule_doc(conditions=[condition])]
+        self.rule.debug = False
+
+        self.rule.attributes = {
+            'syncer_last_seen': datetime.datetime.utcnow()
+                                - datetime.timedelta(days=8),
+        }
+        self.assertEqual(self.rule.check_rules('host-a'), {'hits': ['r1']})
+
+        # And the host is judged again the moment it is back.
+        self.rule.attributes = {
+            'syncer_last_seen': datetime.datetime.utcnow(),
+        }
+        self.assertEqual(self.rule.check_rules('host-a'), {})
 
 
 class TestGetOutcomesCache(unittest.TestCase):

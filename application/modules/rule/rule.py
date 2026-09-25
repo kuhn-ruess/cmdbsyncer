@@ -12,7 +12,7 @@ from rich.table import Table
 from rich import box
 
 from application import logger, app
-from application.modules.rule.match import match
+from application.modules.rule.match import match, AGE_CONDITIONS
 from application.helpers.syncer_jinja import render_jinja
 
 
@@ -23,6 +23,41 @@ _RULE_DESCRIPTIONS = {
     'all': "ALL must match",
     'anyway': "ALWAYS match",
 }
+
+# The two attributes that age on their own: every import stamps them
+# without the host data changing, while every other value a rule reads
+# only moves together with the host — and that already drops the host
+# cache. A rule rendering one of them into its outcome therefore answers
+# differently tomorrow.
+TIMESTAMP_ATTRIBUTES = ('syncer_last_seen', 'syncer_last_sync')
+
+
+def rules_depend_on_time(prepared_rules):
+    """
+    Can any of these rules change its answer while the host document
+    stands still?
+
+    Two ways to write such a rule, and both count:
+
+    - one of the age conditions (Older Than / Newer Than), which holds a
+      timestamp against the clock;
+    - a value rendered from syncer_last_seen / syncer_last_sync, which is
+      how the same thing was written before those conditions existed.
+
+    Nobody touches the host when the answer changes, so there is no event
+    left to invalidate a cached outcome on — the rule set is kept out of
+    the outcome cache instead (see get_outcomes).
+    """
+    for rule in prepared_rules:
+        for condition in rule['conditions']:
+            for match_key in ('value_match', 'tag_match', 'hostname_match'):
+                if condition.get(match_key) in AGE_CONDITIONS:
+                    return True
+    # Cheap enough for the once-per-rule-set call this is: the timestamps
+    # can sit in an outcome, in a condition value, or inside a Jinja
+    # expression in either of them.
+    rules_text = str(prepared_rules)
+    return any(attribute in rules_text for attribute in TIMESTAMP_ATTRIBUTES)
 
 
 def format_condition(condition):
@@ -111,7 +146,8 @@ class Rule():
         self.debug_lines = []
         # Total outcome of the last debug run (see debug_result)
         self.debug_outcomes = {}
-        # Cached (id(self.rules), [rule objs], [rule.to_mongo() docs]).
+        # Cached (id(self.rules), [rule objs], [rule.to_mongo() docs],
+        # works-with-a-timestamp flag).
         # Invalidated automatically when self.rules is reassigned.
         self._rule_docs_cache = None
         # Default cache key derived from the concrete rule-engine class.
@@ -261,6 +297,10 @@ class Rule():
         - rule objects (kept for .name access during debug)
         - prepared rule dicts with plain-dict conditions and outcomes so
           the hot loop does cheap dict access instead of SON lookups.
+
+        Whether any of those rules works with a timestamp is answered here
+        too (see depends_on_time), because this is the one place that
+        already pays for materialising the rule set.
         """
         current_key = id(self.rules)
         cache = self._rule_docs_cache
@@ -282,8 +322,21 @@ class Rule():
                 # the project's account lists instead of the folder scope.
                 'project': doc.get('project'),
             })
-        self._rule_docs_cache = (current_key, objs, prepared)
+        self._rule_docs_cache = (current_key, objs, prepared,
+                                 rules_depend_on_time(prepared))
         return objs, prepared
+
+    def depends_on_time(self):
+        """
+        Does any rule of this engine work with a timestamp?
+
+        The answer decides whether this engine's outcomes are cached at
+        all. It is computed once per rule set, so an installation whose
+        rules never mention a time pays a single scan per run and keeps
+        its cache exactly as it was.
+        """
+        self._iter_rule_docs()
+        return self._rule_docs_cache[3]
 
     # pylint: disable=too-many-branches,too-many-statements
     def check_rules(self, hostname):
@@ -517,8 +570,29 @@ class Rule():
         instead of the account's project scope) and must not poison the
         export's cache slot — nor return a stale cached result instead of
         producing debug lines.
+
+        A rule set working with a timestamp bypasses it as well, for the
+        same reason and permanently: its answer changes with the clock, so
+        a stored one is only valid for the day it was computed.
         """
         cache = self.cache_name or self._default_cache_key
+        if use_cache and self.depends_on_time():
+            # Not read and not written from here on. The cache is keyed per
+            # rule set, not per rule, so one rule asking for the sighting
+            # date takes this engine's whole outcome out of the cache —
+            # which is the point: the outcome is the accumulated answer of
+            # all of them and cannot be half cached.
+            use_cache = False
+            if cache in db_host.cache:
+                # A slot from the days before the rule set asked for a
+                # timestamp. Nothing would ever read it again — until the
+                # timestamp leaves the rule set, and then it would serve an
+                # answer from months ago.
+                del db_host.cache[cache]
+                if persist_cache:
+                    db_host.save()
+                else:
+                    setattr(db_host, '_cache_dirty', True)
         if use_cache and cache in db_host.cache:
             logger.debug("Using Rule Cache for %s", db_host.hostname)
             return db_host.cache[cache]
