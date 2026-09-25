@@ -684,6 +684,19 @@ class Plugin():
         attributes['SOURCE_ACCOUNT'] = db_host.source_account_name or ''
         attributes.update(db_host.labels.items())
         attributes.update(db_host.inventory.items())
+        # syncer_last_seen / syncer_last_sync used to reach a rule only as the
+        # copy set_account() writes into the inventory on import. A host the
+        # import never reached that far on — one that is only inventorized, or
+        # whose import was skipped because another account owns it — carried no
+        # value at all, so a rule asking "when was this host last seen" got
+        # nothing while the host page showed a date; and every other host's
+        # copy was one run behind. Both timestamps are fields of the host
+        # document, so serve them from there: a rule now sees what the host
+        # page shows.
+        if db_host.last_import_seen:
+            attributes['syncer_last_seen'] = db_host.last_import_seen
+        if db_host.last_import_sync:
+            attributes['syncer_last_sync'] = db_host.last_import_sync
         self._apply_template_attributes(db_host, attributes)
 
         self.init_custom_attributes()

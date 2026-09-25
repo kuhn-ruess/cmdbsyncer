@@ -639,6 +639,58 @@ class TestPlugin(unittest.TestCase):
         self.assertEqual(result['all']['SOURCE_ACCOUNT'], '')
 
     @patch('application.modules.plugin.app')
+    def test_get_attributes_seen_timestamps_without_inventory(self, mock_app):
+        """A host the import never stamped into the inventory still has the
+        timestamps: they come from the host document."""
+        mock_app.config = self.mock_app_config
+
+        seen = datetime.datetime(2026, 9, 17, 2, 3, 56)
+        synced = datetime.datetime(2026, 9, 16, 2, 3, 56)
+
+        mock_host = Mock()
+        mock_host.hostname = 'test-host'
+        mock_host.source_account_name = ''
+        mock_host.cache = {}
+        mock_host.labels = {}
+        mock_host.inventory = {}
+        mock_host.cmdb_templates = []
+        mock_host.last_import_seen = seen
+        mock_host.last_import_sync = synced
+
+        plugin = plain_plugin()
+
+        result = plugin.get_attributes(mock_host, False)
+
+        self.assertEqual(result['all']['syncer_last_seen'], seen)
+        self.assertEqual(result['all']['syncer_last_sync'], synced)
+
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_seen_timestamps_beat_inventory_copy(self, mock_app):
+        """The inventory holds the value of the last import that ran
+        set_account(); the host document is the current one and wins."""
+        mock_app.config = self.mock_app_config
+
+        old = datetime.datetime(2026, 9, 1, 0, 0, 0)
+        seen = datetime.datetime(2026, 9, 17, 2, 3, 56)
+
+        mock_host = Mock()
+        mock_host.hostname = 'test-host'
+        mock_host.source_account_name = ''
+        mock_host.cache = {}
+        mock_host.labels = {}
+        mock_host.inventory = {'syncer_last_seen': old, 'syncer_last_sync': old}
+        mock_host.cmdb_templates = []
+        mock_host.last_import_seen = seen
+        mock_host.last_import_sync = seen
+
+        plugin = plain_plugin()
+
+        result = plugin.get_attributes(mock_host, False)
+
+        self.assertEqual(result['all']['syncer_last_seen'], seen)
+        self.assertEqual(result['all']['syncer_last_sync'], seen)
+
+    @patch('application.modules.plugin.app')
     def test_get_attributes_host_data_wins_over_template(self, mock_app):
         """Host labels/inventory override template labels on key collisions."""
         mock_app.config = self.mock_app_config
