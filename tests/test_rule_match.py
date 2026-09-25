@@ -7,10 +7,16 @@ Covers:
   - application.modules.rule.match.make_bool
   - application.modules.rule.match.parse_age / age_in_seconds and the
     "older than" / "newer than" conditions built on them
+  - which of the three condition dropdowns offer those two
 """
 # pylint: disable=missing-function-docstring
 import datetime
+import importlib.util
+import os
+import sys
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import re
 
@@ -342,6 +348,69 @@ class TestAgeConditions(unittest.TestCase):
         # match() lowercases the operands of the string conditions; a
         # datetime must reach check_condition untouched.
         self.assertTrue(check_condition(self.eight_days_ago, "2d", "older_than"))
+
+
+def _condition_choices():
+    """
+    The choices of the three condition dropdowns, read from the real model
+    definition.
+
+    tests/__init__ stubs `application.modules.rule` as an empty package and
+    `application.db` as a MagicMock that would swallow the choices, so
+    models.py is executed once against a recorder instead. The module is
+    deliberately not registered in sys.modules — other tests stub that name.
+    """
+    class _Field:  # pylint: disable=too-few-public-methods
+        def __init__(self, *_args, **kwargs):
+            self.choices = kwargs.get('choices')
+
+    stub_db = SimpleNamespace(
+        StringField=_Field,
+        BooleanField=_Field,
+        EmbeddedDocument=object,
+    )
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    source = os.path.join(repo_root, 'application', 'modules', 'rule', 'models.py')
+    spec = importlib.util.spec_from_file_location('_rule_models_for_test', source)
+    module = importlib.util.module_from_spec(spec)
+    with patch.object(sys.modules['application'], 'db', stub_db):
+        spec.loader.exec_module(module)
+    condition = module.FullCondition
+    return {
+        'hostname_match': [x[0] for x in condition.hostname_match.choices],
+        'tag_match': [x[0] for x in condition.tag_match.choices],
+        'value_match': [x[0] for x in condition.value_match.choices],
+    }
+
+
+class TestWhereTheAgeConditionsAreOffered(unittest.TestCase):
+    """
+    An age condition compares a point in time. Only an attribute value can be
+    one — a hostname and an attribute name are names, so the condition there
+    could never be true and, negated, would always be true.
+    """
+
+    def setUp(self):
+        self.choices = _condition_choices()
+
+    def test_the_value_dropdown_offers_them(self):
+        for condition in ('older_than', 'newer_than'):
+            self.assertIn(condition, self.choices['value_match'])
+
+    def test_the_attribute_name_dropdown_does_not(self):
+        for condition in ('older_than', 'newer_than'):
+            self.assertNotIn(condition, self.choices['tag_match'])
+
+    def test_the_hostname_dropdown_does_not(self):
+        for condition in ('older_than', 'newer_than'):
+            self.assertNotIn(condition, self.choices['hostname_match'])
+
+    def test_every_other_condition_stays_on_all_three(self):
+        # Nothing but the two age conditions may be missing on the name side.
+        expected = [x for x in self.choices['value_match']
+                    if x not in ('older_than', 'newer_than')]
+        self.assertEqual(expected, self.choices['tag_match'])
+        self.assertEqual(expected, self.choices['hostname_match'])
 
 
 class TestRegexCache(unittest.TestCase):

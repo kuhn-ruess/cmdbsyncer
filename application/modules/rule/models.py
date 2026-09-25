@@ -3,6 +3,7 @@ Default Rule Models
 """
 # pylint: disable=too-few-public-methods
 from application import db
+from application.modules.rule.match import AGE_CONDITIONS
 
 
 #   .-- Condition Types
@@ -27,6 +28,13 @@ condition_types = [
                    " (same notation as Older Than)"),
     ('ignore', "Always Match - Matches everything (use negate to check 'does not exist')"),
 ]
+
+# The age conditions read their operand as a point in time. Only the value of
+# an attribute can be one: a hostname and an attribute name are names, so an
+# age condition there can never be true — and, negated, would always be true
+# and turn the condition into a silent catch-all. They are therefore offered
+# for the attribute value only.
+name_condition_types = [x for x in condition_types if x[0] not in AGE_CONDITIONS]
 
 
 class FullCondition(db.EmbeddedDocument):
@@ -112,11 +120,14 @@ class FullCondition(db.EmbeddedDocument):
 
     Older Than / Newer Than
     -----------------------
-    The attribute is read as a point in time and compared against the
-    clock, not against your text. Enter an age: a number followed by
+    Offered for "Value Match" only: the attribute's value is read as a
+    point in time and compared against the clock, not against your text.
+    A hostname and an attribute name are names, never a point in time,
+    so "Hostname Match" and "Tag Match" do not offer these two.
+    Enter an age: a number followed by
     m (minutes), h (hours), d (days) or w (weeks) — a number on its own
     counts days.
-    Example: Attribute Key syncer_last_seen, Value Condition "Older Than",
+    Example: Attribute Key syncer_last_seen, Value Match "Older Than",
     Value "2d" matches every host that was not seen for more than two days.
     Use case: switch a host off once it stopped being imported, and back on
     with "Newer Than" as soon as it is seen again.
@@ -135,11 +146,11 @@ class FullCondition(db.EmbeddedDocument):
         ('tag', "Match for Attribute"),
     ])
 
-    hostname_match = db.StringField(choices=condition_types)
+    hostname_match = db.StringField(choices=name_condition_types)
     hostname = db.StringField()
     hostname_match_negate = db.BooleanField()
 
-    tag_match = db.StringField(choices=condition_types)
+    tag_match = db.StringField(choices=name_condition_types)
     tag = db.StringField()
     tag_match_negate = db.BooleanField()
 
