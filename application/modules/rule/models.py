@@ -21,6 +21,10 @@ condition_types = [
     ('swith', "Starts With - Does the attribute start with your string?"),
     ('regex', "Regular Expression - Does the attribute match your regex pattern?"),
     ('bool', "Boolean Match - Does the attribute match your True/False value?"),
+    ('older_than', "Older Than - Is the attribute a timestamp older than the given age?"
+                   " (e.g. '2d', '12h', '30m', '1w', or a plain number of days)"),
+    ('newer_than', "Newer Than - Is the attribute a timestamp not older than the given age?"
+                   " (same notation as Older Than)"),
     ('ignore', "Always Match - Matches everything (use negate to check 'does not exist')"),
 ]
 
@@ -105,6 +109,21 @@ class FullCondition(db.EmbeddedDocument):
     Attribute matches your True/False value.
     Accepts: true, false, True, False, none, None, empty values
     Example: Check if maintenance_mode is True
+
+    Older Than / Newer Than
+    -----------------------
+    The attribute is read as a point in time and compared against the
+    clock, not against your text. Enter an age: a number followed by
+    m (minutes), h (hours), d (days) or w (weeks) — a number on its own
+    counts days.
+    Example: Attribute Key syncer_last_seen, Value Condition "Older Than",
+    Value "2d" matches every host that was not seen for more than two days.
+    Use case: switch a host off once it stopped being imported, and back on
+    with "Newer Than" as soon as it is seen again.
+    An attribute that is not a point in time never matches, in either
+    direction — a host without a sighting date falls through both rules.
+    Careful with negate: "not older than 2d" also matches the hosts that
+    have no date at all, while "Newer Than 2d" does not.
 
     Always Match (Ignore)
     --------------------

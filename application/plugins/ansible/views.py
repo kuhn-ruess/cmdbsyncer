@@ -60,6 +60,8 @@ _SHORT_MATCH = {
     'swith': 'starts with',
     'regex': 'regex',
     'bool': 'is',
+    'older_than': 'older than',
+    'newer_than': 'newer than',
     'ignore': 'any',
 }
 

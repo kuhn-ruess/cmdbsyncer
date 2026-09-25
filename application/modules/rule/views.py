@@ -34,6 +34,8 @@ condition_types={
     'swith': "starts with",
     'regex': "regex match",
     'bool': "boolean match",
+    'older_than': "older than",
+    'newer_than': "newer than",
     'ignore': "always match",
 }
 

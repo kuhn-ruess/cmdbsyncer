@@ -5,8 +5,11 @@ Covers:
   - application.modules.rule.match.check_condition (pure condition dispatch)
   - application.modules.rule.match.match (negation, type coercion, errors)
   - application.modules.rule.match.make_bool
+  - application.modules.rule.match.parse_age / age_in_seconds and the
+    "older than" / "newer than" conditions built on them
 """
 # pylint: disable=missing-function-docstring
+import datetime
 import unittest
 
 import re
@@ -15,6 +18,8 @@ from application.modules.rule.match import (
     check_condition,
     match,
     make_bool,
+    parse_age,
+    age_in_seconds,
     MatchException,
     MAX_REGEX_LENGTH,
     _compiled_regex,
@@ -218,6 +223,125 @@ class TestMatchRealWorldScenarios(unittest.TestCase):
         # At the match() level it unconditionally returns False — the
         # "does not exist" decision is made one layer up (see rule.py).
         self.assertFalse(match("whatever", "", "ignore", negate=True))
+
+
+
+class TestParseAge(unittest.TestCase):
+    """The age a user types in a condition, in seconds."""
+
+    def test_bare_number_counts_days(self):
+        # The Jinja expression these conditions replace compared
+        # (utcnow() - syncer_last_seen).days, so a plain 2 has to mean the
+        # same two days here.
+        self.assertEqual(parse_age("2"), 2 * 86400)
+
+    def test_days(self):
+        self.assertEqual(parse_age("2d"), 2 * 86400)
+
+    def test_hours(self):
+        self.assertEqual(parse_age("12h"), 12 * 3600)
+
+    def test_minutes(self):
+        self.assertEqual(parse_age("30m"), 30 * 60)
+
+    def test_weeks(self):
+        self.assertEqual(parse_age("1w"), 7 * 86400)
+
+    def test_fraction_and_whitespace_and_case(self):
+        self.assertEqual(parse_age(" 0.5D "), 12 * 3600)
+
+    def test_nonsense_says_what_is_accepted(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_age("two days")
+        self.assertIn("2d", str(ctx.exception))
+
+    def test_empty_is_not_an_age(self):
+        with self.assertRaises(ValueError):
+            parse_age("")
+
+
+class TestAgeInSeconds(unittest.TestCase):
+    """How old the attribute's point in time is — or None if it is none."""
+
+    def test_naive_datetime_is_read_as_utc(self):
+        # Everything the syncer stores is naive UTC (Host.set_import_seen).
+        stamp = datetime.datetime.utcnow() - datetime.timedelta(hours=3)
+        self.assertAlmostEqual(age_in_seconds(stamp), 3 * 3600, delta=60)
+
+    def test_aware_datetime_is_converted(self):
+        stamp = (datetime.datetime.now(datetime.timezone.utc)
+                 - datetime.timedelta(hours=3))
+        self.assertAlmostEqual(age_in_seconds(stamp), 3 * 3600, delta=60)
+
+    def test_iso_string_from_an_imported_attribute(self):
+        stamp = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        self.assertAlmostEqual(age_in_seconds(stamp.isoformat()), 86400, delta=60)
+
+    def test_plain_date_string(self):
+        self.assertGreater(age_in_seconds("2000-01-01"), 0)
+
+    def test_a_string_that_is_no_date_is_not_a_timestamp(self):
+        self.assertIsNone(age_in_seconds("prod"))
+
+    def test_none_is_not_a_timestamp(self):
+        self.assertIsNone(age_in_seconds(None))
+
+
+class TestAgeConditions(unittest.TestCase):
+    """'Older Than' / 'Newer Than' hold an attribute against the clock."""
+
+    def setUp(self):
+        self.eight_days_ago = (datetime.datetime.utcnow()
+                               - datetime.timedelta(days=8))
+        self.an_hour_ago = (datetime.datetime.utcnow()
+                            - datetime.timedelta(hours=1))
+
+    def test_older_than_hit(self):
+        # The case the customer asked for: not seen for more than two days.
+        self.assertTrue(match(self.eight_days_ago, "2d", "older_than"))
+
+    def test_older_than_miss(self):
+        self.assertFalse(match(self.an_hour_ago, "2d", "older_than"))
+
+    def test_newer_than_hit(self):
+        # And back on again as soon as the host is seen.
+        self.assertTrue(match(self.an_hour_ago, "2d", "newer_than"))
+
+    def test_newer_than_miss(self):
+        self.assertFalse(match(self.eight_days_ago, "2d", "newer_than"))
+
+    def test_hours_and_minutes(self):
+        self.assertTrue(match(self.an_hour_ago, "30m", "older_than"))
+        self.assertFalse(match(self.an_hour_ago, "12h", "older_than"))
+
+    def test_a_date_in_the_future_is_not_old(self):
+        tomorrow = datetime.datetime.utcnow() + datetime.timedelta(days=1)
+        self.assertFalse(match(tomorrow, "2d", "older_than"))
+        self.assertTrue(match(tomorrow, "2d", "newer_than"))
+
+    def test_an_attribute_that_is_no_timestamp_never_matches(self):
+        # A host whose value is not a point in time falls through both
+        # directions instead of raising and taking the export down.
+        self.assertFalse(match("prod", "2d", "older_than"))
+        self.assertFalse(match("prod", "2d", "newer_than"))
+        self.assertFalse(match(None, "2d", "older_than"))
+        self.assertFalse(match(None, "2d", "newer_than"))
+
+    def test_negate_flips_the_result(self):
+        self.assertFalse(match(self.eight_days_ago, "2d", "older_than",
+                               negate=True))
+        self.assertTrue(match(self.an_hour_ago, "2d", "older_than",
+                              negate=True))
+
+    def test_an_unusable_age_raises_match_exception(self):
+        with self.assertRaises(MatchException) as ctx:
+            match(self.eight_days_ago, "two days", "older_than")
+        self.assertIn("older_than", str(ctx.exception))
+
+    def test_check_condition_does_not_coerce_the_timestamp(self):
+        # match() lowercases the operands of the string conditions; a
+        # datetime must reach check_condition untouched.
+        self.assertTrue(check_condition(self.eight_days_ago, "2d", "older_than"))
 
 
 class TestRegexCache(unittest.TestCase):

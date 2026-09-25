@@ -3,6 +3,7 @@
 Helper To match condtions
 """
 # pylint: disable=too-many-branches,too-many-return-statements
+import datetime
 import re
 
 
@@ -31,6 +32,23 @@ def _compiled_regex(needle):
     return compiled
 
 
+# Conditions comparing a timestamp attribute against the clock instead of
+# against another string. Everything that needs to know whether a rule can
+# change its answer without the host changing asks for this tuple — see
+# Rule.depends_on_time().
+AGE_CONDITIONS = ('older_than', 'newer_than')
+
+# Units accepted behind the age of those conditions. Without a unit the
+# number counts days, which is what the Jinja expression these conditions
+# replace compared ((utcnow() - syncer_last_seen).days > 2).
+AGE_UNIT_SECONDS = {
+    'm': 60,
+    'h': 3600,
+    'd': 86400,
+    'w': 604800,
+}
+
+
 class MatchException(Exception):
     """
     Invalid Match Exception
@@ -55,6 +73,48 @@ def make_bool(value):
         return False
     return False
 
+
+
+def parse_age(needle):
+    """
+    The user's age as seconds: ``2d``, ``12h``, ``30m``, ``1w`` — or, with
+    no unit behind it, that number of days.
+    """
+    text = str(needle).strip().lower()
+    seconds_per_unit = AGE_UNIT_SECONDS['d']
+    if text and text[-1] in AGE_UNIT_SECONDS:
+        seconds_per_unit = AGE_UNIT_SECONDS[text[-1]]
+        text = text[:-1].strip()
+    try:
+        amount = float(text)
+    except ValueError:
+        units = '/'.join(sorted(AGE_UNIT_SECONDS))
+        raise ValueError(
+            f"'{needle}' is not an age. Give a number of days, or a number "
+            f"followed by one of {units} — like 2d, 12h, 30m, 1w") from None
+    return amount * seconds_per_unit
+
+
+def age_in_seconds(attr_value):
+    """
+    How long ago the attribute's point in time was, in seconds — or None
+    when the value is not a point in time at all.
+
+    The timestamps the syncer writes are naive UTC (see
+    ``Host.set_import_seen``); a date imported from somewhere else may
+    arrive as a string, with or without an offset. Everything is compared
+    in UTC.
+    """
+    if isinstance(attr_value, datetime.datetime):
+        stamp = attr_value
+    else:
+        try:
+            stamp = datetime.datetime.fromisoformat(str(attr_value).strip())
+        except (TypeError, ValueError):
+            return None
+    if stamp.tzinfo is not None:
+        stamp = stamp.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return (datetime.datetime.utcnow() - stamp).total_seconds()
 
 
 def check_condition(attr_value, needle, condition):
@@ -94,6 +154,17 @@ def check_condition(attr_value, needle, condition):
         pattern = _compiled_regex(needle)
         if pattern.match(str(attr_value)):
             return True
+    elif condition in AGE_CONDITIONS:
+        age = age_in_seconds(attr_value)
+        if age is None:
+            # Nothing to hold against the clock, so neither direction
+            # matches: a host without a sighting date is out of both the
+            # "not seen for two days" and the "seen today" rule.
+            return False
+        limit = parse_age(needle)
+        if condition == 'older_than':
+            return age > limit
+        return age <= limit
     elif condition == 'bool':
         if needle == attr_value:
             return True
