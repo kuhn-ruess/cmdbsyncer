@@ -309,6 +309,77 @@ print('IMPORT_INVENTORY_OK')
 '''
 
 
+# The two timestamps a rule uses to ask how long ago a host was last seen
+# age on their own, while the export cache they live in is only dropped
+# when the host's data changes. An import has to refresh them inside that
+# cache without throwing the rest of it away — a full flush would make
+# every export after an import recompute the whole fleet.
+IMPORT_SEEN_CACHE = '''
+import datetime
+
+from application.models.host import Host
+
+host = Host.get_host('seen-host.example.com')
+host.update_host({'site': 'muc'})
+host.save()
+
+old = datetime.datetime(2026, 1, 1, 0, 0, 0)
+host.cache = {
+    'checkmk_hostattribute': {
+        'attributes': {
+            'all': {'syncer_last_seen': old, 'syncer_last_sync': old,
+                    'site': 'muc'},
+            'filtered': {},
+        },
+    },
+    'CheckmkAttributeRule': {'custom_attributes': {'criticality': 'prod'}},
+    'cmk_tags_tag_choices': {'criticality': ['prod']},
+}
+host.save()
+
+# An import run that finds the host unchanged: no label moved, so nothing
+# invalidates the cache.
+host.update_host({'site': 'muc'})
+host.save()
+host.reload()
+
+cached = host.cache['checkmk_hostattribute']['attributes']['all']
+if cached['syncer_last_seen'] == old:
+    fail('the import left a stale syncer_last_seen in the cache')
+eq(cached['syncer_last_seen'], host.last_import_seen,
+   'the cached syncer_last_seen')
+eq(cached['site'], 'muc', 'the rest of the cached attribute set')
+eq(sorted(host.cache.keys()),
+   ['CheckmkAttributeRule', 'checkmk_hostattribute', 'cmk_tags_tag_choices'],
+   'the cache slots the import left behind')
+
+# Both cached copies now say what the host document says, and the other
+# cache slots are still the ones the export had built.
+eq(cached['syncer_last_sync'], host.last_import_sync,
+   'the cached syncer_last_sync')
+eq(host.cache['CheckmkAttributeRule'],
+   {'custom_attributes': {'criticality': 'prod'}},
+   'the outcome cache after the import')
+
+# The inventorize path stamps the same timestamps and refreshes them the
+# same way.
+back = datetime.datetime(2026, 2, 2, 0, 0, 0)
+host.cache['checkmk_hostattribute']['attributes']['all']['syncer_last_seen'] = back
+host.save()
+host.mark_inventorized(changed=True)
+host.save()
+host.reload()
+cached = host.cache['checkmk_hostattribute']['attributes']['all']
+if cached['syncer_last_seen'] == back:
+    fail('mark_inventorized left a stale syncer_last_seen in the cache')
+eq(cached['syncer_last_seen'], host.last_import_seen,
+   'the cached syncer_last_seen after an inventorize run')
+eq(cached['syncer_last_sync'], host.last_import_sync,
+   'the cached syncer_last_sync after a changed inventorize run')
+print('IMPORT_SEEN_CACHE_OK')
+'''
+
+
 # What the syncers ask for before they talk to a target system. Every
 # consumer test mocks these away, so this is the only place the queries
 # themselves run.
@@ -416,6 +487,10 @@ class TestHostRoundtripSmoke(unittest.TestCase):
     def test_import_manages_inventory(self):
         """Inventory sections stay namespaced, and separate from each other."""
         self._run(IMPORT_INVENTORY, 'IMPORT_INVENTORY_OK')
+
+    def test_import_refreshes_the_cached_seen_timestamps(self):
+        """An import keeps syncer_last_seen current inside the cache it keeps."""
+        self._run(IMPORT_SEEN_CACHE, 'IMPORT_SEEN_CACHE_OK')
 
     def test_export_selects_the_right_hosts(self):
         """Only hosts that may leave the syncer reach a target system."""

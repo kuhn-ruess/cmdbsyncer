@@ -747,6 +747,43 @@ class Host(HostLabelsMixin, db.Document):
         # Delete Cache if new Data is imported
         self.cache = {}
 
+    def refresh_cached_seen_timestamps(self):
+        """
+        Write the current import timestamps into the cached attribute sets.
+
+        ``Plugin.get_attributes()`` hands out
+        ``cache['<engine>_hostattribute']['attributes']`` unchanged for as
+        long as that slot exists, so a host with a warm cache served a rule
+        the timestamps of the run that filled it: an expression asking how
+        long ago the host was last seen kept answering with that day
+        forever. Dropping the cache here instead would be correct too, but
+        an import stamps every host it finds on every run, so the next
+        export would recompute the whole fleet even when nothing about it
+        changed. Only these two values age on their own, so only they are
+        written back — every other cache slot is left untouched.
+
+        Indexes into the cache step by step on purpose: MongoEngine only
+        marks a ``DictField`` as changed when a nested dict is reached
+        through ``__getitem__``, so a write via ``values()`` would never be
+        saved.
+        """
+        if not self.last_import_seen and not self.last_import_sync:
+            return
+        for slot_name in list(self.cache.keys()):
+            slot = self.cache[slot_name]
+            if not isinstance(slot, dict) or 'attributes' not in slot:
+                continue
+            attributes = slot['attributes']
+            if not isinstance(attributes, dict) or 'all' not in attributes:
+                continue
+            all_attributes = attributes['all']
+            if not isinstance(all_attributes, dict):
+                continue
+            if self.last_import_seen:
+                all_attributes['syncer_last_seen'] = self.last_import_seen
+            if self.last_import_sync:
+                all_attributes['syncer_last_sync'] = self.last_import_sync
+
     def mark_inventorized(self, changed=False):
         """
         Stamp the import-seen (and, when the inventory actually changed,
@@ -756,12 +793,14 @@ class Host(HostLabelsMixin, db.Document):
         timestamps and deliberately leaves lifecycle state untouched: an
         inventorize source is secondary, so it must never resurrect a host
         the primary import source archived or flip its stale flag. The
-        cache is already invalidated by update_inventory() on change.
+        cache is already invalidated by update_inventory() on change; when
+        it survives, the new timestamps are written into it.
         """
         now = datetime.datetime.utcnow()
         self.last_import_seen = now
         if changed:
             self.last_import_sync = now
+        self.refresh_cached_seen_timestamps()
 
     def set_import_seen(self):
         """
@@ -774,6 +813,7 @@ class Host(HostLabelsMixin, db.Document):
         import can't undo an operator decision.
         """
         self.last_import_seen = datetime.datetime.utcnow()
+        self.refresh_cached_seen_timestamps()
         if self.deleted_at and self._was_auto_archived():
             self.restore('active')
         if not self.lifecycle_state:
