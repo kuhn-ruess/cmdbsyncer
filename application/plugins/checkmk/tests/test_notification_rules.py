@@ -2,6 +2,7 @@
 Unit tests for checkmk notification_rules module.
 """
 # pylint: disable=missing-function-docstring,missing-class-docstring,protected-access,unused-argument
+import copy
 import unittest
 from unittest.mock import patch
 
@@ -754,24 +755,19 @@ class TestNotificationPluginSelection(_SyncTestCase):
         notify = body['rule_config']['notification_method']['notify_plugin']
         self.assertEqual(notify['plugin_params']['params'], [])
 
-    def test_changed_custom_plugin_params_count_as_drift(self):
-        """The parameters of a custom plug-in are the syncer's, so a
-        change to them has to reach Checkmk — unlike the parameters of a
-        built-in plug-in, which belong to the Checkmk admin."""
+    def test_changed_custom_plugin_params_are_no_drift(self):
+        """The parameters of a custom plug-in only seed a new rule. Once
+        it exists they are the admin's, like those of a built-in one —
+        rewriting them would move the rule off its parameter set."""
         created, updated, deleted = self._apply(
             [{'rule_config': _custom_cfg(['new'])}],
             [{'id': 'custom-id', 'rule_config': _custom_cfg(['old'])}])
 
-        self.assertEqual((created, deleted), ([], []))
-        self.assertEqual(len(updated), 1)
-        pushed = updated[0][1]['rule_config']
-        self.assertEqual(
-            pushed['notification_method']['notify_plugin']['plugin_params'],
-            {'plugin_name': 'my_custom_script', 'params': ['new']})
+        self.assertEqual((created, updated, deleted), ([], [], []))
 
-    def test_update_pushes_our_own_params_for_a_custom_plugin(self):
-        """The stored method block must not be carried over here — it
-        would put the old parameters back."""
+    def test_update_keeps_stored_params_of_a_custom_plugin(self):
+        """Another field changed; the stored method block goes back, not
+        the syncer's parameters."""
         sent = []
         with patch.object(self.sync, 'request',
                           side_effect=lambda *a, **kw: sent.append((a, kw)) or ({}, {})):
@@ -781,8 +777,7 @@ class TestNotificationPluginSelection(_SyncTestCase):
         _args, kwargs = sent[0]
         notify = (kwargs['data']['rule_config']['notification_method']
                   ['notify_plugin'])
-        self.assertEqual(notify['plugin_params']['params'], ['new'])
-
+        self.assertEqual(notify['plugin_params']['params'], ['old'])
 
     def _pushed_method(self, stored_cfg, desired_cfg):
         sent = []
@@ -808,10 +803,8 @@ class TestNotificationPluginSelection(_SyncTestCase):
         stored_cfg = _custom_cfg(['old'])
         stored_cfg['notification_method']['notification_bulking'] = {
             'state': 'enabled', 'value': {'time_horizon': 60}}
-        method = self._pushed_method(stored_cfg, _custom_cfg(['new']))
-        self.assertEqual(method['notify_plugin']['plugin_params']['params'], ['new'])
-        self.assertEqual(method['notification_bulking'],
-                         stored_cfg['notification_method']['notification_bulking'])
+        self.assertEqual(self._pushed_method(stored_cfg, _custom_cfg(['new'])),
+                         stored_cfg['notification_method'])
 
     def test_manual_params_are_no_drift_when_the_syncer_sends_none(self):
         desired_cfg = _cfg(['ops'], plugin='my_custom_script')
@@ -823,6 +816,164 @@ class TestNotificationPluginSelection(_SyncTestCase):
             [{'rule_config': desired_cfg}],
             [{'id': 'custom-id', 'rule_config': _custom_cfg(['set-by-hand'])}])
         self.assertEqual((created, updated, deleted), ([], [], []))
+
+
+def _param_key(params):
+    """Identity of a parameter set's values the way Checkmk hashes them
+    (``make_parameter_hashable``): dict keys and list items unordered."""
+    if isinstance(params, dict):
+        return tuple(sorted((k, _param_key(v)) for k, v in params.items()))
+    if isinstance(params, (list, tuple)):
+        return tuple(sorted((_param_key(v) for v in params), key=repr))
+    return params
+
+
+class _FakeCheckmk:
+    """
+    Checkmk's notification rule store, as far as parameter sets go
+    (``cmk/gui/watolib/notifications.py``). A rule keeps only the id of
+    its parameter set and a GET fills in that set's values. The API has
+    no field for the id, so every PUT and POST binds the rule to the
+    first set of the plug-in holding identical values, or to a new
+    auto-generated one.
+    """
+    RULES = '/domain-types/notification_rule/collections/all'
+    AUTO = 'Auto-generated during rule creation via the REST API'
+
+    def __init__(self):
+        self.param_sets = {}   # plugin -> [(set_id, description, params)]
+        self.rules = {}        # rule_id -> (rule_config without params, set_id)
+        self.writes = []
+
+    def add_set(self, plugin, set_id, params, description=''):
+        self.param_sets.setdefault(plugin, []).append(
+            (set_id, description or set_id, params))
+
+    def only_rule(self):
+        """Id of the one rule the site holds."""
+        assert len(self.rules) == 1, self.rules
+        return next(iter(self.rules))
+
+    def set_of(self, rule_id):
+        return self.rules[rule_id][1]
+
+    def rebind_by_hand(self, rule_id, set_id):
+        """What the admin does in the rule editor."""
+        self.rules[rule_id] = (self.rules[rule_id][0], set_id)
+
+    def _bind(self, plugin, params):
+        for set_id, _description, stored in self.param_sets.get(plugin, []):
+            if _param_key(stored) == _param_key(params):
+                return set_id
+        set_id = f'auto-{sum(len(sets) for sets in self.param_sets.values())}'
+        self.add_set(plugin, set_id, params, self.AUTO)
+        return set_id
+
+    def _store(self, rule_id, rule_config):
+        config = copy.deepcopy(rule_config)
+        notify = config['notification_method']['notify_plugin']
+        params = dict(notify['plugin_params'])
+        plugin = params.pop('plugin_name')
+        notify['plugin_params'] = {'plugin_name': plugin}
+        self.rules[rule_id] = (config, self._bind(plugin, params))
+
+    def _read(self, rule_id):
+        config, set_id = self.rules[rule_id]
+        config = copy.deepcopy(config)
+        plugin_params = config['notification_method']['notify_plugin']['plugin_params']
+        plugin = plugin_params['plugin_name']
+        plugin_params.update(copy.deepcopy(next(
+            params for sid, _d, params in self.param_sets[plugin] if sid == set_id)))
+        return config
+
+    def request(self, url, method='GET', data=None):
+        if method == 'GET' and url == self.RULES:
+            return {'value': [{'id': rule_id,
+                               'extensions': {'rule_config': self._read(rule_id)}}
+                              for rule_id in self.rules]}, {}
+        self.writes.append((method, url))
+        if method == 'POST' and url == self.RULES:
+            self._store(f'rule-{len(self.writes)}', data['rule_config'])
+        elif method == 'PUT':
+            self._store(url.rsplit('/', 1)[-1], data['rule_config'])
+        elif url.endswith('/actions/delete/invoke'):
+            del self.rules[url.split('/')[-4]]
+        return {}, {}
+
+
+class TestParameterSetAgainstCheckmk(_SyncTestCase):
+    """
+    The export run against a Checkmk that rebinds parameter sets the way
+    the real one does — the parameter set an admin picks by hand has to
+    survive the next run.
+    """
+    PLUGIN = 'my_custom_script'
+    SYNCER_PARAMS = ('https://hook', 'team-a')
+
+    def setUp(self):
+        super().setUp()
+        self.cmk = _FakeCheckmk()
+        # A script's parameter set, as Checkmk keeps it on disk.
+        self.cmk.add_set(self.PLUGIN, 'first-set', {'params': list(self.SYNCER_PARAMS)})
+        self.cmk.add_set(self.PLUGIN, 'chosen-by-hand',
+                         {'params': ['https://hook', 'team-b']})
+
+    def _desired(self, folder='/it', plugin=PLUGIN, params=SYNCER_PARAMS):
+        cfg = _cfg(['ops'], plugin=plugin)
+        cfg['conditions'] = {'match_folder': {'state': 'enabled', 'value': folder}}
+        if plugin == self.PLUGIN:
+            cfg['notification_method']['notify_plugin'] = {
+                'option': 'create_notification_with_custom_parameters',
+                'plugin_params': {'plugin_name': plugin, 'params': list(params)},
+            }
+        return {'rule_config': cfg}
+
+    def _export(self, *desired):
+        with patch.object(self.sync, 'request', side_effect=self.cmk.request):
+            self.sync._diff_and_apply(
+                list(desired), self.sync._fetch_existing_rules('cmdbsyncer_'))
+
+    def _rule_chosen_by_hand(self, desired):
+        self._export(desired)
+        rule_id = self.cmk.only_rule()
+        self.assertEqual(self.cmk.set_of(rule_id), 'first-set')
+        self.cmk.rebind_by_hand(rule_id, 'chosen-by-hand')
+        self.cmk.writes.clear()
+        return rule_id
+
+    def test_new_rule_lands_on_the_set_with_the_syncer_params(self):
+        self._export(self._desired())
+        self.assertEqual([self.cmk.set_of(rule_id) for rule_id in self.cmk.rules],
+                         ['first-set'])
+
+    def test_set_chosen_by_hand_is_left_alone(self):
+        rule_id = self._rule_chosen_by_hand(self._desired())
+        self._export(self._desired())
+        self.assertEqual(self.cmk.writes, [])
+        self.assertEqual(self.cmk.set_of(rule_id), 'chosen-by-hand')
+
+    def test_set_chosen_by_hand_survives_a_rewrite(self):
+        rule_id = self._rule_chosen_by_hand(self._desired())
+        self._export(self._desired(folder='/other'))
+        self.assertEqual(self.cmk.writes, [('PUT', f'/objects/notification_rule/{rule_id}')])
+        self.assertEqual(self.cmk.set_of(rule_id), 'chosen-by-hand')
+        self.assertNotIn(_FakeCheckmk.AUTO, [
+            description for _sid, description, _p in self.cmk.param_sets[self.PLUGIN]])
+
+    def test_changed_syncer_params_do_not_move_the_rule(self):
+        rule_id = self._rule_chosen_by_hand(self._desired())
+        self._export(self._desired(params=['https://hook', 'team-c']))
+        self.assertEqual(self.cmk.writes, [])
+        self.assertEqual(self.cmk.set_of(rule_id), 'chosen-by-hand')
+
+    def test_builtin_set_chosen_by_hand_survives_a_rewrite(self):
+        self.cmk.add_set('mail', 'mail-default', {})
+        self.cmk.add_set('mail', 'mail-by-hand', {'from': 'noc@example.com'})
+        self._export(self._desired(plugin='mail'))
+        rule_id = self.cmk.only_rule()
+        self.cmk.rebind_by_hand(rule_id, 'mail-by-hand')
+        self._export(self._desired(plugin='mail', folder='/other'))
+        self.assertEqual(self.cmk.set_of(rule_id), 'mail-by-hand')
 
 
 class TestNotificationRuleLoop(_SyncTestCase):
