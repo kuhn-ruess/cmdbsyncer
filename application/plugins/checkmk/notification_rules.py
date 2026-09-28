@@ -760,30 +760,39 @@ class CheckmkNotificationRuleSync(CMK2):
 
     def _diff_and_apply(self, desired, existing):
         unmatched_existing = list(existing)
-        to_update = []
-        to_create = []
+        changed = []
+        # Identical rules are paired first, across all of them. Pairing a
+        # changed rule by its recipients before that could take the
+        # Checkmk rule of an unchanged sibling shipping to the same
+        # groups — both would then be rewritten and trade the method
+        # settings the admin attached to each of them.
         for body in desired:
             our_cfg = self._comparable(body['rule_config'])
-            match = None
-            for cmk in unmatched_existing:
-                if deep_compare(our_cfg, self._comparable(cmk['rule_config'])):
-                    match = cmk
-                    break
-            if match is not None:
+            match = next((cmk for cmk in unmatched_existing
+                          if deep_compare(our_cfg,
+                                          self._comparable(cmk['rule_config']))),
+                         None)
+            if match is None:
+                changed.append(body)
+            else:
                 unmatched_existing.remove(match)
-                continue
-            # Nothing identical left. Rewrite the rule that ships to the
-            # same recipients instead of deleting it and creating a new
-            # one — a fresh rule would lose the notification method
-            # settings the admin attached to it in Checkmk.
-            for cmk in unmatched_existing:
-                if self._recipients(cmk['rule_config']) == \
-                        self._recipients(body['rule_config']):
-                    match = cmk
-                    break
-            if match is not None:
-                unmatched_existing.remove(match)
-                to_update.append((match, body))
+        to_update = []
+        to_create = []
+        for body in changed:
+            # Rewrite the rule that ships to the same recipients instead
+            # of deleting it and creating a new one — a fresh rule would
+            # lose the notification method settings the admin attached
+            # to it in Checkmk. One with the same plug-in is preferred,
+            # its settings are the ones that still apply.
+            candidates = [cmk for cmk in unmatched_existing
+                          if self._recipients(cmk['rule_config']) ==
+                          self._recipients(body['rule_config'])]
+            candidates.sort(key=lambda cmk, body=body:
+                            self.plugin_name(cmk['rule_config']) !=
+                            self.plugin_name(body['rule_config']))
+            if candidates:
+                unmatched_existing.remove(candidates[0])
+                to_update.append((candidates[0], body))
             else:
                 to_create.append(body)
         to_delete = unmatched_existing
@@ -847,21 +856,28 @@ class CheckmkNotificationRuleSync(CMK2):
         Rewrite one of our rules in place.
 
         The notification method block is taken from Checkmk, not from
-        us: its parameters belong to the admin, and pushing our own
-        (which only names the plugin) would rebind the rule to Checkmk's
-        first parameter set for that plugin. Only a changed plugin makes
-        the stored parameters useless, so only then do we push ours.
+        us: its parameters and its bulking belong to the admin, and
+        pushing our own (which only names the plugin) would rebind the
+        rule to Checkmk's first parameter set for that plugin. Only a
+        changed plugin makes the stored block useless, so only then do
+        we push ours.
 
-        A custom plug-in is the other way round — the syncer sends its
-        parameters, so ours have to win.
+        A custom plug-in the syncer sends parameters for is the one
+        exception — those parameters are ours, so they have to win. Its
+        bulking stays the admin's all the same, and a custom plug-in
+        sent without parameters leaves the admin's ones alone.
         """
         rule_id = current['id']
         config = dict(body['rule_config'])
         stored = current['rule_config']
-        if self._notify_plugin_block(config).get('option') != CUSTOM_PLUGIN_OPTION and \
-                self.plugin_name(stored) == self.plugin_name(config) and \
+        if self.plugin_name(stored) == self.plugin_name(config) and \
                 stored.get('notification_method'):
-            config['notification_method'] = stored['notification_method']
+            method = dict(stored['notification_method'])
+            ours = self._notify_plugin_block(config)
+            if ours.get('option') == CUSTOM_PLUGIN_OPTION and \
+                    set(ours.get('plugin_params') or {}) - {'plugin_name'}:
+                method['notify_plugin'] = ours
+            config['notification_method'] = method
         url = f"/objects/notification_rule/{rule_id}"
         try:
             self.request(url, data={'rule_config': config}, method="PUT")

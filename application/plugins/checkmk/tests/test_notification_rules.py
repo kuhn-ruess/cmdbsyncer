@@ -599,6 +599,48 @@ class TestCheckmkNotificationRuleSync(_SyncTestCase):
             kwargs['data']['rule_config']['notification_method'],
             stored_cfg['notification_method'])
 
+    def test_changed_rule_does_not_take_an_unchanged_siblings_rule(self):
+        """
+        Two of our rules ship to the same groups, only one of them
+        changed. The changed one must not be paired with the Checkmk rule
+        of the unchanged one — both would be rewritten and swap the
+        method settings the admin configured on each.
+        """
+        host_cfg = _cfg(['ops'])
+        host_cfg['conditions']['match_folder'] = {
+            'state': 'enabled', 'value': '/hosts'}
+        svc_old = _cfg(['ops'])
+        svc_old['conditions']['match_folder'] = {
+            'state': 'enabled', 'value': '/old'}
+        svc_new = _cfg(['ops'])
+        svc_new['conditions']['match_folder'] = {
+            'state': 'enabled', 'value': '/new'}
+
+        created, updated, deleted = self._apply(
+            [{'rule_config': svc_new}, {'rule_config': host_cfg}],
+            [{'id': 'host-id', 'rule_config': host_cfg},
+             {'id': 'svc-id', 'rule_config': svc_old}])
+
+        self.assertEqual((created, deleted), ([], []))
+        self.assertEqual([(cmk['id'], body['rule_config']) for cmk, body in updated],
+                         [('svc-id', svc_new)])
+
+    def test_changed_rule_prefers_the_rule_with_its_own_plugin(self):
+        desired_cfg = _cfg(['ops'], plugin='mail')
+        desired_cfg['conditions'] = {
+            'match_folder': {'state': 'enabled', 'value': '/y'}}
+        created, updated, deleted = self._apply(
+            [{'rule_config': desired_cfg}],
+            [{'id': 'slack-id', 'rule_config': _cfg(['ops'], plugin='slack')},
+             {'id': 'mail-id', 'rule_config': dict(
+                 _cfg(['ops'], plugin='mail'),
+                 conditions={'match_folder': {'state': 'enabled',
+                                              'value': '/x'}})}])
+
+        self.assertEqual(created, [])
+        self.assertEqual(deleted, ['slack-id'])
+        self.assertEqual([cmk['id'] for cmk, _body in updated], ['mail-id'])
+
     def test_update_rule_pushes_own_method_when_plugin_changed(self):
         stored_cfg = _cfg(['ops'], plugin='slack')
         desired_cfg = _cfg(['ops'], plugin='mail')
@@ -740,6 +782,47 @@ class TestNotificationPluginSelection(_SyncTestCase):
         notify = (kwargs['data']['rule_config']['notification_method']
                   ['notify_plugin'])
         self.assertEqual(notify['plugin_params']['params'], ['new'])
+
+
+    def _pushed_method(self, stored_cfg, desired_cfg):
+        sent = []
+        with patch.object(self.sync, 'request',
+                          side_effect=lambda *a, **kw: sent.append((a, kw)) or ({}, {})):
+            self.sync._update_rule({'id': 'rule-id', 'rule_config': stored_cfg},
+                                   {'rule_config': desired_cfg})
+        return sent[0][1]['data']['rule_config']['notification_method']
+
+    def test_update_keeps_manual_params_when_the_syncer_sends_none(self):
+        """The parameter field is empty in the syncer, so the ones set by
+        hand in Checkmk are the admin's and must survive a rewrite."""
+        stored_cfg = _custom_cfg(['https://hook', 'set-by-hand'])
+        desired_cfg = _cfg(['ops'], plugin='my_custom_script')
+        desired_cfg['notification_method']['notify_plugin'] = {
+            'option': 'create_notification_with_custom_parameters',
+            'plugin_params': {'plugin_name': 'my_custom_script'},
+        }
+        self.assertEqual(self._pushed_method(stored_cfg, desired_cfg),
+                         stored_cfg['notification_method'])
+
+    def test_update_keeps_manual_bulking_of_a_custom_plugin(self):
+        stored_cfg = _custom_cfg(['old'])
+        stored_cfg['notification_method']['notification_bulking'] = {
+            'state': 'enabled', 'value': {'time_horizon': 60}}
+        method = self._pushed_method(stored_cfg, _custom_cfg(['new']))
+        self.assertEqual(method['notify_plugin']['plugin_params']['params'], ['new'])
+        self.assertEqual(method['notification_bulking'],
+                         stored_cfg['notification_method']['notification_bulking'])
+
+    def test_manual_params_are_no_drift_when_the_syncer_sends_none(self):
+        desired_cfg = _cfg(['ops'], plugin='my_custom_script')
+        desired_cfg['notification_method']['notify_plugin'] = {
+            'option': 'create_notification_with_custom_parameters',
+            'plugin_params': {'plugin_name': 'my_custom_script'},
+        }
+        created, updated, deleted = self._apply(
+            [{'rule_config': desired_cfg}],
+            [{'id': 'custom-id', 'rule_config': _custom_cfg(['set-by-hand'])}])
+        self.assertEqual((created, updated, deleted), ([], [], []))
 
 
 class TestNotificationRuleLoop(_SyncTestCase):
