@@ -744,18 +744,16 @@ class CheckmkNotificationRuleSync(CMK2):
 
         Everything inside ``notification_method`` except the plugin
         name — the method's parameters and the bulking settings — is
-        the Checkmk admin's, so it must not count as drift. The
-        parameters of a custom plug-in are the exception: those are the
-        ones the syncer itself sends, so a change to them is drift.
+        the Checkmk admin's, so it must not count as drift. That holds
+        for a custom plug-in too: the parameters the syncer has for it
+        only seed a rule it creates. Checkmk has no field for the
+        parameter set a rule uses and binds it, on every write, to the
+        first set with identical values — so rewriting the parameters
+        would move the rule off the set the admin picked for it.
         """
-        notify_plugin = self._notify_plugin_block(rule_config)
-        method = {'plugin_name': self.plugin_name(rule_config)}
-        if notify_plugin.get('option') == CUSTOM_PLUGIN_OPTION:
-            params = dict(notify_plugin.get('plugin_params') or {})
-            params.pop('plugin_name', None)
-            method['plugin_params'] = params
         reduced = dict(rule_config)
-        reduced['notification_method'] = method
+        reduced['notification_method'] = {
+            'plugin_name': self.plugin_name(rule_config)}
         return reduced
 
     def _diff_and_apply(self, desired, existing):
@@ -856,28 +854,19 @@ class CheckmkNotificationRuleSync(CMK2):
         Rewrite one of our rules in place.
 
         The notification method block is taken from Checkmk, not from
-        us: its parameters and its bulking belong to the admin, and
-        pushing our own (which only names the plugin) would rebind the
-        rule to Checkmk's first parameter set for that plugin. Only a
-        changed plugin makes the stored block useless, so only then do
-        we push ours.
-
-        A custom plug-in the syncer sends parameters for is the one
-        exception — those parameters are ours, so they have to win. Its
-        bulking stays the admin's all the same, and a custom plug-in
-        sent without parameters leaves the admin's ones alone.
+        us: its parameters and its bulking belong to the admin. Checkmk
+        binds the rewritten rule to the first parameter set holding the
+        values it is sent, so sending the stored values back keeps it on
+        the set it had, while sending ours would move it. Only a changed
+        plugin makes the stored block useless, so only then do we push
+        ours.
         """
         rule_id = current['id']
         config = dict(body['rule_config'])
         stored = current['rule_config']
         if self.plugin_name(stored) == self.plugin_name(config) and \
                 stored.get('notification_method'):
-            method = dict(stored['notification_method'])
-            ours = self._notify_plugin_block(config)
-            if ours.get('option') == CUSTOM_PLUGIN_OPTION and \
-                    set(ours.get('plugin_params') or {}) - {'plugin_name'}:
-                method['notify_plugin'] = ours
-            config['notification_method'] = method
+            config['notification_method'] = stored['notification_method']
         url = f"/objects/notification_rule/{rule_id}"
         try:
             self.request(url, data={'rule_config': config}, method="PUT")
