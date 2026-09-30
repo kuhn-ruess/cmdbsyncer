@@ -54,6 +54,57 @@ def merge_folder_attributes(existing, new):
     return merged
 
 
+# Checkmk folder attributes that really hold a boolean. Every other attribute
+# a folder option sets is text (custom attributes such as a city or street,
+# the title, the site) or a structure (contact groups, labels, parents).
+BOOLEAN_FOLDER_ATTRIBUTES = ('bake_agent_package',)
+
+
+def drop_unset_folder_values(folder, attributes):
+    """
+    Remove folder options whose value is True, False or None.
+
+    Such a value is what a template renders when the host has no data for
+    it, e.g. ``{'city': {{ city }}}`` for a host whose city is False. Checkmk
+    accepts it on write, but Checkmk 2.5 then fails to list any folder at all
+    ("Not a valid string."), which stops every following export. A tag group
+    may be unset with None, and ``BOOLEAN_FOLDER_ATTRIBUTES`` keep their
+    booleans.
+
+    Args:
+        folder (str): folder path, only used for the warning.
+        attributes: the parsed folder options.
+
+    Returns:
+        tuple: (the options to keep, the names of the dropped ones)
+    """
+    if not isinstance(attributes, dict):
+        return attributes, []
+    kept = {}
+    dropped = []
+    for name, value in attributes.items():
+        allowed = (value is None and str(name).startswith('tag_')) or \
+            (isinstance(value, bool) and name in BOOLEAN_FOLDER_ATTRIBUTES)
+        if (value is None or isinstance(value, bool)) and not allowed:
+            dropped.append(name)
+            logger.warning("Folder option %r of %s is %r, not sent to Checkmk",
+                           name, folder, value)
+            continue
+        kept[name] = value
+    return kept, dropped
+
+
+def is_unreadable_folder_error(exc):
+    """
+    True when Checkmk failed to show folder data it stored itself.
+
+    Checkmk 2.5 answers with a crash report ("Mismatch between endpoint and
+    internal data format") when a folder holds a value its own schema no
+    longer accepts, e.g. a boolean for a text attribute.
+    """
+    return 'Mismatch between endpoint and internal data format' in str(exc)
+
+
 # pylint: disable=too-many-instance-attributes,too-many-public-methods
 class SyncCMK2(CMK2):
     """
@@ -112,6 +163,11 @@ class SyncCMK2(CMK2):
         # Lazy per-run map of Project name -> allows this
         # account (see project_denied_for_account).
         self._project_allows_account = None
+        # Folder -> option names a rule gave no text value (see
+        # drop_unset_folder_values); they are removed from the folder.
+        self.dropped_folder_values = {}
+        # Set when Checkmk cannot list its folders (see fetch_checkmk_folders)
+        self.folder_listing_failed = False
 
     def __getstate__(self):
         # multiprocessing pickles ``self`` for every task dispatched via
@@ -231,6 +287,9 @@ class SyncCMK2(CMK2):
                             source="Checkmk Export",
                         )
                         continue
+                    parsed, dropped = drop_unset_folder_values(config_path, parsed)
+                    if dropped:
+                        self._report_dropped_folder_values(config_path, dropped)
                     existing = self.custom_folder_attributes.get(config_path)
                     if existing is None:
                         self.custom_folder_attributes[config_path] = parsed
@@ -238,6 +297,29 @@ class SyncCMK2(CMK2):
                         self.custom_folder_attributes[config_path] = \
                             merge_folder_attributes(existing, parsed)
 
+
+    def _report_dropped_folder_values(self, folder, dropped):
+        """
+        Remember the folder options left out for having no value, and tell
+        the admin once per folder and attribute, so a rule rendering False
+        for thousands of hosts does not flood the console and the log.
+        """
+        known = self.dropped_folder_values.setdefault(folder, [])
+        new = [name for name in dropped if name not in known]
+        if not new:
+            return
+        known.extend(new)
+        names = ", ".join(new)
+        print(f"{CC.WARNING} !! {CC.ENDC}Folder option {names} for {folder} "
+              "has no text value (True, False or None) and is not sent to "
+              "Checkmk, check the Move to Folder rule and the host data")
+        self.log_details.append(
+            ('error', f'Folder option without value for {folder}: {names}'))
+        log.log(
+            "Folder option without value not sent to Checkmk",
+            details=[('path', folder), ('attributes', names)],
+            source="Checkmk Export",
+        )
 
     @staticmethod
     def _folder_attr_satisfied(target, current):
@@ -273,10 +355,23 @@ class SyncCMK2(CMK2):
 
         print(f"{CC.OKGREEN} -- {CC.ENDC}Check if we need to update Folders")
         for folder_name, target_attributes in self.custom_folder_attributes.items():
+            if self.folder_listing_failed and \
+                    folder_name not in self.existing_folders_attributes and \
+                    not self._read_folder(folder_name, target_attributes):
+                continue
             add_attributes = {}
             update_attributes = {}
+            cmk_attributes = self.existing_folders_attributes.get(folder_name, {})
+            # A value the rule gave no text is not sent, but when the folder
+            # already holds such a value (a boolean where Checkmk expects
+            # text) it is removed, so Checkmk 2.5 can list the folder again.
+            remove_attributes = [
+                name for name in self.dropped_folder_values.get(folder_name, [])
+                if name in cmk_attributes and name not in target_attributes
+                and (cmk_attributes[name] is None
+                     or isinstance(cmk_attributes[name], bool))
+            ]
             for attr_name, attr_value in target_attributes.items():
-                cmk_attributes = self.existing_folders_attributes.get(folder_name, {})
                 if attr_name not in cmk_attributes:
                     add_attributes[attr_name] = attr_value
                 else:
@@ -287,7 +382,7 @@ class SyncCMK2(CMK2):
             url = f'/objects/folder_config/{folder_name_url}'
             curren_folder = {}
             etag = None
-            if add_attributes or update_attributes:
+            if add_attributes or update_attributes or remove_attributes:
                 # get current E-Tag
                 try:
                     curren_folder, headers = self.request(url)
@@ -321,10 +416,12 @@ class SyncCMK2(CMK2):
             # that key REPLACES the whole set, wiping attributes the syncer does
             # not know about (tags, SNMP settings, ...).
             changed_attributes = {**add_attributes, **update_attributes}
-            if changed_attributes:
-                payload = {
-                    'update_attributes' : changed_attributes
-                }
+            if changed_attributes or remove_attributes:
+                payload = {}
+                if changed_attributes:
+                    payload['update_attributes'] = changed_attributes
+                if remove_attributes:
+                    payload['remove_attributes'] = remove_attributes
                 update_headers = {
                     'if-match': etag,
                 }
@@ -336,7 +433,77 @@ class SyncCMK2(CMK2):
                     self._log_folder_error(folder_name, 'update attributes', exp)
                     continue
                 print(f"{CC.OKGREEN} *{CC.ENDC} Updated Attributes on Folder: {folder_name} "\
-                      f"({changed_attributes})")
+                      f"({payload})")
+
+    def _read_folder(self, folder_name, target_attributes):
+        """
+        Read one folder when the folder list could not be read.
+
+        Returns True when its attributes are now known. A folder Checkmk
+        cannot read either is repaired right away and False returned.
+        """
+        url = f"/objects/folder_config/{folder_name.replace('/', '~')}"
+        try:
+            folder, _ = self.request(url)
+        except CmkException as exp:
+            if is_unreadable_folder_error(exp):
+                self._repair_unreadable_folder(folder_name, target_attributes)
+            else:
+                self._log_folder_error(folder_name, 'read the folder', exp)
+            return False
+        if not folder:
+            return False
+        attributes = dict(folder.get('extensions', {}).get('attributes', {}))
+        attributes['title'] = folder.get('title')
+        self.existing_folders_attributes[folder_name] = attributes
+        return True
+
+    def _repair_unreadable_folder(self, folder_name, target_attributes):
+        """
+        Write the folder options into a folder Checkmk cannot read.
+
+        Checkmk 2.5 fails to show a folder holding e.g. a boolean where it
+        expects text. Its ETag cannot be read, so the update is sent with
+        ``If-Match: *``. The rule's values replace the broken ones, and the
+        options the rule gave no value are removed.
+        """
+        attributes = dict(target_attributes)
+        payload = {}
+        if 'title' in attributes:
+            payload['title'] = attributes.pop('title')
+        if attributes:
+            payload['update_attributes'] = attributes
+        remove = [name for name in self.dropped_folder_values.get(folder_name, [])
+                  if name not in attributes]
+        if not payload and not remove:
+            self._log_folder_error(
+                folder_name, 'be read',
+                'Checkmk cannot read this folder and no rule sets its '
+                'attributes, fix it in Checkmk')
+            return
+        url = f"/objects/folder_config/{folder_name.replace('/', '~')}"
+        header = {'If-Match': '*'}
+        attempts = [payload]
+        error = None
+        if remove:
+            # Checkmk refuses the whole update when one of the removed
+            # attributes is not set on the folder, so try without them too.
+            attempts.insert(0, {**payload, 'remove_attributes': remove})
+        for attempt in attempts:
+            if not attempt:
+                continue
+            try:
+                self.request(url, method="PUT", data=attempt,
+                             additional_header=header)
+            except CmkException as exp:
+                error = exp
+                continue
+            print(f"{CC.OKGREEN} *{CC.ENDC} Repaired unreadable Folder: "
+                  f"{folder_name} ({attempt})")
+            self.log_details.append(
+                ('info', f'Repaired unreadable folder {folder_name}'))
+            return
+        self._log_folder_error(folder_name, 'repair the unreadable folder', error)
 
     def _log_folder_error(self, folder_name, action, exp):
         """
@@ -357,6 +524,38 @@ class SyncCMK2(CMK2):
 
 
 
+    def _continue_without_folder_list(self, exc):
+        """
+        Keep the export going when Checkmk cannot list its folders.
+
+        One folder with a value Checkmk no longer accepts breaks the whole
+        folder list. The export then learns the folders from the hosts and
+        reads (or repairs) each folder it sets attributes on by itself.
+        """
+        self.folder_listing_failed = True
+        message = ("Checkmk cannot list its folders, one of them holds a value "
+                   "it no longer accepts. Continuing with the folders of the "
+                   f"hosts and repairing the folders the rules manage ({exc})")
+        print(f"{CC.WARNING} !! {CC.ENDC}{message}")
+        self.log_details.append(('error', message))
+
+    def _folders_from_hosts(self):
+        """
+        Fill ``existing_folders`` from the folders the hosts are in.
+        """
+        known = set(self.existing_folders)
+        for host in self.checkmk_hosts.values():
+            path = ''
+            for part in host.get('folder', '/').split('/'):
+                if not part:
+                    continue
+                path += '/' + part
+                if path not in known:
+                    known.add(path)
+                    self.existing_folders.append(path)
+        if '/' not in known:
+            self.existing_folders.append('/')
+
     def fetch_checkmk_hosts(self):
         """
         Retrieve all hosts currently configured in CheckMK.
@@ -364,7 +563,7 @@ class SyncCMK2(CMK2):
         Uses either folder-based or global host fetching depending on
         configuration settings to populate the checkmk_hosts dictionary.
         """
-        if app.config['CMK_GET_HOST_BY_FOLDER']:
+        if app.config['CMK_GET_HOST_BY_FOLDER'] and not self.folder_listing_failed:
             # The folder-hosts endpoint
             # (objects/folder_config/<folder>/collections/hosts) does NOT
             # accept include_links — it hardcodes it to False internally.
@@ -902,13 +1101,22 @@ class SyncCMK2(CMK2):
         self.num_deleted = 0
         # Set when sending a failed bulk request host by host did not help
         self.bulk_fallback_stopped = False
+        self.dropped_folder_values = {}
+        self.folder_listing_failed = False
 
         self.name=f"Sync Hosts to Account: {self.account_name}"
         self.source="checkmk_host_export"
 
 
-        self.fetch_checkmk_folders()
+        try:
+            self.fetch_checkmk_folders()
+        except CmkException as exc:
+            if not is_unreadable_folder_error(exc):
+                raise
+            self._continue_without_folder_list(exc)
         self.fetch_checkmk_hosts()
+        if self.folder_listing_failed:
+            self._folders_from_hosts()
 
         ## Start SYNC of Hosts into CMK
 

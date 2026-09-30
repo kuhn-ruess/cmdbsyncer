@@ -134,6 +134,56 @@ class TestSyncCMK2(unittest.TestCase):
                        'contactgroups': {'groups': ['team_a', 'team_c']}}},
         )
 
+    @patch('application.plugins.checkmk.syncer.log')
+    def test_handle_extra_folder_options_drops_values_without_text(self, mock_log):
+        """A template rendering False for a custom attribute (a host without
+        a city) must not reach Checkmk: 2.5 then fails to list any folder
+        ("Not a valid string.") and every following export stops."""
+        self.syncer.handle_extra_folder_options(
+            "/stores|{'title': 'Stores'}/s1|{'city': False, 'street': None, "
+            "'zip': True, 'site': 'main'}"
+        )
+        self.syncer.handle_extra_folder_options(
+            "/stores/s1|{'city': False, 'street': None, 'zip': True}"
+        )
+
+        self.assertEqual(
+            self.syncer.custom_folder_attributes,
+            {'/stores': {'title': 'Stores'}, '/stores/s1': {'site': 'main'}},
+        )
+        # Reported once per folder, not once per host.
+        mock_log.log.assert_called_once()
+        self.assertEqual(
+            [d for d in self.syncer.log_details if d[0] == 'error'],
+            [('error', 'Folder option without value for /stores/s1: '
+                       'city, street, zip')],
+        )
+
+    @patch('application.plugins.checkmk.syncer.log')
+    def test_handle_extra_folder_options_later_host_supplies_text(self, _mock_log):
+        """A host without the value no longer blocks the next host in the
+        same folder from setting it (first value wins on merge)."""
+        self.syncer.handle_extra_folder_options("/s1|{'city': False}")
+        self.syncer.handle_extra_folder_options("/s1|{'city': 'Budapest'}")
+
+        self.assertEqual(self.syncer.custom_folder_attributes,
+                         {'/s1': {'city': 'Budapest'}})
+
+    def test_handle_extra_folder_options_keeps_real_booleans_and_unset_tags(self):
+        """Nested flags (contact groups), Checkmk's own boolean attributes
+        and a tag group unset with None are still sent."""
+        self.syncer.handle_extra_folder_options(
+            "/s1|{'contactgroups': {'groups': ['a'], 'use': False}, "
+            "'bake_agent_package': False, 'tag_snmp_ds': None}"
+        )
+
+        self.assertEqual(
+            self.syncer.custom_folder_attributes,
+            {'/s1': {'contactgroups': {'groups': ['a'], 'use': False},
+                     'bake_agent_package': False, 'tag_snmp_ds': None}},
+        )
+        self.assertEqual(self.syncer.log_details, [])
+
     @patch('application.plugins.checkmk.syncer.app')
     def test_fetch_checkmk_hosts_by_folder(self, mock_app):
         """Test fetch_checkmk_hosts with folder mode"""
@@ -1295,6 +1345,88 @@ class TestSyncCMK2Misc(unittest.TestCase):
         payload = mock_req.call_args_list[1].kwargs['data']
         self.assertEqual(payload['update_attributes']['contactgroups'],
                          {'groups': ['ops'], 'use': True})
+
+    @patch('builtins.print')
+    def test_handle_folders_removes_boolean_the_rule_left_out(self, _print):
+        """A folder already holding city=False (written by an older run) gets
+        the value removed, a real text value stays."""
+        self.syncer.custom_folder_attributes = {'/f': {}, '/g': {}}
+        self.syncer.dropped_folder_values = {'/f': ['city', 'street'],
+                                             '/g': ['city']}
+        self.syncer.existing_folders_attributes = {
+            '/f': {'city': False, 'street': 'Main St'},
+            '/g': {'city': 'Budapest'}}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = [
+                ({'title': 'F'}, {'etag': 'e1'}),  # GET current
+                (None, {'etag': 'e2'}),             # PUT
+            ]
+            self.syncer.handle_folders()
+        self.assertEqual(mock_req.call_count, 2)
+        self.assertEqual(mock_req.call_args_list[1].kwargs['data'],
+                         {'remove_attributes': ['city']})
+
+    @patch('builtins.print')
+    def test_handle_folders_repairs_unreadable_folder(self, _print):
+        """When Checkmk cannot list the folders, a folder it cannot show
+        either is written blind (If-Match *): the rule's text values replace
+        the broken ones, options without value are removed."""
+        self.syncer.folder_listing_failed = True
+        self.syncer.custom_folder_attributes = {'/s1': {'city': 'Budapest'},
+                                                '/s2': {'site': 'main'}}
+        self.syncer.dropped_folder_values = {'/s1': ['street']}
+        unreadable = CmkException(
+            "Internal Server Error RestAPIResponseException: Mismatch between "
+            "endpoint and internal data format.. Crash report generated.")
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = [
+                unreadable,                                    # GET /s1
+                (None, {'etag': 'x'}),                         # PUT /s1
+                ({'title': 'S2', 'extensions': {
+                    'attributes': {'site': 'main'}}}, {}),     # GET /s2
+            ]
+            self.syncer.handle_folders()
+        self.assertEqual(mock_req.call_count, 3)
+        put = mock_req.call_args_list[1]
+        self.assertEqual(put.args[0], '/objects/folder_config/~s1')
+        self.assertEqual(put.kwargs['additional_header'], {'If-Match': '*'})
+        self.assertEqual(put.kwargs['data'],
+                         {'update_attributes': {'city': 'Budapest'},
+                          'remove_attributes': ['street']})
+        # /s2 was readable and already right: nothing written.
+        self.assertEqual(self.syncer.existing_folders_attributes['/s2'],
+                         {'site': 'main', 'title': 'S2'})
+
+    @patch('builtins.print')
+    def test_repair_retries_without_remove(self, _print):
+        """Checkmk refuses to remove an attribute the folder does not have,
+        so the repair is sent once more without the removal."""
+        self.syncer.dropped_folder_values = {'/s1': ['street']}
+        with patch.object(self.syncer, 'request') as mock_req:
+            mock_req.side_effect = [CmkException('not removed'),
+                                    (None, {'etag': 'x'})]
+            self.syncer._repair_unreadable_folder(  # pylint: disable=protected-access
+                '/s1', {'city': 'Budapest'})
+        self.assertEqual(mock_req.call_args_list[1].kwargs['data'],
+                         {'update_attributes': {'city': 'Budapest'}})
+        self.assertFalse([d for d in self.syncer.log_details if d[0] == 'error'])
+
+    @patch('builtins.print')
+    @patch('application.plugins.checkmk.syncer.app')
+    def test_unreadable_folder_list_falls_back_to_host_folders(self, mock_app, _print):
+        """The folder list crashing in Checkmk no longer stops the export:
+        hosts are fetched in one go and their folders count as existing."""
+        mock_app.config = {'CMK_GET_HOST_BY_FOLDER': True}
+        self.syncer._continue_without_folder_list(  # pylint: disable=protected-access
+            CmkException('Mismatch between endpoint and internal data format.'))
+        with patch.object(self.syncer, 'fetch_all_checkmk_hosts') as fetch_all:
+            self.syncer.fetch_checkmk_hosts()
+            fetch_all.assert_called_once()
+        self.syncer.checkmk_hosts = {'h1': {'folder': '/a/b'},
+                                     'h2': {'folder': '/a/c'}}
+        self.syncer._folders_from_hosts()  # pylint: disable=protected-access
+        self.assertEqual(sorted(self.syncer.existing_folders),
+                         ['/', '/a', '/a/b', '/a/c'])
 
     def test_folder_attr_satisfied_subset_semantics(self):
         f = SyncCMK2._folder_attr_satisfied
