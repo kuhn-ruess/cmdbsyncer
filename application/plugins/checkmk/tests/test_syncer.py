@@ -765,6 +765,72 @@ class TestSyncCMK2(unittest.TestCase):
         self.assertNotIn('host1', affected)
 
     @patch('application.plugins.checkmk.syncer.app')
+    def test_bulk_update_sends_each_host_once_per_request(self, mock_app):
+        """Checkmk edits a host once per entry it has in the request"""
+        mock_app.config = self.mock_app_config
+
+        entries = [
+            {'host_name': 'host1', 'update_attributes': {'a': '1'}},
+            {'host_name': 'host1', 'remove_attributes': ['b']},
+            {'host_name': 'host2', 'update_attributes': {'a': '1'}},
+            {'host_name': 'host1', 'update_attributes': {'labels': {'x': 'y'}}},
+        ]
+
+        with patch.object(self.syncer, 'request') as mock_request:
+            mock_request.return_value = (None, {})
+            self.syncer.send_bulk_update_host(entries)
+
+        sent = [c.kwargs['data']['entries'] for c in mock_request.call_args_list]
+        self.assertEqual(sent, [
+            [entries[0], entries[2]],
+            [entries[1]],
+            [entries[3]],
+        ])
+        self.assertEqual(self.syncer.num_updated, 4)
+
+    @patch('application.plugins.checkmk.syncer.app')
+    def test_bulk_update_logs_the_reason_per_failed_host(self, mock_app):
+        """A partly failed bulk names each host with its reason, no resend"""
+        mock_app.config = {**self.mock_app_config, 'CMK_BULK_FALLBACK_SINGLE': True}
+
+        entries = [
+            {'host_name': 'host1', 'update_attributes': {'a': '1'}},
+            {'host_name': 'broken', 'remove_attributes': ['b']},
+        ]
+        error = CmkException(
+            "Some actions failed Some of the actions were performed but the "
+            "following were faulty and were skipped: broken.",
+            failed_hosts={'broken': 'Failed to remove b'})
+
+        with patch.object(self.syncer, 'request', side_effect=error) as mock_request:
+            self.syncer.send_bulk_update_host(entries)
+
+        # Checkmk applied the rest already, so nothing is sent again
+        self.assertEqual(mock_request.call_count, 1)
+        self.assertEqual(self.syncer.num_updated, 1)
+        self.assertEqual(self.syncer.log_details, [
+            ('error', 'Bulk update 1/1: Checkmk skipped 1 of 2 hosts'),
+            ('failed_host', 'broken: Failed to remove b'),
+        ])
+
+    @patch('application.plugins.checkmk.syncer.app')
+    def test_bulk_create_logs_the_reason_per_failed_host(self, mock_app):
+        mock_app.config = {**self.mock_app_config, 'CMK_BULK_FALLBACK_SINGLE': True}
+
+        entries = [{'host_name': 'host1', 'folder': '/'},
+                   {'host_name': 'bad', 'folder': '/'}]
+        error = CmkException("Some actions failed",
+                             failed_hosts={'bad': 'Validation failed: tag'})
+
+        with patch.object(self.syncer, 'request', side_effect=error) as mock_request:
+            self.syncer.send_bulk_create_host(entries)
+
+        self.assertEqual(mock_request.call_count, 1)
+        self.assertEqual(self.syncer.num_created, 1)
+        self.assertIn(('failed_host', 'bad: Validation failed: tag'),
+                      self.syncer.log_details)
+
+    @patch('application.plugins.checkmk.syncer.app')
     def test_bulk_update_stops_fallback_if_nothing_works(self, mock_app):
         """If not one host works, the next batches stay in bulk"""
         mock_app.config = {**self.mock_app_config,
@@ -1039,6 +1105,36 @@ class TestSyncCMK2UpdateHost(unittest.TestCase):
             cmk_host, {}, {'ipaddress': '1.1.1.1', 'tag_env': 'prod'}, [])
         self.assertEqual(body['update_attributes'], {'ipaddress': '1.1.1.1'})
         self.assertEqual(body['tags'], {'tag_env': 'prod'})
+
+    def test_build_update_body_sends_only_changed_attributes(self):
+        """Unchanged attributes would only log "Nothing was changed" in Checkmk"""
+        cmk_host = {'extensions': {'attributes':
+            {'labels': {}, 'ipaddress': '1.1.1.1', 'alias': 'a', 'tag_env': 'prod'}}}
+        body, _ = self.syncer._build_host_update_body(
+            cmk_host, {}, {'ipaddress': '1.1.1.1', 'alias': 'b',
+                           'tag_env': 'prod', 'tag_os': 'linux'}, [])
+        self.assertEqual(body, {'update_attributes': {'alias': 'b'},
+                                'tags': {'tag_os': 'linux'}})
+
+    def test_build_update_body_labels_only_has_no_empty_parts(self):
+        """A label change must not come with an empty attribute update"""
+        cmk_host = {'extensions': {'attributes':
+            {'labels': {'a': 'old'}, 'ipaddress': '1.1.1.1'}}}
+        body, _ = self.syncer._build_host_update_body(
+            cmk_host, {'a': 'new'}, {'ipaddress': '1.1.1.1'}, [])
+        self.assertEqual(body, {'labels': {'a': 'new'}})
+
+    @patch('application.plugins.checkmk.syncer.app')
+    def test_label_change_sends_one_entry(self, mock_app):
+        mock_app.config = {'CMK_BULK_UPDATE_HOSTS': True,
+                           'CMK_COLLECT_BULK_OPERATIONS': True,
+                           'CMK_BULK_UPDATE_OPERATIONS': 50}
+        self.syncer.bulk_updates = []
+        cmk_host = {'extensions': {'attributes': {'labels': {'a': 'old'}},
+                                   'folder': '/'}}
+        self.syncer.update_host('h', cmk_host, '/', {'a': 'new'}, {}, [], False)
+        self.assertEqual(self.syncer.bulk_updates, [
+            {'host_name': 'h', 'update_attributes': {'labels': {'a': 'new'}}}])
 
     def test_build_update_body_remove_attributes_filters_missing(self):
         cmk_host = {'extensions': {'attributes':

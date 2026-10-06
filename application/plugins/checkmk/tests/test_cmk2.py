@@ -139,6 +139,42 @@ class TestCMK2Request(unittest.TestCase):
             str(caught.exception),
             'Some actions failed The following were faulty and were skipped: myhost.')
 
+    def test_bulk_error_carries_the_reason_per_host(self):
+        """Only `ext.failed_hosts` says why a host of a bulk request failed"""
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            'title': 'Some actions failed',
+            'detail': 'Some of the actions were performed but the following '
+                      'were faulty and were skipped: myhost.',
+            'ext': {
+                'succeeded_hosts': {'value': [{'id': 'other'}]},
+                'failed_hosts': {'myhost': 'Failed to remove tag_agent'},
+            },
+        }
+        mock_response.headers = {}
+
+        with patch.object(self.cmk, 'inner_request', return_value=mock_response):
+            with self.assertRaises(CmkException) as caught:
+                self.cmk.request('endpoint')
+
+        self.assertEqual(caught.exception.failed_hosts,
+                         {'myhost': 'Failed to remove tag_agent'})
+        # The (large) list of succeeded hosts stays out of the message
+        self.assertNotIn('other', str(caught.exception))
+
+    def test_other_errors_have_no_failed_hosts(self):
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {'title': 'Bad Request', 'detail': 'x'}
+        mock_response.headers = {}
+
+        with patch.object(self.cmk, 'inner_request', return_value=mock_response):
+            with self.assertRaises(CmkException) as caught:
+                self.cmk.request('endpoint')
+
+        self.assertEqual(caught.exception.failed_hosts, {})
+
     def test_error_with_fields_keeps_them_attached(self):
         mock_response = Mock()
         mock_response.status_code = 400

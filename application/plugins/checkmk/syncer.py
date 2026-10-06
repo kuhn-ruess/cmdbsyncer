@@ -1172,7 +1172,7 @@ class SyncCMK2(CMK2):
 
                 export_details += [
                   ('add_attributes', str(additional_attributes)),
-                  ('remove_attributes', str(additional_attributes)),
+                  ('remove_attributes', str(remove_attributes)),
                 ]
 
                 if app.config['CMK_DETAILED_LOG']:
@@ -1360,6 +1360,53 @@ class SyncCMK2(CMK2):
             self.console(f" * {len(failed)} of {len(chunk)} hosts still not working")
         return failed
 
+    @staticmethod
+    def _one_entry_per_host(entries):
+        """
+        Split bulk update entries into rounds with each host at most once.
+
+        A host gets one entry per kind of change (attributes, removals,
+        labels, tags), since Checkmk refuses to update and remove in one
+        entry. Checkmk however applies every entry of a host once for each
+        entry that host has in the request: a host with three entries is
+        edited nine times. Every repeat is logged as "Nothing was changed",
+        and a repeated removal fails with "Failed to remove", which marks
+        the host as faulty although the removal worked. One entry per host
+        and request avoids both. The order per host stays the same.
+        """
+        rounds = []
+        seen = {}
+        for entry in entries:
+            index = seen.get(entry['host_name'], 0)
+            seen[entry['host_name']] = index + 1
+            if index == len(rounds):
+                rounds.append([])
+            rounds[index].append(entry)
+        return rounds
+
+    def _log_bulk_failed_hosts(self, chunk, what, request_nr, error):
+        """
+        Log a bulk request which Checkmk applied except for some hosts.
+
+        Checkmk answers "Some actions failed" and names the skipped hosts
+        together with the reason for each one. All other hosts of the
+        request are done, so nothing is sent again.
+
+        Returns:
+            int: Number of entries Checkmk applied
+        """
+        failed = error.failed_hosts
+        hostnames = {x['host_name'] for x in chunk}
+        logger.debug("Bulk %s %s failed: %s", what, request_nr, error)
+        summary = (f"Bulk {what} {request_nr}: Checkmk skipped {len(failed)} "
+                   f"of {len(hostnames)} hosts")
+        self.console(f" * CMK API ERROR {summary}")
+        self.log_details.append(('error', summary))
+        for hostname, reason in failed.items():
+            self.console(f"   {hostname}: {reason}")
+            self.log_details.append(('failed_host', f"{hostname}: {reason}"))
+        return len([x for x in chunk if x['host_name'] not in failed])
+
     def send_bulk_create_host(self, entries):
         """
         Send bulk host creation requests to CheckMK API.
@@ -1379,6 +1426,10 @@ class SyncCMK2(CMK2):
                 self.request(url, method="POST", data={'entries': chunk})
                 self.num_created += len(chunk)
             except CmkException as error:
+                if error.failed_hosts:
+                    self.num_created += self._log_bulk_failed_hosts(
+                        chunk, 'create', f"{count}/{total}", error)
+                    continue
                 self.log_details.append((f'error_bulk_{count}', f"Bulk Create Error: {error}"))
                 self.console(f" * CMK API ERROR {error}")
                 affected = str(self._retry_bulk_single(chunk, 'create', error))
@@ -1548,8 +1599,10 @@ class SyncCMK2(CMK2):
             entries (list): List of host update payloads
         """
         chunk_size = app.config['CMK_BULK_UPDATE_OPERATIONS']
-        total = math.ceil(len(entries) / chunk_size) if entries else 0
-        for count, chunk in enumerate(self.chunks(entries, chunk_size), start=1):
+        chunks = [chunk for one_round in self._one_entry_per_host(entries)
+                  for chunk in self.chunks(one_round, chunk_size)]
+        total = len(chunks)
+        for count, chunk in enumerate(chunks, start=1):
             self.console(f" * Send Bulk Update Request {count}/{total}")
             url = "/domain-types/host_config/actions/bulk-update/invoke"
             try:
@@ -1558,6 +1611,10 @@ class SyncCMK2(CMK2):
                             )
                 self.num_updated += len(chunk)
             except CmkException as error:
+                if error.failed_hosts:
+                    self.num_updated += self._log_bulk_failed_hosts(
+                        chunk, 'update', f"{count}/{total}", error)
+                    continue
                 self.log_details.append(('error', f"CMK API Error: {error}"))
                 self.console(f" * CMK API ERROR {error}")
                 self.log_details.append(('error_affected',
@@ -1665,14 +1722,16 @@ class SyncCMK2(CMK2):
         if do_update_labels:
             update_reasons.append("Labels not match")
 
-        do_update_attributes = False
+        # Only what differs is sent. update_attributes merges, so the
+        # unchanged rest stays as it is in Checkmk anyway, and sending it
+        # only adds "Nothing was changed" entries to the audit log.
+        changed_attributes = {}
         for key, value in additional_attributes.items():
             attr = cmk_attributes.get(key)
             if attr != value:
                 update_reasons.append(
                     f"Update Extra Attribute: {key} Currently: {attr} != {value}")
-                do_update_attributes = True
-                break
+                changed_attributes[key] = value
 
         do_remove_attributes = False
         not_existing = []
@@ -1687,18 +1746,19 @@ class SyncCMK2(CMK2):
         for attr in not_existing:
             remove_attributes.remove(attr)
 
-        if not (do_update_labels or do_update_attributes or do_remove_attributes):
+        if not (do_update_labels or changed_attributes or do_remove_attributes):
             return {}, update_reasons
 
-        update_body = {'update_attributes': {}, 'tags': {}}
+        update_body = {}
         if do_update_labels:
             update_body['labels'] = labels
-        if do_update_attributes and additional_attributes:
-            update_body['update_attributes'].update(
-                {x: y for x, y in additional_attributes.items()
-                 if not x.startswith('tag_')})
-            update_body['tags'] = {x: y for x, y in additional_attributes.items()
-                                   if x.startswith('tag_')}
+        attributes = {x: y for x, y in changed_attributes.items()
+                      if not x.startswith('tag_')}
+        if attributes:
+            update_body['update_attributes'] = attributes
+        tags = {x: y for x, y in changed_attributes.items() if x.startswith('tag_')}
+        if tags:
+            update_body['tags'] = tags
         if do_remove_attributes and remove_attributes:
             update_body['remove_attributes'] = remove_attributes
 
