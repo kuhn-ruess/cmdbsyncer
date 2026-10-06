@@ -18,7 +18,17 @@ FALLBACK_CMK_VERSION = '2.4.0'
 
 
 class CmkException(Exception):
-    """Cmk Errors"""
+    """
+    Cmk Errors
+
+    ``failed_hosts`` holds the per host reasons Checkmk sends with a
+    partly failed bulk request ("Some actions failed"), as
+    ``{hostname: reason}``. It is empty for every other error.
+    """
+
+    def __init__(self, *args, failed_hosts=None):
+        super().__init__(*args)
+        self.failed_hosts = failed_hosts or {}
 
 class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
     """
@@ -248,7 +258,11 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
                     message = " ".join(str(x) for x in (title, detail) if x is not None)
                     if fields is not None:
                         message += str(fields)
-                    raise CmkException(message)
+                    # A bulk request that failed for single hosts names
+                    # them in `detail`, but only `ext.failed_hosts` says why.
+                    ext = response_json.get('ext')
+                    failed_hosts = ext.get('failed_hosts') if isinstance(ext, dict) else None
+                    raise CmkException(message, failed_hosts=failed_hosts)
                 return {}, {'status_code': response.status_code}
             resp_header['status_code'] = response.status_code
 
