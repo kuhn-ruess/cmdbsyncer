@@ -1353,15 +1353,41 @@ class TestSyncCMK2Misc(unittest.TestCase):
     # ---- add_bulk_update_host ----
     @patch('application.plugins.checkmk.syncer.app')
     def test_add_bulk_update_triggers_send_at_threshold(self, mock_app):
+        """The threshold counts hosts, all entries of a host go out together"""
         mock_app.config = {
             'CMK_COLLECT_BULK_OPERATIONS': False,
             'CMK_BULK_UPDATE_OPERATIONS': 1,
         }
         self.syncer.bulk_updates = []
+        first = {'host_name': 'h1', 'update_attributes': {'a': '1'}}
+        second = {'host_name': 'h1', 'remove_attributes': ['b']}
         with patch.object(self.syncer, 'send_bulk_update_host') as mock_send:
-            self.syncer.add_bulk_update_host({'host_name': 'h1'})
-            mock_send.assert_called_once()
-        self.assertEqual(self.syncer.bulk_updates, [])
+            self.syncer.add_bulk_update_host(first)
+            self.syncer.add_bulk_update_host(second)
+            mock_send.assert_not_called()
+            self.syncer.add_bulk_update_host({'host_name': 'h2'})
+            mock_send.assert_called_once_with([first, second])
+        self.assertEqual(self.syncer.bulk_updates, [{'host_name': 'h2'}])
+
+    @patch('application.plugins.checkmk.syncer.app')
+    def test_bulk_update_requests_are_full_with_several_entries_per_host(self, mock_app):
+        """Three entries per host must not mean three times the requests"""
+        mock_app.config = {
+            'CMK_COLLECT_BULK_OPERATIONS': False,
+            'CMK_BULK_UPDATE_OPERATIONS': 2,
+        }
+        self.syncer.bulk_updates = []
+        with patch.object(self.syncer, 'request') as mock_request:
+            mock_request.return_value = (None, {})
+            for host in ('h1', 'h2', 'h3', 'h4'):
+                for what in ('update_attributes', 'remove_attributes', 'labels'):
+                    self.syncer.add_bulk_update_host({'host_name': host, what: {}})
+            self.syncer.send_bulk_update_host(self.syncer.bulk_updates)
+
+        sent = [[x['host_name'] for x in c.kwargs['data']['entries']]
+                for c in mock_request.call_args_list]
+        # 4 hosts in batches of 2, three rounds each: 6 full requests
+        self.assertEqual(sent, [['h1', 'h2']] * 3 + [['h3', 'h4']] * 3)
 
     # ---- set_status_attribute ----
     @patch('application.plugins.checkmk.syncer.app')

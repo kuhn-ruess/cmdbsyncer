@@ -1627,14 +1627,23 @@ class SyncCMK2(CMK2):
         Queues host update operations and triggers bulk processing when
         batch size limits are reached.
 
+        CMK_BULK_UPDATE_OPERATIONS counts hosts, not entries: a request
+        carries every host at most once (see _one_entry_per_host), so a
+        queue of that many entries would go out as several requests with
+        only a part of the hosts each. The queue is therefore sent once it
+        holds that many hosts and the next host comes, which keeps all
+        entries of a host in the same send.
+
         Args:
             body (dict): Host update payload
         """
-        self.bulk_updates.append(body)
-        if not app.config['CMK_COLLECT_BULK_OPERATIONS'] and \
-                len(self.bulk_updates) >= int(app.config['CMK_BULK_UPDATE_OPERATIONS']):
+        if not app.config['CMK_COLLECT_BULK_OPERATIONS'] and self.bulk_updates and \
+                body['host_name'] != self.bulk_updates[-1]['host_name'] and \
+                len({x['host_name'] for x in self.bulk_updates}) >= \
+                int(app.config['CMK_BULK_UPDATE_OPERATIONS']):
             self.send_bulk_update_host(self.bulk_updates)
             self.bulk_updates = []
+        self.bulk_updates.append(body)
 
     @staticmethod
     def _normalize_cmk_folder(current_folder):
