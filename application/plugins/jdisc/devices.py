@@ -165,7 +165,6 @@ class JdiscDevices(JDisc):
         """
         JDisc Application Inventorize
         """
-        rewrite = self.config.get('rewrite_hostname')
         import_unnamed = self.config.get('import_unnamed_devices')
         entries = []
         for dev in self.run_query()['devices']['findAll']:
@@ -176,7 +175,7 @@ class JdiscDevices(JDisc):
                 hostname = f"unnamed-{dev['serialNumber']}"
             if not hostname:
                 continue
-            if rewrite:
-                hostname = Host.rewrite_hostname(hostname, rewrite, dev)
+            # run_inventory applies rewrite_hostname, the same way the
+            # import does
             entries.append((hostname, dev))
         run_inventory(self.config, entries)

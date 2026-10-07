@@ -105,7 +105,6 @@ def mysql_inventorize(account):
     field_names = config['fields'].split(',')
 
     objects = []
-    rewrite = config.get('rewrite_hostname')
     for line in rows:
         labels = dict(zip(field_names, line))
         if not labels[config['hostname_field']]:
@@ -114,10 +113,7 @@ def mysql_inventorize(account):
         if not hostname:
             continue
         del labels[config['hostname_field']]
-        # Mirror the import path so inventory writes land on the same
-        # host key as the matching importer.
-        if rewrite:
-            hostname = Host.rewrite_hostname(hostname, rewrite, labels)
-
+        # run_inventory applies rewrite_hostname, the same way the
+        # import does
         objects.append((hostname, labels))
     run_inventory(config, objects)

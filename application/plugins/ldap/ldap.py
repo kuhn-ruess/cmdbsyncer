@@ -77,10 +77,18 @@ def get_objects(results, config):
         except KeyError:
             continue
 
-        if config.get('rewrite_hostname'):
-            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
-
+        # The hostname as LDAP has it: rewrite_hostname is applied by
+        # whoever turns it into hosts, the import or run_inventory
         yield hostname, labels
+
+
+def rewrite_hostname(hostname, labels, config):
+    """
+    The hostname the import creates the host under
+    """
+    if config.get('rewrite_hostname'):
+        return Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
+    return hostname
 
 
 def parse_object(dn, entry, config):
@@ -93,7 +101,8 @@ def parse_object(dn, entry, config):
     """
     parsed = list(get_objects([(dn, entry)], config))
     if parsed:
-        return parsed[0]
+        hostname, labels = parsed[0]
+        return rewrite_hostname(hostname, labels, config), labels
 
     labels = {key: ', '.join(decode_value(x, config) for x in content)
               for key, content in entry.items()}
@@ -299,6 +308,7 @@ def ldap_import(account, debug=False):
     config = get_account_by_name(account)
     config['debug'] = debug
     for hostname, labels in _inner_import(config):
+        hostname = rewrite_hostname(hostname, labels, config)
         print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
         host_obj = Host.get_host(hostname)
         do_save = host_obj.set_account(account_dict=config)

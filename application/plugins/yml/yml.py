@@ -121,16 +121,13 @@ class YMLSyncer(Plugin):
         """
         Inventorize Hosts
         """
-        rewrite = self.config.get('rewrite_hostname')
         entries = []
         for entry in data:
             hostname = entry.get('hostname')
             if not hostname:
                 continue
-            # Mirror the import path so inventory writes land on the
-            # same host key as the matching importer.
-            if rewrite:
-                hostname = Host.rewrite_hostname(hostname, rewrite, entry)
+            # run_inventory applies rewrite_hostname, the same way the
+            # import does
             entries.append((hostname, entry))
         run_inventory(self.config, entries)
 

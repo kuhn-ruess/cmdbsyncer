@@ -130,12 +130,6 @@ class ODBC(Plugin):
         """
         ODBC Inventorize
         """
-        rewrite = self.config.get('rewrite_hostname')
-        entries = []
-        for hostname, labels in self._innter_sql():
-            # Mirror the import path so inventory writes land on the
-            # same host key as the matching importer.
-            if rewrite:
-                hostname = Host.rewrite_hostname(hostname, rewrite, labels)
-            entries.append((hostname, labels))
-        run_inventory(self.config, entries)
+        # run_inventory applies rewrite_hostname, the same way the
+        # import does
+        run_inventory(self.config, list(self._innter_sql()))
