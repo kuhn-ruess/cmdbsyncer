@@ -2,7 +2,7 @@
 Import Jira Data
 """
 from application import logger
-from application.models.host import Host
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application.modules.debug import ColorCodes
 from application.modules.plugin import Plugin
 
@@ -82,8 +82,7 @@ class JiraOnPrem(Plugin):
             hostname = host['name']
             process = 100.0 * counter / total if total else 0
             print(f"{ColorCodes.OKGREEN}({process:.0f}%){ColorCodes.ENDC} {hostname}")
-            host_obj = Host.get_host(hostname)
-            host_obj.raw = str(host)
+            raw = str(host)
             del host['name']
 
             attributes = {}
@@ -96,10 +95,9 @@ class JiraOnPrem(Plugin):
                     for idx, value in enumerate(attr_value):
                         if isinstance(value, dict):
                             attributes[f'{attr}_{idx}'] = value.get('value')
-            host_obj.update_host(attributes)
-            do_save = host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
+            for _name, host_obj in get_import_hosts(hostname, self.config, attributes):
+                host_obj.raw = raw
+                update_import_host(host_obj, attributes, self.config)
 
 
 def import_jira(account):

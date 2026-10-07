@@ -4,7 +4,6 @@
 
 from syncerapi.v1 import (
     cc,
-    Host,
 )
 
 from syncerapi.v1.core import (
@@ -13,6 +12,7 @@ from syncerapi.v1.core import (
     Plugin,
 )
 from syncerapi.v1.inventory import run_inventory
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application.helpers.sql import (
     build_select_query,
     custom_query_allow_ddl,
@@ -113,29 +113,17 @@ class ODBC(Plugin):
         ODBC Import
         """
         for hostname, labels in self._innter_sql():
-            if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(hostname,
-                                                 self.config['rewrite_hostname'], labels)
-            print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
+            hosts = get_import_hosts(hostname, self.config, labels)
             del labels[self.config['hostname_field']]
-            host_obj = Host.get_host(hostname)
-            host_obj.update_host(labels)
-            do_save=host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
-            else:
-                print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
+            for name, host_obj in hosts:
+                print(f" {cc.OKGREEN}* {cc.ENDC} Check {name}")
+                if not update_import_host(host_obj, labels, self.config):
+                    print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
 
     def sql_inventorize(self):
         """
         ODBC Inventorize
         """
-        rewrite = self.config.get('rewrite_hostname')
-        entries = []
-        for hostname, labels in self._innter_sql():
-            # Mirror the import path so inventory writes land on the
-            # same host key as the matching importer.
-            if rewrite:
-                hostname = Host.rewrite_hostname(hostname, rewrite, labels)
-            entries.append((hostname, labels))
-        run_inventory(self.config, entries)
+        # run_inventory applies rewrite_hostname, the same way the
+        # import does
+        run_inventory(self.config, self._innter_sql())

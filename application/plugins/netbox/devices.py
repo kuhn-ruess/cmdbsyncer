@@ -5,6 +5,7 @@ Create Devices in Netbox
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application.models.host import Host
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application.modules.debug import ColorCodes as CC
 
 from .netbox import SyncNetbox
@@ -179,16 +180,12 @@ class SyncDevices(SyncNetbox):
                              'default_ret', 'endpoint',
                              '_full_cache', '_init_cache']:
                     del labels[what]
-                if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                    hostname = Host.rewrite_hostname(hostname,
-                                                     self.config['rewrite_hostname'], labels)
-                host_obj = Host.get_host(hostname)
-                print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
+                hosts = get_import_hosts(hostname, self.config, labels)
                 rendered_labels = self.handle_nb_attributes(labels)
-                host_obj.update_host(rendered_labels)
-                do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
-                if do_save:
-                    host_obj.save()
+                for hostname, host_obj in hosts:
+                    print(f"\n{CC.HEADER}Process Device: {hostname}{CC.ENDC}")
+                    update_import_host(host_obj, rendered_labels, self.config,
+                                       import_id=import_id)
             except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise

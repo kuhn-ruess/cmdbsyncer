@@ -4,8 +4,8 @@
 import re
 
 from application import log
-from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
+from application.helpers.import_hostnames import get_import_hosts, import_hostnames
 from application.modules.debug import ColorCodes, attribute_table
 
 try:
@@ -77,9 +77,8 @@ def get_objects(results, config):
         except KeyError:
             continue
 
-        if config.get('rewrite_hostname'):
-            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
-
+        # The hostname as LDAP has it: rewrite_hostname is applied by
+        # whoever turns it into hosts, the import or run_inventory
         yield hostname, labels
 
 
@@ -89,11 +88,13 @@ def parse_object(dn, entry, config):
 
     Returns (hostname, labels). The hostname is empty when the object has
     no hostname field — then the labels carry every attribute the object
-    has, so it is visible why it would be skipped.
+    has, so it is visible why it would be skipped. A rewrite that names
+    several hosts shows them comma separated.
     """
     parsed = list(get_objects([(dn, entry)], config))
     if parsed:
-        return parsed[0]
+        hostname, labels = parsed[0]
+        return ', '.join(import_hostnames(hostname, config, labels)), labels
 
     labels = {key: ', '.join(decode_value(x, config) for x in content)
               for key, content in entry.items()}
@@ -422,16 +423,16 @@ def ldap_import(account, debug=False):
     """
     config = get_account_by_name(account)
     config['debug'] = debug
-    for hostname, labels in _inner_import(config):
-        print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
-        host_obj = Host.get_host(hostname)
-        do_save = host_obj.set_account(account_dict=config)
-        host_obj.update_host(labels)
-        if do_save:
-            print(f" {ColorCodes.OKGREEN} * {ColorCodes.ENDC} Updated Labels")
-            host_obj.save()
-        else:
-            print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
+    for source_name, labels in _inner_import(config):
+        for hostname, host_obj in get_import_hosts(source_name, config, labels):
+            print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {hostname}")
+            do_save = host_obj.set_account(account_dict=config)
+            host_obj.update_host(labels)
+            if do_save:
+                print(f" {ColorCodes.OKGREEN} * {ColorCodes.ENDC} Updated Labels")
+                host_obj.save()
+            else:
+                print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
 
 
 def _print_object(number, dn, entry, config):

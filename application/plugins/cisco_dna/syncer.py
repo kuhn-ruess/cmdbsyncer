@@ -7,6 +7,7 @@ from requests.auth import HTTPBasicAuth
 
 from application import app
 from application.models.host import Host
+from application.helpers.import_hostnames import get_import_hosts
 from application.modules.debug import ColorCodes
 
 # Default HTTP timeout for Cisco DNA calls; without it the importer
@@ -233,15 +234,15 @@ class CiscoDNA():
             process = 100.0 * counter / total
             hostname = device['hostname']
             print(f"{ColorCodes.HEADER}({process:.0f}%) {hostname}{ColorCodes.ENDC}")
-            db_host = Host.get_host(hostname)
             inventory = {}
             inventory['manufacturer'] = "cisco"
             for attribute in inventory_attributes:
                 inventory[attribute] = device[attribute]
-            db_host.update_inventory('cisco_dna_', inventory)
-            db_host.sync_id = device['id']
-            do_save = db_host.set_account(account_dict=self.account_dict)
-            if do_save:
-                db_host.save()
-            else:
-                print("  - Object owned by other Source, not saved")
+            for _name, db_host in get_import_hosts(hostname, self.account_dict, device):
+                db_host.update_inventory('cisco_dna_', inventory)
+                db_host.sync_id = device['id']
+                do_save = db_host.set_account(account_dict=self.account_dict)
+                if do_save:
+                    db_host.save()
+                else:
+                    print("  - Object owned by other Source, not saved")

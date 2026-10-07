@@ -5,6 +5,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from application.models.host import Host
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application import log, logger
 from application.modules.debug import ColorCodes as CC
 from application.modules.plugin import Plugin
@@ -194,7 +195,7 @@ class SyncIdoit(Plugin):
                         for name, value in values.items():
                             server[name] = value
 
-            if True == self.config["filter_monitoring_status"]:
+            if self.config["filter_monitoring_status"] is True:
                 if "monitoring_active_value" in server and "1" == server["monitoring_active_value"]:
                     servers[title] = server
             else:
@@ -298,15 +299,9 @@ class SyncIdoit(Plugin):
             if objects := self.get_objects(object_type=object_type, get_categories=True):
 
                 for device, labels in objects:
-                    host_obj = Host.get_host(device)
-
-                    print(f"{CC.HEADER}Process Device: {device}{CC.ENDC}")
-
-                    host_obj.update_host(labels)
-                    do_save = host_obj.set_account(account_dict=self.config)
-
-                    if do_save:
-                        host_obj.save()
+                    for name, host_obj in get_import_hosts(device, self.config, labels):
+                        print(f"{CC.HEADER}Process Device: {name}{CC.ENDC}")
+                        update_import_host(host_obj, labels, self.config)
 
             else:
                 print(f"{CC.HEADER}no devices found{CC.ENDC}")

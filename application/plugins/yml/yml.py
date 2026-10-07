@@ -6,6 +6,7 @@ import ast
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 from application import logger
 from application.helpers.inventory import run_inventory
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application.modules.plugin import Plugin, ResponseDataException
 try:
     import yaml as yml
@@ -15,7 +16,6 @@ except ImportError:
 
 from syncerapi.v1 import (
     cc,
-    Host
 )
 
 class YMLSyncer(Plugin):
@@ -105,32 +105,21 @@ class YMLSyncer(Plugin):
             if not hostname:
                 continue
             del entry['hostname']
-            if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                hostname = Host.rewrite_hostname(hostname, self.config['rewrite_hostname'], entry)
-
-            print(f" {cc.OKGREEN}** {cc.ENDC} Update {hostname}")
-            host_obj = Host.get_host(hostname)
-            host_obj.update_host(entry)
-
-            do_save = host_obj.set_account(account_dict=self.config)
-
-            if do_save:
-                host_obj.save()
+            for name, host_obj in get_import_hosts(hostname, self.config, entry):
+                print(f" {cc.OKGREEN}** {cc.ENDC} Update {name}")
+                update_import_host(host_obj, entry, self.config)
 
     def inventorize_objects(self, data):
         """
         Inventorize Hosts
         """
-        rewrite = self.config.get('rewrite_hostname')
         entries = []
         for entry in data:
             hostname = entry.get('hostname')
             if not hostname:
                 continue
-            # Mirror the import path so inventory writes land on the
-            # same host key as the matching importer.
-            if rewrite:
-                hostname = Host.rewrite_hostname(hostname, rewrite, entry)
+            # run_inventory applies rewrite_hostname, the same way the
+            # import does
             entries.append((hostname, entry))
         run_inventory(self.config, entries)
 

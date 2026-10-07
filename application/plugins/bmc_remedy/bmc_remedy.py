@@ -3,9 +3,9 @@ BMC Remedy Plugin
 """
 from syncerapi.v1 import (
     cc,
-    Host,
 )
 
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application.modules.plugin import Plugin
 
 
@@ -82,15 +82,12 @@ class RemedySyncer(Plugin):
             if not hostname:
                 continue
 
-            host_obj = Host.get_host(hostname)
             attrs = {k: v for k, v in labels.items() if k != hostname_field}
-            host_obj.update_host(attrs)
-            do_save = host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
-                print(f" {cc.OKGREEN}* {cc.ENDC} Update {hostname}")
-            else:
-                print(f" {cc.WARNING} * {cc.ENDC} {hostname}: managed by a different source")
+            for name, host_obj in get_import_hosts(hostname, self.config, attrs):
+                if update_import_host(host_obj, attrs, self.config):
+                    print(f" {cc.OKGREEN}* {cc.ENDC} Update {name}")
+                else:
+                    print(f" {cc.WARNING} * {cc.ENDC} {name}: managed by a different source")
 
 
 def get_hosts(account, debug=False):

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Import Mysql Data"""
 from application import logger
-from application.models.host import Host
 from application.helpers.get_account import get_account_by_name
 from application.modules.debug import ColorCodes
 from application.helpers.inventory import run_inventory
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application.helpers.sql import (
     build_select_query,
     custom_query_allow_ddl,
@@ -55,22 +55,17 @@ def mysql_import(account):
         labels = dict(zip(field_names, line))
         if not labels[config['hostname_field']]:
             continue
-        hostname = labels[config['hostname_field']].strip()
-        if 'rewrite_hostname' in config and config['rewrite_hostname']:
-            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
-        if not hostname:
-            continue
-        print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {hostname}")
+        hosts = [(name, host_obj) for name, host_obj
+                 in get_import_hosts(labels[config['hostname_field']].strip(), config, labels)
+                 if name]
         del labels[config['hostname_field']]
 
-        host_obj = Host.get_host(hostname)
-        host_obj.update_host(labels)
-        do_save = host_obj.set_account(account_dict=config)
-        if do_save:
-            print(f" {ColorCodes.OKBLUE} * {ColorCodes.ENDC} Updated Labels")
-            host_obj.save()
-        else:
-            print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
+        for name, host_obj in hosts:
+            print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Check {name}")
+            if update_import_host(host_obj, labels, config):
+                print(f" {ColorCodes.OKBLUE} * {ColorCodes.ENDC} Updated Labels")
+            else:
+                print(f" {ColorCodes.WARNING} * {ColorCodes.ENDC} Managed by diffrent master")
 
 def mysql_inventorize(account):
     """
@@ -105,7 +100,6 @@ def mysql_inventorize(account):
     field_names = config['fields'].split(',')
 
     objects = []
-    rewrite = config.get('rewrite_hostname')
     for line in rows:
         labels = dict(zip(field_names, line))
         if not labels[config['hostname_field']]:
@@ -114,10 +108,7 @@ def mysql_inventorize(account):
         if not hostname:
             continue
         del labels[config['hostname_field']]
-        # Mirror the import path so inventory writes land on the same
-        # host key as the matching importer.
-        if rewrite:
-            hostname = Host.rewrite_hostname(hostname, rewrite, labels)
-
+        # run_inventory applies rewrite_hostname, the same way the
+        # import does
         objects.append((hostname, labels))
     run_inventory(config, objects)

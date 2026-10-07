@@ -70,7 +70,6 @@ API Output:
 """
 from syncerapi.v1 import (
     cc,
-    Host,
 )
 
 from syncerapi.v1.core import (
@@ -78,6 +77,7 @@ from syncerapi.v1.core import (
 )
 
 from syncerapi.v1.inventory import run_inventory
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 
 
 class Prtg(Plugin):
@@ -135,17 +135,13 @@ class Prtg(Plugin):
         """
 
         for hostname, device in self.get_devices():
-            print(f" {cc.OKGREEN}** {cc.ENDC} Update {hostname}")
-            host_obj = Host.get_host(hostname)
-
             if tags_string := device.get('tags_raw'):
                 tags_list = tags_string.split()
                 device['tags_raw'] = tags_list
 
-            host_obj.update_host(device)
-            do_save = host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
+            for name, host_obj in get_import_hosts(hostname, self.config, device):
+                print(f" {cc.OKGREEN}** {cc.ENDC} Update {name}")
+                update_import_host(host_obj, device, self.config)
 
     def inventorize_objects(self):
         """

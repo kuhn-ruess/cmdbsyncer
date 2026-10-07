@@ -6,6 +6,7 @@ from application.models.host import Host
 from application.modules.plugin import Plugin
 from application.modules.debug import ColorCodes
 from application.helpers.inventory import run_inventory
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 
 
 class CSV(Plugin):
@@ -61,21 +62,15 @@ class CSV(Plugin):
                     for dkey in keys:
                         if not row[dkey]:
                             del row[dkey]
-                    if self.config['rewrite_hostname']:
-                        hostname = Host.rewrite_hostname(
-                            hostname, self.config['rewrite_hostname'], row
-                        )
-                    host_obj = Host.get_host(hostname)
+                    hosts = get_import_hosts(hostname, self.config, row)
                     del row[hostname_field]
-                    host_obj.update_host(row)
-                    do_save = host_obj.set_account(
-                        account_dict=self.config, import_id=import_id
-                    )
-                    if do_save:
-                        host_obj.save()
-                        num_saved += 1
-                    print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} "
-                          f"Update {hostname} Saved: {do_save}")
+                    for hostname, host_obj in hosts:
+                        do_save = update_import_host(host_obj, row, self.config,
+                                                     import_id=import_id)
+                        if do_save:
+                            num_saved += 1
+                        print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} "
+                              f"Update {hostname} Saved: {do_save}")
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     num_errors += 1
                     self.log_details.append(
@@ -113,7 +108,6 @@ class CSV(Plugin):
               f"{ColorCodes.UNDERLINE}{filename}{ColorCodes.ENDC}")
         objects = []
         num_errors = 0
-        rewrite = self.config.get('rewrite_hostname')
         with open(csv_path, newline='', encoding=encoding) as csvfile:
             reader = csv.DictReader(csvfile, delimiter=delimiter)
             for row_idx, labels in enumerate(reader, start=1):
@@ -126,10 +120,8 @@ class CSV(Plugin):
                     )
                     continue
                 del labels[hostname_field]
-                # Mirror the import path so inventory writes land on
-                # the same host key as the matching importer.
-                if rewrite:
-                    hostname = Host.rewrite_hostname(hostname, rewrite, labels)
+                # run_inventory applies rewrite_hostname, the same way
+                # the import does
                 objects.append((hostname, labels))
 
         self.log_details.append(('num_objects', str(len(objects))))

@@ -5,6 +5,7 @@ from requests.exceptions import RequestException
 from requests.auth import HTTPBasicAuth
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
 
+from application.helpers.import_hostnames import import_hostnames, update_import_host
 from application.helpers.inventory import run_inventory
 from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
@@ -279,16 +280,17 @@ class SyncServiceNow(Plugin):
             offset += limit
 
 #.
-#   .-- Hostname of a record
-    def record_hostname(self, labels):
+#   .-- Hostnames of a record
+    def record_hostnames(self, labels):
         """
-        The hostname a record would be imported under, empty when the
-        record carries no value in the hostname field of the account
+        The hostnames a record would be imported under, none when the
+        record carries no value in the hostname field of the account.
+        Usually one, several when `rewrite_hostname` renders a list.
         """
         hostname = labels.get(self.config.get('hostname_field') or 'name')
-        if hostname and (rewrite := self.config.get('rewrite_hostname')):
-            hostname = Host.rewrite_hostname(hostname, rewrite, labels)
-        return hostname or ''
+        if not hostname:
+            return []
+        return [x for x in import_hostnames(hostname, self.config, labels) if x]
 
 #.
 #   .-- Relationship table
@@ -394,7 +396,8 @@ class SyncServiceNow(Plugin):
         may have created the host under a different name — with the
         domain appended, for example. The CI name is on the host as the
         label the import wrote it to, so that label is what identifies
-        it: `ldom-s02` finds `ldom-s02.munich-airport.de`.
+        it: `ldom-s02` finds `ldom-s02.munich-airport.de`. A CI the
+        import turned into several hosts finds all of them.
         """
         if self._host_index is not None:
             return
@@ -405,7 +408,7 @@ class SyncServiceNow(Plugin):
                         .only('hostname', 'labels'):
             labels = host.labels or {}
             if label and (value := labels.get(label)):
-                index.setdefault(value, host.hostname)
+                index.setdefault(value, []).append(host.hostname)
             if sys_id := labels.get('sys_id'):
                 sys_ids.add(sys_id)
         if label:
@@ -455,7 +458,7 @@ class SyncServiceNow(Plugin):
             # import never created falls through to the rewrite, and
             # then run_inventory reports it as unknown
             if name in index:
-                hosts.append(index[name])
+                hosts.extend(index[name])
             elif rewrite:
                 hosts.append(Host.rewrite_hostname(name, rewrite, labels))
             else:
@@ -666,7 +669,8 @@ class SyncServiceNow(Plugin):
             'url': self.table_url(table),
             'params': params,
             'limits': self.last_rate_limit or {},
-            'records': [{'hostname': self.record_hostname(x), 'labels': x} for x in records],
+            'records': [{'hostname': ', '.join(self.record_hostnames(x)), 'labels': x}
+                        for x in records],
         }
 
 #.
@@ -687,21 +691,17 @@ class SyncServiceNow(Plugin):
             for record in self.get_table(table):
                 labels = self.flatten_record(record)
 
-                hostname = self.record_hostname(labels)
-                if not hostname:
+                hostnames = self.record_hostnames(labels)
+                if not hostnames:
                     self.log_details.append(('unnamed_record_skipped', table))
                     continue
 
-                print(f"{CC.HEADER}Process Object: {hostname}{CC.ENDC}")
+                for hostname in hostnames:
+                    print(f"{CC.HEADER}Process Object: {hostname}{CC.ENDC}")
 
-                host_obj = Host.get_host(hostname)
-                host_obj.update_host(labels)
-                do_save = host_obj.set_account(account_dict=self.config)
-
-                if do_save:
-                    host_obj.save()
-                    count += 1
-                else:
-                    print(f"{CC.WARNING} * {CC.ENDC} Managed by different master")
+                    if update_import_host(Host.get_host(hostname), labels, self.config):
+                        count += 1
+                    else:
+                        print(f"{CC.WARNING} * {CC.ENDC} Managed by different master")
 
             print(f"{CC.OKGREEN} -- {CC.ENDC}Imported {count} objects from {table}\n")

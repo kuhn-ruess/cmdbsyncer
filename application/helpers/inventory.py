@@ -4,6 +4,7 @@ Inventory Helpers
 """
 from application.models.host import Host
 from application.helpers.get_account import account_allows
+from application.helpers.import_hostnames import import_hostnames
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.debug import ColorCodes as CC
 from syncerapi.v1.core import (
@@ -28,7 +29,36 @@ def inventorize_host(host_obj, labels, key, config):
 
 
 
-def run_inventory(config, objects, sub_key=None):  # pylint: disable=too-many-branches
+def _inventorize_name(hostname, labels, inv_key, config, collected_by_key):
+    """
+    Inventorize the host of one name, and note it for the collection
+    of its `inventorize_collect_by_key` value
+    """
+    if app_config['LOWERCASE_HOSTNAMES']:
+        hostname = hostname.lower()
+
+    # The hostname is usually just one RDN of the source object, so name
+    # the full DN too when the source delivers one (LDAP)
+    origin = f" ({labels['dn']})" if labels.get('dn') else ""
+    print(f"{CC.OKGREEN}* {CC.ENDC} Data for {hostname}{origin}")
+    if collect_key := config.get('inventorize_collect_by_key'):
+        if value := labels.get(collect_key):
+            if rewrite := config.get('inventorize_rewrite_collect_by_key'):
+                value = render_jinja(rewrite, **labels)
+            value = value.strip()
+            if value != hostname:
+                collected_by_key.setdefault(value, [])
+                collected_by_key[value].append(hostname)
+
+    if config.get('inventorize_match_by_domain'):
+        for host_obj in Host.objects(hostname__endswith=hostname):
+            inventorize_host(host_obj, labels, inv_key, config)
+    else:
+        host_obj = Host.get_host(hostname, create=False)
+        inventorize_host(host_obj, labels, inv_key, config)
+
+
+def run_inventory(config, objects, sub_key=None):
     """
     Execute the inventory process for a collection of hosts and their associated labels.
 
@@ -44,7 +74,8 @@ def run_inventory(config, objects, sub_key=None):  # pylint: disable=too-many-br
             - inventorize_rewrite_collect_by_key: Jinja template for rewriting collect key values
             - inventorize_match_by_domain: Boolean flag for domain-based host matching
         objects (list): List of tuples in the format (hostname, labels) where:
-            - hostname (str): The hostname of the host
+            - hostname (str): The hostname as the source delivers it; the
+              rewrite_hostname of the account is applied here, once
             - labels (dict or list): Dictionary of labels, or a list that is
               wrapped as {'list': labels}
         sub_key (str, optional): Additional key suffix to append to the inventory key.
@@ -71,33 +102,13 @@ def run_inventory(config, objects, sub_key=None):  # pylint: disable=too-many-br
     if sub_key:
         inv_key += "_" + sub_key
     collected_by_key = {}
-    for hostname, labels in objects:
+    for source_name, labels in objects:
         if isinstance(labels, list):
             labels = {'list':labels}
-        if config.get('rewrite_hostname'):
-            hostname = Host.rewrite_hostname(hostname, config['rewrite_hostname'], labels)
-        if app_config['LOWERCASE_HOSTNAMES']:
-            hostname = hostname.lower()
-
-        # The hostname is usually just one RDN of the source object, so name
-        # the full DN too when the source delivers one (LDAP)
-        origin = f" ({labels['dn']})" if labels.get('dn') else ""
-        print(f"{CC.OKGREEN}* {CC.ENDC} Data for {hostname}{origin}")
-        if collect_key := config.get('inventorize_collect_by_key'):
-            if value := labels.get(collect_key):
-                if rewrite := config.get('inventorize_rewrite_collect_by_key'):
-                    value = render_jinja(rewrite, **labels)
-                value = value.strip()
-                if value != hostname:
-                    collected_by_key.setdefault(value, [])
-                    collected_by_key[value].append(hostname)
-
-        if config.get('inventorize_match_by_domain'):
-            for host_obj in Host.objects(hostname__endswith=hostname):
-                inventorize_host(host_obj, labels, inv_key, config)
-        else:
-            host_obj = Host.get_host(hostname, create=False)
-            inventorize_host(host_obj, labels, inv_key, config)
+        # The same names the import created the hosts under, one record
+        # can stand for several of them
+        for hostname in import_hostnames(source_name, config, labels):
+            _inventorize_name(hostname, labels, inv_key, config, collected_by_key)
 
     if collected_by_key:
         print(f"{CC.OKBLUE}Run 2: {CC.ENDC} Add extra collected data")

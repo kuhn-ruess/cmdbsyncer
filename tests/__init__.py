@@ -568,6 +568,14 @@ _load_real_module(
     os.path.join("modules", "rule", "match.py"),
 )
 
+# The entry point every importer turns a record into its hosts with. It
+# needs nothing but the Host stub above, and the importers loaded below
+# must find the real one, so their tests run records through it.
+_load_real_module(
+    "application.helpers.import_hostnames",
+    os.path.join("helpers", "import_hostnames.py"),
+)
+
 # Pure standard-library helper — loaded for real so the rule analysis
 # hashes attribute values exactly as production does.
 _load_real_module(

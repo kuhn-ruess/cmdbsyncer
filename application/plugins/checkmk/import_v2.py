@@ -2,10 +2,9 @@
 """
 Get Hosts from a CMKv2 Instance
 """
-import click
-from application.models.host import Host
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application.modules.debug import ColorCodes as CC
-from .cmk2 import CMK2, CmkException
+from .cmk2 import CMK2
 
 
 
@@ -48,17 +47,12 @@ class DataGeter(CMK2):
                 print(f"{CC.OKBLUE} *{CC.ENDC} Host blacklisted by filter, ignored")
                 continue
 
-            host_obj = Host.get_host(hostname)
             labels = {}
             effective_attributes = hostdata['extensions']['effective_attributes']
             labels = effective_attributes
             if 'labels' in effective_attributes:
                 labels.update(effective_attributes['labels'])
 
-            host_obj.update_host(labels)
-            do_save = host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
-            else:
-                print(f"{CC.OKBLUE} *{CC.ENDC} Host owned by diffrent source, ignored")
-
+            for _name, host_obj in get_import_hosts(hostname, self.config, labels):
+                if not update_import_host(host_obj, labels, self.config):
+                    print(f"{CC.OKBLUE} *{CC.ENDC} Host owned by diffrent source, ignored")

@@ -5,6 +5,7 @@ from collections import defaultdict
 
 from application import logger
 from application.models.host import Host
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 
 from .netbox import SyncNetbox
 from .utils import make_progress, parse_import_filter
@@ -206,21 +207,18 @@ class SyncInterfaces(SyncNetbox):
 
     def _import_interfaces_to_inventory(self, per_host, mode):
         """Store each host's interfaces on the host's inventory."""
-        rewrite = self.config.get('rewrite_hostname')
         attr_name = f"{self.config['name']}_{mode}_interfaces_import"
         with make_progress() as progress:
             self.console = progress.console.print
             task = progress.add_task("Importing Interfaces", total=len(per_host))
             for parent_name, port_infos in per_host.items():
-                hostname = parent_name
-                if rewrite:
-                    hostname = Host.rewrite_hostname(hostname, rewrite, {})
-                db_object = Host.get_host(hostname, create=False)
-                if db_object:
-                    self.console(f"* {hostname}: {len(port_infos)} interfaces imported")
-                    db_object.set_inventory_attribute(attr_name, port_infos)
-                else:
-                    self.console(f"* Skip {hostname}: host not found in Syncer")
+                for hostname, db_object in get_import_hosts(parent_name, self.config, {},
+                                                            create=False):
+                    if db_object:
+                        self.console(f"* {hostname}: {len(port_infos)} interfaces imported")
+                        db_object.set_inventory_attribute(attr_name, port_infos)
+                    else:
+                        self.console(f"* Skip {hostname}: host not found in Syncer")
                 progress.advance(task)
 
     def _import_interfaces_as_hosts(self, per_host):
@@ -229,31 +227,26 @@ class SyncInterfaces(SyncNetbox):
         again like any other host.
         """
         import_id = self.get_unique_id()
-        rewrite = self.config.get('rewrite_hostname')
         total = sum(len(infos) for infos in per_host.values())
         with make_progress() as progress:
             self.console = progress.console.print
             task = progress.add_task("Importing Interfaces as Hosts", total=total)
             for parent_name, port_infos in per_host.items():
                 for port in port_infos:
-                    self._import_interface_host(parent_name, port, import_id, rewrite)
+                    self._import_interface_host(parent_name, port, import_id)
                     progress.advance(task)
         if extra_filter := self.config.get('delete_host_if_not_found_on_import'):
             Host.delete_host_not_found_on_import(self.config['name'], import_id, extra_filter)
 
-    def _import_interface_host(self, parent_name, port, import_id, rewrite):
+    def _import_interface_host(self, parent_name, port, import_id):
         """Create / update a single interface as a Host object."""
         if not port['name']:
             return
-        hostname = f"{parent_name}/{port['name']}"
         labels = dict(port, parent_host=parent_name)
-        if rewrite:
-            hostname = Host.rewrite_hostname(hostname, rewrite, labels)
-        host_obj = Host.get_host(hostname)
-        self.console(f"* Import Interface Host {hostname}")
-        host_obj.update_host(labels)
-        if host_obj.set_account(account_dict=self.config, import_id=import_id):
-            host_obj.save()
+        for hostname, host_obj in get_import_hosts(f"{parent_name}/{port['name']}",
+                                                   self.config, labels):
+            self.console(f"* Import Interface Host {hostname}")
+            update_import_host(host_obj, labels, self.config, import_id=import_id)
 #.
 
 

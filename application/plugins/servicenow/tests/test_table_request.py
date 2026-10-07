@@ -3,7 +3,7 @@ Unit tests for the ServiceNow Table API request
 """
 # pylint: disable=missing-function-docstring
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import application.plugins.servicenow.syncer as snow
 from application.plugins.servicenow.syncer import (ServiceNowError, SyncServiceNow,
@@ -118,27 +118,70 @@ class TestFlattenRecord(unittest.TestCase):
                           'assigned_to': 'Jane'})
 
 
-class TestRecordHostname(unittest.TestCase):
-    """Tests for SyncServiceNow.record_hostname"""
+class TestRecordHostnames(unittest.TestCase):
+    """Tests for SyncServiceNow.record_hostnames"""
 
     def test_default_field_is_name(self):
-        self.assertEqual(syncer().record_hostname({'name': 'srv01'}), 'srv01')
+        self.assertEqual(syncer().record_hostnames({'name': 'srv01'}), ['srv01'])
 
     def test_empty_hostname_field_falls_back_to_name(self):
         # get_account turns an empty custom field into False
-        self.assertEqual(syncer(hostname_field=False).record_hostname({'name': 'srv01'}), 'srv01')
+        self.assertEqual(syncer(hostname_field=False).record_hostnames({'name': 'srv01'}),
+                         ['srv01'])
 
     def test_record_without_the_field_has_no_hostname(self):
-        self.assertEqual(syncer(hostname_field='fqdn').record_hostname({'name': 'srv01'}), '')
+        self.assertEqual(syncer(hostname_field='fqdn').record_hostnames({'name': 'srv01'}), [])
 
     def test_rewrite_is_applied(self):
         labels = {'name': 'srv01'}
         with patch.object(snow.Host, 'rewrite_hostname', create=True,
                           return_value='srv01.example.com') as rewrite:
             self.assertEqual(
-                syncer(rewrite_hostname='{{name}}.example.com').record_hostname(labels),
-                'srv01.example.com')
+                syncer(rewrite_hostname='{{name}}.example.com').record_hostnames(labels),
+                ['srv01.example.com'])
         rewrite.assert_called_once_with('srv01', '{{name}}.example.com', labels)
+
+    def test_a_rewrite_rendering_a_list_names_several_hosts(self):
+        with patch.object(snow.Host, 'rewrite_hostname', create=True,
+                          return_value="['s1-hvl01', 's1-rtr01']"):
+            self.assertEqual(
+                syncer(rewrite_hostname='{{ [HOSTNAME, ...] }}').record_hostnames(
+                    {'name': 's1-hvl01'}),
+                ['s1-hvl01', 's1-rtr01'])
+
+    def test_a_rewrite_rendering_nothing_skips_the_record(self):
+        with patch.object(snow.Host, 'rewrite_hostname', create=True, return_value=''):
+            self.assertEqual(
+                syncer(rewrite_hostname='{% if 0 %}x{% endif %}').record_hostnames(
+                    {'name': 'srv01'}),
+                [])
+
+
+class TestImportOneRecordAsSeveralHosts(unittest.TestCase):
+    """SyncServiceNow.import_hosts with a rewrite that renders a list"""
+
+    def test_every_name_becomes_a_host_of_the_account(self):
+        hosts = {}
+
+        def get_host(name, create=True):  # pylint: disable=unused-argument
+            return hosts.setdefault(name, Mock(name=name, **{'set_account.return_value': True}))
+
+        instance = syncer(tables='cmdb_ci_server', id='acc1', name='SNOW',
+                          rewrite_hostname='{{ [HOSTNAME, HOSTNAME + "-rtr"] }}')
+        instance.log_details = []
+        instance.get_table = lambda table, query=None, fields=None: iter(
+            [{'name': 's1', 'ip_address': '10.0.0.10'}])
+        instance.flatten_record = dict
+        with patch.object(snow.Host, 'rewrite_hostname', create=True,
+                          return_value="['s1', 's1-rtr']"), \
+             patch.object(snow.Host, 'get_host', create=True, side_effect=get_host):
+            instance.import_hosts()
+
+        self.assertEqual(sorted(hosts), ['s1', 's1-rtr'])
+        for host in hosts.values():
+            host.update_host.assert_called_once_with({'name': 's1', 'ip_address': '10.0.0.10'})
+            host.set_account.assert_called_once_with(account_dict=instance.config)
+            host.save.assert_called_once_with()
 
 
 class TestReadPage(unittest.TestCase):
@@ -586,15 +629,21 @@ class TestHostLookup(unittest.TestCase):
     def test_the_label_lookup_finds_the_renamed_host(self):
         # The relation names the CI, the import created the host with
         # the domain appended
-        instance = syncer(hosts={'ldom-s02': 'ldom-s02.munich-airport.de'})
+        instance = syncer(hosts={'ldom-s02': ['ldom-s02.munich-airport.de']})
         instance.get_table = lambda table, query=None, fields=None: iter(
             [{'parent': 'LDOM-S02-ORA', 'child': 'ldom-s02',
               'type': 'Contains::Contained by'}])
         self.assertEqual(instance.record_hosts({'name': 'LDOM-S02-ORA'}, 'rel'),
                          ['ldom-s02.munich-airport.de'])
 
+    def test_a_ci_imported_as_several_hosts_finds_all_of_them(self):
+        instance = syncer(hosts={'s1': ['s1', 's1-rtr']})
+        self.assertEqual(
+            instance.record_hosts({'name': 'eth0', 'cmdb_ci': 's1'}, 'cmdb_ci'),
+            ['s1', 's1-rtr'])
+
     def test_it_works_for_a_reference_field_too(self):
-        instance = syncer(hosts={'srv01': 'srv01.example.com'})
+        instance = syncer(hosts={'srv01': ['srv01.example.com']})
         self.assertEqual(
             instance.record_hosts({'name': 'eth0', 'cmdb_ci': 'srv01'}, 'cmdb_ci'),
             ['srv01.example.com'])
@@ -606,7 +655,7 @@ class TestHostLookup(unittest.TestCase):
             ['srv01'])
 
     def test_the_rewrite_only_applies_to_an_unknown_ci(self):
-        instance = syncer(hosts={'srv01': 'srv01.example.com'},
+        instance = syncer(hosts={'srv01': ['srv01.example.com']},
                           inventorize_rewrite_parent='{{HOSTNAME}}.wrong.example.com')
         with patch.object(snow.Host, 'rewrite_hostname', create=True,
                           return_value='srv02.wrong.example.com') as rewrite:

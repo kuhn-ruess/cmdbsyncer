@@ -4,9 +4,9 @@ Jdisc Device Import
 
 from syncerapi.v1.inventory import run_inventory
 from syncerapi.v1 import (
-    Host,
     cc,
 )
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 
 from .jdisc import JDisc
 
@@ -142,18 +142,12 @@ class JdiscDevices(JDisc):
                 elif not hostname:
                     self.log_details.append(('unnamed_device_skipped', f'{labels["serialNumber"]}'))
                     continue
-                if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                    hostname = Host.rewrite_hostname(hostname,
-                                                     self.config['rewrite_hostname'], labels)
-                print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
+                hosts = get_import_hosts(hostname, self.config, labels)
                 del labels['name']
-                host_obj = Host.get_host(hostname)
-                host_obj.update_host(labels)
-                do_save=host_obj.set_account(account_dict=self.config)
-                if do_save:
-                    host_obj.save()
-                else:
-                    print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
+                for hostname, host_obj in hosts:
+                    print(f" {cc.OKGREEN}* {cc.ENDC} Check {hostname}")
+                    if not update_import_host(host_obj, labels, self.config):
+                        print(f" {cc.WARNING} * {cc.ENDC} Managed by diffrent master")
             except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
@@ -165,7 +159,6 @@ class JdiscDevices(JDisc):
         """
         JDisc Application Inventorize
         """
-        rewrite = self.config.get('rewrite_hostname')
         import_unnamed = self.config.get('import_unnamed_devices')
         entries = []
         for dev in self.run_query()['devices']['findAll']:
@@ -176,7 +169,7 @@ class JdiscDevices(JDisc):
                 hostname = f"unnamed-{dev['serialNumber']}"
             if not hostname:
                 continue
-            if rewrite:
-                hostname = Host.rewrite_hostname(hostname, rewrite, dev)
+            # run_inventory applies rewrite_hostname, the same way the
+            # import does
             entries.append((hostname, dev))
         run_inventory(self.config, entries)

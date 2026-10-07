@@ -29,7 +29,7 @@ class TestDataGeter(unittest.TestCase):
     def tearDown(self):
         self.init_patcher.stop()
 
-    @patch('application.plugins.checkmk.import_v2.Host')
+    @patch('application.helpers.import_hostnames.Host')
     @patch('builtins.print')
     def test_run_imports_hosts(self, mock_print, mock_host):
         mock_host_obj = Mock()
@@ -53,11 +53,11 @@ class TestDataGeter(unittest.TestCase):
         with patch.object(self.getter, 'request', return_value=api_response):
             self.getter.run()
 
-        mock_host.get_host.assert_called_once_with('host1')
+        mock_host.get_host.assert_called_once_with('host1', create=True)
         mock_host_obj.update_host.assert_called_once()
         mock_host_obj.save.assert_called_once()
 
-    @patch('application.plugins.checkmk.import_v2.Host')
+    @patch('application.helpers.import_hostnames.Host')
     @patch('builtins.print')
     def test_run_skips_filtered_hosts(self, mock_print, mock_host):
         self.getter.config = {'import_filter': 'test-, dev-'}
@@ -87,9 +87,9 @@ class TestDataGeter(unittest.TestCase):
             self.getter.run()
 
         # Only prod-host1 should be processed
-        mock_host.get_host.assert_called_once_with('prod-host1')
+        mock_host.get_host.assert_called_once_with('prod-host1', create=True)
 
-    @patch('application.plugins.checkmk.import_v2.Host')
+    @patch('application.helpers.import_hostnames.Host')
     @patch('builtins.print')
     def test_run_skips_if_not_owned(self, mock_print, mock_host):
         mock_host_obj = Mock()

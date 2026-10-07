@@ -5,9 +5,9 @@ import json
 
 from syncerapi.v1 import (
     cc,
-    Host,
 )
 
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 from application.modules.plugin import Plugin
 
 
@@ -132,7 +132,6 @@ class JiraCloud(Plugin):
         for host in self._iter_aql_objects(self.config['ql_query']):
             hostname = host['label']
             attributes = host['attributes']
-            host_obj = Host.get_host(hostname)
             id_field = 'objectTypeAttributeId'
             obj_field = 'objectAttributeValues'
             labels = {}
@@ -145,10 +144,8 @@ class JiraCloud(Plugin):
                 labels[self.get_name_by_id(attr[id_field])] = \
                                                     self.attribute_value(values[0])
 
-            host_obj.update_host(labels)
-            do_save = host_obj.set_account(account_dict=self.config)
-            if do_save:
-                host_obj.save()
+            for _name, host_obj in get_import_hosts(hostname, self.config, labels):
+                update_import_host(host_obj, labels, self.config)
 
 def import_jira_cloud(account, debug=False):
     """

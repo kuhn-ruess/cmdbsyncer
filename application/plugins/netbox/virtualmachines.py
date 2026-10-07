@@ -6,6 +6,7 @@ Create Devices in Netbox
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application import logger
+from application.helpers.import_hostnames import get_import_hosts, update_import_host
 
 from syncerapi.v1 import (
     cc,
@@ -181,16 +182,11 @@ class SyncVirtualMachines(SyncNetbox):
                              '_full_cache', '_init_cache']:
                     del labels[what]
 
-                if 'rewrite_hostname' in self.config and self.config['rewrite_hostname']:
-                    hostname = Host.rewrite_hostname(hostname,
-                                                     self.config['rewrite_hostname'], labels)
-                host_obj = Host.get_host(hostname)
-                print(f"\n{cc.HEADER}Process VM: {hostname}{cc.ENDC}")
+                hosts = get_import_hosts(hostname, self.config, labels)
                 result = self.handle_nb_attributes(labels)
-                host_obj.update_host(result)
-                do_save = host_obj.set_account(account_dict=self.config, import_id=import_id)
-                if do_save:
-                    host_obj.save()
+                for hostname, host_obj in hosts:
+                    print(f"\n{cc.HEADER}Process VM: {hostname}{cc.ENDC}")
+                    update_import_host(host_obj, result, self.config, import_id=import_id)
             except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
