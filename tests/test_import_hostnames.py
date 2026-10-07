@@ -29,10 +29,10 @@ from application.helpers.import_hostnames import (
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# The example from the documentation: one store server record, three
-# devices of that store
-STORE_TEMPLATE = ("{{ [HOSTNAME, HOSTNAME | replace('HVL01', 'RTR01'), "
-                  "HOSTNAME | replace('HVL01', 'SW01')] }}")
+# The example from the documentation: one server record per site, three
+# devices of that site
+SITE_TEMPLATE = ("{{ [HOSTNAME, HOSTNAME | replace('SRV01', 'RTR01'), "
+                  "HOSTNAME | replace('SRV01', 'SW01')] }}")
 
 
 def rewrite_hostname(old_name, template, attributes):
@@ -138,9 +138,9 @@ class ImportHostnamesTest(unittest.TestCase):
         self.assertEqual(import_hostnames('srv01', config, {}), [''])
 
     def test_a_template_rendering_a_list_names_every_device(self):
-        config = {'rewrite_hostname': STORE_TEMPLATE}
-        self.assertEqual(import_hostnames('S0815-HVL01', config, {}),
-                         ['S0815-HVL01', 'S0815-RTR01', 'S0815-SW01'])
+        config = {'rewrite_hostname': SITE_TEMPLATE}
+        self.assertEqual(import_hostnames('SITE7-SRV01', config, {}),
+                         ['SITE7-SRV01', 'SITE7-RTR01', 'SITE7-SW01'])
 
     def test_a_list_built_in_a_loop(self):
         config = {'rewrite_hostname':
@@ -159,11 +159,11 @@ class GetImportHostsTest(unittest.TestCase):
     def test_one_host_per_name(self):
         fake = FakeHosts()
         with with_hosts(fake):
-            found = get_import_hosts('S1-HVL01', {'rewrite_hostname': STORE_TEMPLATE}, {})
+            found = get_import_hosts('S1-SRV01', {'rewrite_hostname': SITE_TEMPLATE}, {})
         self.assertEqual([name for name, _host in found],
-                         ['S1-HVL01', 'S1-RTR01', 'S1-SW01'])
+                         ['S1-SRV01', 'S1-RTR01', 'S1-SW01'])
         self.assertEqual([host for _name, host in found],
-                         [fake.hosts[x] for x in ['S1-HVL01', 'S1-RTR01', 'S1-SW01']])
+                         [fake.hosts[x] for x in ['S1-SRV01', 'S1-RTR01', 'S1-SW01']])
 
     def test_a_plain_name_is_exactly_one_host(self):
         fake = FakeHosts()
@@ -207,14 +207,14 @@ def load_plugin_module(name, relative_path):
 class ImporterIntegrationTest(unittest.TestCase):
     """The importers themselves, fed one record that names three devices"""
 
-    CONFIG = {'id': 'acc1', 'name': 'stores', 'rewrite_hostname': STORE_TEMPLATE}
+    CONFIG = {'id': 'acc1', 'name': 'sites', 'rewrite_hostname': SITE_TEMPLATE}
 
     def assert_three_devices(self, fake, labels):
-        self.assertEqual(sorted(fake.hosts), ['S1-HVL01', 'S1-RTR01', 'S1-SW01'])
+        self.assertEqual(sorted(fake.hosts), ['S1-RTR01', 'S1-SRV01', 'S1-SW01'])
         for host in fake.hosts.values():
             host.update_host.assert_called_once_with(labels)
             self.assertEqual(host.set_account.call_args.kwargs['account_dict']['name'],
-                             'stores')
+                             'sites')
             host.save.assert_called_once_with()
 
     def test_rest_and_json(self):
@@ -223,7 +223,7 @@ class ImporterIntegrationTest(unittest.TestCase):
         importer.config = dict(self.CONFIG, hostname_field='host')
         fake = FakeHosts()
         with with_hosts(fake), patch('builtins.print'):
-            importer.import_hosts([{'host': 'S1-HVL01', 'ip': '10.1.1.10'}])
+            importer.import_hosts([{'host': 'S1-SRV01', 'ip': '10.1.1.10'}])
         self.assert_three_devices(fake, {'ip': '10.1.1.10'})
 
     def test_csv(self):
@@ -231,7 +231,7 @@ class ImporterIntegrationTest(unittest.TestCase):
         with tempfile.NamedTemporaryFile('w', suffix='.csv', delete=False,
                                          encoding='utf-8', newline='') as handle:
             writer = csv.writer(handle, delimiter=';')
-            writer.writerows([['host', 'ip'], ['S1-HVL01', '10.1.1.10']])
+            writer.writerows([['host', 'ip'], ['S1-SRV01', '10.1.1.10']])
         self.addCleanup(os.unlink, handle.name)
         importer = csv_module.CSV.__new__(csv_module.CSV)
         importer.config = dict(self.CONFIG, path=handle.name, encoding='utf-8',
@@ -250,15 +250,15 @@ class ImporterIntegrationTest(unittest.TestCase):
         importer.config = dict(self.CONFIG, hostname_field='host')
         fake = FakeHosts(owned_by_other={'S1-RTR01'})
         with with_hosts(fake), patch('builtins.print'):
-            importer.import_hosts([{'host': 'S1-HVL01'}])
+            importer.import_hosts([{'host': 'S1-SRV01'}])
         fake.hosts['S1-RTR01'].save.assert_not_called()
-        fake.hosts['S1-HVL01'].save.assert_called_once_with()
+        fake.hosts['S1-SRV01'].save.assert_called_once_with()
         fake.hosts['S1-SW01'].save.assert_called_once_with()
 
     def test_a_plain_rewrite_imports_one_host_as_before(self):
         rest = load_plugin_module('rest_under_test', 'plugins/rest/rest.py')
         importer = rest.RestImport.__new__(rest.RestImport)
-        importer.config = {'id': 'acc1', 'name': 'stores', 'hostname_field': 'host',
+        importer.config = {'id': 'acc1', 'name': 'sites', 'hostname_field': 'host',
                            'rewrite_hostname': '{{ HOSTNAME }}.example.com'}
         fake = FakeHosts()
         with with_hosts(fake), patch('builtins.print'):
@@ -287,7 +287,7 @@ class RunInventoryTest(unittest.TestCase):
 
     def run_inventory(self, config, objects):
         fake = FakeHosts()
-        for name in ['S1-HVL01', 'S1-RTR01', 'S1-SW01', 'srv01.example.com']:
+        for name in ['S1-SRV01', 'S1-RTR01', 'S1-SW01', 'srv01.example.com']:
             fake.get_host(name)
         self.inventory.Host = types.SimpleNamespace(get_host=fake.get_host)
         with with_hosts(fake), patch('builtins.print'):
@@ -295,9 +295,9 @@ class RunInventoryTest(unittest.TestCase):
         return fake, [call.args[0] for call in self.inventorize_host.call_args_list]
 
     def test_every_device_of_the_record_is_inventorized(self):
-        fake, hosts = self.run_inventory({'rewrite_hostname': STORE_TEMPLATE},
-                                         [('S1-HVL01', {'ip': '1'})])
-        self.assertEqual(hosts, [fake.hosts[x] for x in ['S1-HVL01', 'S1-RTR01', 'S1-SW01']])
+        fake, hosts = self.run_inventory({'rewrite_hostname': SITE_TEMPLATE},
+                                         [('S1-SRV01', {'ip': '1'})])
+        self.assertEqual(hosts, [fake.hosts[x] for x in ['S1-SRV01', 'S1-RTR01', 'S1-SW01']])
 
     def test_the_rewrite_is_applied_once(self):
         # It used to run in the importer and again in run_inventory,

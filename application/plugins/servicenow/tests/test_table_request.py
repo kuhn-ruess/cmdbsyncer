@@ -143,11 +143,11 @@ class TestRecordHostnames(unittest.TestCase):
 
     def test_a_rewrite_rendering_a_list_names_several_hosts(self):
         with patch.object(snow.Host, 'rewrite_hostname', create=True,
-                          return_value="['s1-hvl01', 's1-rtr01']"):
+                          return_value="['s1-srv01', 's1-rtr01']"):
             self.assertEqual(
                 syncer(rewrite_hostname='{{ [HOSTNAME, ...] }}').record_hostnames(
-                    {'name': 's1-hvl01'}),
-                ['s1-hvl01', 's1-rtr01'])
+                    {'name': 's1-srv01'}),
+                ['s1-srv01', 's1-rtr01'])
 
     def test_a_rewrite_rendering_nothing_skips_the_record(self):
         with patch.object(snow.Host, 'rewrite_hostname', create=True, return_value=''):
