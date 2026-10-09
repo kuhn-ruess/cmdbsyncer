@@ -66,6 +66,27 @@ _HELP_CMDB_OBJECT = (
     "even if they later disappear from the source (never auto-deleted)."
 )
 
+class _PasswordField(StringField):
+    """
+    The account password, put on the account encrypted as it is read
+    from the form.
+
+    Doing it while the form fills the account, instead of afterwards in
+    on_model_change, means every way of saving the form gets it. The
+    approval workflow fills a copy of the account and stores that for
+    later, without on_model_change: the typed password used to land in
+    the plain text field there, and on approval the account kept its
+    old encrypted one, so the new password never took effect.
+    """
+
+    def populate_obj(self, obj, name):
+        if self.data:
+            obj.encrypt_password(self.data)
+        # Only legacy accounts have a plain text password, and the form
+        # shows it to them, so it comes back here and gets encrypted.
+        setattr(obj, name, "")
+
+
 def _render_custom_data(_view, _context, model, _name):
     """
     Render for detail table
@@ -264,7 +285,7 @@ class AccountModelView(DefaultModelView):
 
     form_overrides = {
         'name': StringField,
-        'password': StringField,
+        'password': _PasswordField,
         'address': StringField,
         'username': StringField,
     }
@@ -423,9 +444,6 @@ class AccountModelView(DefaultModelView):
                 if not getattr(model, field):
                     setattr(model, field, content)
 
-        if form.password.data:
-            model.set_password(form.password.data)
-            model.password = ""
         return super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):
