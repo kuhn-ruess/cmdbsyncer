@@ -210,6 +210,11 @@ def is_template(source):
     return any(marker in source for marker in _JINJA_MARKERS)
 
 
+def global_names():
+    """Names every rendered template knows without them being passed in."""
+    return set(JINJA_ENV.globals) | set(_GLOBALS)
+
+
 def _compile_template(source, strict):
     """
     Compile and cache a template. Sync runs reuse the same handful of

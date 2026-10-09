@@ -9,6 +9,7 @@ from cryptography.fernet import Fernet
 from application import db, app
 from application.modules.rule.models import rule_types
 from application.models.account import Account
+from application.plugins.checkmk.list_source import RULE_SOURCE_CHOICES, rule_uses_list
 
 
 
@@ -472,6 +473,15 @@ class CheckmkRuleMngmt(db.Document):
     # context (host match conditions are ignored) instead of recomputing
     # it per host and de-duplicating the identical copies.
     static_rule = db.BooleanField(default=False)
+    # Where the rule gets its input: 'hosts' (default, rendered per host)
+    # or 'list' (rendered once per row of ``list_source``), see
+    # ``list_source.rule_uses_list``. Empty on rules saved before the
+    # switch existed.
+    rule_source = db.StringField(choices=RULE_SOURCE_CHOICES)
+    # The pasted table of a 'list' rule (CSV, semicolon or tab separated,
+    # first line = column names). Its columns are the Jinja variables of
+    # the outcomes, see ``list_source.py``.
+    list_source = db.StringField()
     # Name of the Project this rule belongs to (or empty for a
     # free/global rule). Referenced by name — not as a ReferenceField — so a
     # project and its rules survive a JSON im-/export between separate syncer
@@ -484,6 +494,15 @@ class CheckmkRuleMngmt(db.Document):
         'strict': False,
         'indexes': ['primary_ruleset', 'project'],
     }
+
+    def clean(self):
+        """
+        A rule rendered from its list is never rendered per host: keep it on
+        the host-independent path however it was saved (form, JSON import,
+        API).
+        """
+        if rule_uses_list(self.rule_source, self.list_source):
+            self.static_rule = True
 
 #.
 

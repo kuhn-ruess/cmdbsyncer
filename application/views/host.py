@@ -30,6 +30,7 @@ from application.plugins.checkmk import (
 from application.plugins.checkmk.cmk_rules import get_preview_providers
 from application.plugins.checkmk.sitepool import release_site_for_site_id
 from application.plugins.netbox import get_device_debug_data as netbox_host_debug
+from application.plugins.netbox import get_object_debug_data as netbox_object_debug
 from application.plugins.ansible import get_ansible_debug_data as ansible_host_debug
 from application.plugins.ansible.models import AnsibleProject
 from application.plugins.idoit import get_idoit_debug_data as idoit_host_debug
@@ -264,6 +265,7 @@ def _rebuild_cmdb_fields(model):
 DEBUG_MODE_ROLES = {
     'checkmk_host': 'checkmk',
     'netbox_device': 'netbox',
+    'netbox_object': 'netbox',
     'ansible_host': 'ansible',
     'idoit_host': 'idoit',
     'vmware_host': 'vmware',
@@ -305,6 +307,7 @@ def get_debug(hostname, mode, ansible_project=None):
         debug_funcs = {
             'checkmk_host': cmk_host_debug,
             'netbox_device': netbox_host_debug,
+            'netbox_object': netbox_object_debug,
             'ansible_host': ansible_host_debug,
             'idoit_host': idoit_host_debug,
             'vmware_host': vmware_host_debug,
@@ -345,6 +348,159 @@ def get_debug(hostname, mode, ansible_project=None):
         return output, output_rules
     except DoesNotExist:
         return {'Error': "Host not found in Database"}, {}
+
+
+def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-locals,too-many-branches
+    """
+    The debug page of a host or CMDB object: its attributes, the rules
+    matching it and their outcomes for the chosen target system. Shared by
+    the host and the object list, ``object_label`` names what is debugged.
+    """
+    host = None
+    if obj_id := request.args.get('obj_id'):
+        host = Host.objects.get(id=obj_id)
+        hostname = host.hostname
+    else:
+        hostname = request.args.get('hostname', '').strip()
+        if hostname:
+            host = Host.objects(hostname=hostname).first()
+    mode = request.args.get('mode', 'checkmk_host')
+    ansible_project = request.args.get('ansible_project', '').strip()
+
+
+
+    output= {}
+    output_rules = {}
+
+    if hostname:
+        output, output_rules = get_debug(hostname, mode, ansible_project=ansible_project)
+
+    # Project picker for the Ansible mode — rules now live inside
+    # projects, so the debug page must say which one it evaluated.
+    ansible_projects = []
+    if mode == 'ansible_host' and current_user.has_right('ansible'):
+        ansible_projects = [
+            p.name for p in AnsibleProject.objects().order_by('sort_field', 'name')
+        ]
+
+    # Map each rule-group key (as set by the mode-specific debug
+    # function) to the Flask-Admin model endpoint. Flask-Admin's
+    # default endpoint is `model.__name__.lower()` since none of our
+    # add_view() calls override it. Shared across all modes first,
+    # then the per-mode specifics win.
+    bp = app.config['BASE_PREFIX']
+    base_urls = {'CustomAttributes': f"{bp}admin/customattributerule/edit/?id="}
+    per_mode = {
+        'checkmk_host': {
+            'filter':      'checkmkfilterrule',
+            'rewrite':     'checkmkrewriteattributerule',
+            'actions':     'checkmkrule',
+            'Setup Rules': 'checkmkrulemngmt',
+        },
+        'netbox_device': {
+            'rewrite':            'netboxrewriteattributerule',
+            'actions':            'netboxcustomattributes',
+            'VM Attributes':      'netboxvirtualmachineattributes',
+            'Cluster Attributes': 'netboxclusterattributes',
+        },
+        'netbox_object': {
+            'rewrite':            'netboxrewriteattributerule',
+            'IP Addresses':       'netboxipamipaddressattributes',
+            'Prefixes':           'netboxipamprefixattributes',
+            'Interfaces':         'netboxdciminterfaceattributes',
+            'Virtual Interfaces': 'netboxvirtualizationinterfaceattributes',
+            'Contacts':           'netboxcontactattributes',
+            'Dataflow':           'netboxdataflowattributes',
+        },
+        'ansible_host': {
+            'filter':  'ansiblefilterrule',
+            'rewrite': 'ansiblerewriteattributesrule',
+            'actions': 'ansiblecustomvariablesrule',
+        },
+        'idoit_host': {
+            'rewrite': 'idoitrewriteattributerule',
+            'actions': 'idoitcustomattributes',
+        },
+        'vmware_host': {
+            'rewrite': 'vmwarerewriteattributes',
+            'actions': 'vmwarecustomattributes',
+        },
+        'jira_cloud_host': {
+            'filter':  'jiracloudfilterrule',
+            'rewrite': 'jiracloudrewriteattributerule',
+            'actions': 'jiraexportrule',
+        },
+    }.get(mode, {})
+    for group, endpoint in per_mode.items():
+        base_urls[group] = f"{bp}admin/{endpoint}/edit/?id="
+
+    new_rules = {}
+    for rule_group, rule_data in output_rules.items():
+        group = new_rules.setdefault(
+            rule_group, {'rules': [], 'outcomes': rule_data['outcomes']})
+        for rule in rule_data['rules']:
+            rule_id = rule.get('id')
+            if rule_group in base_urls and rule_id:
+                rule['rule_url'] = f"{base_urls[rule_group]}{rule_id}"
+            else:
+                rule['rule_url'] = ''
+            group['rules'].append(rule)
+
+    # Folder options (contact groups, title, tags) are packed into the
+    # move_folder/create_folder outcome as a Python dict after a '|'. Show
+    # the resolved per-folder attributes on the debug page — or a clear
+    # error when the dict is malformed (what the export skips silently).
+    folder_options = None
+    if mode == 'checkmk_host' and isinstance(output, dict):
+        folder_options = _checkmk_folder_options_debug(output.get("Outcomes"))
+
+    if "Error" in output:
+        output = f"Error: {output['Error']}"
+
+    # Optional rule preview: when an admin picks a rule from any
+    # registered Checkmk rule-type, render its outcomes against
+    # this host's attributes so the debug page shows what the
+    # corresponding export would emit for this host. The dropdown
+    # value is encoded as ``"<rule_type>:<id>"`` so a single
+    # selector can offer rules from every registered provider.
+    rule_preview = None
+    rule_preview_error = None
+    rule_preview_groups = []
+    preview_rule_id = request.args.get('preview_rule_id', '').strip()
+    if mode == 'checkmk_host' and current_user.has_right('checkmk'):
+        for rule_type, provider in get_preview_providers().items():
+            entries = list(
+                provider['model'].objects().only('id', 'name').order_by('name')
+            )
+            rule_preview_groups.append({
+                'type': rule_type,
+                'label': provider['label'],
+                'entries': entries,
+            })
+        if preview_rule_id and hostname and ':' in preview_rule_id:
+            preview_type, _, raw_id = preview_rule_id.partition(':')
+            rule_preview, rule_preview_error = \
+                cmk_rule_preview(hostname, preview_type, raw_id)
+            # The preview itself only renders the outcome — it does
+            # not know whether the rule's conditions match this host.
+            # Reuse the per-rule hit info already computed for the
+            # Rules section so the preview can show a "won't match"
+            # warning when relevant.
+            if rule_preview:
+                rule_preview['match'] = _find_rule_match(new_rules, raw_id)
+
+    return view.render('debug_host.html', hostname=hostname, output=output,
+                       object_label=object_label,
+                       host=host,
+                       folder_options=folder_options,
+                       cmdb_mode=app.config.get('CMDB_MODE', False),
+                       rules=new_rules, mode=mode,
+                       rule_preview=rule_preview,
+                       rule_preview_error=rule_preview_error,
+                       rule_preview_groups=rule_preview_groups,
+                       preview_rule_id=preview_rule_id,
+                       ansible_projects=ansible_projects,
+                       ansible_project=ansible_project)
 
 
 def _checkmk_folder_options_debug(actions):
@@ -1070,6 +1226,9 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
     # strings this replaced were case-mismatched against the registered
     # endpoint and broke whenever the front-end didn't case-fold paths.
     column_extra_row_actions = [
+        EndpointLinkRowAction("fa fa-bug", ".debug",
+                              title="Debug object",
+                              id_arg="obj_id"),
         EndpointLinkRowAction("fa fa-history", ".timeline",
                               title="Show change timeline",
                               id_arg="obj_id"),
@@ -1086,6 +1245,15 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
     # interceptor that hijacks the row icon's click. Without this the
     # icon would navigate to the bare form partial.
     list_template = 'admin/object_list.html'
+
+    @expose('/debug')
+    def debug(self):
+        """
+        Debug page of a CMDB object: the same page as for a host (rules,
+        attributes, outcomes per target system), reachable with the
+        objects right alone.
+        """
+        return render_debug_page(self, object_label='Object')
 
     @expose('/timeline')
     def timeline(self):
@@ -1913,145 +2081,9 @@ Impact Chain.
         return jsonify({'nodes': list(nodes.values()), 'edges': edges})
 
     @expose('/debug')
-    def debug(self):  # pylint: disable=too-many-locals,too-many-branches
-        """
-        Checkmk specific Debug Page
-        """
-        host = None
-        if obj_id := request.args.get('obj_id'):
-            host = Host.objects.get(id=obj_id)
-            hostname = host.hostname
-        else:
-            hostname = request.args.get('hostname', '').strip()
-            if hostname:
-                host = Host.objects(hostname=hostname).first()
-        mode = request.args.get('mode', 'checkmk_host')
-        ansible_project = request.args.get('ansible_project', '').strip()
-
-
-
-        output= {}
-        output_rules = {}
-
-        if hostname:
-            output, output_rules = get_debug(hostname, mode, ansible_project=ansible_project)
-
-        # Project picker for the Ansible mode — rules now live inside
-        # projects, so the debug page must say which one it evaluated.
-        ansible_projects = []
-        if mode == 'ansible_host' and current_user.has_right('ansible'):
-            ansible_projects = [
-                p.name for p in AnsibleProject.objects().order_by('sort_field', 'name')
-            ]
-
-        # Map each rule-group key (as set by the mode-specific debug
-        # function) to the Flask-Admin model endpoint. Flask-Admin's
-        # default endpoint is `model.__name__.lower()` since none of our
-        # add_view() calls override it. Shared across all modes first,
-        # then the per-mode specifics win.
-        bp = app.config['BASE_PREFIX']
-        base_urls = {'CustomAttributes': f"{bp}admin/customattributerule/edit/?id="}
-        per_mode = {
-            'checkmk_host': {
-                'filter':      'checkmkfilterrule',
-                'rewrite':     'checkmkrewriteattributerule',
-                'actions':     'checkmkrule',
-                'Setup Rules': 'checkmkrulemngmt',
-            },
-            'netbox_device': {
-                'rewrite':            'netboxrewriteattributerule',
-                'actions':            'netboxcustomattributes',
-                'VM Attributes':      'netboxvirtualmachineattributes',
-                'Cluster Attributes': 'netboxclusterattributes',
-            },
-            'ansible_host': {
-                'filter':  'ansiblefilterrule',
-                'rewrite': 'ansiblerewriteattributesrule',
-                'actions': 'ansiblecustomvariablesrule',
-            },
-            'idoit_host': {
-                'rewrite': 'idoitrewriteattributerule',
-                'actions': 'idoitcustomattributes',
-            },
-            'vmware_host': {
-                'rewrite': 'vmwarerewriteattributes',
-                'actions': 'vmwarecustomattributes',
-            },
-            'jira_cloud_host': {
-                'filter':  'jiracloudfilterrule',
-                'rewrite': 'jiracloudrewriteattributerule',
-                'actions': 'jiraexportrule',
-            },
-        }.get(mode, {})
-        for group, endpoint in per_mode.items():
-            base_urls[group] = f"{bp}admin/{endpoint}/edit/?id="
-
-        new_rules = {}
-        for rule_group, rule_data in output_rules.items():
-            group = new_rules.setdefault(
-                rule_group, {'rules': [], 'outcomes': rule_data['outcomes']})
-            for rule in rule_data['rules']:
-                rule_id = rule.get('id')
-                if rule_group in base_urls and rule_id:
-                    rule['rule_url'] = f"{base_urls[rule_group]}{rule_id}"
-                else:
-                    rule['rule_url'] = ''
-                group['rules'].append(rule)
-
-        # Folder options (contact groups, title, tags) are packed into the
-        # move_folder/create_folder outcome as a Python dict after a '|'. Show
-        # the resolved per-folder attributes on the debug page — or a clear
-        # error when the dict is malformed (what the export skips silently).
-        folder_options = None
-        if mode == 'checkmk_host' and isinstance(output, dict):
-            folder_options = _checkmk_folder_options_debug(output.get("Outcomes"))
-
-        if "Error" in output:
-            output = f"Error: {output['Error']}"
-
-        # Optional rule preview: when an admin picks a rule from any
-        # registered Checkmk rule-type, render its outcomes against
-        # this host's attributes so the debug page shows what the
-        # corresponding export would emit for this host. The dropdown
-        # value is encoded as ``"<rule_type>:<id>"`` so a single
-        # selector can offer rules from every registered provider.
-        rule_preview = None
-        rule_preview_error = None
-        rule_preview_groups = []
-        preview_rule_id = request.args.get('preview_rule_id', '').strip()
-        if mode == 'checkmk_host' and current_user.has_right('checkmk'):
-            for rule_type, provider in get_preview_providers().items():
-                entries = list(
-                    provider['model'].objects().only('id', 'name').order_by('name')
-                )
-                rule_preview_groups.append({
-                    'type': rule_type,
-                    'label': provider['label'],
-                    'entries': entries,
-                })
-            if preview_rule_id and hostname and ':' in preview_rule_id:
-                preview_type, _, raw_id = preview_rule_id.partition(':')
-                rule_preview, rule_preview_error = \
-                    cmk_rule_preview(hostname, preview_type, raw_id)
-                # The preview itself only renders the outcome — it does
-                # not know whether the rule's conditions match this host.
-                # Reuse the per-rule hit info already computed for the
-                # Rules section so the preview can show a "won't match"
-                # warning when relevant.
-                if rule_preview:
-                    rule_preview['match'] = _find_rule_match(new_rules, raw_id)
-
-        return self.render('debug_host.html', hostname=hostname, output=output,
-                           host=host,
-                           folder_options=folder_options,
-                           cmdb_mode=app.config.get('CMDB_MODE', False),
-                           rules=new_rules, mode=mode,
-                           rule_preview=rule_preview,
-                           rule_preview_error=rule_preview_error,
-                           rule_preview_groups=rule_preview_groups,
-                           preview_rule_id=preview_rule_id,
-                           ansible_projects=ansible_projects,
-                           ansible_project=ansible_project)
+    def debug(self):
+        """Debug page of a host, see ``render_debug_page``."""
+        return render_debug_page(self)
 
 
     # Bulk actions that only make sense when the syncer is in CMDB mode

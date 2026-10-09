@@ -247,6 +247,7 @@ def import_host_module():
         ModuleType('application.plugins.netbox'),
     )
     netbox_mod.get_device_debug_data = MagicMock()
+    netbox_mod.get_object_debug_data = MagicMock()
     ansible_mod = sys.modules.setdefault(
         'application.plugins.ansible',
         ModuleType('application.plugins.ansible'),

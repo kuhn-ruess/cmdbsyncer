@@ -1,0 +1,84 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<style>
+.lrd-head { display: flex; align-items: center; gap: 12px; margin: 1rem 0 0.75rem; }
+.lrd-head h2 { margin: 0; }
+.lrd-muted { color: var(--surface-muted, #6c757d); }
+.lrd-card { margin-bottom: 1rem; }
+.lrd-scroll { max-height: 420px; overflow: auto; }
+.lrd-card table { width: auto; margin: 0; }
+.lrd-card td, .lrd-card th { padding: 3px 10px; white-space: pre-wrap; vertical-align: top; }
+.lrd-card pre { margin: 0; white-space: pre-wrap; font-size: 0.8rem;
+                color: var(--surface-text, inherit); background: transparent; }
+.lrd-skip { color: var(--surface-muted, #6c757d); }
+.lrd-errors { color: var(--danger, #c0392b); padding-left: 18px; }
+</style>
+<div class="lrd-head">
+  <h2><i class="fa fa-bug"></i> Debug Setup Rule: {{ rule.name }}</h2>
+  <a class="btn btn-sm btn-secondary" href="{{ edit_url }}"><i class="fa fa-pencil"></i> Edit rule</a>
+</div>
+
+{% if not preview %}
+  <div class="card app-card lrd-card"><div class="card-body">
+    <p>This rule is rendered <b>per host</b>: which Checkmk rule it creates depends on the host.
+    Open the host debug page, pick a host, and the rule is shown as rendered for that host.</p>
+    <a class="btn btn-primary btn-sm" href="{{ host_debug_url }}"><i class="fa fa-bug"></i> Open host debug with this rule</a>
+  </div></div>
+{% else %}
+  {% set parsed = preview.parsed %}
+  <p class="lrd-muted">Rendered from its pasted list, exactly like <code>checkmk export_rules</code> does,
+    but without contacting Checkmk. Run <code>checkmk export_rules &lt;account&gt; --dry-run</code>
+    to compare it with what Checkmk has.</p>
+
+  {% if parsed.errors or preview.problems %}
+  <div class="card app-card lrd-card"><div class="card-body">
+    <h5>Problems</h5>
+    <ul class="lrd-errors">
+      {% for msg in parsed.errors %}<li>List: {{ msg }}</li>{% endfor %}
+      {% for msg in preview.problems %}<li>{{ msg }}</li>{% endfor %}
+    </ul>
+  </div></div>
+  {% endif %}
+
+  <div class="card app-card lrd-card"><div class="card-body">
+    <h5>Rules the export would send
+      <small class="lrd-muted">({{ preview.rules.values()|map('length')|sum }} after joining)</small></h5>
+    {% if not preview.rules %}
+      <p class="lrd-muted">No rule: every row renders an empty Value or condition, or the list is not valid.</p>
+    {% endif %}
+    {% for ruleset, rules in preview.rules.items() %}
+      <h6 style="margin-top: 0.75rem;"><code>{{ ruleset }}</code></h6>
+      <table class="table table-sm table-bordered">
+        <tr><th>Folder</th><th>Value</th><th>Conditions</th></tr>
+        {% for r in rules %}
+        <tr>
+          <td><code>{{ r.folder }}</code></td>
+          <td><pre>{{ r.value }}</pre></td>
+          <td><pre>{% for key, cond in r.condition.items() if cond %}{{ key }}: {{ cond }}
+{% endfor %}</pre></td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% endfor %}
+  </div></div>
+
+  <div class="card app-card lrd-card"><div class="card-body">
+    <h5>Rows <small class="lrd-muted">({{ parsed.rows|length }})</small></h5>
+    <p class="lrd-muted">"Rules" counts the Checkmk rules a row produced over all outcomes, before rows are joined.
+      0 means the row's Value, service or host name condition rendered empty.</p>
+    <div class="lrd-scroll">
+    <table class="table table-sm table-bordered">
+      <tr><th>row_idx</th><th>Rules</th>
+        {% for name in parsed.columns %}<th>{{ '{{ ' ~ name ~ ' }}' }}</th>{% endfor %}</tr>
+      {% for row in parsed.rows %}
+      {% set count = preview.row_counts[loop.index0] if loop.index0 < preview.row_counts|length else 0 %}
+      <tr class="{{ 'lrd-skip' if not count }}">
+        <td>{{ loop.index0 }}</td><td>{{ count }}</td>
+        {% for name in parsed.columns %}<td>{{ row[name] }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+  </div></div>
+{% endif %}
+{% endblock %}

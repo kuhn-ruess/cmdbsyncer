@@ -118,6 +118,8 @@ sys.modules["application.plugins.checkmk"].get_rule_preview = MagicMock(
 _stub_package("application.plugins.netbox", path=[])
 sys.modules["application.plugins.netbox"].get_device_debug_data = MagicMock(
     name="stub.get_device_debug_data")
+sys.modules["application.plugins.netbox"].get_object_debug_data = MagicMock(
+    name="stub.get_object_debug_data")
 _stub_package("application.plugins.ansible", path=[])
 sys.modules["application.plugins.ansible"].get_ansible_debug_data = MagicMock(
     name="stub.get_ansible_debug_data")
@@ -612,6 +614,7 @@ _syncer_jinja_early = _stub_package("application.helpers.syncer_jinja")
 _syncer_jinja_early.render_jinja = MagicMock(name="stub.render_jinja")
 _syncer_jinja_early.get_list = MagicMock(name="stub.get_list")
 _syncer_jinja_early.check_jinja_syntax = _check_jinja_syntax
+_syncer_jinja_early.global_names = set
 
 _try_load_real_module(
     "application.modules.plugin",
@@ -626,6 +629,12 @@ _try_load_real_module(
 _try_load_real_module(
     "application.plugins.checkmk.helpers",
     os.path.join("plugins", "checkmk", "helpers.py"),
+)
+# cmk_rules renders the List Source of a Setup Rule with this parser (pure
+# Python, no dependencies).
+_load_real_module(
+    "application.plugins.checkmk.list_source",
+    os.path.join("plugins", "checkmk", "list_source.py"),
 )
 # cmk_rules provides folder_in_scope, imported by syncer at module load, so it
 # must be registered before the syncer module is loaded below.
@@ -662,6 +671,7 @@ _syncer_jinja = _stub_package("application.helpers.syncer_jinja")
 _syncer_jinja.render_jinja = MagicMock(name="stub.render_jinja")
 _syncer_jinja.get_list = MagicMock(name="stub.get_list")
 _syncer_jinja.check_jinja_syntax = _check_jinja_syntax
+_syncer_jinja.global_names = set
 
 # application.helpers.get_account
 _get_account = _stub_package("application.helpers.get_account")

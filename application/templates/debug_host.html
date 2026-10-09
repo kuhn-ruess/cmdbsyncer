@@ -138,7 +138,9 @@
     padding: 4px 0; font-size: 0.85rem; }
 </style>
 
-{% if host %}
+{# The host tab bar links the host pages; an object has its own list and
+   edit form, so its debug page shows a plain heading instead. #}
+{% if host and object_label != 'Object' %}
   {% with active='debug' %}
   {% include 'admin/_host_tabs.html' with context %}
   {% endwith %}
@@ -146,23 +148,28 @@
 
 <div class="container-fluid" style="max-width: 1400px;">
 
-  {% if not host %}
+  {% if not host or object_label == 'Object' %}
   <div class="debug-head">
-    <h2><i class="fa fa-bug"></i> Debug: {{ hostname or 'pick a host' }}</h2>
+    <h2><i class="fa fa-bug"></i> Debug: {{ hostname or ('pick an object' if object_label == 'Object' else 'pick a host') }}</h2>
+    {% if host and object_label == 'Object' %}
+      <span class="badge badge-secondary">{{ host.object_type }}</span>
+      <a class="btn btn-sm btn-secondary" href="{{ get_url('.edit_view', id=host.id) }}"><i class="fa fa-pencil"></i> Edit object</a>
+    {% endif %}
   </div>
   {% endif %}
 
   <form method="GET" class="debug-form">
     <div class="form-group">
-      <label for="hostname">Host</label>
+      <label for="hostname">{{ object_label or 'Host' }}</label>
       <input name="hostname" class="form-control" id="hostname" value="{{ hostname }}"
-             placeholder="hostname" style="min-width: 260px;">
+             placeholder="{{ 'object name' if object_label == 'Object' else 'hostname' }}" style="min-width: 260px;">
     </div>
     <div class="form-group">
       <label for="inputTarget">Target</label>
       <select id="inputTarget" name="mode" class="form-control">
         <option value="checkmk_host" {% if mode == 'checkmk_host' %}selected{% endif %}>Checkmk Host</option>
         <option value="netbox_device" {% if mode == 'netbox_device' %}selected{% endif %}>Netbox Device</option>
+        <option value="netbox_object" {% if mode == 'netbox_object' %}selected{% endif %}>Netbox Objects (IPs, Prefixes, Interfaces, Contacts, Dataflow)</option>
         <option value="ansible_host" {% if mode == 'ansible_host' %}selected{% endif %}>Ansible Host</option>
         <option value="idoit_host" {% if mode == 'idoit_host' %}selected{% endif %}>i-doit Host</option>
         <option value="vmware_host" {% if mode == 'vmware_host' %}selected{% endif %}>VMware Host</option>

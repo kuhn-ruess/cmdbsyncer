@@ -17,6 +17,12 @@ from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
 from application.plugins.checkmk.helpers import make_progress, resolve_loop_list
+from application.plugins.checkmk.list_source import (
+    parse_list_source,
+    row_context,
+    rule_uses_list,
+    merge_service_conditions,
+)
 from application.helpers.label_hash import syncer_hash
 from application.modules.debug import ColorCodes as CC
 
@@ -803,6 +809,36 @@ def get_preview_providers():
     }
 
 
+def preview_list_rule(rule):
+    """
+    What the export makes of a Setup Rule rendered from its list, without
+    contacting Checkmk: the parsed list, how many Checkmk rules each row
+    produced, the rules after joining (per ruleset) and the problems the
+    run reported. Feeds the "Debug this rule" page of the Setup Rule form.
+    """
+    syncer = CheckmkRuleSync(False, probe_version=False)
+    # Without an account there is no ownership marker to write; the page
+    # does not show it anyway.
+    syncer.account_id = getattr(syncer, 'account_id', None) or 'preview'
+    try:
+        syncer.static_rules = [rule]
+        syncer.rulsets_by_type = {}
+        syncer.calculate_static_rules()
+    finally:
+        # A page view, not a run: leave no log entry behind.
+        syncer.close()
+    report = syncer.list_rule_report.get(rule.name) or {
+        'parsed': parse_list_source(rule.list_source), 'row_counts': []}
+    return {
+        'parsed': report['parsed'],
+        'row_counts': report['row_counts'],
+        'rules': {ruleset: list(rules) for ruleset, rules
+                  in syncer.rulsets_by_type.items()},
+        'problems': [text for level, text in syncer.log_details
+                     if level == 'ERROR'],
+    }
+
+
 def clean_postproccessed(data):
     """
     Normalize Checkmk's explicit_password tuples before rule comparison.
@@ -959,6 +995,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # (action, target, detail lines). Filled by _plan, printed by
         # _report_dry_run at the end of the run.
         self.dry_run_plan = []
+        # Setup Rule name -> parsed list and rules per row of every list
+        # rule this run rendered, see _calculate_list_rule.
+        self.list_rule_report = {}
 
     @property
     def rule_marker(self):
@@ -1358,6 +1397,20 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             rule_params['_syncer_rule'] = syncer_rule
             rule_params['_syncer_outcome'] = syncer_outcome
         return rule_params
+
+    @staticmethod
+    def _list_row_incomplete(rule_params, context):
+        """
+        Whether a row of a list renders the Value, or a service or host name
+        condition the outcome configures, to nothing. Such a row creates no
+        rule: without the condition the rule would apply to every service
+        or host, without the Value it is no rule at all.
+        """
+        for key in ('value_template', 'condition_service', 'condition_host'):
+            template = rule_params.get(key)
+            if template and not str(render_jinja(template, _ctx=context)).strip():
+                return True
+        return False
 
     def _apply_host_label_condition(self, rule_params, condition_tpl, context):
         """
@@ -2132,33 +2185,91 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         for rule_type, rules in host_actions.items():
             for rule_params in rules:
-                # loop_over_list without a list attribute name is a
-                # meaningless toggle (e.g. accidentally ticked in the
-                # form) — treat it like a plain rule instead of failing
-                # on the empty attribute lookup.
-                if rule_params.get('loop_over_list') and \
-                        rule_params.get('list_to_loop'):
-                    loop_list, error = resolve_loop_list(
-                        rule_params['list_to_loop'], attributes['all'])
-                    if error:
-                        self.log_error(
-                            f"Loop list '{rule_params['list_to_loop']}' of "
-                            f"{rule_params.get('ruleset')} could not be "
-                            f"rendered: {error}")
-                        continue
-                    for loop_idx, loop_value in enumerate(loop_list):
-                        loop_rule_params = dict(rule_params)
-                        loop_rule_params.pop('loop_over_list', None)
-                        loop_rule_params.pop('list_to_loop', None)
-                        updated_rule = self.build_condition_and_update_rule_params(
-                            loop_rule_params, attributes, loop_value, loop_idx
-                        )
-                        self._collect_rule(rule_type, updated_rule)
-                else:
-                    updated_rule = self.build_condition_and_update_rule_params(
-                        rule_params, attributes
-                    )
+                for updated_rule in self._build_outcome_rules(
+                        rule_params, attributes):
                     self._collect_rule(rule_type, updated_rule)
+
+    def _build_outcome_rules(self, rule_params, attributes, from_list=False):
+        """
+        The Checkmk rules one outcome renders to against ``attributes``:
+        one per entry of its loop list, or a single one without a loop.
+        Outcomes that render to nothing are left out.
+
+        ``from_list`` marks a row of a Setup Rule's list: an entry whose
+        Value, service or host name condition renders empty is left out as
+        well (see ``_list_row_incomplete``).
+        """
+        # loop_over_list without a list attribute name is a
+        # meaningless toggle (e.g. accidentally ticked in the
+        # form) — treat it like a plain rule instead of failing
+        # on the empty attribute lookup.
+        if not (rule_params.get('loop_over_list') and
+                rule_params.get('list_to_loop')):
+            if from_list and self._list_row_incomplete(
+                    rule_params, attributes['all']):
+                return []
+            updated_rule = self.build_condition_and_update_rule_params(
+                rule_params, attributes)
+            return [updated_rule] if updated_rule is not None else []
+        loop_list, error = resolve_loop_list(
+            rule_params['list_to_loop'], attributes['all'])
+        if error:
+            self.log_error(
+                f"Loop list '{rule_params['list_to_loop']}' of "
+                f"{rule_params.get('ruleset')} could not be "
+                f"rendered: {error}")
+            return []
+        built = []
+        for loop_idx, loop_value in enumerate(loop_list):
+            loop_rule_params = dict(rule_params)
+            loop_rule_params.pop('loop_over_list', None)
+            loop_rule_params.pop('list_to_loop', None)
+            if from_list and self._list_row_incomplete(
+                    loop_rule_params, dict(attributes['all'], loop=loop_value,
+                                           loop_idx=loop_idx)):
+                continue
+            updated_rule = self.build_condition_and_update_rule_params(
+                loop_rule_params, attributes, loop_value, loop_idx
+            )
+            if updated_rule is not None:
+                built.append(updated_rule)
+        return built
+
+    def _calculate_list_rule(self, rule, rule_project=None):
+        """
+        Render a Setup Rule that carries a list once per row of that list.
+
+        Every row is rendered like a host-independent rule, with the row's
+        columns as Jinja variables (see ``row_context``); a loop list is
+        resolved against the row as well. Rows rendering to the same rule
+        collapse, and rows only differing in their service names are joined
+        into one rule (``merge_service_conditions``). A list that cannot be
+        read creates no rule at all and is reported.
+        """
+        parsed = parse_list_source(rule.list_source)
+        # How many Checkmk rules each row produced, before joining. Read by
+        # the list rule debug page (preview_list_rule).
+        row_counts = [0] * len(parsed.rows)
+        self.list_rule_report[rule.name] = {'parsed': parsed,
+                                            'row_counts': row_counts}
+        if parsed.errors:
+            self.log_error(
+                f"List rule '{rule.name}' skipped, its list is not valid: "
+                f"{'; '.join(parsed.errors)}")
+            return
+        for outcome_doc in rule.outcomes:
+            outcome = dict(outcome_doc.to_mongo())
+            if rule_project:
+                outcome['project'] = rule_project
+            built = []
+            for row_idx, row in enumerate(parsed.rows):
+                row_rules = self._build_outcome_rules(
+                    outcome, {'all': row_context(row, row_idx)},
+                    from_list=True)
+                row_counts[row_idx] += len(row_rules)
+                built.extend(row_rules)
+            for updated_rule in merge_service_conditions(built):
+                self._collect_rule(outcome['ruleset'], updated_rule)
 
 
 
@@ -2189,6 +2300,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             # project here too — a static project rule must ignore the
             # account's folder scope like every other project rule.
             rule_project = getattr(rule, 'project', None)
+            if rule_uses_list(getattr(rule, 'rule_source', None),
+                              getattr(rule, 'list_source', None)):
+                self._calculate_list_rule(rule, rule_project)
+                continue
             for outcome in rule.outcomes:
                 outcome = dict(outcome.to_mongo())
                 if rule_project:

@@ -1,0 +1,188 @@
+{# Rule source switch and List preview of a Checkmk Setup Rule.
+
+   * The "Rule source" select decides which step 2 section is shown: the host
+     Conditions, or the Pasted List. Static Rule is hidden for a list rule,
+     which is always host-independent.
+   * The pasted text and the outcome templates go to the view's
+     `_list_source_preview` endpoint, which parses them exactly like the
+     export does. The answer is shown below the field: separator, the column
+     variables (click one to insert it into the outcome field last edited),
+     the first rows, errors and variables that are no column.
+   Cell content is only ever inserted as text. #}
+<style>
+#list-source-preview { margin: -4px 0 12px; font-size: 0.85rem; }
+#list-source-preview .lsp-meta { color: var(--surface-muted, #6c757d); margin: 4px 0; }
+#list-source-preview .lsp-vars { margin: 4px 0 6px; }
+#list-source-preview .lsp-var {
+  font-family: ui-monospace, monospace; font-size: 0.8rem;
+  margin: 0 4px 4px 0; padding: 1px 8px;
+  border: 1px solid var(--surface-border, #ced4da); border-radius: 10px;
+  background: var(--surface-subtle, #f8f9fa); color: var(--surface-text, #2c3e50);
+  cursor: pointer;
+}
+#list-source-preview .lsp-var:hover { background: rgba(26, 205, 182, 0.18); }
+#list-source-preview .lsp-var small { color: var(--surface-muted, #6c757d); margin-left: 4px; }
+#list-source-preview .lsp-errors { color: var(--danger, #c0392b); margin: 4px 0; padding-left: 18px; }
+#list-source-preview .lsp-warnings { color: var(--warning-text, #9a6700); margin: 4px 0; padding-left: 18px; }
+#list-source-preview .lsp-scroll { max-height: 260px; overflow: auto; }
+#list-source-preview table { width: auto; margin: 0; }
+#list-source-preview th, #list-source-preview td { padding: 2px 8px; white-space: pre; }
+#list-source-preview th small { display: block; font-weight: normal; color: var(--surface-muted, #6c757d); }
+</style>
+<script>
+(function () {
+  var field = document.getElementById('list_source');
+  var box = document.getElementById('list-source-preview');
+  var help = document.getElementById('list-source-help');
+  if (!field || !box || !help) { return; }
+  var form = field.form;
+  var url = "{{ get_url('.list_source_preview') }}";
+  var listSection = help.closest('section');
+  var condTyp = document.getElementById('condition_typ');
+  var condSection = condTyp ? condTyp.closest('section') : null;
+  var staticBox = document.getElementById('static_rule');
+  var staticGroup = staticBox ? (staticBox.closest('.form-check') || staticBox.closest('.form-group') || staticBox.parentNode) : null;
+  var switcher = document.getElementById('rule_source');
+  var loadedAsList = mode() === 'list';
+  var lastField = null;
+  var timer = null;
+
+  function mode() {
+    return switcher && switcher.value ? switcher.value : 'hosts';
+  }
+
+  function applyMode() {
+    var isList = mode() === 'list';
+    if (listSection) { listSection.style.display = isList ? '' : 'none'; }
+    if (condSection) { condSection.style.display = isList ? 'none' : ''; }
+    if (staticGroup) { staticGroup.style.display = isList ? 'none' : ''; }
+    // A list rule is stored as static; back to per host, it is not.
+    if (staticBox && !isList && loadedAsList) { staticBox.checked = false; }
+    if (isList) { refresh(); }
+  }
+
+  function el(tag, text, cls) {
+    var node = document.createElement(tag);
+    if (text !== undefined) { node.textContent = text; }
+    if (cls) { node.className = cls; }
+    return node;
+  }
+
+  function variable(name) { return '{{ "{{ " }}' + name + '{{ " }}" }}'; }
+
+  function insert(text) {
+    if (!lastField || !document.body.contains(lastField)) {
+      window.alert('Click into an outcome field (Value, a condition, ...) first, then on the variable.');
+      return;
+    }
+    var start = lastField.selectionStart || 0;
+    var end = lastField.selectionEnd || 0;
+    var value = lastField.value;
+    lastField.value = value.slice(0, start) + text + value.slice(end);
+    lastField.focus();
+    lastField.selectionStart = lastField.selectionEnd = start + text.length;
+    lastField.dispatchEvent(new Event('input', {bubbles: true}));
+  }
+
+  function messages(list, cls) {
+    if (!list.length) { return; }
+    var ul = el('ul', undefined, cls);
+    list.forEach(function (msg) { ul.appendChild(el('li', msg)); });
+    box.appendChild(ul);
+  }
+
+  function show(data) {
+    box.textContent = '';
+    if (!field.value.trim()) {
+      box.appendChild(el('div', 'Paste a list above: first line the column names, then one line per rule.', 'lsp-meta'));
+      return;
+    }
+    box.appendChild(el('div', data.row_count + ' row(s), ' + (data.delimiter || '?') +
+      ' separated. Column variables (click to insert into the outcome field you were editing):', 'lsp-meta'));
+    var vars = el('div', undefined, 'lsp-vars');
+    data.columns.concat(['row_idx']).forEach(function (name) {
+      var chip = el('button', variable(name), 'lsp-var');
+      chip.type = 'button';
+      chip.addEventListener('mousedown', function (event) { event.preventDefault(); });
+      chip.addEventListener('click', function () { insert(variable(name)); });
+      vars.appendChild(chip);
+    });
+    box.appendChild(vars);
+    messages(data.errors, 'lsp-errors');
+    messages(data.warnings, 'lsp-warnings');
+    if (!data.rows.length) { return; }
+    var wrap = el('div', undefined, 'lsp-scroll');
+    var table = el('table', undefined, 'table table-sm table-bordered');
+    var head = el('tr');
+    head.appendChild(el('th', 'row_idx'));
+    data.columns.forEach(function (name) { head.appendChild(el('th', variable(name))); });
+    table.appendChild(head);
+    data.rows.forEach(function (row, idx) {
+      var tr = el('tr');
+      tr.appendChild(el('td', String(idx)));
+      data.columns.forEach(function (name) { tr.appendChild(el('td', row[name])); });
+      table.appendChild(tr);
+    });
+    wrap.appendChild(table);
+    box.appendChild(wrap);
+    if (data.row_count > data.rows.length) {
+      box.appendChild(el('div', 'First ' + data.rows.length + ' of ' + data.row_count + ' rows shown.', 'lsp-meta'));
+    }
+  }
+
+  function refresh() {
+    if (mode() !== 'list') { return; }
+    var body = new FormData();
+    body.append('list_source', field.value);
+    form.querySelectorAll('[name^="outcomes-"]').forEach(function (input) {
+      if (input.type !== 'checkbox') { body.append(input.name, input.value); }
+    });
+    fetch(url, {
+      method: 'POST',
+      body: body,
+      credentials: 'same-origin',
+      headers: {'X-CSRFToken': "{{ csrf_token() }}"}
+    }).then(function (resp) { return resp.json(); })
+      .then(show)
+      .catch(function () { box.textContent = ''; });
+  }
+
+  function later() {
+    clearTimeout(timer);
+    timer = setTimeout(refresh, 400);
+  }
+
+  {% if model is defined and model and model.id %}
+  // Saved rule: link its debug page right in the help.
+  var slot = document.getElementById('list-rule-debug-slot');
+  if (slot) {
+    slot.textContent = '';
+    var link = el('a', 'Debug this rule');
+    link.href = "{{ get_url('.list_rule_debug', id=model.id) }}";
+    link.target = '_blank';
+    slot.appendChild(link);
+    slot.appendChild(document.createTextNode(' (opens a new tab, shows the saved state)'));
+  }
+  {% endif %}
+
+  form.addEventListener('focusin', function (event) {
+    var target = event.target;
+    if (target.name && target.name.indexOf('outcomes-') === 0 &&
+        (target.tagName === 'TEXTAREA' || target.type === 'text')) {
+      lastField = target;
+    }
+  });
+  form.addEventListener('input', function (event) {
+    if (event.target === field ||
+        (event.target.name && event.target.name.indexOf('outcomes-') === 0)) {
+      later();
+    }
+  });
+  if (switcher) {
+    switcher.addEventListener('change', applyMode);
+    // Select2 (if it decorates the select) reports changes through jQuery.
+    if (window.jQuery) { window.jQuery(switcher).on('change', applyMode); }
+  }
+  applyMode();
+})();
+</script>

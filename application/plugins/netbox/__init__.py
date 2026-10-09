@@ -88,6 +88,66 @@ def get_device_debug_data(hostname):
 
     return attributes, extra_attributes, rule_logs
 
+# Netbox exports that work on objects, each with its own rule type: debug
+# label, rule engine and rule model. The label names the rule group on the
+# debug page.
+OBJECT_RULE_TYPES = (
+    ('IP Addresses', NetboxIpamIPaddressRule, NetboxIpamIpaddressattributes),
+    ('Prefixes', NetboxIpamPrefixRule, NetboxIpamPrefixAttributes),
+    ('Interfaces', NetboxInterfaceRule, NetboxDcimInterfaceAttributes),
+    ('Virtual Interfaces', NetboxVirtInterfaceRule,
+     NetboxVirtualizationInterfaceAttributes),
+    ('Contacts', NetboxContactRule, NetboxContactAttributes),
+    ('Dataflow', NetboxDataflowRule, NetboxDataflowAttributes),
+)
+
+
+def get_object_debug_data(hostname):
+    """
+    Debug data of a host or CMDB object for the Netbox object exports (IP
+    addresses, prefixes, interfaces, contacts, dataflow): the attributes
+    after the Netbox rewrite, and for every object rule type the matching
+    rules and their outcome. Returns ``(attributes, outcomes, rule_logs)``.
+    """
+    rule_logs = {}
+    rewrite = load_device_rules()['rewrite']
+    rewrite.debug = True
+
+    syncer = SyncDevices(False)
+    syncer.config = {'_id': "debugmode"}
+    syncer.debug = True
+    syncer.filter = False
+    syncer.rewrite = rewrite
+
+    db_object = clear_host_debug_cache(hostname, 'netbox')
+    if not db_object:
+        return None, None, None
+
+    attributes = syncer.get_attributes(db_object, 'netbox')
+    rule_logs['rewrite'] = rewrite.debug_result()
+    outcomes = {}
+    if not attributes:
+        return attributes, outcomes, rule_logs
+    for label, engine_class, model in OBJECT_RULE_TYPES:
+        engine = engine_class()
+        engine.debug = True
+        engine.rules = model.objects(enabled=True).order_by('sort_field')
+        try:
+            outcome = engine.get_outcomes(db_object, attributes['all'],
+                                          persist_cache=False, use_cache=False)
+        except Exception as exp:  # pylint: disable=broad-exception-caught
+            rule_logs[label] = [{
+                'name': f'ERROR evaluating {label} rules',
+                'hit': False, 'last_match': '', 'condition_type': '',
+                'no_match_reason': None, 'error': str(exp),
+            }]
+            continue
+        rule_logs[label] = engine.debug_result()
+        if outcome:
+            outcomes[label] = outcome
+    return attributes, outcomes, rule_logs
+
+
 def load_device_rules():
     """
     Cache all needed Rules for operation
