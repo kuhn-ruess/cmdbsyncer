@@ -160,12 +160,31 @@ def merge_list_of_dicts(input_list):
     dict_obj = {k: v for d in input_list for k, v in d.items() if v}
     return dict_obj
 
-def replace_account_variable(match):
-    account_var = match.group(0)
-    try:
-        return get_account_variable(account_var)
-    except ValueError:
-        return account_var
+_ACCOUNT_MACRO = re.compile(r'\{\{\s*ACCOUNT:[^}]+\}\}')
+_ACCOUNT_VALUE_NAME = 'syncer_account_value_'
+
+
+def replace_account_variables(value):
+    """
+    Swap each resolvable {{ACCOUNT:...}} macro for a Jinja variable.
+
+    The account values come back as a dict for the render context. They
+    must not become part of the template source: a password holding
+    `{{`, `{%` or `{#` would be parsed as Jinja and come out mangled or
+    empty. A macro whose account cannot be resolved stays as it is.
+    """
+    values = {}
+
+    def _replace(match):
+        try:
+            resolved = get_account_variable(match.group(0))
+        except ValueError:
+            return match.group(0)
+        name = f'{_ACCOUNT_VALUE_NAME}{len(values)}'
+        values[name] = resolved
+        return '{{ ' + name + ' }}'
+
+    return _ACCOUNT_MACRO.sub(_replace, value), values
 
 
 # Filters have to be registered on both envs — an overlay copies the
@@ -255,7 +274,9 @@ def render_jinja(value, mode="ignore", replace_newlines=True, **kwargs):
     # Jinja spelling `{{ ACCOUNT:name:field }}` resolves like the compact
     # `{{ACCOUNT:name:field}}`.
     if isinstance(value, str) and 'ACCOUNT:' in value:
-        value = re.sub(r'\{\{\s*ACCOUNT:[^}]+\}\}', replace_account_variable, value)
+        value, account_values = replace_account_variables(value)
+        if account_values:
+            kwargs = {**kwargs, **account_values}
 
     if replace_newlines and isinstance(value, str):
         value = value.replace('\n', '')
