@@ -2,11 +2,14 @@
 # Install Check_MK Agent on Windows
 - name: "Download Checkmk Agent."
   ansible.windows.win_get_url:
-    url: "https://{{ cmk_server }}:{{ cmk_server_port }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=windows_msi&host_name={{ inventory_hostname }}"
+    url: "https://{{ cmk_server }}:{{ cmk_server_port }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=windows_msi&host_name={{ cmk_agent_host_name }}"
     dest: "{{ cmk_windows_tmp }}\\cmk_agent.msi"
     headers:
-      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
+      # Built here instead of url_password: win_get_url encodes Basic auth
+      # as ASCII, b64encode uses UTF-8 like Checkmk expects.
+      Authorization: "Basic {{ (cmk_user ~ ':' ~ cmk_secret) | b64encode }}"
       accept: "application/octet-stream"
+  no_log: true
   when: cmk_install_agent | bool
 
 - name: "Install Checkmk Agent"
@@ -16,20 +19,81 @@
     state: present
   when: cmk_install_agent | bool
 
+# win_command passes argv without PowerShell, every value is escaped as
+# one argument.
 - name: "Register Agent for TLS."
-  ansible.windows.win_shell: ".\\cmk-agent-ctl.exe register --hostname {{ inventory_hostname }} --server {{ cmk_server }}:{{ cmk_agent_receiver_port }} --site {{ cmk_site }} --user {{ cmk_user }} --password {{ cmk_secret }} --trust-cert"
-  args:
-    chdir: C:\\Program Files (x86)\\checkmk\service
+  ansible.windows.win_command:
+    argv:
+      - C:\Program Files (x86)\checkmk\service\cmk-agent-ctl.exe
+      - register
+      - --hostname
+      - "{{ cmk_agent_host_name }}"
+      - --server
+      - "{{ cmk_server }}:{{ cmk_agent_receiver_port }}"
+      - --site
+      - "{{ cmk_site }}"
+      - --user
+      - "{{ cmk_user }}"
+      - --password
+      - "{{ cmk_secret }}"
+      - --trust-cert
+    chdir: C:\Program Files (x86)\checkmk\service
+  no_log: true
   when: cmk_register_tls | bool
 
+# check_mk_agent.exe joins the updater arguments with plain spaces into a
+# new command line. User and secret are therefore handed over already
+# quoted by the Windows argument rules, so they survive that join.
 - name: "Register Agent on Local Bakery."
-  ansible.windows.win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_server }}:{{ cmk_server_port }} -i {{ cmk_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{ cmk_secret }} -v"
-  args:
-    chdir: C:\\Program Files (x86)\\checkmk\service
+  ansible.windows.win_command:
+    argv:
+      - C:\Program Files (x86)\checkmk\service\check_mk_agent.exe
+      - updater
+      - register
+      - -s
+      - "{{ cmk_server }}:{{ cmk_server_port }}"
+      - -i
+      - "{{ cmk_site }}"
+      - -H
+      - "{{ cmk_agent_host_name }}"
+      - -p
+      - https
+      - -U
+      - "{{ cmk_updater_user }}"
+      - -S
+      - "{{ cmk_updater_secret }}"
+      - -v
+    chdir: C:\Program Files (x86)\checkmk\service
+  vars: &cmk_updater_vars
+    cmk_updater_user: >-
+      {{ '"' ~ (cmk_user | regex_replace('(\\*)"', '\1\1\\"')
+                         | regex_replace('(\\+)$', '\1\1')) ~ '"' }}
+    cmk_updater_secret: >-
+      {{ '"' ~ (cmk_secret | regex_replace('(\\*)"', '\1\1\\"')
+                           | regex_replace('(\\+)$', '\1\1')) ~ '"' }}
+  no_log: true
   when: cmk_register_bakery | bool
 
 - name: "Register Agent on Central Bakery."
-  ansible.windows.win_shell: ".\\check_mk_agent.exe updater register -s {{ cmk_main_server }}:{{ cmk_server_port }} -i {{ cmk_main_site }} -H {{ inventory_hostname }} -p https -U {{ cmk_user }} -S {{ cmk_secret }} -v"
-  args:
-    chdir: C:\\Program Files (x86)\\checkmk\service
+  ansible.windows.win_command:
+    argv:
+      - C:\Program Files (x86)\checkmk\service\check_mk_agent.exe
+      - updater
+      - register
+      - -s
+      - "{{ cmk_main_server }}:{{ cmk_server_port }}"
+      - -i
+      - "{{ cmk_main_site }}"
+      - -H
+      - "{{ cmk_agent_host_name }}"
+      - -p
+      - https
+      - -U
+      - "{{ cmk_updater_user }}"
+      - -S
+      - "{{ cmk_updater_secret }}"
+      - -v
+    chdir: C:\Program Files (x86)\checkmk\service
+  vars: *cmk_updater_vars
+  no_log: true
   when: cmk_register_central_bakery | bool

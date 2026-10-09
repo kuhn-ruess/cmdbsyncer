@@ -13,13 +13,16 @@
 
 - name: "Download Checkmk Agent."
   ansible.builtin.uri:
-    url: "https://{{ cmk_server }}:{{ cmk_server_port }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=linux_rpm&host_name={{ inventory_hostname }}"
+    url: "https://{{ cmk_server }}:{{ cmk_server_port }}/{{ cmk_site }}/check_mk/api/1.0/domain-types/agent/actions/download_by_host/invoke?os_type=linux_rpm&host_name={{ cmk_agent_host_name }}"
     dest: "{{ cmk_linux_tmp }}/cmk_agent.rpm"
     method: GET
     validate_certs: "{{ validate_certs | bool }}"
+    url_username: "{{ cmk_user }}"
+    url_password: "{{ cmk_secret }}"
+    force_basic_auth: true
     headers:
-      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
       Accept: "application/octet-stream"
+  no_log: true
   when: cmk_install_agent | bool
   register: checkmk_agent_download_state
   ignore_errors: yes

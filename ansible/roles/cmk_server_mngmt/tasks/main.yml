@@ -89,8 +89,10 @@
     url: "{{ cmk_main_server_full }}/check_mk/api/1.0/domain-types/downtime/collections/host"
     method: POST
     validate_certs: no
+    url_username: "{{ cmk_user }}"
+    url_password: "{{ cmk_secret }}"
+    force_basic_auth: true
     headers:
-      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
       Accept: "application/json"
       Content-Type: "application/json"
     body_format: json
@@ -99,8 +101,8 @@
       end_time: "{{ checkmk_downtime_end.stdout }}"
       comment: "Site update in progress"
       downtime_type: "host"
-      host_name: "{{ inventory_hostname }}"
-
+      host_name: "{{ cmk_agent_host_name }}"
+  no_log: true
   when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed and (cmk_user | default('') | trim) != '' and (cmk_secret | default('') | trim) != ''
   ignore_errors: yes
   delegate_to: localhost

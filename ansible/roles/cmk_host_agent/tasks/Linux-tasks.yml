@@ -1,28 +1,69 @@
 ---
+# The commands run without a shell and get every value as its own
+# argument, so a secret with spaces, quotes, $ or backslashes reaches
+# the agent unchanged.
 - name: "Register Agent for TLS."
   become: true
-  ansible.builtin.shell: |
-    cmk-agent-ctl register -H {{ inventory_hostname }} \
-    -s {% if cmk_server_ip %}{{ cmk_server_ip}}{% else %}{{ cmk_server }}{% endif %}:{{ cmk_agent_receiver_port }}  -i {{ cmk_site }} \
-    -U {{ cmk_user }} --password {{ cmk_secret }} --trust-cert
+  ansible.builtin.command:
+    argv:
+      - cmk-agent-ctl
+      - register
+      - -H
+      - "{{ cmk_agent_host_name }}"
+      - -s
+      - "{{ cmk_server_ip if cmk_server_ip else cmk_server }}:{{ cmk_agent_receiver_port }}"
+      - -i
+      - "{{ cmk_site }}"
+      - -U
+      - "{{ cmk_user }}"
+      - --password
+      - "{{ cmk_secret }}"
+      - --trust-cert
+  no_log: true
   when: cmk_register_tls | bool
   ignore_errors: yes
 
 - name: "Register Agent on Local Bakery."
   become: true
-  ansible.builtin.shell: |
-    cmk-update-agent register -H {{ inventory_hostname }} \
-    -s {% if cmk_server_ip %}{{ cmk_server_ip}}{% else %}{{ cmk_server }}{% endif %}:{{cmk_server_port}} -i {{ cmk_site }} -p https \
-    -U {{ cmk_user }} --password {{ cmk_secret }}
+  ansible.builtin.command:
+    argv:
+      - cmk-update-agent
+      - register
+      - -H
+      - "{{ cmk_agent_host_name }}"
+      - -s
+      - "{{ cmk_server_ip if cmk_server_ip else cmk_server }}:{{ cmk_server_port }}"
+      - -i
+      - "{{ cmk_site }}"
+      - -p
+      - https
+      - -U
+      - "{{ cmk_user }}"
+      - --password
+      - "{{ cmk_secret }}"
+  no_log: true
   when: cmk_register_bakery | bool
   ignore_errors: yes
 
 - name: "Register Agent on Central Bakery."
   become: true
-  ansible.builtin.shell: |
-    cmk-update-agent register -H {{ inventory_hostname }} \
-    -s {% if cmk_main_server_ip %}{{ cmk_main_server_ip}}{% else %}{{ cmk_main_server }}{% endif %}:{{cmk_server_port}} -i {{ cmk_main_site }} -p https \
-    -U {{ cmk_user }} --password {{ cmk_secret }}
+  ansible.builtin.command:
+    argv:
+      - cmk-update-agent
+      - register
+      - -H
+      - "{{ cmk_agent_host_name }}"
+      - -s
+      - "{{ cmk_main_server_ip if cmk_main_server_ip else cmk_main_server }}:{{ cmk_server_port }}"
+      - -i
+      - "{{ cmk_main_site }}"
+      - -p
+      - https
+      - -U
+      - "{{ cmk_user }}"
+      - --password
+      - "{{ cmk_secret }}"
+  no_log: true
   when: cmk_register_central_bakery | bool
   ignore_errors: yes
 

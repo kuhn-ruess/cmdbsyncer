@@ -17,3 +17,8 @@ cmk_agent_port: 6556
 cmk_agent_configure_firewall_zone: public
 configure_firewall: False
 validate_certs: True
+# Host name the role reports to Checkmk (agent download, registration,
+# host creation, discovery). Override it per host with an Ansible custom
+# variable when the Checkmk host name differs from the inventory name,
+# e.g. short name in Checkmk while ansible_host holds the FQDN.
+cmk_agent_host_name: "{{ inventory_hostname }}"

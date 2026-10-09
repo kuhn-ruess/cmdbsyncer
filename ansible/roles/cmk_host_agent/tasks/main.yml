@@ -4,15 +4,18 @@
     url: "https://{{ cmk_main_server }}/{{ cmk_main_site }}/check_mk/api/1.0/domain-types/host_config/collections/all"
     method: POST
     validate_certs: "{{ validate_certs | bool }}"
+    url_username: "{{ cmk_user }}"
+    url_password: "{{ cmk_secret }}"
+    force_basic_auth: true
     headers:
-      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
       Accept: "application/json"
       Content-Type: "application/json"
     body_format: json
     body:
-      host_name: "{{ inventory_hostname }}"
+      host_name: "{{ cmk_agent_host_name }}"
       folder: "{{ cmk_create_folder | default('/') }}"
     status_code: [200, 201, 409]
+  no_log: true
   when: cmk_create_host | bool
   delegate_to: localhost
   ignore_errors: yes
@@ -24,12 +27,17 @@
     url: "https://{{ cmk_main_server }}/{{ cmk_main_site }}/check_mk/api/1.0/domain-types/service_discovery_run/actions/start/invoke"
     method: POST
     validate_certs: "{{ validate_certs | bool }}"
+    url_username: "{{ cmk_user }}"
+    url_password: "{{ cmk_secret }}"
+    force_basic_auth: true
     headers:
-      Authorization: "Bearer {{ cmk_user }} {{ cmk_secret }}"
       Accept: "application/json"
     return_content: false
-    body: "{\"host_name\": \"{{ inventory_hostname }}\", \"mode\": \"fix_all\" }"
+    body:
+      host_name: "{{ cmk_agent_host_name }}"
+      mode: "fix_all"
     body_format: json
+  no_log: true
   when: cmk_discover | bool
   ignore_errors: yes
   delegate_to: localhost
