@@ -109,6 +109,7 @@ class Account(db.Document):
         enabled (bool): Whether the account is enabled.
 
     Methods:
+        encrypt_password(password, key=False): Encrypts the password.
         set_password(password, key=False): Encrypts and stores the password.
         get_password(key=False): Decrypts and returns the password.
     """
@@ -167,9 +168,9 @@ class Account(db.Document):
                 return entry.value or default
         return default
 
-    def set_password(self, password, key=False):
+    def encrypt_password(self, password, key=False):
         """
-        Encrypt Password in Store
+        Put the password encrypted on the account, without saving it
         """
         if key:
             cryptography_key = key
@@ -177,6 +178,12 @@ class Account(db.Document):
             cryptography_key = app.config['CRYPTOGRAPHY_KEY']
         f = Fernet(cryptography_key)
         self.password_crypted = f.encrypt(str.encode(password)).decode('utf-8')
+
+    def set_password(self, password, key=False):
+        """
+        Encrypt Password in Store
+        """
+        self.encrypt_password(password, key)
         self.save()
 
     def get_password(self, key=False):
