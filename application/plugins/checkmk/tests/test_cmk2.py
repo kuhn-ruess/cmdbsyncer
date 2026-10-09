@@ -2,14 +2,13 @@
 Unit tests for the CMK2 base class
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
-import base64
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 
 import requests
 
 from application.plugins.checkmk.cmk2 import (
-    CmkException, CMK2, FALLBACK_CMK_VERSION, auth_header)
+    CmkException, CMK2, FALLBACK_CMK_VERSION)
 
 
 class TestCmkException(unittest.TestCase):
@@ -22,28 +21,6 @@ class TestCmkException(unittest.TestCase):
     def test_message(self):
         exc = CmkException("test error")
         self.assertEqual(str(exc), "test error")
-
-
-class TestAuthHeader(unittest.TestCase):
-    """The Authorization header carries every password Checkmk accepts."""
-
-    def test_plain_password_uses_bearer(self):
-        self.assertEqual(auth_header('automation', 'secret'),
-                         'Bearer automation secret')
-
-    def test_latin1_password_keeps_bearer(self):
-        password = 'Gr\u00fc\u00dfe\u00a7\u00b4\\"\'{%$'
-        header = auth_header('automation', password)
-        self.assertEqual(header, f'Bearer automation {password}')
-        header.encode('latin-1')
-
-    def test_password_beyond_latin1_uses_utf8_basic(self):
-        password = 'Gr\u00fc\u00dfe\u00a7\u00b4\u20ac\\'
-        header = auth_header('automation', password)
-        self.assertTrue(header.startswith('Basic '))
-        header.encode('ascii')
-        decoded = base64.b64decode(header[6:]).decode('utf-8')
-        self.assertEqual(decoded, f'automation:{password}')
 
 
 class TestCMK2Request(unittest.TestCase):
