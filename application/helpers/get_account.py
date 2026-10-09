@@ -20,7 +20,18 @@ SECRET_ACCOUNT_FIELDS = ('password', 'password_crypted')
 
 SECRET_PLACEHOLDER = '********'
 
-_mask_secrets = ContextVar('mask_account_secrets', default=False)
+_mask_secrets = ContextVar('mask_account_secrets', default=None)
+
+
+class SecretMasking:  # pylint: disable=too-few-public-methods
+    """
+    State of one `mask_account_secrets` block. `used` turns True once a
+    secret was replaced by the placeholder, so the caller knows its
+    results hold placeholders instead of real values.
+    """
+
+    def __init__(self):
+        self.used = False
 
 
 @contextmanager
@@ -34,10 +45,14 @@ def mask_account_secrets():
     `checkmk`) could add a rule whose outcome is the macro, open the
     debug page and read the password of *any* account — bypassing the
     `account` role that guards the account views.
+
+    Yields a `SecretMasking`: whatever was computed inside the block and
+    cached for later runs carries the placeholder when its `used` is set.
     """
-    token = _mask_secrets.set(True)
+    masking = SecretMasking()
+    token = _mask_secrets.set(masking)
     try:
-        yield
+        yield masking
     finally:
         _mask_secrets.reset(token)
 
@@ -71,8 +86,25 @@ def clear_account_cache(*_args, **_kwargs):
     _account_cache.clear()
 
 
+def clear_host_caches(*_args, **_kwargs):
+    """
+    Drop the per host outcome caches. Wired to Account save/delete.
+
+    Rule outcomes are cached with every {{ACCOUNT:...}} macro already
+    resolved, so the exports reading them (e.g. the Ansible inventory)
+    would keep serving what the account held when the cache was built,
+    or an empty value when it did not exist yet. Saving a rule drops
+    the caches for the same reason.
+    """
+    # Imported here: the host model renders Jinja, which imports this module.
+    from application.models.host import Host  # pylint: disable=import-outside-toplevel
+    Host.objects(cache__ne={}).update(set__cache={})
+
+
 signals.post_save.connect(clear_account_cache, sender=Account)
 signals.post_delete.connect(clear_account_cache, sender=Account)
+signals.post_save.connect(clear_host_caches, sender=Account)
+signals.post_delete.connect(clear_host_caches, sender=Account)
 
 
 def _resolve_password(account):
@@ -164,7 +196,9 @@ def get_account_variable(macro):
         inner = macro.strip().removeprefix('{{').removesuffix('}}')
         _, account, var = (part.strip() for part in inner.split(':'))
         value = get_account_by_name(account)[var]
-        if var in SECRET_ACCOUNT_FIELDS and _mask_secrets.get():
+        masking = _mask_secrets.get()
+        if var in SECRET_ACCOUNT_FIELDS and masking is not None:
+            masking.used = True
             return SECRET_PLACEHOLDER
         return value
     except (ValueError, KeyError, AccountNotFoundError) as exc:

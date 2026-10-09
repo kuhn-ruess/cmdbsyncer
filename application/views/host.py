@@ -286,6 +286,42 @@ def _normalize_rule_log(data):
     return {'rules': data or [], 'outcomes': {}}
 
 
+def _run_debug(hostname, mode, ansible_project):
+    """
+    Evaluate the rules of debug `mode` for `hostname`.
+
+    Returns the plugin's (attributes, actions, debug_log).
+    """
+    debug_funcs = {
+        'checkmk_host': cmk_host_debug,
+        'netbox_device': netbox_host_debug,
+        'ansible_host': ansible_host_debug,
+        'idoit_host': idoit_host_debug,
+        'vmware_host': vmware_host_debug,
+        'jira_cloud_host': jira_cloud_host_debug,
+    }
+
+    # The debug run renders every matching rule's outcome and shows the
+    # result on the page. A rule outcome may contain the
+    # {{ACCOUNT:<name>:password}} macro, so mask account secrets for the
+    # whole run. Otherwise a plugin role alone would be enough to read
+    # any account's password here.
+    with mask_account_secrets() as masking:
+        if mode == 'ansible_host':
+            # Ansible rules live inside projects; let the caller pick which
+            # project's rules to evaluate (defaults to the Default project).
+            result = ansible_host_debug(hostname, ansible_project)
+        else:
+            result = debug_funcs[mode](hostname)
+    if masking.used:
+        # The debug run stores its outcomes in the host cache, where the
+        # exports read them from (e.g. the Ansible inventory). With the
+        # placeholder in them, the next export would send it instead of
+        # the secret, so the host has to compute them again.
+        Host.objects(hostname=hostname).update(set__cache={})
+    return result
+
+
 def get_debug(hostname, mode, ansible_project=None):
     """
     Get Output for Host Debug Page
@@ -302,27 +338,7 @@ def get_debug(hostname, mode, ansible_project=None):
         output = {}
         output_rules = {}
 
-        debug_funcs = {
-            'checkmk_host': cmk_host_debug,
-            'netbox_device': netbox_host_debug,
-            'ansible_host': ansible_host_debug,
-            'idoit_host': idoit_host_debug,
-            'vmware_host': vmware_host_debug,
-            'jira_cloud_host': jira_cloud_host_debug,
-        }
-
-        # The debug run renders every matching rule's outcome and shows the
-        # result on the page. A rule outcome may contain the
-        # {{ACCOUNT:<name>:password}} macro, so mask account secrets for the
-        # whole run — otherwise a plugin role alone would be enough to read
-        # any account's password here.
-        with mask_account_secrets():
-            if mode == 'ansible_host':
-                # Ansible rules live inside projects; let the caller pick which
-                # project's rules to evaluate (defaults to the Default project).
-                attributes, actions, debug_log = ansible_host_debug(hostname, ansible_project)
-            else:
-                attributes, actions, debug_log = debug_funcs[mode](hostname)
+        attributes, actions, debug_log = _run_debug(hostname, mode, ansible_project)
 
         for type_name, data in debug_log.items():
             output_rules[type_name] = _normalize_rule_log(data)
