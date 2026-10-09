@@ -11,6 +11,7 @@ from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
 from application.helpers.label_history import label_history_enabled
 from application.models.host_cleanup import HostQuerySet, relation_target
+from application.models.host_create_time import stamp_create_time
 from application.models.host_templates import parse_cmdb_match, clear_consumer_cache
 from application.models.account import (
     account_is_master, report_master_skip, object_types,
@@ -375,7 +376,8 @@ class Host(db.Document):
         if create:
             new_host = Host()
             new_host.hostname = hostname
-            new_host.create_time = datetime.datetime.utcnow()
+            # create_time is stamped by the pre_save receiver below, so
+            # a host created anywhere else gets one too.
             return new_host
         return False
 
@@ -694,7 +696,6 @@ class Host(db.Document):
         """
         return self.labels
 
-
     def set_inventory_attribute(self, key, value):
         """
         Set a Singe Attribute to the Inventory and Save it.
@@ -710,7 +711,6 @@ class Host(db.Document):
         self.cache = {}
         self.save()
         return True
-
 
     def _inventory_match_passes(self, new_data, config):
         """
@@ -743,7 +743,6 @@ class Host(db.Document):
         Updates all inventory entries, with names who starting with given key.
         Ones not existing any more in new_data will be removed.
         Will also reset the Cache for the Host if some changes are detected.
-
 
         Args:
            key (string): Identifier for Inventory Attributes
@@ -811,7 +810,6 @@ class Host(db.Document):
         """
         Add Log Entry to Host log.
         Can be shown in Frontend in the Host View.
-
 
         Args:
             entry (string): Message
@@ -929,7 +927,6 @@ class Host(db.Document):
         # Owned by a master — the caller discards everything this run changed.
         report_master_skip(self.hostname, self.source_account_name)
         return False
-
 
     def set_import_sync(self):
         """
@@ -1094,6 +1091,9 @@ class Host(db.Document):
             'type': rtype, 'target_host': self.pk,
         }}}))
 
+
+# A host records when it was created, no matter which path saved it.
+signals.pre_save.connect(stamp_create_time, sender=Host)
 
 # Template values live in every consumer's attribute cache, so editing a
 # template has to invalidate it — no matter which entry point wrote it.
