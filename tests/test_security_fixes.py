@@ -109,6 +109,13 @@ class AccountSecretMaskingTest(unittest.TestCase):
             value = self._resolve('{{ACCOUNT:mon:address}}')
         self.assertEqual(value, 'https://cmk.example')
 
+    def test_masking_reports_a_masked_secret(self):
+        with get_account.mask_account_secrets() as masking:
+            self._resolve('{{ACCOUNT:mon:address}}')
+            self.assertFalse(masking.used)
+            self._resolve('{{ACCOUNT:mon:password}}')
+        self.assertTrue(masking.used)
+
     def test_masking_is_reset_after_the_block(self):
         with get_account.mask_account_secrets():
             pass
