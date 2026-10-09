@@ -31,6 +31,9 @@ PASSWORDS = [
     'per%cent%s',
     'dol$lar$1',
     'ünïcödé€',
+    'Grüße§´ß€\\',
+    'ÄÖÜäöü°^²³µ',
+    'ab\\ä\\ß',
     'all\\\'"{}%$ü',
 ]
 
@@ -42,10 +45,10 @@ check(form, 302, method='post', data={
     'typ': 'custom',
     'address': 'https://example.org',
     'enabled': 'y',
-    'password': PASSWORDS[0],
+    'password': PASSWORDS[-1],
 })
 account = Account.objects.get(name='chars-account')
-eq(account.get_password(), PASSWORDS[0], 'password after create')
+eq(account.get_password(), PASSWORDS[-1], 'password after create')
 
 edit = f'/admin/account/edit/?id={account.pk}'
 for number, password in enumerate(PASSWORDS):

@@ -1,6 +1,7 @@
 """
 Central Request Modul to CMK 2.x
 """
+import base64
 import multiprocessing
 import requests
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
@@ -15,6 +16,24 @@ cli_cmk = register_cli_group(app, 'checkmk', 'checkmk', "Checkmk commands")
 # shape of a rule condition (2.2 used a different one), so the newest
 # format is the safe default for anything that does not talk to Checkmk.
 FALLBACK_CMK_VERSION = '2.4.0'
+
+
+def auth_header(username, password):
+    """
+    The Authorization header for the Checkmk REST API.
+
+    HTTP sends header values as latin-1, so a password holding a character
+    beyond it (like the euro sign) cannot go into the plain Bearer header:
+    requests fails on it before anything is sent. Checkmk decodes Basic
+    credentials as UTF-8, so those passwords go that way. Every other
+    password keeps the Bearer header the older Checkmk versions expect.
+    """
+    try:
+        f'{username} {password}'.encode('latin-1')
+    except UnicodeEncodeError:
+        token = base64.b64encode(f'{username}:{password}'.encode('utf-8'))
+        return f"Basic {token.decode('ascii')}"
+    return f'Bearer {username} {password}'
 
 
 class CmkException(Exception):
@@ -199,7 +218,7 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
 
         url = f'{address}/check_mk/{api_version}{url}'
         headers = {
-            'Authorization': f'Bearer {username} {password}',
+            'Authorization': auth_header(username, password),
             'Accept': 'application/json',
             'Content-Type': 'application/json',
         }
