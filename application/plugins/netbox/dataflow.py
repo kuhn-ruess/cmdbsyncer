@@ -96,17 +96,13 @@ class SyncDataFlow(SyncNetbox):
             self.console = progress.console.print
             task1 = progress.add_task("Updating Data in Netbox", total=total)
 
-            for db_object in db_objects:
+            # Every host, then every row of a list rule.
+            for hostname, _attributes, object_config in self.hosts_and_list_rows(
+                    db_objects, 'netbox'):
                 create_list = []
                 update_list = []
 
-                all_attributes = self.get_attributes(db_object, 'netbox')
-                if not all_attributes:
-                    progress.advance(task1)
-                    continue
-
-                object_config = self.get_host_data(db_object, all_attributes['all'])
-                self.console(f" * Handle {db_object.hostname}")
+                self.console(f" * Handle {hostname}")
 
                 allowed_rules = [x.name for x in rules]
                 if not 'rules' in object_config:

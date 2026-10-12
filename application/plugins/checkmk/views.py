@@ -37,7 +37,6 @@ from application.modules.rule.views import (
     _render_full_conditions,
     get_rule_json,
     _render_jinja,
-    _modern_rule_form,
 )
 from application.views._form_sections import modern_form, section
 from application.models.project import Project
@@ -61,6 +60,7 @@ from .models import (
 from .folder_attributes import CONTACTGROUP_FLAGS, FOLDER_ATTRIBUTE_CATALOG
 from .cmk_rules import label_condition_problems, preview_list_rule
 from .list_source import OUTCOME_TEMPLATE_FIELDS
+from .notification_rules import JINJA_FIELDS, validate_outcome_jinja
 
 
 def _subform_data(subform, name):
@@ -103,6 +103,15 @@ class ProjectSelectField(SelectField):
 
 div_open = rules.HTML('<div class="form-check form-check-inline">')
 div_close = rules.HTML("</div>")
+
+# Main card of the rule types without a sort field (BI, Downtimes).
+MAIN_FIELDS_WITHOUT_SORT = (
+    rules.Field('name'),
+    rules.Field('documentation'),
+    div_open,
+    rules.NestedRule(('enabled', 'last_match')),
+    div_close,
+)
 
 main_open = rules.HTML('<div class="card">'\
         '<h5 class="card-header">Main Options</h5>'\
@@ -779,10 +788,18 @@ bi_rule_template.update({
         }
     })
 
-class CheckmkBiRuleView(DefaultModelView):
+class CheckmkBiRuleView(ListSourceViewMixin, DefaultModelView):  # pylint: disable=too-many-ancestors
     """
     Custom BI Rule View
     """
+    list_source_creates = 'BI object'
+    list_source_per_outcome = True
+    list_source_main_fields = MAIN_FIELDS_WITHOUT_SORT
+    list_source_help_items = (
+        'Objects with the same ID are created once.',
+    )
+    list_source_outcome = ('BI Rule', 'Business Intelligence object pushed into Checkmk.')
+    list_source_template_fields = (('rule_template', 'Template'),)
     can_export = True
 
     export_types = ['syncer_rules', ]
@@ -793,22 +810,6 @@ class CheckmkBiRuleView(DefaultModelView):
         'name': get_rule_json
     }
 
-    form_rules = _modern_rule_form(
-        main_fields=[
-            rules.Field('name'),
-            rules.Field('documentation'),
-            div_open,
-            rules.NestedRule(('enabled', 'last_match')),
-            div_close,
-        ],
-        condition_fields=[
-            rules.Field('condition_typ'),
-            rules.Field('conditions'),
-        ],
-        outcome_fields=[rules.Field('outcomes')],
-        outcome_title='BI Rule',
-        outcome_desc='Business Intelligence rule pushed into Checkmk.',
-    )
 
     form_excluded_columns = (
         'render_full_conditions',
@@ -849,12 +850,6 @@ class CheckmkBiRuleView(DefaultModelView):
             rule.rule_template = rule.rule_template.replace('true','True')
 
         return super().on_model_change(form, model, is_created)
-
-    def __init__(self, model, **kwargs):
-        """
-        """
-        #self.form_subdocuments = bi_rule_template
-        super().__init__(model, **kwargs)
 
     def is_accessible(self):
         """ Overwrite """
@@ -1896,26 +1891,27 @@ class CheckmkSitePoolView(DefaultModelView):
         return current_user.is_authenticated and current_user.has_right('checkmk')
 
 
-class CheckmkDowntimeView(RuleModelView):
+class CheckmkDowntimeView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Checkmk Downtimes
     """
-    # Custom Form Rules because default needs the sort_field which we not have
-    form_rules = _modern_rule_form(
-        main_fields=[
-            rules.Field('name'),
-            rules.Field('documentation'),
-            div_open,
-            rules.NestedRule(('enabled', 'last_match')),
-            div_close,
-        ],
-        condition_fields=[
-            rules.Field('condition_typ'),
-            rules.Field('conditions'),
-        ],
-        outcome_fields=[rules.Field('outcomes')],
-        outcome_title='Downtime',
-        outcome_desc='Schedule a Checkmk downtime window for matching hosts.',
+    list_source_creates = 'set of downtimes'
+    list_source_main_fields = MAIN_FIELDS_WITHOUT_SORT
+    list_source_help_items = (
+        'The column <code>hostname</code> (or <code>name</code>) names the '
+        'Checkmk host the downtimes are set on, a row without it sets none.',
+    )
+    list_source_outcome = ('Downtime', 'Schedule a Checkmk downtime window.')
+    list_source_template_fields = (
+        ('start_day_template', 'Start Day Template'),
+        ('every_template', 'Every Template'),
+        ('offset_days_template', 'Offset Days Template'),
+        ('start_time_h', 'Start Hour'),
+        ('start_time_m', 'Start Minute'),
+        ('end_time_h', 'End Hour'),
+        ('end_time_m', 'End Minute'),
+        ('duration_h', 'Duration'),
+        ('downtime_comment', 'Comment'),
     )
 
     column_labels = {
@@ -2119,10 +2115,20 @@ def _service_event_select(*args, **kwargs):
     return _CheckboxMultiField(*args, **kwargs)
 
 
-class CheckmkNotificationRuleView(RuleModelView):
+class CheckmkNotificationRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Custom Notification Rule Model View
     """
+    list_source_creates = 'notification rule'
+    list_source_per_outcome = True
+    list_source_help_items = (
+        'Identical rules are created once.',
+    )
+    list_source_outcome = ('Notification Rule',
+                           'One Checkmk notification rule body. Empty fields '
+                           'disable the corresponding condition.')
+    list_source_template_fields = tuple(
+        (field, field.replace('_', ' ').capitalize()) for field in JINJA_FIELDS)
     edit_template = 'admin/model/checkmk_notification_rule_edit.html'
     create_template = 'admin/model/checkmk_notification_rule_create.html'
 
@@ -2213,25 +2219,6 @@ class CheckmkNotificationRuleView(RuleModelView):
                 names.add(name)
         return names
 
-    form_rules = _modern_rule_form(
-        main_fields=[
-            rules.Field('name'),
-            rules.Field('documentation'),
-            div_open,
-            rules.NestedRule(('enabled', 'last_match')),
-            div_close,
-            rules.Field('sort_field'),
-        ],
-        condition_fields=[
-            rules.Field('condition_typ'),
-            rules.Field('conditions'),
-        ],
-        outcome_fields=[rules.Field('outcomes')],
-        outcome_title='Notification Rule',
-        outcome_desc='One Checkmk notification rule body, rendered '
-                     'against each matching host\'s attributes. '
-                     'Empty fields disable the corresponding condition.',
-    )
 
     column_labels = {
         'render_cmk_notification_rule': "Notification Rules",
@@ -2337,8 +2324,6 @@ class CheckmkNotificationRuleView(RuleModelView):
         """
         if not super().validate_form(form):
             return False
-        # pylint: disable-next=import-outside-toplevel
-        from .notification_rules import JINJA_FIELDS, validate_outcome_jinja
         outcomes = getattr(form, 'outcomes', None)
         for entry in getattr(outcomes, 'entries', None) or []:
             entry_form = getattr(entry, 'form', None)
@@ -2389,25 +2374,24 @@ class CheckmkDCDView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too
         FilterLike('project', 'Project'),
     )
 
-    form_rules = list_source_rule_form(
-        main_fields=[
-            rules.Field('name'),
-            rules.Field('documentation'),
-            rules.Field('project'),
-            div_open,
-            rules.NestedRule(('enabled', 'last_match', 'static_rule')),
-            div_close,
-            rules.Field('sort_field'),
-        ],
-        creates='DCD connection',
-        help_items=(
-            'A row whose DCD ID renders empty creates none; identical '
-            'connections are created once.',
-            '<code>{{ cmk_site }}</code> and <code>{{ account }}</code> are '
-            'available in every row as well.',
-        ),
-        outcome=('DCD Rule', 'The DCD connection(s) to create in Checkmk.'),
+    list_source_creates = 'DCD connection'
+    list_source_per_outcome = True
+    list_source_main_fields = (
+        rules.Field('name'),
+        rules.Field('documentation'),
+        rules.Field('project'),
+        div_open,
+        rules.NestedRule(('enabled', 'last_match', 'static_rule')),
+        div_close,
+        rules.Field('sort_field'),
     )
+    list_source_help_items = (
+        'A row whose DCD ID renders empty creates none; identical '
+        'connections are created once.',
+        '<code>{{ cmk_site }}</code> and <code>{{ account }}</code> are '
+        'available in every row as well.',
+    )
+    list_source_outcome = ('DCD Rule', 'The DCD connection(s) to create in Checkmk.')
 
     # Rendered per row: the text fields of a DCD connection.
     list_source_template_fields = (

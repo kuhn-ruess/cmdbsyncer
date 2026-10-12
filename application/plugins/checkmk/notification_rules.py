@@ -472,17 +472,29 @@ class CheckmkNotificationRuleSync(CMK2):
                     continue
                 host_actions = self.actions.get_outcomes(  # pylint: disable=no-member
                     db_host, attributes['all'])
-                for outcome in (host_actions or {}).get('rules', []):
-                    for body in self._render_outcome(outcome, attributes['all'],
-                                                     marker_full,
-                                                     db_host.hostname):
-                        key = _canonical(body['rule_config'])
-                        if key in seen:
-                            continue
-                        seen.add(key)
-                        rules.append(body)
+                self._add_rules(rules, seen, host_actions, attributes['all'],
+                                marker_full, db_host.hostname)
                 progress.advance(task1)
+            # Every row of a list rule renders its outcomes once.
+            for row in self.list_rows():
+                self._add_rules(rules, seen, row.outcomes, row.attributes['all'],
+                                marker_full, row.name or row.rule)
         return rules
+
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
+    def _add_rules(self, rules, seen, actions, attributes, marker_full, hostname):
+        """
+        Render the matched outcomes of one host or list row and add the
+        rule bodies not ``seen`` before to ``rules``.
+        """
+        for outcome in (actions or {}).get('rules', []):
+            for body in self._render_outcome(outcome, attributes,
+                                             marker_full, hostname):
+                key = _canonical(body['rule_config'])
+                if key in seen:
+                    continue
+                seen.add(key)
+                rules.append(body)
 
     def _loop_contexts(self, outcome, attributes, hostname=''):
         """

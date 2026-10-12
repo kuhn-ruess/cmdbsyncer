@@ -4,7 +4,7 @@ Netbox Rule
 """
 from mongoengine import CASCADE
 from application import db
-from application.modules.rule.models import rule_types
+from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
 
 #   .-- Rewrite Attribute
 class NetboxRewriteAttributeRule(db.Document):
@@ -46,13 +46,16 @@ class NetboxClusterOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxClusterAttributes(db.Document):
+class NetboxClusterAttributes(ListSourceMixin, db.Document):
     """
     Configure Clusters
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
@@ -95,13 +98,16 @@ class NetboxVirtualMachineOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxVirtualMachineAttributes(db.Document):
+class NetboxVirtualMachineAttributes(ListSourceMixin, db.Document):
     """
     Virutal Machine
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
@@ -149,7 +155,7 @@ class NetboxOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxCustomAttributes(db.Document):
+class NetboxCustomAttributes(ListSourceMixin, db.Document):
     """
     Define Rule based Custom Variables
     LEGACY: This is for Devices
@@ -157,6 +163,9 @@ class NetboxCustomAttributes(db.Document):
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
@@ -245,13 +254,16 @@ class NetboxIpamPrefixOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxIpamPrefixAttributes(db.Document):
+class NetboxIpamPrefixAttributes(ListSourceMixin, db.Document):
     """
     Define Rule based Prefixes
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
@@ -399,13 +411,16 @@ class NetboxContactOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxContactAttributes(db.Document):
+class NetboxContactAttributes(ListSourceMixin, db.Document):
     """
     Define Rule based Custom Variables
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
@@ -437,13 +452,16 @@ class NetboxDataflowOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxDataflowAttributes(db.Document):
+class NetboxDataflowAttributes(ListSourceMixin, db.Document):
     """
     Define Rule based DataFlow Attributes
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))

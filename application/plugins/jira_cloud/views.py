@@ -18,6 +18,7 @@ from pygments.lexers import DjangoLexer
 from wtforms import HiddenField, StringField
 
 from application.modules.rule.views import FiltereModelView, RuleModelView
+from application.modules.rule.list_source_views import ListSourceViewMixin
 from application.views.default import DefaultModelView
 from application.plugins.jira_cloud.models import JiraSchemaCache
 
@@ -109,8 +110,17 @@ def _render_outcomes(_view, _context, model, _name):
     return Markup(html)
 
 
-class JiraExportRuleView(RuleModelView):
+class JiraExportRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """Flask-Admin view for JiraExportRule."""
+
+    list_source_creates = 'Jira object'
+    list_source_help_items = (
+        'The column <code>hostname</code> (or <code>name</code>) finds the '
+        'object by its Name and names a new one, a row without it creates '
+        'none.',
+    )
+    list_source_outcome = ('Field Mapping', 'The Jira attributes to write.')
+    list_source_template_fields = (('value', 'Value'),)
 
     column_list = (
         'name', 'enabled', 'sort_field',

@@ -3,7 +3,7 @@
 VMware Rule
 """
 from application import db
-from application.modules.rule.models import rule_types
+from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
 
 #   .-- Rewrite Attribute
 class VMwareRewriteAttributes(db.Document):
@@ -36,13 +36,16 @@ class VMwareCustomAttributesOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class VMwareCustomAttributes(db.Document):
+class VMwareCustomAttributes(ListSourceMixin, db.Document):
     """
     Configure Custom Attributes
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))

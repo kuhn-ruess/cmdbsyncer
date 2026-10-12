@@ -21,6 +21,7 @@ from application.modules.rule.views import (
     div_close,
     div_open,
 )
+from application.modules.rule.list_source_views import ListSourceViewMixin
 from application.views.default import DefaultModelView
 
 from application.modules.rule.models import (
@@ -390,10 +391,19 @@ class _ProjectAwareRuleView:  # pylint: disable=too-few-public-methods
         return form
 
 
-class AnsibleCustomVariablesView(_ProjectAwareRuleView, RuleModelView):  # pylint: disable=too-many-ancestors
+class AnsibleCustomVariablesView(_ProjectAwareRuleView, ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Custom Rule Model View
     """
+    list_source_creates = 'inventory host'
+    list_source_main_fields = _ansible_main_fields()
+    list_source_help_items = (
+        'The column <code>hostname</code> (or <code>name</code>) names the '
+        'host in the inventory, a row without it adds none. Its columns are '
+        'host variables next to the outcomes.',
+    )
+    list_source_outcome = ('Outcomes', 'The variables of the inventory host.')
+    list_source_template_fields = (('attribute_value', 'Attribute Value'),)
 
 
     list_template = ANSIBLE_RULE_LIST_TEMPLATE
@@ -412,16 +422,6 @@ class AnsibleCustomVariablesView(_ProjectAwareRuleView, RuleModelView):  # pylin
         'project': _format_project,
     }
 
-    form_rules = _modern_rule_form(
-        main_fields=_ansible_main_fields(),
-        condition_fields=[
-            form_rules.Field('condition_typ'),
-            form_rules.Field('conditions'),
-        ],
-        outcome_fields=[form_rules.Field('outcomes')],
-        outcome_title='Outcomes',
-        outcome_desc='What the rule does to matching hosts.',
-    )
 
     def is_accessible(self):
         """ Overwrite """

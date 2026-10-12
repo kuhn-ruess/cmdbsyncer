@@ -9,7 +9,7 @@ from mongoengine.errors import ValidationError
 from application import db
 from application.helpers.retention import register_retention, retention_seconds
 from application.modules.inventory import is_reserved_provider_name
-from application.modules.rule.models import rule_types
+from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
 
 _PROJECT_NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.\-]*$')
 
@@ -158,13 +158,16 @@ register_retention('Ansible run history', AnsibleRunStats, 'started_at',
                    RUN_STATS_RETENTION_KEY, DEFAULT_RUN_STATS_RETENTION_DAYS)
 
 
-class AnsibleCustomVariablesRule(db.Document):
+class AnsibleCustomVariablesRule(ListSourceMixin, db.Document):
     """
     Rules for Ansible
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     project = db.ReferenceField(
         document_type=AnsibleProject,

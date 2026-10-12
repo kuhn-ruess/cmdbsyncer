@@ -1,4 +1,6 @@
-{% extends 'admin/model/create.html' %}
+{# The create page of a rule with a list source: the view's own create page
+   (list_source_base, set by ListSourceViewMixin) plus the list preview. #}
+{% extends list_source_base or 'admin/model/create.html' %}
 
 {% block tail %}
   {{ super() }}

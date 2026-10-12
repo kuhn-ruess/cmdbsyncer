@@ -343,14 +343,10 @@ class SyncNetbox(Plugin):
             task1 = progress.add_task(f"Updating Data for {what}", total=None)
 
 
-            for db_object in db_objects:
-                hostname = db_object.hostname
+            # Every host, then every row of a list rule.
+            for hostname, _attributes, cfg in self.hosts_and_list_rows(
+                    db_objects, 'netbox'):
                 try:
-                    all_attributes = self.get_attributes(db_object, 'netbox')
-                    if not all_attributes:
-                        progress.advance(task1)
-                        continue
-                    cfg = self.get_host_data(db_object, all_attributes['all'])
                     if not cfg:
                         progress.advance(task1)
                         continue

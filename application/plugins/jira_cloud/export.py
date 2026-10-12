@@ -271,6 +271,10 @@ class JiraCloudExport(JiraCloud):
                     logger.exception("Export failed for %s", db_host.hostname)
                     self.log_details.append(
                         (f'export_error {db_host.hostname}', str(error)))
+            # A row of a list rule is one more object, named by the row.
+            self.export_list_rows(
+                lambda row: self._process_outcomes(row.name, row.outcomes, counts, console),
+                rule_engine, named=True)
 
         for type_id in all_type_ids:
             c = counts[type_id]
@@ -289,10 +293,16 @@ class JiraCloudExport(JiraCloud):
         if not attrs:
             return
         outcomes = rule_engine.get_outcomes(db_host, attrs['all'])
+        self._process_outcomes(db_host.hostname, outcomes, counts, console)
+
+    def _process_outcomes(self, lookup_value, outcomes, counts, console):
+        """
+        Create or update the Jira objects of one host or list row, found
+        by ``lookup_value`` in their Name attribute.
+        """
         fields_by_type = outcomes.get('fields_by_type') or {}
         if not fields_by_type:
             return
-        lookup_value = db_host.hostname
 
         for type_id_str, fields in fields_by_type.items():
             type_id = int(type_id_str)
@@ -311,7 +321,7 @@ class JiraCloudExport(JiraCloud):
                 target_attrs[name_to_id[name]] = value
             if unknown:
                 console(f"{cc.WARNING}   ? {cc.ENDC}"
-                        f"{db_host.hostname} [type {type_id}]: "
+                        f"{lookup_value} [type {type_id}]: "
                         f"unknown Jira attribute(s) {unknown}")
             if not target_attrs:
                 counts[type_id]["skipped"] += 1
@@ -329,30 +339,30 @@ class JiraCloudExport(JiraCloud):
                     for attr_id, new_value in changed.items():
                         old_value = current.get(attr_id, '<unset>')
                         console(f"{cc.OKBLUE}     · {cc.ENDC}"
-                                f"{db_host.hostname} [type {type_id}] "
+                                f"{lookup_value} [type {type_id}] "
                                 f"{id_to_name.get(attr_id, attr_id)}: "
                                 f"{old_value!r} -> {new_value!r}")
                 error = self._put_object(obj_id, type_id, changed)
                 if error:
                     console(f"{cc.FAIL}   ✗ {cc.ENDC}"
-                            f"{db_host.hostname} [type {type_id}] update "
+                            f"{lookup_value} [type {type_id}] update "
                             f"rejected by Jira: {error}")
                     # 'error' in the key flags the whole run as errored in
                     # the web log so the rejection is visible there and
                     # error-only notifications fire.
                     self.log_details.append(
-                        (f'export_error {db_host.hostname} [type {type_id}]',
+                        (f'export_error {lookup_value} [type {type_id}]',
                          f'update rejected: {error}'))
                     counts[type_id]["failed"] += 1
                     continue
                 verb = "would update" if self.dry_run else "updated"
                 console(f"{cc.OKGREEN}   ↻ {cc.ENDC}"
-                        f"{db_host.hostname} [type {type_id}] {verb} "
+                        f"{lookup_value} [type {type_id}] {verb} "
                         f"({len(changed)} field(s))")
                 counts[type_id]["updated"] += 1
             elif self.update_only:
                 console(f"{cc.WARNING}   ⊘ {cc.ENDC}"
-                        f"{db_host.hostname} [type {type_id}] "
+                        f"{lookup_value} [type {type_id}] "
                         f"(no existing object, skipped — update-only)")
                 counts[type_id]["skipped"] += 1
             else:
@@ -361,16 +371,16 @@ class JiraCloudExport(JiraCloud):
                 error = self._post_object(type_id, target_attrs)
                 if error:
                     console(f"{cc.FAIL}   ✗ {cc.ENDC}"
-                            f"{db_host.hostname} [type {type_id}] create "
+                            f"{lookup_value} [type {type_id}] create "
                             f"rejected by Jira: {error}")
                     self.log_details.append(
-                        (f'export_error {db_host.hostname} [type {type_id}]',
+                        (f'export_error {lookup_value} [type {type_id}]',
                          f'create rejected: {error}'))
                     counts[type_id]["failed"] += 1
                     continue
                 verb = "would create" if self.dry_run else "created"
                 console(f"{cc.OKBLUE}   + {cc.ENDC}"
-                        f"{db_host.hostname} [type {type_id}] ({verb})")
+                        f"{lookup_value} [type {type_id}] ({verb})")
                 counts[type_id]["created"] += 1
 
 

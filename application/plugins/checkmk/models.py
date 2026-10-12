@@ -551,12 +551,15 @@ class NotificationRuleOutcome(db.EmbeddedDocument):
     }
 
 
-class CheckmkNotificationRule(db.Document):
+class CheckmkNotificationRule(ListSourceMixin, db.Document):
     """
     Generate Checkmk notification rules from host attributes.
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -801,12 +804,15 @@ class BiAggregationOutcome(db.EmbeddedDocument):
 
 
 
-class CheckmkBiAggregation(db.Document):
+class CheckmkBiAggregation(ListSourceMixin, db.Document):
     """
     BI Aggregation
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -959,12 +965,15 @@ class BiRuleOutcome(db.EmbeddedDocument):
     }
 
 
-class CheckmkBiRule(db.Document):
+class CheckmkBiRule(ListSourceMixin, db.Document):
     """
     BI Rule
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
@@ -1041,12 +1050,15 @@ class DowtimeRuleOutcome(db.EmbeddedDocument):
     }
 
 
-class CheckmkDowntimeRule(db.Document):
+class CheckmkDowntimeRule(ListSourceMixin, db.Document):
     """
     Downtime Rule
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))

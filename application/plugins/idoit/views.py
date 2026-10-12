@@ -6,6 +6,7 @@ from markupsafe import Markup, escape
 from wtforms import HiddenField
 
 from application.modules.rule.views import RuleModelView
+from application.modules.rule.list_source_views import ListSourceViewMixin
 from .models import idoit_outcome_types
 
 def _render_idoit_outcome(_view, _context, model, _name):
@@ -22,10 +23,18 @@ def _render_idoit_outcome(_view, _context, model, _name):
     return Markup(html)
 
 
-class IdoitCustomAttributesView(RuleModelView):
+class IdoitCustomAttributesView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Custom rule model view
     """
+    list_source_creates = 'i-doit object'
+    list_source_help_items = (
+        'The column <code>hostname</code> (or <code>name</code>) is the '
+        'title of the object, a row without it creates none.',
+    )
+    list_source_outcome = ('i-doit Actions',
+                           'Object type, description and categories of the object.')
+    list_source_template_fields = (('param', 'Parameter'),)
 
     def __init__(self, model, **kwargs):
         """

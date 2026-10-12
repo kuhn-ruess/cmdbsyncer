@@ -1,11 +1,14 @@
 """
 Form side of a rule with a list source (see ``list_source.py``)
 
-A rule view offers the list by mixing in ``ListSourceViewMixin`` and
-building its form with ``list_source_rule_form``. The view then has the
-Rule source switch, the List field with its live preview, the check on
-save and the preview endpoint; what is rule type specific (the outcome
-fields rendered per row, extra help) is set as class attributes.
+A rule view offers the list by mixing in ``ListSourceViewMixin``. For a
+model with the list fields (see ``list_source_fields``) the view then has
+the Rule source switch, the List field with its live preview, the check on
+save and the preview endpoint; for a model without them it stays a plain
+rule view, so one view class can serve both. What is rule type specific
+(what a row creates, the outcome fields rendered per row, extra help) is
+set as class attributes; the form is built from them by
+``list_source_rule_form``.
 """
 from markupsafe import Markup
 from flask import flash, request
@@ -24,16 +27,38 @@ from application.modules.rule.list_source import (
 )
 from application.views._form_sections import modern_form, section
 
+# Main card of a rule form, as RuleModelView has it.
+RULE_MAIN_FIELDS = (
+    rules.Field('name'),
+    rules.Field('documentation'),
+    rules.HTML('<div class="form-check form-check-inline">'),
+    rules.NestedRule(('enabled', 'last_match')),
+    rules.HTML('</div>'),
+    rules.Field('sort_field'),
+)
+
+# Create and edit page of a rule with a list source.
+_LIST_PAGES = ('admin/model/list_source_create.html',
+               'admin/model/list_source_edit.html')
+
 # Names of the separators in the preview.
 _DELIMITER_NAMES = {'\t': 'tab', ';': 'semicolon', ',': 'comma', '|': 'pipe'}
 
 
-def list_source_help(creates, items):
+def _per_row(creates, per_outcome):
+    """What a row turns into, for the help and the card description."""
+    if per_outcome:
+        return f'one {creates} per row and per outcome'
+    return f'one {creates} per row, made of all outcomes'
+
+
+def list_source_help(creates, items, per_outcome=True):
     """
     The help shown above the List field: how columns become variables,
-    what a row creates (``creates`` names one of it, e.g. 'Checkmk rule'),
-    the rule type specific ``items`` (HTML of one list entry each) and how
-    the separator is found.
+    what a row creates (``creates`` names one of it, e.g. 'Checkmk rule';
+    ``per_outcome``: every outcome of a row creates one, else all outcomes
+    of a row make up one), the rule type specific ``items`` (HTML of one
+    list entry each) and how the separator is found.
     """
     entries = [
         '<b>First line = column names.</b> Each column becomes a Jinja '
@@ -43,7 +68,7 @@ def list_source_help(creates, items):
         '<code>{{ row }}</code>, its 0-based number <code>{{ row_idx }}'
         '</code>. The variables of your list are listed below the field as '
         'you paste.',
-        f'<b>Every row &times; every outcome</b> renders one {creates}.',
+        f'<b>The list replaces the hosts:</b> {_per_row(creates, per_outcome)}.',
         *items,
         'Separator (tab from a spreadsheet, <code>;</code>, <code>,</code> or '
         '<code>|</code>) is detected from the first line.',
@@ -55,7 +80,8 @@ def list_source_help(creates, items):
         + '</ul></div>')
 
 
-def list_source_rule_form(main_fields, creates, help_items, outcome):
+def list_source_rule_form(main_fields, creates, help_items, outcome,
+                          per_outcome=True):
     """
     ``form_rules`` of a rule with a list source: the three step cards of
     every rule form, with the Rule source switch below the main fields and
@@ -63,7 +89,8 @@ def list_source_rule_form(main_fields, creates, help_items, outcome):
     cards is shown, depending on the rule source (see
     ``_list_source_preview.html``).
 
-    ``creates`` names what one row and outcome create, ``help_items`` add
+    ``creates`` names what one row and outcome create (``per_outcome``,
+    else what one row creates of all its outcomes), ``help_items`` add
     rule type specific entries to the help (see ``list_source_help``),
     ``outcome`` is the ``(title, description)`` of the outcomes card.
     """
@@ -74,9 +101,9 @@ def list_source_rule_form(main_fields, creates, help_items, outcome):
                 'input from.',
                 [*main_fields, rules.Field('rule_source')]),
         section('2', 'cond', 'Pasted List',
-                f'One {creates} per row of this list and per outcome. Host '
+                f'{_per_row(creates, per_outcome).capitalize()}. Host '
                 'conditions do not apply.',
-                [rules.HTML(list_source_help(creates, help_items)),
+                [rules.HTML(list_source_help(creates, help_items, per_outcome)),
                  rules.Field('list_source'),
                  rules.HTML('<div id="list-source-preview"></div>')]),
         section('2', 'cond', 'Conditions',
@@ -96,17 +123,38 @@ class ListSourceViewMixin:
     Rule source switch, List field, live preview and the check on save for
     a rule view. Mix in before the view's base class.
     """
-    create_template = 'admin/model/list_source_create.html'
-    edit_template = 'admin/model/list_source_edit.html'
-
+    # What one row and outcome create, e.g. 'i-doit object'. When set, the
+    # form is built by ``list_source_rule_form`` from the attributes below;
+    # otherwise the view brings its own ``form_rules``.
+    list_source_creates = None
+    list_source_main_fields = RULE_MAIN_FIELDS
+    list_source_help_items = ()
+    list_source_outcome = ('Outcomes', 'What the rule creates.')
+    # Every outcome of a row creates one object (else all outcomes of a
+    # row make up one object, as they would for a host).
+    list_source_per_outcome = False
     # (field, label) of the outcome fields rendered per row: the save and
     # the preview warn when one of them reads a variable that is no column.
     list_source_template_fields = ()
     # Variables every row knows besides its columns, e.g. the account.
     list_source_known_names = ()
-    list_source_placeholder = 'name;value\nsrv01;gold\nsrv02;silver'
+    list_source_placeholder = 'hostname;value\nsrv01;gold\nsrv02;silver'
 
     def __init__(self, model, **kwargs):
+        if 'list_source' not in model._fields:  # pylint: disable=protected-access
+            # A rule type of this view without a list.
+            super().__init__(model, **kwargs)
+            return
+        # The list pages extend the view's own pages, see render.
+        self.create_template, self.edit_template = _LIST_PAGES
+        if self.list_source_creates:
+            self.form_rules = list_source_rule_form(
+                main_fields=list(self.list_source_main_fields),
+                creates=self.list_source_creates,
+                help_items=self.list_source_help_items,
+                outcome=self.list_source_outcome,
+                per_outcome=self.list_source_per_outcome,
+            )
         self.form_overrides = {**(self.form_overrides or {}),
                                'list_source': TextAreaField}
         self.form_args = {**(getattr(self, 'form_args', None) or {}),
@@ -134,6 +182,17 @@ class ListSourceViewMixin:
         self.column_exclude_list = [*(self.column_exclude_list or []),
                                     'list_source']
         super().__init__(model, **kwargs)
+
+    def render(self, template, **kwargs):
+        """
+        Tell a list page which page of the view it extends: the create or
+        edit page the view class has.
+        """
+        if template in _LIST_PAGES:
+            kwargs['list_source_base'] = (type(self).create_template
+                                          if template == _LIST_PAGES[0]
+                                          else type(self).edit_template)
+        return super().render(template, **kwargs)
 
     def _check_list_rule(self, data):
         """
@@ -194,7 +253,7 @@ class ListSourceViewMixin:
         it is exported in: from the list when one is filled in.
         """
         super().on_form_prefill(form, id)
-        if not form.rule_source.data:
+        if hasattr(form, 'rule_source') and not form.rule_source.data:
             form.rule_source.data = (
                 RULE_SOURCE_LIST if rule_uses_list(None, form.list_source.data)
                 else RULE_SOURCE_HOSTS)

@@ -170,7 +170,7 @@ def idoit_host_debug(hostname):
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY local RULE{ColorCodes.ENDC}")
         return
 
-    pprint.pprint(syncer.get_object_payload(db_host, rules))
+    pprint.pprint(syncer.get_object_payload(db_host.hostname, rules))
 
     attribute_table("Full Attribute List", attributes['all'])
     attribute_table("Filtered Attribute for i-doit Rules", attributes['filtered'])

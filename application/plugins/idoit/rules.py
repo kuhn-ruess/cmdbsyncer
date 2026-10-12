@@ -19,18 +19,18 @@ class IdoitVariableRule(Rule):
         Filter if labels match to a rule
         """
 
+        # A row of a list rule has no host, it is named by the row.
+        hostname = self.db_host.hostname if self.db_host else self.hostname
         for outcome in rule_outcomes:
             action = outcome['action']
 
             if action == 'id_category':
                 try:
-                    hostname = self.db_host.hostname
                     new_value = render_jinja(
                         outcome['param'],
                         mode='raise',
                         replace_newlines=False,
-                        HOSTNAME=hostname,
-                        **self.attributes,
+                        **{'HOSTNAME': hostname, **self.attributes},
                     )
                     as_dict = literal_eval(new_value)
                     outcomes.setdefault('id_category', {})
@@ -38,12 +38,10 @@ class IdoitVariableRule(Rule):
                 except jinja2.exceptions.UndefinedError:
                     pass
             elif action == 'id_object_description':
-                hostname = self.db_host.hostname
                 new_value = render_jinja(
                     outcome['param'],
                     replace_newlines=False,
-                    HOSTNAME=hostname,
-                    **self.attributes,
+                    **{'HOSTNAME': hostname, **self.attributes},
                 )
                 outcomes['description'] = new_value
             elif action == "ignore_host":

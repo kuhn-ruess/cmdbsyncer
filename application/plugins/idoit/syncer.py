@@ -205,7 +205,7 @@ class SyncIdoit(Plugin):
 
 #.
 #   .--- Get object payload
-    def get_object_payload(self, db_host, rules):
+    def get_object_payload(self, hostname, rules):
         """
         Get basic object payload to create or update a object
         """
@@ -215,7 +215,6 @@ class SyncIdoit(Plugin):
 
         method = "cmdb.object.create"
 
-        hostname = db_host.hostname
         payload =  {
            "version": "2.0",
            "method": method,
@@ -261,22 +260,29 @@ class SyncIdoit(Plugin):
             found_hosts.append(objectname)
 
             custom_rules = self.get_host_data(db_host, all_attributes["all"])
-            if custom_rules.get("ignore_host"):
-                continue
+            self.export_object(objectname, custom_rules, current_idoit_objects,
+                               f"({process:.0f}%) {objectname}")
 
-            print(f"\n{CC.HEADER}({process:.0f}%) {objectname}{CC.ENDC}")
+        # A row of a list rule is one more object, named by the row.
+        self.export_list_rows(
+            lambda row: self.export_object(row.name, row.outcomes, current_idoit_objects,
+                                           f"List rule {row.rule}: {row.name}"),
+            named=True)
 
-            current_id = False
-            if objectname not in current_idoit_objects:
-                payload = self.get_object_payload(db_host,
-                                                  custom_rules)
-
-                print(f"{CC.OKBLUE} *{CC.ENDC} Create Host id {current_id}")
-
-                self.request(payload)
-
-            else:
-                print(f"{CC.WARNING} *{CC.ENDC}  Host already existed")
+    def export_object(self, objectname, custom_rules, current_idoit_objects, title):
+        """
+        Create the i-doit object of one host or list row, unless it exists
+        already or the rules ignore it.
+        """
+        if custom_rules.get("ignore_host"):
+            return
+        print(f"\n{CC.HEADER}{title}{CC.ENDC}")
+        if objectname not in current_idoit_objects:
+            payload = self.get_object_payload(objectname, custom_rules)
+            print(f"{CC.OKBLUE} *{CC.ENDC} Create Host {objectname}")
+            self.request(payload)
+        else:
+            print(f"{CC.WARNING} *{CC.ENDC}  Host already existed")
 
 #.
 #   .--- Import hosts

@@ -797,6 +797,69 @@ class Plugin():
         """
         return self.actions.get_outcomes(db_host, attributes)
 #.
+#   .-- List Rows
+    def list_rows(self, engine=None, context=None, named=False):
+        """
+        The rows of the list rules of ``engine`` (default: this plugin's
+        actions), see Rule.list_rows. An export works on each row the way
+        it works on a host, with ``row.attributes`` and ``row.outcomes``.
+
+        ``named``: the export needs the name of the object a row stands
+        for (the ``hostname`` or ``name`` column), a row without one is
+        reported and skipped. A list that cannot be read is reported too.
+        """
+        engine = engine or self.actions
+        for row in engine.list_rows(context):
+            if named and not row.name:
+                self.log_error(
+                    f"List rule '{row.rule}', row {row.row_idx + 1} skipped: "
+                    "it needs a 'hostname' or 'name' column to name its object")
+                continue
+            yield row
+        for message in engine.list_errors:
+            self.log_error(message)
+
+    def export_list_rows(self, export, engine=None, context=None, named=False):
+        """
+        Call ``export(row)`` for every row of the list rules (see
+        list_rows), the way an export loop calls its work for a host: a row
+        that fails is logged as an export error and the next one goes on.
+        """
+        for row in self.list_rows(engine, context, named):
+            try:
+                export(row)
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                if self.debug:
+                    raise
+                name = row.name or f"{row.rule}, row {row.row_idx + 1}"
+                logger.exception("Export failed for list row %s", name)
+                self.log_details.append((f'export_error {name}', str(error)))
+                print(f" Error in process: {error}")
+
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
+    def hosts_and_list_rows(self, db_objects, cache_key, engine=None,
+                            context=None, named=False):
+        """
+        ``(name, attributes, outcomes)`` of everything an export renders:
+        each host of ``db_objects`` that is not filtered out, with its
+        outcomes of ``engine`` (default: get_host_data, which asks this
+        plugin's actions), then each row of the engine's list rules (see
+        list_rows). A row without a name is named after its rule and
+        position.
+        """
+        for db_host in db_objects:
+            attributes = self.get_attributes(db_host, cache_key)
+            if not attributes:
+                continue
+            if engine:
+                outcomes = engine.get_outcomes(db_host, attributes['all'])
+            else:
+                outcomes = self.get_host_data(db_host, attributes['all'])
+            yield db_host.hostname, attributes, outcomes
+        for row in self.list_rows(engine, context, named):
+            yield (row.name or f"{row.rule}, row {row.row_idx + 1}",
+                   row.attributes, row.outcomes)
+#.
 
     def debug_rules(self, hostname, _model=None):
         """

@@ -2,7 +2,7 @@
 i-doit Model
 """
 from application import db
-from application.modules.rule.models import rule_types
+from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
 
 #   .-- Rewrite Attribute
 class IdoitRewriteAttributeRule(db.Document):
@@ -45,13 +45,16 @@ class IdoitOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class IdoitCustomAttributes(db.Document):
+class IdoitCustomAttributes(ListSourceMixin, db.Document):
     """
     Define rule based custom i-doit variables
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))

@@ -14,6 +14,7 @@ from wtforms import HiddenField
 
 from application.views.default import DefaultModelView
 from application.modules.rule.views import RuleModelView, get_rule_json
+from application.modules.rule.list_source_views import ListSourceViewMixin
 from .models import (netbox_outcome_types,
                      netbox_ipam_ipaddress_outcome_types,
                      netbox_device_interface_outcome_types,
@@ -66,10 +67,19 @@ def _render_netbox_outcome(_view, _context, model, _name):
     return Markup(html)
 
 
-class NetboxCustomAttributesView(RuleModelView):
+class NetboxCustomAttributesView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Custom Rule Model View
     """
+    list_source_creates = 'Netbox object'
+    list_source_help_items = (
+        'A device or virtual machine is named by the column '
+        '<code>hostname</code> (or <code>name</code>), a row without it '
+        'creates none. Other objects are found by their outcomes, as for a '
+        'host.',
+    )
+    list_source_outcome = ('Netbox Actions', 'The fields of the Netbox object.')
+    list_source_template_fields = (('param', 'Parameter'),)
 
     def __init__(self, model, **kwargs):
         """
@@ -125,10 +135,13 @@ def _render_dataflow_outcome(_view, _context, model, _name):
     html += "</table>"
     return Markup(html)
 
-class NetboxDataFlowAttributesView(RuleModelView):
+class NetboxDataFlowAttributesView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Custom Dataflow Model
     """
+    list_source_creates = 'Dataflow object'
+    list_source_outcome = ('Fields', 'The fields of the Dataflow object.')
+    list_source_template_fields = (('field_value', 'Field Value'),)
 
     def __init__(self, model, **kwargs):
         """

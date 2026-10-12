@@ -231,17 +231,7 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
                         progress.advance(task1)
                         continue
 
-                    self.console(f" * Work on {hostname}")
-                    logger.debug("%s: %s", hostname, custom_rules)
-                    if not (vm_host_data := current_attributes.get(hostname)):
-                        logger.debug(" Not found in VMware Data")
-                        progress.advance(task1)
-                        continue
-                    changes = self._write_custom_attributes(
-                        current_vms[hostname], vm_host_data, custom_rules['attributes'])
-                    if changes and self.dry_run:
-                        self.console(f"   [dry-run] would update: {changes}")
-                    logger.debug(" Updated: %s", changes)
+                    self.export_vm(hostname, custom_rules, current_attributes, current_vms)
 
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     if self.debug:
@@ -250,6 +240,27 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
                     self.console(f" Error in process: {error}")
                 progress.advance(task1)
 
+            # A row of a list rule writes to the virtual machine it names.
+            self.export_list_rows(
+                lambda row: self.export_vm(row.name, row.outcomes,
+                                           current_attributes, current_vms),
+                named=True)
+
+    def export_vm(self, hostname, custom_rules, current_attributes, current_vms):
+        """
+        Write the custom attributes of one host or list row to the virtual
+        machine of that name, when vCenter knows it.
+        """
+        self.console(f" * Work on {hostname}")
+        logger.debug("%s: %s", hostname, custom_rules)
+        if not (vm_host_data := current_attributes.get(hostname)):
+            logger.debug(" Not found in VMware Data")
+            return
+        changes = self._write_custom_attributes(
+            current_vms[hostname], vm_host_data, custom_rules['attributes'])
+        if changes and self.dry_run:
+            self.console(f"   [dry-run] would update: {changes}")
+        logger.debug(" Updated: %s", changes)
 
     def inventorize_attributes(self):
         """

@@ -291,6 +291,12 @@ class CheckmkDowntimeSync(CMK2):
                                         current_by_host.get(hostname, []))
                 progress.advance(task1)
 
+            # A row of a list rule sets its downtimes on the host it names.
+            self.export_list_rows(
+                lambda row: self.do_hosts_downtimes(row.name, row.outcomes, row.attributes,
+                                                    current_by_host.get(row.name, [])),
+                named=True)
+
         # Final status line: a fully deduplicated run creates nothing and
         # would otherwise end without any output, which reads like a failure.
         print(f"{cc.OKGREEN} -- {cc.ENDC}Downtimes: {self.dt_stats['created']} created, "

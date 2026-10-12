@@ -7,6 +7,7 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 from mongoengine.errors import DoesNotExist
 from application.models.host import Host
 from application.modules.plugin import Plugin
+from application import logger
 
 class AnsibleInventory(Plugin):
     """
@@ -115,7 +116,25 @@ class AnsibleInventory(Plugin):
                 data['all']['hosts'].append(hostname)
                 if show_status:
                     progress.advance(task1)
+        for hostname, inventory in self.list_row_inventories():
+            data['_meta']['hostvars'][hostname] = inventory
+            data['all']['hosts'].append(hostname)
         return data
+
+    def list_row_inventories(self):
+        """
+        ``(hostname, variables)`` of every row of a list rule: one more
+        inventory host, named by the row's ``hostname`` (or ``name``)
+        column, with the row's columns and the rule's variables. Kept off
+        the terminal: the inventory is read from stdout.
+        """
+        for row in self.actions.list_rows():  # pylint: disable=no-member
+            if not row.name or 'ignore_host' in row.outcomes:
+                continue
+            yield row.name, self._convert_string_booleans(
+                {**row.attributes['filtered'], **row.outcomes})
+        for message in self.actions.list_errors:  # pylint: disable=no-member
+            logger.error(message)
 
 
     def get_host_inventory(self, hostname):
@@ -125,7 +144,7 @@ class AnsibleInventory(Plugin):
         try:
             db_host = Host.get_export_hosts().get(hostname=hostname)
         except DoesNotExist:
-            return False
+            return dict(self.list_row_inventories()).get(hostname, False)
 
         attributes = self.get_attributes(db_host, 'ansible')
         if not attributes:

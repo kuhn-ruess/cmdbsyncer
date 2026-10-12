@@ -85,6 +85,40 @@ class SyncVirtualMachines(SyncNetbox):
                     del custom_rules['fields'][mode]
         return custom_rules
 
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
+    def export_virtualmachine(self, object_name, all_attributes, cfg,
+                              current_nb_objects, found_hosts):
+        """
+        Create or update the Netbox virtual machine of one host or list
+        row. Returns the virtual machine.
+        """
+        cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip4')
+        cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip6')
+
+        query = {
+            'name': object_name,
+        }
+        logger.debug("Object Filter Query: %r", query)
+        if current_obj := current_nb_objects.get(**query):
+            if payload := self.get_update_keys(current_obj, cfg,
+                                               ['primary_ip4', 'primary_ip6']):
+                self.console(f"* Update Object: {object_name} {payload}")
+                current_obj.update(payload)
+            else:
+                self.console(f"* Object {object_name} already up to date")
+        else:
+            ### Create
+            self.console(f"* Create Object {object_name}")
+            payload = self.get_update_keys(False, cfg)
+            payload['name'] = object_name
+            logger.debug("Create Payload: %r", payload)
+            current_obj = self.nb.virtualization.virtual_machines.create(payload)
+        # Mark as successfully synced only after create/update
+        # returned without raising, so cleanup decommissions
+        # objects whose API call failed.
+        found_hosts.append(object_name)
+        return current_obj
+
 #   .--- Sync Virtual Machines
     # pylint: disable-next=too-many-locals,too-many-branches,too-many-statements
     def sync_virtualmachines(self):
@@ -117,32 +151,8 @@ class SyncVirtualMachines(SyncNetbox):
                     if not cfg:
                         progress.advance(task1)
                         continue
-                    cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip4')
-                    cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip6')
-
-                    object_name = hostname
-                    query = {
-                        'name': object_name,
-                    }
-                    logger.debug("Object Filter Query: %r", query)
-                    if current_obj := current_nb_objects.get(**query):
-                        if payload := self.get_update_keys(current_obj, cfg,
-                                                           ['primary_ip4', 'primary_ip6']):
-                            self.console(f"* Update Object: {object_name} {payload}")
-                            current_obj.update(payload)
-                        else:
-                            self.console(f"* Object {object_name} already up to date")
-                    else:
-                        ### Create
-                        self.console(f"* Create Object {object_name}")
-                        payload = self.get_update_keys(False, cfg)
-                        payload['name'] = object_name
-                        logger.debug("Create Payload: %r", payload)
-                        current_obj = self.nb.virtualization.virtual_machines.create(payload)
-                    # Mark as successfully synced only after create/update
-                    # returned without raising, so cleanup decommissions
-                    # objects whose API call failed.
-                    found_hosts.append(hostname)
+                    current_obj = self.export_virtualmachine(
+                        hostname, all_attributes, cfg, current_nb_objects, found_hosts)
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     if self.debug:
                         raise
@@ -153,6 +163,12 @@ class SyncVirtualMachines(SyncNetbox):
                     db_object.set_inventory_attribute(attr_name, current_obj.id)
 
                 progress.advance(task1)
+
+            # A row of a list rule is one more virtual machine, named by the row.
+            self.export_list_rows(
+                lambda row: self.export_virtualmachine(
+                    row.name, row.attributes, row.outcomes, current_nb_objects, found_hosts),
+                named=True)
 
             task2 = progress.add_task("Cleanup netbox", total=None)
             for vm in current_nb_objects.filter(cf_cmdbsyncer_id=str(self.account_id)):

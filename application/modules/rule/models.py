@@ -275,8 +275,9 @@ def list_source_fields():
 class ListSourceMixin:
     """
     Model side of a rule with a list source (see ``list_source_fields``).
-    The rule needs a ``static_rule`` flag: its export renders host
-    independent rules once, and a list rule is one of them.
+    A list rule never applies to a host (see Rule.list_rows); a rule type
+    with a ``static_rule`` flag renders host independent rules once, and
+    a list rule is one of them.
     """
 
     def clean(self):
@@ -286,6 +287,7 @@ class ListSourceMixin:
         API).
         """
         super().clean()
-        if rule_uses_list(self.rule_source, self.list_source):
+        if 'static_rule' in self._fields and \
+                rule_uses_list(self.rule_source, self.list_source):
             self.static_rule = True
 #.

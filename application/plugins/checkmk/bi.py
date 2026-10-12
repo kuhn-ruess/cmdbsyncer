@@ -30,14 +30,9 @@ class BI(CMK2):
 
         unique_rules = {}
         related_packs = []
-        for db_host in Host.active_non_template():
-            logger.debug(f"Working on {db_host.hostname}")
-            attributes = self.get_attributes(db_host, 'checkmk')
-            logger.debug(f"His Attributes {attributes}")
-            if not attributes:
-                continue
-            host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-            logger.debug(f"His Actions {host_actions}")
+        for hostname, attributes, host_actions in self.hosts_and_list_rows(
+                Host.active_non_template(), 'checkmk'):
+            logger.debug(f"Actions of {hostname}: {host_actions}")
             if host_actions:
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
@@ -52,20 +47,20 @@ class BI(CMK2):
                             pack_id = rule_dict['pack_id']
                         except (ValueError, SyntaxError, TypeError, KeyError) as exc:
                             logger.error(
-                                f"Skipping BI rule for host {db_host.hostname}:"
+                                f"Skipping BI rule for host {hostname}:"
                                 f" malformed rule_template ({exc})"
                             )
                             log.log(
                                 "Skipping malformed BI rule template",
                                 details=[
-                                    ('host', db_host.hostname),
+                                    ('host', hostname),
                                     ('error', str(exc)),
                                 ],
                                 source="CMK BI",
                             )
                             print(
                                 f"{CC.FAIL} *{CC.ENDC} Skipping BI rule for"
-                                f" {db_host.hostname}: malformed rule_template"
+                                f" {hostname}: malformed rule_template"
                             )
                             continue
                         unique_rules[rule_id] = rule_dict
@@ -126,14 +121,9 @@ class BI(CMK2):
 
         unique_aggregations = {}
         related_packs = []
-        for db_host in Host.active_non_template():
-            logger.debug(f"Working on {db_host.hostname}")
-            attributes = self.get_attributes(db_host, 'checkmk')
-            logger.debug(f"His Attributes {attributes}")
-            if not attributes:
-                continue
-            host_actions = self.actions.get_outcomes(db_host, attributes['all'])
-            logger.debug(f"His Actions {host_actions}")
+        for hostname, attributes, host_actions in self.hosts_and_list_rows(
+                Host.active_non_template(), 'checkmk'):
+            logger.debug(f"Actions of {hostname}: {host_actions}")
             if host_actions:
                 for _rule_type, rules in host_actions.items():
                     for rule_params in rules:
@@ -150,20 +140,20 @@ class BI(CMK2):
                         except (ValueError, SyntaxError, TypeError, KeyError) as exc:
                             logger.error(
                                 f"Skipping BI aggregation for host"
-                                f" {db_host.hostname}: malformed"
+                                f" {hostname}: malformed"
                                 f" rule_template ({exc})"
                             )
                             log.log(
                                 "Skipping malformed BI aggregation template",
                                 details=[
-                                    ('host', db_host.hostname),
+                                    ('host', hostname),
                                     ('error', str(exc)),
                                 ],
                                 source="CMK BI",
                             )
                             print(
                                 f"{CC.FAIL} *{CC.ENDC} Skipping BI aggregation"
-                                f" for {db_host.hostname}: malformed rule_template"
+                                f" for {hostname}: malformed rule_template"
                             )
                             continue
                         unique_aggregations[aggregation_id] = aggregation_dict

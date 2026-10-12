@@ -830,6 +830,18 @@ _try_load_real_module(
 )
 
 
+# --- Rule engines rendering a row of a list rule -----------------------------
+# Plain Rule subclasses: they only need the rule engine and the Jinja stub.
+_try_load_real_module(
+    "application.plugins.jira_cloud.rules",
+    os.path.join("plugins", "jira_cloud", "rules.py"),
+)
+_try_load_real_module(
+    "application.plugins.idoit.rules",
+    os.path.join("plugins", "idoit", "rules.py"),
+)
+
+
 # --- API modules under test -------------------------------------------------
 # Load the real api/__init__, api/syncer, api/objects files under their
 # canonical module names. They import User/Account/LogEntry/Host etc. from

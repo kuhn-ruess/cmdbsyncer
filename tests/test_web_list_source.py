@@ -1,8 +1,8 @@
 """
 Every rule type with a list source gets the same form part from
 ``ListSourceViewMixin``: the Rule source switch, the List field with its
-live preview and the preview endpoint. Checked for the Checkmk Setup Rules
-and the DCD rules against the real app.
+live preview and the preview endpoint. Checked for every rule type with a
+list against the real app.
 
 Runs against the real app like ``tests/test_web_requests_smoke.py``, see
 ``tests/web_smoke_helpers.py`` for why this needs a subprocess.
@@ -62,13 +62,47 @@ form = check(f'/admin/checkmkrulemngmt/edit/?id={legacy.id}', 200).get_data(as_t
 if '<option selected value="list">' not in form and \\
         'value="list" selected' not in form:
     fail('a rule with a list but without rule source does not open as list rule')
+
+# Every other rule type with a list shows it in its form, with its own
+# outcome fields checked by the preview; a rule type without a list (here
+# the Netbox interfaces, served by the same view as the devices) does not.
+for base, field in (('/admin/idoitcustomattributes', 'param'),
+                    ('/admin/jiraexportrule', 'value'),
+                    ('/admin/checkmkbirule', 'rule_template'),
+                    ('/admin/checkmkbiaggregation', 'rule_template'),
+                    ('/admin/checkmkdowntimerule', 'downtime_comment'),
+                    ('/admin/checkmknotificationrule', 'match_hosts'),
+                    ('/admin/netboxcustomattributes', 'param'),
+                    ('/admin/netboxcontactattributes', 'param'),
+                    ('/admin/netboxdataflowattributes', 'field_value'),
+                    ('/admin/vmwarecustomattributes', 'attribute_value'),
+                    ('/admin/ansiblecustomvariablesrule', 'attribute_value')):
+    form = check(f'{base}/new/', 200).get_data(as_text=True)
+    for needle in ('id="rule_source"', 'id="list_source"', 'list-source-preview'):
+        if needle not in form:
+            fail(f'the form at {base} does not show {needle!r}')
+    token = csrf(f'{base}/new/')
+    answer = check(f'{base}/_list_source_preview', 200, method='post',
+                   headers={'X-CSRFToken': token},
+                   data={'list_source': 'hostname,room\\nsrv01,r1\\n',
+                         f'outcomes-0-{field}': '{{ rooom }}'}).get_json()
+    eq(answer['columns'], ['hostname', 'room'], f'columns of {base}')
+    if not any("'{{ rooom }}' is not a column" in text for text in answer['warnings']):
+        fail(f'{base} does not warn about a variable that is no column')
+form = check('/admin/netboxdciminterfaceattributes/new/', 200).get_data(as_text=True)
+if 'id="list_source"' in form or 'list-source-preview' in form:
+    fail('the Netbox interfaces form shows a list it cannot export')
+# The notification rule form keeps its own page parts next to the list.
+form = check('/admin/checkmknotificationrule/new/', 200).get_data(as_text=True)
+if '_notification_plugins' not in form:
+    fail('the notification rule form lost its own page parts')
 print('LIST_SOURCE_FORMS_OK')
 '''
 
 
 @unittest.skipUnless(HAVE_MONGOMOCK, SKIP_REASON)
 class TestWebListSource(unittest.TestCase):
-    """The list source form part of the Setup and DCD rules."""
+    """The list source form part of every rule type with a list."""
 
     def test_list_source_forms(self):
         """Switch, preview endpoint and saving, in both CMDB modes."""

@@ -6,6 +6,7 @@ Handle Rule Matching
 # pylint: disable=too-many-instance-attributes
 import ast
 import re
+from collections import namedtuple
 from copy import deepcopy
 from rich.console import Console
 from rich.table import Table
@@ -14,7 +15,19 @@ from rich import box
 from application import logger, app
 from application.modules.rule.match import match, AGE_CONDITIONS
 from application.helpers.syncer_jinja import render_jinja
+from application.modules.rule.list_source import (
+    is_list_rule,
+    parse_list_source,
+    row_context,
+    row_name,
+)
 
+# One row of a list rule, ready for the export (see Rule.list_rows):
+# ``rule`` and ``row_idx`` say where it comes from, ``name`` is the object
+# it stands for (see list_source.row_name, may be None), ``attributes``
+# has the shape of Plugin.get_attributes ({'all': ..., 'filtered': ...})
+# and ``outcomes`` is what the rule's outcomes render to for this row.
+ListRow = namedtuple('ListRow', ['rule', 'row_idx', 'name', 'attributes', 'outcomes'])
 
 # Module-level constants to avoid per-call dict/string allocation in the
 # rule-engine hot path.
@@ -146,6 +159,8 @@ class Rule():
         self.debug_lines = []
         # Total outcome of the last debug run (see debug_result)
         self.debug_outcomes = {}
+        # Why a list rule created no rows in the last list_rows run.
+        self.list_errors = []
         # Cached (id(self.rules), [rule objs], [rule.to_mongo() docs],
         # works-with-a-timestamp flag).
         # Invalidated automatically when self.rules is reassigned.
@@ -321,6 +336,9 @@ class Rule():
                 # without the field) — consumers use it to route the rule by
                 # the project's account lists instead of the folder scope.
                 'project': doc.get('project'),
+                # A rule rendered from its pasted list never applies to a
+                # host, see list_rows.
+                'list': is_list_rule(rule_obj),
             })
         self._rule_docs_cache = (current_key, objs, prepared,
                                  rules_depend_on_time(prepared))
@@ -370,6 +388,8 @@ class Rule():
                 logger.debug('##########################')
                 logger.debug('Check Rule: %s', rule_obj.name)
                 logger.debug('##########################')
+            if rule['list']:
+                continue
             rule_hit = False
             debug_data = None
             condition_typ = rule['condition_typ']
@@ -447,6 +467,43 @@ class Rule():
             console.print(table)
             print()
         return outcomes
+
+    def list_rows(self, context=None):
+        """
+        The rows of this engine's list rules, one ``ListRow`` each, with
+        the rule's outcomes rendered for the row instead of for a host.
+
+        The row's columns (see list_source.row_context) and ``context``
+        (values every row of the export knows, e.g. the account) are the
+        attributes of a row; ``HOSTNAME`` is the row's name. Every row is
+        on its own, as one host would be: other rules do not add to it. A
+        rule whose list cannot be read creates no row at all, the reason is
+        collected in ``list_errors``.
+        """
+        self.list_errors = []
+        rule_objs, prepared_rules = self._iter_rule_docs()
+        for rule_obj, rule in zip(rule_objs, prepared_rules):
+            if not rule['list']:
+                continue
+            parsed = parse_list_source(rule_obj.list_source)
+            if parsed.errors:
+                self.list_errors.append(
+                    f"List rule '{rule['name']}' skipped, its list is not "
+                    f"valid: {'; '.join(parsed.errors)}")
+                continue
+            for row_idx, row in enumerate(parsed.rows):
+                name = row_name(row)
+                attributes = {**(context or {}), **row_context(row, row_idx),
+                              'HOSTNAME': name}
+                self.attributes = attributes
+                self.hostname = name
+                self.db_host = None
+                self.first_matching_tag = None
+                self.first_matching_value = None
+                outcomes = self.add_outcomes(rule, rule['outcomes'], {})
+                yield ListRow(rule['name'], row_idx, name,
+                              {'all': attributes, 'filtered': dict(row)},
+                              outcomes)
 
     def debug_result(self):
         """

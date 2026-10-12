@@ -44,6 +44,10 @@ RULE_SOURCE_CHOICES = (
 # and the loop of an outcome).
 ROW_NAMES = ('row', 'row_idx', 'loop', 'loop_idx', 'HOSTNAME')
 
+# Columns that name the object a row stands for, in the order they are
+# read (see ``row_name``).
+NAME_COLUMNS = ('hostname', 'name')
+
 ParsedList = namedtuple('ParsedList', ['columns', 'rows', 'errors', 'delimiter'])
 
 
@@ -244,6 +248,19 @@ def check_list_rule(rule_source, list_text, templates, known_names=()):
                     f"list, it renders empty. "
                     f"Columns: {columns}")
     return parsed, errors, warnings
+
+
+def row_name(row):
+    """
+    The name of the object a row stands for, where the target of a rule
+    needs one (an i-doit object, a Netbox device, a host in Checkmk, ...):
+    the row's ``hostname`` column, else its ``name`` column. None when
+    the row has neither or leaves them empty.
+    """
+    for column in NAME_COLUMNS:
+        if row.get(column):
+            return row[column]
+    return None
 
 
 def row_context(row, row_idx):

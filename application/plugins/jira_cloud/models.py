@@ -3,7 +3,7 @@ Jira Cloud Export Models
 """
 # pylint: disable=too-few-public-methods
 from application import db
-from application.modules.rule.models import rule_types
+from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
 
 
 class JiraExportOutcome(db.EmbeddedDocument):
@@ -42,7 +42,7 @@ class JiraExportOutcome(db.EmbeddedDocument):
         return self.target.split('|', 1)[1]
 
 
-class JiraExportRule(db.Document):
+class JiraExportRule(ListSourceMixin, db.Document):
     """
     Defines which hosts get exported to Jira Cloud Assets and which
     fields are written.
@@ -53,6 +53,9 @@ class JiraExportRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))

@@ -114,32 +114,8 @@ class SyncDevices(SyncNetbox):
                         progress.advance(task1)
                         continue
 
-                    if custom_rules.get('ignore_host'):
-                        progress.advance(task1)
-                        continue
-
-                    custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip4')
-                    custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
-
-
-                    if device := current_netbox_devices.get(name=hostname):
-                        # Update
-                        if update_keys := self.get_update_keys(device, custom_rules,
-                                                               ['primary_ip4', 'primary_ip6']):
-                            self.console(f" * Update Device {hostname}: {update_keys}")
-                            device.update(update_keys)
-                        else:
-                            self.console(f" * Already up to date {hostname}")
-                    else:
-                        ### Create
-                        self.console(f" * Create Device {hostname}")
-                        payload = self.get_update_keys(False, custom_rules)
-                        payload['name'] = hostname
-                        device = self.nb.dcim.devices.create(payload)
-                    # Mark as successfully synced only after create/update
-                    # returned without raising, so cleanup decommissions
-                    # devices whose API call failed.
-                    found_hosts.append(hostname)
+                    device = self.export_device(hostname, all_attributes, custom_rules,
+                                                current_netbox_devices, found_hosts)
 
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     if self.debug:
@@ -152,6 +128,12 @@ class SyncDevices(SyncNetbox):
                     attr_name = f"{self.config['name']}_device_id"
                     db_host.set_inventory_attribute(attr_name, device.id)
 
+            # A row of a list rule is one more device, named by the row.
+            self.export_list_rows(
+                lambda row: self.export_device(row.name, row.attributes, row.outcomes,
+                                               current_netbox_devices, found_hosts),
+                named=True)
+
             task2 = progress.add_task("Cleanup netbox", total=None)
             for device in current_netbox_devices.filter(cf_cmdbsyncer_id=str(self.account_id)):
                 if str(device.status) == 'Decommissioning':
@@ -160,6 +142,38 @@ class SyncDevices(SyncNetbox):
                     self.console(f"* Set Inactive for {device.name}")
                     device.update({"status": 'decommissioning'})
                     progress.advance(task2)
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
+    def export_device(self, hostname, all_attributes, custom_rules,
+                      current_netbox_devices, found_hosts):
+        """
+        Create or update the Netbox device of one host or list row.
+        Returns the device, or None when the rules ignore it.
+        """
+        if custom_rules.get('ignore_host'):
+            return None
+
+        custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip4')
+        custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
+
+        if device := current_netbox_devices.get(name=hostname):
+            # Update
+            if update_keys := self.get_update_keys(device, custom_rules,
+                                                   ['primary_ip4', 'primary_ip6']):
+                self.console(f" * Update Device {hostname}: {update_keys}")
+                device.update(update_keys)
+            else:
+                self.console(f" * Already up to date {hostname}")
+        else:
+            ### Create
+            self.console(f" * Create Device {hostname}")
+            payload = self.get_update_keys(False, custom_rules)
+            payload['name'] = hostname
+            device = self.nb.dcim.devices.create(payload)
+        # Mark as successfully synced only after create/update
+        # returned without raising, so cleanup decommissions
+        # devices whose API call failed.
+        found_hosts.append(hostname)
+        return device
 #.
 #   .--- Import Devices
     def import_hosts(self):
