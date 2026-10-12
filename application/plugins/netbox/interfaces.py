@@ -35,8 +35,6 @@ class SyncInterfaces(SyncNetbox):
         """
         Iterarte over objects and sync them to Netbox
         """
-        # pylint: disable=too-many-locals,too-many-branches
-        # pylint: disable=too-many-statements,too-many-nested-blocks
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
         db_objects = Host.objects_by_filter(object_filter)
         total = db_objects.count()
@@ -44,18 +42,11 @@ class SyncInterfaces(SyncNetbox):
             self.console = progress.console.print
             task1 = progress.add_task("Updating Interfaces for Devices", total=total)
 
-            current_netbox_interfaces = False
-            if mode == "dcim":
-                current_netbox_interfaces = self.nb.dcim.interfaces
-            elif mode == 'virtualization':
-                current_netbox_interfaces = self.nb.virtualization.interfaces
-
             self.if_types = [x['value'] for x in self.nb.dcim.interfaces.choices()['type']]
             for db_object in db_objects:
                 port_infos = []
+                hostname = db_object.hostname
                 try:
-                    hostname = db_object.hostname
-
                     all_attributes = self.get_attributes(db_object, 'netbox')
                     if not all_attributes:
                         progress.advance(task1)
@@ -66,60 +57,101 @@ class SyncInterfaces(SyncNetbox):
                     except KeyError:
                         progress.advance(task1)
                         continue
-
-                    for cfg_interface in cfg_interfaces:
-                        sub_fields = cfg_interface['sub_fields']
-                        ipv4 = sub_fields.get('ipv4_addresses', {}).get('value')
-                        ipv6 = sub_fields.get('ipv6_addresses', {}).get('value')
-                        if not ipv4 and not ipv6:
-                            continue
-                        cfg_interface['fields'] = self.fix_values(cfg_interface['fields'])
-                        logger.debug("Working with %s", cfg_interface)
-                        interface_name = cfg_interface['fields']['name']['value']
-                        interface_query = {
-                            'device': hostname,
-                            'name': interface_name,
-                        }
-                        logger.debug("%s Interface Filter Query: %s", mode, interface_query)
-                        if interfaces := current_netbox_interfaces.filter(**interface_query):
-                            for interface in interfaces:
-                                # Update
-                                if payload := self.get_update_keys(interface, cfg_interface):
-                                    self.console(f"* Update {mode} Interface: "\
-                                                 f"{interface_name} {payload}")
-                                    interface.update(payload)
-                                else:
-                                    self.console(f"* Interface {interface} already up to date")
-                        else:
-                            ### Create
-                            self.console(f"* Create {mode} Interface {interface_name}")
-                            payload = self.get_update_keys(False, cfg_interface)
-                            if payload.get('device'):
-                                payload['device'] = \
-                                        sub_fields['netbox_device_id']['value']
-                            logger.debug("Create Payload: %s", payload)
-                            if mode == 'dcim':
-                                interface = self.nb.dcim.interfaces.create(payload)
-                            elif mode == 'virtualization':
-                                interface = self.nb.virtualization.interfaces.create(payload)
-
-
-                        port_infos.append({
-                            'port_name': cfg_interface['fields']['name']['value'],
-                            'netbox_if_id': interface.id,
-                            'ipv4_addresses': ipv4,
-                            'ipv6_addresses': ipv6,
-                        })
+                    self.export_interfaces(hostname, cfg_interfaces, mode, port_infos)
                 except Exception as error:  # pylint: disable=broad-exception-caught
                     if self.debug:
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
                     self.console(f" Error in process: {error}")
 
-
                 progress.advance(task1)
                 attr_name = f"{self.config['name']}_{mode}_interfaces"
                 db_object.set_inventory_attribute(attr_name, port_infos)
+
+            # A row of a list rule describes interfaces of the device (or
+            # virtual machine) its hostname or name column names. There is
+            # no host to note the Netbox IDs on.
+            self.export_list_rows(
+                lambda row: self.export_interfaces(
+                    row.name, row.outcomes.get('interfaces', []), mode, []),
+                named=True)
+
+    def export_interfaces(self, hostname, cfg_interfaces, mode, port_infos):
+        """
+        Create or update the interfaces of one device or virtual machine
+        (``hostname``, a host or a list row) and add what was synced to
+        ``port_infos``.
+        """
+        if mode == 'dcim':
+            current_netbox_interfaces = self.nb.dcim.interfaces
+            parent_field = 'device'
+        else:
+            current_netbox_interfaces = self.nb.virtualization.interfaces
+            parent_field = 'virtual_machine'
+        for cfg_interface in cfg_interfaces:
+            sub_fields = cfg_interface['sub_fields']
+            ipv4 = sub_fields.get('ipv4_addresses', {}).get('value')
+            ipv6 = sub_fields.get('ipv6_addresses', {}).get('value')
+            if not ipv4 and not ipv6:
+                continue
+            cfg_interface['fields'] = self.fix_values(cfg_interface['fields'])
+            logger.debug("Working with %s", cfg_interface)
+            interface_name = cfg_interface['fields']['name']['value']
+            logger.debug("%s Interface Filter Query: %s=%s, name=%s",
+                         mode, parent_field, hostname, interface_name)
+            if interfaces := current_netbox_interfaces.filter(
+                    **{parent_field: hostname, 'name': interface_name}):
+                for interface in interfaces:
+                    # Update
+                    if payload := self.get_update_keys(interface, cfg_interface):
+                        self.console(f"* Update {mode} Interface: "\
+                                     f"{interface_name} {payload}")
+                        interface.update(payload)
+                    else:
+                        self.console(f"* Interface {interface} already up to date")
+            else:
+                ### Create
+                self.console(f"* Create {mode} Interface {interface_name}")
+                interface = self.create_interface(hostname, cfg_interface, mode,
+                                                  current_netbox_interfaces)
+
+            port_infos.append({
+                'port_name': interface_name,
+                'netbox_if_id': interface.id,
+                'ipv4_addresses': ipv4,
+                'ipv6_addresses': ipv6,
+            })
+
+    def create_interface(self, hostname, cfg_interface, mode, netbox_interfaces):
+        """
+        Create an interface on the device or virtual machine ``hostname``.
+        """
+        payload = self.get_update_keys(False, cfg_interface)
+        if mode == 'dcim' and payload.get('device'):
+            payload['device'] = self.parent_id(
+                mode, payload['device'],
+                cfg_interface['sub_fields'].get('netbox_device_id', {}).get('value'))
+        elif mode == 'virtualization':
+            payload['virtual_machine'] = self.parent_id(
+                mode, hostname, payload.get('virtual_machine'))
+        logger.debug("Create Payload: %s", payload)
+        return netbox_interfaces.create(payload)
+
+    def parent_id(self, mode, name, given_id):
+        """
+        Netbox ID of the device (``mode`` dcim) or virtual machine an
+        interface is created on: ``given_id`` when the rule sets one, else
+        the one Netbox has under ``name``.
+        """
+        if given_id:
+            return given_id
+        if mode == 'dcim':
+            parent = self.nb.dcim.devices.get(name=name)
+        else:
+            parent = self.nb.virtualization.virtual_machines.get(name=name)
+        if not parent:
+            raise ValueError(f"{name} not found in Netbox")
+        return parent.id
 
 
 #   .--- Import Interfaces

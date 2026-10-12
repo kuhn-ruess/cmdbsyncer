@@ -64,8 +64,7 @@ if '<option selected value="list">' not in form and \\
     fail('a rule with a list but without rule source does not open as list rule')
 
 # Every other rule type with a list shows it in its form, with its own
-# outcome fields checked by the preview; a rule type without a list (here
-# the Netbox interfaces, served by the same view as the devices) does not.
+# outcome fields checked by the preview.
 for base, field in (('/admin/idoitcustomattributes', 'param'),
                     ('/admin/jiraexportrule', 'value'),
                     ('/admin/checkmkbirule', 'rule_template'),
@@ -75,6 +74,9 @@ for base, field in (('/admin/idoitcustomattributes', 'param'),
                     ('/admin/netboxcustomattributes', 'param'),
                     ('/admin/netboxcontactattributes', 'param'),
                     ('/admin/netboxdataflowattributes', 'field_value'),
+                    ('/admin/netboxdciminterfaceattributes', 'param'),
+                    ('/admin/netboxvirtualizationinterfaceattributes', 'param'),
+                    ('/admin/netboxipamipaddressattributes', 'param'),
                     ('/admin/vmwarecustomattributes', 'attribute_value'),
                     ('/admin/ansiblecustomvariablesrule', 'attribute_value')):
     form = check(f'{base}/new/', 200).get_data(as_text=True)
@@ -89,9 +91,6 @@ for base, field in (('/admin/idoitcustomattributes', 'param'),
     eq(answer['columns'], ['hostname', 'room'], f'columns of {base}')
     if not any("'{{ rooom }}' is not a column" in text for text in answer['warnings']):
         fail(f'{base} does not warn about a variable that is no column')
-form = check('/admin/netboxdciminterfaceattributes/new/', 200).get_data(as_text=True)
-if 'id="list_source"' in form or 'list-source-preview' in form:
-    fail('the Netbox interfaces form shows a list it cannot export')
 # The notification rule form keeps its own page parts next to the list.
 form = check('/admin/checkmknotificationrule/new/', 200).get_data(as_text=True)
 if '_notification_plugins' not in form:

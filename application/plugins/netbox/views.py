@@ -121,6 +121,34 @@ class NetboxCustomAttributesView(ListSourceViewMixin, RuleModelView):  # pylint:
         return current_user.is_authenticated and current_user.has_right('netbox')
 
 
+class NetboxInterfaceAttributesView(NetboxCustomAttributesView):  # pylint: disable=too-many-ancestors
+    """
+    Interfaces of devices or virtual machines
+    """
+    list_source_creates = 'set of interfaces'
+    list_source_help_items = (
+        'The column <code>hostname</code> (or <code>name</code>) names the '
+        'device or virtual machine the interfaces belong to, it is '
+        '<code>{{ HOSTNAME }}</code>; a row without it creates none. A new '
+        'interface gets the Netbox ID of that device or virtual machine '
+        'when the outcomes give none.',
+        'As for a host, an interface is only synced with IPv4 or IPv6 '
+        'addresses.',
+    )
+
+
+class NetboxIpAddressAttributesView(NetboxCustomAttributesView):  # pylint: disable=too-many-ancestors
+    """
+    IP addresses
+    """
+    list_source_creates = 'set of IP addresses'
+    list_source_help_items = (
+        'Assigned Object ID is the Netbox ID of the interface, or its name: '
+        'then the column <code>hostname</code> (or <code>name</code>) names '
+        'the device (or virtual machine) the interface belongs to.',
+    )
+
+
 def _render_dataflow_outcome(_view, _context, model, _name):
     """
     Render Dataflow outcomes

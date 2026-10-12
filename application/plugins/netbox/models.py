@@ -2,6 +2,9 @@
 """
 Netbox Rule
 """
+# Mongoengine Document classes are data carriers; they don't need
+# additional public methods to satisfy pylint.
+# pylint: disable=too-few-public-methods
 from mongoengine import CASCADE
 from application import db
 from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
@@ -190,7 +193,8 @@ netbox_ipam_ipaddress_outcome_types = [
    '(Example: 127.0.0.1/24), (Comma separated)'),
   ('family', 'Family of IP: ipv6 or ipv4'),
   ('status', 'Status of IP like: active'),
-  ('assigned_object_id', 'Assigned Object ID'),
+  ('assigned_object_id',
+   'Assigned Object ID, or the name of an interface of the device (Hostname)'),
   ('assigned_object_type', 'Assigned Object Type'),
   ('vrf', "VRF"),
   ('role', 'Role'),
@@ -210,13 +214,16 @@ class NetboxIpamIPAddressOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxIpamIpaddressattributes(db.Document):
+class NetboxIpamIpaddressattributes(ListSourceMixin, db.Document):
     """
     Define Rule based Custom Variables
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
@@ -310,13 +317,16 @@ class NetboxDcimInterfaceOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxDcimInterfaceAttributes(db.Document):
+class NetboxDcimInterfaceAttributes(ListSourceMixin, db.Document):
     """
     Define Rule based Custom Variables
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
@@ -363,13 +373,16 @@ class NetboxVirtInterfaceOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class NetboxVirtualizationInterfaceAttributes(db.Document):
+class NetboxVirtualizationInterfaceAttributes(ListSourceMixin, db.Document):
     """
     Define Rule based Custom Variables
     """
 
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     condition_typ = db.StringField(choices=rule_types)
     conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))

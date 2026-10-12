@@ -14,6 +14,9 @@ from application.modules.rule.list_source import row_name
 from application.modules.rule.rule import Rule
 from application.plugins.idoit.rules import IdoitVariableRule
 from application.plugins.jira_cloud.rules import JiraExportAttributeRule
+from application.plugins.netbox.rules import NetboxInterfaceRule
+from application.plugins.netbox.interfaces import SyncInterfaces
+from application.plugins.netbox.ips import SyncIPS
 from tests import real_render_jinja
 
 
@@ -116,6 +119,78 @@ class TestRuleTypes(unittest.TestCase):
         ], 'list', 'hostname,owner\nsrv01,team-a\n')]
         row = next(engine.list_rows())
         self.assertEqual(row.outcomes, {'fields_by_type': {'7': {'Owner': 'team-a'}}})
+
+
+@patch.dict(Rule.get_multilist_outcomes.__globals__, render_jinja=real_render_jinja)
+class TestNetboxRows(unittest.TestCase):
+    """A row describes interfaces and IP addresses of a device by its name"""
+
+    def _syncer(self, cls):
+        syncer = cls.__new__(cls)
+        syncer.nb = Mock()
+        syncer.console = Mock()
+        syncer.config = {'name': 'nb'}
+        syncer.set_syncer_id = False
+        syncer.log_details = []
+        syncer.debug = True
+        return syncer
+
+    def test_interface_of_a_row(self):
+        engine = NetboxInterfaceRule()
+        engine.rules = [_rule_doc('if', [
+            {'action': 'device', 'param': '{{ HOSTNAME }}', 'list_variable_name': ''},
+            {'action': 'name', 'param': '{{ port }}', 'list_variable_name': ''},
+            {'action': 'ipv4_addresses', 'param': '{{ ip }}', 'list_variable_name': ''},
+        ], 'list', 'hostname;port;ip\nsw01;eth0;10.0.0.1/24\n')]
+        row = next(engine.list_rows())
+        interface = row.outcomes['interfaces'][0]
+        self.assertEqual(row.name, 'sw01')
+        self.assertEqual(interface['fields']['name'], {'value': 'eth0'})
+        self.assertEqual(interface['sub_fields']['ipv4_addresses'],
+                         {'value': ['10.0.0.1/24']})
+
+    def test_new_interface_gets_the_device_id_by_name(self):
+        syncer = self._syncer(SyncInterfaces)
+        syncer.if_types = ['other']
+        syncer.nb.dcim.interfaces.filter.return_value = []
+        syncer.nb.dcim.devices.get.return_value = Mock(id=42)
+        syncer.nb.dcim.interfaces.create.return_value = Mock(id=7)
+        port_infos = []
+        syncer.export_interfaces('sw01', [{
+            'fields': {'device': {'value': 'sw01'}, 'name': {'value': 'eth0'}},
+            'sub_fields': {'ipv4_addresses': {'value': ['10.0.0.1/24']}},
+        }], 'dcim', port_infos)
+        syncer.nb.dcim.interfaces.filter.assert_called_with(device='sw01', name='eth0')
+        syncer.nb.dcim.devices.get.assert_called_with(name='sw01')
+        self.assertEqual(syncer.nb.dcim.interfaces.create.call_args[0][0]['device'], 42)
+        self.assertEqual(port_infos[0]['netbox_if_id'], 7)
+
+    def test_vm_interface_is_looked_up_on_its_vm(self):
+        syncer = self._syncer(SyncInterfaces)
+        syncer.if_types = ['other']
+        syncer.nb.virtualization.interfaces.filter.return_value = []
+        syncer.nb.virtualization.virtual_machines.get.return_value = Mock(id=5)
+        syncer.export_interfaces('vm01', [{
+            'fields': {'name': {'value': 'eth0'}},
+            'sub_fields': {'ipv4_addresses': {'value': ['10.0.0.2/24']}},
+        }], 'virtualization', [])
+        syncer.nb.virtualization.interfaces.filter.assert_called_with(
+            virtual_machine='vm01', name='eth0')
+        payload = syncer.nb.virtualization.interfaces.create.call_args[0][0]
+        self.assertEqual(payload['virtual_machine'], 5)
+
+    def test_ip_assigned_by_interface_name(self):
+        syncer = self._syncer(SyncIPS)
+        syncer.nb.dcim.interfaces.get.return_value = Mock(id=7)
+        fields = {'assigned_object_id': {'value': 'eth0'}}
+        self.assertEqual(syncer.assigned_object_id('sw01', fields), 7)
+        syncer.nb.dcim.interfaces.get.assert_called_with(device='sw01', name='eth0')
+        self.assertEqual(fields['assigned_object_id'], {'value': '7'})
+        self.assertEqual(syncer.assigned_object_id(None, {'assigned_object_id':
+                                                           {'value': ' 9 '}}), 9)
+        with self.assertRaises(ValueError):
+            syncer.assigned_object_id(None, fields | {'assigned_object_id':
+                                                      {'value': 'eth0'}})
 
 
 class TestPluginListRows(unittest.TestCase):

@@ -840,6 +840,19 @@ _try_load_real_module(
     "application.plugins.idoit.rules",
     os.path.join("plugins", "idoit", "rules.py"),
 )
+_try_load_real_module(
+    "application.plugins.netbox.rules",
+    os.path.join("plugins", "netbox", "rules.py"),
+)
+# The Netbox exports of a row: they need the Netbox base loaded above.
+_try_load_real_module(
+    "application.plugins.netbox.interfaces",
+    os.path.join("plugins", "netbox", "interfaces.py"),
+)
+_try_load_real_module(
+    "application.plugins.netbox.ips",
+    os.path.join("plugins", "netbox", "ips.py"),
+)
 
 
 # --- API modules under test -------------------------------------------------

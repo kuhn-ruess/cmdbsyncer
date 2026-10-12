@@ -6,6 +6,8 @@ from application.modules.rule.views import RewriteAttributeView
 
 from .views import (
                   NetboxCustomAttributesView,
+                  NetboxInterfaceAttributesView,
+                  NetboxIpAddressAttributesView,
                   NetboxDataFlowAttributesView,
                   NetboxDataFlowModelView,
               )
@@ -37,10 +39,10 @@ def register_admin_views(admin):
     admin.add_view(NetboxCustomAttributesView(NetboxCustomAttributes,\
             name="DCIM: Devices", category="Netbox",
             menu_icon_type='fa', menu_icon_value='fa-server'))
-    admin.add_view(NetboxCustomAttributesView(NetboxDcimInterfaceAttributes,\
+    admin.add_view(NetboxInterfaceAttributesView(NetboxDcimInterfaceAttributes,\
             name="DCIM: Interfaces", category="Netbox",
             menu_icon_type='fa', menu_icon_value='fa-plug'))
-    admin.add_view(NetboxCustomAttributesView(NetboxIpamIpaddressattributes,\
+    admin.add_view(NetboxIpAddressAttributesView(NetboxIpamIpaddressattributes,\
             name="IPAM: IP Addresses", category="Netbox",
             menu_icon_type='fa', menu_icon_value='fa-hashtag'))
     admin.add_view(NetboxCustomAttributesView(NetboxIpamPrefixAttributes,\
@@ -52,7 +54,7 @@ def register_admin_views(admin):
     admin.add_view(NetboxCustomAttributesView(NetboxVirtualMachineAttributes,\
             name="Virtualization: Virtual Machines", category="Netbox",
             menu_icon_type='fa', menu_icon_value='fa-cubes'))
-    admin.add_view(NetboxCustomAttributesView(NetboxVirtualizationInterfaceAttributes,\
+    admin.add_view(NetboxInterfaceAttributesView(NetboxVirtualizationInterfaceAttributes,\
             name="Virtualization: Interfaces", category="Netbox",
             menu_icon_type='fa', menu_icon_value='fa-link'))
     admin.add_view(NetboxCustomAttributesView(NetboxContactAttributes,\
