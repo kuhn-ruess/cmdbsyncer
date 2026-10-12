@@ -17,6 +17,7 @@ from application.plugins.jira_cloud.rules import JiraExportAttributeRule
 from application.plugins.netbox.rules import NetboxInterfaceRule
 from application.plugins.netbox.interfaces import SyncInterfaces
 from application.plugins.netbox.ips import SyncIPS
+from application.plugins.ansible import playbook_rules
 from tests import real_render_jinja
 
 
@@ -191,6 +192,27 @@ class TestNetboxRows(unittest.TestCase):
         with self.assertRaises(ValueError):
             syncer.assigned_object_id(None, fields | {'assigned_object_id':
                                                       {'value': 'eth0'}})
+
+
+class TestPlaybookFireRows(unittest.TestCase):
+    """A fire rule from a list fires against the host each row names"""
+
+    def test_rows_fire_once_per_named_row(self):
+        rule = _rule_doc('fire', [{'playbook': 'site.yml'}], 'list',
+                         'hostname\nsrv01\n\nsrv02\n')
+        query = Mock()
+        query.order_by.return_value = [rule]
+        with patch.object(playbook_rules, 'AnsiblePlaybookFireRule') as model, \
+                patch.object(playbook_rules, 'Host') as host, \
+                patch.object(playbook_rules, 'available_playbooks',
+                             return_value=['site.yml']), \
+                patch.object(playbook_rules, '_already_fired', return_value=False), \
+                patch.object(playbook_rules, 'run_playbook') as run:
+            model.objects.return_value = query
+            host.get_export_hosts.return_value = []
+            self.assertEqual(playbook_rules.fire_playbook_rules(), 2)
+        self.assertEqual([call.kwargs['target_host'] for call in run.call_args_list],
+                         ['srv01', 'srv02'])
 
 
 class TestPluginListRows(unittest.TestCase):

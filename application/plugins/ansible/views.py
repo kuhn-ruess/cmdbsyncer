@@ -496,10 +496,20 @@ class AnsibleRewriteRuleView(_ProjectAwareRuleView, RewriteAttributeView):  # py
         return current_user.is_authenticated and current_user.has_right('ansible')
 
 
-class AnsiblePlaybookFireRuleView(_ProjectAwareRuleView, RuleModelView):  # pylint: disable=too-many-ancestors
+class AnsiblePlaybookFireRuleView(_ProjectAwareRuleView, ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Editor for rules that fire playbooks against matching hosts.
     """
+    list_source_creates = 'playbook run'
+    list_source_per_outcome = True
+    list_source_main_fields = _ansible_main_fields()
+    list_source_help_items = (
+        'The column <code>hostname</code> (or <code>name</code>) names the '
+        'host the playbooks run against, a row without it fires none. As '
+        'for a host, each playbook fires once per rule and host.',
+    )
+    list_source_outcome = ('Playbook Fires',
+                           'Which playbook(s) to run against matching hosts.')
 
     column_exclude_list = [
         'conditions', 'outcomes', 'render_full_conditions',

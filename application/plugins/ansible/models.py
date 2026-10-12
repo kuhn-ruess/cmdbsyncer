@@ -243,7 +243,7 @@ class AnsiblePlaybookAction(db.EmbeddedDocument):
     }
 
 
-class AnsiblePlaybookFireRule(db.Document):
+class AnsiblePlaybookFireRule(ListSourceMixin, db.Document):
     """
     Rule that triggers playbook runs for matching hosts. Matching uses
     the standard rule engine; firing is driven by the `ansible
@@ -252,6 +252,9 @@ class AnsiblePlaybookFireRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
 
     project = db.ReferenceField(
         document_type=AnsibleProject,

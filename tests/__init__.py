@@ -853,6 +853,22 @@ _try_load_real_module(
     "application.plugins.netbox.ips",
     os.path.join("plugins", "netbox", "ips.py"),
 )
+# The playbook fire engine and its runner; the models stay stubs, the
+# tests patch what they use.
+_ansible_models = sys.modules.setdefault(
+    "application.plugins.ansible.models",
+    types.ModuleType("application.plugins.ansible.models"))
+for _name in ("AnsibleRunStats", "AnsiblePlaybookFireRule"):
+    if not hasattr(_ansible_models, _name):
+        setattr(_ansible_models, _name, MagicMock(name=f"stub.{_name}"))
+_try_load_real_module(
+    "application.plugins.ansible.runner",
+    os.path.join("plugins", "ansible", "runner.py"),
+)
+_try_load_real_module(
+    "application.plugins.ansible.playbook_rules",
+    os.path.join("plugins", "ansible", "playbook_rules.py"),
+)
 
 
 # --- API modules under test -------------------------------------------------

@@ -91,6 +91,11 @@ for base, field in (('/admin/idoitcustomattributes', 'param'),
     eq(answer['columns'], ['hostname', 'room'], f'columns of {base}')
     if not any("'{{ rooom }}' is not a column" in text for text in answer['warnings']):
         fail(f'{base} does not warn about a variable that is no column')
+# The playbook fire rules render no outcome per row, the row names the host.
+form = check('/admin/ansibleplaybookfirerule/new/', 200).get_data(as_text=True)
+for needle in ('id="rule_source"', 'id="list_source"', 'list-source-preview'):
+    if needle not in form:
+        fail(f'the playbook fire rule form does not show {needle!r}')
 # The notification rule form keeps its own page parts next to the list.
 form = check('/admin/checkmknotificationrule/new/', 200).get_data(as_text=True)
 if '_notification_plugins' not in form:
