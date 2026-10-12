@@ -4,7 +4,7 @@ Checkmk DCD Manager
 # pylint: disable=duplicate-code
 from jinja2.exceptions import UndefinedError
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-from application.plugins.checkmk.cmk2 import CMK2
+from application.plugins.checkmk.cmk2 import CMK2, CmkException
 
 from application import logger
 from application.modules.rule.list_source import (
@@ -111,7 +111,7 @@ class CheckmkDCDRuleSync(CMK2):
         creation_rules = []
         for crule in rule['creation_rules']:
             rule_payload = {
-                'folder_path': render_jinja(crule['folder_path'], attributes),
+                'folder_path': render_jinja(crule['folder_path'], **attributes),
                 'delete_hosts': crule['delete_hosts'],
                 'host_attributes': dict({x['attribute_name']:x['attribute_value'] \
                                             for x in crule['host_attributes']})
@@ -259,15 +259,30 @@ class CheckmkDCDRuleSync(CMK2):
             self.calculate_static_rules({'cmk_site': site, 'account': account_ctx})
 
             task2 = progress.add_task("Send Rules to Checkmk", total=len(self.all_rules))
-            count_new = 0
-            count_existing = 0
-            for rule in self.all_rules:
-                if not self.does_rule_exist(rule['dcd_id']):
-                    count_new += 1
-                    self.create_rule_in_cmk(rule)
-                else:
-                    count_existing += 1
-                progress.advance(task2)
+            self.send_rules(lambda: progress.advance(task2))
 
-            self.log_details.append(('new_rules', count_new))
-            self.log_details.append(('existing_rules', count_existing))
+    def send_rules(self, advance):
+        """
+        Create the collected connections Checkmk does not have yet.
+        ``advance`` is called once per connection.
+        """
+        count_new = 0
+        count_existing = 0
+        for rule in self.all_rules:
+            if not self.does_rule_exist(rule['dcd_id']):
+                # One connection Checkmk refuses must not keep the others
+                # from being created.
+                try:
+                    self.create_rule_in_cmk(rule)
+                    count_new += 1
+                except CmkException as error:
+                    if self.debug:
+                        raise
+                    self.log_error(
+                        f"DCD connection {rule['dcd_id']} not created: {error}")
+            else:
+                count_existing += 1
+            advance()
+
+        self.log_details.append(('new_rules', count_new))
+        self.log_details.append(('existing_rules', count_existing))

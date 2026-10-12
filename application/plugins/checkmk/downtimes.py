@@ -115,7 +115,12 @@ class CheckmkDowntimeSync(CMK2):
 
         duration = False
         if rule['duration_h']:
-            duration = int(render_jinja(rule['duration_h']))
+            # Rendered with the attributes like every other field: a
+            # template reading a host attribute or a list column has to
+            # see it. An empty result means no duration.
+            rendered_duration = render_jinja(rule['duration_h'], **attributes).strip()
+            if rendered_duration:
+                duration = int(rendered_duration)
 
         offset = False
         if rule['offset_days']:
@@ -251,8 +256,8 @@ class CheckmkDowntimeSync(CMK2):
                 else:
                     self.dt_stats['existing'] += 1
         except Exception as exp:  # pylint: disable=broad-exception-caught
-            self.log_details.append(('error', f'Exception {exp}'))
-            print(f"Exception: {exp}")
+            self.log_details.append(('error', f'{hostname}: Exception {exp}'))
+            print(f"Exception for {hostname}: {exp}")
 
     def run(self):
         """
@@ -366,6 +371,23 @@ class CheckmkDowntimeSync(CMK2):
                 "start": datetime.datetime.fromisoformat(extensions["start_time"]),
                 "end": datetime.datetime.fromisoformat(extensions["end_time"]),
                 "comment": extensions["comment"],
-                "duration": extensions.get("duration", False),
+                "duration": _flexible_duration(extensions),
             })
         return by_host
+
+
+def _flexible_duration(extensions):
+    """
+    The duration of a downtime read from Checkmk, in the shape
+    calculate_configured_downtimes gives it: the minutes of a flexible
+    downtime, False for a fixed one. Checkmk 2.4 and 2.5 report it as
+    ``mode.duration_minutes``; without reading it there, a configured
+    flexible downtime never equals the one already set and is set again
+    on every run.
+    """
+    if "duration" in extensions:
+        return extensions["duration"] or False
+    mode = extensions.get("mode") or {}
+    if mode.get("type") == "flexible":
+        return mode.get("duration_minutes") or False
+    return False

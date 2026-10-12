@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 from types import SimpleNamespace
 
 from jinja2.exceptions import UndefinedError
+from application.plugins.checkmk.cmk2 import CmkException
 from application.plugins.checkmk.dcd import CheckmkDCDRuleSync
 from tests import base_mock_init, real_render_jinja
 
@@ -348,6 +349,36 @@ class TestDCDListRule(unittest.TestCase):
         self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
         self.assertEqual([rule['dcd_id'] for rule in self.sync.all_rules],
                          ['static_dc'])
+
+
+    def test_folder_of_a_creation_rule_reads_the_row(self, _render):
+        self.sync.static_rules = [_dcd_rule(
+            "id;folder\ndc1;/dc/one\n",
+            creation_rules=[{'folder_path': '{{ folder }}', 'delete_hosts': False,
+                             'host_attributes': [], 'host_filters': []}])]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        self.assertEqual(
+            self.sync.all_rules[0]['connector']['creation_rules'][0]['folder_path'],
+            '/dc/one')
+
+    def test_a_refused_connection_does_not_stop_the_others(self, _render):
+        self.sync.static_rules = [_dcd_rule("id\ndc1\ndc2\n")]
+        created = []
+
+        def create(payload):
+            if payload['dcd_id'] == 'dc1':
+                raise CmkException('Bad Request')
+            created.append(payload['dcd_id'])
+
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        with patch.object(self.sync, 'does_rule_exist', return_value=False), \
+                patch.object(self.sync, 'create_rule_in_cmk', side_effect=create), \
+                patch('builtins.print'):
+            self.sync.send_rules(Mock())
+        self.assertEqual(created, ['dc2'])
+        self.assertIn(('new_rules', 1), self.sync.log_details)
+        self.assertTrue(any('dc1 not created' in str(detail)
+                            for detail in self.sync.log_details))
 
 
 if __name__ == '__main__':

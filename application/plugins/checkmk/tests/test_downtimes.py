@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from application.plugins.checkmk.cmk2 import CmkException
 from application.plugins.checkmk.downtimes import CheckmkDowntimeSync
-from tests import base_mock_init
+from tests import base_mock_init, real_render_jinja
 
 
 class TestCheckMkDowntimeSync(unittest.TestCase):
@@ -179,6 +179,43 @@ class TestCheckMkDowntimeSync(unittest.TestCase):
         # the skipped downtime is counted for the final status line
         self.assertEqual(self.sync.dt_stats['existing'], 1)
 
+
+    def test_get_all_cmk_downtimes_reads_the_flexible_duration(self):
+        # Checkmk 2.4 and 2.5 report a flexible downtime's duration under
+        # mode.duration_minutes. Read anywhere else, a configured flexible
+        # downtime never equals the one already set and is set again on
+        # every run.
+        def entry(host, mode):
+            return {'extensions': {'host_name': host,
+                                   'start_time': '2025-01-01T10:00:00+00:00',
+                                   'end_time': '2025-01-01T12:00:00+00:00',
+                                   'comment': 'c', 'mode': mode}}
+        response = ({'value': [
+            entry('h1', {'type': 'flexible', 'duration_minutes': 30}),
+            entry('h2', {'type': 'fixed'}),
+        ]}, {})
+        with patch.object(self.sync, 'request', return_value=response):
+            by_host = self.sync.get_all_cmk_downtimes()
+        self.assertEqual(by_host['h1'][0]['duration'], 30)
+        self.assertIs(by_host['h2'][0]['duration'], False)
+
+    @patch('application.plugins.checkmk.downtimes.render_jinja',
+           side_effect=real_render_jinja)
+    def test_duration_is_rendered_with_the_attributes(self, _render):
+        # A list row (or a host attribute) can set the duration
+        rule = {'start_time_h': '{{ start }}', 'start_time_m': '0',
+                'end_time_h': '23', 'end_time_m': '0', 'start_day': 'today',
+                'start_day_template': '', 'every': 'once', 'every_template': '',
+                'offset_days': '', 'offset_days_template': '',
+                'duration_h': '{{ dur }}', 'downtime_comment': 'patch {{ dur }}'}
+        downtimes = list(self.sync.calculate_configured_downtimes(
+            rule, {'start': '22', 'dur': '45'}))
+        self.assertEqual(downtimes[0]['duration'], 45)
+        self.assertEqual(downtimes[0]['comment'], 'patch 45')
+        # A duration rendering empty is no duration
+        downtimes = list(self.sync.calculate_configured_downtimes(
+            rule, {'start': '22', 'dur': ''}))
+        self.assertIs(downtimes[0]['duration'], False)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
