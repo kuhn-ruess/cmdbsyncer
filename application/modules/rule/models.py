@@ -4,6 +4,7 @@ Default Rule Models
 # pylint: disable=too-few-public-methods
 from application import db
 from application.modules.rule.match import AGE_CONDITIONS
+from application.modules.rule.list_source import RULE_SOURCE_CHOICES, rule_uses_list
 
 
 #   .-- Condition Types
@@ -252,4 +253,39 @@ class CustomAttribute(db.EmbeddedDocument):
     meta = {
         'strict': False
     }
+#.
+#   .-- List Source
+
+
+def list_source_fields():
+    """
+    The two fields of a rule that can take a pasted list as its input,
+    for its class body: ``rule_source, list_source = list_source_fields()``.
+
+    ``rule_source`` is 'hosts' (default, rendered per host) or 'list'
+    (rendered once per row of ``list_source``), see
+    ``list_source.rule_uses_list``; it is empty on rules saved before the
+    switch existed. ``list_source`` holds the pasted table (CSV, semicolon
+    or tab separated, first line = column names); its columns are the
+    Jinja variables of the outcomes.
+    """
+    return db.StringField(choices=RULE_SOURCE_CHOICES), db.StringField()
+
+
+class ListSourceMixin:
+    """
+    Model side of a rule with a list source (see ``list_source_fields``).
+    The rule needs a ``static_rule`` flag: its export renders host
+    independent rules once, and a list rule is one of them.
+    """
+
+    def clean(self):
+        """
+        A rule rendered from its list is never rendered per host: keep it on
+        the host-independent path however it was saved (form, JSON import,
+        API).
+        """
+        super().clean()
+        if rule_uses_list(self.rule_source, self.list_source):
+            self.static_rule = True
 #.

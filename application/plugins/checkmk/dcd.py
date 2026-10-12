@@ -7,6 +7,11 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNComple
 from application.plugins.checkmk.cmk2 import CMK2
 
 from application import logger
+from application.modules.rule.list_source import (
+    is_list_rule,
+    parse_list_source,
+    row_context,
+)
 
 from syncerapi.v1 import Host, render_jinja
 
@@ -183,8 +188,37 @@ class CheckmkDCDRuleSync(CMK2):
                 rule_payload = self.build_rule_payload(rule, attributes)
                 logger.debug('\nGot Payload: %s', rule_payload)
 
-                if rule_payload and rule_payload not in self.all_rules:
+                # A connection without ID is no connection (a row of a list
+                # with an empty cell, for example).
+                if rule_payload and rule_payload.get('dcd_id') and \
+                        rule_payload not in self.all_rules:
                     self.all_rules.append(rule_payload)
+
+    def calculate_static_rules(self, context):
+        """
+        Static rules carry no host data: render each once against
+        ``context`` (site and account) instead of per host. Their match
+        conditions are ignored, a static rule is always emitted. A rule
+        rendered from its list is rendered once per row instead, with the
+        row's columns added to ``context``.
+        """
+        for rule in self.static_rules:
+            host_actions = {'dcd': [dict(outcome.to_mongo())
+                                    for outcome in rule.outcomes]}
+            if not is_list_rule(rule):
+                self.calculate_rules_of_host(f"static:{rule.name}",
+                                             host_actions, context)
+                continue
+            parsed = parse_list_source(rule.list_source)
+            if parsed.errors:
+                self.log_error(
+                    f"List rule '{rule.name}' skipped, its list is not valid: "
+                    f"{'; '.join(parsed.errors)}")
+                continue
+            for row_idx, row in enumerate(parsed.rows):
+                self.calculate_rules_of_host(
+                    f"list:{rule.name}:{row_idx}", host_actions,
+                    {**context, **row_context(row, row_idx)})
 
     def export_rules(self):
         """
@@ -222,15 +256,7 @@ class CheckmkDCDRuleSync(CMK2):
                     self.calculate_rules_of_host(db_host.hostname, host_actions, attributes['all'])
                 progress.advance(task1)
 
-            # Static rules carry no host data: render each once against an empty
-            # host context instead of per host (their match conditions are
-            # ignored — a static rule is always emitted).
-            for rule in self.static_rules:
-                host_actions = {'dcd': [dict(outcome.to_mongo())
-                                        for outcome in rule.outcomes]}
-                self.calculate_rules_of_host(
-                    f"static:{rule.name}", host_actions,
-                    {'cmk_site': site, 'account': account_ctx})
+            self.calculate_static_rules({'cmk_site': site, 'account': account_ctx})
 
             task2 = progress.add_task("Send Rules to Checkmk", total=len(self.all_rules))
             count_new = 0

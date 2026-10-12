@@ -41,7 +41,12 @@ from application.modules.rule.views import (
 )
 from application.views._form_sections import modern_form, section
 from application.models.project import Project
-from application.helpers.syncer_jinja import check_jinja_syntax, global_names
+from application.helpers.syncer_jinja import check_jinja_syntax
+from application.modules.rule.list_source import is_list_rule
+from application.modules.rule.list_source_views import (
+    ListSourceViewMixin,
+    list_source_rule_form,
+)
 from .models import (
     action_outcome_types,
     ACTION_CATALOG,
@@ -55,14 +60,7 @@ from .models import (
 )
 from .folder_attributes import CONTACTGROUP_FLAGS, FOLDER_ATTRIBUTE_CATALOG
 from .cmk_rules import label_condition_problems, preview_list_rule
-from .list_source import (
-    RULE_SOURCE_CHOICES,
-    RULE_SOURCE_HOSTS,
-    RULE_SOURCE_LIST,
-    check_list_rule,
-    outcome_templates,
-    rule_uses_list,
-)
+from .list_source import OUTCOME_TEMPLATE_FIELDS
 
 
 def _subform_data(subform, name):
@@ -885,41 +883,27 @@ class FilterRulesetContains(BaseMongoEngineFilter):
         return "contains"
 
 
-# Shown above the List field of a Setup Rule, so the mode explains itself
-# where it is used.
-LIST_SOURCE_HELP = Markup(
-    '<div id="list-source-help" class="small" style="margin-bottom: 8px;">'
-    '<ul style="padding-left: 18px; margin-bottom: 4px;">'
-    '<li><b>First line = column names.</b> Each column becomes a Jinja '
-    'variable for the outcome fields below: lower case, every space or '
-    'special character becomes <code>_</code>, so <code>Service Level</code> '
-    'is <code>{{ service_level }}</code>. The whole row is '
-    '<code>{{ row }}</code>, its 0-based number <code>{{ row_idx }}</code>. '
-    'The variables of your list are listed below the field as you paste.</li>'
-    '<li><b>Every row &times; every outcome</b> renders one Checkmk rule. A '
-    'row whose Value, service or host name condition renders empty creates '
-    'no rule (otherwise it would apply to every service or host).</li>'
-    '<li><b>Rows that only differ in the service name are joined</b> into one '
+# What a row of a Setup Rule's list does, shown above its List field.
+SETUP_RULE_LIST_HELP = (
+    'A row whose Value, service or host name condition renders empty '
+    'creates no rule (otherwise it would apply to every service or host).',
+    '<b>Rows that only differ in the service name are joined</b> into one '
     'Checkmk rule matching all of their services; identical rules are '
-    'created once.</li>'
-    '<li><b>Changing the list later:</b> the next <code>checkmk export_rules'
+    'created once.',
+    '<b>Changing the list later:</b> the next <code>checkmk export_rules'
     '</code> creates the rules of new rows, updates changed ones and removes '
-    'the rules this Setup Rule created for rows that are gone.</li>'
-    '<li><b>Debugging:</b> <span id="list-rule-debug-slot">after saving, the '
+    'the rules this Setup Rule created for rows that are gone.',
+    '<b>Debugging:</b> <span id="list-rule-debug-slot">after saving, the '
     'bug icon of this rule in the Setup Rules list</span> opens its debug '
     'page: every row with the number of rules it produced and the Checkmk '
     'rules the export would send, without touching Checkmk. To compare with '
-    'Checkmk, run <code>checkmk export_rules &lt;account&gt; --dry-run</code>.'
-    '</li>'
-    '<li>Separator (tab from a spreadsheet, <code>;</code>, <code>,</code> or '
-    '<code>|</code>) is detected from the first line. Checkmk compares '
-    'service names as regex prefix: add <code>$</code> for an exact match, '
-    'e.g. <code>{{ service }}$</code>.</li>'
-    '</ul></div>'
+    'Checkmk, run <code>checkmk export_rules &lt;account&gt; --dry-run</code>.',
+    'Checkmk compares service names as regex prefix: add <code>$</code> for '
+    'an exact match, e.g. <code>{{ service }}$</code>.',
 )
 
 
-class CheckmkMngmtRuleView(RuleModelView):
+class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Management of Rules inside Checkmk
     """
@@ -1027,37 +1011,24 @@ class CheckmkMngmtRuleView(RuleModelView):
         rules.HTML(f'<a href="{docu_links["cmk_setup_rules"]}" target="_blank" '
                    f'class="badge badge-light" style="margin-bottom: 8px;">'
                    f'<i class="fa fa-info-circle"></i> Documentation</a>'),
-        *modern_form(
-            section('1', 'main', 'Main Options',
-                     'Name, description, activation and where the rule '
-                     'gets its input from.',
-                     [rules.Field('name'),
-                      rules.Field('documentation'),
-                      rules.Field('project'),
-                      div_open,
-                      rules.NestedRule(('enabled', 'last_match', 'static_rule')),
-                      div_close,
-                      rules.Field('rule_source')]),
-            # Only one of the two step 2 sections is shown, depending on
-            # the rule source (see _list_source_preview.html).
-            section('2', 'cond', 'Pasted List',
-                     'One Checkmk rule per row of this list and per outcome. '
-                     'Host conditions do not apply.',
-                     [rules.HTML(LIST_SOURCE_HELP),
-                      rules.Field('list_source'),
-                      rules.HTML('<div id="list-source-preview"></div>')]),
-            section('2', 'cond', 'Conditions',
-                     'When does this rule apply? '
-                     'Match hostname or any host attribute.',
-                     [rules.Field('condition_typ'),
-                      rules.Field('conditions')]),
-            section('3', 'out', 'Checkmk Setup Rule',
-                     'The actual ruleset entry to create inside Checkmk. '
-                     'With a pasted list, click a column variable above to '
-                     'insert it into the field you were editing.',
-                     [rules.Field('outcomes')]),
+        *list_source_rule_form(
+            main_fields=[
+                rules.Field('name'),
+                rules.Field('documentation'),
+                rules.Field('project'),
+                div_open,
+                rules.NestedRule(('enabled', 'last_match', 'static_rule')),
+                div_close,
+            ],
+            creates='Checkmk rule',
+            help_items=SETUP_RULE_LIST_HELP,
+            outcome=('Checkmk Setup Rule',
+                     'The actual ruleset entry to create inside Checkmk.'),
         ),
     ]
+
+    list_source_template_fields = OUTCOME_TEMPLATE_FIELDS
+    list_source_placeholder = 'service;level\nDisk C:;gold\nCPU load;silver'
 
     def __init__(self, model, **kwargs):
         """
@@ -1077,21 +1048,7 @@ class CheckmkMngmtRuleView(RuleModelView):
         self.form_overrides.update({
             'render_cmk_rule_mngmt': HiddenField,
             'project': ProjectSelectField,
-            'list_source': TextAreaField,
         })
-        self.form_args = dict(getattr(self, 'form_args', {}) or {})
-        self.form_args['rule_source'] = {
-            'label': 'Rule source',
-            'choices': RULE_SOURCE_CHOICES,
-            'default': RULE_SOURCE_HOSTS,
-            'description': (
-                "Per host: the outcomes are rendered for every host matching "
-                "the conditions, with the host's attributes. From a pasted "
-                "list: the outcomes are rendered once per row of a list you "
-                "paste, with its columns; host conditions and Static Rule do "
-                "not apply."
-            ),
-        }
 
         self.column_labels.update({
             'render_cmk_rule_mngmt': "Create following Rules",
@@ -1104,12 +1061,6 @@ class CheckmkMngmtRuleView(RuleModelView):
             "outcome templates reference no host attributes — it skips "
             "the per-host calculation entirely."
         )
-        self.form_widget_args = dict(getattr(self, 'form_widget_args', {}) or {})
-        self.form_widget_args['list_source'] = {
-            'rows': 8,
-            'style': 'font-family: monospace; white-space: pre;',
-            'placeholder': 'service;level\nDisk C:;gold\nCPU load;silver',
-        }
         self.form_descriptions['project'] = (
             "Assign this rule to a Project. Project rules are exported "
             "by the normal 'export_rules' run, but only to the accounts the "
@@ -1311,60 +1262,11 @@ class CheckmkMngmtRuleView(RuleModelView):
                 return False
         label_errors = self._condition_label_errors(outcomes)
         loop_errors = self._loop_list_errors(outcomes)
-        list_errors = self._list_rule_messages(form)
-        if label_errors or loop_errors or list_errors:
-            for message in label_errors + loop_errors + list_errors:
+        if label_errors or loop_errors:
+            for message in label_errors + loop_errors:
                 flash(message, 'danger')
             return False
         return True
-
-    @staticmethod
-    def _check_list_rule(data):
-        """
-        ``check_list_rule`` on submitted form data: the rule source, the
-        list and every ``outcomes-N-<field>`` template.
-        """
-        return check_list_rule(
-            data.get('rule_source'), data.get('list_source'),
-            outcome_templates(data), known_names=global_names())
-
-    def _list_rule_messages(self, form):
-        """
-        Refuse a list rule the export could not use: an unreadable list
-        creates no rule at all, and a rule that created rules before would
-        remove them. Variables that are no column only warn.
-        """
-        data = {field.name: field.data for field in form
-                if field.name in ('rule_source', 'list_source')}
-        for entry in getattr(getattr(form, 'outcomes', None), 'entries', None) or []:
-            for field in getattr(entry, 'form', None) or []:
-                data[field.name] = field.data
-        _parsed, errors, warnings = self._check_list_rule(data)
-        for message in warnings:
-            flash(message, 'warning')
-        return errors
-
-    @expose('/_list_source_preview', methods=['POST'])
-    def list_source_preview(self):
-        """
-        Parse a pasted list the way the export will and answer with the
-        column variables, the first rows, every problem and the outcome
-        templates reading a variable that is no column. Feeds the preview
-        under the List field while the rule is being edited.
-        """
-        data = request.form.to_dict()
-        data['rule_source'] = RULE_SOURCE_LIST
-        parsed, errors, warnings = self._check_list_rule(data)
-        delimiter = {'\t': 'tab', ';': 'semicolon', ',': 'comma',
-                     '|': 'pipe'}.get(parsed.delimiter, '')
-        return {
-            'columns': parsed.columns,
-            'rows': parsed.rows[:20],
-            'row_count': len(parsed.rows),
-            'delimiter': delimiter,
-            'errors': errors,
-            'warnings': warnings,
-        }
 
     @expose('/list_rule_debug')
     def list_rule_debug(self):
@@ -1382,22 +1284,11 @@ class CheckmkMngmtRuleView(RuleModelView):
         host_debug_url = (f"{app.config['BASE_PREFIX']}admin/host/debug"
                           f"?mode=checkmk_host&preview_rule_id=setup_rule:{rule.id}")
         preview = None
-        if rule_uses_list(rule.rule_source, rule.list_source):
+        if is_list_rule(rule):
             preview = preview_list_rule(rule)
         return self.render('admin/checkmk_list_rule_debug.html', rule=rule,
                            preview=preview, host_debug_url=host_debug_url,
                            edit_url=self.get_url('.edit_view', id=rule.id))
-
-    def on_form_prefill(self, form, id):  # pylint: disable=redefined-builtin
-        """
-        A rule saved before the rule source switch existed shows the mode
-        it is exported in: from the list when one is filled in.
-        """
-        super().on_form_prefill(form, id)
-        if not form.rule_source.data:
-            form.rule_source.data = (
-                RULE_SOURCE_LIST if rule_uses_list(None, form.list_source.data)
-                else RULE_SOURCE_HOSTS)
 
     @staticmethod
     def _loop_list_errors(outcomes):
@@ -2479,7 +2370,7 @@ class CheckmkCacheView(DefaultModelView):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
 
-class CheckmkDCDView(RuleModelView):
+class CheckmkDCDView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too-many-ancestors
     """
     Custom DCD Rule View
     """
@@ -2498,7 +2389,7 @@ class CheckmkDCDView(RuleModelView):
         FilterLike('project', 'Project'),
     )
 
-    form_rules = _modern_rule_form(
+    form_rules = list_source_rule_form(
         main_fields=[
             rules.Field('name'),
             rules.Field('documentation'),
@@ -2508,14 +2399,26 @@ class CheckmkDCDView(RuleModelView):
             div_close,
             rules.Field('sort_field'),
         ],
-        condition_fields=[
-            rules.Field('condition_typ'),
-            rules.Field('conditions'),
-        ],
-        outcome_fields=[rules.Field('outcomes')],
-        outcome_title='DCD Rule',
-        outcome_desc='The DCD connection(s) to create in Checkmk.',
+        creates='DCD connection',
+        help_items=(
+            'A row whose DCD ID renders empty creates none; identical '
+            'connections are created once.',
+            '<code>{{ cmk_site }}</code> and <code>{{ account }}</code> are '
+            'available in every row as well.',
+        ),
+        outcome=('DCD Rule', 'The DCD connection(s) to create in Checkmk.'),
     )
+
+    # Rendered per row: the text fields of a DCD connection.
+    list_source_template_fields = (
+        ('dcd_id', 'DCD ID'),
+        ('title', 'Title'),
+        ('comment', 'Comment'),
+        ('site', 'Site'),
+        ('connector_type', 'Connector Type'),
+    )
+    list_source_known_names = ('cmk_site', 'account')
+    list_source_placeholder = 'id;site\npiggyback_dc1;site_a\npiggyback_dc2;site_b'
 
     def __init__(self, model, **kwargs):
         """

@@ -630,8 +630,12 @@ _try_load_real_module(
     "application.plugins.checkmk.helpers",
     os.path.join("plugins", "checkmk", "helpers.py"),
 )
-# cmk_rules renders the List Source of a Setup Rule with this parser (pure
-# Python, no dependencies).
+# The exports render the List Source of a rule with this parser, the Setup
+# Rules join their rows with the Checkmk part (pure Python, no dependencies).
+_load_real_module(
+    "application.modules.rule.list_source",
+    os.path.join("modules", "rule", "list_source.py"),
+)
 _load_real_module(
     "application.plugins.checkmk.list_source",
     os.path.join("plugins", "checkmk", "list_source.py"),

@@ -5,9 +5,11 @@ Unit tests for checkmk dcd module
 import unittest
 from unittest.mock import Mock, patch
 
+from types import SimpleNamespace
+
 from jinja2.exceptions import UndefinedError
 from application.plugins.checkmk.dcd import CheckmkDCDRuleSync
-from tests import base_mock_init
+from tests import base_mock_init, real_render_jinja
 
 
 class TestCheckmkDCDRuleSync(unittest.TestCase):
@@ -257,6 +259,95 @@ class TestCheckmkDCDRuleSync(unittest.TestCase):
                 'host1', {'type1': [{'rule': '1'}, {'rule': '2'}]}, {})
 
         self.assertEqual(len(self.sync.all_rules), 1)
+
+    def test_calculate_rules_of_host_skips_connection_without_id(self):
+        with patch.object(self.sync, 'build_rule_payload',
+                          return_value={'dcd_id': '', 'title': 't'}):
+            self.sync.calculate_rules_of_host(
+                'host1', {'type1': [{'rule': 'data'}]}, {})
+
+        self.assertEqual(self.sync.all_rules, [])
+
+
+class _Doc(dict):
+    """Embedded outcome stand-in: ``to_mongo`` is all the export reads."""
+    def to_mongo(self):
+        return dict(self)
+
+
+def _dcd_outcome(**fields):
+    outcome = {
+        'dcd_id': '{{ id }}', 'title': 'Piggyback {{ id }}', 'comment': '',
+        'documentation_url': '', 'disabled': False, 'site': '{{ cmk_site }}',
+        'connector_type': 'piggyback', 'restricted_source_hosts': [],
+        'interval': 60, 'creation_rules': [], 'activate_changes_interval': 600,
+        'discover_on_creation': False, 'exclude_time_ranges': [],
+        'no_deletion_time_after_init': 6000, 'max_cache_age': 3600,
+        'validity_period': 60,
+    }
+    outcome.update(fields)
+    return _Doc(outcome)
+
+
+def _dcd_rule(text, source='list', **outcome):
+    return SimpleNamespace(name='dc list', rule_source=source,
+                           list_source=text, outcomes=[_dcd_outcome(**outcome)])
+
+
+def _render(value, *args, **kwargs):
+    """Real Jinja for the export; the int settings are rendered as text."""
+    return real_render_jinja(str(value), *args, **kwargs)
+
+
+@patch('application.plugins.checkmk.dcd.render_jinja', side_effect=_render)
+class TestDCDListRule(unittest.TestCase):
+    """A DCD rule rendered once per row of its pasted list"""
+
+    def setUp(self):
+        def mock_init(self_param, account=False):
+            base_mock_init(self_param,
+                           console=Mock(), all_rules=[], debug=False)
+
+        with patch('application.plugins.checkmk.dcd.CMK2.__init__', mock_init):
+            self.sync = CheckmkDCDRuleSync()
+        self.sync.version_at_least = Mock(return_value=True)
+
+    def _ids(self):
+        return [(rule['dcd_id'], rule['title'], rule['site'])
+                for rule in self.sync.all_rules]
+
+    def test_one_connection_per_row(self, _render):
+        self.sync.static_rules = [_dcd_rule("ID\ndc1\ndc2\ndc1\n\n")]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        # The repeated row creates its connection once
+        self.assertEqual(self._ids(), [('dc1', 'Piggyback dc1', 'site_a'),
+                                       ('dc2', 'Piggyback dc2', 'site_a')])
+
+    def test_columns_override_nothing_but_add_variables(self, _render):
+        self.sync.static_rules = [_dcd_rule(
+            "id;site\ndc1;site_b\n", site='{{ site }}')]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        self.assertEqual(self._ids(), [('dc1', 'Piggyback dc1', 'site_b')])
+
+    def test_row_without_id_creates_nothing(self, _render):
+        self.sync.static_rules = [_dcd_rule("id;title\n;x\ndc2;y\n")]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        self.assertEqual([rule['dcd_id'] for rule in self.sync.all_rules],
+                         ['dc2'])
+
+    def test_invalid_list_creates_nothing_and_is_reported(self, _render):
+        self.sync.static_rules = [_dcd_rule("id;site\ndc1;a;extra\n")]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        self.assertEqual(self.sync.all_rules, [])
+        self.assertIn("List rule 'dc list' skipped",
+                      self.sync.log_details[-1][1])
+
+    def test_host_mode_renders_once_and_ignores_the_list(self, _render):
+        self.sync.static_rules = [_dcd_rule("id\ndc1\ndc2\n", source='hosts',
+                                            dcd_id='static_dc')]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        self.assertEqual([rule['dcd_id'] for rule in self.sync.all_rules],
+                         ['static_dc'])
 
 
 if __name__ == '__main__':

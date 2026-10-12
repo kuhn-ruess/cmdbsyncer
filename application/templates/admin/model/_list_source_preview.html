@@ -1,4 +1,5 @@
-{# Rule source switch and List preview of a Checkmk Setup Rule.
+{# Rule source switch and List preview of a rule with a list source
+   (ListSourceViewMixin in application/modules/rule/list_source_views.py).
 
    * The "Rule source" select decides which step 2 section is shown: the host
      Conditions, or the Pasted List. Static Rule is hidden for a list rule,
@@ -8,6 +9,7 @@
      export does. The answer is shown below the field: separator, the column
      variables (click one to insert it into the outcome field last edited),
      the first rows, errors and variables that are no column.
+   * A view with a `list_rule_debug` page gets it linked in the help.
    Cell content is only ever inserted as text. #}
 <style>
 #list-source-preview { margin: -4px 0 12px; font-size: 0.85rem; }
@@ -94,7 +96,7 @@
   function show(data) {
     box.textContent = '';
     if (!field.value.trim()) {
-      box.appendChild(el('div', 'Paste a list above: first line the column names, then one line per rule.', 'lsp-meta'));
+      box.appendChild(el('div', 'Paste a list above: first line the column names, then one line per row.', 'lsp-meta'));
       return;
     }
     box.appendChild(el('div', data.row_count + ' row(s), ' + (data.delimiter || '?') +
@@ -152,7 +154,7 @@
     timer = setTimeout(refresh, 400);
   }
 
-  {% if model is defined and model and model.id %}
+  {% if model is defined and model and model.id and admin_view.list_rule_debug is defined %}
   // Saved rule: link its debug page right in the help.
   var slot = document.getElementById('list-rule-debug-slot');
   if (slot) {

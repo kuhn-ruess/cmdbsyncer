@@ -574,6 +574,11 @@ class PluginViewFormattingTest(unittest.TestCase):
             ModuleType('application.models.project'),
         )
         project_mod.Project = MagicMock()
+        # The Setup and DCD rule views build their form with it.
+        _load_source_module(
+            'application.modules.rule.list_source_views',
+            os.path.join('application', 'modules', 'rule', 'list_source_views.py'),
+        )
 
         checkmk_module = _load_source_module(
             'application.plugins.checkmk.views',

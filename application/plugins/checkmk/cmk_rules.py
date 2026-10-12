@@ -17,12 +17,12 @@ from application.models.host import Host
 from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
 from application.plugins.checkmk.helpers import make_progress, resolve_loop_list
-from application.plugins.checkmk.list_source import (
+from application.modules.rule.list_source import (
+    is_list_rule,
     parse_list_source,
     row_context,
-    rule_uses_list,
-    merge_service_conditions,
 )
+from application.plugins.checkmk.list_source import merge_service_conditions
 from application.helpers.label_hash import syncer_hash
 from application.modules.debug import ColorCodes as CC
 
@@ -2300,8 +2300,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             # project here too — a static project rule must ignore the
             # account's folder scope like every other project rule.
             rule_project = getattr(rule, 'project', None)
-            if rule_uses_list(getattr(rule, 'rule_source', None),
-                              getattr(rule, 'list_source', None)):
+            if is_list_rule(rule):
                 self._calculate_list_rule(rule, rule_project)
                 continue
             for outcome in rule.outcomes:

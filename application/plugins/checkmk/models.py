@@ -7,9 +7,8 @@ Checkmk Rules
 from mongoengine import DENY
 from cryptography.fernet import Fernet
 from application import db, app
-from application.modules.rule.models import rule_types
+from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
 from application.models.account import Account
-from application.plugins.checkmk.list_source import RULE_SOURCE_CHOICES, rule_uses_list
 
 
 
@@ -449,7 +448,7 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
         'strict': False,
     }
 
-class CheckmkRuleMngmt(db.Document):
+class CheckmkRuleMngmt(ListSourceMixin, db.Document):
     """
     Manage Checkmk Rules
     """
@@ -473,15 +472,8 @@ class CheckmkRuleMngmt(db.Document):
     # context (host match conditions are ignored) instead of recomputing
     # it per host and de-duplicating the identical copies.
     static_rule = db.BooleanField(default=False)
-    # Where the rule gets its input: 'hosts' (default, rendered per host)
-    # or 'list' (rendered once per row of ``list_source``), see
-    # ``list_source.rule_uses_list``. Empty on rules saved before the
-    # switch existed.
-    rule_source = db.StringField(choices=RULE_SOURCE_CHOICES)
-    # The pasted table of a 'list' rule (CSV, semicolon or tab separated,
-    # first line = column names). Its columns are the Jinja variables of
-    # the outcomes, see ``list_source.py``.
-    list_source = db.StringField()
+    # Per host or from a pasted list, see ``list_source_fields``.
+    rule_source, list_source = list_source_fields()
     # Name of the Project this rule belongs to (or empty for a
     # free/global rule). Referenced by name — not as a ReferenceField — so a
     # project and its rules survive a JSON im-/export between separate syncer
@@ -494,15 +486,6 @@ class CheckmkRuleMngmt(db.Document):
         'strict': False,
         'indexes': ['primary_ruleset', 'project'],
     }
-
-    def clean(self):
-        """
-        A rule rendered from its list is never rendered per host: keep it on
-        the host-independent path however it was saved (form, JSON import,
-        API).
-        """
-        if rule_uses_list(self.rule_source, self.list_source):
-            self.static_rule = True
 
 #.
 
@@ -921,7 +904,7 @@ class DCDRuleOutcome(db.EmbeddedDocument):
     }
 
 
-class CheckmkDCDRule(db.Document):
+class CheckmkDCDRule(ListSourceMixin, db.Document):
     """
     DCD Rule
     """
@@ -941,6 +924,9 @@ class CheckmkDCDRule(db.Document):
     # match conditions) instead of once per host and de-duplicated — the same
     # optimisation CheckmkRuleMngmt.static_rule provides for Setup rules.
     static_rule = db.BooleanField(default=False)
+    # Per host or from a pasted list, see ``list_source_fields``. A list
+    # rule creates its DCD connections once per row.
+    rule_source, list_source = list_source_fields()
 
     # Name of the Project this DCD rule belongs to (or empty).
     # Referenced by name to match CheckmkRuleMngmt.project. A DCD rule assigned
