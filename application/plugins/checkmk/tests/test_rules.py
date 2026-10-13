@@ -14,6 +14,7 @@ from application.plugins.checkmk.rules import (
     folder_options_tree,
     parse_folder_options_debug,
 )
+from tests import real_render_jinja
 
 
 class TestCheckmkRulesetRule(unittest.TestCase):
@@ -57,6 +58,11 @@ class TestDefaultRule(unittest.TestCase):
 
         self.assertIn('default', result)
         self.assertEqual(len(result['default']), 2)
+
+
+# Folder value guarded by an if block, with a tag closed without a space.
+IF_DEFINED_FOLDER = ("{% if folder_var is defined %}/{{folder_var}}"
+                     "|{'title': '{{folder_var}}'}{%endif %}")
 
 
 class TestCheckmkRule(unittest.TestCase):
@@ -251,6 +257,43 @@ class TestCheckmkRule(unittest.TestCase):
                 'P', outcomes, 'move_folder', 'extra_folder_options')
         self.assertEqual(outcomes['move_folder'], '/berlin/web')
         self.assertEqual(outcomes['extra_folder_options'], '/berlin/web|OPT')
+
+    @patch('application.plugins.checkmk.rules.app')
+    def test_folder_outcome_if_defined_block_renders(self, mock_app):
+        # A value wrapped in {% if x is defined %}...{%endif %} renders to the
+        # folder plus its options when the variable is set.
+        mock_app.config = {'CMK_LOWERCASE_FOLDERNAMES': False}
+        self.rule.attributes = {'folder_var': 'web'}
+        outcomes = {'move_folder': '', 'extra_folder_options': ''}
+        with patch('application.plugins.checkmk.rules.render_jinja',
+                   side_effect=real_render_jinja), \
+             patch.object(self.rule, 'replace',
+                          side_effect=lambda x, **kw: x):
+            self.rule._apply_folder_outcome(
+                IF_DEFINED_FOLDER, outcomes,
+                'move_folder', 'extra_folder_options')
+        self.assertEqual(outcomes['move_folder'], '/web')
+        self.assertEqual(outcomes['extra_folder_options'],
+                         "/web|{'title': 'web'}")
+
+    @patch('application.plugins.checkmk.rules.app')
+    def test_folder_outcome_if_defined_block_false_adds_nothing(self, mock_app):
+        # Condition false: the rule contributes no folder (as in 4.2) and
+        # nothing is reported as broken.
+        mock_app.config = {'CMK_LOWERCASE_FOLDERNAMES': False}
+        self.rule.attributes = {}
+        outcomes = {'move_folder': '', 'extra_folder_options': ''}
+        with patch('application.plugins.checkmk.rules.render_jinja',
+                   side_effect=real_render_jinja), \
+             patch('application.plugins.checkmk.rules.log') as mock_log, \
+             patch.object(self.rule, 'replace',
+                          side_effect=lambda x, **kw: x):
+            self.rule._apply_folder_outcome(
+                IF_DEFINED_FOLDER, outcomes,
+                'move_folder', 'extra_folder_options')
+        self.assertEqual(outcomes['move_folder'], '')
+        self.assertEqual(outcomes['extra_folder_options'], '')
+        mock_log.log.assert_not_called()
 
     def test_add_outcomes_dont_move(self):
         outcomes = {}
@@ -463,6 +506,19 @@ class TestFolderOptionValidation(unittest.TestCase):
     def test_no_options_passes(self):
         self.assertIsNone(validate_folder_option_param('/{{site}}/berlin'))
         self.assertIsNone(validate_folder_option_param(''))
+
+    def test_if_defined_block_passes(self):
+        # Statement tags print nothing; they must not be glued onto the
+        # options dict as a stray literal and reject a valid value.
+        self.assertIsNone(validate_folder_option_param(IF_DEFINED_FOLDER))
+
+    def test_if_defined_block_with_broken_options_rejected(self):
+        # Inside an if block a doubled '}}' must still be caught.
+        param = ("{% if folder_var is defined %}/{{folder_var}}"
+                 "|{'title': 'X'}}{% endif %}")
+        error = validate_folder_option_param(param)
+        self.assertIsNotNone(error)
+        self.assertIn('brace', error)
 
     def test_plain_title_passes(self):
         self.assertIsNone(
