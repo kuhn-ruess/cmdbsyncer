@@ -481,7 +481,7 @@
                   <tr>
                     <th style="width: 280px;">Rule</th>
                     <th style="width: 70px;">Hit</th>
-                    <th>Matching condition / first reason it won't match</th>
+                    <th>Matching conditions / first reason it won't match</th>
                     <th style="width: 260px;">Outcome of this rule</th>
                     <th style="width: 120px;">Condition Type</th>
                     <th style="width: 100px;">Last Match</th>
@@ -527,8 +527,10 @@
                           <span class="badge badge-secondary">static</span>
                           <span class="text-muted">host-independent — emitted for every host, match conditions ignored</span>
                         {% elif rule['hit'] %}
-                          {% if rule['match_reason'] %}
-                            {{ render_condition(rule['match_reason']) }}
+                          {% if rule['match_reasons'] %}
+                            {% for cond in rule['match_reasons'] %}
+                              <div>{{ render_condition(cond) }}</div>
+                            {% endfor %}
                           {% else %}
                             <span class="text-muted"><i class="fa fa-check"></i> always matches</span>
                           {% endif %}
@@ -540,7 +542,7 @@
                         {% if rule['outcome'] %}
                           {{ render_outcome(rule['outcome']) }}
                         {% elif rule['hit'] %}
-                          <span class="text-muted">nothing new — an earlier rule already set it</span>
+                          <span class="text-muted">no change to the total outcome: the same value was already set by an earlier rule, or the outcome rendered empty</span>
                         {% else %}
                           <span class="text-muted">—</span>
                         {% endif %}

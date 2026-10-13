@@ -3,6 +3,8 @@ Unit tests for the Rule base class optimizations.
 """
 # pylint: disable=missing-function-docstring,protected-access
 import datetime
+import importlib.util
+import pathlib
 import unittest
 from unittest.mock import Mock, patch
 
@@ -129,6 +131,71 @@ class TestDebugOutcomes(unittest.TestCase):
         self.assertEqual(result['rules'][1]['outcome'],
                          {'hits': ['r1', 'r2']})
 
+    @staticmethod
+    def _conditional_rule_doc(name, condition_typ, conditions):
+        doc = Mock()
+        doc.to_mongo.return_value = {
+            'name': name,
+            '_id': name,
+            'condition_typ': condition_typ,
+            'conditions': conditions,
+            'outcomes': [],
+            'last_match': False,
+        }
+        return doc
+
+    @staticmethod
+    def _host_condition(hostname):
+        return {'match_type': 'host', 'hostname': hostname,
+                'hostname_match': 'equal', 'hostname_match_negate': False}
+
+    @patch('application.modules.rule.rule.Console')
+    @patch('application.modules.rule.rule.app')
+    def test_all_rule_shows_every_matching_condition(self, mock_app, _console):
+        mock_app.config = {'ADVANCED_RULE_DEBUG': False}
+        conditions = [self._host_condition('a'), self._host_condition('b'),
+                      self._host_condition('c')]
+        self.rule.rules = [self._conditional_rule_doc('r1', 'all', conditions)]
+
+        with patch.object(self.rule, 'handle_match', return_value=True):
+            self.rule.check_rules('host-a')
+
+        line = self.rule.debug_result()['rules'][0]
+        self.assertTrue(line['hit'])
+        self.assertEqual(line['match_reasons'], conditions)
+
+    @patch('application.modules.rule.rule.Console')
+    @patch('application.modules.rule.rule.app')
+    def test_any_rule_shows_the_condition_that_matched(self, mock_app, _console):
+        mock_app.config = {'ADVANCED_RULE_DEBUG': False}
+        conditions = [self._host_condition('a'), self._host_condition('b'),
+                      self._host_condition('c')]
+        self.rule.rules = [self._conditional_rule_doc('r1', 'any', conditions)]
+
+        with patch.object(self.rule, 'handle_match',
+                          side_effect=[False, True]):
+            self.rule.check_rules('host-a')
+
+        line = self.rule.debug_result()['rules'][0]
+        self.assertTrue(line['hit'])
+        self.assertEqual(line['match_reasons'], [conditions[1]])
+
+    @patch('application.modules.rule.rule.Console')
+    @patch('application.modules.rule.rule.app')
+    def test_all_rule_miss_shows_first_failing_condition(self, mock_app, _console):
+        mock_app.config = {'ADVANCED_RULE_DEBUG': False}
+        conditions = [self._host_condition('a'), self._host_condition('b')]
+        self.rule.rules = [self._conditional_rule_doc('r1', 'all', conditions)]
+
+        with patch.object(self.rule, 'handle_match',
+                          side_effect=[True, False]):
+            self.rule.check_rules('host-a')
+
+        line = self.rule.debug_result()['rules'][0]
+        self.assertFalse(line['hit'])
+        self.assertEqual(line['match_reasons'], [])
+        self.assertEqual(line['no_match_reason'], conditions[1])
+
     @patch('application.modules.rule.rule.app')
     def test_no_outcome_key_without_debug(self, mock_app):
         mock_app.config = {'ADVANCED_RULE_DEBUG': False}
@@ -139,6 +206,59 @@ class TestDebugOutcomes(unittest.TestCase):
 
         self.assertEqual(self.rule.debug_result(),
                          {'rules': [], 'outcomes': {}})
+
+
+def _real_custom_attribute_rule():
+    """
+    The real CustomAttributeRule engine. tests/__init__.py stubs its module
+    for the plugin tests, so it is loaded straight from its file here.
+    """
+    path = (pathlib.Path(__file__).resolve().parent.parent
+            / 'application' / 'modules' / 'custom_attributes' / 'rules.py')
+    spec = importlib.util.spec_from_file_location('_real_custom_attr_rules', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.CustomAttributeRule
+
+
+class TestLaterRuleWins(unittest.TestCase):
+    """
+    Two Custom Attribute rules setting the same attribute: the later rule
+    in the sort order wins, and the debug lines say so.
+    """
+    @staticmethod
+    def _rule_doc(name, value):
+        doc = Mock()
+        doc.to_mongo.return_value = {
+            'name': name,
+            '_id': name,
+            'condition_typ': 'anyway',
+            'conditions': [],
+            'outcomes': [{'attribute_name': 'role', 'attribute_value': value}],
+            'last_match': False,
+        }
+        return doc
+
+    @patch('application.modules.rule.rule.Console')
+    @patch('application.modules.rule.rule.app')
+    def test_later_rule_overwrites_and_same_value_is_no_change(self, mock_app,
+                                                                _console):
+        mock_app.config = {'ADVANCED_RULE_DEBUG': False}
+        engine = _real_custom_attribute_rule()()
+        engine.debug = True
+        engine.attributes = {}
+        engine.rules = [self._rule_doc('r1', 'web'),
+                        self._rule_doc('r2', 'db'),
+                        self._rule_doc('r3', 'db')]
+
+        total = engine.check_rules('host-a')
+
+        self.assertEqual(total, {'role': 'db'})
+        lines = engine.debug_result()['rules']
+        self.assertEqual(lines[0]['outcome'], {'role': 'web'})
+        self.assertEqual(lines[1]['outcome'], {'role': 'db'})
+        # Same value as before: the rule hit, but changed nothing.
+        self.assertEqual(lines[2]['outcome'], {})
 
 
 class TestOutcomeDelta(unittest.TestCase):
