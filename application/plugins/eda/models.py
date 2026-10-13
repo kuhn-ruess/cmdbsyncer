@@ -14,6 +14,11 @@ DEFAULT_RESEND_HOURS = 24
 EVENT_LOG_RETENTION_KEY = 'EDA_EVENT_LOG_RETENTION_DAYS'
 DEFAULT_EVENT_LOG_RETENTION_DAYS = 90
 
+# An event counts as repeating once a host was sent it this often while
+# it kept matching: the rulebook ran, the condition is still there.
+# Account field `repeat_threshold`, 0 switches the detection off.
+DEFAULT_REPEAT_THRESHOLD = 3
+
 event_statuses = [
     ('success', 'Success'),
     ('failure', 'Failure'),
@@ -92,5 +97,55 @@ class EdaEventLog(db.Document):
     }
 
 
+repeat_states = [
+    ('pending', 'Pending'),
+    ('repeating', 'Repeating'),
+    ('resolved', 'Resolved'),
+]
+
+
+class EdaEventState(db.Document):
+    """
+    How one event of one rule fares on one host, per account.
+
+    A streak starts when the host matches, every send (successful or
+    not) counts in `sends`. When a run no longer gives the host this
+    event, the streak is `resolved`: whatever the rulebook did worked.
+    A host that keeps matching after `repeat_threshold` sends is
+    `repeating`: the event goes out again and again without effect.
+    """
+    account = db.StringField()
+    rule_id = db.StringField()
+    rule_name = db.StringField()
+    hostname = db.StringField()
+    event = db.StringField()
+
+    state = db.StringField(choices=repeat_states, default='pending')
+    sends = db.IntField(default=0)
+    failures = db.IntField(default=0)
+    total_sends = db.IntField(default=0)
+    repeat_threshold = db.IntField(default=DEFAULT_REPEAT_THRESHOLD)
+
+    first_sent = db.DateTimeField()
+    last_sent = db.DateTimeField()
+    last_status = db.StringField(choices=event_statuses)
+    last_http_status = db.IntField()
+    last_match = db.DateTimeField()
+    resolved_at = db.DateTimeField()
+
+    meta = {
+        'strict': False,
+        'indexes': [
+            ('account', 'rule_id', 'hostname', 'event'),
+            ('state', 'account'),
+            {'fields': ['resolved_at'],
+             'expireAfterSeconds': retention_seconds(
+                 EVENT_LOG_RETENTION_KEY, DEFAULT_EVENT_LOG_RETENTION_DAYS)},
+        ],
+    }
+
+
 register_retention('EDA event history', EdaEventLog, 'sent_at',
+                   EVENT_LOG_RETENTION_KEY, DEFAULT_EVENT_LOG_RETENTION_DAYS)
+register_retention('EDA resolved event states', EdaEventState, 'resolved_at',
                    EVENT_LOG_RETENTION_KEY, DEFAULT_EVENT_LOG_RETENTION_DAYS)

@@ -10,7 +10,8 @@ from application.models.host import Host
 from application.modules.debug import ColorCodes as CC
 from application.modules.plugin import Plugin
 
-from .models import EdaEventLog, EdaEventRule
+from .models import EdaEventLog, EdaEventRule, EdaEventState
+from .repeats import note_match, note_send, repeat_threshold
 from .rules import EdaEventRuleEngine
 
 # How much of an answer the history keeps
@@ -44,6 +45,7 @@ class EdaSender(Plugin):
         self.actions = EdaEventRuleEngine()
         self.actions.rules = EdaEventRule.objects(enabled=True).order_by('sort_field')
         self.counts = {'sent': 0, 'failed': 0, 'skipped': 0}
+        self.run_started = datetime.now()
 
     #   .-- Request
     def auth(self):
@@ -96,6 +98,32 @@ class EdaSender(Plugin):
         return EdaEventLog.objects(**query).first() is not None
     #.
 
+    #   .-- Repeat tracking
+    def track_match(self, hostname, event):
+        """The streak of this event on this host, updated for this run."""
+        key = {
+            'account': self.account_name,
+            'rule_id': event['rule_id'],
+            'hostname': hostname,
+            'event': event['event'],
+        }
+        state = EdaEventState.objects(**key).first() or EdaEventState(**key)
+        note_match(state, event['rule_name'],
+                   repeat_threshold(self.config.get('repeat_threshold')), datetime.now())
+        state.save()
+        return state
+
+    def resolve_unmatched(self):
+        """
+        Streaks of this account whose host gave no such event in this run
+        are resolved: the host no longer matches, the action worked.
+        """
+        return EdaEventState.objects(
+            account=self.account_name, resolved_at=None,
+            last_match__lt=self.run_started,
+        ).update(set__resolved_at=datetime.now(), set__state='resolved')
+    #.
+
     def host_events(self, db_host):
         """The events the rules give one host."""
         attributes = self.get_attributes(db_host, False)
@@ -106,6 +134,7 @@ class EdaSender(Plugin):
 
     def handle_event(self, hostname, event):
         """Send one event unless it was sent recently, and log it."""
+        state = None if self.dry_run else self.track_match(hostname, event)
         if self.recently_sent(hostname, event):
             self.counts['skipped'] += 1
             return
@@ -130,6 +159,8 @@ class EdaSender(Plugin):
             http_status=status,
             response=answer,
         ).save()
+        note_send(state, ok, status, datetime.now())
+        state.save()
         if ok:
             self.counts['sent'] += 1
             print(f" {CC.OKGREEN}*{CC.ENDC} {hostname}: sent {event['event']}")
@@ -142,6 +173,8 @@ class EdaSender(Plugin):
         for db_host in Host.get_export_hosts():
             for event in self.host_events(db_host):
                 self.handle_event(db_host.hostname, event)
+        if not self.dry_run:
+            self.log_details.append(('resolved', self.resolve_unmatched()))
         for key, value in self.counts.items():
             self.log_details.append((key, value))
         return self.counts

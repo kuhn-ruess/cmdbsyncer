@@ -811,6 +811,52 @@ class SyncerAPITest(unittest.TestCase):
         self.assertIn('24h_checkpoint', body)
 
 
+class SyncerEdaAPITest(unittest.TestCase):
+    """Tests for /api/v1/syncer/eda, what the Checkmk check reads"""
+
+    def setUp(self):
+        self.app = _build_app()
+        self.client = self.app.test_client()
+        self.headers = _basic_auth()
+
+    @_auth_patches
+    @patch('application.api.syncer.collect_summary')
+    def test_summary_under_result(self, collect):
+        collect.return_value = {'repeating': 2, 'offenders': []}
+        resp = self.client.get('/api/v1/syncer/eda?account=eda&min_sends=5&limit=10',
+                               headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json(), {'result': {'repeating': 2, 'offenders': []}})
+        kwargs = collect.call_args.kwargs
+        self.assertEqual((kwargs['account'], kwargs['min_sends'], kwargs['limit']),
+                         ('eda', 5, 10))
+        self.assertIsNone(kwargs['hostname_filter'])
+
+    @_auth_patches
+    @patch('application.api.syncer.collect_summary')
+    def test_defaults(self, collect):
+        collect.return_value = {}
+        self.client.get('/api/v1/syncer/eda', headers=self.headers)
+        kwargs = collect.call_args.kwargs
+        self.assertEqual((kwargs['account'], kwargs['min_sends'], kwargs['limit']),
+                         (None, None, 100))
+
+    @_auth_patches
+    @patch('application.api.syncer.collect_summary')
+    def test_invalid_arguments(self, collect):
+        for query in ('min_sends=0', 'min_sends=x', 'limit=-1'):
+            resp = self.client.get(f'/api/v1/syncer/eda?{query}', headers=self.headers)
+            self.assertEqual(resp.status_code, 400, query)
+        collect.assert_not_called()
+
+    @patch('application.api.User')
+    def test_syncer_role_is_enough(self, user_cls):
+        user_cls.objects.get.return_value = _FakeUser(api_roles=['syncer'])
+        with patch('application.api.syncer.collect_summary', return_value={}):
+            resp = self.client.get('/api/v1/syncer/eda', headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+
+
 class APIReadOnlyUserTest(unittest.TestCase):
     """A read-only account may read over the API and may not write."""
 

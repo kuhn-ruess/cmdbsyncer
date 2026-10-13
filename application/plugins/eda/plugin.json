@@ -10,12 +10,14 @@
     "account_custom_field_presets": {
         "auth_header": "Authorization",
         "auth_prefix": "Bearer",
+        "repeat_threshold": "3",
         "verify_cert": "True",
         "ca_cert_chain": "",
         "ca_root_cert": ""
     },
     "account_custom_field_help": {
         "auth_header": "HTTP header the token is sent in (default Authorization). Only used when the account has a password but no username: the password is the token. With a username, the request uses Basic Auth instead.",
-        "auth_prefix": "Text put in front of the token, separated by a space (default Bearer, what the ansible.eda.webhook source expects). Leave it empty when the event stream wants the bare token in the header."
+        "auth_prefix": "Text put in front of the token, separated by a space (default Bearer, what the ansible.eda.webhook source expects). Leave it empty when the event stream wants the bare token in the header.",
+        "repeat_threshold": "A host that still matches after its event was sent this often counts as repeating: the event goes out again and again without effect. Shown under Repeated Events and in the REST API. Default 3, 0 switches it off."
     }
 }

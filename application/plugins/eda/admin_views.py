@@ -3,15 +3,16 @@ Flask-Admin view registration of Event Driven Ansible
 """
 from application.views.module_overview import register_module_menu
 
-from .models import EdaEventLog, EdaEventRule
-from .views import EdaEventLogView, EdaEventRuleView
+from .models import EdaEventLog, EdaEventRule, EdaEventState
+from .views import EdaEventLogView, EdaEventRuleView, EdaEventStateView
 
 
 def register_admin_views(admin):
     """
     Event Driven Ansible
       ├─ Event Rules
-      └─ Event History
+      ├─ Event History
+      └─ Repeated Events
     """
     admin.add_sub_category(name="Event Driven Ansible", parent_name="Modules")
     register_module_menu(admin, "Event Driven Ansible")
@@ -24,3 +25,8 @@ def register_admin_views(admin):
                                    category="Event Driven Ansible",
                                    menu_icon_type='fa',
                                    menu_icon_value='fa-history'))
+    admin.add_view(EdaEventStateView(EdaEventState, name="Repeated Events",
+                                     endpoint='edaeventstate',
+                                     category="Event Driven Ansible",
+                                     menu_icon_type='fa',
+                                     menu_icon_value='fa-repeat'))

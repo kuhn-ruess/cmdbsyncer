@@ -88,6 +88,7 @@ not_exported = {
     'AnsibleRunStats': 'Playbook run history',
     'CheckmkObjectCache': 'Rebuilt from the Checkmk API',
     'EdaEventLog': 'Event Driven Ansible event history',
+    'EdaEventState': 'Event Driven Ansible repeat tracking per host',
     'CheckmkRuleAnalysis': 'Result of the last rule analysis run',
     'CronStats': 'Cronjob run statistics',
     'FieldApproval': 'Approval queue, tied to live hosts',

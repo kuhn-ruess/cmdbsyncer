@@ -1,8 +1,9 @@
 """
 Syncer API.
 
-Read-only access to log entries, cron status, host counters, plus a
-webhook trigger for cron groups. Authenticated via ``@require_token``;
+Read-only access to log entries, cron status, host counters, the
+repeated Event Driven Ansible events, plus a webhook trigger for cron
+groups. Authenticated via ``@require_token``;
 a user with ``api_roles = ['syncer']`` (or ``'all'``) can call this
 namespace. The ``/cron/trigger/<group>`` route additionally accepts an
 ``X-Webhook-Token`` header tied to the CronGroup, so external systems
@@ -14,12 +15,16 @@ from flask import request
 from flask_restx import Namespace, Resource, fields
 
 from application import log
-from application.api import require_token, scope_host_query
+from application.api import (
+    api_scope_active, hostnames_in_scope, get_api_account_scope,
+    require_token, scope_host_query,
+)
 from application.enterprise import run_hook as _ent_run_hook
 from application.helpers.audit import audit
 from application.modules.log.models import LogEntry
 from application.models.host import Host
 from application.models.cron import CronStats, CronGroup
+from application.plugins.eda.repeats import DEFAULT_OFFENDER_LIMIT, collect_summary
 
 API = Namespace(
     'syncer',
@@ -96,6 +101,62 @@ HOSTS_STATS = API.model('hosts_stats', {
                                               '(e.g. apps, services)'),
     'not_updated_last_24h': fields.Integer(
         description='Hosts whose ``last_import_seen`` is older than 24h'),
+})
+
+EDA_COUNTS = {
+    'events_24h': fields.Integer(description='Events sent (or tried) in '
+                                             'the last 24 hours'),
+    'failed_24h': fields.Integer(description='Of those, the ones the event '
+                                             'stream did not accept'),
+    'pending': fields.Integer(description='Open streaks below the '
+                                          'threshold: sent, host still '
+                                          'matches'),
+    'repeating': fields.Integer(description='Open streaks at or above the '
+                                            'threshold: sent again and '
+                                            'again without effect'),
+    'repeating_hosts': fields.Integer(description='Distinct hosts with a '
+                                                  'repeating event'),
+    'failing': fields.Integer(description='Open streaks whose last send '
+                                          'failed'),
+    'max_sends': fields.Integer(description='Most sends of one open streak'),
+}
+
+EDA_ACCOUNT = API.model('eda_account', {
+    'account': fields.String(description='EDA account the events go to'),
+    **EDA_COUNTS,
+})
+
+EDA_OFFENDER = API.model('eda_offender', {
+    'account': fields.String(),
+    'hostname': fields.String(),
+    'event': fields.String(description='Event name as sent'),
+    'rule': fields.String(description='Name of the Event Rule'),
+    'rule_id': fields.String(),
+    'sends': fields.Integer(description='Sends since the host matches'),
+    'failures': fields.Integer(description='Of those, failed sends'),
+    'threshold': fields.Integer(description='Threshold the streak was '
+                                            'measured against'),
+    'first_sent': fields.String(example='2026-10-10 06:00:00'),
+    'last_sent': fields.String(example='2026-10-13 06:00:00'),
+    'last_status': fields.String(example='success',
+                                 description='success or failure'),
+    'last_http_status': fields.Integer(),
+})
+
+EDA_SUMMARY = API.model('eda_summary', {
+    **EDA_COUNTS,
+    'min_sends': fields.Integer(description='Threshold override of the '
+                                            'request, null = per account'),
+    'accounts': fields.List(fields.Nested(EDA_ACCOUNT)),
+    'offenders': fields.List(fields.Nested(EDA_OFFENDER),
+                             description='Repeating streaks, most sends '
+                                         'first'),
+    'offenders_truncated': fields.Boolean(description='True when the '
+                                                      'limit cut the list'),
+})
+
+EDA_RESPONSE = API.model('eda_response', {
+    'result': fields.Nested(EDA_SUMMARY),
 })
 
 ERROR = API.model('error', {
@@ -384,4 +445,62 @@ class SyncerHostsApi(Resource):
                 is_object=False,
                 last_import_seen__lt=ago_24h,
             )).count(),
+        }, 200
+
+
+def _int_arg(name, default, minimum):
+    """An integer query argument, None when it is not valid."""
+    value = request.args.get(name)
+    if value in (None, ''):
+        return default
+    try:
+        number = int(value)
+    except ValueError:
+        return None
+    return number if number >= minimum else None
+
+
+def _eda_hostname_filter():
+    """Hosts a restricted API user may see, None when unrestricted."""
+    if not api_scope_active():
+        return None
+    scope = get_api_account_scope()
+
+    def allowed(hostnames):
+        return hostnames_in_scope(hostnames, scope)
+    return allowed
+
+
+@API.route('/eda')
+class SyncerEdaApi(Resource):
+    """Event Driven Ansible: events sent again and again without effect."""
+
+    @API.doc(security=['basicAuth', 'apiToken'], params={
+        'account': 'Only this EDA account',
+        'min_sends': 'Count a streak as repeating from this many sends on, '
+                     'instead of the repeat_threshold of each account',
+        'limit': f'Most offenders listed (default {DEFAULT_OFFENDER_LIMIT})',
+    })
+    @API.response(200, 'Counters and repeating events.', EDA_RESPONSE)
+    @API.response(400, 'Invalid query argument', ERROR)
+    @API.response(401, 'Authentication failed', ERROR)
+    @require_token
+    def get(self):
+        """Return how many events repeat without effect, and which.
+
+        A streak starts when a host matches an Event Rule and counts
+        every send of that event. It ends (resolved) on the first run in
+        which the host no longer gives the event. A streak that is still
+        open after ``repeat_threshold`` sends (account field, default 3)
+        is repeating.
+        """
+        min_sends = _int_arg('min_sends', None, 1)
+        limit = _int_arg('limit', DEFAULT_OFFENDER_LIMIT, 0)
+        if (request.args.get('min_sends') and min_sends is None) or limit is None:
+            return {'error': 'min_sends must be >= 1, limit >= 0'}, 400
+        return {
+            'result': collect_summary(
+                account=request.args.get('account') or None,
+                min_sends=min_sends, limit=limit,
+                hostname_filter=_eda_hostname_filter()),
         }, 200

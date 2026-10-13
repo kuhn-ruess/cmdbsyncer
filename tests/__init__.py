@@ -874,11 +874,16 @@ _try_load_real_module(
 _stub_package("application.plugins.eda", path=[])
 _eda_models = _stub_package("application.plugins.eda.models")
 _eda_models.DEFAULT_RESEND_HOURS = 24
-for _name in ("EdaEventLog", "EdaEventRule"):
+_eda_models.DEFAULT_REPEAT_THRESHOLD = 3
+for _name in ("EdaEventLog", "EdaEventRule", "EdaEventState"):
     setattr(_eda_models, _name, MagicMock(name=f"stub.{_name}"))
 _try_load_real_module(
     "application.plugins.eda.rules",
     os.path.join("plugins", "eda", "rules.py"),
+)
+_try_load_real_module(
+    "application.plugins.eda.repeats",
+    os.path.join("plugins", "eda", "repeats.py"),
 )
 _try_load_real_module(
     "application.plugins.eda.sender",

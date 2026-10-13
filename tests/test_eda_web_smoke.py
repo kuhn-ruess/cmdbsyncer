@@ -4,7 +4,9 @@ Event Driven Ansible against the real web application
 Creates an event rule through its form, gives two hosts the Checkmk agent
 output the rule matches on and lets the sender run with the request to
 the event stream replaced: one host must send its event exactly once,
-the other none, and the history must show it.
+the other none, and the history must show it. The streak of that event
+must show up as repeating in the REST API the Checkmk check reads, and
+resolve once the host no longer matches.
 """
 import unittest
 
@@ -13,6 +15,7 @@ from tests.web_smoke_helpers import HAVE_MONGOMOCK, SKIP_REASON, run_against_app
 
 
 EDA_FLOW = LOGIN + r'''
+import base64
 from unittest.mock import Mock
 from application.models.account import Account
 from application.models.host import Host
@@ -72,6 +75,36 @@ eq(again.inner_request.called, False, 'request on the second run')
 
 eq(EdaEventLog.objects(status='success').count(), 1, 'history entries')
 check('/admin/edaeventlog/', 200)
+
+from application.plugins.eda.models import EdaEventState
+streak = EdaEventState.objects.get(hostname='srv01')
+eq((streak.sends, streak.state, streak.resolved_at), (1, 'pending', None), 'open streak')
+check('/admin/edaeventstate/', 200)
+check(f'/admin/edaeventstate/details/?id={streak.id}', 200)
+
+monitor = User(email='monitor@example.com', name='monitor', api_roles=['syncer'])
+monitor.set_password('monitor-password')
+monitor.save()
+api_auth = {'Authorization': 'Basic '
+            + base64.b64encode(b'monitor:monitor-password').decode()}
+summary = check('/api/v1/syncer/eda?min_sends=1', 200, headers=api_auth).json['result']
+eq((summary['repeating'], summary['repeating_hosts'], summary['events_24h']), (1, 1, 1),
+   'API counters')
+eq(summary['offenders'][0]['hostname'], 'srv01', 'offender')
+eq(summary['accounts'][0]['account'], 'eda', 'account of the counters')
+eq(check('/api/v1/syncer/eda', 200, headers=api_auth).json['result']['repeating'], 0,
+   'repeating below the default threshold')
+
+host = Host.objects.get(hostname='srv01')
+host.update_inventory('cmk_svc', {'check_mk_agent_output': 'Version: 2.3.0'})
+host.save()
+fixed = EdaSender('eda')
+fixed.inner_request = Mock()
+fixed.send_events()
+streak.reload()
+eq((streak.state, streak.resolved_at is not None), ('resolved', True), 'resolved streak')
+eq(check('/api/v1/syncer/eda?min_sends=1', 200, headers=api_auth).json['result']['repeating'],
+   0, 'repeating after the fix')
 print('EDA_FLOW_OK')
 '''
 
