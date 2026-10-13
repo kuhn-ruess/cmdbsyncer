@@ -396,14 +396,16 @@ class Rule():
             conditions = rule['conditions']
 
             no_match_reason = None
-            match_reason = None
+            # Every condition that made the rule hit: the one that matched
+            # for 'any' rules, all of them for 'all' rules.
+            match_reasons = []
             if condition_typ == 'any':
                 for condition in conditions:
                     if self.handle_match(condition, hostname):
                         rule_hit = True
                         no_match_reason = None
                         if self.debug:
-                            match_reason = dict(condition)
+                            match_reasons = [dict(condition)]
                         break # We have a hit, no need to check more
                     if self.debug:
                         no_match_reason = dict(condition)
@@ -416,10 +418,10 @@ class Rule():
                         if self.debug:
                             no_match_reason = dict(condition)
                         break # One was no hit, no need for loop
-                if self.debug and rule_hit and conditions:
-                    # All conditions matched — surface the last one as the
-                    # representative match (mirrors no_match_reason shape).
-                    match_reason = dict(conditions[-1])
+                if self.debug and rule_hit:
+                    # The rule only hits because every condition matched,
+                    # so all of them are the reason, not just one.
+                    match_reasons = [dict(c) for c in conditions]
 
             elif condition_typ == 'anyway':
                 rule_hit = True
@@ -430,18 +432,20 @@ class Rule():
                     "group": self.name,
                     "hit": rule_hit,
                     'no_match_reason': no_match_reason,
-                    'match_reason': match_reason,
+                    'match_reasons': match_reasons,
                     "condition_type": _RULE_DESCRIPTIONS[condition_typ],
                     "name": rule['name'],
                     "id": str(rule['_id']),
                     "last_match": str(rule['last_match']),
                 }
                 self.debug_lines.append(debug_data)
-                # Show WHY the rule hit or missed: for 'all' rules the first
-                # failing condition, for 'any' rules the matching one (on a
-                # miss, the last condition checked — all of them failed).
+                # Show WHY the rule hit or missed: on a hit every condition
+                # that matched (all of them for 'all' rules, the matching one
+                # for 'any' rules), on a miss the first failing condition of
+                # an 'all' rule or the last checked one of an 'any' rule.
                 if rule_hit:
-                    deciding = format_condition(match_reason)
+                    deciding = " AND ".join(
+                        format_condition(c) for c in match_reasons)
                     if deciding:
                         deciding = f"matched: {deciding}"
                 else:
