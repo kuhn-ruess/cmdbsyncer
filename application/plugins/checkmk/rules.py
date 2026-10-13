@@ -30,7 +30,9 @@ def _maybe_render(value, **context):
     return render_jinja(value, mode="nullify", **context)
 
 
-_JINJA_BLOCK_RE = re.compile(r'\{\{.*?\}\}|\{%.*?%\}|\{#.*?#\}')
+_JINJA_EXPR_RE = re.compile(r'\{\{.*?\}\}')
+# Statement tags ({% if %}, {%endif %}, ...) and comments print nothing.
+_JINJA_STMT_RE = re.compile(r'\{%.*?%\}|\{#.*?#\}')
 
 
 def validate_folder_option_param(param):
@@ -50,10 +52,14 @@ def validate_folder_option_param(param):
       a bare Jinja expression ``{{ groups.split(',') }}`` instead of the Checkmk
       shape ``{'groups': ['grp'], 'use': True}``.
 
-    Host attributes are unknown at save time, so every Jinja construct is
-    replaced with ``None`` — a valid literal that is quote-neutral (so it never
-    corrupts a surrounding string) and lets ``ast.literal_eval`` parse the dict
-    even when a value comes from a ``{{ ... }}`` expression.
+    Host attributes are unknown at save time, so every ``{{ ... }}``
+    expression is replaced with ``None``, a valid literal that is
+    quote-neutral (so it never corrupts a surrounding string) and lets
+    ``ast.literal_eval`` parse the dict even when a value comes from an
+    expression. Statement tags (``{% if %}``, ``{% endif %}``) and comments
+    produce no output, so they are removed: replacing them with ``None`` as
+    well glued a stray ``None`` onto the options dict and rejected a valid
+    ``{% if x is defined %}/{{x}}|{...}{% endif %}`` value.
 
     Returns a human-readable error string, or ``None`` when it looks valid (or
     there is nothing to check).
@@ -68,7 +74,7 @@ def validate_folder_option_param(param):
                 "'.replace(...)' directly after a '|join(...)' filter.")
     if '|' not in param:
         return None
-    literal = _JINJA_BLOCK_RE.sub('None', param)
+    literal = _JINJA_EXPR_RE.sub('None', _JINJA_STMT_RE.sub('', param))
     for segment in literal.split('/'):
         parts = segment.split('|')
         if len(parts) != 2:
