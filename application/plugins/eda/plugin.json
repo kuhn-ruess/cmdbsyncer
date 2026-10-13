@@ -1,0 +1,21 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "Event Driven Ansible",
+    "description": "Send rule based events to Event Driven Ansible",
+    "ident": "eda",
+    "account_presets": {
+        "address": "https://aap.example.com/eda-event-streams/api/eda/v1/external_event_stream/<uuid>/post/"
+    },
+    "account_custom_field_presets": {
+        "auth_header": "Authorization",
+        "auth_prefix": "Bearer",
+        "verify_cert": "True",
+        "ca_cert_chain": "",
+        "ca_root_cert": ""
+    },
+    "account_custom_field_help": {
+        "auth_header": "HTTP header the token is sent in (default Authorization). Only used when the account has a password but no username: the password is the token. With a username, the request uses Basic Auth instead.",
+        "auth_prefix": "Text put in front of the token, separated by a space (default Bearer, what the ansible.eda.webhook source expects). Leave it empty when the event stream wants the bare token in the header."
+    }
+}

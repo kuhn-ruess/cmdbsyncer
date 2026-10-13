@@ -67,6 +67,15 @@ MODULES = {
         ),
         'docs': _docs('ansible'),
     },
+    'Event Driven Ansible': {
+        'icon': ('image', 'vendor/ansible.svg'),
+        'intro': (
+            "Send events to Event Driven Ansible when hosts match a rule, "
+            "for example to register a Checkmk agent that reports it is "
+            "not registered yet."
+        ),
+        'docs': _docs('ansible/eda'),
+    },
     'i-doit': {
         'icon': ('image', 'vendor/idoit.svg'),
         'intro': (
@@ -320,6 +329,16 @@ ENTRIES = {
         'Playbook Fire Rules': (
             "Conditions under which a playbook starts on its own — for "
             "example when an object appears or changes."
+        ),
+    },
+    'Event Driven Ansible': {
+        'Event Rules': (
+            "Which hosts send which event to the event stream of Event "
+            "Driven Ansible, with the variables the rulebook gets."
+        ),
+        'Event History': (
+            "Every event sent, with its payload and the answer of the "
+            "event stream."
         ),
     },
     'LDAP': {

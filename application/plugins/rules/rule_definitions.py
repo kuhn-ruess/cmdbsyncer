@@ -14,6 +14,7 @@ rules = {
     'ansible_filter': ('application.plugins.ansible.models', 'AnsibleFilterRule'),
     'ansible_playbook_fire': ('application.plugins.ansible.models', 'AnsiblePlaybookFireRule'),
     'ansible_rewrite': ('application.plugins.ansible.models', 'AnsibleRewriteAttributesRule'),
+    'eda_events': ('application.plugins.eda.models', 'EdaEventRule'),
     'custom_attributes': ('application.modules.custom_attributes.models', 'CustomAttributeRule'),
     'cmk_tags': ('application.plugins.checkmk.models', 'CheckmkTagMngmt'),
     'cmk_filter': ('application.plugins.checkmk.models', 'CheckmkFilterRule'),
@@ -86,6 +87,7 @@ rule_names = [(x, y[1]) for x, y in rules.items()]
 not_exported = {
     'AnsibleRunStats': 'Playbook run history',
     'CheckmkObjectCache': 'Rebuilt from the Checkmk API',
+    'EdaEventLog': 'Event Driven Ansible event history',
     'CheckmkRuleAnalysis': 'Result of the last rule analysis run',
     'CronStats': 'Cronjob run statistics',
     'FieldApproval': 'Approval queue, tied to live hosts',

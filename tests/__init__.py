@@ -869,6 +869,21 @@ _try_load_real_module(
     "application.plugins.ansible.playbook_rules",
     os.path.join("plugins", "ansible", "playbook_rules.py"),
 )
+# Event Driven Ansible: the rule engine and the sender are real, the
+# models stay stubs (the tests patch what they use).
+_stub_package("application.plugins.eda", path=[])
+_eda_models = _stub_package("application.plugins.eda.models")
+_eda_models.DEFAULT_RESEND_HOURS = 24
+for _name in ("EdaEventLog", "EdaEventRule"):
+    setattr(_eda_models, _name, MagicMock(name=f"stub.{_name}"))
+_try_load_real_module(
+    "application.plugins.eda.rules",
+    os.path.join("plugins", "eda", "rules.py"),
+)
+_try_load_real_module(
+    "application.plugins.eda.sender",
+    os.path.join("plugins", "eda", "sender.py"),
+)
 
 
 # --- API modules under test -------------------------------------------------
