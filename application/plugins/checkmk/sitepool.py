@@ -65,3 +65,21 @@ def release_site_for_site_id(site_id):
     ).first()
     if pool:
         release_site(pool.name, site_id)
+
+
+def release_host_site(db_host):
+    """
+    Drop the sticky Site Pool site of one host, return False if it had none.
+
+    The seat is freed and the lock cleared. The rule cache goes as well: the
+    export's cached outcome still carries the old site, and as long as it is
+    served the rules are not asked again, so the host would neither get a new
+    site nor take a seat (same as ``reset_sitepool`` does for a whole pool).
+    """
+    old_site = db_host.get_pool_site()
+    if not old_site:
+        return False
+    release_site_for_site_id(old_site)
+    db_host.cache = {}
+    db_host.lock_to_pool_site(False)
+    return True

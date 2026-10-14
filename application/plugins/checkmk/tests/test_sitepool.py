@@ -16,6 +16,7 @@ from application.plugins.checkmk.sitepool import (
     get_site,
     release_site,
     release_site_for_site_id,
+    release_host_site,
 )
 
 
@@ -217,6 +218,80 @@ class TestResetSitePools(unittest.TestCase):
         mock_host.objects.assert_any_call(pool_site__ne=None)
         mock_host.objects.return_value.update.assert_called_once_with(
             unset__pool_site=1, set__cache={})
+
+
+class _Host:  # pylint: disable=too-few-public-methods
+    """Just enough of a Host for the site pool lock and the rule cache"""
+
+    def __init__(self, pool_site, cache):
+        self.hostname = 'srv01'
+        self.pool_site = pool_site
+        self.cache = cache
+        self.saved = 0
+
+    def get_pool_site(self):
+        return self.pool_site or False
+
+    def lock_to_pool_site(self, site_id):
+        self.pool_site = site_id or None
+        self.saved += 1
+
+    def save(self):
+        self.saved += 1
+
+
+class TestReleaseHostSite(unittest.TestCase):
+    """The host action 'Redistribute Site Pool' (release_host_site)"""
+
+    def setUp(self):
+        with patch('application.plugins.checkmk.rules.Rule.__init__',
+                   return_value=None):
+            self.rule = CheckmkRule()
+        self.rule.cache_name = 'checkmk'
+        self.rule.depends_on_time = lambda: False
+        self.rule.check_rule_match = Mock(
+            return_value={'custom_attributes': {'site': 'site2'}})
+
+    def _cached_host(self):
+        return _Host('site1', {
+            'checkmk': {'custom_attributes': {'site': 'site1'}},
+            'checkmk_hostattribute': {'attributes': {}},
+        })
+
+    def test_stale_cache_keeps_old_site(self):
+        # Only the lock dropped, as the action did before: the cached
+        # outcome is served, the rules never run and the old site stays.
+        db_host = self._cached_host()
+        db_host.lock_to_pool_site(False)
+
+        outcomes = self.rule.get_outcomes(db_host, {})
+
+        self.assertEqual(outcomes['custom_attributes']['site'], 'site1')
+        self.rule.check_rule_match.assert_not_called()
+
+    @patch('application.plugins.checkmk.sitepool.release_site_for_site_id')
+    def test_release_lets_the_export_assign_again(self, mock_release):
+        db_host = self._cached_host()
+
+        self.assertTrue(release_host_site(db_host))
+
+        mock_release.assert_called_once_with('site1')
+        self.assertIsNone(db_host.pool_site)
+        self.assertEqual(db_host.cache, {})
+        self.assertTrue(db_host.saved)
+        outcomes = self.rule.get_outcomes(db_host, {})
+        self.rule.check_rule_match.assert_called_once_with(db_host)
+        self.assertEqual(outcomes['custom_attributes']['site'], 'site2')
+
+    @patch('application.plugins.checkmk.sitepool.release_site_for_site_id')
+    def test_host_without_site_is_skipped(self, mock_release):
+        db_host = _Host(None, {'checkmk': {}})
+
+        self.assertFalse(release_host_site(db_host))
+
+        mock_release.assert_not_called()
+        self.assertEqual(db_host.cache, {'checkmk': {}})
+        self.assertEqual(db_host.saved, 0)
 
 
 if __name__ == '__main__':
