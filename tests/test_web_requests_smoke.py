@@ -75,6 +75,36 @@ if found != 1:
 print('CREATE_RULE_OK')
 '''
 
+# A lookup table is saved from its form, a table that cannot be read is
+# refused, and a rendered template reads the saved one.
+CREATE_LOOKUP_TABLE = LOGIN + '''
+from application.models.lookup_table import LookupTable
+from application.helpers.syncer_jinja import render_jinja
+
+form = '/admin/lookuptable/new/'
+check(form, 200)
+check(form, 200, method='post', data={
+    'csrf_token': csrf(form),
+    'name': 'smoke-broken',
+    'entries': 'location;datacenter\\nsite-a;DC1\\nsite-a;DC2',
+})
+if LookupTable.objects(name='smoke-broken').count():
+    fail('a table with a duplicate key was saved')
+check(form, 302, method='post', data={
+    'csrf_token': csrf(form),
+    'name': 'smoke-lookup',
+    'entries': 'location;datacenter\\nsite-a;DC1\\nsite-b;DC2',
+})
+if LookupTable.objects(name='smoke-lookup').count() != 1:
+    fail('the lookup table form answered 302 but saved nothing')
+listing = check('/admin/lookuptable/', 200).get_data(as_text=True)
+if '2 keys' not in listing:
+    fail('the list does not show the size of the table')
+eq(render_jinja("{{ lookup('smoke-lookup', location) }}", location='site-b'),
+   'DC2', 'the rendered lookup')
+print('CREATE_LOOKUP_TABLE_OK')
+'''
+
 # Creating hosts by hand is a CMDB_MODE feature. With the flag off the two
 # views must send the user away instead of offering the form — that is the
 # behaviour the can_create/can_edit properties carry, and getting it wrong
@@ -168,6 +198,10 @@ class TestWebRequestsSmoke(unittest.TestCase):
     def test_rule_can_be_created(self):
         """A rule form saves what it was given."""
         self._run(CREATE_RULE, 'CREATE_RULE_OK')
+
+    def test_lookup_table_can_be_created(self):
+        """A lookup table form saves a valid table and refuses a broken one."""
+        self._run(CREATE_LOOKUP_TABLE, 'CREATE_LOOKUP_TABLE_OK')
 
     def test_host_create_follows_cmdb_mode(self):
         """Hand-made hosts are offered in CMDB mode and only there."""

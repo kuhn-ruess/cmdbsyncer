@@ -16,6 +16,7 @@ rules = {
     'ansible_rewrite': ('application.plugins.ansible.models', 'AnsibleRewriteAttributesRule'),
     'eda_events': ('application.plugins.eda.models', 'EdaEventRule'),
     'custom_attributes': ('application.modules.custom_attributes.models', 'CustomAttributeRule'),
+    'lookup_tables': ('application.models.lookup_table', 'LookupTable'),
     'cmk_tags': ('application.plugins.checkmk.models', 'CheckmkTagMngmt'),
     'cmk_filter': ('application.plugins.checkmk.models', 'CheckmkFilterRule'),
     'cmk_inventory': ('application.plugins.checkmk.models', 'CheckmkInventorizeAttributes'),

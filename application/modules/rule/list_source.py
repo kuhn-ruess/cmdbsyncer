@@ -126,7 +126,8 @@ def _header_columns(header):
     return columns, positions, errors
 
 
-def parse_list_source(text):
+# pylint: disable-next=too-many-locals
+def parse_list_source(text, max_rows=MAX_ROWS):
     """
     Parse a pasted list into ``ParsedList(columns, rows, errors, delimiter)``.
 
@@ -170,8 +171,8 @@ def parse_list_source(text):
             name: (cells[pos].strip() if pos < len(cells) else '')
             for name, pos in zip(columns, positions)
         })
-    if len(rows) > MAX_ROWS:
-        errors.append(f"The list has {len(rows)} rows, at most {MAX_ROWS} "
+    if len(rows) > max_rows:
+        errors.append(f"The list has {len(rows)} rows, at most {max_rows} "
                       "are supported")
     return ParsedList(columns, rows, errors, delimiter)
 

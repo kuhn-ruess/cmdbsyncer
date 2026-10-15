@@ -184,6 +184,10 @@ ENTRIES = {
             "Attributes computed once for every object and available to "
             "all modules — the place for values more than one target needs."
         ),
+        'Lookup Tables': (
+            "Long key and value lists, read in any Jinja field with "
+            "lookup(): attribute A has value x, so attribute B gets y."
+        ),
     },
     'Checkmk': {
         'Rewrite and Create Custom Syncer Attributes': (

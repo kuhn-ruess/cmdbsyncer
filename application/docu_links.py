@@ -10,6 +10,7 @@ with the structure at https://docs.cmdbsyncer.de/.
 docu_links = {
     'rewrite' : 'https://docs.cmdbsyncer.de/basics/rewrite_attributes/',
     'accounts' : 'https://docs.cmdbsyncer.de/basics/accounts/',
+    'lookup_tables': 'https://docs.cmdbsyncer.de/basics/lookup_tables/',
     'cmk_inventory_attributes': 'https://docs.cmdbsyncer.de/checkmk/inventorize/',
     'cmk_groups': 'https://docs.cmdbsyncer.de/checkmk/groups_management/',
     'cmk_user_generation': 'https://docs.cmdbsyncer.de/checkmk/user_generation/',

@@ -61,6 +61,16 @@ def _cmk_password(name):
     return password_ident(name)
 
 
+def _lookup(table, key, column=None, default=''):
+    """
+    The value a lookup table (Modules > Lookup Tables) has for ``key``.
+    Lazily imported to avoid circular imports.
+    """
+    from application.helpers.lookup_table import lookup
+
+    return lookup(table, key, column=column, default=default)
+
+
 def syncer_eval(string, default=None):
     """
     Evals given object
@@ -200,6 +210,7 @@ _GLOBALS = {
     'cmk_cleanup_tag_id': _cmk_cleanup_tag_id,
     'cmk_cleanup_hostname': _cmk_cleanup_hostname,
     'cmk_password': _cmk_password,
+    'lookup': _lookup,
     'get_ip_network': get_ip_network,
     'get_ip4_interface': get_ip_interface,
     'get_ip_interface': get_ip_interface,

@@ -754,6 +754,11 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes",
                                        category="Modules",
                                        menu_icon_type='fa', menu_icon_value='fa-cog'))
+    from application.models.lookup_table import LookupTable
+    from application.views.lookup_table import LookupTableView
+    admin.add_view(LookupTableView(LookupTable, name="Lookup Tables",
+                                   category="Modules",
+                                   menu_icon_type='fa', menu_icon_value='fa-table'))
     #.
     #   .-- Projects
     from application.models.project import Project
