@@ -1,0 +1,205 @@
+{# Jinja help next to the template fields of a rule form.
+
+   A "Jinja help" button below each field named in jinja_help.fields opens a
+   panel with the lookup tables, the variables, the syncer's functions and
+   filters and some Jinja basics. A click on an entry inserts its snippet at
+   the cursor of that field. The content comes from
+   application/helpers/jinja_help.py (RuleModelView.render), rows added with
+   "Add Outcomes" get their button when they appear. Colours use the theme
+   --surface-* tokens with light fallbacks so every theme renders it. #}
+<style>
+.jinja-help-btn {
+  margin-top: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 6px;
+  background: var(--surface-bg, #f8f9fa);
+  color: var(--surface-muted, #4a4f57);
+  font-size: 0.78rem;
+}
+.jinja-help-btn:hover { color: var(--surface-text, #2c3e50); }
+.jinja-help-panel {
+  margin-top: 6px;
+  padding: 8px 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-left: 3px solid #1abc9c;
+  border-radius: 6px;
+  background: var(--surface-subtle, #f1fbf9);
+  color: var(--surface-text, #2c3e50);
+  font-size: 0.82rem;
+}
+.jinja-help-panel .jh-search { width: 100%; margin-bottom: 6px; }
+.jinja-help-panel .jh-group {
+  margin: 8px 0 2px;
+  font-weight: 600;
+  color: var(--surface-muted, #4a4f57);
+}
+.jinja-help-panel .jh-note { color: var(--surface-muted, #4a4f57); }
+.jinja-help-panel .jh-entry {
+  display: block;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.jinja-help-panel .jh-entry:hover { background: rgba(127, 127, 127, 0.15); }
+.jinja-help-panel code {
+  font-family: ui-monospace, monospace;
+  background: rgba(127, 127, 127, 0.15);
+  padding: 0 4px;
+  border-radius: 3px;
+  color: inherit;
+}
+.jinja-help-panel .jh-text { color: var(--surface-muted, #4a4f57); }
+.jinja-help-panel .jh-chip {
+  margin: 2px 4px 2px 0;
+  padding: 0 6px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 10px;
+  background: var(--surface-bg, #f8f9fa);
+  color: inherit;
+  font-size: 0.78rem;
+}
+</style>
+<script type="application/json" id="jinja-help-data">{{ jinja_help|tojson }}</script>
+{# The snippets the script writes are Jinja themselves. #}
+{% raw %}
+<script type="text/javascript">
+(function() {
+  var HELP = JSON.parse(document.getElementById('jinja-help-data').textContent);
+  var NAME_RE = new RegExp('(^|-)(' + HELP.fields.join('|') + ')$');
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) { node.className = cls; }
+    if (text !== undefined) { node.textContent = text; }
+    return node;
+  }
+
+  // Put the snippet where the cursor is (or replace the selection).
+  function insert(input, snippet) {
+    var start = input.selectionStart, end = input.selectionEnd;
+    if (start === null || start === undefined) {
+      start = end = input.value.length;
+    }
+    input.value = input.value.slice(0, start) + snippet + input.value.slice(end);
+    input.focus();
+    input.selectionStart = input.selectionEnd = start + snippet.length;
+    $(input).trigger('input').trigger('change');
+  }
+
+  function entryButton(input, snippet, name, text) {
+    var button = el('button', 'jh-entry');
+    button.type = 'button';
+    button.title = 'Insert ' + snippet;
+    button.dataset.search = (name + ' ' + snippet + ' ' + (text || '')).toLowerCase();
+    button.appendChild(el('code', '', snippet));
+    if (text) {
+      button.appendChild(document.createTextNode(' '));
+      button.appendChild(el('span', 'jh-text', text));
+    }
+    button.addEventListener('click', function() { insert(input, snippet); });
+    return button;
+  }
+
+  function lookupSection(panel, input) {
+    panel.appendChild(el('div', 'jh-group', 'Lookup tables'));
+    if (!HELP.tables.length) {
+      panel.appendChild(el('div', 'jh-note',
+        'No lookup table yet, create one under Modules > Lookup Tables.'));
+      return;
+    }
+    panel.appendChild(el('div', 'jh-note',
+      'Replace attribute with the host attribute that holds the key.'));
+    HELP.tables.forEach(function(table) {
+      var quoted = "'" + table.name.replace(/'/g, "\\'") + "'";
+      var snippet = '{{ lookup(' + quoted + ', attribute) }}';
+      var row = entryButton(input, snippet, table.name,
+                            table.key ? 'key: ' + table.key : '');
+      panel.appendChild(row);
+      var chips = el('div', 'jh-text', 'Column: ');
+      chips.style.paddingLeft = '6px';
+      table.columns.forEach(function(column) {
+        var chip = el('button', 'jh-chip', column);
+        chip.type = 'button';
+        chip.title = 'Insert the column ' + column;
+        chip.addEventListener('click', function() {
+          insert(input, '{{ lookup(' + quoted + ", attribute, '" + column + "') }}");
+        });
+        chips.appendChild(chip);
+      });
+      row.dataset.search += ' ' + table.columns.join(' ').toLowerCase();
+      panel.appendChild(chips);
+    });
+  }
+
+  function buildPanel(input) {
+    var panel = el('div', 'jinja-help-panel');
+    var search = el('input', 'form-control form-control-sm jh-search');
+    search.placeholder = 'Filter, e.g. lookup, ip, list';
+    panel.appendChild(search);
+    if (HELP.note) { panel.appendChild(el('div', 'jh-note', HELP.note)); }
+    lookupSection(panel, input);
+    var group = null;
+    HELP.entries.forEach(function(entry) {
+      if (entry.group !== group) {
+        group = entry.group;
+        panel.appendChild(el('div', 'jh-group', group));
+      }
+      panel.appendChild(entryButton(input, entry.snippet, entry.name, entry.text));
+    });
+    var docs = el('a', '', 'All functions in the documentation');
+    docs.href = HELP.docs;
+    docs.target = '_blank';
+    docs.rel = 'noopener';
+    var footer = el('div', 'jh-group');
+    footer.appendChild(docs);
+    panel.appendChild(footer);
+    search.addEventListener('input', function() {
+      var term = search.value.toLowerCase();
+      panel.querySelectorAll('.jh-entry').forEach(function(button) {
+        button.style.display = button.dataset.search.indexOf(term) === -1 ? 'none' : '';
+      });
+    });
+    return panel;
+  }
+
+  function decorate(input) {
+    if (input.dataset.jinjaHelp) { return; }
+    input.dataset.jinjaHelp = '1';
+    var button = el('button', 'jinja-help-btn');
+    button.type = 'button';
+    button.innerHTML = '<i class="fa fa-magic"></i> Jinja help';
+    var panel = null;
+    button.addEventListener('click', function() {
+      if (!panel) {
+        panel = buildPanel(input);
+        button.parentNode.insertBefore(panel, button.nextSibling);
+        return;
+      }
+      panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    });
+    input.parentNode.insertBefore(button, input.nextSibling);
+  }
+
+  function scan(root) {
+    root.querySelectorAll('input[name], textarea[name]').forEach(function(input) {
+      if (NAME_RE.test(input.name)) { decorate(input); }
+    });
+  }
+
+  $(function() {
+    var form = document.querySelector('form.admin-form') || document.body;
+    scan(form);
+    // Rows added with "Add Outcomes" come in later.
+    new MutationObserver(function() { scan(form); })
+      .observe(form, {childList: true, subtree: true});
+  });
+})();
+</script>
+{% endraw %}

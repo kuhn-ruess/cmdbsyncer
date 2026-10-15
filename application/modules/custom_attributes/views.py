@@ -10,6 +10,7 @@ class CustomAttributeView(RuleModelView):
     """
     Custom Attribute Model View
     """
+    jinja_help_fields = ('attribute_value',)
 
     def __init__(self, model, **kwargs):
         """

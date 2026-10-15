@@ -576,6 +576,7 @@
 
 {% block tail %}
     {{ super() }}
+    {% if jinja_help is defined %}{% include 'admin/model/_jinja_help.html' %}{% endif %}
     <script type="text/javascript">
 
     $(document).on("click", ".btnCondition", function(){

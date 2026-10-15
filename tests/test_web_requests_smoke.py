@@ -76,7 +76,8 @@ print('CREATE_RULE_OK')
 '''
 
 # A lookup table is saved from its form, a table that cannot be read is
-# refused, and a rendered template reads the saved one.
+# refused, a rendered template reads the saved one and the Jinja help of
+# the rule forms lists it.
 CREATE_LOOKUP_TABLE = LOGIN + '''
 from application.models.lookup_table import LookupTable
 from application.helpers.syncer_jinja import render_jinja
@@ -102,6 +103,13 @@ if '2 keys' not in listing:
     fail('the list does not show the size of the table')
 eq(render_jinja("{{ lookup('smoke-lookup', location) }}", location='site-b'),
    'DC2', 'the rendered lookup')
+# The Jinja help of the rule forms offers the saved table.
+page = check('/admin/customattributerule/new/', 200).get_data(as_text=True)
+if 'jinja-help-btn' not in page or 'smoke-lookup' not in page:
+    fail('the custom attribute form has no Jinja help with the lookup table')
+page = check('/admin/checkmkrewriteattributerule/new/', 200).get_data(as_text=True)
+if 'jinja-help-btn' not in page:
+    fail('the rewrite attribute form has no Jinja help')
 print('CREATE_LOOKUP_TABLE_OK')
 '''
 

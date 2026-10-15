@@ -456,6 +456,23 @@ class RuleModelView(DefaultModelView):
         'conditions', 'outcomes'
     ]   
 
+    # Outcome fields that get the Jinja help panel next to them, and a note
+    # the panel shows on top.
+    jinja_help_fields = ()
+    jinja_help_note = ''
+
+    def render(self, template, **kwargs):
+        """
+        Hand the Jinja help panel its content on the create and edit page.
+        """
+        if self.jinja_help_fields and template in (self.create_template,
+                                                   self.edit_template):
+            # Web only: the rule module is also imported without the helpers.
+            from application.helpers.jinja_help import jinja_help  # pylint: disable=import-outside-toplevel
+            kwargs['jinja_help'] = jinja_help(self.jinja_help_fields,
+                                               self.jinja_help_note)
+        return super().render(template, **kwargs)
+
     def create_model(self, form):
         """ 
         Create model
@@ -702,6 +719,8 @@ class RewriteAttributeView(RuleModelView):
     """
     Custom Attribute Model View
     """
+    jinja_help_fields = ('new_attribute_name', 'new_value')
+    jinja_help_note = 'Rendered as Jinja when the Operation is set to Jinja.'
 
     def __init__(self, model, **kwargs):
         """
