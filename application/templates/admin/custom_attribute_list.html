@@ -1,0 +1,458 @@
+{% extends 'admin/model/list.html' %}
+
+{# Global Custom Attributes: the rules grouped by the attributes they set.
+
+   Grouping is only a view: the rules keep running in the order of their
+   sort value. Every row shows its place in that order (#n), and a group
+   whose rules are interleaved with the rules of other groups says so.
+
+   Rows are moved by drag and drop on the handle, or with the arrow keys
+   while the handle has the focus. Every rule stands in exactly one group:
+   the set of attributes it sets, so a rule with several attributes forms
+   a box of that combination (key: the sorted names joined with " + ").
+   A rule of one attribute dropped into another group of one attribute
+   sets that group's attribute instead, after a confirmation. A move into
+   or out of a box of several attributes is refused, those rules change
+   their attributes in the rule itself.
+
+   A group folds away with its heading (Expand all / Collapse all for
+   every group), which groups are folded is kept per group key in the
+   browser. A rule moved with the arrow keys into a folded group
+   unfolds it, so the moved row stays in sight.
+
+   Grouped only on the default order (by sort value) and when every rule
+   fits on one page, an explicit sort or the plain list switch shows the
+   normal table. #}
+{% block model_menu_bar_after_filters %}
+  {{ super() }}
+  <li class="nav-item ml-auto">
+    <a class="nav-link" id="ca-view-toggle" href="#"></a>
+  </li>
+  <li class="nav-item ca-fold-all" hidden>
+    <a class="nav-link" id="ca-expand-all" href="#" role="button">Expand all</a>
+  </li>
+  <li class="nav-item ca-fold-all" hidden>
+    <a class="nav-link" id="ca-collapse-all" href="#" role="button">Collapse all</a>
+  </li>
+{% endblock %}
+
+{% block tail %}
+{{ super() }}
+<style>
+  tr.ca-group-header > th {
+    background: var(--surface-subtle, #f1f5f9);
+    color: var(--surface-text, #1f2937);
+    border-top: 2px solid var(--surface-border, #94a3b8);
+    padding: 8px 12px;
+    font-weight: 600;
+    text-align: left;
+  }
+  .ca-group-toggle {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5em;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .ca-group-toggle:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+  .ca-group-toggle .ca-chevron {
+    display: inline-block;
+    width: 1em;
+    transition: transform 0.15s;
+  }
+  .ca-group-toggle[aria-expanded="false"] .ca-chevron {
+    transform: rotate(-90deg);
+  }
+  tr.ca-rule-row.ca-folded {
+    display: none;
+  }
+  tr.ca-group-header code {
+    color: inherit;
+    font-size: 1em;
+  }
+  tr.ca-group-header .ca-group-note {
+    font-weight: normal;
+    color: var(--surface-muted, #64748b);
+    margin-left: 0.25em;
+  }
+  tr.ca-rule-row.ca-gap > td {
+    border-top: 2px dashed var(--surface-border, #94a3b8);
+  }
+  .ca-place {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .ca-handle {
+    cursor: grab;
+    padding: 0 4px;
+    line-height: 1;
+    color: var(--surface-muted, #64748b);
+  }
+  .ca-handle:focus {
+    outline: 2px solid var(--surface-border, #94a3b8);
+  }
+  tr.ca-rule-row.sortable-ghost {
+    opacity: 0.4;
+  }
+</style>
+<script>
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var flat = params.get('flat') === '1';
+  var explicitSort = params.get('sort') !== null;
+  var onePage = {{ 'true' if num_pages is none or num_pages <= 1 else 'false' }};
+  var canMove = {{ 'true' if admin_view.can_edit else 'false' }};
+  var reorderUrl = "{{ get_url('.reorder_view') }}";
+  var csrfToken = "{{ csrf_token() }}";
+
+  var toggle = document.getElementById('ca-view-toggle');
+  var grouped = !flat && !explicitSort && onePage;
+  if (toggle) {
+    var target = new URL(window.location.href);
+    if (grouped) {
+      target.searchParams.set('flat', '1');
+      toggle.textContent = 'Show as plain list';
+    } else if (flat) {
+      target.searchParams.delete('flat');
+      toggle.textContent = 'Group by attribute';
+    } else {
+      toggle.parentNode.removeChild(toggle);
+    }
+    toggle.href = target.toString();
+  }
+  if (!grouped) return;
+
+  var table = document.querySelector('table.model-list');
+  if (!table || !table.tHead || !table.tBodies[0]) return;
+  var tbody = table.tBodies[0];
+  var colCount = table.tHead.rows[0].cells.length;
+
+  function readInfo(row) {
+    var el = row.querySelector('.ca-order');
+    if (!el) return null;
+    return {
+      rule: el.dataset.rule,
+      name: el.dataset.name,
+      pos: parseInt(el.dataset.pos, 10) || 0,
+      tied: el.dataset.tied === '1',
+      attrs: JSON.parse(el.dataset.attrs || '[]'),
+      gap: parseInt(el.dataset.gap, 10) || 0
+    };
+  }
+
+  // The group of a rule is the set of its attributes (sorted by the server)
+  function groupKey(attrs) { return attrs.join(' + '); }
+
+  // Collect the groups, every rule in exactly one
+  var groups = {};
+  var groupAttrs = {};
+  var rows = Array.prototype.slice.call(tbody.rows);
+  rows.forEach(function(row) {
+    var info = readInfo(row);
+    if (!info) return;
+    var key = groupKey(info.attrs);
+    groupAttrs[key] = info.attrs;
+    (groups[key] = groups[key] || []).push({row: row, info: info, key: key});
+  });
+  var names = Object.keys(groups);
+  if (!names.length) return;
+  names.forEach(function(key) {
+    groups[key].sort(function(a, b) { return a.info.pos - b.info.pos; });
+  });
+  names.sort(function(a, b) { return groups[a][0].info.pos - groups[b][0].info.pos; });
+
+  // Folded groups, by group key, kept in the browser
+  var FOLD_KEY = 'ca-folded-groups';
+  var folded = {};
+  try {
+    (JSON.parse(localStorage.getItem(FOLD_KEY) || '[]') || []).forEach(function(attr) {
+      folded[attr] = true;
+    });
+  } catch (e) { folded = {}; }
+  function saveFolded() {
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify(Object.keys(folded))); } catch (e) {}
+  }
+
+  function header(key, idx) {
+    var tr = document.createElement('tr');
+    tr.className = 'ca-group-header';
+    tr.dataset.key = key;
+    var th = document.createElement('th');
+    th.colSpan = colCount;
+    th.scope = 'rowgroup';
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ca-group-toggle';
+    button.title = 'Fold or unfold this group';
+    button.setAttribute('aria-controls', groups[key].map(function(m, j) {
+      return 'ca-g' + idx + '-r' + j;
+    }).join(' '));
+    button.innerHTML = '<span class="fa fa-chevron-down ca-chevron" aria-hidden="true"></span>';
+    button.addEventListener('click', function() {
+      setFolded(tr, button.getAttribute('aria-expanded') === 'true');
+      saveFolded();
+    });
+    th.appendChild(button);
+    var attrs = groupAttrs[key];
+    if (attrs.length) {
+      var title = document.createElement('span');
+      attrs.forEach(function(attr, j) {
+        if (j) title.appendChild(document.createTextNode(' + '));
+        var code = document.createElement('code');
+        code.textContent = attr;
+        title.appendChild(code);
+      });
+      button.appendChild(title);
+    } else {
+      button.appendChild(document.createTextNode('No new attribute'));
+    }
+    var members = groups[key];
+    var note = members.length + (members.length === 1 ? ' rule' : ' rules');
+    var interleaved = members.some(function(m) { return m.info.gap > 0; });
+    if (interleaved) {
+      note += ', interleaved with rules of other groups (see #)';
+    }
+    var span = document.createElement('span');
+    span.className = 'ca-group-note';
+    span.textContent = note;
+    button.appendChild(span);
+    tr.appendChild(th);
+    return tr;
+  }
+
+  function rowsOf(head) {
+    var list = [], el = head.nextElementSibling;
+    while (el && !el.classList.contains('ca-group-header')) {
+      if (el.classList.contains('ca-rule-row')) list.push(el);
+      el = el.nextElementSibling;
+    }
+    return list;
+  }
+
+  function setFolded(head, fold) {
+    var button = head.querySelector('.ca-group-toggle');
+    button.setAttribute('aria-expanded', fold ? 'false' : 'true');
+    rowsOf(head).forEach(function(row) { row.classList.toggle('ca-folded', fold); });
+    if (fold) { folded[head.dataset.key] = true; } else { delete folded[head.dataset.key]; }
+  }
+
+  function decorate(member) {
+    var row = member.row, info = member.info;
+    row.classList.add('ca-rule-row');
+    row.dataset.rule = info.rule;
+    row.dataset.key = member.key;
+    var gap = info.gap;
+    if (gap > 0) {
+      row.classList.add('ca-gap');
+      row.title = gap + (gap === 1 ? ' rule' : ' rules') +
+        ' of other groups run between this rule and the one above it';
+    }
+    var cell = row.cells[0];
+    var place = document.createElement('span');
+    place.className = 'ca-place';
+    if (canMove) {
+      var handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'btn btn-sm btn-link ca-handle';
+      handle.innerHTML = '<span class="fa fa-bars" aria-hidden="true"></span>';
+      handle.setAttribute('aria-label', 'Move rule ' + info.name +
+        ', with the arrow keys up and down');
+      handle.title = 'Drag, or focus and use the arrow keys, to change the order';
+      handle.addEventListener('keydown', onKey);
+      place.appendChild(handle);
+    }
+    var badge = document.createElement('span');
+    badge.className = 'badge badge-secondary';
+    badge.textContent = '#' + info.pos;
+    badge.title = 'Position ' + info.pos + ' in the order the rules run' +
+      (info.tied ? '. Same sort value as another rule, their order among each other is not fixed' : '');
+    place.appendChild(badge);
+    if (info.tied) {
+      var tie = document.createElement('span');
+      tie.className = 'text-warning';
+      tie.textContent = '=';
+      tie.title = badge.title;
+      place.appendChild(tie);
+    }
+    cell.insertBefore(place, cell.firstChild);
+  }
+
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  names.forEach(function(key, idx) {
+    var head = header(key, idx);
+    tbody.appendChild(head);
+    groups[key].forEach(function(member, j) {
+      decorate(member);
+      member.row.id = 'ca-g' + idx + '-r' + j;
+      tbody.appendChild(member.row);
+    });
+    setFolded(head, !!folded[key]);
+  });
+
+  function foldAll(fold) {
+    return function(event) {
+      event.preventDefault();
+      Array.prototype.forEach.call(tbody.querySelectorAll('tr.ca-group-header'), function(head) {
+        setFolded(head, fold);
+      });
+      saveFolded();
+    };
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.ca-fold-all'), function(item) {
+    item.hidden = false;
+  });
+  var expandAll = document.getElementById('ca-expand-all');
+  var collapseAll = document.getElementById('ca-collapse-all');
+  if (expandAll) expandAll.addEventListener('click', foldAll(false));
+  if (collapseAll) collapseAll.addEventListener('click', foldAll(true));
+
+  // Back to the handle that was moved before the reload
+  try {
+    var focus = sessionStorage.getItem('ca-focus');
+    if (focus) {
+      sessionStorage.removeItem('ca-focus');
+      Array.prototype.forEach.call(tbody.querySelectorAll('tr.ca-rule-row'), function(row) {
+        if (row.dataset.rule === focus) {
+          var handle = row.querySelector('.ca-handle');
+          if (handle) handle.focus();
+        }
+      });
+    }
+  } catch (e) { /* no storage, no focus */ }
+
+  if (!canMove) return;
+
+  function isRuleRow(el) { return el && el.classList.contains('ca-rule-row'); }
+  function isHeader(el) { return el && el.classList.contains('ca-group-header'); }
+
+  function neighbour(row, direction) {
+    var el = row[direction];
+    while (el && !isHeader(el)) {
+      if (isRuleRow(el) && el.dataset.rule !== row.dataset.rule) return el.dataset.rule;
+      el = el[direction];
+    }
+    return null;
+  }
+
+  function groupOf(row) {
+    var el = headerOf(row);
+    return el ? el.dataset.key : null;
+  }
+
+  function headerOf(row) {
+    var el = row.previousElementSibling;
+    while (el && !isHeader(el)) el = el.previousElementSibling;
+    return el;
+  }
+
+  function commit(row) {
+    var fromKey = row.dataset.key;
+    var toKey = groupOf(row);
+    if (toKey === null) { window.location.reload(); return; }
+    // A rule moved into a folded group unfolds it, in sight after the reload
+    var head = headerOf(row);
+    if (head.querySelector('.ca-group-toggle').getAttribute('aria-expanded') === 'false') {
+      setFolded(head, false);
+      saveFolded();
+    }
+    var info = readInfo(row);
+    var fromAttrs = groupAttrs[fromKey], toAttrs = groupAttrs[toKey];
+    if (toKey !== fromKey) {
+      if (!fromAttrs.length || !toAttrs.length) {
+        alert('A rule without a new attribute can not change its group, ' +
+              'and a rule can not be moved into that group.');
+        window.location.reload();
+        return;
+      }
+      if (fromAttrs.length > 1 || toAttrs.length > 1) {
+        alert('Rule "' + info.name + '" can not be moved into the group ' + toKey + '.\n\n' +
+              'A rule moves into another group only when both set a single attribute: ' +
+              'a box of several attributes holds exactly the rules that set them. ' +
+              'To change these attributes, edit the rule. Within its own group ' +
+              'the rule can still be moved.');
+        window.location.reload();
+        return;
+      }
+      var question = 'Move rule "' + info.name + '" into the group ' + toKey + '?\n\n' +
+        'The rule then sets the attribute ' + toKey + ' instead of ' + fromKey +
+        ', with the same value.';
+      if (!confirm(question)) { window.location.reload(); return; }
+    }
+    var payload = {
+      rule_id: info.rule,
+      after_id: neighbour(row, 'previousElementSibling'),
+      before_id: neighbour(row, 'nextElementSibling'),
+      from_attrs: fromAttrs,
+      to_attrs: toAttrs
+    };
+    if (!payload.after_id && !payload.before_id) { window.location.reload(); return; }
+    if (payload.after_id) payload.before_id = null;
+    fetch(reorderUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+      body: JSON.stringify(payload)
+    }).then(function(response) {
+      return response.json().catch(function() { return {}; }).then(function(body) {
+        if (!response.ok) alert(body.error || body.message || 'The order could not be saved.');
+        try { sessionStorage.setItem('ca-focus', info.rule); } catch (e) {}
+        window.location.reload();
+      });
+    }).catch(function() {
+      alert('The order could not be saved.');
+      window.location.reload();
+    });
+  }
+
+  function onKey(event) {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    var row = event.currentTarget.closest('tr');
+    if (event.key === 'ArrowUp') {
+      var prev = row.previousElementSibling;
+      if (isHeader(prev)) {
+        // Up out of the group: last place of the group above
+        if (!prev.previousElementSibling) return;
+        tbody.insertBefore(row, prev);
+      } else if (prev) {
+        tbody.insertBefore(row, prev);
+      } else {
+        return;
+      }
+    } else {
+      var next = row.nextElementSibling;
+      if (!next) return;
+      // Into the next group as its first rule, or one place down
+      tbody.insertBefore(row, next.nextElementSibling);
+    }
+    event.currentTarget.focus();
+    commit(row);
+  }
+
+  if (typeof Sortable !== 'undefined') {
+    Sortable.create(tbody, {
+      draggable: '.ca-rule-row',
+      handle: '.ca-handle',
+      ghostClass: 'sortable-ghost',
+      animation: 150,
+      forceFallback: true,
+      fallbackTolerance: 4,
+      onEnd: function(event) {
+        if (event.oldIndex === event.newIndex) return;
+        commit(event.item);
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}
