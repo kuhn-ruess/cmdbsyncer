@@ -34,14 +34,14 @@
   {% if cmdb_mode and not user_readonly %}
   <button type="button" class="btn btn-sm btn-outline-primary"
           data-toggle="modal" data-target="#bulkAddModal"
-          title="Add multiple hosts at once by pasting a CSV or a plain hostname list"
+          title="Add hosts by hand: paste hostnames, CSV, YAML or a key/value list, then edit every host in the preview"
           style="margin-left: auto;">
-    <i class="fa fa-plus-square"></i> Bulk add hosts
+    <i class="fa fa-plus-square"></i> Add hosts manually
   </button>
   <button type="button" class="btn btn-sm btn-outline-secondary"
           data-toggle="modal" data-target="#csvImportModal"
-          title="Import hosts from a CSV file (round-trips the Export CSV format)">
-    <i class="fa fa-upload"></i> Import CSV
+          title="Import hosts from a CSV file (round-trips the Export CSV format) or from YAML files (one or several hosts per file)">
+    <i class="fa fa-upload"></i> Import CSV / YAML
   </button>
   {% endif %}
   <a href="{{ url_for('.export_csv') }}{% if request.query_string %}?{{ request.query_string.decode('utf-8') }}{% endif %}"
@@ -383,7 +383,7 @@
         <input type="hidden" name="return_to" value="{{ request.full_path }}">
 
         <div class="modal-header">
-          <h5 class="modal-title" id="bulkAddModalLabel">Bulk add hosts</h5>
+          <h5 class="modal-title" id="bulkAddModalLabel">Manual add</h5>
           <button type="button" class="close" data-dismiss="modal" aria-label="Close">
             <span aria-hidden="true">&times;</span>
           </button>
@@ -391,32 +391,47 @@
 
         <div class="modal-body">
           <div class="form-group">
-            <label for="bulkAddText">Hostnames or CSV</label>
+            <label for="bulkAddText">Hostnames, CSV, YAML or key/value list</label>
             <textarea class="form-control" id="bulkAddText" name="hosts_text"
                       rows="10" required
-                      placeholder="One hostname per line, e.g.&#10;web01.example.com&#10;web02.example.com&#10;&#10;— or paste CSV with a header row:&#10;hostname,label_env,inventory_os&#10;db01,production,linux"></textarea>
+                      placeholder="One hostname per line, e.g.&#10;web01.example.com&#10;web02.example.com&#10;&#10;or paste CSV with a header row:&#10;hostname,label_env,inventory_os&#10;db01,production,linux&#10;&#10;or YAML, hosts separated by ---:&#10;cluster: ocp-prd.example.com&#10;api: https://api.example.com:6443"></textarea>
             <small class="form-text text-muted">
-              A plain list creates one host per line. Paste CSV (any line with a
-              delimiter) and you get a preview to pick the hostname column first.
-              Every extra column becomes a host label;
-              <code>inventory_&lt;name&gt;</code> columns go to the inventory.
+              Everything opens in a preview first: pick the hostname column, the
+              columns for the Secret Store, the account and the template, and
+              edit the values of every host before they are created. Every extra
+              column becomes a host label; <code>inventory_&lt;name&gt;</code>
+              columns go to the inventory.
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="bulkAddTemplateId">Assign template (optional)</label>
+            <select class="form-control" id="bulkAddTemplateId" name="template_id">
+              <option value="">No template</option>
+              {% for template in import_template_choices or [] %}
+                <option value="{{ template.id }}">{{ template.hostname }}</option>
+              {% endfor %}
+            </select>
+            <small class="form-text text-muted">
+              Applies to every host; the preview can still give single hosts another one.
             </small>
           </div>
 
           <div class="form-group mb-0">
-            <label for="bulkAddTemplateId">Assign template (optional)</label>
-            <select class="form-control" id="bulkAddTemplateId" name="template_id">
-              <option value="">No template</option>
-              {% for template in set_template_choices or [] %}
-                <option value="{{ template.id }}">{{ template.hostname }}</option>
-              {% endfor %}
+            <label for="bulkAddFormat">Format</label>
+            <select class="form-control" id="bulkAddFormat" name="paste_format">
+              <option value="auto">Auto detect</option>
+              <option value="hosts">Host list (one hostname per line)</option>
+              <option value="csv">CSV with a header row</option>
+              <option value="yaml">YAML (hosts separated by ---)</option>
+              <option value="kv">Key/value list (key: value, key=value or tab separated; an empty line or --- starts the next host)</option>
             </select>
           </div>
         </div>
 
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Add hosts</button>
+          <button type="submit" class="btn btn-primary">Continue</button>
         </div>
       </form>
     </div>
@@ -433,7 +448,7 @@
         <input type="hidden" name="return_to" value="{{ request.full_path }}">
 
         <div class="modal-header">
-          <h5 class="modal-title" id="csvImportModalLabel">Import hosts from CSV</h5>
+          <h5 class="modal-title" id="csvImportModalLabel">Import hosts from CSV or YAML</h5>
           <button type="button" class="close" data-dismiss="modal" aria-label="Close">
             <span aria-hidden="true">&times;</span>
           </button>
@@ -441,13 +456,18 @@
 
         <div class="modal-body">
           <div class="form-group mb-0">
-            <label for="csvImportFile">CSV file</label>
+            <label for="csvImportFile">CSV or YAML file(s)</label>
             <input type="file" class="form-control-file" id="csvImportFile"
-                   name="csv_file" accept=".csv,text/csv" required>
+                   name="csv_file" accept=".csv,text/csv,.yml,.yaml" multiple required>
             <small class="form-text text-muted">
               After upload you pick the hostname column and assign an optional
               template. Every other column becomes a host label;
               <code>inventory_&lt;name&gt;</code> columns go to the inventory.
+              A YAML file can hold several hosts: a list of <code>key: value</code>
+              mappings or several documents separated by <code>---</code>; several
+              files can be uploaded at once. A CSV holds one host per row. Columns
+              holding tokens or certificates can be sent to the Secret Store
+              instead of becoming labels.
             </small>
           </div>
         </div>
@@ -466,7 +486,7 @@
   <div class="modal-dialog modal-xl" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="csvPreviewModalLabel">Import hosts from CSV — preview</h5>
+        <h5 class="modal-title" id="csvPreviewModalLabel">Import preview</h5>
         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
           <span aria-hidden="true">&times;</span>
         </button>
@@ -639,7 +659,7 @@
   // CSV import preview: keep everything in a modal instead of navigating
   // to a full page. The upload/paste is POSTed via AJAX; the server
   // returns the preview fragment which we drop into the preview modal.
-  function loadCsvPreview(form) {
+  function loadCsvPreview(form, title) {
     var fd = new FormData(form);
     fetch(form.getAttribute('action'), {
       method: 'POST',
@@ -647,38 +667,70 @@
       credentials: 'same-origin',
       headers: { 'X-Requested-With': 'XMLHttpRequest' }
     }).then(function(resp) {
+      // A redirect is never a preview: show its page (and flash) as a page,
+      // not nested inside the dialog.
+      if (resp.redirected) { window.location = resp.url; return null; }
       if (!resp.ok) { throw new Error('Upload failed (' + resp.status + ')'); }
       return resp.text();
     }).then(function(html) {
+      if (html === null) { return; }
+      $('#csvPreviewModalLabel').text(title);
       $('#csvPreviewBody').html(html);
       $('#bulkAddModal').modal('hide');
       $('#csvImportModal').modal('hide');
       $('#csvPreviewModal').modal('show');
     }).catch(function(err) {
-      alert('Could not build the CSV preview: ' + err.message);
+      alert('Could not build the import preview: ' + err.message);
     });
   }
 
-  // File upload is always a CSV -> always go through the preview modal.
+  // Uploads and Manual add both go through the preview modal.
   $(document).on('submit', '#csvImportForm', function(ev) {
     ev.preventDefault();
-    loadCsvPreview(this);
+    loadCsvPreview(this, 'Import CSV / YAML: preview');
+  });
+  $(document).on('submit', '#bulkAddForm', function(ev) {
+    ev.preventDefault();
+    loadCsvPreview(this, 'Manual add: preview');
   });
 
-  // Bulk add: a pasted CSV (any line carrying a delimiter) goes through
-  // the preview modal; a plain hostname list submits normally.
-  $(document).on('submit', '#bulkAddForm', function(ev) {
-    var text = $('#bulkAddText').val() || '';
-    var firstLine = '';
-    var lines = text.split('\n');
-    for (var i = 0; i < lines.length; i++) {
-      if (lines[i].trim()) { firstLine = lines[i]; break; }
-    }
-    if (/[,;\t]/.test(firstLine)) {
-      ev.preventDefault();
-      loadCsvPreview(this);
-    }
-    // else: plain list -> normal submit, imports and redirects back.
+  // Editable preview: "Add column" appends an empty column to every host.
+  $(document).on('click', '#importAddColumn', function() {
+    var name = (window.prompt('Name of the new column') || '').trim();
+    if (!name) { return; }
+    var table = document.getElementById('importTable');
+    var head = document.createElement('th');
+    head.setAttribute('data-col', name);
+    head.textContent = name;
+    var templateHead = table.querySelector('th.import-template-col');
+    templateHead.parentNode.insertBefore(head, templateHead);
+    table.querySelectorAll('tbody tr.import-row').forEach(function(row) {
+      var cell = document.createElement('td');
+      var input = document.createElement('input');
+      input.className = 'form-control form-control-sm import-cell';
+      input.setAttribute('data-col', name);
+      cell.appendChild(input);
+      row.insertBefore(cell, row.querySelector('td.import-template-col'));
+    });
+  });
+
+  // On "Start import" an editable preview sends what the user edited: the
+  // table becomes JSON rows (a template per row under __template__).
+  $(document).on('submit', '#csvPreviewForm', function() {
+    var table = document.getElementById('importTable');
+    if (!table || table.getAttribute('data-editable') !== '1') { return; }
+    var rows = [];
+    table.querySelectorAll('tbody tr.import-row').forEach(function(row) {
+      var entry = {};
+      row.querySelectorAll('.import-cell').forEach(function(cell) {
+        entry[cell.getAttribute('data-col')] = cell.value;
+      });
+      var template = row.querySelector('.import-row-template');
+      if (template && template.value) { entry.__template__ = template.value; }
+      rows.push(entry);
+    });
+    this.querySelector('textarea[name="csv_text"]').value = JSON.stringify(rows);
+    this.querySelector('input[name="import_format"]').value = 'json';
   });
 
   // Toggling "first row is a header" re-parses server-side and swaps the

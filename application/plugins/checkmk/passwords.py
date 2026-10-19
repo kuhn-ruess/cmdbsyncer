@@ -93,9 +93,10 @@ class CheckmkPasswordSync(CMK2):
         """
         Export Passwords
         """
-        # Collect Rules
-
-        total = CheckmkPassword.objects(enabled=True).count()
+        # Secret Store entries flagged as not for Checkmk (certificates,
+        # secrets only other modules use) stay out of Checkmk.
+        exportable = CheckmkPassword.objects(enabled=True, export_to_checkmk__ne=False)
+        total = exportable.count()
         with Progress(SpinnerColumn(),
                       MofNCompleteColumn(),
                       *Progress.get_default_columns(),
@@ -108,7 +109,7 @@ class CheckmkPasswordSync(CMK2):
             progress.advance(task1)
             task2 = progress.add_task("Export Passwords", total=total)
 
-            for password in CheckmkPassword.objects(enabled=True):
+            for password in exportable:
                 password_id = f"cmdbsyncer_{password['id']}"
                 payload = self.build_payload(password)
                 payload_hash = self.payload_hash(payload)

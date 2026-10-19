@@ -754,11 +754,6 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     admin.add_view(CustomAttributeView(CustomAttributeRule, name="Global Custom Attributes",
                                        category="Modules",
                                        menu_icon_type='fa', menu_icon_value='fa-cog'))
-    from application.models.lookup_table import LookupTable
-    from application.views.lookup_table import LookupTableView
-    admin.add_view(LookupTableView(LookupTable, name="Lookup Tables",
-                                   category="Modules",
-                                   menu_icon_type='fa', menu_icon_value='fa-table'))
     #.
     #   .-- Projects
     from application.models.project import Project
@@ -768,6 +763,28 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     #.
 
     _register_all_plugin_admin_views(admin)
+
+    #   .-- Modules: shared data at the bottom
+    # Lookup Tables and the Secret Store serve every module, so they sit
+    # below the modules, after a divider. Registered after the plugins
+    # because Flask-Admin keeps the registration order.
+    from application.views.menu_links import AccessMenuLink
+    from application.models.lookup_table import LookupTable
+    from application.views.lookup_table import LookupTableView
+    from application.models.secret import Secret
+    from application.views.secret import SecretView
+    lookup_view = LookupTableView(LookupTable, name="Lookup Tables",
+                                  category="Modules",
+                                  menu_icon_type='fa', menu_icon_value='fa-table')
+    secret_view = SecretView(Secret, name="Secret Store", endpoint="secret",
+                             category="Modules",
+                             menu_icon_type='fa', menu_icon_value='fa-lock')
+    admin.add_link(AccessMenuLink(
+        name='', url='#', category='Modules', class_name='dropdown-divider',
+        access=lambda: lookup_view.is_accessible() or secret_view.is_accessible()))
+    admin.add_view(lookup_view)
+    admin.add_view(secret_view)
+    #.
 
     #   .-- Top bar grouping
     # The bar holds three groups: the working views (Objects, Modules,
@@ -816,7 +833,6 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
     # compact. Each of the three topics gets its own sub menu, so Settings
     # itself stays a short list.
     from application.views.account import AccountModelView, ChildAccountModelView
-    from application.views.menu_links import AccessMenuLink
     from flask_login import current_user as _menu_user
 
     _add_sub_menu(admin, "Accounts", 'fa-user-circle')

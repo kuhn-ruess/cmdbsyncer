@@ -180,8 +180,10 @@ class BulkEnableDisableTest(unittest.TestCase):
         )
         view.model = types.SimpleNamespace(_fields=dict.fromkeys(fields))
         view.object_id_converter = str
+        # The selection is filtered on the view's queryset (not in_bulk,
+        # which ignores the queryset's filters).
         view.get_query = lambda: types.SimpleNamespace(
-            in_bulk=lambda _ids: dict(enumerate(docs)))
+            filter=lambda **_kwargs: list(docs))
         view.bulk_calls = 0
         view.on_bulk_change = lambda: setattr(
             view, 'bulk_calls', view.bulk_calls + 1)

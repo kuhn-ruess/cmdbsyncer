@@ -544,9 +544,9 @@ def import_project_rules_from_folder(project_name, account, folder,  # pylint: d
 
         if password_hints:
             hint_list = ', '.join(sorted(password_hints))
-            print(f"{ColorCodes.WARNING} * Rules reference password store "
-                  f"entries: {hint_list}. Create matching Checkmk Passwords in "
-                  f"the syncer and run 'checkmk export_passwords <account>' so "
+            print(f"{ColorCodes.WARNING} * Rules reference Secret Store "
+                  f"entries: {hint_list}. Create matching global entries in "
+                  f"the Secret Store and run 'checkmk export_passwords <account>' so "
                   f"the reference resolves in the target Checkmk.{ColorCodes.ENDC}")
 
         message = (f"Imported {imported} rule(s) from Checkmk folder "

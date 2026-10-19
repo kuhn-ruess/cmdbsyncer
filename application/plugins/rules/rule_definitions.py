@@ -37,7 +37,8 @@ rules = {
                               'CheckmkNotificationRule'),
     'cmk_folder_pool': ('application.plugins.checkmk.models', 'CheckmkFolderPool'),
     'cmk_site_pool': ('application.plugins.checkmk.models', 'CheckmkSitePool'),
-    'cmk_passwords': ('application.plugins.checkmk.models', 'CheckmkPassword'),
+    # The Secret Store; the type keeps its old name so older exports import.
+    'cmk_passwords': ('application.models.secret', 'Secret'),
     'host_objects': ('application.models.host', 'Host',
                      {'object_type__ne': 'template'}),
     'cmdb_templates': ('application.models.host', 'Host',

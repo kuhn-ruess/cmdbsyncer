@@ -42,9 +42,9 @@ def cli_import_rules(rulefile_path, override, debug):# pylint: disable=unused-ar
               help="Also export user accounts including hashed passwords "
                    "and roles (skipped by default — treat the output as secret).")
 @click.option("--include-passwords", is_flag=True, default=False,
-              help="Also export the Checkmk password store (skipped by "
-                   "default — the entries are encrypted with this instance's "
-                   "key, treat the output as secret).")
+              help="Also export the Secret Store (skipped by default; "
+                   "the entries are encrypted with this instance's key, "
+                   "treat the output as secret).")
 def cli_export_all_rules(target_path, include_hosts, include_accounts,
                          include_users, include_passwords):
     """

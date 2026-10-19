@@ -325,14 +325,15 @@ class DefaultModelView(ModelView):
     def _bulk_set_enabled(self, ids, enabled):
         """Flip ``enabled`` on the selected documents.
 
-        Selection is resolved the way Flask-Admin's own delete action
-        does it, so a view that narrows its queryset (per project, per
-        account) can only ever switch what it also lists.
+        The selection is filtered on the view's own queryset, so a view
+        that narrows it (per project, per account, per scope) can only
+        ever switch what it also lists. Not ``in_bulk``: mongoengine
+        ignores the queryset's filters there.
         """
         changed = 0
-        selected = self.get_query().in_bulk(
-            [self.object_id_converter(pk) for pk in ids])
-        for model in selected.values():
+        selected = self.get_query().filter(
+            pk__in=[self.object_id_converter(pk) for pk in ids])
+        for model in selected:
             if bool(model.enabled) == enabled:
                 continue
             model.enabled = enabled

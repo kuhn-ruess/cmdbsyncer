@@ -235,9 +235,9 @@ class RulesExport(Resource):
                'passwords and role assignments — treat as secret. Skipped by '
                'default.')
     @API.param('include_passwords',
-               'Set to ``1`` to also export the Checkmk password store '
+               'Set to ``1`` to also export the Secret Store '
                '(``cmk_passwords``). The entries stay encrypted with this '
-               'instance key — treat as secret. Skipped by default.')
+               'instance key, treat as secret. Skipped by default.')
     @API.response(200, 'Every rule, grouped by ``rule_type``.',
                   RULES_EXPORT_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)

@@ -44,7 +44,14 @@ FUNCTIONS = (
      "Cleans a value up to a valid Checkmk host name."),
     ('cmk_password',
      "{{ cmk_password('name') }}",
-     "Password store reference of a Checkmk Password of the syncer."),
+     "Checkmk password store reference of a global Secret Store entry."),
+    ('secret',
+     "{{ secret('key') }}",
+     "Checkmk password store reference of the Secret Store entry of this host "
+     "(or the global entry of that name)."),
+    ('secret_value',
+     "{{ secret_value('key') }}",
+     "Plaintext of that Secret Store entry, e.g. a certificate."),
     ('get_ip_network',
      "{{ get_ip_network(attribute) }}",
      "Network of an address with mask: 10.1.2.3/255.255.255.0 gives "

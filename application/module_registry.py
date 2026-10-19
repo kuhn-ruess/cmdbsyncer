@@ -188,6 +188,11 @@ ENTRIES = {
             "Long key and value lists, read in any Jinja field with "
             "lookup(): attribute A has value x, so attribute B gets y."
         ),
+        'Secret Store': (
+            "Passwords, tokens and certificates, global or bound to a host. "
+            "Rules reference them with secret(), Checkmk gets them in its "
+            "password store."
+        ),
     },
     'Checkmk': {
         'Rewrite and Create Custom Syncer Attributes': (
@@ -238,10 +243,6 @@ ENTRIES = {
         'Manage DCD Rules': (
             "Maintain the connections of Checkmk's Dynamic Configuration "
             "Daemon that pick up the exported hosts."
-        ),
-        'Manage Password Store': (
-            "Fill Checkmk's password store, so rules can reference secrets "
-            "without the passwords ending up in the configuration."
         ),
         'Inventorize from Checkmk Settings': (
             "Choose which data the syncer reads back from Checkmk — labels, "

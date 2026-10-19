@@ -1,11 +1,11 @@
 """
-Bridge Checkmk rule secrets to the syncer's own Checkmk password store.
+Bridge Checkmk rule secrets to the global entries of the syncer's Secret Store.
 
 Checkmk masks an ``explicit_password`` in a rule value as ``******`` on every
 read, so a rule imported from one Checkmk instance carries no usable secret and
 would overwrite the target's password with ``******`` on deploy. Instead we
 rewrite every ``explicit_password`` into a ``stored_password`` reference backed
-by a syncer :class:`CheckmkPassword`. The reference is a Jinja macro
+by a global Secret Store entry. The reference is a Jinja macro
 ``{{ cmk_password("name") }}`` that resolves to the entry's stable ident
 ``cmdbsyncer_<id>`` at export time — the same ident the password export writes
 into every Checkmk instance, so a rule deployed to test and prod resolves each
@@ -40,10 +40,12 @@ def password_ident(name):
     instead of aborting the whole export.
     """
     from .models import CheckmkPassword  # pylint: disable=import-outside-toplevel
-    entry = CheckmkPassword.objects(name=name).first()
+    # Only global entries: a host-bound secret is reached through
+    # ``secret('key')`` for its own host, never by name from another one.
+    entry = CheckmkPassword.objects(name=name, host_id=None).first()
     if not entry:
         logger.error(
-            "cmk_password(%r): no Checkmk Password with that name in the syncer",
+            "cmk_password(%r): no global Secret Store entry with that name",
             name)
         return f"cmdbsyncer_missing_{name}"
     return f"cmdbsyncer_{entry.id}"
@@ -63,7 +65,7 @@ def rewrite_explicit_passwords(value_raw):
     becomes ``('cmk_postprocessed', 'stored_password', ('{{ cmk_password("<hint>") }}', ''))``
     where ``<hint>`` defaults to the value's field name (e.g. ``secret``). The
     hint is only a starting name — rename the macro on the rule and create a
-    matching syncer Checkmk Password.
+    matching global Secret Store entry.
 
     Returns ``(new_value_raw, hints)`` where ``hints`` is the list of default
     names inserted (empty, and ``value_raw`` returned unchanged, when the value

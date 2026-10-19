@@ -1,5 +1,5 @@
 {# Modal-body fragment: loaded via AJAX into #csvPreviewBody (see
-   host_list.html). Do NOT wrap it in page chrome — the modal is the frame. #}
+   host_list.html). Do NOT wrap it in page chrome: the modal is the frame. #}
 <form method="POST" id="csvPreviewForm"
       action="{{ url_for('.csv_import_run') }}"
       data-preview-url="{{ url_for('.csv_import') }}">
@@ -8,7 +8,11 @@
     {# Multi-line CSV rides in a hidden textarea so the import (and the
        header re-preview) work without server state. #}
     <textarea name="csv_text" style="display:none;">{{ csv_text }}</textarea>
+    <input type="hidden" name="import_format" value="{{ import_format }}">
 
+    {% if import_format == 'json' %}
+    <input type="hidden" name="has_header" value="1">
+    {% else %}
     <div class="form-group form-check">
         <input type="checkbox" class="form-check-input csv-preview-refresh" id="hasHeader"
                name="has_header" value="1" {% if has_header %}checked{% endif %}>
@@ -16,10 +20,11 @@
             First row contains column names (header)
         </label>
         <small class="form-text text-muted">
-            Forgot the header? Uncheck this — the first row is then kept as
+            Forgot the header? Uncheck this: the first row is then kept as
             data and columns are numbered instead.
         </small>
     </div>
+    {% endif %}
 
     <div class="form-group">
         <label for="hostnameColumn"><strong>Hostname column</strong></label>
@@ -32,8 +37,41 @@
         </select>
     </div>
 
+    {% if can_store_secrets %}
     <div class="form-group">
-        <label for="csvTemplateId">Assign template (optional)</label>
+        <label><strong>Columns for the Secret Store</strong></label>
+        <div>
+            {% for col in columns %}
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="secret_columns"
+                       id="secretColumn{{ loop.index }}" value="{{ col }}"
+                       {% if col in secret_columns %}checked{% endif %}>
+                <label class="form-check-label" for="secretColumn{{ loop.index }}">{{ col }}</label>
+            </div>
+            {% endfor %}
+        </div>
+        <small class="form-text text-muted">
+            Checked columns do not become labels: their values are stored in the
+            Secret Store, bound to the imported host, and rules reach them with
+            <code>{{ "{{ secret('column') }}" }}</code>.
+        </small>
+    </div>
+    {% endif %}
+
+    <div class="form-group">
+        <label for="importAccount"><strong>Account</strong></label>
+        <select class="form-control" id="importAccount" name="account" required>
+            {% for value, label in accounts %}
+            <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+        <small class="form-text text-muted">
+            Every host of this import, and with it its secrets, belongs to this account.
+        </small>
+    </div>
+
+    <div class="form-group">
+        <label for="csvTemplateId">Assign template (optional{% if editable %}, for every host without its own{% endif %})</label>
         <select class="form-control" id="csvTemplateId" name="template_id">
             <option value="">No template</option>
             {% for template in templates %}
@@ -46,33 +84,71 @@
     </div>
 
     <p class="text-muted">
-        Preview of the first {{ preview_rows|length }} of {{ row_count }} row(s).
+        {% if editable %}
+        All {{ row_count }} host(s). Edit any value, add a column or give a host
+        its own template before you start the import.
+        {% else %}
+        Preview of the first {{ preview_rows|length }} of {{ row_count }} row(s);
+        an import this big is not editable here.
+        {% endif %}
         Every column except the hostname, <code>folder</code>,
         <code>lifecycle_state</code> and <code>inventory_&lt;name&gt;</code>
         becomes a host label (an <code>label_&lt;name&gt;</code> prefix is
         stripped for the Export CSV round-trip).
     </p>
 
+    {% if editable %}
+    <div class="mb-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="importAddColumn">
+            <i class="fa fa-plus"></i> Add column
+        </button>
+    </div>
+    {% endif %}
+
     <div class="table-responsive" style="max-height: 22rem; overflow: auto;">
-        <table class="table table-sm table-bordered">
+        <table class="table table-sm table-bordered" id="importTable"
+               data-editable="{{ '1' if editable else '0' }}">
             <thead>
                 <tr>
                     {% for col in columns %}
-                    <th style="white-space: nowrap;">
+                    <th style="white-space: nowrap;" data-col="{{ col }}">
                         {{ col if col else '(empty)' }}
                         {% if col == hostname_column %}
                             <span class="badge badge-primary">hostname</span>
                         {% endif %}
                     </th>
                     {% endfor %}
+                    {% if editable %}<th class="import-template-col">Template</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
                 {% for row in preview_rows %}
-                <tr>
+                <tr class="import-row">
                     {% for col in columns %}
-                    <td>{{ row[col] }}</td>
+                    {% if editable %}
+                    <td>
+                        {% if '\n' in row[col] %}
+                        <textarea class="form-control form-control-sm import-cell"
+                                  data-col="{{ col }}" rows="2">{{ row[col] }}</textarea>
+                        {% else %}
+                        <input class="form-control form-control-sm import-cell"
+                               data-col="{{ col }}" value="{{ row[col] }}">
+                        {% endif %}
+                    </td>
+                    {% else %}
+                    <td>{{ row[col]|truncate(80) }}</td>
+                    {% endif %}
                     {% endfor %}
+                    {% if editable %}
+                    <td class="import-template-col">
+                        <select class="form-control form-control-sm import-row-template">
+                            <option value="">(as above)</option>
+                            {% for template in templates %}
+                            <option value="{{ template.id }}">{{ template.hostname }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
                 {% if not preview_rows %}

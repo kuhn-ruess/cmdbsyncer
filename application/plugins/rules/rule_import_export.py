@@ -53,6 +53,24 @@ def _model_class_for(rule_type):
     return getattr(module, class_name, None)
 
 
+def rule_type_allowed(rule_type, user=False):
+    """
+    True when *user* may export or import *rule_type*.
+
+    The Secret Store (``cmk_passwords``) holds host-bound secrets, so a
+    user limited to accounts or CMDB templates must neither read it out in
+    bulk nor write entries into it through a rule import. *user* defaults
+    to the user of the running request (none outside a request: the CLI).
+    """
+    if rule_type != PASSWORDS_RULE_TYPE:
+        return True
+    # pylint: disable=import-outside-toplevel
+    from application.helpers.secret_access import acting_user, is_scoped
+    if user is False:
+        user = acting_user()
+    return not is_scoped(user)
+
+
 def _queryset_filter_for(rule_type):
     """Queryset filter kwargs for *rule_type*.
 
@@ -69,7 +87,7 @@ def _queryset_filter_for(rule_type):
 def iter_rules_of_type(rule_type):
     """Yield JSON strings (one per rule) for *rule_type*. Empty when unknown."""
     model_class = _model_class_for(rule_type)
-    if model_class is None:
+    if model_class is None or not rule_type_allowed(rule_type):
         return
     for db_rule in model_class.objects(**_queryset_filter_for(rule_type)):
         yield db_rule.to_json()
@@ -88,7 +106,7 @@ def iter_all_rules(include_hosts=False, include_accounts=False,
     a complete configuration backup. Four types carry either bulk data or
     secrets and are opt-in via the matching ``include_*=True`` flag:
     ``host_objects``, ``accounts``, ``users`` (hashed passwords and
-    roles) and ``cmk_passwords`` (the Checkmk password store, encrypted
+    roles) and ``cmk_passwords`` (the Secret Store, encrypted
     with this instance's ``CRYPTOGRAPHY_KEY``). Treat exports made with
     those flags as secret.
 
@@ -162,6 +180,8 @@ def import_one_rule(json_dict, rule_type, override=False):
     model_class = _model_class_for(rule_type)
     if model_class is None:
         return 'unknown_type'
+    if not rule_type_allowed(rule_type):
+        return 'invalid'
     return _save_rule(json_dict, model_class, override=override)
 
 
@@ -175,7 +195,8 @@ def import_rule_lines(lines, default_rule_type=None, override=False):
     Returns ``{rule_type: imported_count}``.
     """
     rule_type = default_rule_type
-    model_class = _model_class_for(rule_type) if rule_type else None
+    model_class = _model_class_for(rule_type) \
+        if rule_type and rule_type_allowed(rule_type) else None
     counts = {}
     for line in lines:
         if isinstance(line, str):
@@ -191,7 +212,8 @@ def import_rule_lines(lines, default_rule_type=None, override=False):
         if (isinstance(json_dict, dict)
                 and len(json_dict) == 1 and 'rule_type' in json_dict):
             rule_type = json_dict['rule_type']
-            model_class = _model_class_for(rule_type)
+            model_class = _model_class_for(rule_type) \
+                if rule_type_allowed(rule_type) else None
             continue
         if model_class is None:
             continue

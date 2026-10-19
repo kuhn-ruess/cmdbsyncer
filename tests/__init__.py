@@ -428,6 +428,27 @@ _label_history.label_history_retention_seconds = MagicMock(
     name="stub.label_history_retention_seconds", return_value=90 * 86400)
 
 
+# --- Secret Store helpers ---------------------------------------------------
+# The host view imports the import-file and access helpers; they need the
+# real models, which the stubbed package cannot offer. The Secret Store is
+# tested against the real app in tests/test_secret_store_scope.py.
+
+_host_import_file = _stub_package("application.helpers.host_import_file")
+for _name in ("is_yaml_filename", "key_value_rows", "looks_like_yaml",
+              "rows_columns", "split_secrets",
+              "store_row_secrets", "suggested_secret_columns", "yaml_rows"):
+    setattr(_host_import_file, _name, MagicMock(name=f"stub.{_name}"))
+_host_secrets = _stub_package("application.views.host_secrets")
+_host_secrets.render_host_secrets = MagicMock(name="stub.render_host_secrets")
+_secret_access = _stub_package("application.helpers.secret_access")
+# Unit tests run as the trusted CLI: no acting user, no scope.
+for _name, _value in (("can_manage", True), ("set_acting_user", None),
+                      ("acting_user", None), ("is_scoped", False),
+                      ("host_in_scope", True)):
+    setattr(_secret_access, _name,
+            MagicMock(name=f"stub.{_name}", return_value=_value))
+
+
 # --- Extra stubs for application.api tests ----------------------------------
 # application.api imports User, Account, and the `log` object from application
 # at import time. We register minimal stand-ins so test_api can load the real
@@ -723,7 +744,7 @@ _models_host.HostError = type("HostError", (Exception,), {})
 
 def _stub_get_cmdb_model_fields(object_type="host"):
     """Mirror of application.models.host.get_cmdb_model_fields."""
-    cmdb_models = _models_host.app.config.get("CMDB_MODELS", {}) or {}
+    cmdb_models = _models_host.app.config.get("CMDB_MODELS", {}) or {}  # pylint: disable=no-member
     fields = dict(cmdb_models.get(object_type, {}) or {})
     fields.update(cmdb_models.get("all", {}) or {})
     return fields

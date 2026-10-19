@@ -40,6 +40,8 @@ roles = [
   ('log', "Log View"),
   ('global_attributes', "Global Attributes"),
   ('rule', "Generic Rules (Filter, Rewrite, Custom Attributes)"),
+  ('secrets', "Secret Store"),
+  ('secrets_reveal', "Secret Store: show plaintext values"),
   ('fileadmin', "File Management"),
   ('user', "User Management"),
   ('ansible', "Ansible"),

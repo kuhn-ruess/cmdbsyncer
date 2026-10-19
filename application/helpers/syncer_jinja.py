@@ -52,13 +52,51 @@ def _cmk_cleanup_hostname(value):
 
 def _cmk_password(name):
     """
-    Resolve a syncer Checkmk Password name to its password-store ident
+    Resolve the name of a global Secret Store entry to its Checkmk ident
     (``cmdbsyncer_<id>``) so rules can reference a stored secret instead of an
     inlined one. Lazily imported to avoid circular imports.
     """
     from application.plugins.checkmk.rule_passwords import password_ident
 
     return password_ident(name)
+
+
+@jinja2.pass_context
+def _secret(context, key):
+    """
+    Checkmk password-store ident of Secret Store entry ``key``: the entry
+    bound to the host the template renders for, else the global entry of
+    that name. The host comes from the context handed to the render, not
+    from template variables, so a template cannot reach another host's
+    secret by redefining HOSTNAME.
+    """
+    from application.models.secret import resolve_secret
+
+    entry = resolve_secret(context.parent.get('HOSTNAME'), key)
+    if entry is None:
+        logger.error(f"secret({key!r}): no Secret Store entry for this host or global")
+        return f"cmdbsyncer_missing_{key}"
+    return entry.checkmk_ident()
+
+
+@jinja2.pass_context
+def _secret_value(context, key):
+    """
+    Plaintext of Secret Store entry ``key``, resolved like ``secret``.
+    Inside a web or API request it is masked unless the acting user may
+    reveal that entry, so a preview or debug page never leaks it.
+    """
+    from application.models.secret import resolve_secret
+    from application.helpers.secret_access import acting_user, can_reveal
+
+    entry = resolve_secret(context.parent.get('HOSTNAME'), key)
+    if entry is None:
+        logger.error(f"secret_value({key!r}): no Secret Store entry for this host or global")
+        return ''
+    user = acting_user()
+    if user is not None and not can_reveal(user, entry):
+        return '******'
+    return entry.get_password()
 
 
 def _lookup(table, key, column=None, default=''):
@@ -210,6 +248,8 @@ _GLOBALS = {
     'cmk_cleanup_tag_id': _cmk_cleanup_tag_id,
     'cmk_cleanup_hostname': _cmk_cleanup_hostname,
     'cmk_password': _cmk_password,
+    'secret': _secret,
+    'secret_value': _secret_value,
     'lookup': _lookup,
     'get_ip_network': get_ip_network,
     'get_ip4_interface': get_ip_interface,

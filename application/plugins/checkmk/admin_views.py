@@ -18,7 +18,6 @@ from .models import (
     CheckmkInventorizeAttributes,
     CheckmkNotificationRule,
     CheckmkObjectCache,
-    CheckmkPassword,
     CheckmkRewriteAttributeRule,
     CheckmkRule,
     CheckmkRuleMngmt,
@@ -45,7 +44,6 @@ from .views import (
     CheckmkInventorizeAttributesView,
     CheckmkMngmtRuleView,
     CheckmkNotificationRuleView,
-    CheckmkPasswordView,
     CheckmkRuleView,
     CheckmkSettingsView,
     CheckmkSiteView,
@@ -170,15 +168,6 @@ def register_admin_views(admin):
             category="Checkmk",
             menu_icon_type='fa',
             menu_icon_value='fa-refresh',
-        )
-    )
-    admin.add_view(
-        CheckmkPasswordView(
-            CheckmkPassword,
-            name="Manage Password Store",
-            category="Checkmk",
-            menu_icon_type='fa',
-            menu_icon_value='fa-lock',
         )
     )
 

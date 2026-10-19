@@ -9,6 +9,8 @@ Helpers (form widgets, Mongo filters) live in sibling modules:
 from datetime import datetime
 import csv
 import io
+import json
+from functools import partial
 from flask_login import current_user
 from flask import flash, request, redirect, url_for, render_template, Response
 from flask_admin.model.template import EndpointLinkRowAction, LinkRowAction
@@ -42,6 +44,15 @@ from application.models.account import Account
 from application.helpers.get_account import mask_account_secrets
 from application.helpers.sates import add_changes
 from application.helpers.label_history import label_history_enabled
+from application.helpers.host_import_file import (
+    is_yaml_filename, key_value_rows, looks_like_yaml, rows_columns,
+    split_secrets, store_row_secrets,
+    suggested_secret_columns, yaml_rows,
+)
+from application.views.host_secrets import render_host_secrets
+from application.helpers.secret_access import (
+    can_manage as can_manage_secrets, host_in_scope,
+)
 from application.views.default import DefaultModelView, row_action_target
 from application.views.host_widgets import (
     StaticLabelField,
@@ -175,6 +186,54 @@ def _account_field_choices(current=None):
     if current and current not in known:
         choices.insert(0, (current, current))
     return choices
+
+
+def _preview_error(message, return_to):
+    """
+    Report a failed import preview. The preview is fetched into a modal, so
+    there the message comes back as a small fragment for the modal; a
+    redirect would load the whole host list page into the dialog. A plain
+    form post gets the usual flash and redirect.
+    """
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return render_template('admin/host_import_error.html', message=message)
+    flash(message, 'error')
+    return redirect(return_to)
+
+
+def _import_account_choices():
+    """
+    (value, label) choices for the account of a manual import (Import CSV /
+    YAML, Manual add): the accounts the user may assign. A user limited to
+    accounts must pick one of theirs; everybody else may also keep the
+    CMDB sentinel, which is the default.
+    """
+    choices = [(name, name) for name in _allowed_account_names()]
+    scope = current_user.account_scope() if current_user.is_authenticated else None
+    if scope is None:
+        choices.insert(0, (CMDB_SOURCE_ACCOUNT_NAME, 'cmdb (CMDB managed)'))
+    return choices
+
+
+def _import_account(name):
+    """
+    ``(name, id)`` of the account a manual import assigns, or None when the
+    user may not assign ``name`` (a forged form value included).
+    """
+    if name not in {value for value, _label in _import_account_choices()}:
+        return None
+    if name == CMDB_SOURCE_ACCOUNT_NAME:
+        return CMDB_SOURCE_ACCOUNT_NAME, CMDB_SOURCE_ACCOUNT_ID
+    account = Account.objects(name=name).first()
+    return (name, str(account.id)) if account else None
+
+
+# Rows up to this count are shown as an editable table in the import
+# preview; a bigger import is previewed read only (first rows only).
+EDITABLE_PREVIEW_ROWS = 500
+
+# Key the editable preview uses to hand over a per-row template id.
+ROW_TEMPLATE_KEY = '__template__'
 
 
 # Fields that only make sense when the syncer is in CMDB mode. Stripped
@@ -937,7 +996,7 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
 
     column_details_list = [
         'hostname', 'no_autodelete', 'lifecycle_state',
-        'inventory', 'labels', 'cache'
+        'inventory', 'labels', 'secrets', 'cache'
     ]
 
     column_exclude_list = [
@@ -1003,6 +1062,7 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
     column_formatters_detail = {
         'log': _render_log_grid,
         'labels': _render_labels_with_origin,
+        'secrets': render_host_secrets,
         'inventory': _render_inventory_grid,
         'cache': format_cache,
         'cmdb_fields': _render_cmdb_fields,
@@ -1483,7 +1543,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
     column_details_list = [
         'hostname', 'folder', 'no_autodelete', 'lifecycle_state',
         'relations',
-        'labels', 'cmdb_templates', 'inventory', 'log',
+        'labels', 'secrets', 'cmdb_templates', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
@@ -1601,6 +1661,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
     column_formatters_detail = {
         'log': _render_log_grid,
         'labels': _render_labels_with_origin,
+        'secrets': render_host_secrets,
         'inventory': _render_inventory_grid,
         'cache': format_cache,
         'cmdb_templates': _render_cmdb_template,
@@ -2399,6 +2460,7 @@ Impact Chain.
         """
         if template.endswith('host_list.html') or template.endswith('list.html'):
             kwargs.setdefault('set_template_choices', self.get_template_list())
+            kwargs.setdefault('import_template_choices', list(_template_field_queryset()))
             kwargs.setdefault('assign_project_choices',
                               [p.name for p in Project.objects().order_by('name')])
             kwargs.setdefault('set_account_choices', _allowed_account_names())
@@ -2954,6 +3016,21 @@ Impact Chain.
             data_rows = raw_rows
         return columns, data_rows
 
+    @classmethod
+    def _import_columns_and_rows(cls, text, has_header, import_format):
+        """
+        ``(columns, data_rows)`` of the previewed import text: CSV, or the
+        rows of uploaded YAML files carried as JSON (``import_format``
+        ``json``), where every key is a column.
+        """
+        if import_format == 'json':
+            try:
+                rows = json.loads(text or '[]')
+            except ValueError:
+                return [], []
+            return rows_columns([row for row in rows if isinstance(row, dict)])
+        return cls._csv_columns_and_rows(text, has_header)
+
     @staticmethod
     def _rows_as_dicts(columns, data_rows):
         """Zip each raw value row against ``columns`` into a row dict."""
@@ -2963,31 +3040,42 @@ Impact Chain.
             for row in data_rows
         ]
 
-    def _render_csv_preview(self, text, has_header, template_id, return_to):
+    def _render_csv_preview(self, text, has_header, template_id, return_to,  # pylint: disable=too-many-arguments,too-many-positional-arguments
+                            import_format='csv'):
         """
         Render the CSV import preview: parse the text into columns + sample
         rows and let the user pick which column holds the hostname before
-        anything is created. Shared by the file upload and by a pasted CSV
-        in "Bulk add hosts". Flashes and redirects when the text is empty.
+        anything is created. Shared by the file upload and by "Manual add".
+        Up to EDITABLE_PREVIEW_ROWS rows the table is editable: values per
+        host, added columns and a template per host. The account picker
+        offers the accounts the user may assign. Flashes and redirects when
+        the text is empty.
         """
-        columns, data_rows = self._csv_columns_and_rows(text, has_header)
+        columns, data_rows = self._import_columns_and_rows(
+            text, has_header, import_format)
         if not columns:
-            flash('The CSV is empty.', 'error')
-            return redirect(return_to)
+            return _preview_error('The import file is empty.', return_to)
         # Preselect a column literally named "hostname", else the first.
         hostname_column = next(
             (col for col in columns if col.strip().lower() == 'hostname'),
             columns[0],
         )
+        editable = len(data_rows) <= EDITABLE_PREVIEW_ROWS
         return render_template(
             'admin/host_csv_import_preview.html',
             columns=columns,
-            preview_rows=self._rows_as_dicts(columns, data_rows[:10]),
+            preview_rows=self._rows_as_dicts(
+                columns, data_rows if editable else data_rows[:10]),
             row_count=len(data_rows),
+            editable=editable,
+            accounts=_import_account_choices(),
             hostname_column=hostname_column,
             has_header=has_header,
             csv_text=text,
-            templates=self.get_template_list(),
+            import_format=import_format,
+            can_store_secrets=can_manage_secrets(current_user),
+            secret_columns=suggested_secret_columns(columns, hostname_column),
+            templates=list(_template_field_queryset()),
             template_id=template_id,
             return_to=return_to,
         )
@@ -3022,8 +3110,8 @@ Impact Chain.
                 labels[col] = value
         return labels, inventory
 
-    def _bulk_upsert_host(self, row, template, actor_email,  # pylint: disable=too-many-locals
-                          hostname_key='hostname'):
+    def _bulk_upsert_host(self, row, template, actor_email,  # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+                          hostname_key='hostname', on_saved=None, account=None):
         """
         Create (or update) a single host from a CSV/list row using the
         same CMDB recipe as `on_model_change`. Returns True if a new host
@@ -3041,11 +3129,17 @@ Impact Chain.
 
         host = Host.get_host(hostname)
         is_new = host.id is None
+        # An existing host outside the user's scope is not theirs to
+        # overwrite (or to move into one of their accounts).
+        if not is_new and not host_in_scope(current_user, host):
+            raise ValueError(f'{hostname}: host is outside your scope')
 
+        account_name, account_id = account or (CMDB_SOURCE_ACCOUNT_NAME,
+                                               CMDB_SOURCE_ACCOUNT_ID)
         host.object_type = 'host'
         host.is_object = False
-        host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
-        host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
+        host.source_account_id = account_id
+        host.source_account_name = account_name
         host.no_autodelete = True
         host.cache = {}
         host.last_import_sync = datetime.utcnow()
@@ -3100,27 +3194,49 @@ Impact Chain.
         )
 
         host.save()
+        if on_saved is not None:
+            on_saved(host)
         return is_new
 
-    def _run_bulk_host_create(self, rows, template_id, hostname_key='hostname'):
+    @staticmethod
+    def _store_row_secrets(host, secrets, counts):
+        """Store a row's secrets for ``host``; counts ``[stored, refused]``."""
+        stored, refused = store_row_secrets(current_user, host, secrets, 'GUI import')
+        counts[0] += stored
+        counts[1] += refused
+
+    def _run_bulk_host_create(self, rows, template_id, hostname_key='hostname',  # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+                              secret_columns=(), account=None):
         """
         Apply `_bulk_upsert_host` to every row and flash a summary. A bad
         row is counted as skipped instead of aborting the whole batch.
-        `hostname_key` names the column carrying the hostname.
+        `hostname_key` names the column carrying the hostname, `account`
+        the ``(name, id)`` every host gets. A row may name its own template
+        under ROW_TEMPLATE_KEY; only templates the user may assign count.
         """
-        template = None
-        if template_id:
-            template = Host.objects(id=template_id).first()
-            if not template:
-                flash('Selected template not found — hosts created without a template.',
-                      'warning')
+        templates = {str(tmpl.id): tmpl for tmpl in _template_field_queryset()}
+        template = templates.get(str(template_id)) if template_id else None
+        if template_id and template is None:
+            flash('Selected template not found: hosts created without a template.',
+                  'warning')
 
         created = updated = skipped = 0
+        secret_counts = [0, 0]  # stored, refused
         errors = []
         actor_email = getattr(current_user, 'email', None)
         for row in rows:
+            # Secret columns never become labels: they are taken out of the
+            # row and land in the Secret Store once the host is saved.
+            store_secrets = partial(self._store_row_secrets,
+                                    secrets=split_secrets(row, secret_columns),
+                                    counts=secret_counts)
+            row_template_id = str(row.pop(ROW_TEMPLATE_KEY, '') or '')
             try:
-                result = self._bulk_upsert_host(row, template, actor_email, hostname_key)
+                if row_template_id and row_template_id not in templates:
+                    raise ValueError(f'template {row_template_id} not allowed')
+                result = self._bulk_upsert_host(
+                    row, templates.get(row_template_id, template), actor_email,
+                    hostname_key, on_saved=store_secrets, account=account)
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 skipped += 1
                 if len(errors) < 5:
@@ -3133,40 +3249,94 @@ Impact Chain.
             else:
                 updated += 1
 
-        summary = f'Bulk add: {created} created, {updated} updated'
+        summary = f'Import: {created} created, {updated} updated'
         if skipped:
             summary += f', {skipped} skipped'
+        if secret_columns:
+            summary += f', {secret_counts[0]} secret(s) stored'
         flash(summary, 'success' if (created or updated) else 'warning')
+        if secret_counts[1]:
+            flash(f'{secret_counts[1]} secret(s) not stored: the host is outside '
+                  f'your scope.', 'error')
         for err in errors:
             flash(f'Row error: {err}', 'error')
+
+    @classmethod
+    def _pasted_import_text(cls, raw, paste_format='auto'):
+        """
+        ``(text, import_format)`` of pasted text for the preview. The format
+        is picked on the Manual add form: ``hosts`` (one hostname per line),
+        ``csv``, ``yaml``, ``kv`` (a key/value list: ``key: value``,
+        ``key=value`` or tab separated, hosts split by an empty line or
+        ``---``) or ``auto``, which tells YAML, CSV and a host list apart.
+        Raises ValueError with the message for the user.
+        """
+        if paste_format == 'auto':
+            if looks_like_yaml(raw):
+                paste_format = 'yaml'
+            elif cls._looks_like_csv(raw):
+                paste_format = 'csv'
+            else:
+                paste_format = 'hosts'
+        if paste_format == 'yaml':
+            return json.dumps(yaml_rows([('pasted text', raw)])), 'json'
+        if paste_format == 'kv':
+            return json.dumps(key_value_rows(raw)), 'json'
+        if paste_format == 'csv':
+            return raw, 'csv'
+        rows = [{'hostname': line.strip()} for line in raw.splitlines() if line.strip()]
+        return json.dumps(rows), 'json'
 
     @expose('/bulk_add', methods=['POST'])
     def bulk_add_process(self):
         """
-        Create hosts from a pasted CSV or plain hostname list, optionally
-        assigning a CMDB template. CMDB mode only.
+        "Manual add": pasted hostnames (one per line), CSV or YAML. All of
+        them go through the editable import preview, where values, template
+        and account are set before anything is created. CMDB mode only.
         """
         return_to = _safe_return_to(request.form.get('return_to'))
         if not app.config.get('CMDB_MODE'):
-            flash('Bulk add is only available in CMDB mode.', 'error')
+            flash('Manual add is only available in CMDB mode.', 'error')
             return redirect(return_to)
         if not current_user.is_authenticated or not current_user.has_right('host'):
             return Response("Unauthorized", status=401)
 
         raw = request.form.get('hosts_text', '') or ''
         if not raw.strip():
-            flash('Please paste at least one hostname.', 'error')
-            return redirect(return_to)
+            return _preview_error('Please paste at least one hostname.', return_to)
 
-        # A pasted CSV goes through the same preview as an uploaded file, so
-        # the user picks the hostname column instead of it being guessed.
-        if self._looks_like_csv(raw):
-            return self._render_csv_preview(
-                raw, True, request.form.get('template_id', ''), return_to)
+        # Everything goes through the preview: the user picks the hostname
+        # column, the Secret Store columns and the account, and edits the
+        # values per host before anything is created.
+        try:
+            text, import_format = self._pasted_import_text(
+                raw, request.form.get('paste_format') or 'auto')
+        except ValueError as exc:
+            return _preview_error(str(exc), return_to)
+        return self._render_csv_preview(
+            text, True, request.form.get('template_id', ''), return_to,
+            import_format=import_format)
 
-        rows = [{'hostname': line.strip()} for line in raw.splitlines() if line.strip()]
-        self._run_bulk_host_create(rows, request.form.get('template_id') or None)
-        return redirect(return_to)
+    @staticmethod
+    def _read_import_uploads(uploads):
+        """
+        ``(text, import_format)`` of the uploaded files: one CSV as it is,
+        or one or more YAML files as JSON rows. Raises ValueError with the
+        message for the user.
+        """
+        uploads = [upload for upload in uploads if upload and upload.filename]
+        if not uploads:
+            raise ValueError('Please choose a CSV or YAML file to import.')
+        try:
+            texts = [(upload.filename, upload.read().decode('utf-8-sig'))
+                     for upload in uploads]
+        except UnicodeDecodeError as exc:
+            raise ValueError('Could not read the file: expected UTF-8 encoded text.') from exc
+        if all(is_yaml_filename(name) for name, _text in texts):
+            return json.dumps(yaml_rows(texts)), 'json'
+        if len(texts) == 1:
+            return texts[0][1], 'csv'
+        raise ValueError('Several files can only be imported as YAML.')
 
     @expose('/csv_import', methods=['POST'])
     def csv_import(self):
@@ -3186,22 +3356,20 @@ Impact Chain.
         # A fresh upload carries the file; a re-preview (header toggle)
         # re-submits the already-read text in a hidden field.
         text = request.form.get('csv_text')
+        import_format = request.form.get('import_format') or 'csv'
         if text is None:
-            upload = request.files.get('csv_file')
-            if not upload or not upload.filename:
-                flash('Please choose a CSV file to import.', 'error')
-                return redirect(return_to)
             try:
-                text = upload.read().decode('utf-8-sig')
-            except UnicodeDecodeError:
-                flash('Could not read the file — expected a UTF-8 encoded CSV.', 'error')
-                return redirect(return_to)
+                text, import_format = self._read_import_uploads(
+                    request.files.getlist('csv_file'))
+            except ValueError as exc:
+                return _preview_error(str(exc), return_to)
             has_header = True
         else:
             has_header = request.form.get('has_header') == '1'
 
         return self._render_csv_preview(
-            text, has_header, request.form.get('template_id', ''), return_to)
+            text, has_header, request.form.get('template_id', ''), return_to,
+            import_format=import_format)
 
     @expose('/csv_import_run', methods=['POST'])
     def csv_import_run(self):
@@ -3219,15 +3387,27 @@ Impact Chain.
         text = request.form.get('csv_text') or ''
         has_header = request.form.get('has_header') == '1'
         hostname_column = request.form.get('hostname_column') or ''
-        columns, data_rows = self._csv_columns_and_rows(text, has_header)
+        columns, data_rows = self._import_columns_and_rows(
+            text, has_header, request.form.get('import_format') or 'csv')
         if not hostname_column or hostname_column not in columns:
             flash('Please choose which column holds the hostname.', 'error')
+            return redirect(return_to)
+        secret_columns = [col for col in request.form.getlist('secret_columns')
+                          if col in columns and col != hostname_column]
+        if secret_columns and not can_manage_secrets(current_user):
+            flash('Storing secrets needs the Secret Store role.', 'error')
+            return redirect(return_to)
+        account = _import_account(request.form.get('account') or CMDB_SOURCE_ACCOUNT_NAME)
+        if account is None:
+            flash('You may not import into this account.', 'error')
             return redirect(return_to)
 
         rows = self._rows_as_dicts(columns, data_rows)
         self._run_bulk_host_create(
             rows, request.form.get('template_id') or None,
             hostname_key=hostname_column,
+            secret_columns=secret_columns,
+            account=account,
         )
         return redirect(return_to)
 

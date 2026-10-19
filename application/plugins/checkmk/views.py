@@ -9,7 +9,7 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter  # pylint: disable=no-name-in-module
 from pygments.lexers import DjangoLexer  # pylint: disable=no-name-in-module
 
-from wtforms import HiddenField, StringField, PasswordField, SelectMultipleField, SelectField, \
+from wtforms import HiddenField, StringField, SelectMultipleField, SelectField, \
     TextAreaField
 from wtforms.validators import ValidationError
 from flask_admin import BaseView
@@ -2487,71 +2487,6 @@ class CheckmkInventorizeAttributesView(DefaultModelView):
                      rules.Field('attribute_source')]),
         ),
     ]
-
-    def is_accessible(self):
-        """ Overwrite """
-        return current_user.is_authenticated and current_user.has_right('checkmk')
-
-class CheckmkPasswordView(DefaultModelView):
-    """
-    Checkmk Password View
-    """
-
-    form_rules = [
-        rules.HTML(f'<a href="{docu_links["cmk_password_store"]}" target="_blank" '
-                   f'class="badge badge-light" style="margin-bottom: 8px;">'
-                   f'<i class="fa fa-info-circle"></i> Documentation</a>'),
-        *modern_form(
-            section('1', 'main', 'Basics',
-                    'Internal name, notes and activation.',
-                    [rules.Field('name'),
-                     rules.Field('documentation'),
-                     rules.Field('enabled')]),
-            section('2', 'out', "Checkmk Password Store",
-                    'Fields synced into Checkmk\'s built-in password store.',
-                    [rules.Field('title'),
-                     rules.Field('comment'),
-                     rules.Field('documentation_url'),
-                     rules.Field('owner'),
-                     rules.Field('password'),
-                     rules.Field('shared')]),
-        ),
-    ]
-
-    column_filters = (
-       FilterLike(
-            "title",
-           'Title'
-       ),
-       FilterLike(
-            "comment",
-           'Comment'
-       ),
-    )
-
-    column_editable_list = [
-        'enabled'
-
-    ]
-
-    form_excluded_columns = [
-       "password_crypted"
-    ]
-
-    column_exclude_list = [
-        'password_crypted', 'shared', 'documentation_url',
-        'owner',
-    ]
-
-    def scaffold_form(self):
-        form_class = super().scaffold_form()
-        form_class.password = PasswordField("Password")
-        return form_class
-
-    def on_model_change(self, form, model, is_created):
-        if form.password.data:
-            model.set_password(form.password.data)
-        return super().on_model_change(form, model, is_created)
 
     def is_accessible(self):
         """ Overwrite """

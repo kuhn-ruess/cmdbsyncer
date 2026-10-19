@@ -74,6 +74,7 @@ from application.helpers.get_account import (
     get_account_by_name,
     AccountNotFoundError,
 )
+from application.helpers.secret_access import set_acting_user
 from application.plugins.rules.rule_definitions import rules as enabled_rules
 from application.plugins.rules.rule_import_export import (
     iter_rules_of_type,
@@ -153,6 +154,9 @@ def _current_user():
     user = _request_user.get() or _AUTH_USER
     if user is None:
         raise MCPAuthError("Not authenticated")
+    # Shared helpers (rule export/import, Secret Store) ask for the acting
+    # user; outside a Flask request this is how they learn it.
+    set_acting_user(user)
     return user
 
 

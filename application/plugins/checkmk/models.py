@@ -5,10 +5,10 @@ Checkmk Rules
 # additional public methods to satisfy pylint.
 # pylint: disable=too-few-public-methods
 from mongoengine import DENY
-from cryptography.fernet import Fernet
-from application import db, app
+from application import db
 from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
 from application.models.account import Account
+from application.models.secret import Secret
 
 
 
@@ -827,38 +827,10 @@ class CheckmkBiAggregation(ListSourceMixin, db.Document):
     }
 #.
 #   .-- Checkmk Passwords
-class CheckmkPassword(db.Document):
-    """
-    Checkmk Passwords
-    """
-    name = db.StringField(required=True, unique=True)
-    documentation = db.StringField()
-
-    title = db.StringField(required=True)
-    comment = db.StringField()
-    documentation_url = db.StringField()
-    password_crypted = db.StringField()
-    owner = db.StringField(default="admin", required=True)
-    shared = db.ListField(field=db.StringField())
-    last_export_hash = db.StringField()
-
-    def set_password(self, password):
-        """
-        Encryp Password
-        """
-        f = Fernet(app.config['CRYPTOGRAPHY_KEY'])
-        self.password_crypted = f.encrypt(str.encode(password)).decode('utf-8')
-
-
-    def get_password(self):
-        """
-        Decrypt Password
-        """
-        f = Fernet(app.config['CRYPTOGRAPHY_KEY'])
-        return f.decrypt(str.encode(self.password_crypted)).decode('utf-8')
-
-
-    enabled = db.BooleanField()
+# The Checkmk password store became the global Secret Store. The model lives
+# in application.models.secret and keeps this collection; the old name stays
+# importable for the password export, rule import/export and plugins.
+CheckmkPassword = Secret
 #.
 #   .-- Checkmk DCD Rules
 
