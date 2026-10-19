@@ -1,0 +1,152 @@
+{% extends 'admin/master.html' %}
+
+{% macro attr_value(value) -%}
+{%- if value is mapping -%}
+<ul class="list-unstyled mb-0">
+{%- for k, v in value.items() %}
+  <li><code>{{ k }}</code>: {{ attr_value(v) }}</li>
+{%- endfor %}
+</ul>
+{%- elif value is iterable and value is not string -%}
+{{ value|join(', ') }}
+{%- else -%}
+{{ value }}
+{%- endif -%}
+{%- endmacro %}
+
+{% block body %}
+<div class="container-fluid mt-4" style="max-width: 1400px;">
+    <h3><i class="fa fa-bug"></i> Folder Debug: <code>{{ path }}</code></h3>
+    <p>
+        Account: <strong>{{ account or 'none (every host, rules only)' }}</strong>.
+        <a href="{{ url_for('.index', account=account, calculate=1) }}">
+            <i class="fa fa-arrow-left"></i> All folders</a>
+        <a href="{{ docu_link }}" target="_blank" class="badge badge-light">
+            <i class="fa fa-info-circle"></i> Documentation</a>
+    </p>
+    <p class="text-muted">
+        Which host and which Export Rule gave this folder which option, in the
+        order the export reads them, and what the merge made of each value:
+        lists (like the contact groups) are joined, for a single value
+        (title, site, the <code>use</code> flag, ...) the first one wins.
+        Read only, nothing is sent to Checkmk or saved.
+    </p>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% if folder %}
+    <div class="card app-card mb-3">
+        <div class="card-header"><strong>Folder options sent to Checkmk</strong></div>
+        <div class="card-body">
+            {% if folder.attributes %}
+            {{ attr_value(folder.attributes) }}
+            {% else %}
+            <span class="text-muted">No folder options, the folder keeps what it has in Checkmk.</span>
+            {% endif %}
+            {% if folder.hidden_contributions %}
+            <div class="alert alert-warning mt-2 mb-0">
+                {{ folder.hidden_contributions }} contribution(s) of hosts outside
+                your scope are not shown and not part of the value above. The
+                value sent to Checkmk may hold more.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card app-card mb-3">
+        <div class="card-header"><strong>Contributions and merge</strong></div>
+        <div class="card-body">
+            {% if not entries %}
+            <span class="text-muted">No host gives this folder options.</span>
+            {% else %}
+            <div class="table-scroll">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Host</th>
+                        <th>Export Rule and matching conditions</th>
+                        <th>Option</th>
+                        <th>Value</th>
+                        <th>Merge</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for entry, notes in entries %}
+                    {% set outer = loop %}
+                    {% for note in notes %}
+                    <tr>
+                        {% if loop.first %}
+                        <td rowspan="{{ notes|length }}">{{ outer.index }}</td>
+                        <td rowspan="{{ notes|length }}">
+                            <a href="{{ url_for('host.debug', hostname=entry.hostname) }}">{{ entry.hostname }}</a>
+                            {% if entry.kind == 'create' %}
+                            <span class="badge badge-light">Create Empty Folder</span>
+                            {% endif %}
+                        </td>
+                        <td rowspan="{{ notes|length }}">
+                            {% if entry.rule %}
+                            <a href="{{ rule_url }}{{ entry.rule.id }}">{{ entry.rule.name }}</a>
+                            <small class="text-muted">({{ entry.rule.condition_type }})</small>
+                            {% for condition in entry.rule.conditions %}
+                            <div><small>matched: {{ condition }}</small></div>
+                            {% endfor %}
+                            {% for param in entry.rule.params %}
+                            <div><small class="text-muted">{{ param.action }}:</small>
+                                <code>{{ param.param }}</code></div>
+                            {% endfor %}
+                            {% else %}
+                            <span class="text-muted">unknown</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
+                        <td><code>{{ note.path or '(all)' }}</code></td>
+                        <td>{% if note.value is not none %}<code>{{ note.value }}</code>{% endif %}</td>
+                        <td>
+                            {% if note.effect == 'set' %}
+                            <span class="badge badge-success">set</span>
+                            {% elif note.effect == 'added' %}
+                            <span class="badge badge-success">added to the list</span>
+                            {% elif note.effect == 'present' %}
+                            <span class="badge badge-secondary">already in the list</span>
+                            {% elif note.effect == 'same' %}
+                            <span class="badge badge-secondary">same value already set</span>
+                            {% elif note.effect == 'ignored' %}
+                            <span class="badge badge-warning">ignored, first value wins</span>
+                            <small>kept: <code>{{ note.kept }}</code></small>
+                            {% elif note.effect == 'dropped' %}
+                            <span class="badge badge-warning">dropped, renders to no value</span>
+                            {% elif note.effect == 'broken' %}
+                            <span class="badge badge-danger">broken, skipped by the export</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card app-card mb-3">
+        <div class="card-header"><strong>Hosts in this folder</strong></div>
+        <div class="card-body">
+            {% if folder.hosts %}
+            {% for hostname in folder.hosts %}
+            <a href="{{ url_for('host.debug', hostname=hostname) }}">{{ hostname }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+            {% else %}
+            <span class="text-muted">No host lands directly in this folder.</span>
+            {% endif %}
+            {% if folder.hidden_hosts %}
+            <small class="text-muted">(+{{ folder.hidden_hosts }} outside your scope)</small>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

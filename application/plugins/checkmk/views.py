@@ -2811,6 +2811,106 @@ class CheckmkUserGenerationPreviewView(BaseView):
         )
 
 
+def visible_hostnames(user):
+    """
+    Hostnames ``user`` may see by their account and template scope, the
+    same rule as the Host list. None for an unrestricted user.
+    """
+    # pylint: disable-next=import-outside-toplevel
+    from application.models.host_templates import scope_hosts_to_templates
+    accounts = user.account_scope()
+    templates = user.template_scope()
+    if accounts is None and templates is None:
+        return None
+    query = Host.objects()
+    if accounts is not None:
+        query = query.filter(source_account_name__in=list(accounts))
+    return set(scope_hosts_to_templates(query, templates).scalar('hostname'))
+
+
+class CheckmkFolderView(BaseView):
+    """
+    The Checkmk folders the host export computes: which hosts land in a
+    folder and which folder options (contact groups, title, ...) it gets.
+    The debug of a folder shows which host and which Export Rule gave which
+    value and how the values merge.
+
+    Read only: the rules run without Checkmk, no pool seat is taken or
+    freed and nothing is saved. A user with an account or template scope
+    only sees the folders of their hosts, see ``scope_folders``.
+    """
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
+    @staticmethod
+    def _accounts():
+        return [a.name for a in
+                Account.objects(enabled=True, type='cmkv2').order_by('name')]
+
+    def _calculate(self, account):
+        """``(calculation, folders, error)`` for ``account`` ('' = none)."""
+        # pylint: disable=import-outside-toplevel
+        from .folder_view import FolderCalculation, scope_folders
+        if account and account not in self._accounts():
+            return None, None, f"Unknown Checkmk account: {account}"
+        try:
+            calculation = FolderCalculation(account)
+            calculation.run()
+            folders = scope_folders(calculation.folders(),
+                                    visible_hostnames(current_user))
+        except Exception as exp:  # pylint: disable=broad-exception-caught
+            return None, None, f"{type(exp).__name__}: {exp}"
+        return calculation, folders, None
+
+    @expose('/', methods=['GET'])
+    def index(self):
+        """The folder list of the chosen account"""
+        account = request.args.get('account', '').strip()
+        folders, error = None, None
+        if request.args.get('calculate'):
+            _, folders, error = self._calculate(account)
+        rows = []
+        if folders:
+            # pylint: disable-next=import-outside-toplevel
+            from .folder_view import subtree_hosts
+            for path in sorted(folders):
+                folder = folders[path]
+                rows.append(dict(folder,
+                                 depth=0 if path == '/' else path.count('/'),
+                                 name=path if path == '/' else path.rsplit('/', 1)[1],
+                                 total_hosts=len(subtree_hosts(folders, path))))
+        return self.render(
+            'admin/checkmk_folders.html',
+            accounts=self._accounts(), account=account,
+            calculated=bool(request.args.get('calculate')),
+            rows=rows, error=error,
+            docu_link=docu_links['cmk_folders'])
+
+    @expose('/debug', methods=['GET'])
+    def debug(self):
+        """Who gave a folder which option, and what the merge made of it"""
+        account = request.args.get('account', '').strip()
+        path = request.args.get('folder', '').strip() or '/'
+        calculation, folders, error = self._calculate(account)
+        folder = None
+        if folders is not None:
+            folder = folders.get(path)
+            if folder is None:
+                error = f"No folder {path} for this account and your scope"
+            else:
+                calculation.attribute_rules(folder)
+        rule_url = f"{app.config['BASE_PREFIX']}admin/checkmkrule/edit/?id="
+        return self.render(
+            'admin/checkmk_folder_debug.html',
+            account=account, path=path, folder=folder, error=error,
+            entries=list(zip(folder['contributions'], folder['trace']))
+            if folder else [],
+            rule_url=rule_url,
+            docu_link=docu_links['cmk_folders'])
+
+
 class CheckmkDataQualityView(BaseView):
     """
     Data Quality area: upload a CSV of hostnames and check them against a

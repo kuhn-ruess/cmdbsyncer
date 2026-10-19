@@ -788,6 +788,8 @@ for _mod_name, _mod_path in [
     ("poolfolder", "poolfolder.py"),
     ("sitepool", "sitepool.py"),
     ("rules", "rules.py"),
+    # folder_view needs rules and syncer, both loaded by now.
+    ("folder_view", "folder_view.py"),
     ("bi", "bi.py"),
     # cmk_rules is loaded earlier (before syncer) — see above.
     ("dcd", "dcd.py"),

@@ -236,6 +236,56 @@ print('USER_GENERATION_PREVIEW_OK')
 '''
 
 
+# The Checkmk Folders page and the debug of a folder, calculated from the
+# real rules: two hosts share a folder and each gives its contact group.
+# Nothing is saved, and a user with an account scope sees only their part.
+CHECKMK_FOLDERS = LOGIN + '''
+from application.models.host import Host
+from application.models.user import User
+from application.plugins.checkmk.models import CheckmkRule, CheckmkRuleOutcome
+
+for name, team, source in (('folder-host-a', 'team_a', 'source_a'),
+                           ('folder-host-b', 'team_b', 'source_b')):
+    host = Host.get_host(name)
+    host.update_host({'team': team})
+    host.source_account_name = source
+    host.save()
+CheckmkRule(name='smoke-folder-rule', enabled=True, condition_typ='anyway',
+            outcomes=[CheckmkRuleOutcome(
+                action='move_folder',
+                action_param="shared|{'contactgroups': "
+                             "{'groups': ['{{ team }}'], 'use': True}}")]).save()
+before = {h.hostname: (h.cache, h.folder) for h in Host.objects()}
+
+base = '/admin/checkmk_folders'
+check(f'{base}/', 200)
+page = check(f'{base}/?calculate=1', 200).get_data(as_text=True)
+for needle in ('/shared', 'team_a', 'team_b', 'folder-host-b'):
+    if needle not in page:
+        fail(f'the folder list does not show {needle!r}')
+page = check(f'{base}/debug?folder=/shared', 200).get_data(as_text=True)
+for needle in ('smoke-folder-rule', 'added to the list', 'contactgroups.groups',
+               'folder-host-a', 'folder-host-b'):
+    if needle not in page:
+        fail(f'the folder debug does not show {needle!r}')
+after = {h.hostname: (h.cache, h.folder) for h in Host.objects()}
+eq(after, before, 'hosts after the calculation')
+
+user = User.objects.get(email='smoke@example.com')
+user.restrict_to_accounts = ['source_a']
+user.save()
+page = check(f'{base}/?calculate=1', 200).get_data(as_text=True)
+if 'team_a' not in page:
+    fail('a scoped user does not see their contact group')
+for needle in ('team_b', 'folder-host-b'):
+    if needle in page:
+        fail(f'a scoped user sees {needle!r} of a host outside their scope')
+page = check(f'{base}/debug?folder=/shared', 200).get_data(as_text=True)
+if 'team_b' in page or 'outside' not in page:
+    fail('the scoped folder debug leaks or does not say what it leaves out')
+print('CHECKMK_FOLDERS_OK')
+'''
+
 @unittest.skipUnless(HAVE_MONGOMOCK, SKIP_REASON)
 class TestWebRequestsSmoke(unittest.TestCase):
     """Walk the real request paths in both CMDB modes."""
@@ -273,6 +323,10 @@ class TestWebRequestsSmoke(unittest.TestCase):
     def test_host_create_follows_cmdb_mode(self):
         """Hand-made hosts are offered in CMDB mode and only there."""
         self._run(HOST_CREATE_GATE, 'HOST_CREATE_GATE_OK')
+
+    def test_checkmk_folders(self):
+        """Folder list and folder debug, read only and scoped."""
+        self._run(CHECKMK_FOLDERS, 'CHECKMK_FOLDERS_OK')
 
     def test_user_generation_preview_renders(self):
         """The preview shows what a generation run would create."""

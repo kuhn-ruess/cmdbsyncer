@@ -143,8 +143,8 @@ class SyncCMK2(CMK2):
 
     limit = False
 
-    def __init__(self, account=False):
-        super().__init__(account)
+    def __init__(self, account=False, probe_version=True):
+        super().__init__(account, probe_version=probe_version)
         # Per-instance run state. Keeping these on the class caused queues
         # and counters to leak between accounts / repeated runs in one
         # process, which in turn triggered wrong cleanup and duplicate

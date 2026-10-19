@@ -1,0 +1,122 @@
+{% extends 'admin/master.html' %}
+
+{% macro attr_value(value) -%}
+{%- if value is mapping -%}
+<ul class="list-unstyled mb-0">
+{%- for k, v in value.items() %}
+  <li><code>{{ k }}</code>: {{ attr_value(v) }}</li>
+{%- endfor %}
+</ul>
+{%- elif value is iterable and value is not string -%}
+{{ value|join(', ') }}
+{%- else -%}
+{{ value }}
+{%- endif -%}
+{%- endmacro %}
+
+{% block body %}
+<div class="container-fluid mt-4" style="max-width: 1400px;">
+    <h3><i class="fa fa-folder"></i> Checkmk Folders and Folder Options</h3>
+    <p>
+        The folders the host export of the chosen account would use, the hosts
+        landing in each of them and the folder options (contact groups, title,
+        tags, ...) the export merges from those hosts. Calculated from the
+        rules and hosts of the syncer: Checkmk is not asked, no pool seat is
+        taken or freed and nothing is saved. A host waiting for its first pool
+        folder shows up where it is without one.
+        <a href="{{ docu_link }}" target="_blank" class="badge badge-light">
+            <i class="fa fa-info-circle"></i> Documentation</a>
+    </p>
+
+    <form method="GET" action="{{ url_for('.index') }}" class="card app-card mb-4">
+        <div class="card-body">
+            <input type="hidden" name="calculate" value="1"/>
+            <div class="form-row align-items-end">
+                <div class="form-group col-md-5">
+                    <label for="account">Checkmk account</label>
+                    <select class="form-control" id="account" name="account">
+                        <option value="">no account: every host, rules only</option>
+                        {% for name in accounts %}
+                        <option value="{{ name }}" {% if name == account %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="form-text text-muted">
+                        With an account its host selection applies as in its
+                        export (object filter, limits, Projects, folder scope).
+                    </small>
+                </div>
+                <div class="form-group col-md-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa fa-calculator"></i> Calculate
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    {% if calculated and not error %}
+    <div class="card app-card">
+        <div class="card-body">
+            <p class="text-muted">{{ rows|length }} folder(s).</p>
+            <div class="table-scroll">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Folder</th>
+                        <th>Hosts</th>
+                        <th>Folder options sent to Checkmk</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td style="padding-left: {{ 0.5 + row.depth * 1.5 }}em;">
+                            <i class="fa fa-folder-o"></i>
+                            <code title="{{ row.path }}">{{ row.name }}</code>
+                        </td>
+                        <td>
+                            {% if row.hosts %}
+                            <details>
+                                <summary>{{ row.hosts|length }} here</summary>
+                                {{ row.hosts|join(', ') }}
+                            </details>
+                            {% else %}
+                            <span class="text-muted">0 here</span>
+                            {% endif %}
+                            {% if row.total_hosts != row.hosts|length %}
+                            <small class="text-muted">{{ row.total_hosts }} with sub-folders</small>
+                            {% endif %}
+                            {% if row.hidden_hosts %}
+                            <small class="text-muted">(+{{ row.hidden_hosts }} outside your scope)</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if row.attributes %}
+                            {{ attr_value(row.attributes) }}
+                            {% else %}
+                            <span class="text-muted">none</span>
+                            {% endif %}
+                            {% if row.contributions|selectattr('error')|list %}
+                            <span class="badge badge-danger">broken option</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            <a class="btn btn-sm btn-secondary"
+                               href="{{ url_for('.debug', account=account, folder=row.path) }}">
+                                <i class="fa fa-bug"></i> Debug</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

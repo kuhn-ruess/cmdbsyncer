@@ -37,6 +37,7 @@ from .views import (
     CheckmkBiRuleView,
     CheckmkCacheView,
     CheckmkDataQualityView,
+    CheckmkFolderView,
     CheckmkRuleOptimizationView,
     CheckmkDCDView,
     CheckmkDowntimeView,
@@ -238,6 +239,15 @@ def register_admin_views(admin):
             endpoint="checkmk_user_generation_preview",
             menu_icon_type='fa',
             menu_icon_value='fa-eye',
+        )
+    )
+    admin.add_view(
+        CheckmkFolderView(
+            name="Folders and Folder Options",
+            category="Checkmk",
+            endpoint="checkmk_folders",
+            menu_icon_type='fa',
+            menu_icon_value='fa-folder',
         )
     )
     admin.add_view(

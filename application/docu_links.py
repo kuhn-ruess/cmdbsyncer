@@ -18,6 +18,7 @@ docu_links = {
     'cmk_setup_rules': 'https://docs.cmdbsyncer.de/checkmk/rules_management/',
     'cmk_hosttags': 'https://docs.cmdbsyncer.de/checkmk/create_hosttags/',
     'cmk_password_store': 'https://docs.cmdbsyncer.de/checkmk/password_store/',
+    'cmk_folders': 'https://docs.cmdbsyncer.de/checkmk/folders/',
 
     # Enterprise features — referenced from cmdbsyncer_enterprise views.
     'ent_overview': 'https://docs.cmdbsyncer.de/enterprise/',
