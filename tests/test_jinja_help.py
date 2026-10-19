@@ -51,7 +51,8 @@ class JinjaHelpTest(unittest.TestCase):
             'application.helpers.jinja_help',
             os.path.join('application', 'helpers', 'jinja_help.py'))
         cls.model = types.ModuleType('application.models.lookup_table')
-        cls.model.LookupTable = MagicMock(name='LookupTable')
+        cls.lookup_table = MagicMock(name='LookupTable')
+        cls.model.LookupTable = cls.lookup_table
         sys.modules['application.models.lookup_table'] = cls.model
 
     @classmethod
@@ -76,17 +77,30 @@ class JinjaHelpTest(unittest.TestCase):
 
     def test_every_snippet_is_one_line_valid_jinja(self):
         for group in (self.help.FUNCTIONS, self.help.FILTERS,
-                      self.help.BASICS, self.help.RULE_VARIABLES):
+                      self.help.BASICS, self.help.RULE_VARIABLES,
+                      self.help.SETUP_RULE_VARIABLES):
             for name, snippet, _text in group:
                 self.assertNotIn('\n', snippet, name)
                 self.assertIsNone(self.jinja.check_jinja_syntax(snippet), name)
+
+    def test_a_form_hands_in_its_own_variables(self):
+        query = self.lookup_table.objects.only.return_value.order_by
+        query.return_value = []
+        names = {entry['name'] for entry in self.help.jinja_help(
+            ['folder'], variables=self.help.SETUP_RULE_VARIABLES)['entries']
+                 if entry['group'] == 'Variables'}
+        self.assertIn('HOST_FOLDER', names)
+        self.assertNotIn('FIRST_MATCHING_TAG', names)
+        default = {entry['name'] for entry in self.help.jinja_help(
+            ['new_value'])['entries'] if entry['group'] == 'Variables'}
+        self.assertIn('FIRST_MATCHING_TAG', default)
 
     def test_lookup_tables_list_their_key_and_columns(self):
         table = MagicMock(entries='location;datacenter;owner\nsite-a;DC1;team-a\n')
         table.name = 'datacenters'
         empty = MagicMock(entries='')
         empty.name = 'empty'
-        query = self.model.LookupTable.objects.only.return_value.order_by
+        query = self.lookup_table.objects.only.return_value.order_by
         query.return_value = [table, empty]
         self.assertEqual(self.help.lookup_tables(), [
             {'name': 'datacenters', 'key': 'location',

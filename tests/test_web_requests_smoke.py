@@ -113,6 +113,61 @@ if 'jinja-help-btn' not in page:
 print('CREATE_LOOKUP_TABLE_OK')
 '''
 
+# The Setup Rule form: Jinja help next to Value Template and Folder (with
+# HOST_FOLDER), the key/value editor of the label conditions and its
+# suggestions, and HOST_FOLDER refused where there is no host.
+SETUP_RULE_FORM = LOGIN + '''
+from application.models.host import Host
+from application.plugins.checkmk.models import CheckmkRuleMngmt, RuleMngmtOutcome
+
+base = '/admin/checkmkrulemngmt'
+page = check(f'{base}/new/', 200).get_data(as_text=True)
+for needle in ('jinja-help-btn', 'HOST_FOLDER', 'label-cond-endpoint',
+               '_label_suggestions'):
+    if needle not in page:
+        fail(f'the Setup Rule form does not show {needle!r}')
+
+host = Host.get_host('smoke-label-host')
+host.update_host({'os': 'linux'})
+host.save()
+CheckmkRuleMngmt(
+    name='smoke-labels', enabled=True, condition_typ='anyway',
+    outcomes=[RuleMngmtOutcome(ruleset='r', folder='/', value_template='1',
+                               condition_label_template='os:windows',
+                               condition_service_label='team:web')]).save()
+eq(check(f'{base}/_label_suggestions?kind=host', 200).get_json()['suggestions'],
+   ['os'], 'host label keys')
+eq(check(f'{base}/_label_suggestions?kind=host&key=os', 200).get_json()['suggestions'],
+   ['linux', 'windows'], 'host label values')
+eq(check(f'{base}/_label_suggestions?kind=service', 200).get_json()['suggestions'],
+   ['team'], 'service label keys')
+
+def post(name, expected, rule_source, list_source=''):
+    form = f'{base}/new/'
+    return check(form, expected, method='post', data={
+        'csrf_token': csrf(form),
+        'name': name,
+        'condition_typ': 'anyway',
+        'rule_source': rule_source,
+        'list_source': list_source,
+        'enabled': 'y',
+        'outcomes-0-ruleset': 'checkgroup_parameters:filesystem',
+        'outcomes-0-folder': '{{ HOST_FOLDER }}',
+        'outcomes-0-folder_index': '0',
+        'outcomes-0-value_template': '{}',
+    })
+
+answer = post('smoke-folder-list', 200, 'list', 'service\\nDisk C:\\n')
+if CheckmkRuleMngmt.objects(name='smoke-folder-list').count():
+    fail('a list rule with HOST_FOLDER was saved')
+if 'needs a host' not in answer.get_data(as_text=True):
+    fail('the refused list rule does not say why')
+post('smoke-folder-host', 302, 'hosts')
+if CheckmkRuleMngmt.objects(name='smoke-folder-host').count() != 1:
+    fail('a per host rule with HOST_FOLDER was not saved')
+print('SETUP_RULE_FORM_OK')
+'''
+
 # Creating hosts by hand is a CMDB_MODE feature. With the flag off the two
 # views must send the user away instead of offering the form — that is the
 # behaviour the can_create/can_edit properties carry, and getting it wrong
@@ -210,6 +265,10 @@ class TestWebRequestsSmoke(unittest.TestCase):
     def test_lookup_table_can_be_created(self):
         """A lookup table form saves a valid table and refuses a broken one."""
         self._run(CREATE_LOOKUP_TABLE, 'CREATE_LOOKUP_TABLE_OK')
+
+    def test_setup_rule_form_helpers(self):
+        """Jinja help, label editor and HOST_FOLDER of the Setup Rule form."""
+        self._run(SETUP_RULE_FORM, 'SETUP_RULE_FORM_OK')
 
     def test_host_create_follows_cmdb_mode(self):
         """Hand-made hosts are offered in CMDB mode and only there."""

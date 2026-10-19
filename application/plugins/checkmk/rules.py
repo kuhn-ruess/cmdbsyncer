@@ -239,6 +239,10 @@ class CheckmkRule(Rule):
     found_poolfolder_rule = False # Spcific Helper for this kind of action
     found_sitepool_rule = False # Specific Helper for the site_pool action
     db_host = False
+    # False: only read the folder and site a host is locked to in its pool,
+    # never take or free a seat. For callers that only want to know where
+    # a host would land (see host_folder), not move it.
+    assign_pools = True
 
     def fix_and_format_foldername(self, folder):
         """ Format Foldername
@@ -416,6 +420,9 @@ class CheckmkRule(Rule):
                     folder_name = self.db_host.get_folder()
                     outcomes['extra_folder_options'] += folder_name
                     outcomes['move_folder'] += folder_name
+                elif not self.assign_pools:
+                    # Not assigned yet: the next host export picks the folder.
+                    pass
                 else:
                     # Assign an new, free folder to Host
                     only_pools = None
@@ -449,6 +456,8 @@ class CheckmkRule(Rule):
                 # Sticky: keep the site the host was assigned before.
                 if self.db_host.get_pool_site():
                     outcomes['custom_attributes']['site'] = self.db_host.get_pool_site()
+                elif not self.assign_pools:
+                    pass
                 else:
                     # Assign a new, least-loaded site from the pool.
                     pool_name = _maybe_render(action_param, **self.attributes).strip()
@@ -588,6 +597,8 @@ class CheckmkRule(Rule):
 
         self.db_host = db_host
         outcomes = self.check_rules(hostname)
+        if not self.assign_pools:
+            return outcomes
         # This Host does not match to an poolfolder rule
         if not self.found_poolfolder_rule:
             if db_host.get_folder():
@@ -601,3 +612,36 @@ class CheckmkRule(Rule):
                 db_host.lock_to_pool_site(False)
                 sitepool.release_site_for_site_id(old_site)
         return outcomes
+
+
+def host_folder_engine():
+    """
+    The host export's folder rules (Checkmk > Export Rules) as an engine
+    that never takes or frees a pool seat, for ``host_folder``.
+    """
+    from .models import CheckmkRule as CheckmkRuleModel  # pylint: disable=import-outside-toplevel
+    engine = CheckmkRule()
+    engine.assign_pools = False
+    engine.rules = CheckmkRuleModel.objects(enabled=True).order_by('sort_field')
+    return engine
+
+
+def host_folder(engine, db_host, attributes):
+    """
+    The folder the host export puts the host in: its Move to Folder
+    outcome, or the pool folder it is locked to, else ``/``. The host and
+    its outcome cache stay untouched.
+    """
+    outcomes = engine.get_outcomes(db_host, attributes, persist_cache=False,
+                                   use_cache=False)
+    return outcomes.get('move_folder') or '/'
+
+
+def with_host_folder(db_host, attributes):
+    """
+    A copy of ``attributes`` with HOST_FOLDER, the folder the host export
+    puts the host in. For a single host (the host debug); the export keeps
+    one engine for all hosts.
+    """
+    folder = host_folder(host_folder_engine(), db_host, attributes)
+    return dict(attributes, HOST_FOLDER=folder)

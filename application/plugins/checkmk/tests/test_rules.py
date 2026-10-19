@@ -13,6 +13,8 @@ from application.plugins.checkmk.rules import (
     validate_folder_option_param,
     folder_options_tree,
     parse_folder_options_debug,
+    host_folder,
+    with_host_folder,
 )
 from tests import real_render_jinja
 
@@ -444,6 +446,70 @@ class TestCheckmkRule(unittest.TestCase):
 
             db_host.lock_to_folder.assert_called_once_with(False)
             mock_poolfolder.remove_seat.assert_called_once_with('/old_folder')
+
+    @patch('application.plugins.checkmk.rules.sitepool')
+    @patch('application.plugins.checkmk.rules.poolfolder')
+    def test_read_only_engine_keeps_pool_seats(self, mock_poolfolder, mock_sitepool):
+        """Without assign_pools a host keeps its seats, matching or not."""
+        self.rule.assign_pools = False
+        with patch.object(self.rule, 'check_rules', return_value={}):
+            db_host = Mock()
+            db_host.get_folder.return_value = '/old_folder'
+            db_host.get_pool_site.return_value = 'site1'
+            self.rule.check_rule_match(db_host)
+        db_host.lock_to_folder.assert_not_called()
+        db_host.lock_to_pool_site.assert_not_called()
+        mock_poolfolder.remove_seat.assert_not_called()
+        mock_sitepool.release_site_for_site_id.assert_not_called()
+
+    @patch('application.plugins.checkmk.rules.sitepool')
+    @patch('application.plugins.checkmk.rules.poolfolder')
+    def test_read_only_engine_takes_no_new_seat(self, mock_poolfolder, mock_sitepool):
+        """A host without a pool folder yet gets none, and no folder."""
+        self.rule.assign_pools = False
+        self.rule.db_host.get_folder.return_value = None
+        self.rule.db_host.get_pool_site.return_value = None
+        result = self.rule.add_outcomes(None, [
+            {'action': 'folder_pool', 'action_param': ''},
+            {'action': 'site_pool', 'action_param': 'pool1'},
+        ], {})
+        self.assertNotIn('move_folder', result)
+        mock_poolfolder.get_folder.assert_not_called()
+        mock_sitepool.get_site.assert_not_called()
+        self.rule.db_host.lock_to_folder.assert_not_called()
+
+    def test_read_only_engine_reads_locked_pool_folder(self):
+        self.rule.assign_pools = False
+        self.rule.db_host.get_folder.return_value = '/pool1'
+        result = self.rule.add_outcomes(
+            None, [{'action': 'folder_pool', 'action_param': ''}], {})
+        self.assertEqual(result['move_folder'], '/pool1')
+
+
+class TestHostFolder(unittest.TestCase):
+    """host_folder: where the host export puts a host"""
+
+    def test_move_folder_outcome(self):
+        engine = Mock()
+        engine.get_outcomes.return_value = {'move_folder': '/linux/web'}
+        db_host = Mock()
+        self.assertEqual(host_folder(engine, db_host, {'os': 'linux'}),
+                         '/linux/web')
+        engine.get_outcomes.assert_called_once_with(
+            db_host, {'os': 'linux'}, persist_cache=False, use_cache=False)
+
+    def test_no_folder_rule_is_main_folder(self):
+        engine = Mock()
+        engine.get_outcomes.return_value = {}
+        self.assertEqual(host_folder(engine, Mock(), {}), '/')
+
+    @patch('application.plugins.checkmk.rules.host_folder_engine')
+    def test_with_host_folder_copies_the_attributes(self, engine):
+        engine.return_value.get_outcomes.return_value = {'move_folder': '/web'}
+        attributes = {'HOSTNAME': 'srv01'}
+        self.assertEqual(with_host_folder(Mock(), attributes),
+                         {'HOSTNAME': 'srv01', 'HOST_FOLDER': '/web'})
+        self.assertNotIn('HOST_FOLDER', attributes)
 
 
 class TestFolderOptionValidation(unittest.TestCase):

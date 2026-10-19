@@ -392,7 +392,10 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
 
     ### Folder
     Full path to the Checkmk Folder where the rule is to be placed.
-    Use / for Main Folder
+    Use / for Main Folder. Jinja works here as well, and {{ HOST_FOLDER }}
+    is the folder the host lands in by the Export Rules (Move to Folder or
+    Pool Folder), so a rule can follow its host. Only for rules rendered per
+    host: a rule from a pasted list or a Static Rule has no host.
 
     ### Folder Index
     Numeric position for the Rule in side the Folder
@@ -410,8 +413,11 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
 
     ### Condition Label Template
     Defines which label has to match.
-    Labels format is key:value. You can Hardcode something or use the same Placeholders
-    like in the Value Templates (Jinja2). Only one Label can be used.
+    The form asks for key and value and suggests both from the existing
+    labels; stored is key:value. You can Hardcode something or use the same
+    Placeholders like in the Value Templates (Jinja2). Only one Label can be
+    used. Service labels work the same way, one key and value per line, all
+    of them must match.
 
     ### Condition Host
     It's possible to define a Host Condition. Placeholder is {{ hostname }}

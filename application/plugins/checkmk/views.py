@@ -41,7 +41,7 @@ from application.modules.rule.views import (
 from application.views._form_sections import modern_form, section
 from application.models.project import Project
 from application.helpers.syncer_jinja import check_jinja_syntax
-from application.modules.rule.list_source import is_list_rule
+from application.modules.rule.list_source import is_list_rule, rule_uses_list
 from application.modules.rule.list_source_views import (
     ListSourceViewMixin,
     list_source_rule_form,
@@ -58,7 +58,12 @@ from .models import (
     CheckmkSitePool,
 )
 from .folder_attributes import CONTACTGROUP_FLAGS, FOLDER_ATTRIBUTE_CATALOG
-from .cmk_rules import label_condition_problems, preview_list_rule
+from .cmk_rules import (
+    HOST_FOLDER,
+    label_condition_problems,
+    label_suggestions,
+    preview_list_rule,
+)
 from .list_source import OUTCOME_TEMPLATE_FIELDS
 from .notification_rules import JINJA_FIELDS, validate_outcome_jinja
 
@@ -1025,6 +1030,19 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
     list_source_template_fields = OUTCOME_TEMPLATE_FIELDS
     list_source_placeholder = 'service;level\nDisk C:;gold\nCPU load;silver'
 
+    jinja_help_fields = ('value_template', 'folder')
+    jinja_help_note = ('Per host the host attributes are the variables, from '
+                       'a pasted list its columns (HOSTNAME and HOST_FOLDER '
+                       'are not set there).')
+    jinja_help_variables = 'SETUP_RULE_VARIABLES'
+
+    @expose('/_label_suggestions')
+    def label_suggestions(self):
+        """Keys, or with ``key`` the values, the label condition editor
+        of the form suggests for host (``kind=host``) or service labels."""
+        return {'suggestions': label_suggestions(request.args.get('kind'),
+                                                 request.args.get('key'))}
+
     def __init__(self, model, **kwargs):
         """
         Update elements
@@ -1140,13 +1158,24 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                                     ' current host. Empty = no host-name condition.'
                                 ),
                             },
+                            'folder': {
+                                'description': (
+                                    'Checkmk folder the rule is created in, e.g.'
+                                    ' /linux. Jinja supported. {{ HOST_FOLDER }}'
+                                    ' is the folder the host lands in (Export'
+                                    ' Rules: Move to Folder or Pool Folder), only'
+                                    ' for rules rendered per host.'
+                                ),
+                            },
                             'condition_label_template': {
                                 'label': 'Condition — Host label',
                                 'description': (
                                     'Optional. Only apply to hosts carrying this'
-                                    ' label. Give a single key:value label (only'
-                                    ' one host label is supported). Jinja'
-                                    ' supported. Empty = no host-label condition.'
+                                    ' label: enter its key and value (only one'
+                                    ' host label is supported). Both are'
+                                    ' suggested from the existing labels, Jinja'
+                                    ' works in both. Empty = no host-label'
+                                    ' condition.'
                                 ),
                             },
                             'condition_service': {
@@ -1162,9 +1191,11 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                                 'label': 'Condition — Service label',
                                 'description': (
                                     'Optional. For service rulesets only: apply'
-                                    ' to services carrying these labels. key:value;'
-                                    ' comma-separated = all must match (AND). Jinja'
-                                    ' supported. Empty = no service-label condition.'
+                                    ' to services carrying these labels, one key'
+                                    ' and value per line, all must match (AND).'
+                                    ' Suggested from the labels other Setup Rules'
+                                    ' use, Jinja works in both. Empty = no'
+                                    ' service-label condition.'
                                 ),
                             },
                         },
@@ -1257,8 +1288,9 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                 return False
         label_errors = self._condition_label_errors(outcomes)
         loop_errors = self._loop_list_errors(outcomes)
-        if label_errors or loop_errors:
-            for message in label_errors + loop_errors:
+        folder_errors = self._host_folder_errors(form, outcomes)
+        if label_errors or loop_errors or folder_errors:
+            for message in label_errors + loop_errors + folder_errors:
                 flash(message, 'danger')
             return False
         return True
@@ -1301,6 +1333,35 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                 errors.append(
                     f"Outcome {pos}: the Jinja of 'Loop over List' is not "
                     f"valid: {defect}.")
+        return errors
+
+    @staticmethod
+    def _host_folder_errors(form, outcomes):
+        """
+        Refuse HOST_FOLDER in a rule without a host: rendered from a list
+        or as Static Rule it would always be empty.
+        """
+        rule_source = getattr(getattr(form, 'rule_source', None), 'data', None)
+        list_source = getattr(getattr(form, 'list_source', None), 'data', None)
+        static = getattr(getattr(form, 'static_rule', None), 'data', False)
+        if rule_uses_list(rule_source, list_source):
+            mode = 'a rule from a pasted list'
+        elif static:
+            mode = 'a Static Rule'
+        else:
+            return []
+        errors = []
+        for pos, entry in enumerate(getattr(outcomes, 'entries', None) or [], start=1):
+            subform = getattr(entry, 'form', None)
+            if subform is None:
+                continue
+            for field in subform:
+                if HOST_FOLDER in str(field.data or ''):
+                    errors.append(
+                        f"Outcome {pos}: {{{{ {HOST_FOLDER} }}}} needs a host, "
+                        f"{mode} has none. Switch the rule to 'Per host' or "
+                        f"enter the folder.")
+                    break
         return errors
 
     @staticmethod

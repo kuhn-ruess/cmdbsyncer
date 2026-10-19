@@ -460,6 +460,9 @@ class RuleModelView(DefaultModelView):
     # the panel shows on top.
     jinja_help_fields = ()
     jinja_help_note = ''
+    # Name of the variables catalog in helpers/jinja_help.py the rule hands
+    # in (default: the one of the host attribute rules).
+    jinja_help_variables = 'RULE_VARIABLES'
 
     def render(self, template, **kwargs):
         """
@@ -468,9 +471,10 @@ class RuleModelView(DefaultModelView):
         if self.jinja_help_fields and template in (self.create_template,
                                                    self.edit_template):
             # Web only: the rule module is also imported without the helpers.
-            from application.helpers.jinja_help import jinja_help  # pylint: disable=import-outside-toplevel
-            kwargs['jinja_help'] = jinja_help(self.jinja_help_fields,
-                                               self.jinja_help_note)
+            from application.helpers import jinja_help  # pylint: disable=import-outside-toplevel
+            kwargs['jinja_help'] = jinja_help.jinja_help(
+                self.jinja_help_fields, self.jinja_help_note,
+                getattr(jinja_help, self.jinja_help_variables))
         return super().render(template, **kwargs)
 
     def create_model(self, form):

@@ -35,6 +35,11 @@ KEEP_VALUE_HINT = "Value managed manually in Checkmk - Syncer will not overwrite
 # rule list already says the value may be adjusted there.
 KEEP_VALUE_MARK = "(Value editable)"
 
+# Jinja variable of a per host Setup Rule: the folder the host export puts
+# the host in (see rules.host_folder). Rules rendered from a list or as
+# static rule have no host, so it is not set there.
+HOST_FOLDER = 'HOST_FOLDER'
+
 # Longest Setup Rule name written into the Checkmk rule description. Long
 # enough for real rule names, short enough to keep the rule list readable.
 DESCRIPTION_NAME_LIMIT = 60
@@ -389,6 +394,80 @@ def label_condition_problems(host_label='', service_label=''):
                 "Service label conditions must be 'key:value' — fix "
                 + ', '.join(repr(b) for b in bad))
     return problems
+
+
+# Most keys or values the label suggestions of the Setup Rule form offer.
+LABEL_SUGGESTION_LIMIT = 300
+
+# Setup Rule outcome field of each kind of label condition.
+LABEL_CONDITION_FIELDS = {
+    'host': 'condition_label_template',
+    'service': 'condition_service_label',
+}
+
+
+def _rule_label_conditions(kind):
+    """(key, value) of every literal label condition of that kind in the
+    Setup Rules. Jinja parts are left out, their value is only known per host."""
+    from .models import CheckmkRuleMngmt  # pylint: disable=import-outside-toplevel
+    field = LABEL_CONDITION_FIELDS[kind]
+    pairs = set()
+    for rule in CheckmkRuleMngmt.objects.only(f'outcomes.{field}'):
+        for outcome in rule.outcomes or []:
+            for entry in (getattr(outcome, field, None) or '').split(','):
+                if _has_jinja_fragment(entry):
+                    continue
+                if parsed := parse_label(entry):
+                    pairs.add(parsed)
+    return pairs
+
+
+def _host_label_keys():
+    """Attribute names of the hosts, the source of their Checkmk labels."""
+    pipeline = [
+        {'$project': {'kv': {'$objectToArray': '$labels'}}},
+        {'$unwind': '$kv'},
+        {'$group': {'_id': '$kv.k'}},
+        {'$limit': LABEL_SUGGESTION_LIMIT},
+    ]
+    return {row['_id'] for row in Host.objects.aggregate(pipeline)}
+
+
+def _host_label_values(key):
+    """Values the hosts have for the attribute ``key``."""
+    path = f'labels.{key}'
+    pipeline = [
+        {'$match': {path: {'$exists': True}}},
+        {'$group': {'_id': f'${path}'}},
+        {'$limit': LABEL_SUGGESTION_LIMIT},
+    ]
+    return {str(row['_id']) for row in Host.objects.aggregate(pipeline)
+            if row['_id'] not in (None, '')}
+
+
+def label_suggestions(kind, key=None):
+    """
+    Suggestions for the label condition editor of the Setup Rule form:
+    the label keys, or with ``key`` the values of that key. Both come from
+    the label conditions the Setup Rules already use, host labels also from
+    the attributes of the hosts. Unknown kinds and keys a Mongo path cannot
+    hold get nothing.
+    """
+    if kind not in LABEL_CONDITION_FIELDS:
+        return []
+    pairs = _rule_label_conditions(kind)
+    if key is None:
+        found = {pair[0] for pair in pairs}
+        if kind == 'host':
+            found |= _host_label_keys()
+    else:
+        key = key.strip()
+        if not key or '.' in key or key.startswith('$'):
+            return []
+        found = {value for pair_key, value in pairs if pair_key == key}
+        if kind == 'host':
+            found |= _host_label_values(key)
+    return sorted(found, key=lambda text: (text.lower(), text))[:LABEL_SUGGESTION_LIMIT]
 
 
 def iter_rule_folders():
@@ -998,6 +1077,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # Setup Rule name -> parsed list and rules per row of every list
         # rule this run rendered, see _calculate_list_rule.
         self.list_rule_report = {}
+        # Folder rules engine for HOST_FOLDER, built on first use.
+        self._host_folder_engine = None
 
     @property
     def rule_marker(self):
@@ -1654,8 +1735,29 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                     use_cache=use_cache)
                 self.flush_host_cache(db_host)
                 if host_actions:
-                    self.calculate_rules_of_host(host_actions, attributes)
+                    self.calculate_rules_of_host(
+                        host_actions,
+                        self._with_host_folder(db_host, host_actions, attributes))
                 progress.advance(task1)
+
+    def _with_host_folder(self, db_host, host_actions, attributes):
+        """
+        The attributes plus HOST_FOLDER when one of the host's outcomes
+        uses it. Only then the folder rules run for the host, the other
+        hosts cost nothing.
+        """
+        if not any(HOST_FOLDER in str(value)
+                   for outcomes in host_actions.values()
+                   for outcome in outcomes for value in outcome.values()):
+            return attributes
+        # pylint: disable-next=import-outside-toplevel
+        from .rules import host_folder, host_folder_engine
+        if self._host_folder_engine is None:
+            self._host_folder_engine = host_folder_engine()
+        folder = host_folder(self._host_folder_engine, db_host,
+                             attributes['all'])
+        return dict(attributes, all=dict(attributes['all'],
+                                         **{HOST_FOLDER: folder}))
 
     def _optimized_rule_groups(self):
         """

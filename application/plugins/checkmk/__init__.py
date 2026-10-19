@@ -349,12 +349,18 @@ def get_rule_preview(hostname, rule_type, rule_id):
     if not attributes:
         return None, "Host is disabled by a filter rule — no attributes available for preview"
 
+    context = attributes['all']
+    if rule_type == 'setup_rule':
+        # The export hands a per host Setup Rule the host's folder as well.
+        from .rules import with_host_folder
+        context = with_host_folder(db_host, context)
+
     return {
         'rule_name': rule.name,
         'rule_id': str(rule.id),
         'rule_type': rule_type,
         'rule_type_label': provider['label'],
-        'outcomes': provider['render'](rule, attributes['all']),
+        'outcomes': provider['render'](rule, context),
     }, None
 
 

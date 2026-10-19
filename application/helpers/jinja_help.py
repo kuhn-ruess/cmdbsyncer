@@ -107,6 +107,19 @@ RULE_VARIABLES = (
      "Every attribute of the host is a variable of its own name."),
 )
 
+# The variables of a Checkmk Setup Rule rendered per host.
+SETUP_RULE_VARIABLES = (
+    ('HOSTNAME', "{{ HOSTNAME }}", "Name of the host."),
+    ('HOST_FOLDER', "{{ HOST_FOLDER }}",
+     "Folder the host lands in (Checkmk > Export Rules: Move to Folder or "
+     "Pool Folder), e.g. as rule folder. Per host only: a rule from a list "
+     "or a Static Rule has no host."),
+    ('loop', "{{ loop }}",
+     "Current entry when Loop over List is set (loop_idx: its index)."),
+    ('any attribute', "{{ attribute }}",
+     "Every attribute of the host is a variable of its own name."),
+)
+
 
 def _entries(group, items):
     return [{'group': group, 'name': name, 'snippet': snippet, 'text': text}
@@ -129,16 +142,16 @@ def lookup_tables():
     return tables
 
 
-def jinja_help(fields, note=''):
+def jinja_help(fields, note='', variables=RULE_VARIABLES):
     """
     What the help panel of a form needs: the fields (outcome field names)
-    it is shown for, a note on when they are rendered, the entries and the
-    lookup tables.
+    it is shown for, a note on when they are rendered, the entries (with
+    the variables the form's rule hands in) and the lookup tables.
     """
     return {
         'fields': list(fields),
         'note': note,
-        'entries': (_entries('Variables', RULE_VARIABLES)
+        'entries': (_entries('Variables', variables)
                     + _entries('Syncer functions', FUNCTIONS)
                     + _entries('Syncer filters', FILTERS)
                     + _entries('Jinja basics', BASICS)),

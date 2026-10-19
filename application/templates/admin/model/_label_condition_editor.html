@@ -1,0 +1,250 @@
+{# Key/value editor for the label conditions of the Checkmk Setup Rule form.
+
+   The Host label and Service label conditions are stored as text,
+   "key:value" (Service label: several, comma separated, all must match).
+   This puts a key and a value input per label in front of the field and
+   writes the text back on every change, so nothing about storage or export
+   changes. Keys and values are suggested by the view's _label_suggestions
+   endpoint (labels other Setup Rules use, host labels also the attributes
+   of the hosts). Jinja works in both inputs. A value that cannot be split
+   into key and value (e.g. one Jinja expression rendering all labels) stays
+   in the plain text field, "Edit as text" switches at any time. Colours use
+   the theme --surface-* tokens with light fallbacks so every theme renders
+   it. #}
+<style>
+.label-cond-editor { margin-bottom: 4px; }
+.label-cond-editor .lce-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.label-cond-editor .lce-row input { flex: 1 1 0; min-width: 0; }
+.label-cond-editor .lce-colon {
+  font-family: ui-monospace, monospace;
+  color: var(--surface-muted, #4a4f57);
+}
+.label-cond-editor .lce-btn {
+  padding: 1px 8px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 6px;
+  background: var(--surface-bg, #f8f9fa);
+  color: var(--surface-muted, #4a4f57);
+  font-size: 0.78rem;
+}
+.label-cond-editor .lce-btn:hover { color: var(--surface-text, #2c3e50); }
+.label-cond-editor .lce-actions { display: flex; gap: 6px; align-items: center; }
+.label-cond-editor .lce-note {
+  font-size: 0.78rem;
+  color: var(--surface-muted, #4a4f57);
+}
+</style>
+<script type="application/json" id="label-cond-endpoint">{{ url_for('.label_suggestions')|tojson }}</script>
+{# The JavaScript handles Jinja delimiters as plain text. #}
+{% raw %}
+<script type="text/javascript">
+(function() {
+  var NAME_RE = /(^|-)(condition_label_template|condition_service_label)$/;
+  var cache = {};
+  var counter = 0;
+
+  var ENDPOINT = JSON.parse(document.getElementById('label-cond-endpoint').textContent);
+
+  // Keys (key === null) or values of a key, fetched once per kind and key.
+  function suggestions(kind, key, done) {
+    var slot = kind + '\u0000' + (key === null ? '' : 'v:' + key);
+    if (cache[slot]) { cache[slot].then(done); return; }
+    var url = ENDPOINT + '?kind=' + encodeURIComponent(kind);
+    if (key !== null) { url += '&key=' + encodeURIComponent(key); }
+    cache[slot] = fetch(url, {credentials: 'same-origin'})
+      .then(function(r) { return r.ok ? r.json() : {suggestions: []}; })
+      .then(function(data) { return data.suggestions || []; })
+      .catch(function() { return []; });
+    cache[slot].then(done);
+  }
+
+  function fillList(list, values) {
+    list.innerHTML = '';
+    values.forEach(function(value) {
+      var option = document.createElement('option');
+      option.value = value;
+      list.appendChild(option);
+    });
+  }
+
+  // Split at `sep` outside of {{ }} and {% %}. limit 1: only at the first.
+  function splitOutsideJinja(text, sep, limit) {
+    var parts = [], depth = 0, start = 0;
+    for (var i = 0; i < text.length; i++) {
+      var two = text.substr(i, 2);
+      if (two === '{{' || two === '{%') { depth++; i++; continue; }
+      if ((two === '}}' || two === '%}') && depth > 0) { depth--; i++; continue; }
+      if (depth === 0 && text[i] === sep && (!limit || parts.length < limit)) {
+        parts.push(text.slice(start, i));
+        start = i + 1;
+      }
+    }
+    parts.push(text.slice(start));
+    return parts;
+  }
+
+  // [[key, value], ...] or null when the text is no list of key:value.
+  function parse(text) {
+    if (!text.trim()) { return [['', '']]; }
+    var labels = [];
+    var entries = splitOutsideJinja(text, ',');
+    for (var i = 0; i < entries.length; i++) {
+      if (!entries[i].trim()) { continue; }
+      var pair = splitOutsideJinja(entries[i], ':', 1);
+      if (pair.length !== 2) { return null; }
+      labels.push([pair[0].trim(), pair[1].trim()]);
+    }
+    return labels.length ? labels : [['', '']];
+  }
+
+  function decorate(input) {
+    if (input.dataset.labelEditor) { return; }
+    input.dataset.labelEditor = '1';
+    var kind = /condition_label_template$/.test(input.name) ? 'host' : 'service';
+    var keyList = document.createElement('datalist');
+    keyList.id = 'lce-keys-' + (++counter);
+
+    var editor = document.createElement('div');
+    editor.className = 'label-cond-editor';
+    var rows = document.createElement('div');
+    editor.appendChild(rows);
+    editor.appendChild(keyList);
+    var actions = document.createElement('div');
+    actions.className = 'lce-actions';
+    editor.appendChild(actions);
+
+    function write() {
+      var labels = [];
+      rows.querySelectorAll('.lce-row').forEach(function(row) {
+        var key = row.querySelector('.lce-key').value.trim();
+        var value = row.querySelector('.lce-value').value.trim();
+        if (key || value) { labels.push(key + ':' + value); }
+      });
+      input.value = labels.join(', ');
+      $(input).trigger('change');
+    }
+
+    function addRow(key, value) {
+      var row = document.createElement('div');
+      row.className = 'lce-row';
+      var keyInput = document.createElement('input');
+      keyInput.className = 'form-control form-control-sm lce-key';
+      keyInput.placeholder = 'key, e.g. os';
+      keyInput.setAttribute('list', keyList.id);
+      keyInput.autocomplete = 'off';
+      keyInput.value = key;
+      var valueList = document.createElement('datalist');
+      valueList.id = 'lce-values-' + (++counter);
+      var valueInput = document.createElement('input');
+      valueInput.className = 'form-control form-control-sm lce-value';
+      valueInput.placeholder = 'value, e.g. linux';
+      valueInput.setAttribute('list', valueList.id);
+      valueInput.autocomplete = 'off';
+      valueInput.value = value;
+      var colon = document.createElement('span');
+      colon.className = 'lce-colon';
+      colon.textContent = ':';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'lce-btn';
+      remove.title = 'Remove this label';
+      remove.innerHTML = '<i class="fa fa-times"></i>';
+      remove.addEventListener('click', function() {
+        if (rows.children.length > 1) {
+          row.remove();
+        } else {
+          keyInput.value = valueInput.value = '';
+        }
+        write();
+      });
+      keyInput.addEventListener('focus', function() {
+        suggestions(kind, null, function(values) { fillList(keyList, values); });
+      });
+      valueInput.addEventListener('focus', function() {
+        var current = keyInput.value.trim();
+        if (!current || current.indexOf('{') !== -1) { fillList(valueList, []); return; }
+        suggestions(kind, current, function(values) { fillList(valueList, values); });
+      });
+      keyInput.addEventListener('input', write);
+      valueInput.addEventListener('input', write);
+      row.appendChild(keyInput);
+      row.appendChild(colon);
+      row.appendChild(valueInput);
+      row.appendChild(valueList);
+      row.appendChild(remove);
+      rows.appendChild(row);
+      return row;
+    }
+
+    var add = null;
+    if (kind === 'service') {
+      add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'lce-btn';
+      add.innerHTML = '<i class="fa fa-plus"></i> Add label';
+      add.addEventListener('click', function() {
+        addRow('', '').querySelector('.lce-key').focus();
+      });
+      actions.appendChild(add);
+    }
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'lce-btn';
+    actions.appendChild(toggle);
+    var note = document.createElement('span');
+    note.className = 'lce-note';
+    actions.appendChild(note);
+
+    function showText(reason) {
+      rows.style.display = 'none';
+      if (add) { add.style.display = 'none'; }
+      input.style.display = '';
+      toggle.textContent = 'Edit as key and value';
+      note.textContent = reason || '';
+    }
+
+    function showRows() {
+      var labels = parse(input.value);
+      if (!labels) {
+        showText('This value is no list of key:value, edit it as text.');
+        return;
+      }
+      rows.innerHTML = '';
+      labels.forEach(function(pair) { addRow(pair[0], pair[1]); });
+      rows.style.display = '';
+      if (add) { add.style.display = ''; }
+      input.style.display = 'none';
+      toggle.textContent = 'Edit as text';
+      note.textContent = kind === 'service' ? 'All labels must match.' : '';
+    }
+
+    toggle.addEventListener('click', function() {
+      if (input.style.display === 'none') { showText(''); } else { showRows(); }
+    });
+    input.parentNode.insertBefore(editor, input);
+    showRows();
+  }
+
+  function scan(root) {
+    root.querySelectorAll('input[name]').forEach(function(input) {
+      if (NAME_RE.test(input.name) && input.name.indexOf('outcomes') !== -1) {
+        decorate(input);
+      }
+    });
+  }
+
+  $(function() {
+    var form = document.querySelector('form.admin-form') || document.body;
+    scan(form);
+    // Rows added with "Add Outcomes" come in later.
+    new MutationObserver(function() { scan(form); })
+      .observe(form, {childList: true, subtree: true});
+  });
+})();
+</script>
+{% endraw %}
