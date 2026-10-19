@@ -342,15 +342,6 @@ def parse_label(rendered):
     return key, value
 
 
-_JINJA_SPAN = re.compile(r'\{\{.*?\}\}|\{%.*?%\}', re.DOTALL)
-
-
-def _has_jinja(text):
-    """True if the value opens a Jinja expression/block — its rendered
-    result is only known per host, so it is exempt from static shape checks."""
-    return '{{' in text or '{%' in text
-
-
 def _has_jinja_fragment(text):
     """True if the text carries ANY Jinja delimiter, opening or closing. Used
     to skip fragments produced when a comma inside a Jinja expression splits a
@@ -358,40 +349,22 @@ def _has_jinja_fragment(text):
     return any(tok in text for tok in ('{{', '}}', '{%', '%}'))
 
 
-def _strip_jinja(text):
-    """Drop complete Jinja expressions/blocks so only the hand-typed literal
-    text remains — lets us judge literal structure (e.g. a stray comma)
-    without guessing what the Jinja will render to."""
-    return _JINJA_SPAN.sub('', text)
-
-
 def label_condition_problems(host_label='', service_label=''):
     """
     Static validation of the Host/Service label condition fields for the
-    save-time form check. Reports only problems that hold regardless of what
-    any Jinja renders to: a literal comma in the single-valued Host label, and
-    a fully-static Service label entry that is not 'key:value'. Jinja-bearing
-    values are otherwise trusted (validated per host at export time). Returns a
-    list of human-readable messages, empty when nothing is statically wrong.
+    save-time form check. Both take comma separated 'key:value' labels; an
+    entry without Jinja that is no 'key:value' is reported. Jinja-bearing
+    entries are trusted (validated per host at export time). Returns a list
+    of human-readable messages, empty when nothing is statically wrong.
     """
     problems = []
-    host_label = (host_label or '').strip()
-    if host_label:
-        if ',' in _strip_jinja(host_label):
-            problems.append(
-                "Host label condition takes a single 'key:value' — remove the "
-                f"comma from '{host_label}'")
-        elif not _has_jinja(host_label) and not parse_label(host_label):
-            problems.append(
-                f"Host label condition must be 'key:value', got '{host_label}'")
-    service_label = (service_label or '').strip()
-    if service_label:
-        bad = [seg.strip() for seg in service_label.split(',')
+    for what, labels in (('Host', host_label), ('Service', service_label)):
+        bad = [seg.strip() for seg in (labels or '').split(',')
                if seg.strip() and not _has_jinja_fragment(seg)
                and not parse_label(seg.strip())]
         if bad:
             problems.append(
-                "Service label conditions must be 'key:value' — fix "
+                f"{what} label conditions must be 'key:value', fix "
                 + ', '.join(repr(b) for b in bad))
     return problems
 
@@ -522,8 +495,8 @@ def cmk_conditions_to_outcome(conditions):
 
     Handles both the 2.2 (``host_labels``/``service_labels``) and the 2.3+
     (``host_label_groups``/``service_label_groups``) shapes and tolerates
-    missing keys. Only the first host label is representable in the outcome
-    model, matching the export side which also emits a single label.
+    missing keys. Several host or service labels become a comma separated
+    list, as the export reads them.
     """
     conditions = conditions or {}
     result = {
@@ -541,15 +514,14 @@ def cmk_conditions_to_outcome(conditions):
     if service.get('match_on'):
         result['condition_service'] = ','.join(service['match_on'])
 
-    # Host label: 2.3+ nested label_groups, else flat 2.2 host_labels.
-    label = _first_label_from_groups(conditions.get('host_label_groups'))
-    if not label:
-        host_labels = conditions.get('host_labels') or []
-        if host_labels:
-            first = host_labels[0]
-            if first.get('key') and first.get('value') is not None:
-                label = f"{first['key']}:{first['value']}"
-    result['condition_label_template'] = label or ''
+    # Host labels: 2.3+ nested label_groups, else flat 2.2 host_labels.
+    host_labels = _all_labels_from_groups(conditions.get('host_label_groups'))
+    if not host_labels:
+        host_labels = [
+            f"{entry['key']}:{entry['value']}"
+            for entry in conditions.get('host_labels') or []
+            if entry.get('key') and entry.get('value') is not None]
+    result['condition_label_template'] = ','.join(host_labels)
 
     # Service labels: collect every label across the groups.
     svc_labels = _all_labels_from_groups(conditions.get('service_label_groups'))
@@ -561,15 +533,6 @@ def cmk_conditions_to_outcome(conditions):
     result['condition_service_label'] = ','.join(svc_labels)
 
     return result
-
-
-def _first_label_from_groups(label_groups):
-    """Return the first ``key:value`` label found in a *_label_groups list."""
-    for group in label_groups or []:
-        for entry in group.get('label_group') or []:
-            if entry.get('label'):
-                return entry['label']
-    return ''
 
 
 def _all_labels_from_groups(label_groups):
@@ -1493,36 +1456,48 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                 return True
         return False
 
+    def _rendered_labels(self, template, context, what):
+        """
+        The 'key:value' labels a label condition renders to: comma separated,
+        all of them must match. None when one entry is no 'key:value' (logged,
+        the caller then skips the rule).
+        """
+        labels = []
+        for entry in get_list(render_jinja(template, _ctx=context)):
+            parsed = parse_label(entry)
+            if not parsed:
+                self.log_error(
+                    f"Skipped a Checkmk rule for '{context['HOSTNAME']}': {what} "
+                    f"label conditions must be 'key:value', got '{entry}'"
+                )
+                return None
+            labels.append(parsed)
+        return labels
+
     def _apply_host_label_condition(self, rule_params, condition_tpl, context):
         """
         Add the Host label condition to ``condition_tpl`` in place and drop
-        the source key from ``rule_params``. Returns False when the rendered
-        label is not a single 'key:value' (the caller then skips the rule),
-        True otherwise — including when no condition is configured.
+        the source key from ``rule_params``. Several comma separated labels
+        all have to match. Returns False when an entry is malformed (the
+        caller then skips the rule), True otherwise, also without condition.
         """
         template = rule_params.pop('condition_label_template', None)
         if not template:
             return True
-        rendered = render_jinja(template, _ctx=context)
-        parsed = parse_label(rendered)
-        if not parsed:
-            self.log_error(
-                f"Skipped a Checkmk rule for '{context['HOSTNAME']}': the Host label "
-                f"condition must render to a single 'key:value', got '{rendered}'"
-            )
+        labels = self._rendered_labels(template, context, 'Host')
+        if labels is None:
             return False
-        label_key, label_value = parsed
+        if not labels:
+            return True
         if self.checkmk_version.startswith('2.2'):
-            condition_tpl['host_labels'] = [{
-                "key": label_key, "operator": "is", "value": label_value,
-            }]
+            condition_tpl['host_labels'] = [
+                {"key": key, "operator": "is", "value": value}
+                for key, value in labels]
         else:
             condition_tpl['host_label_groups'] = [{
                 "operator": "and",
-                "label_group": [{
-                    "operator": "and",
-                    "label": f"{label_key}:{label_value}",
-                }],
+                "label_group": [{"operator": "and", "label": f"{key}:{value}"}
+                                for key, value in labels],
             }]
         return True
 
@@ -1531,26 +1506,20 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         Add the Service label condition to ``condition_tpl`` in place and drop
         the source key from ``rule_params``. Every comma-separated entry must
         be a 'key:value' label (they are AND-combined). Returns False when any
-        entry is malformed (the caller then skips the rule), True otherwise —
-        including when no condition is configured.
+        entry is malformed (the caller then skips the rule), True otherwise,
+        also when no condition is configured.
         """
         if 'condition_service_label' not in rule_params:
             return True
         template = rule_params.pop('condition_service_label')
         if not template:
             return True
-        labels = []
-        for entry in get_list(render_jinja(template, _ctx=context)):
-            parsed = parse_label(entry)
-            if not parsed:
-                self.log_error(
-                    f"Skipped a Checkmk rule for '{context['HOSTNAME']}': Service "
-                    f"label conditions must be 'key:value', got '{entry}'"
-                )
-                return False
-            labels.append(f"{parsed[0]}:{parsed[1]}")
+        labels = self._rendered_labels(template, context, 'Service')
+        if labels is None:
+            return False
         condition_tpl['service_label_groups'] = [{
-            "label_group": [{"operator": "and", "label": x} for x in labels],
+            "label_group": [{"operator": "and", "label": f"{key}:{value}"}
+                            for key, value in labels],
             "operator": "and",
         }]
         return True

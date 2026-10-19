@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from application.plugins.checkmk.cmk_rules import (
+    cmk_conditions_to_outcome,
     parse_label,
     label_condition_problems,
 )
@@ -61,13 +62,16 @@ class TestLabelConditionProblems(unittest.TestCase):
         # Value from Jinja, single label, no literal comma — accepted.
         self.assertEqual(label_condition_problems(host_label='env:{{value}}'), [])
 
-    def test_host_label_literal_comma_rejected_even_with_jinja(self):
-        # The reported case: Jinja slipped it past the old check, but the
-        # literal comma means "two labels", which a Host label does not allow.
+    def test_host_label_bad_entry_rejected_with_jinja_sibling(self):
+        # Jinja must not slip a broken literal entry past the check: the
+        # comma separates two labels, and 'test' is none.
         problems = label_condition_problems(host_label='test:{{value}},test')
         self.assertEqual(len(problems), 1)
-        self.assertIn('single', problems[0])
-        self.assertIn('comma', problems[0])
+        self.assertIn("'test'", problems[0])
+
+    def test_host_label_multiple_valid(self):
+        self.assertEqual(
+            label_condition_problems(host_label='os:linux, dc:{{ dc }}'), [])
 
     def test_host_label_static_without_colon_rejected(self):
         problems = label_condition_problems(host_label='justkey')
@@ -114,18 +118,38 @@ class TestBuildConditionLabels(unittest.TestCase):
         self.assertTrue(any(
             d[0] == 'ERROR' and needle in d[1] for d in self.sync.log_details))
 
+    @_GET_LIST
     @_RENDER
-    def test_host_label_keeps_colon_in_value(self, _render):
+    def test_host_label_keeps_colon_in_value(self, _render, _get_list):
         # A value with its own colon (e.g. a URL) must not break — only the
         # first colon separates key from value.
         result = self._build(condition_label_template='url:https://example.com')
         label = result['condition']['host_label_groups'][0]['label_group'][0]['label']
         self.assertEqual(label, 'url:https://example.com')
 
+    @_GET_LIST
     @_RENDER
-    def test_host_label_malformed_skips_and_logs(self, _render):
+    def test_host_label_malformed_skips_and_logs(self, _render, _get_list):
         self._assert_skipped(
             self._build(condition_label_template='no_colon_here'), 'Host label')
+
+    @_GET_LIST
+    @_RENDER
+    def test_host_labels_and_combine(self, _render, _get_list):
+        result = self._build(condition_label_template='os:linux, dc:dc1')
+        groups = result['condition']['host_label_groups']
+        self.assertEqual(len(groups), 1)
+        self.assertEqual([entry['label'] for entry in groups[0]['label_group']],
+                         ['os:linux', 'dc:dc1'])
+
+    @_GET_LIST
+    @_RENDER
+    def test_host_labels_checkmk_22(self, _render, _get_list):
+        self.sync.checkmk_version = '2.2.0p1'
+        result = self._build(condition_label_template='os:linux, dc:dc1')
+        self.assertEqual(result['condition']['host_labels'], [
+            {'key': 'os', 'operator': 'is', 'value': 'linux'},
+            {'key': 'dc', 'operator': 'is', 'value': 'dc1'}])
 
     @_GET_LIST
     @_RENDER
@@ -140,6 +164,25 @@ class TestBuildConditionLabels(unittest.TestCase):
     def test_service_label_malformed_skips_and_logs(self, _render, _get_list):
         self._assert_skipped(
             self._build(condition_service_label='crit:yes, bogus'), 'Service label')
+
+
+
+class TestImportedHostLabels(unittest.TestCase):
+    """Several host labels of a Checkmk rule survive the import."""
+
+    def test_label_groups(self):
+        result = cmk_conditions_to_outcome({'host_label_groups': [{
+            'operator': 'and',
+            'label_group': [{'operator': 'and', 'label': 'env:prod'},
+                            {'operator': 'and', 'label': 'os:linux'}],
+        }]})
+        self.assertEqual(result['condition_label_template'], 'env:prod,os:linux')
+
+    def test_checkmk_22_host_labels(self):
+        result = cmk_conditions_to_outcome({'host_labels': [
+            {'key': 'env', 'operator': 'is', 'value': 'prod'},
+            {'key': 'os', 'operator': 'is', 'value': 'linux'}]})
+        self.assertEqual(result['condition_label_template'], 'env:prod,os:linux')
 
 
 if __name__ == '__main__':

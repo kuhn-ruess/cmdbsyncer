@@ -413,11 +413,11 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
 
     ### Condition Label Template
     Defines which label has to match.
-    The form asks for key and value and suggests both from the existing
-    labels; stored is key:value. You can Hardcode something or use the same
-    Placeholders like in the Value Templates (Jinja2). Only one Label can be
-    used. Service labels work the same way, one key and value per line, all
-    of them must match.
+    The form asks for key and value per label (+ adds another one) and
+    suggests both from the existing labels; stored is key:value, several
+    labels comma separated, all of them must match. You can Hardcode
+    something or use the same Placeholders like in the Value Templates
+    (Jinja2). Service labels work the same way.
 
     ### Condition Host
     It's possible to define a Host Condition. Placeholder is {{ hostname }}

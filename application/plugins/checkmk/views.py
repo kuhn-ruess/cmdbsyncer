@@ -1170,12 +1170,11 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                             'condition_label_template': {
                                 'label': 'Condition — Host label',
                                 'description': (
-                                    'Optional. Only apply to hosts carrying this'
-                                    ' label: enter its key and value (only one'
-                                    ' host label is supported). Both are'
-                                    ' suggested from the existing labels, Jinja'
-                                    ' works in both. Empty = no host-label'
-                                    ' condition.'
+                                    'Optional. Only apply to hosts carrying these'
+                                    ' labels: key and value per label, + adds one,'
+                                    ' all must match (AND). Suggested from the'
+                                    ' existing labels, Jinja works in both. Empty ='
+                                    ' no host-label condition.'
                                 ),
                             },
                             'condition_service': {
@@ -1191,10 +1190,10 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                                 'label': 'Condition — Service label',
                                 'description': (
                                     'Optional. For service rulesets only: apply'
-                                    ' to services carrying these labels, one key'
-                                    ' and value per line, all must match (AND).'
-                                    ' Suggested from the labels other Setup Rules'
-                                    ' use, Jinja works in both. Empty = no'
+                                    ' to services carrying these labels: key and'
+                                    ' value per label, + adds one, all must match'
+                                    ' (AND). Suggested from the labels other Setup'
+                                    ' Rules use, Jinja works in both. Empty = no'
                                     ' service-label condition.'
                                 ),
                             },
@@ -1216,7 +1215,7 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                                 'style': 'font-family: monospace; white-space: pre;',
                             },
                             'condition_label_template': {
-                                'placeholder': 'key:value — e.g. os:linux (one label only)'
+                                'placeholder': 'key:value, key:value (comma = AND)'
                             },
                             'condition_host': {
                                 'placeholder': (

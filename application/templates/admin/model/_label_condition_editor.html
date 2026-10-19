@@ -1,39 +1,68 @@
 {# Key/value editor for the label conditions of the Checkmk Setup Rule form.
 
-   The Host label and Service label conditions are stored as text,
-   "key:value" (Service label: several, comma separated, all must match).
-   This puts a key and a value input per label in front of the field and
-   writes the text back on every change, so nothing about storage or export
-   changes. Keys and values are suggested by the view's _label_suggestions
-   endpoint (labels other Setup Rules use, host labels also the attributes
-   of the hosts). Jinja works in both inputs. A value that cannot be split
-   into key and value (e.g. one Jinja expression rendering all labels) stays
-   in the plain text field, "Edit as text" switches at any time. Colours use
+   The Host label and Service label conditions are stored as text:
+   "key:value", several labels comma separated, all of them must match.
+   This shows every label as a compact key : value chip in one wrapping
+   line, "+" adds a label, "x" removes one, and writes the text back on
+   every change, so storage and export read the same text as before. Keys
+   and values are suggested by the view's _label_suggestions endpoint
+   (labels other Setup Rules use, host labels also the attributes of the
+   hosts). Jinja works in both inputs. A value that cannot be split into
+   key and value (e.g. one Jinja expression rendering all labels) stays in
+   the plain text field, the text button switches at any time. Colours use
    the theme --surface-* tokens with light fallbacks so every theme renders
    it. #}
 <style>
-.label-cond-editor { margin-bottom: 4px; }
-.label-cond-editor .lce-row {
+.label-cond-editor {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   margin-bottom: 4px;
 }
-.label-cond-editor .lce-row input { flex: 1 1 0; min-width: 0; }
+.label-cond-editor .lce-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 2px 2px 4px;
+  border: 1px solid var(--surface-border, #d7dbe0);
+  border-radius: 6px;
+  background: var(--surface-bg, #f8f9fa);
+}
+.label-cond-editor .lce-label input {
+  width: 9em;
+  height: 26px;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--surface-text, #2c3e50);
+  font-size: 0.85rem;
+}
+.label-cond-editor .lce-label input:focus {
+  border-color: var(--surface-border, #d7dbe0);
+  background: var(--surface-subtle, #fff);
+  outline: none;
+}
 .label-cond-editor .lce-colon {
   font-family: ui-monospace, monospace;
   color: var(--surface-muted, #4a4f57);
 }
 .label-cond-editor .lce-btn {
-  padding: 1px 8px;
+  height: 26px;
+  padding: 0 8px;
   border: 1px solid var(--surface-border, #d7dbe0);
   border-radius: 6px;
   background: var(--surface-bg, #f8f9fa);
   color: var(--surface-muted, #4a4f57);
   font-size: 0.78rem;
 }
+.label-cond-editor .lce-label .lce-btn {
+  border: 0;
+  background: transparent;
+  padding: 0 6px;
+}
 .label-cond-editor .lce-btn:hover { color: var(--surface-text, #2c3e50); }
-.label-cond-editor .lce-actions { display: flex; gap: 6px; align-items: center; }
 .label-cond-editor .lce-note {
   font-size: 0.78rem;
   color: var(--surface-muted, #4a4f57);
@@ -45,10 +74,9 @@
 <script type="text/javascript">
 (function() {
   var NAME_RE = /(^|-)(condition_label_template|condition_service_label)$/;
+  var ENDPOINT = JSON.parse(document.getElementById('label-cond-endpoint').textContent);
   var cache = {};
   var counter = 0;
-
-  var ENDPOINT = JSON.parse(document.getElementById('label-cond-endpoint').textContent);
 
   // Keys (key === null) or values of a key, fetched once per kind and key.
   function suggestions(kind, key, done) {
@@ -102,6 +130,15 @@
     return labels.length ? labels : [['', '']];
   }
 
+  function button(cls, icon, title) {
+    var node = document.createElement('button');
+    node.type = 'button';
+    node.className = cls;
+    node.title = title;
+    node.innerHTML = '<i class="fa ' + icon + '"></i>';
+    return node;
+  }
+
   function decorate(input) {
     if (input.dataset.labelEditor) { return; }
     input.dataset.labelEditor = '1';
@@ -111,52 +148,53 @@
 
     var editor = document.createElement('div');
     editor.className = 'label-cond-editor';
-    var rows = document.createElement('div');
-    editor.appendChild(rows);
     editor.appendChild(keyList);
-    var actions = document.createElement('div');
-    actions.className = 'lce-actions';
-    editor.appendChild(actions);
+    var add = button('lce-btn lce-add', 'fa-plus', 'Add a label (all must match)');
+    var toggle = button('lce-btn lce-toggle', 'fa-pencil', 'Edit as text');
+    var note = document.createElement('span');
+    note.className = 'lce-note';
+    editor.appendChild(add);
+    editor.appendChild(toggle);
+    editor.appendChild(note);
+
+    function labels() { return editor.querySelectorAll('.lce-label'); }
 
     function write() {
-      var labels = [];
-      rows.querySelectorAll('.lce-row').forEach(function(row) {
-        var key = row.querySelector('.lce-key').value.trim();
-        var value = row.querySelector('.lce-value').value.trim();
-        if (key || value) { labels.push(key + ':' + value); }
+      var parts = [];
+      labels().forEach(function(label) {
+        var key = label.querySelector('.lce-key').value.trim();
+        var value = label.querySelector('.lce-value').value.trim();
+        if (key || value) { parts.push(key + ':' + value); }
       });
-      input.value = labels.join(', ');
+      input.value = parts.join(', ');
+      note.textContent = labels().length > 1 ? 'all must match' : '';
       $(input).trigger('change');
     }
 
-    function addRow(key, value) {
-      var row = document.createElement('div');
-      row.className = 'lce-row';
+    function addLabel(key, value) {
+      var label = document.createElement('span');
+      label.className = 'lce-label';
       var keyInput = document.createElement('input');
-      keyInput.className = 'form-control form-control-sm lce-key';
-      keyInput.placeholder = 'key, e.g. os';
+      keyInput.className = 'lce-key';
+      keyInput.placeholder = 'key';
       keyInput.setAttribute('list', keyList.id);
       keyInput.autocomplete = 'off';
       keyInput.value = key;
       var valueList = document.createElement('datalist');
       valueList.id = 'lce-values-' + (++counter);
       var valueInput = document.createElement('input');
-      valueInput.className = 'form-control form-control-sm lce-value';
-      valueInput.placeholder = 'value, e.g. linux';
+      valueInput.className = 'lce-value';
+      valueInput.placeholder = 'value';
       valueInput.setAttribute('list', valueList.id);
       valueInput.autocomplete = 'off';
       valueInput.value = value;
       var colon = document.createElement('span');
       colon.className = 'lce-colon';
       colon.textContent = ':';
-      var remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'lce-btn';
-      remove.title = 'Remove this label';
-      remove.innerHTML = '<i class="fa fa-times"></i>';
+      var remove = button('lce-btn', 'fa-times', 'Remove this label');
       remove.addEventListener('click', function() {
-        if (rows.children.length > 1) {
-          row.remove();
+        if (labels().length > 1) {
+          label.remove();
         } else {
           keyInput.value = valueInput.value = '';
         }
@@ -172,62 +210,49 @@
       });
       keyInput.addEventListener('input', write);
       valueInput.addEventListener('input', write);
-      row.appendChild(keyInput);
-      row.appendChild(colon);
-      row.appendChild(valueInput);
-      row.appendChild(valueList);
-      row.appendChild(remove);
-      rows.appendChild(row);
-      return row;
+      label.appendChild(keyInput);
+      label.appendChild(colon);
+      label.appendChild(valueInput);
+      label.appendChild(valueList);
+      label.appendChild(remove);
+      editor.insertBefore(label, add);
+      return label;
     }
 
-    var add = null;
-    if (kind === 'service') {
-      add = document.createElement('button');
-      add.type = 'button';
-      add.className = 'lce-btn';
-      add.innerHTML = '<i class="fa fa-plus"></i> Add label';
-      add.addEventListener('click', function() {
-        addRow('', '').querySelector('.lce-key').focus();
-      });
-      actions.appendChild(add);
-    }
-    var toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'lce-btn';
-    actions.appendChild(toggle);
-    var note = document.createElement('span');
-    note.className = 'lce-note';
-    actions.appendChild(note);
+    add.addEventListener('click', function() {
+      addLabel('', '').querySelector('.lce-key').focus();
+      write();
+    });
 
     function showText(reason) {
-      rows.style.display = 'none';
-      if (add) { add.style.display = 'none'; }
+      labels().forEach(function(label) { label.remove(); });
+      add.style.display = 'none';
       input.style.display = '';
-      toggle.textContent = 'Edit as key and value';
+      toggle.title = 'Edit as key and value';
+      toggle.innerHTML = '<i class="fa fa-tags"></i>';
       note.textContent = reason || '';
     }
 
-    function showRows() {
-      var labels = parse(input.value);
-      if (!labels) {
-        showText('This value is no list of key:value, edit it as text.');
+    function showLabels() {
+      var parsed = parse(input.value);
+      if (!parsed) {
+        showText('No list of key:value, edit it as text.');
         return;
       }
-      rows.innerHTML = '';
-      labels.forEach(function(pair) { addRow(pair[0], pair[1]); });
-      rows.style.display = '';
-      if (add) { add.style.display = ''; }
+      labels().forEach(function(label) { label.remove(); });
+      parsed.forEach(function(pair) { addLabel(pair[0], pair[1]); });
+      add.style.display = '';
       input.style.display = 'none';
-      toggle.textContent = 'Edit as text';
-      note.textContent = kind === 'service' ? 'All labels must match.' : '';
+      toggle.title = 'Edit as text';
+      toggle.innerHTML = '<i class="fa fa-pencil"></i>';
+      note.textContent = parsed.length > 1 ? 'all must match' : '';
     }
 
     toggle.addEventListener('click', function() {
-      if (input.style.display === 'none') { showText(''); } else { showRows(); }
+      if (input.style.display === 'none') { showText(''); } else { showLabels(); }
     });
     input.parentNode.insertBefore(editor, input);
-    showRows();
+    showLabels();
   }
 
   function scan(root) {
