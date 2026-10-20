@@ -147,6 +147,8 @@ class _SearchSyntaxError(Exception):  # pylint: disable=missing-class-docstring
 
 _search_parser.parse_search = MagicMock(name="stub.parse_search", return_value=None)
 _search_parser.SearchSyntaxError = _SearchSyntaxError
+_search_parser.value_regex_query = MagicMock(name="stub.value_regex_query",
+                                              return_value={})
 
 
 # The host views ask `application.helpers.timezone` which clock the

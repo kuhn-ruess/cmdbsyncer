@@ -26,6 +26,7 @@ search_parser = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(search_parser)
 parse_search = search_parser.parse_search
 SearchSyntaxError = search_parser.SearchSyntaxError
+value_regex_query = search_parser.value_regex_query
 
 
 class ParseSearchTests(unittest.TestCase):
@@ -82,17 +83,30 @@ class ParseSearchTests(unittest.TestCase):
     def test_arbitrary_field_targets_labels_and_inventory(self):
         result = parse_search('env:prod')
         self.assertEqual(result, {'$or': [
-            {'labels.env': {'$regex': 'prod', '$options': 'i'}},
-            {'inventory.env': {'$regex': 'prod', '$options': 'i'}},
+            value_regex_query('labels.env', 'prod'),
+            value_regex_query('inventory.env', 'prod'),
         ]})
 
     def test_explicit_labels_dot_routes_only_to_labels(self):
         result = parse_search('labels.env:prod')
-        self.assertEqual(result, {'labels.env': {'$regex': 'prod', '$options': 'i'}})
+        self.assertEqual(result, value_regex_query('labels.env', 'prod'))
 
     def test_explicit_inventory_dot_routes_only_to_inventory(self):
         result = parse_search('inventory.cpu:8')
-        self.assertEqual(result, {'inventory.cpu': {'$regex': '8', '$options': 'i'}})
+        self.assertEqual(result, value_regex_query('inventory.cpu', '8'))
+
+    def test_field_value_also_matches_numbers_as_text(self):
+        # `$regex` alone never matches a label stored as the integer 5
+        query = value_regex_query('labels.vlan', '5')
+        self.assertEqual(query['$or'][0],
+                         {'labels.vlan': {'$regex': '5', '$options': 'i'}})
+        match = query['$or'][1]['$expr']['$regexMatch']
+        self.assertEqual(match['input']['$convert']['input'], '$labels.vlan')
+        self.assertEqual(match['input']['$convert']['to'], 'string')
+        # missing / null / objects must not turn into a matchable ''
+        self.assertIsNone(match['input']['$convert']['onNull'])
+        self.assertIsNone(match['input']['$convert']['onError'])
+        self.assertEqual(match['regex'], '5')
 
     def test_implicit_and_between_terms(self):
         result = parse_search('prod web')
@@ -208,14 +222,14 @@ class ShortFieldFormTests(unittest.TestCase):
 
     def test_label_key_keeps_its_case(self):
         result = parse_search('l.Env:prod')
-        self.assertEqual(result, {'labels.Env': {'$regex': 'prod', '$options': 'i'}})
+        self.assertEqual(result, value_regex_query('labels.Env', 'prod'))
 
     def test_unknown_field_untouched(self):
         # `hoster` must not be mistaken for the `h` short form
         result = parse_search('hoster:x')
         self.assertEqual(result, {'$or': [
-            {'labels.hoster': {'$regex': 'x', '$options': 'i'}},
-            {'inventory.hoster': {'$regex': 'x', '$options': 'i'}},
+            value_regex_query('labels.hoster', 'x'),
+            value_regex_query('inventory.hoster', 'x'),
         ]})
 
 
@@ -336,7 +350,7 @@ class CreatedDateTests(unittest.TestCase):
 
     def test_a_label_named_created_is_still_reachable(self):
         self.assertEqual(parse_search('labels.created:foo'),
-                         {'labels.created': {'$regex': 'foo', '$options': 'i'}})
+                         value_regex_query('labels.created', 'foo'))
 
     def test_non_dates_are_an_error_instead_of_an_empty_result(self):
         for term in ('created:web*', 'created:tomorrow', 'created:2026-13-01',

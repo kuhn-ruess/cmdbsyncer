@@ -15,7 +15,9 @@ from mongoengine import Q
 
 from application.models.host import Host
 from application.modules.rule.match import MAX_REGEX_LENGTH
-from application.modules.search_parser import parse_search, SearchSyntaxError
+from application.modules.search_parser import (
+    parse_search, SearchSyntaxError, value_regex_query,
+)
 from application.helpers.timezone import user_timezone
 
 FILTER_KEY_RE = re.compile(r'^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$')
@@ -239,19 +241,13 @@ class FilterHasCmdbTemplate(BaseMongoEngineFilter):
 def _build_keyvalue_pipeline(field, value):
     """
     Build a MongoDB `$or` pipeline for a "key:value" label/inventory
-    filter. The string branch uses `$regex` so users can actually pass
-    regex syntax (the filter is advertised as "regex search"); the
-    numeric and boolean branches use exact equality, because BSON
-    numbers and booleans are **not** string-matchable with `$regex` —
-    which is why `input_monitoring:True` used to find nothing.
+    filter. The value is a regex (the filter is advertised as "regex
+    search") and also matches numbers and booleans as text, see
+    `value_regex_query`. `yes`/`no` additionally match the booleans,
+    which as text read `true`/`false`.
     """
     regex_value = _compile_filter_regex(value)
-    or_clauses = [{field: {"$regex": regex_value, "$options": "i"}}]
-
-    try:
-        or_clauses.append({field: int(value)})
-    except ValueError:
-        pass
+    or_clauses = [value_regex_query(field, regex_value)]
 
     lower = value.lower()
     if lower in ('true', 'yes'):
