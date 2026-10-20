@@ -288,6 +288,31 @@ def _dict_match_expr(field_name, regex_str, target):
     }}
 
 
+def value_regex_query(path, regex_str):
+    """
+    Case-insensitive regex match on one label/inventory value, numbers
+    included. `$regex` alone only ever matches strings, so `vlan:5`
+    missed a label stored as the integer 5. The `$expr` branch matches
+    the value converted to a string (numbers, booleans); a missing,
+    null or non-convertible value converts to null and never matches.
+    The plain `$regex` branch stays for list values, whose elements
+    `$regex` matches one by one.
+    """
+    return {'$or': [
+        {path: {'$regex': regex_str, '$options': 'i'}},
+        {'$expr': {'$regexMatch': {
+            'input': {'$convert': {
+                'input': f'${path}',
+                'to': 'string',
+                'onError': None,
+                'onNull': None,
+            }},
+            'regex': regex_str,
+            'options': 'i',
+        }}},
+    ]}
+
+
 _DATE_TERM_RE = re.compile(r'^(?P<operator>>=|<=|>|<)?\s*(?P<date>\S+)$')
 _ISO_DATE_RE = re.compile(r'^(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})$')
 
@@ -423,11 +448,11 @@ def _leaf_to_mongo(field, value, mode, tzinfo):
         return {'hostname': {'$regex': regex_str, '$options': 'i'}}
 
     if field.startswith('labels.') or field.startswith('inventory.'):
-        return {field: {'$regex': regex_str, '$options': 'i'}}
+        return value_regex_query(field, regex_str)
 
     return {'$or': [
-        {f'labels.{field}': {'$regex': regex_str, '$options': 'i'}},
-        {f'inventory.{field}': {'$regex': regex_str, '$options': 'i'}},
+        value_regex_query(f'labels.{field}', regex_str),
+        value_regex_query(f'inventory.{field}', regex_str),
     ]}
 
 

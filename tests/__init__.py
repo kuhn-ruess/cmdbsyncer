@@ -147,6 +147,8 @@ class _SearchSyntaxError(Exception):  # pylint: disable=missing-class-docstring
 
 _search_parser.parse_search = MagicMock(name="stub.parse_search", return_value=None)
 _search_parser.SearchSyntaxError = _SearchSyntaxError
+_search_parser.value_regex_query = MagicMock(name="stub.value_regex_query",
+                                              return_value={})
 
 
 # The host views ask `application.helpers.timezone` which clock the
@@ -723,7 +725,7 @@ _models_host.HostError = type("HostError", (Exception,), {})
 
 def _stub_get_cmdb_model_fields(object_type="host"):
     """Mirror of application.models.host.get_cmdb_model_fields."""
-    cmdb_models = _models_host.app.config.get("CMDB_MODELS", {}) or {}
+    cmdb_models = _models_host.app.config.get("CMDB_MODELS", {}) or {}  # pylint: disable=no-member
     fields = dict(cmdb_models.get(object_type, {}) or {})
     fields.update(cmdb_models.get("all", {}) or {})
     return fields
