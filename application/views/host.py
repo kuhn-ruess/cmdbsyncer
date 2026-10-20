@@ -1534,6 +1534,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
     can_view_details = True
 
     page_size = app.config['HOST_PAGESIZE']
+    page_size_options = (20, 50, 100, 250, 500)
 
     # `cmdb_templates` sits right under Labels and shows the badge row
     # plus, per template, the values it contributes — the same read-only
@@ -2487,6 +2488,17 @@ Impact Chain.
                       return_to=request.referrer or '')
         return redirect(url)
 
+    # Handled client-side like `set_template`: admin/host_list.html opens
+    # the "Remove Template" modal, which posts to `process_template_removal`.
+    @action('remove_template', 'Remove Template', None)
+    def action_remove_template(self, ids):
+        """
+        Action to remove a CMDB template (modal only, needs JS)
+        """
+        del ids
+        flash('Remove Template needs JavaScript enabled', 'error')
+        return redirect(_safe_return_to(request.referrer))
+
     @action('assign_project', 'Assign Project', None)
     def action_assign_project(self, ids):
         """
@@ -2844,6 +2856,31 @@ Impact Chain.
         except Exception as e:  # pylint: disable=broad-exception-caught
             flash(f'Error applying template: {str(e)}', 'error')
 
+        return redirect(return_to)
+
+    @expose('/process_template_removal', methods=['POST'])
+    def process_template_removal(self):
+        """
+        Take the picked template off every selected host. The other
+        templates of a host stay; a host without it is left alone.
+        """
+        host_ids = [x for x in request.form.get('host_ids', '').split(',') if x.strip()]
+        template_id = request.form.get('template_id')
+        return_to = _safe_return_to(request.form.get('return_to'))
+
+        template = _template_field_queryset().filter(id=template_id).first() \
+            if template_id else None
+        if not template:
+            flash('Please select a template', 'error')
+            return redirect(return_to)
+
+        # Template values are merged into the cached export attributes,
+        # so the cache has to go together with the assignment.
+        updated = _scope_hosts_to_user(
+            Host.objects(id__in=host_ids, cmdb_templates=template.id)
+        ).update(pull__cmdb_templates=template.id, set__cache={})
+        flash(f"Removed template '{template.hostname}' from {updated} host(s)",
+              'success')
         return redirect(return_to)
 
     def get_template_list(self):
