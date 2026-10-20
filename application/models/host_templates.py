@@ -99,7 +99,7 @@ def get_template(template_name):
 
 def assignable_templates(template_names=None):
     """
-    Queryset of the active CMDB templates, optionally narrowed to
+    Queryset of the active CMDB templates, ordered by name, optionally narrowed to
     ``template_names`` — the allowlist of a template-restricted user
     (``User.template_scope()``). ``None`` means unrestricted.
 
@@ -111,7 +111,7 @@ def assignable_templates(template_names=None):
     query = Host.objects(object_type='template', deleted_at__exists=False)
     if template_names is not None:
         query = query.filter(hostname__in=list(template_names))
-    return query
+    return query.order_by('hostname')
 
 
 def template_ids_for_names(template_names):
