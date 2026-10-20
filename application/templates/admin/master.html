@@ -1,4 +1,8 @@
 {% extends admin_base_template %}
+{# Edit and details pages get the document as `model`, the host pages
+   (debug, timeline, ...) as `host`. #}
+{% block title %}{{ page_title(admin_view,
+    model if model is defined else (host if host is defined else none)) }}{% endblock %}
 {% block head_css %}
     {{ super() }}
     <link rel="icon" type="image/png" href="{{ config['BASE_PREFIX'] }}static/favicon.png">

@@ -467,6 +467,10 @@ if not CLI_MODE:
             insecure = False
         return {'show_https_warning': insecure}
 
+    # pylint: disable-next=import-outside-toplevel
+    from application.helpers.page_title import page_title
+    app.add_template_global(page_title)
+
     @app.template_filter('localtime')
     def _localtime(value, fmt='%Y-%m-%d %H:%M:%S'):
         """
