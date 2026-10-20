@@ -260,66 +260,63 @@ def _build_keyvalue_pipeline(field, value):
     return {"$or": or_clauses}
 
 
-class FilterLabelKeyAndValue(BaseMongoEngineFilter):
+class _KeyAndValueFilter(BaseMongoEngineFilter):
+    """
+    Filter a "key:value" pair in one dict field of the host, named by
+    `field` in the subclass. `key:none` lists the hosts carrying the key
+    with an empty value.
+    """
+    field = None
+
+    def apply(self, query, value):
+        try:
+            key, value = value.split(':', 1)
+            path = f'{self.field}.{_validate_filter_key(key)}'
+            value = value.strip()
+
+            # Filter for None values, but only if key exists
+            if value.lower() == 'none':
+                pipeline = {
+                    "$and": [
+                        {path: None},
+                        {path: {"$exists": True}}
+                    ]
+                }
+                return query.filter(__raw__=pipeline)
+
+            pipeline = _build_keyvalue_pipeline(path, value)
+            return query.filter(__raw__=pipeline)
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            flash(str(error), 'danger')
+        return False
+
+    def operation(self):
+        return "regex search"
+
+
+class FilterLabelKeyAndValue(_KeyAndValueFilter):
     """
     Filter Key:Value Pair for Label
     """
-
-    def apply(self, query, value):
-        try:
-            key, value = value.split(':', 1)
-            key = _validate_filter_key(key)
-            value = value.strip()
-
-            # Filter for None values, but only if key exists
-            if value.lower() == 'none':
-                pipeline = {
-                    "$and": [
-                        {f"labels.{key}": None},
-                        {f"labels.{key}": {"$exists": True}}
-                    ]
-                }
-                return query.filter(__raw__=pipeline)
-
-            pipeline = _build_keyvalue_pipeline(f'labels.{key}', value)
-            return query.filter(__raw__=pipeline)
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            flash(str(error), 'danger')
-        return False
-
-    def operation(self):
-        return "regex search"
+    field = 'labels'
 
 
-class FilterInventoryKeyAndValue(BaseMongoEngineFilter):
+class FilterInventoryKeyAndValue(_KeyAndValueFilter):
     """
     Filter Key:Value Pair for Inventory
     """
+    field = 'inventory'
 
-    def apply(self, query, value):
-        try:
-            key, value = value.split(':', 1)
-            key = _validate_filter_key(key)
-            value = value.strip()
 
-            # Filter for None values, but only if key exists
-            if value.lower() == 'none':
-                pipeline = {
-                    "$and": [
-                        {f"inventory.{key}": None},
-                        {f"inventory.{key}": {"$exists": True}}
-                    ]
-                }
-                return query.filter(__raw__=pipeline)
-
-            pipeline = _build_keyvalue_pipeline(f'inventory.{key}', value)
-            return query.filter(__raw__=pipeline)
-        except Exception as error:  # pylint: disable=broad-exception-caught
-            flash(str(error), 'danger')
-        return False
-
-    def operation(self):
-        return "regex search"
+class FilterCheckmkAttributeKeyAndValue(_KeyAndValueFilter):
+    """
+    Filter Key:Value Pair in the attributes of the last Checkmk sync:
+    labels and inventory after the Checkmk rewrite rules plus what the
+    templates add — the green badges of the host list. A host whose
+    cache was cleared (edited since its last sync) has none of them
+    until the next sync.
+    """
+    field = 'cache.checkmk_hostattribute.attributes.all'
 
 
 class HostnameAndLabelSearchMixin:  # pylint: disable=too-few-public-methods

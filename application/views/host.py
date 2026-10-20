@@ -72,6 +72,7 @@ from application.views.host_filters import (
     FilterHasCmdbTemplate,
     FilterLabelKeyAndValue,
     FilterInventoryKeyAndValue,
+    FilterCheckmkAttributeKeyAndValue,
     HostnameAndLabelSearchMixin,
 )
 from application.views.host_renderers import (
@@ -1635,6 +1636,10 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
            Host,
            'CMDB Template',
            options=(('yes', 'Assigned'), ('no', 'Not assigned')),
+       ),
+       FilterCheckmkAttributeKeyAndValue(
+        Host,
+        "Checkmk Attribute Key:Value"
        ),
     )
 
