@@ -68,14 +68,14 @@
                     <tr>
                         <th>Folder</th>
                         <th>Hosts</th>
-                        <th>Folder options sent to Checkmk</th>
+                        <th class="text-nowrap">Folder options sent to Checkmk</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
                 {% for row in rows %}
                     <tr>
-                        <td style="padding-left: {{ 0.5 + row.depth * 1.5 }}em;">
+                        <td class="text-nowrap" style="padding-left: {{ 0.5 + row.depth * 1.5 }}em;">
                             <i class="fa fa-folder-o"></i>
                             <code title="{{ row.path }}">{{ row.name }}</code>
                         </td>
@@ -83,7 +83,12 @@
                             {% if row.hosts %}
                             <details>
                                 <summary>{{ row.hosts|length }} here</summary>
-                                {{ row.hosts|join(', ') }}
+                                <ul class="list-unstyled mb-1"
+                                    style="column-width: 22em; max-height: 20em; overflow-y: auto;">
+                                    {% for host in row.hosts %}
+                                    <li class="text-nowrap">{{ host }}</li>
+                                    {% endfor %}
+                                </ul>
                             </details>
                             {% else %}
                             <span class="text-muted">0 here</span>
