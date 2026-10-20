@@ -1430,6 +1430,7 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
     ]
 
     _force_object_type = 'template'
+    column_default_sort = 'hostname'
 
     def get_query(self):
         """
@@ -2787,7 +2788,8 @@ Impact Chain.
     def get_template_list(self):
         """Get available CMDB templates for the action form"""
         try:
-            templates = Host.objects(is_object=True, object_type='template')
+            templates = Host.objects(is_object=True, object_type='template') \
+                .order_by('hostname')
             return list(templates)
         except Exception:  # pylint: disable=broad-exception-caught
             return []
