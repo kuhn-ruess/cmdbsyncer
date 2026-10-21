@@ -115,6 +115,17 @@ def _render_plugin_data(_view, _context, model, _name):
     html += "</table>"
     return Markup(html)
 
+def _render_type(_view, _context, model, _name):
+    """
+    Render the type as before, tagged with its label for the group
+    headings of the account list
+    """
+    # pylint: disable-next=no-member,protected-access
+    labels = dict(Account._fields['type'].choices or [])
+    value = model.type or ''
+    return Markup(f'<span class="account-type" data-type="{escape(value)}" '
+                  f'data-label="{escape(labels.get(value, value))}">{escape(value)}</span>')
+
 class ChildAccountModelView(DefaultModelView):
     """
     Child Account Model
@@ -188,7 +199,7 @@ class AccountModelView(DefaultModelView):
         """
         Limit Objects
         """
-        return Account.objects(is_child__ne=True).order_by('name', 'typ')
+        return Account.objects(is_child__ne=True).order_by('type', 'name')
 
     column_filters = name_and_enabled_filters()
 
@@ -199,6 +210,7 @@ class AccountModelView(DefaultModelView):
     # under its row, read from the plugin's plugin.json.
     edit_template = 'admin/account_edit.html'
     create_template = 'admin/account_create.html'
+    list_template = 'admin/account_list.html'
 
     @staticmethod
     def custom_field_help():
@@ -281,6 +293,7 @@ class AccountModelView(DefaultModelView):
     column_formatters = {
         'password': _render_custom_data,
         'plugin_settings': _render_plugin_data,
+        'type': _render_type,
     }
 
     form_overrides = {

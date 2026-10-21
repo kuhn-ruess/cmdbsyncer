@@ -1,0 +1,158 @@
+{# Foldable group headings for list views that group their rows.
+
+   fold_all_menu() puts Expand all / Collapse all into the menu bar, they
+   stay hidden until the page found groups. fold_assets() brings the
+   styles and window.GroupFold:
+
+     var fold = GroupFold({tbody: tbody, storageKey: '...', rowClass: '...'});
+     var head = fold.header(key, colCount);  // tr.group-header, button inside
+     head.button.appendChild(...);           // the heading's label
+     fold.restore();                         // folded groups from last visit
+
+   Rows carry rowClass, a group is every such row up to the next heading.
+   Which groups are folded is kept per key in the browser, without
+   browser storage every group starts unfolded. #}
+
+{% macro fold_all_menu(push_right=True) %}
+  <li class="nav-item group-fold-all{{ ' ml-auto' if push_right }}" hidden>
+    <a class="nav-link group-expand-all" href="#" role="button">Expand all</a>
+  </li>
+  <li class="nav-item group-fold-all" hidden>
+    <a class="nav-link group-collapse-all" href="#" role="button">Collapse all</a>
+  </li>
+{% endmacro %}
+
+{% macro fold_assets() %}
+<style>
+  tr.group-header > th {
+    background: var(--surface-subtle, #f1f5f9);
+    color: var(--surface-text, #1f2937);
+    border-top: 2px solid var(--surface-border, #94a3b8);
+    padding: 8px 12px;
+    font-weight: 600;
+    text-align: left;
+  }
+  .group-toggle {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5em;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .group-toggle:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+  .group-toggle .group-chevron {
+    display: inline-block;
+    width: 1em;
+    transition: transform 0.15s;
+  }
+  .group-toggle[aria-expanded="false"] .group-chevron {
+    transform: rotate(-90deg);
+  }
+  tr.group-header .group-note {
+    font-weight: normal;
+    color: var(--surface-muted, #64748b);
+    margin-left: 0.25em;
+  }
+  tr.group-folded {
+    display: none;
+  }
+</style>
+<script>
+window.GroupFold = function(options) {
+  var tbody = options.tbody;
+  var folded = {};
+  try {
+    (JSON.parse(localStorage.getItem(options.storageKey) || '[]') || []).forEach(function(key) {
+      folded[key] = true;
+    });
+  } catch (e) { folded = {}; }
+
+  function save() {
+    try { localStorage.setItem(options.storageKey, JSON.stringify(Object.keys(folded))); } catch (e) {}
+  }
+
+  function heads() {
+    return Array.prototype.slice.call(tbody.querySelectorAll('tr.group-header'));
+  }
+
+  function rowsOf(head) {
+    var list = [], el = head.nextElementSibling;
+    while (el && !el.classList.contains('group-header')) {
+      if (el.classList.contains(options.rowClass)) list.push(el);
+      el = el.nextElementSibling;
+    }
+    return list;
+  }
+
+  function isFolded(head) {
+    return head.button.getAttribute('aria-expanded') === 'false';
+  }
+
+  function setFolded(head, fold) {
+    head.button.setAttribute('aria-expanded', fold ? 'false' : 'true');
+    rowsOf(head).forEach(function(row) { row.classList.toggle('group-folded', fold); });
+    if (fold) { folded[head.dataset.key] = true; } else { delete folded[head.dataset.key]; }
+  }
+
+  function header(key, colCount) {
+    var tr = document.createElement('tr');
+    tr.className = 'group-header';
+    tr.dataset.key = key;
+    var th = document.createElement('th');
+    th.colSpan = colCount;
+    th.scope = 'rowgroup';
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'group-toggle';
+    button.title = 'Fold or unfold this group';
+    button.innerHTML = '<span class="fa fa-chevron-down group-chevron" aria-hidden="true"></span>';
+    button.addEventListener('click', function() {
+      setFolded(tr, !isFolded(tr));
+      save();
+    });
+    th.appendChild(button);
+    tr.appendChild(th);
+    tr.button = button;
+    return tr;
+  }
+
+  // Fold the groups folded on the last visit, wire up Expand / Collapse all
+  function restore() {
+    var all = heads();
+    all.forEach(function(head) {
+      head.button.setAttribute('aria-controls',
+        rowsOf(head).map(function(row) { return row.id; }).join(' '));
+      setFolded(head, !!folded[head.dataset.key]);
+    });
+    if (!all.length) return;
+    function foldAll(fold) {
+      return function(event) {
+        event.preventDefault();
+        heads().forEach(function(head) { setFolded(head, fold); });
+        save();
+      };
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.group-fold-all'), function(item) {
+      item.hidden = false;
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.group-expand-all'), function(link) {
+      link.addEventListener('click', foldAll(false));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.group-collapse-all'), function(link) {
+      link.addEventListener('click', foldAll(true));
+    });
+  }
+
+  return {header: header, rowsOf: rowsOf, isFolded: isFolded,
+          setFolded: setFolded, save: save, restore: restore};
+};
+</script>
+{% endmacro %}

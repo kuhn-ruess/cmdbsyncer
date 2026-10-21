@@ -1,0 +1,53 @@
+{% extends 'admin/model/list.html' %}
+{% import 'admin/_group_fold.html' as group_fold %}
+
+{# Accounts grouped by their type. The query orders by type, then name;
+   a heading row goes in front of the first account of every type, it
+   folds the group away (see _group_fold.html). An explicit column sort
+   shows the normal table. #}
+{% block model_menu_bar_after_filters %}
+  {{ super() }}
+  {{ group_fold.fold_all_menu() }}
+{% endblock %}
+
+{% block tail %}
+{{ super() }}
+{{ group_fold.fold_assets() }}
+<script>
+(function() {
+  if (new URLSearchParams(window.location.search).get('sort') !== null) return;
+  var table = document.querySelector('table.model-list');
+  if (!table || !table.tHead || !table.tBodies[0]) return;
+  var tbody = table.tBodies[0];
+  var colCount = table.tHead.rows[0].cells.length;
+  var fold = GroupFold({tbody: tbody, storageKey: 'account-folded-groups',
+                        rowClass: 'account-row'});
+
+  var heads = [];
+  Array.prototype.slice.call(tbody.rows).forEach(function(row) {
+    var tag = row.querySelector('.account-type');
+    if (!tag) return;
+    var type = tag.getAttribute('data-type');
+    var head = heads[heads.length - 1];
+    if (!head || head.dataset.key !== type) {
+      head = fold.header(type, colCount);
+      head.button.appendChild(document.createTextNode(
+        tag.getAttribute('data-label') || type || 'No type'));
+      row.parentNode.insertBefore(head, row);
+      heads.push(head);
+    }
+    row.classList.add('account-row');
+    row.id = 'account-g' + (heads.length - 1) + '-r' + fold.rowsOf(head).length;
+  });
+
+  heads.forEach(function(head) {
+    var count = fold.rowsOf(head).length;
+    var note = document.createElement('span');
+    note.className = 'group-note';
+    note.textContent = count + (count === 1 ? ' account' : ' accounts');
+    head.button.appendChild(note);
+  });
+  fold.restore();
+})();
+</script>
+{% endblock %}

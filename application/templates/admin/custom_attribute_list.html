@@ -1,4 +1,5 @@
 {% extends 'admin/model/list.html' %}
+{% import 'admin/_group_fold.html' as group_fold %}
 
 {# Global Custom Attributes: the rules grouped by the attributes they set.
 
@@ -28,60 +29,16 @@
   <li class="nav-item ml-auto">
     <a class="nav-link" id="ca-view-toggle" href="#"></a>
   </li>
-  <li class="nav-item ca-fold-all" hidden>
-    <a class="nav-link" id="ca-expand-all" href="#" role="button">Expand all</a>
-  </li>
-  <li class="nav-item ca-fold-all" hidden>
-    <a class="nav-link" id="ca-collapse-all" href="#" role="button">Collapse all</a>
-  </li>
+  {{ group_fold.fold_all_menu(push_right=False) }}
 {% endblock %}
 
 {% block tail %}
 {{ super() }}
+{{ group_fold.fold_assets() }}
 <style>
-  tr.ca-group-header > th {
-    background: var(--surface-subtle, #f1f5f9);
-    color: var(--surface-text, #1f2937);
-    border-top: 2px solid var(--surface-border, #94a3b8);
-    padding: 8px 12px;
-    font-weight: 600;
-    text-align: left;
-  }
-  .ca-group-toggle {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 0.5em;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .ca-group-toggle:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
-  }
-  .ca-group-toggle .ca-chevron {
-    display: inline-block;
-    width: 1em;
-    transition: transform 0.15s;
-  }
-  .ca-group-toggle[aria-expanded="false"] .ca-chevron {
-    transform: rotate(-90deg);
-  }
-  tr.ca-rule-row.ca-folded {
-    display: none;
-  }
-  tr.ca-group-header code {
+  tr.group-header code {
     color: inherit;
     font-size: 1em;
-  }
-  tr.ca-group-header .ca-group-note {
-    font-weight: normal;
-    color: var(--surface-muted, #64748b);
-    margin-left: 0.25em;
   }
   tr.ca-rule-row.ca-gap > td {
     border-top: 2px dashed var(--surface-border, #94a3b8);
@@ -171,38 +128,12 @@
   });
   names.sort(function(a, b) { return groups[a][0].info.pos - groups[b][0].info.pos; });
 
-  // Folded groups, by group key, kept in the browser
-  var FOLD_KEY = 'ca-folded-groups';
-  var folded = {};
-  try {
-    (JSON.parse(localStorage.getItem(FOLD_KEY) || '[]') || []).forEach(function(attr) {
-      folded[attr] = true;
-    });
-  } catch (e) { folded = {}; }
-  function saveFolded() {
-    try { localStorage.setItem(FOLD_KEY, JSON.stringify(Object.keys(folded))); } catch (e) {}
-  }
+  var fold = GroupFold({tbody: tbody, storageKey: 'ca-folded-groups',
+                        rowClass: 'ca-rule-row'});
 
-  function header(key, idx) {
-    var tr = document.createElement('tr');
-    tr.className = 'ca-group-header';
-    tr.dataset.key = key;
-    var th = document.createElement('th');
-    th.colSpan = colCount;
-    th.scope = 'rowgroup';
-    var button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'ca-group-toggle';
-    button.title = 'Fold or unfold this group';
-    button.setAttribute('aria-controls', groups[key].map(function(m, j) {
-      return 'ca-g' + idx + '-r' + j;
-    }).join(' '));
-    button.innerHTML = '<span class="fa fa-chevron-down ca-chevron" aria-hidden="true"></span>';
-    button.addEventListener('click', function() {
-      setFolded(tr, button.getAttribute('aria-expanded') === 'true');
-      saveFolded();
-    });
-    th.appendChild(button);
+  function header(key) {
+    var tr = fold.header(key, colCount);
+    var button = tr.button;
     var attrs = groupAttrs[key];
     if (attrs.length) {
       var title = document.createElement('span');
@@ -223,27 +154,10 @@
       note += ', interleaved with rules of other groups (see #)';
     }
     var span = document.createElement('span');
-    span.className = 'ca-group-note';
+    span.className = 'group-note';
     span.textContent = note;
     button.appendChild(span);
-    tr.appendChild(th);
     return tr;
-  }
-
-  function rowsOf(head) {
-    var list = [], el = head.nextElementSibling;
-    while (el && !el.classList.contains('ca-group-header')) {
-      if (el.classList.contains('ca-rule-row')) list.push(el);
-      el = el.nextElementSibling;
-    }
-    return list;
-  }
-
-  function setFolded(head, fold) {
-    var button = head.querySelector('.ca-group-toggle');
-    button.setAttribute('aria-expanded', fold ? 'false' : 'true');
-    rowsOf(head).forEach(function(row) { row.classList.toggle('ca-folded', fold); });
-    if (fold) { folded[head.dataset.key] = true; } else { delete folded[head.dataset.key]; }
   }
 
   function decorate(member) {
@@ -289,32 +203,14 @@
 
   while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
   names.forEach(function(key, idx) {
-    var head = header(key, idx);
-    tbody.appendChild(head);
+    tbody.appendChild(header(key));
     groups[key].forEach(function(member, j) {
       decorate(member);
       member.row.id = 'ca-g' + idx + '-r' + j;
       tbody.appendChild(member.row);
     });
-    setFolded(head, !!folded[key]);
   });
-
-  function foldAll(fold) {
-    return function(event) {
-      event.preventDefault();
-      Array.prototype.forEach.call(tbody.querySelectorAll('tr.ca-group-header'), function(head) {
-        setFolded(head, fold);
-      });
-      saveFolded();
-    };
-  }
-  Array.prototype.forEach.call(document.querySelectorAll('.ca-fold-all'), function(item) {
-    item.hidden = false;
-  });
-  var expandAll = document.getElementById('ca-expand-all');
-  var collapseAll = document.getElementById('ca-collapse-all');
-  if (expandAll) expandAll.addEventListener('click', foldAll(false));
-  if (collapseAll) collapseAll.addEventListener('click', foldAll(true));
+  fold.restore();
 
   // Back to the handle that was moved before the reload
   try {
@@ -333,7 +229,7 @@
   if (!canMove) return;
 
   function isRuleRow(el) { return el && el.classList.contains('ca-rule-row'); }
-  function isHeader(el) { return el && el.classList.contains('ca-group-header'); }
+  function isHeader(el) { return el && el.classList.contains('group-header'); }
 
   function neighbour(row, direction) {
     var el = row[direction];
@@ -361,9 +257,9 @@
     if (toKey === null) { window.location.reload(); return; }
     // A rule moved into a folded group unfolds it, in sight after the reload
     var head = headerOf(row);
-    if (head.querySelector('.ca-group-toggle').getAttribute('aria-expanded') === 'false') {
-      setFolded(head, false);
-      saveFolded();
+    if (fold.isFolded(head)) {
+      fold.setFolded(head, false);
+      fold.save();
     }
     var info = readInfo(row);
     var fromAttrs = groupAttrs[fromKey], toAttrs = groupAttrs[toKey];
