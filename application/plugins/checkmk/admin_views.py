@@ -37,6 +37,7 @@ from .user_models import (
 from .views import (
     CheckmkBiRuleView,
     CheckmkCacheView,
+    CheckmkConfigChecksView,
     CheckmkDataQualityView,
     CheckmkFolderView,
     CheckmkRuleOptimizationView,
@@ -259,12 +260,20 @@ def register_admin_views(admin):
         menu_icon_type='fa',
         menu_icon_value='fa-eye',
     ))
+    admin.add_sub_category(name="Data Quality", parent_name="Checkmk")
     add(checks, CheckmkDataQualityView(
         name="Data Quality Check",
-        category="Checkmk",
+        category="Data Quality",
         endpoint="checkmk_data_quality",
         menu_icon_type='fa',
         menu_icon_value='fa-check-square-o',
+    ))
+    add(checks, CheckmkConfigChecksView(
+        name="Configuration Checks",
+        category="Data Quality",
+        endpoint="checkmk_config_checks",
+        menu_icon_type='fa',
+        menu_icon_value='fa-stethoscope',
     ))
     add(checks, CheckmkCacheView(
         CheckmkObjectCache, name="Cache", category="Checkmk",

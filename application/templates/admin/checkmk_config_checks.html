@@ -1,0 +1,89 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Checkmk Configuration Checks</h3>
+    <p>
+        Pick a Checkmk account and the checks to run. Every check reads part of
+        the site's setup and lists the problems it finds there, for example
+        HTTP checks that check the same URL twice. Running a check never
+        changes anything in Checkmk. <strong>Export PDF</strong> downloads the
+        result as a PDF report.
+    </p>
+
+    {% if not accounts %}
+    <div class="alert alert-warning">
+        No enabled Checkmk (cmkv2) account found. Create one first.
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('.run') }}" class="card app-card mb-4">
+        <div class="card-body">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="form-group">
+                <label for="account">Checkmk account</label>
+                <select class="form-control" id="account" name="account" required>
+                    <option value="">Select account</option>
+                    {% for account in accounts %}
+                    <option value="{{ account }}"
+                            {% if account == selected_account %}selected{% endif %}>
+                        {{ account }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Checks</label>
+                {% for check in checks %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="checks"
+                           value="{{ check.name }}" id="check_{{ check.name }}"
+                           {% if check.name in selected_checks %}checked{% endif %}>
+                    <label class="form-check-label" for="check_{{ check.name }}">
+                        {{ check.title }}
+                        <small class="form-text text-muted mt-0">{{ check.description }}</small>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fa fa-search"></i> Run checks
+            </button>
+            <button type="submit" class="btn btn-outline-secondary"
+                    formaction="{{ url_for('.report') }}"
+                    {% if not pdf_available %}disabled title="{{ pdf_missing }}"{% endif %}>
+                <i class="fa fa-file-pdf-o"></i> Export PDF
+            </button>
+            {% if not pdf_available %}
+            <small class="form-text text-muted">{{ pdf_missing }}</small>
+            {% endif %}
+        </div>
+    </form>
+
+    {% for report in reports or [] %}
+    <div class="card app-card mb-4">
+        <div class="card-header">
+            {{ report.title }} in <strong>{{ report.account }}</strong>
+            <span class="badge {{ 'badge-warning' if report.warnings else 'badge-success' }} ml-1">{{ report.total }}</span>
+        </div>
+        <div class="card-body">
+            {% include 'admin/_config_check_findings.html' %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<style>
+    .cc-stat { margin-right: 1.25rem; }
+    .cc-summary { width: auto; min-width: 22rem; margin-bottom: 1.5rem; }
+    .cc-count { text-align: right; }
+    .cc-total td { font-weight: 600; }
+    .cc-section { margin-top: 1.5rem; }
+    .cc-section-title { border-bottom: 1px solid currentColor; padding-bottom: 0.25rem; }
+    .cc-items { padding-left: 1rem; margin-bottom: 0; }
+    .cc-muted { opacity: 0.7; font-size: 0.875em; }
+    .cc-state { color: #1a1a1a; }
+    .cc-state-warn { background: #ffc107; }
+    .cc-state-crit { background: #dc3545; color: #fff; }
+    .cc-state-unknown { background: #fd7e14; }
+</style>
+{% endblock %}

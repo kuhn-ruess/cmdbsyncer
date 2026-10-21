@@ -1,0 +1,88 @@
+<!doctype html>
+{#
+  Print layout of the Checkmk configuration checks: a paper document in the
+  syncer's design (logo and navbar color of this installation). It opens the
+  browser's print dialog, where "Save as PDF" writes the file. Paper is
+  white whatever theme the user picked, so the colors here are fixed on
+  purpose and the page does not load the theme.
+#}
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Checkmk Configuration Checks · {{ selected_account }}</title>
+    <link rel="icon" type="image/png" href="{{ config['BASE_PREFIX'] }}static/favicon.png">
+    <style>
+        @page { size: A4 landscape; margin: 12mm; }
+        * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body {
+            font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 10pt; color: #2c3e50; background: #fff; margin: 0;
+        }
+        .cc-header {
+            display: flex; align-items: center; gap: 16px;
+            background-color: {{ brand_color }};
+            background-image: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(0,0,0,0.22) 100%);
+            color: #fff; padding: 14px 20px; border-radius: 6px;
+        }
+        .cc-header img { height: 44px; }
+        .cc-header h1 { font-size: 16pt; margin: 0; font-weight: 600; }
+        .cc-header .cc-meta { font-size: 9pt; opacity: 0.85; }
+        h2 { font-size: 13pt; margin: 18px 0 4px; border-bottom: 2px solid {{ brand_color }}; padding-bottom: 3px; }
+        .cc-description { margin: 4px 0 8px; }
+        .cc-stat { margin-right: 14px; }
+        .cc-table { width: 100%; border-collapse: collapse; }
+        .cc-table th {
+            background: #f5f7fa; text-align: left; font-weight: 600;
+            border-bottom: 2px solid #e6e9ec; padding: 5px 6px;
+        }
+        .cc-table td { border-top: 1px solid #eef0f3; padding: 5px 6px; vertical-align: top; }
+        .cc-table tr { page-break-inside: avoid; }
+        .cc-items { padding-left: 14px; margin: 0; }
+        .cc-muted { color: #6c757d; font-size: 8.5pt; }
+        .cc-summary { border-collapse: collapse; margin: 6px 0 4px; min-width: 300px; }
+        .cc-summary th, .cc-summary td { padding: 3px 8px; border-bottom: 1px solid #eef0f3; text-align: left; }
+        .cc-summary th { background: #f5f7fa; }
+        .cc-summary a { color: inherit; text-decoration: none; }
+        .cc-count { text-align: right !important; }
+        .cc-total td { font-weight: 600; }
+        .cc-section { margin-top: 14px; }
+        .cc-section-title { font-size: 11pt; margin: 0 0 4px; padding-bottom: 2px; border-bottom: 1px solid #c8ced6; }
+        .cc-description, .cc-action { margin: 2px 0 4px; }
+        .badge-success { background: #28a745; color: #fff; }
+        .cc-state-warn { background: #ffc107; color: #1a1a1a; }
+        .cc-state-crit { background: #dc3545; color: #fff; }
+        .cc-state-unknown { background: #fd7e14; color: #1a1a1a; }
+        h2 { page-break-before: auto; }
+        .cc-section { page-break-inside: auto; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 8.5pt; }
+        .badge-warning { background: #ffc107; color: #1a1a1a; }
+        .badge-info { background: #17a2b8; color: #fff; }
+        code { font-size: 8.5pt; }
+        .cc-footer { margin-top: 16px; font-size: 8pt; color: #6c757d; }
+        @media screen { body { padding: 16px; } }
+    </style>
+</head>
+<body>
+    <div class="cc-header">
+        <img src="{{ logo_url }}" alt="CMDBsyncer">
+        <div>
+            <h1>Checkmk Configuration Checks</h1>
+            <div class="cc-meta">
+                Account {{ selected_account }}
+                {% if reports %}· {{ reports[0].run_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% for report in reports %}
+    <h2>{{ report.title }}</h2>
+    <p class="cc-description">{{ report.description }}</p>
+    {% include 'admin/_config_check_findings.html' %}
+    {% endfor %}
+
+    <p class="cc-footer">
+        Created by CMDBsyncer. The checks only read the Checkmk configuration.
+    </p>
+    <script>window.addEventListener('load', function () { window.print(); });</script>
+</body>
+</html>

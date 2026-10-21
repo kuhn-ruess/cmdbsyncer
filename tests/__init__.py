@@ -687,6 +687,27 @@ _try_load_real_module(
 )
 
 
+def _load_real_package(package_name, relative_dir):
+    """Like _load_real_module, for a package: its submodules load for real."""
+    directory = os.path.join(_APP_ROOT, relative_dir)
+    spec = importlib.util.spec_from_file_location(
+        package_name, os.path.join(directory, "__init__.py"),
+        submodule_search_locations=[directory])
+    assert spec and spec.loader, f"Cannot load spec for {package_name}"
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[package_name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# The configuration checks import CMK2 and the models lazily; the package
+# and its built-in checks load for the registry and detection tests.
+_load_real_package(
+    "application.plugins.checkmk.config_checks",
+    os.path.join("plugins", "checkmk", "config_checks"),
+)
+
+
 # --- Checkmk plugin modules --------------------------------------------------
 # Additional stubs and module loads needed by checkmk plugin tests.
 # These live here (not in the plugin test directory) because the test bootstrap

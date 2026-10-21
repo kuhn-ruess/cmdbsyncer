@@ -2910,7 +2910,34 @@ class CheckmkFolderView(BaseView):
             docu_link=docu_links['cmk_folders'])
 
 
-class CheckmkDataQualityView(BaseView):
+class _DataQualityAccess:  # pylint: disable=too-few-public-methods
+    """
+    Who may open the Checkmk data quality pages, and which accounts they
+    may pick: the full ``checkmk`` right or the ``checkmk_data_quality``
+    role, limited to the user's own accounts.
+    """
+
+    def is_accessible(self):
+        """ Overwrite """
+        if not current_user.is_authenticated:
+            return False
+        return current_user.has_right('checkmk') \
+            or current_user.has_right('checkmk_data_quality')
+
+    @staticmethod
+    def _accounts():
+        """
+        Enabled Checkmk (cmkv2) accounts the current user may check:
+        an account-restricted user only gets their own.
+        """
+        scope = current_user.account_scope() \
+            if current_user.is_authenticated else None
+        return [a.name for a in
+                Account.objects(enabled=True, type='cmkv2').order_by('name')
+                if scope is None or a.name in scope]
+
+
+class CheckmkDataQualityView(_DataQualityAccess, BaseView):
     """
     Data Quality area: upload a CSV of hostnames and check them against a
     Checkmk account's monitoring data. For every host the report shows whether
@@ -2925,30 +2952,11 @@ class CheckmkDataQualityView(BaseView):
     the Checkmk section.
     """
 
-    def is_accessible(self):
-        """ Overwrite """
-        if not current_user.is_authenticated:
-            return False
-        return current_user.has_right('checkmk') \
-            or current_user.has_right('checkmk_data_quality')
-
     @staticmethod
     def _template_scope():
         """The current user's CMDB-template allowlist, None = unrestricted."""
         return current_user.template_scope() \
             if current_user.is_authenticated else None
-
-    @staticmethod
-    def _accounts():
-        """
-        Enabled Checkmk (cmkv2) accounts the current user may check —
-        an account-restricted user only gets their own.
-        """
-        scope = current_user.account_scope() \
-            if current_user.is_authenticated else None
-        return [a.name for a in
-                Account.objects(enabled=True, type='cmkv2').order_by('name')
-                if scope is None or a.name in scope]
 
     def _render(self, accounts, selected_account='', report=None, extra=None):
         """
@@ -3132,3 +3140,100 @@ class CheckmkDataQualityView(BaseView):
             msg += f"; skipped {len(result['skipped'])} already-existing host(s)"
         flash(msg + '.', 'success')
         return redirect(self.get_url('.index'))
+
+
+class CheckmkConfigChecksView(_DataQualityAccess, BaseView):
+    """
+    Data Quality: Configuration Checks. Pick a Checkmk account and the
+    checks to run (see ``config_checks``), read the problems they find and
+    export them as a printable report. The checks only read from Checkmk.
+    """
+
+    def _selection(self):
+        """``(account, check names, error)`` from the submitted form."""
+        # pylint: disable=import-outside-toplevel
+        from .config_checks import get_check
+        account = request.form.get('account', '')
+        names = [name for name in request.form.getlist('checks')
+                 if get_check(name)]
+        if account not in self._accounts():
+            return account, names, 'Select a Checkmk account first'
+        if not names:
+            return account, names, 'Select at least one check'
+        return account, names, None
+
+    def _run(self):
+        """
+        Run the selected checks. Returns ``(account, names, reports, None)``,
+        or a redirect back to the form as the last element when the
+        selection is incomplete or Checkmk fails.
+        """
+        # pylint: disable=import-outside-toplevel
+        from requests.exceptions import RequestException
+        from .config_checks import run_checks
+        from .cmk2 import CmkException
+        account, names, error = self._selection()
+        if not error:
+            try:
+                return account, names, run_checks(account, names), None
+            except (CmkException, RequestException) as exc:
+                error = f"Checkmk request failed: {exc}"
+        flash(error, 'error')
+        return account, names, None, redirect(self.get_url('.index'))
+
+    @staticmethod
+    def _pdf_state():
+        """Whether the PDF export works, and the hint when it does not."""
+        # pylint: disable=import-outside-toplevel
+        from .config_checks import pdf_available, PDF_MISSING
+        available = pdf_available()
+        return {'pdf_available': available,
+                'pdf_missing': '' if available else PDF_MISSING}
+
+    @expose('/', methods=['GET'])
+    def index(self):
+        """The account and check selection."""
+        # pylint: disable=import-outside-toplevel
+        from .config_checks import get_checks
+        checks = get_checks()
+        return self.render('admin/checkmk_config_checks.html',
+                           accounts=self._accounts(), checks=checks,
+                           selected_account='',
+                           selected_checks=[c.name for c in checks],
+                           reports=None, **self._pdf_state())
+
+    @expose('/run', methods=['POST'])
+    def run(self):
+        """Run the selected checks and show their problems."""
+        # pylint: disable=import-outside-toplevel
+        from .config_checks import get_checks
+        account, names, reports, failed = self._run()
+        if failed:
+            return failed
+        return self.render('admin/checkmk_config_checks.html',
+                           accounts=self._accounts(), checks=get_checks(),
+                           selected_account=account, selected_checks=names,
+                           reports=reports, **self._pdf_state())
+
+    @expose('/report', methods=['POST'])
+    def report(self):
+        """The same checks as a PDF download in the syncer design."""
+        # pylint: disable=import-outside-toplevel
+        import os
+        from flask import Response
+        from .config_checks import PDF_MISSING
+        try:
+            from .config_checks.pdf import render_pdf, pdf_filename
+        except ImportError:
+            flash(PDF_MISSING, 'error')
+            return redirect(self.get_url('.index'))
+        account, _names, reports, failed = self._run()
+        if failed:
+            return failed
+        pdf = render_pdf(
+            reports, account,
+            brand_color=app.config.get('STYLE_NAV_BACKGROUND_COLOR'),
+            logo_path=os.path.join(app.root_path, 'static', 'logo_white.png'))
+        return Response(pdf, mimetype='application/pdf', headers={
+            'Content-Disposition':
+                f'attachment; filename="{pdf_filename(account)}"'})

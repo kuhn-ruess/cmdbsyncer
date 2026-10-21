@@ -256,6 +256,11 @@ ENTRIES = {
             "Check a list of host names against a Checkmk site: is the host "
             "known, does its agent answer, who may see it."
         ),
+        'Configuration Checks': (
+            "Run checks against a Checkmk site's setup, for example for HTTP "
+            "checks that check the same URL twice, and export the problems "
+            "as a PDF report."
+        ),
         'BI Aggregation': (
             "Define the Checkmk BI aggregations the syncer creates."
         ),

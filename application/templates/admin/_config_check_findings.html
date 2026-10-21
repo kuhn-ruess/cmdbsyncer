@@ -1,0 +1,99 @@
+{#
+  One configuration check report, separated by topic: a summary with the
+  count per topic, then one section per topic with what it means, what to
+  do and a table with the columns the topic declares. Shared by the page
+  (checkmk_config_checks.html) and its print layout
+  (checkmk_config_checks_report.html), so both show the same thing.
+#}
+{% macro cell(column, value, scope_folder) %}
+{%- if column.kind == 'items' -%}
+<ul class="cc-items">
+    {% for item in value or [] %}
+    <li>
+        {% if item.service %}<strong>{{ item.service }}</strong>{% endif %}
+        {% if item.rule %}{{ item.rule }}{% endif %}
+        <div class="cc-muted">
+            {{ item.detail }}{% if item.folder and item.folder != scope_folder %}, folder <code>{{ item.folder }}</code>{% endif %}{% if item.rule_id %},
+            rule <code>{{ item.rule_id }}</code>{% endif %}
+        </div>
+    </li>
+    {% endfor %}
+</ul>
+{%- elif column.kind == 'code' -%}
+<code>{{ value }}</code>
+{%- elif column.kind == 'state' -%}
+<span class="badge cc-state cc-state-{{ value | lower }}">{{ value }}</span>
+{%- else -%}
+{{ value }}
+{%- endif -%}
+{% endmacro %}
+
+<p class="cc-stats">
+    {% for label, value in report.stats %}
+    <span class="cc-stat">{{ label }}: <strong>{{ value }}</strong></span>
+    {% endfor %}
+</p>
+
+<table class="table table-sm cc-summary">
+    <thead>
+        <tr><th>Topic</th><th class="cc-count">Findings</th></tr>
+    </thead>
+    <tbody>
+        {% for section in report.sections %}
+        <tr>
+            <td><a href="#cc-{{ report.name }}-{{ section.topic.key }}">{{ section.topic.title }}</a></td>
+            <td class="cc-count">
+                {% if section.findings %}
+                <span class="badge {{ 'badge-warning' if section.topic.severity == 'warning' else 'badge-info' }}">{{ section.findings | length }}</span>
+                {% else %}
+                <span class="badge badge-success">0</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        <tr class="cc-total">
+            <td>Total</td>
+            <td class="cc-count"><strong>{{ report.total }}</strong></td>
+        </tr>
+    </tbody>
+</table>
+
+{% for section in report.sections %}
+{% set topic = section.topic %}
+<section class="cc-section" id="cc-{{ report.name }}-{{ topic.key }}">
+    <h5 class="cc-section-title">
+        {{ topic.title }}
+        {% if section.findings %}
+        <span class="badge {{ 'badge-warning' if topic.severity == 'warning' else 'badge-info' }}">{{ section.findings | length }}</span>
+        {% else %}
+        <span class="badge badge-success">0</span>
+        {% endif %}
+    </h5>
+    {% if section.findings %}
+    <p class="cc-description">{{ topic.description }}</p>
+    <p class="cc-action"><strong>What to do:</strong> {{ topic.action }}</p>
+    <div class="table-responsive">
+        <table class="table table-sm cc-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    {% for column in topic.columns %}<th>{{ column.label }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for finding in section.findings %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    {% for column in topic.columns %}
+                    <td>{{ cell(column, finding['values'][column.key], finding['values'].get('folder')) }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="cc-muted">No findings.</p>
+    {% endif %}
+</section>
+{% endfor %}
