@@ -85,6 +85,7 @@ application = [
     "static/**/*",
     "themes/*.css",
     "plugins/**/plugin.json",
+    "plugins/*/data/*.json",
 ]
 
 [tool.pylint.main]
