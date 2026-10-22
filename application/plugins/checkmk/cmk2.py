@@ -30,6 +30,13 @@ class CmkException(Exception):
         super().__init__(*args)
         self.failed_hosts = failed_hosts or {}
 
+
+class CmkTimeout(CmkException):
+    """
+    Checkmk did not answer within the request timeout. The request may
+    still have been applied on the Checkmk side.
+    """
+
 class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
     """
     Get Data from CMK
@@ -273,7 +280,7 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
             # error. The caller logs it and the sync continues instead of dying
             # with a traceback — and the message says out loud that Checkmk may
             # still have applied the operation.
-            raise CmkException(
+            raise CmkTimeout(
                 f"Timeout on {method.upper()} {url}. Checkmk may still have applied "
                 "the request — it was not repeated to avoid duplicate operations. "
                 "Raise 'request_timeout' on the account if this happens regularly."
