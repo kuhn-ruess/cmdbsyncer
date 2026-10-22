@@ -15,7 +15,7 @@ from types import ModuleType, SimpleNamespace
 
 from application import app
 from application.helpers.label_hash import syncer_hash
-from application.plugins.checkmk.cmk2 import CmkException
+from application.plugins.checkmk.cmk2 import CmkException, CmkTimeout
 from application.plugins.checkmk.cmk_rules import (
     clean_postproccessed,
     deep_compare,
@@ -1829,6 +1829,34 @@ class TestRefusedUpdateKeepsTheRule(unittest.TestCase):
         self.assertTrue(any(
             'Could not update Rule r1' in str(entry)
             for entry in self.sync.log_details))
+
+
+class TestUpdateRuleTimeout(unittest.TestCase):
+    """
+    A PUT that runs into the read timeout is not a rejected ``If-Match: *``.
+    Falling back to GET+PUT sent the very same update a second time and
+    cost a second full timeout per rule.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync._rule_etag_wildcard_rejected = None
+        self.methods = []
+
+        def fake_request(_url, method='GET', **_kw):
+            self.methods.append(method)
+            raise CmkTimeout('Timeout on PUT')
+        self.sync.request = MagicMock(side_effect=fake_request)
+
+    def test_a_timed_out_put_is_not_sent_again(self):
+        with self.assertRaises(CmkTimeout):
+            self.sync.update_rule('r1', {'value_raw': "{}"})
+        self.assertEqual(self.methods, ['PUT'])
+
+    def test_a_timeout_keeps_the_wildcard(self):
+        with self.assertRaises(CmkTimeout):
+            self.sync.update_rule('r1', {'value_raw': "{}"})
+        self.assertIsNone(self.sync._rule_etag_wildcard_rejected)
 
 
 class TestDryRunSendsNothing(unittest.TestCase):

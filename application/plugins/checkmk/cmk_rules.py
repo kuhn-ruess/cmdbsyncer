@@ -15,7 +15,7 @@ from mongoengine.errors import DoesNotExist
 from application import app, logger
 from application.models.host import Host
 from application.models.host_templates import active_templates
-from application.plugins.checkmk.cmk2 import CmkException, CMK2
+from application.plugins.checkmk.cmk2 import CmkException, CmkTimeout, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
 from application.plugins.checkmk.helpers import make_progress, resolve_loop_list
 from application.modules.rule.list_source import (
@@ -1142,6 +1142,11 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                     rule_url, data=update_payload, method="PUT",
                     additional_header={'If-Match': '*'},
                 )
+            except CmkTimeout:
+                # Not a rejected wildcard: Checkmk is just slow. Sending the
+                # same PUT again would cost another full timeout and may
+                # apply the update twice.
+                raise
             except CmkException:
                 self._rule_etag_wildcard_rejected = True
             else:
