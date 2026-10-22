@@ -35,6 +35,8 @@ KEEP_VALUE_HINT = "Value managed manually in Checkmk - Syncer will not overwrite
 # Appended to the rule description of a ``keep_value`` outcome, so the Checkmk
 # rule list already says the value may be adjusted there.
 KEEP_VALUE_MARK = "(Value editable)"
+# Checkmk returns every explicit password of a rule value masked like this.
+MASKED_PASSWORD = "'******'"
 
 # Jinja variable of a per host Setup Rule: the folder the host export puts
 # the host in (see rules.host_folder). Rules rendered from a list or as
@@ -2774,7 +2776,12 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             'hosts_only': not condition_match and
                           condition_without_hosts(rule['condition']) ==
                           condition_without_hosts(cmk['condition']),
-            'comment': rule.get('comment', '') == cmk['comment'],
+            # A ``keep_value`` rule is never recreated over its comment: that
+            # would throw away the value adjusted in Checkmk, and a password
+            # in it can't be written back anyway, Checkmk only returns it
+            # masked.
+            'comment': rule.get('comment', '') == cmk['comment'] or
+                       bool(rule.get('keep_value')),
             'value': value_match,
             # ``keep_value`` outcomes are written once and then left for the
             # operator to adjust in Checkmk, so drift is not a mismatch.
@@ -2796,6 +2803,11 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         properties = dict(cmk_rule['extensions']['properties'])
         current = properties.get('description', '')
         if current == wanted:
+            return
+        if MASKED_PASSWORD in cmk_rule['extensions']['value_raw']:
+            # The value as read holds the password masked. Sending it back
+            # would replace the real password with the mask, so the
+            # description stays as it is.
             return
         properties['description'] = wanted
         rule_id = cmk_rule['id']
