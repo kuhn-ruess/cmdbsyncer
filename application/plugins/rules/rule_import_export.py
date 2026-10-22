@@ -10,7 +10,11 @@ Two layers of API:
 * ``export_rules``, ``export_all_rules``, ``import_rules`` — CLI
   wrappers that print progress and read/write files.
 """
+import io
 import json
+import os
+import zipfile
+from contextlib import contextmanager
 from json.decoder import JSONDecodeError
 import importlib
 from datetime import datetime
@@ -294,14 +298,47 @@ def export_rules(rule_type):
             print(rulename)
 
 
-def export_all_rules(target_path=None, include_hosts=False,
+def _write_all_rules(outfile, include_hosts, include_accounts,
+                     include_users, include_passwords):
+    """Write every rule as line-delimited JSON. Returns the rule count."""
+    total = 0
+    last_type = None
+    for rule_type, rule in iter_all_rules(include_hosts, include_accounts,
+                                          include_users, include_passwords):
+        if rule_type != last_type:
+            outfile.write(json.dumps({"rule_type": rule_type}) + "\n")
+            last_type = rule_type
+            print(f"* Exporting {rule_type}")
+        outfile.write(rule + "\n")
+        total += 1
+    return total
+
+
+@contextmanager
+def _open_export(target_path, as_zip):
+    """Text file to write an export into, inside a zip archive with *as_zip*."""
+    if not as_zip:
+        with open(target_path, 'w', encoding='utf-8') as outfile:
+            yield outfile
+        return
+    member = os.path.splitext(os.path.basename(target_path))[0] + ".jsonl"
+    with zipfile.ZipFile(target_path, 'w', zipfile.ZIP_DEFLATED) as archive, \
+            archive.open(member, 'w') as raw, \
+            io.TextIOWrapper(raw, encoding='utf-8') as outfile:
+        yield outfile
+
+
+def export_all_rules(target_path=None, include_hosts=False,  # pylint: disable=too-many-arguments,too-many-positional-arguments
                      include_accounts=False, include_users=False,
-                     include_passwords=False):
+                     include_passwords=False, as_zip=False):
     """
     Export all Rules of every known type into a single file (CLI).
+    With *as_zip* the file is written compressed into a zip archive,
+    which ``import_rules`` reads back as it is.
     """
     if not target_path:
-        target_path = f"syncer_rules_export_{datetime.now():%Y%m%d_%H%M%S}.jsonl"
+        target_path = f"syncer_rules_export_{datetime.now():%Y%m%d_%H%M%S}"
+        target_path += ".zip" if as_zip else ".jsonl"
     skipped = [
         (include_hosts, '--include-hosts', HOST_COLLECTION_RULE_TYPE),
         (include_accounts, '--include-accounts', ACCOUNTS_RULE_TYPE),
@@ -312,17 +349,9 @@ def export_all_rules(target_path=None, include_hosts=False,
         if not enabled:
             print(f"* Skipped (use {flag} to export {rule_type})")
 
-    total = 0
-    last_type = None
-    with open(target_path, 'w', encoding='utf-8') as outfile:
-        for rule_type, rule in iter_all_rules(include_hosts, include_accounts,
-                                              include_users, include_passwords):
-            if rule_type != last_type:
-                outfile.write(json.dumps({"rule_type": rule_type}) + "\n")
-                last_type = rule_type
-                print(f"* Exporting {rule_type}")
-            outfile.write(rule + "\n")
-            total += 1
+    with _open_export(target_path, as_zip) as outfile:
+        total = _write_all_rules(outfile, include_hosts, include_accounts,
+                                 include_users, include_passwords)
     print(f"Wrote {total} rules to {target_path}")
 
 
@@ -341,12 +370,27 @@ def import_rules(rulefile_path, override=False):
     """
     Import Rules into the CMDB Syncer (CLI).
     Supports single-type files (rule_type guessed from filename) and
-    multi-type files with multiple ``{"rule_type": "..."}`` header lines.
+    multi-type files with multiple ``{"rule_type": "..."}`` header lines,
+    each also packed into a zip archive.
     With *override* existing rules are replaced instead of skipped.
     """
+    if override:
+        print("* Override enabled: existing rules will be replaced")
+    if zipfile.is_zipfile(rulefile_path):
+        with zipfile.ZipFile(rulefile_path) as archive:
+            for member in archive.namelist():
+                if member.endswith('/'):
+                    continue
+                print(f"* Reading {member}")
+                _import_text(archive.read(member).decode('utf-8'), member,
+                             override)
+        return
     with open(rulefile_path, encoding='utf-8') as rulefile:
-        text = rulefile.read()
+        _import_text(rulefile.read(), rulefile_path, override)
 
+
+def _import_text(text, source_name, override):
+    """Import the content of one export file, *source_name* is its name."""
     has_header = any(
         line.strip().startswith('{"rule_type"') and 'rule_type' in line
         for line in text.splitlines()
@@ -354,14 +398,12 @@ def import_rules(rulefile_path, override=False):
 
     default_type = None
     if not has_header:
-        default_type = get_ruletype_by_filename(rulefile_path)
+        default_type = get_ruletype_by_filename(source_name)
         if default_type not in enabled_rules:
             print("Ruletype not supported")
             print(f"Currently supported: {', '.join(enabled_rules.keys())}")
             return
 
-    if override:
-        print("* Override enabled: existing rules will be replaced")
     counts = import_rule_lines(text.splitlines(), default_rule_type=default_type,
                                override=override)
     for rule_type, count in counts.items():

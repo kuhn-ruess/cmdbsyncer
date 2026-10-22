@@ -45,8 +45,13 @@ def cli_import_rules(rulefile_path, override, debug):# pylint: disable=unused-ar
               help="Also export the Secret Store (skipped by default; "
                    "the entries are encrypted with this instance's key, "
                    "treat the output as secret).")
-def cli_export_all_rules(target_path, include_hosts, include_accounts,
-                         include_users, include_passwords):
+@click.option("--zip", "as_zip", is_flag=True, default=False,
+              help="Write the export compressed into a zip archive, "
+                   "import_rules reads it as it is.")
+@click.option("--debug", default=False, is_flag=True)
+def cli_export_all_rules(target_path, include_hosts, include_accounts,  # pylint: disable=too-many-arguments,too-many-positional-arguments
+                         include_users, include_passwords, as_zip,
+                         debug):  # pylint: disable=unused-argument
     """
     Export all Rules of every type into a single file.
     If no path is given, a timestamped filename is generated.
@@ -57,6 +62,7 @@ def cli_export_all_rules(target_path, include_hosts, include_accounts,
         include_accounts=include_accounts,
         include_users=include_users,
         include_passwords=include_passwords,
+        as_zip=as_zip,
     )
 
 @cli_rules.command('create_rules')

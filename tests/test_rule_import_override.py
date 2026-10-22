@@ -6,8 +6,13 @@ import importlib.util
 import json
 import os
 import sys
+import tempfile
 import types
 import unittest
+import zipfile
+from contextlib import redirect_stdout
+from io import StringIO
+from unittest.mock import patch
 
 from mongoengine.errors import NotUniqueError
 
@@ -146,6 +151,36 @@ class ImportOverrideTests(unittest.TestCase):
         counts = mod.import_rule_lines(lines, override=True)
         self.assertEqual(counts, {'custom_attributes': 1})
         self.assertEqual(FakeRule.store[0]['value'], 'new')
+
+
+
+class ZipExportTests(unittest.TestCase):
+    def setUp(self):
+        FakeRule.store = []
+        self.tmp = tempfile.TemporaryDirectory()  # pylint: disable=consider-using-with
+        self.addCleanup(self.tmp.cleanup)
+
+    def _export(self, path):
+        rules = [('custom_attributes', json.dumps(_rule('a' * 24, 'rule1', 'v')))]
+        with patch.object(mod, 'iter_all_rules', return_value=iter(rules)), \
+                redirect_stdout(StringIO()):
+            mod.export_all_rules(path, as_zip=True)
+
+    def test_zip_export_is_imported_back(self):
+        path = os.path.join(self.tmp.name, 'debug.zip')
+        self._export(path)
+
+        with zipfile.ZipFile(path) as archive:
+            self.assertEqual(archive.namelist(), ['debug.jsonl'])
+        with redirect_stdout(StringIO()):
+            mod.import_rules(path)
+        self.assertEqual([x['name'] for x in FakeRule.store], ['rule1'])
+
+    def test_default_name_ends_in_zip(self):
+        os.chdir(self.tmp.name)
+        self.addCleanup(os.chdir, REPO_ROOT)
+        self._export(None)
+        self.assertTrue(os.listdir(self.tmp.name)[0].endswith('.zip'))
 
 
 if __name__ == '__main__':
