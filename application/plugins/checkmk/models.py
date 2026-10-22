@@ -719,12 +719,17 @@ class CheckmkRewriteAttributeRule(db.Document):
 #.
 #   .-- Checkmk Settings
 
+# The edition suffix of the omd version (2.4.0p12.cee, 2.5.0p1.pro).
+# Checkmk 2.5 renamed the editions and with them the suffixes.
 editions = [
-    ('cee', "Checkmk Enterprise Edition"),
-    ('cre', "Checkmk RAW Edition"),
-    ('cce', "Checkmk Cloud Edition"),
-    ('cme', "Checkmk MSP Edition"),
-
+    ('cee', "Checkmk Enterprise Edition (up to 2.4)"),
+    ('cre', "Checkmk RAW Edition (up to 2.4)"),
+    ('cce', "Checkmk Cloud Edition (up to 2.4)"),
+    ('cme', "Checkmk MSP Edition (up to 2.4)"),
+    ('pro', "Checkmk Pro (2.5 and later)"),
+    ('community', "Checkmk Community (2.5 and later)"),
+    ('ultimate', "Checkmk Ultimate (2.5 and later)"),
+    ('ultimatemt', "Checkmk Ultimate with Multi-Tenancy (2.5 and later)"),
 ]
 class CheckmkSettings(db.Document):
     """
