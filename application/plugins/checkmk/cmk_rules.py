@@ -2148,8 +2148,14 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         Content key of a built rule, used to keep ``rulsets_by_type`` free
         of duplicates.
+
+        The description is left out: it only names the Setup Rule, and two
+        Setup Rules rendering the very same Checkmk rule must not become two
+        Checkmk rules (see ``_collect_rule``).
         """
-        return json.dumps(rule, sort_keys=True, default=repr)
+        return json.dumps({key: value for key, value in rule.items()
+                           if key != 'description'},
+                          sort_keys=True, default=repr)
 
     def _collect_rule(self, rule_type, updated_rule):
         """
@@ -2175,12 +2181,21 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # the list does not actually contain.
         cached = self._rule_signatures.get(rule_type)
         if cached is None or cached[0] is not rules or cached[2] != len(rules):
-            cached = [rules, {self._rule_signature(rule) for rule in rules}, len(rules)]
+            cached = [rules, {self._rule_signature(rule): rule for rule in rules},
+                      len(rules)]
             self._rule_signatures[rule_type] = cached
         signature = self._rule_signature(updated_rule)
-        if signature in cached[1]:
+        known = cached[1].get(signature)
+        if known is not None:
+            # Two Setup Rules render the same Checkmk rule. Naming one of
+            # them would depend on which host came first, and the
+            # description would flip on every run — name neither.
+            if known.get('description') != updated_rule.get('description'):
+                known['description'] = self.rule_marker
+                if known.get('keep_value'):
+                    known['description'] += f" {KEEP_VALUE_MARK}"
             return
-        cached[1].add(signature)
+        cached[1][signature] = updated_rule
         rules.append(updated_rule)
         cached[2] = len(rules)
 
@@ -2783,6 +2798,38 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         our_rule['_skip_create'] = True
         return True
 
+    @staticmethod
+    def _cmk_facts(cmk_rule):
+        """
+        The parts of a Checkmk rule ``_compare_rule`` looks at. The folder
+        is compared against the outcome's configured folder, so a rule that
+        drifted into the wrong folder is corrected instead of accepted.
+        """
+        extensions = cmk_rule['extensions']
+        return {
+            'condition': extensions['conditions'],
+            'comment': extensions['properties'].get('comment', ''),
+            'value': extensions['value_raw'],
+            'folder': normalize_cmk_folder(extensions.get('folder', '/')),
+        }
+
+    def _has_exact_partner(self, rule, cmk_rule, cmk_rules):
+        """
+        Whether another owned Checkmk rule of the ruleset already is exactly
+        ``rule``. Then ``cmk_rule`` is a stale leftover: adjusting it in
+        place would cost a PUT, and the exact rule would be deleted as a
+        duplicate right after — deleting ``cmk_rule`` is all it takes.
+        """
+        for other in cmk_rules:
+            if other is cmk_rule or not self._owns_rule(other):
+                continue
+            comparison = self._compare_rule(rule, self._cmk_facts(other))
+            if comparison and comparison['condition'] and \
+                    comparison['comment'] and comparison['value_ok'] and \
+                    comparison['folder']:
+                return True
+        return False
+
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     def clean_rules(self):
         """
@@ -2828,26 +2875,13 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
 
                     value = cmk_rule['extensions']['value_raw']
                     cmk_condition = cmk_rule['extensions']['conditions']
-                    # Folder the rule currently lives in on the Checkmk side.
-                    # Compared against the outcome's configured folder so a rule
-                    # that drifted into the wrong folder is corrected instead of
-                    # silently accepted.
-                    cmk_folder = normalize_cmk_folder(
-                        cmk_rule['extensions'].get('folder', '/'))
                     rule_found = False
                     condition_matches = []  # Collect all rules with matching conditions
                     # Rules that differ from the Checkmk one only in the
                     # coalesced host list (see optimize_rules).
                     host_list_matches = []
 
-                    cmk_comment = cmk_rule['extensions']['properties'].get(
-                        'comment', '')
-                    cmk_facts = {
-                        'condition': cmk_condition,
-                        'comment': cmk_comment,
-                        'value': value,
-                        'folder': cmk_folder,
-                    }
+                    cmk_facts = self._cmk_facts(cmk_rule)
                     for rule in list(rules):
                         # ``sort_rules`` needs every owned rule to keep
                         # its (rulesets_by_type) slot with a captured
@@ -2917,11 +2951,16 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                     # PUT preserves the rule id and audit history and avoids a
                     # destructive delete+recreate (which briefly removes the
                     # rule from the active policy and churns ids).
-                    if not rule_found and len(condition_matches) == 1 and \
-                            condition_matches[0]['folder_match'] and \
-                            not condition_matches[0]['rule'].get('keep_value') and \
-                            not condition_matches[0]['value_match']:
-                        our_rule = condition_matches[0]['rule']
+                    drift = condition_matches[0] \
+                        if not rule_found and len(condition_matches) == 1 \
+                        else {}
+                    if drift.get('folder_match') and \
+                            not drift['rule'].get('keep_value') and \
+                            not drift['value_match'] and \
+                            not self._has_exact_partner(
+                                drift['rule'], cmk_rule,
+                                rule_response['value']):
+                        our_rule = drift['rule']
                         rule_id = cmk_rule['id']
                         update_payload = {
                             "properties": {
@@ -2974,7 +3013,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                     # several candidates we cannot tell which one the
                     # Checkmk rule grew out of.
                     if not rule_found and not condition_matches and \
-                            len(host_list_matches) == 1:
+                            len(host_list_matches) == 1 and \
+                            not self._has_exact_partner(
+                                host_list_matches[0], cmk_rule,
+                                rule_response['value']):
                         our_rule = host_list_matches[0]
                         rule_id = cmk_rule['id']
                         cmk_hosts = condition_hosts(cmk_condition)

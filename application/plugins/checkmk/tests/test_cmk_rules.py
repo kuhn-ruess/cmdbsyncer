@@ -1817,6 +1817,22 @@ class TestRefusedUpdateKeepsTheRule(unittest.TestCase):
         self.assertTrue(local.get('_skip_create'))
         self.assertEqual(local.get('_cmk_id'), 'r1')
 
+    def test_a_stale_copy_is_deleted_instead_of_updated(self):
+        # Checkmk holds the old value and the wanted one under the same
+        # condition. Updating the stale rule cost a PUT, and the exact rule
+        # was then deleted as a duplicate — deleting the stale one is enough.
+        stale = self._cmk_rule(['h1'], "'old'")
+        exact = dict(self._cmk_rule(['h1'], "'new'"), id='r2')
+        calls = self._wire([stale, exact])
+        local = self._local(['h1'], "'new'")
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['PUT'], [])
+        self.assertEqual(calls['DELETE'], ['/objects/rule/r1'])
+        self.assertEqual(local.get('_cmk_id'), 'r2')
+
     def test_the_failure_is_reported(self):
         self._wire([self._cmk_rule(['h1'], "{'secret': 'old'}")])
         self.sync.rulsets_by_type = {
@@ -1827,6 +1843,32 @@ class TestRefusedUpdateKeepsTheRule(unittest.TestCase):
         self.assertTrue(any(
             'Could not update Rule r1' in str(entry)
             for entry in self.sync.log_details))
+
+
+class TestCollectRuleDescription(unittest.TestCase):
+    """_collect_rule: one Checkmk rule rendered by several Setup Rules."""
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync._rule_signatures = {}
+
+    def test_collect_rule_names_no_setup_rule_for_a_shared_rule(self):
+        # Two Setup Rules rendering the same Checkmk rule used to yield two
+        # rules differing only in the description. Checkmk got the rule
+        # twice, and which copy carried which name depended on the host
+        # order, so every run rewrote the descriptions.
+        def _rule(name):
+            return {'folder': '/', 'value': "'v'", 'optimize': False,
+                    'condition': {'host_tags': []},
+                    'description': f'{self.sync.rule_marker} - {name}'}
+
+        for first, second in (('SMS', 'MAIL'), ('MAIL', 'SMS')):
+            self.sync.rulsets_by_type = {}
+            self.sync._collect_rule('ruleset1', _rule(first))
+            self.sync._collect_rule('ruleset1', _rule(second))
+            rules = self.sync.rulsets_by_type['ruleset1']
+            self.assertEqual(len(rules), 1)
+            self.assertEqual(rules[0]['description'], self.sync.rule_marker)
 
 
 class TestUpdateRuleTimeout(unittest.TestCase):
