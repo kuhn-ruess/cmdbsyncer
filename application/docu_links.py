@@ -16,6 +16,7 @@ docu_links = {
     'cmk_groups': 'https://docs.cmdbsyncer.de/checkmk/groups_management/',
     'cmk_user_generation': 'https://docs.cmdbsyncer.de/checkmk/user_generation/',
     'cmk_setup_rules': 'https://docs.cmdbsyncer.de/checkmk/rules_management/',
+    'cmk_sites': 'https://docs.cmdbsyncer.de/ansible/cmk_sites/',
     'cmk_hosttags': 'https://docs.cmdbsyncer.de/checkmk/create_hosttags/',
     'cmk_password_store': 'https://docs.cmdbsyncer.de/checkmk/password_store/',
     'cmk_folders': 'https://docs.cmdbsyncer.de/checkmk/folders/',

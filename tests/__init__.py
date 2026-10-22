@@ -685,6 +685,12 @@ _try_load_real_module(
     "application.plugins.checkmk.data_quality",
     os.path.join("plugins", "checkmk", "data_quality.py"),
 )
+# download_catalog only needs requests and parse_proxy; the Checkmk Settings
+# view imports it at module load.
+_try_load_real_module(
+    "application.plugins.checkmk.download_catalog",
+    os.path.join("plugins", "checkmk", "download_catalog.py"),
+)
 
 
 def _load_real_package(package_name, relative_dir):

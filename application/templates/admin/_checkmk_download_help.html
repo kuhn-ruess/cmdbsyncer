@@ -1,0 +1,158 @@
+{# Fill-in help of the Checkmk Settings: version, edition and filename of
+   the installation file from the versions checkmk.com offers
+   (download.checkmk.com/stable_downloads.json, loaded by the server,
+   through the download proxy of the saved settings). Only on click: the
+   Syncer often has no internet access, the examples work without it.
+
+   The filename keeps {{CMK_VERSION}} in place of the version, so it fits
+   again when only the version is changed later. Checkmk 2.5 renamed the
+   editions; picking a version switches the edition to the name of that
+   version's generation. #}
+<style>
+  .cmk-dl-help {
+    margin: 4px 0 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--surface-border, #cbd5e1);
+    border-radius: 6px;
+    background: var(--surface-subtle, #f8fafc);
+    color: var(--surface-text, inherit);
+  }
+  .cmk-dl-help .cmk-dl-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .cmk-dl-help select {
+    max-width: 100%;
+  }
+  .cmk-dl-help .cmk-dl-note {
+    color: var(--surface-muted, #64748b);
+    font-size: 0.9em;
+  }
+</style>
+<script>
+(function() {
+  var filename = document.getElementById('cmk_version_filename');
+  var version = document.getElementById('cmk_version');
+  var edition = document.getElementById('cmk_edition');
+  if (!filename || !version || !edition) return;
+  var catalogUrl = "{{ get_url('.download_catalog', id=request.args.get('id')) }}";
+
+  // Edition of the settings (omd suffix) <-> name in the catalog
+  var toCatalog = {cee: 'pro', cre: 'community', cce: 'ultimate', cme: 'ultimatemt'};
+  var toOld = {pro: 'cee', community: 'cre', ultimate: 'cce', ultimatemt: 'cme'};
+  var platformNames = {
+    resolute: 'Ubuntu 26.04', noble: 'Ubuntu 24.04', jammy: 'Ubuntu 22.04',
+    focal: 'Ubuntu 20.04', trixie: 'Debian 13', bookworm: 'Debian 12',
+    bullseye: 'Debian 11', buster: 'Debian 10', el10: 'RHEL 10 and compatible',
+    el9: 'RHEL 9 and compatible', el8: 'RHEL 8 and compatible',
+    el7: 'RHEL 7 and compatible'
+  };
+  function platformName(key) {
+    if (platformNames[key]) return platformNames[key];
+    if (key.indexOf('cma-') === 0) return 'Checkmk Appliance (' + key + ')';
+    var sles = /^sles(\d+)(?:sp(\d+)|\.(\d+))?$/.exec(key);
+    if (sles) return 'SLES ' + sles[1] + (sles[2] ? ' SP' + sles[2] : (sles[3] ? '.' + sles[3] : ''));
+    return key;
+  }
+  function isNewGeneration(major) {
+    var parts = major.split('.').map(Number);
+    return parts[0] > 2 || (parts[0] === 2 && parts[1] >= 5);
+  }
+
+  var group = filename.closest('.form-group') || filename.parentNode;
+  var box = document.createElement('div');
+  box.className = 'cmk-dl-help';
+  box.innerHTML =
+    '<button type="button" class="btn btn-sm btn-secondary cmk-dl-load">' +
+    '<i class="fa fa-download"></i> Fill in from checkmk.com</button> ' +
+    '<span class="cmk-dl-note">Version, edition and filename of the installation file. ' +
+    'Only on click, the Syncer needs internet access (or the download proxy) for it.</span>' +
+    '<div class="cmk-dl-note" style="margin-top:6px">Filename examples: ' +
+    '<code>check-mk-pro-{' + '{CMK_VERSION}}_0.noble_amd64.deb</code>, ' +
+    '<code>check-mk-pro-{' + '{CMK_VERSION}}-el9-38.x86_64.rpm</code>, ' +
+    '<code>check-mk-enterprise-{' + '{CMK_VERSION}}_0.bookworm_amd64.deb</code> (up to 2.4). ' +
+    'Version without edition, e.g. <code>2.4.0p12</code>.</div>' +
+    '<div class="cmk-dl-row" hidden>' +
+    '<select class="form-control form-control-sm cmk-dl-version" style="width:auto"></select>' +
+    '<select class="form-control form-control-sm cmk-dl-platform" style="width:auto"></select>' +
+    '<button type="button" class="btn btn-sm btn-primary cmk-dl-apply">Apply</button>' +
+    '</div>' +
+    '<div class="cmk-dl-note cmk-dl-status"></div>';
+  group.parentNode.insertBefore(box, group.nextSibling);
+
+  var row = box.querySelector('.cmk-dl-row');
+  var versionSelect = box.querySelector('.cmk-dl-version');
+  var platformSelect = box.querySelector('.cmk-dl-platform');
+  var status = box.querySelector('.cmk-dl-status');
+  var majors = [];
+
+  function catalogEdition() {
+    return toCatalog[edition.value] || edition.value || 'pro';
+  }
+  function chosenMajor() {
+    return majors[parseInt(versionSelect.value, 10)];
+  }
+  function fillPlatforms() {
+    var major = chosenMajor();
+    var files = major && major.editions[catalogEdition()];
+    var previous = platformSelect.value;
+    platformSelect.innerHTML = '';
+    if (!files) {
+      status.textContent = 'No installation files of this edition for ' +
+        (major ? major.major : 'this version') + '.';
+      return;
+    }
+    status.textContent = '';
+    Object.keys(files).sort(function(a, b) {
+      return platformName(a).localeCompare(platformName(b));
+    }).forEach(function(key) {
+      var option = document.createElement('option');
+      option.value = key;
+      option.textContent = platformName(key);
+      platformSelect.appendChild(option);
+    });
+    if (files[previous]) platformSelect.value = previous;
+  }
+
+  box.querySelector('.cmk-dl-load').addEventListener('click', function() {
+    status.textContent = 'Loading versions from checkmk.com …';
+    fetch(catalogUrl, {credentials: 'same-origin'})
+      .then(function(response) { return response.json(); })
+      .then(function(data) {
+        if (data.error) { status.textContent = data.error; return; }
+        majors = data.majors || [];
+        versionSelect.innerHTML = '';
+        majors.forEach(function(major, idx) {
+          var option = document.createElement('option');
+          option.value = idx;
+          option.textContent = major.version + (major['class'] ? ' (' + major['class'] + ')' : '');
+          versionSelect.appendChild(option);
+        });
+        row.hidden = false;
+        fillPlatforms();
+      })
+      .catch(function(exp) { status.textContent = 'Could not load the versions: ' + exp; });
+  });
+  versionSelect.addEventListener('change', fillPlatforms);
+  edition.addEventListener('change', function() { if (majors.length) fillPlatforms(); });
+
+  box.querySelector('.cmk-dl-apply').addEventListener('click', function() {
+    var major = chosenMajor();
+    var files = major && major.editions[catalogEdition()];
+    if (!files || !files[platformSelect.value]) return;
+    var name = catalogEdition();
+    var target = isNewGeneration(major.major) ? name : (toOld[name] || name);
+    if (edition.value !== target) {
+      edition.value = target;
+      edition.dispatchEvent(new Event('change'));
+    }
+    version.value = major.version;
+    filename.value = files[platformSelect.value];
+    status.textContent = 'Filled in. The filename keeps {' + '{CMK_VERSION}' +
+      '}, so it stays valid when only the version is changed.';
+  });
+})();
+</script>

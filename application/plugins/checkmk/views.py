@@ -3,6 +3,7 @@ Checkmk Rule Views
 """
 # pylint: disable=too-many-lines
 # pylint: disable=duplicate-code
+import requests
 from markupsafe import Markup, escape
 
 from pygments import highlight
@@ -65,6 +66,7 @@ from .cmk_rules import (
     preview_list_rule,
 )
 from .list_source import OUTCOME_TEMPLATE_FIELDS
+from . import download_catalog
 from .notification_rules import JINJA_FIELDS, validate_outcome_jinja
 
 
@@ -1673,6 +1675,13 @@ class CheckmkSettingsView(DefaultModelView):
                 "Versions directly from checkmk"
             ),
         },
+        'download_proxy': {
+            'placeholder': (
+                "Optional: proxy for the download from checkmk.com, "
+                "e.g. http://proxy.example.com:3128. "
+                "You can use {{ACCOUNT:x:password}}"
+            ),
+        },
         'cmk_user': {
             'placeholder': (
                 "API user for CheckMK automation"
@@ -1701,42 +1710,69 @@ class CheckmkSettingsView(DefaultModelView):
         },
     }
 
-    form_rules = modern_form(
-        section('1', 'main', 'Basics',
-                'Name, documentation and the Ansible user for site ops.',
-                [rules.Field('name'),
-                 rules.Field('documentation'),
-                 rules.Field('server_user')]),
-        section('2', 'cond', 'Checkmk Site',
-                'Edition, version, filename and initial password — used '
-                'when rolling out a fresh site.',
-                [rules.Field('cmk_edition'),
-                 rules.Field('cmk_version'),
-                 rules.Field('cmk_version_filename'),
-                 rules.Field('installation_staging_path'),
-                 rules.Field('inital_password')]),
-        section('3', 'out', 'Checkmk API',
-                'Optional: credentials + API address for automated '
-                'downtimes / status reads.',
-                [rules.Field('cmk_user'),
-                 rules.Field('cmk_secret'),
-                 rules.Field('cmk_server_address')]),
-        section('4', 'aux', 'Automatic Download & Certificates',
-                'Optional: subscription creds for auto-version-download '
-                'and paths to webserver certs for auto-renewal.',
-                [rules.Field('subscription_username'),
-                 rules.Field('subscription_password'),
-                 rules.Field('webserver_certificate'),
-                 rules.Field('webserver_certificate_private_key'),
-                 rules.Field('webserver_certificate_intermediate')]),
-    )
+    form_rules = [
+        rules.HTML(f'<a href="{docu_links["cmk_sites"]}" target="_blank" '
+                   f'class="badge badge-light" style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-info-circle"></i> Documentation</a>'),
+        *modern_form(
+            section('1', 'main', 'Basics',
+                    'Name, documentation and the Ansible user for site ops.',
+                    [rules.Field('name'),
+                     rules.Field('documentation'),
+                     rules.Field('server_user')]),
+            section('2', 'cond', 'Checkmk Site',
+                    'Edition, version, filename and initial password — used '
+                    'when rolling out a fresh site.',
+                    [rules.Field('cmk_edition'),
+                     rules.Field('cmk_version'),
+                     rules.Field('cmk_version_filename'),
+                     rules.Field('installation_staging_path'),
+                     rules.Field('inital_password')]),
+            section('3', 'out', 'Checkmk API',
+                    'Optional: credentials + API address for automated '
+                    'downtimes / status reads.',
+                    [rules.Field('cmk_user'),
+                     rules.Field('cmk_secret'),
+                     rules.Field('cmk_server_address')]),
+            section('4', 'aux', 'Automatic Download & Certificates',
+                    'Optional: subscription creds and proxy for '
+                    'auto-version-download and paths to webserver certs for '
+                    'auto-renewal.',
+                    [rules.Field('subscription_username'),
+                     rules.Field('subscription_password'),
+                     rules.Field('download_proxy'),
+                     rules.Field('webserver_certificate'),
+                     rules.Field('webserver_certificate_private_key'),
+                     rules.Field('webserver_certificate_intermediate')]),
+        ),
+    ]
 
     column_exclude_list = [
         'inital_password',
         'subscription_username',
         'subscription_password',
+        'download_proxy',
         'cmk_secret',
     ]
+
+    # Fill-in help for version and filename, see _checkmk_download_help.html
+    create_template = 'admin/checkmk_settings_create.html'
+    edit_template = 'admin/checkmk_settings_edit.html'
+
+    @expose('/_download_catalog')
+    def download_catalog(self):
+        """
+        The versions and installation files checkmk.com offers, for the
+        fill-in help of the form. Loaded through the download proxy of
+        the edited settings, if any.
+        """
+        settings = CheckmkSettings.objects(id=request.args.get('id')).first() \
+            if request.args.get('id') else None
+        proxy = settings.download_proxy if settings else None
+        try:
+            return {'majors': download_catalog.fetch(proxy)}
+        except (requests.exceptions.RequestException, ValueError) as exp:
+            return {'error': f"Could not load the versions from checkmk.com: {exp}"}, 502
 
     column_sortable_list = (
         'name',

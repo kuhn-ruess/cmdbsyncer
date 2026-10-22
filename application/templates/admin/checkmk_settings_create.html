@@ -1,0 +1,6 @@
+{% extends 'admin/model/create.html' %}
+
+{% block tail %}
+  {{ super() }}
+  {% include 'admin/_checkmk_download_help.html' %}
+{% endblock %}

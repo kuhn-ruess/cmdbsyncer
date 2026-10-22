@@ -140,6 +140,15 @@ class CheckmkSiteSyncerSandboxTest(unittest.TestCase):
             'check-mk-cre-2.3.0.deb',
         )
 
+    def test_download_proxy_is_rendered_and_optional(self):
+        syncer = self.module.SyncSites.__new__(self.module.SyncSites)
+        site = self._make_site('check-mk.deb')
+        site.settings_master.download_proxy = 'http://{{ "proxy" }}.example.com:3128'
+        self.assertEqual(syncer.get_site_data(site)['download_proxy'],
+                         'http://proxy.example.com:3128')
+        site.settings_master.download_proxy = None
+        self.assertEqual(syncer.get_site_data(site)['download_proxy'], '')
+
 
 if __name__ == '__main__':
     unittest.main()

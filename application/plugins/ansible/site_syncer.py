@@ -50,6 +50,7 @@ class SyncSites(Plugin):
             'installation_staging_path': site.settings_master.installation_staging_path or '',
             'subscription_username': site.settings_master.subscription_username,
             'subscription_password': site.settings_master.subscription_password,
+            'download_proxy': render_jinja(site.settings_master.download_proxy or ""),
             'cmk_user': cmk_user,
             'cmk_secret': cmk_secret,
             'cmk_main_server_full': cmk_main_server,
