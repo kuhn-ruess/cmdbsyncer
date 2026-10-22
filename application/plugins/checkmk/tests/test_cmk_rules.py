@@ -778,6 +778,31 @@ class TestCleanRulesFolderAndKeepValue(unittest.TestCase):
         self.assertTrue(local.get('_skip_create'))
         self.assertEqual(local.get('_cmk_id'), 'r1')
 
+    def test_keep_value_rule_is_not_recreated_over_its_comment(self):
+        # A keep_value rule created before the hint was part of the comment
+        # (or whose comment was edited in Checkmk) used to be deleted and
+        # created again on every run, losing the value set in Checkmk.
+        local = {
+            'value': "{'login': ('explicit', ('user', 'secret'))}",
+            'comment': 'hint', 'folder': '/correct',
+            'condition': {'host_name': {'match_on': ['h']}},
+            'keep_value': True,
+            'description': 'cmdbsyncer_test_account (Value editable)',
+        }
+        self.sync.rulsets_by_type = {'ruleset1': [local]}
+        calls = self._wire_get([self._cmk_rule(
+            '/correct', "{'login': ('explicit', ('user', '******'))}",
+            comment='')])
+
+        self.sync.clean_rules()
+
+        self.assertEqual(calls['DELETE'], [])
+        # The description differs, but a PUT would write the masked
+        # password back into Checkmk.
+        self.assertEqual(calls['PUT'], [])
+        self.assertTrue(local.get('_skip_create'))
+        self.assertEqual(local.get('_cmk_id'), 'r1')
+
     def test_removed_key_is_ignored_without_enforce_value(self):
         # Default tolerance: the key only Checkmk has counts as a schema
         # default, so dropping it from the template changes nothing.
