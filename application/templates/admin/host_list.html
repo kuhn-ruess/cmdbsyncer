@@ -574,7 +574,10 @@
   // (the scope only widens when a term is present).
   (function() {
     var $scope = $('#quick-search-scope');
-    var $search = $('input[name="search"]');
+    // Only the visible search box: with a term, the filter form carries
+    // it as a hidden field too, and appending to both forms cloned the
+    // options into the filter form.
+    var $search = $('input[name="search"]').not('[type="hidden"]').first();
     if (!$scope.length || !$search.length) {
       return;
     }
