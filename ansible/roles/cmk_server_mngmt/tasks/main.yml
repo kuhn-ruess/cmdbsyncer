@@ -108,11 +108,19 @@
   delegate_to: localhost
   register: downtime_result
 
+# Checkmk 2.5 asks for the new version and edition and runs a pre-flight
+# check (licensing) during the update. Confirm the questions, and abort
+# instead of continuing past a failed pre-flight check, which can leave the
+# site broken. Older versions only know --conflict.
 - name: "Update Sites to {{ cmk_version }}.{{ cmk_edition }}"
   become: True
   ansible.builtin.shell: |
     omd stop {{ cmk_site }}
+    {% if cmk_version is version('2.5.0', '>=') %}
+    omd -V {{ cmk_version }}.{{ cmk_edition }} update --pre-flight=abort --skeleton=install --confirm-version --confirm-edition {{ cmk_site }}
+    {% else %}
     omd -f -V {{ cmk_version }}.{{ cmk_edition }} update --conflict=install {{ cmk_site }}
+    {% endif %}
     omd start {{ cmk_site }}
   args:
     executable: /bin/bash
