@@ -912,14 +912,15 @@ class TestApplyFindings(unittest.TestCase):
     def _models(self):
         """Stub the rule documents the apply step writes to."""
         models = ModuleType('application.plugins.checkmk.models')
-        models.CheckmkRuleMngmt = MagicMock()
-        models.CheckmkRuleMngmt.objects.get.return_value = self.rule
-        models.CheckmkFilterRule = MagicMock()
-        models.CheckmkFilterRule.objects.return_value.first.return_value = \
-            self.filter_rule
-        models.CheckmkRewriteAttributeRule = MagicMock()
-        models.CheckmkRewriteAttributeRule.objects.return_value.first\
-            .return_value = self.rewrite_rule
+        rule_mngmt = MagicMock()
+        rule_mngmt.objects.get.return_value = self.rule
+        filter_rule = MagicMock()
+        filter_rule.objects.return_value.first.return_value = self.filter_rule
+        rewrite_rule = MagicMock()
+        rewrite_rule.objects.return_value.first.return_value = self.rewrite_rule
+        models.CheckmkRuleMngmt = rule_mngmt
+        models.CheckmkFilterRule = filter_rule
+        models.CheckmkRewriteAttributeRule = rewrite_rule
         rule_models = ModuleType('application.modules.rule.models')
         rule_models.FilterAction = lambda: SimpleNamespace(
             action=None, attribute_name=None)
@@ -1573,8 +1574,9 @@ class TestRuleOptimizationAnalysis(unittest.TestCase):
         rule = SimpleNamespace(name='Agent access', outcomes=[outcome],
                                save=MagicMock())
         models = ModuleType('application.plugins.checkmk.models')
-        models.CheckmkRuleMngmt = MagicMock()
-        models.CheckmkRuleMngmt.objects.get.return_value = rule
+        rule_mngmt = MagicMock()
+        rule_mngmt.objects.get.return_value = rule
+        models.CheckmkRuleMngmt = rule_mngmt
         models.CheckmkFilterRule = MagicMock()
         models.CheckmkRewriteAttributeRule = MagicMock()
 
@@ -2338,6 +2340,74 @@ class TestRuleCalculationHostSaves(unittest.TestCase):
         self.assertEqual(dict(saves), {'h1': 1, 'h2': 1})
         for host in hosts:
             self.assertFalse(getattr(host, '_cache_dirty'))
+
+
+class TestCalculateTemplateRules(unittest.TestCase):
+    """Setup Rules flagged per_template see one template at a time"""
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.seen = []
+        self.calls = []
+
+        def outcomes(db_host, attributes, persist_cache=True, use_cache=True):
+            self.calls.append((persist_cache, use_cache))
+            return {'service_contactgroups': [dict(attributes)]}
+
+        self.sync.template_actions = SimpleNamespace(get_outcomes=outcomes)
+        self.sync.calculate_rules_of_host = \
+            lambda actions, attributes: self.seen.append(attributes['all'])
+
+    @staticmethod
+    def _host(*templates):
+        return SimpleNamespace(hostname='h1', cache={}, cmdb_templates=[
+            SimpleNamespace(hostname=name, deleted_at=None, labels=labels)
+            for name, labels in templates])
+
+    def _template_sets(self, sets):
+        def attributes(db_host, cache, persist_cache=True, template=None):
+            self.assertFalse(cache)
+            return sets[template.hostname]
+        self.sync.get_attributes = attributes
+
+    def test_every_template_is_rendered_on_its_own(self):
+        host = self._host(('base', {}), ('tenant', {}))
+        self._template_sets({
+            'base': {'all': {'groups': 'ops', 'services': 'web'}},
+            'tenant': {'all': {'groups': 'dba', 'services': 'db'}},
+        })
+
+        self.sync._calculate_template_rules(host, {'all': {'groups': 'mixed'}})
+
+        self.assertEqual(self.seen, [
+            {'groups': 'ops', 'services': 'web'},
+            {'groups': 'dba', 'services': 'db'},
+        ])
+        # The engine's cache holds one answer per host, not per template.
+        self.assertEqual(self.calls, [(False, False), (False, False)])
+
+    def test_a_host_without_templates_gets_the_rules_once(self):
+        self.sync._calculate_template_rules(self._host(),
+                                           {'all': {'groups': 'own'}})
+
+        self.assertEqual(self.seen, [{'groups': 'own'}])
+
+    def test_a_template_set_dropped_by_a_filter_is_skipped(self):
+        host = self._host(('base', {}), ('tenant', {}))
+        self._template_sets({'base': False,
+                             'tenant': {'all': {'groups': 'dba'}}})
+
+        self.sync._calculate_template_rules(host, {'all': {}})
+
+        self.assertEqual(self.seen, [{'groups': 'dba'}])
+
+    def test_without_per_template_rules_nothing_runs(self):
+        self.sync.template_actions = None
+
+        self.sync._calculate_template_rules(self._host(('tenant', {})),
+                                           {'all': {}})
+
+        self.assertEqual(self.seen, [])
 
 
 class TestCalculateRulesOfHostLoop(unittest.TestCase):

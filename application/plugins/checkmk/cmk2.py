@@ -138,7 +138,7 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
             self.rewrite = attribute_rewrite
 
 
-    def get_attributes(self, db_host, cache, persist_cache=True):
+    def get_attributes(self, db_host, cache, persist_cache=True, template=None):
         """
         Attributes of a host for every Checkmk export.
 
@@ -146,7 +146,8 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
         shared attribute cache is computed (see ``_load_attribute_rules``).
         """
         self._load_attribute_rules()
-        return super().get_attributes(db_host, cache, persist_cache=persist_cache)
+        return super().get_attributes(db_host, cache, persist_cache=persist_cache,
+                                      template=template)
 
 
     def version_at_least(self, major, minor):

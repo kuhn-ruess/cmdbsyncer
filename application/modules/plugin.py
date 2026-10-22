@@ -591,9 +591,10 @@ class Plugin():
 
     # pylint: disable=too-many-branches
 
-    def _apply_template_attributes(self, db_host, attributes):
+    def _apply_template_attributes(self, db_host, attributes, templates=None):
         """
-        Merge the labels of the host's CMDB templates into `attributes`.
+        Merge the labels of the host's CMDB templates into `attributes`,
+        or of only `templates` when given.
 
         Template labels are merged in virtually and never persisted onto
         the host document. The host's own data (labels + inventory,
@@ -607,7 +608,8 @@ class Plugin():
         for a host that carries a template at all — an export run must
         not query the config document per host.
         """
-        templates = active_templates(db_host)
+        if templates is None:
+            templates = active_templates(db_host)
         if not templates:
             return
         if self.merged_attributes is None:
@@ -663,7 +665,7 @@ class Plugin():
         else:
             setattr(db_host, '_cache_dirty', True)
 
-    def get_attributes(self, db_host, cache, persist_cache=True):
+    def get_attributes(self, db_host, cache, persist_cache=True, template=None):
         """
         Retrieve and process host attributes with caching support.
         
@@ -675,6 +677,11 @@ class Plugin():
             db_host (Host): Database host object containing host information
             cache (str|bool): Cache key prefix for attribute caching.
                             If False, caching is disabled.
+            template (Host): Take only this CMDB template's labels instead
+                            of those of every template of the host. Such
+                            a set is never cached, and the rule engines
+                            computing it neither read nor write their
+                            cache, which holds the set with all templates.
                             
         Returns:
             dict: Dictionary containing 'all' and 'filtered' attribute sets:
@@ -684,6 +691,9 @@ class Plugin():
         """
         # Get Attributes
         self.init_custom_attributes()
+        use_cache = template is None
+        if not use_cache:
+            cache = False
         if cache:
             cache += "_hostattribute"
             if self._attributes_depend_on_time():
@@ -724,13 +734,15 @@ class Plugin():
             attributes['syncer_last_seen'] = db_host.last_import_seen
         if db_host.last_import_sync:
             attributes['syncer_last_sync'] = db_host.last_import_sync
-        self._apply_template_attributes(db_host, attributes)
+        self._apply_template_attributes(
+            db_host, attributes, None if template is None else [template])
 
         attributes.update(
             self.custom_attributes.get_outcomes(
                 db_host,
                 attributes,
                 persist_cache=persist_cache,
+                use_cache=use_cache,
             )
         )
 
@@ -740,6 +752,7 @@ class Plugin():
                 db_host,
                 attributes,
                 persist_cache=persist_cache,
+                use_cache=use_cache,
             ).items():
                 realname = rewrite[4:]
                 if rewrite.startswith('add_'):
@@ -761,6 +774,7 @@ class Plugin():
                 db_host,
                 attributes,
                 persist_cache=persist_cache,
+                use_cache=use_cache,
             )
             data['filtered'] = attributes_filtered
             if attributes_filtered.get('ignore_host') and cache:

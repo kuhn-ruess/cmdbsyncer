@@ -26,6 +26,16 @@ def _template(hostname, labels):
     return tmpl
 
 
+def _host(labels, templates):
+    host = Mock()
+    host.hostname = 'web01'
+    host.cache = {}
+    host.labels = labels
+    host.inventory = {}
+    host.cmdb_templates = templates
+    return host
+
+
 class TestMergeAttributeValues(unittest.TestCase):
 
     def test_values_are_comma_joined(self):
@@ -57,16 +67,6 @@ class TestMergedTemplateAttributes(unittest.TestCase):
         'LABELS_ITERATE_FIRST_LEVEL': False,
     }
 
-    @staticmethod
-    def _host(labels, templates):
-        host = Mock()
-        host.hostname = 'web01'
-        host.cache = {}
-        host.labels = labels
-        host.inventory = {}
-        host.cmdb_templates = templates
-        return host
-
     def _attributes(self, host, merged=()):
         with patch('application.modules.plugin.app') as mock_app:
             mock_app.config = self.mock_app_config
@@ -74,7 +74,7 @@ class TestMergedTemplateAttributes(unittest.TestCase):
             return plugin.get_attributes(host, False)['all']
 
     def test_merged_attribute_collects_every_template(self):
-        host = self._host({}, [_template('a', {'ops': 'a'}),
+        host = _host({}, [_template('a', {'ops': 'a'}),
                                _template('b', {'ops': 'b'}),
                                _template('c', {'ops': 'c'})])
 
@@ -83,7 +83,7 @@ class TestMergedTemplateAttributes(unittest.TestCase):
         self.assertEqual(result['ops'], 'a,b,c')
 
     def test_merged_attribute_appends_to_the_host_value(self):
-        host = self._host({'contact_groups': 'ops'},
+        host = _host({'contact_groups': 'ops'},
                           [_template('db', {'contact_groups': 'dba'})])
 
         result = self._attributes(host, merged=('contact_groups',))
@@ -92,7 +92,7 @@ class TestMergedTemplateAttributes(unittest.TestCase):
         self.assertEqual(result['contact_groups'], 'ops,dba')
 
     def test_unlisted_attribute_still_collides(self):
-        host = self._host({}, [_template('base', {'os': 'linux'}),
+        host = _host({}, [_template('base', {'os': 'linux'}),
                                _template('other', {'os': 'windows'})])
 
         result = self._attributes(host, merged=('contact_groups',))
@@ -100,14 +100,14 @@ class TestMergedTemplateAttributes(unittest.TestCase):
         self.assertEqual(result['os'], 'linux')
 
     def test_merged_attribute_alone_behaves_like_a_normal_value(self):
-        host = self._host({}, [_template('base', {'ops': 'a'})])
+        host = _host({}, [_template('base', {'ops': 'a'})])
 
         result = self._attributes(host, merged=('ops',))
 
         self.assertEqual(result['ops'], 'a')
 
     def test_the_config_is_read_once_per_plugin(self):
-        host = self._host({}, [_template('base', {'ops': 'a'})])
+        host = _host({}, [_template('base', {'ops': 'a'})])
         with patch('application.modules.plugin.app') as mock_app, \
              patch('application.modules.plugin.merged_attribute_keys',
                    return_value={'ops'}) as keys:
@@ -121,7 +121,7 @@ class TestMergedTemplateAttributes(unittest.TestCase):
         keys.assert_called_once()
 
     def test_a_host_without_templates_never_reads_the_config(self):
-        host = self._host({'os': 'linux'}, [])
+        host = _host({'os': 'linux'}, [])
         with patch('application.modules.plugin.app') as mock_app, \
              patch('application.modules.plugin.merged_attribute_keys') as keys:
             mock_app.config = self.mock_app_config
@@ -130,6 +130,47 @@ class TestMergedTemplateAttributes(unittest.TestCase):
             plugin.get_attributes(host, False)
 
         keys.assert_not_called()
+
+
+
+class TestSingleTemplateAttributes(unittest.TestCase):
+    """get_attributes(template=...): the set a per template rule sees"""
+
+    def _attributes(self, host, template, merged=()):
+        with patch('application.modules.plugin.app') as mock_app:
+            mock_app.config = TestMergedTemplateAttributes.mock_app_config
+            plugin = plain_plugin(merged_attributes=merged)
+            result = plugin.get_attributes(host, 'checkmk', template=template)
+        return plugin, result['all']
+
+    def test_only_the_given_template_counts(self):
+        base = _template('base', {'groups': 'ops', 'services': 'web'})
+        tenant = _template('tenant', {'groups': 'dba', 'services': 'db'})
+        host = _host({}, [base, tenant])
+
+        _plugin, result = self._attributes(host, tenant, merged=('groups',))
+
+        self.assertEqual(result['groups'], 'dba')
+        self.assertEqual(result['services'], 'db')
+
+    def test_the_host_value_still_wins(self):
+        tenant = _template('tenant', {'groups': 'dba'})
+        host = _host({'groups': 'own'}, [tenant])
+
+        _plugin, result = self._attributes(host, tenant)
+
+        self.assertEqual(result['groups'], 'own')
+
+    def test_no_cache_is_read_or_written(self):
+        # The cached sets hold the attributes with every template.
+        tenant = _template('tenant', {'groups': 'dba'})
+        host = _host({}, [tenant])
+
+        plugin, _result = self._attributes(host, tenant)
+
+        self.assertEqual(host.cache, {})
+        self.assertFalse(
+            plugin.custom_attributes.get_outcomes.call_args.kwargs['use_cache'])
 
 
 if __name__ == '__main__':

@@ -359,11 +359,15 @@ def analyse_rules(account=None, min_hosts=10, top=20, apply=False,
     if account:
         rule_filter['project__in'] = [None, ''] + projects_for_account(account)
     actions.rules = CheckmkRuleMngmt.objects(
-        **rule_filter).order_by('sort_field')
+        per_template__ne=True, **rule_filter).order_by('sort_field')
     # Report which Setup Rule built a host-name condition, not just which
     # Checkmk rule came out of it — the fix belongs in the Setup Rule.
     actions.tag_source_rule = True
     syncer.actions = actions
+    syncer.template_actions = _template_actions(
+        CheckmkRuleMngmt.objects(per_template=True, **rule_filter))
+    if syncer.template_actions:
+        syncer.template_actions.tag_source_rule = True
     # Logged as what it is — nothing was exported. The object filter is
     # still the one configured for the export.
     syncer.name = 'Checkmk: Analyse Rules'
@@ -421,6 +425,18 @@ def projects_for_account(account):
     ]
 
 
+def _template_actions(rules):
+    """
+    The engine of the Setup Rules evaluated per CMDB template (``rules``,
+    a queryset of them), or None when there is none.
+    """
+    if not rules.count():
+        return None
+    actions = CheckmkRulesetRule()
+    actions.rules = rules.order_by('sort_field')
+    return actions
+
+
 def export_rules(account, dry_run=False, debug=False):
     """
     Create Rules in Checkmk
@@ -454,9 +470,12 @@ def export_rules(account, dry_run=False, debug=False):
         # rules to its ``limit_by_accounts`` (empty = all accounts).
         allowed_projects = [None, ''] + projects_for_account(account)
         actions.rules = CheckmkRuleMngmt.objects(
-            enabled=True, static_rule__ne=True,
+            enabled=True, static_rule__ne=True, per_template__ne=True,
             project__in=allowed_projects).order_by('sort_field')
         syncer.actions = actions
+        syncer.template_actions = _template_actions(CheckmkRuleMngmt.objects(
+            enabled=True, static_rule__ne=True, per_template=True,
+            project__in=allowed_projects))
         syncer.static_rules = CheckmkRuleMngmt.objects(
             enabled=True, static_rule=True,
             project__in=allowed_projects).order_by('sort_field')

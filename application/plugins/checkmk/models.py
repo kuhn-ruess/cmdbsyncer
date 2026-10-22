@@ -478,6 +478,11 @@ class CheckmkRuleMngmt(ListSourceMixin, db.Document):
     # context (host match conditions are ignored) instead of recomputing
     # it per host and de-duplicating the identical copies.
     static_rule = db.BooleanField(default=False)
+    # Evaluated once per CMDB template of the host, each time with only
+    # that template's labels, so values of two templates sharing the same
+    # keys never mix in one Checkmk rule. See
+    # ``CheckmkRuleSync._calculate_template_rules``.
+    per_template = db.BooleanField(default=False)
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
     # Name of the Project this rule belongs to (or empty for a

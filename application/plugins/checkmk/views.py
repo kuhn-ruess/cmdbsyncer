@@ -1017,7 +1017,8 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                 rules.Field('documentation'),
                 rules.Field('project'),
                 div_open,
-                rules.NestedRule(('enabled', 'last_match', 'static_rule')),
+                rules.NestedRule(('enabled', 'last_match', 'static_rule',
+                                  'per_template')),
                 div_close,
             ],
             creates='Checkmk rule',
@@ -1073,6 +1074,13 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
             "ignoring the host match conditions. Use only when the "
             "outcome templates reference no host attributes — it skips "
             "the per-host calculation entirely."
+        )
+        self.form_descriptions['per_template'] = (
+            "Evaluate the rule once per CMDB template of the host, each "
+            "time with only that template's labels, so the values of two "
+            "templates using the same attributes (a contact group and its "
+            "services) never end up in one Checkmk rule. A host without "
+            "templates gets the rule once. Has no effect on a Static Rule."
         )
         self.form_descriptions['project'] = (
             "Assign this rule to a Project. Project rules are exported "

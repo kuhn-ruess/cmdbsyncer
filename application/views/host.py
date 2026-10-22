@@ -514,10 +514,12 @@ def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-lo
     for rule_group, rule_data in output_rules.items():
         group = new_rules.setdefault(
             rule_group, {'rules': [], 'outcomes': rule_data['outcomes']})
+        # "Setup Rules per Template: <name>" links like "Setup Rules"
+        url_group = rule_group.partition(' per Template')[0]
         for rule in rule_data['rules']:
             rule_id = rule.get('id')
-            if rule_group in base_urls and rule_id:
-                rule['rule_url'] = f"{base_urls[rule_group]}{rule_id}"
+            if url_group in base_urls and rule_id:
+                rule['rule_url'] = f"{base_urls[url_group]}{rule_id}"
             else:
                 rule['rule_url'] = ''
             group['rules'].append(rule)
@@ -617,17 +619,19 @@ def _find_rule_match(rules_by_group, raw_id):
     that the debug page already builds. Returns a small dict with
     `hit`, `no_match_reason` and `condition_type`, or None if the rule
     is not present (e.g. a rule type that doesn't appear in this host's
-    debug output).
+    debug output). A rule evaluated per template is in one group per
+    template; it counts as a hit when one of them is.
     """
-    for group in rules_by_group.values():
-        for rule_row in group['rules']:
-            if str(rule_row.get('id')) == raw_id:
-                return {
-                    'hit': bool(rule_row.get('hit')),
-                    'no_match_reason': rule_row.get('no_match_reason'),
-                    'condition_type': rule_row.get('condition_type'),
-                }
-    return None
+    rows = [rule_row for group in rules_by_group.values()
+            for rule_row in group['rules'] if str(rule_row.get('id')) == raw_id]
+    if not rows:
+        return None
+    rule_row = next((row for row in rows if row.get('hit')), rows[0])
+    return {
+        'hit': bool(rule_row.get('hit')),
+        'no_match_reason': rule_row.get('no_match_reason'),
+        'condition_type': rule_row.get('condition_type'),
+    }
 
 
 def _safe_return_to(candidate, fallback_endpoint='.index_view'):

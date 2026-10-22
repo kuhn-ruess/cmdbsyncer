@@ -576,7 +576,8 @@ class TestCMK2AttributeRules(unittest.TestCase):
             self.cmk.get_attributes('db_host', 'checkmk')
 
         mock_load.assert_called_once_with()
-        mock_super.assert_called_once_with('db_host', 'checkmk', persist_cache=True)
+        mock_super.assert_called_once_with('db_host', 'checkmk', persist_cache=True,
+                                           template=None)
 
 
 if __name__ == '__main__':

@@ -14,6 +14,7 @@ from mongoengine.errors import DoesNotExist
 
 from application import app, logger
 from application.models.host import Host
+from application.models.host_templates import active_templates
 from application.plugins.checkmk.cmk2 import CmkException, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
 from application.plugins.checkmk.helpers import make_progress, resolve_loop_list
@@ -1013,6 +1014,10 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # Host-independent rules, wired in by inits.export_rules. Evaluated
         # once in calculate_static_rules instead of per host.
         self.static_rules = []
+        # Rule engine of the rules flagged ``per_template``, wired in by
+        # inits.export_rules. Evaluated once per CMDB template of a host
+        # in _calculate_template_rules; None when there are none.
+        self.template_actions = None
         # Optional Project name scoping the ``rule_marker``.
         # The current export runs are account-wide (all allowed projects in
         # one pass), so this stays None there — it is kept for callers that
@@ -1707,7 +1712,41 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                     self.calculate_rules_of_host(
                         host_actions,
                         self._with_host_folder(db_host, host_actions, attributes))
+                self._calculate_template_rules(db_host, attributes)
                 progress.advance(task1)
+
+    def _calculate_template_rules(self, db_host, attributes):
+        """
+        Render the rules flagged ``per_template`` for one host: once per
+        CMDB template it carries, each time against the host's attributes
+        with only that template's labels. Two templates setting the same
+        keys (a contact group and the services it is meant for, say) so
+        never mix: each template's group meets only its own services.
+
+        A host without templates gets these rules once, against the
+        ``attributes`` it was exported with. The engine's outcome cache
+        is not used, it holds the answer for one attribute set per host.
+        """
+        if self.template_actions is None:
+            return
+        templates = active_templates(db_host)
+        if templates:
+            passes = (self.get_attributes(db_host, False, persist_cache=False,
+                                          template=template)
+                      for template in templates)
+        else:
+            passes = [attributes]
+        for template_attributes in passes:
+            if not template_attributes:
+                continue
+            host_actions = self.template_actions.get_outcomes(
+                db_host, template_attributes['all'], persist_cache=False,
+                use_cache=False)
+            if host_actions:
+                self.calculate_rules_of_host(
+                    host_actions,
+                    self._with_host_folder(db_host, host_actions,
+                                           template_attributes))
 
     def _with_host_folder(self, db_host, host_actions, attributes):
         """

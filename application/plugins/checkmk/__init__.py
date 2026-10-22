@@ -11,6 +11,7 @@ from application import log
 from .cmk2 import cli_cmk, CmkException
 from application.helpers.cron import register_cronjob
 from application.modules.debug import ColorCodes, attribute_table
+from application.models.host_templates import active_templates
 
 
 from application.modules.rule.filter import Filter
@@ -215,6 +216,49 @@ def _debug_extra_engine(title, engine, rules_queryset, db_host, attributes):
         }], 'outcomes': {}}
 
 
+def _debug_template_rules(syncer, db_host, attributes):
+    """
+    Debug lines of the Setup Rules evaluated per CMDB template: one
+    section per template of the host, each against the attributes with
+    only that template's labels, as the export renders them. A host
+    without templates gets them once against its own attributes.
+    """
+    rules = CheckmkRuleMngmt.objects(enabled=True, per_template=True)
+    if not rules.count():
+        return {}
+    templates = active_templates(db_host)
+    if not templates:
+        return {'Setup Rules per Template (host has none)': _debug_extra_engine(
+            'Setup Rules per Template', CheckmkRulesetRule(),
+            rules.order_by('sort_field'), db_host, attributes)}
+    # The filter, rewrite and custom attribute sections show the host's
+    # export attributes. Computing the set of each template must not add
+    # its lines to them.
+    engines = [engine for engine in (syncer.filter, syncer.rewrite,
+                                     syncer.custom_attributes) if engine]
+    sections = {}
+    for template in templates:
+        title = f'Setup Rules per Template: {template.hostname}'
+        # syncer.debug as well: get_attributes hands it on to the custom
+        # attribute engine.
+        syncer.debug = False
+        for engine in engines:
+            engine.debug = False
+        try:
+            template_attributes = syncer.get_attributes(db_host, False,
+                                                        template=template)
+        finally:
+            syncer.debug = True
+            for engine in engines:
+                engine.debug = True
+        if not template_attributes:
+            continue
+        sections[title] = _debug_extra_engine(
+            title, CheckmkRulesetRule(), rules.order_by('sort_field'),
+            db_host, template_attributes)
+    return sections
+
+
 def get_host_debug_data(hostname):
     """
     Returns Debug Data
@@ -283,8 +327,10 @@ def get_host_debug_data(hostname):
         # does not end up with a given ruleset push.
         rule_logs['Setup Rules'] = _debug_extra_engine(
             'Setup Rules', CheckmkRulesetRule(),
-            CheckmkRuleMngmt.objects(enabled=True).order_by('sort_field'),
+            CheckmkRuleMngmt.objects(enabled=True, per_template__ne=True)
+            .order_by('sort_field'),
             db_host, attributes)
+        rule_logs.update(_debug_template_rules(syncer, db_host, attributes))
         # Static Setup rules carry no host data: on export their match
         # conditions are ignored and they are emitted for every host
         # (see CheckmkRuleSync.calculate_static_rules). The debug engine
@@ -318,6 +364,30 @@ def get_host_debug_data(hostname):
     return attributes, actions, rule_logs
 
 
+def _preview_setup_rule(syncer, db_host, rule, attributes, render):
+    """
+    The outcomes of a Setup Rule for the host's preview, rendered once
+    per CMDB template for a rule flagged ``per_template``, as the export
+    does. The export hands a per host Setup Rule the host's folder too.
+    """
+    from .rules import with_host_folder
+    templates = active_templates(db_host) \
+        if getattr(rule, 'per_template', False) else []
+    if not templates:
+        return render(rule, with_host_folder(db_host, attributes['all']))
+    outcomes = []
+    for template in templates:
+        template_attributes = syncer.get_attributes(db_host, False,
+                                                    template=template)
+        if not template_attributes:
+            continue
+        for outcome in render(rule, with_host_folder(db_host,
+                                                     template_attributes['all'])):
+            outcome['meta'] = f"template={template.hostname} · {outcome['meta']}"
+            outcomes.append(outcome)
+    return outcomes
+
+
 def get_rule_preview(hostname, rule_type, rule_id):
     """
     GUI helper: render every outcome of one rule against the live
@@ -349,18 +419,18 @@ def get_rule_preview(hostname, rule_type, rule_id):
     if not attributes:
         return None, "Host is disabled by a filter rule — no attributes available for preview"
 
-    context = attributes['all']
     if rule_type == 'setup_rule':
-        # The export hands a per host Setup Rule the host's folder as well.
-        from .rules import with_host_folder
-        context = with_host_folder(db_host, context)
+        outcomes = _preview_setup_rule(syncer, db_host, rule, attributes,
+                                       provider['render'])
+    else:
+        outcomes = provider['render'](rule, attributes['all'])
 
     return {
         'rule_name': rule.name,
         'rule_id': str(rule.id),
         'rule_type': rule_type,
         'rule_type_label': provider['label'],
-        'outcomes': provider['render'](rule, context),
+        'outcomes': outcomes,
     }, None
 
 
