@@ -42,10 +42,13 @@ class CheckmkPasswordSync(CMK2):
         """
         Build Checkmk APIs Payload
         """
+        ident = f"cmdbsyncer_{password['id']}"
         payload = {
-          "ident": f"cmdbsyncer_{password['id']}",
+          "ident": ident,
           "title": password['title'],
-          "comment": password['comment'],
+          # Entries created by an import carry no comment, which Checkmk
+          # rejects; fall back to the ident.
+          "comment": password['comment'] or ident,
           "password": password.get_password(),
           "owner": password['owner'],
           "shared": password.shared,
