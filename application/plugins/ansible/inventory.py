@@ -17,43 +17,37 @@ class AnsibleInventory(Plugin):
 
     name = "Ansible"
     source = "ansible_jobs"
+    # Cache slot prefix of the attribute set. Set per project by the
+    # provider, so two projects never serve each other's cached values.
+    cache_key = "ansible"
 
 
-    def bypass_host(self, attributes1, attributes2):
-        """
-        Check if we should ignore a host
-        """
-        checks = [
-            'cmk_register_tls',
-            'cmk_create_host',
-            'cmk_register_bakery',
-            'cmk_register_central_bakery',
-            'cmk_install_agent',
-            'cmk_discover',
-            'dont_bypass',
-        ]
-        # If not at leas one of the attributes is True,
-        # we have to ignore the host
-        for check in checks:
-            if attributes1.get(check.lower(), "false").lower() == "true":
-                return False
-            if attributes2.get(check.lower(), "false").lower() == "true":
-                return False
-        return True
-
-
-    def get_host_data(self, db_host, attributes):
+    def get_host_data(self, db_host, attributes, persist_cache=True):
         """
         Return extra Attributes based on
         rules which has existing attributes in condition
         """
-        if db_host.cache.get('ansible',{}).get('outcomes'):
-            return db_host.cache['ansible']['outcomes']
-        outcomes = self.actions.get_outcomes(db_host, attributes)  # pylint: disable=no-member
-        db_host.cache.setdefault('ansible', {})
-        db_host.cache['ansible']['outcomes'] = outcomes
-        db_host.save()
-        return outcomes
+        return self.actions.get_outcomes(  # pylint: disable=no-member
+            db_host, attributes, persist_cache=persist_cache)
+
+    def get_host_vars(self, db_host):
+        """
+        The inventory variables of one host, False if a rule drops it.
+
+        The rule engines collect their cache writes and the host is saved
+        once at the end, instead of once per engine.
+        """
+        attributes = self.get_attributes(db_host, self.cache_key, persist_cache=False)
+        extra_attributes = {}
+        if attributes:
+            extra_attributes = self.get_host_data(db_host, attributes['all'],
+                                                  persist_cache=False)
+        self.flush_host_cache(db_host)
+        if not attributes or 'ignore_host' in extra_attributes:
+            return False
+        # A new dict: the filtered set is the cached one of the host
+        return self._convert_string_booleans(
+            {**attributes['filtered'], **extra_attributes})
 
     def _convert_string_booleans(self, data):
         """
@@ -89,31 +83,13 @@ class AnsibleInventory(Plugin):
             query = Host.get_export_hosts()
             if show_status:
                 task1 = progress.add_task("Calculating Variables", total=query.count())
-            for db_host in query:
-                hostname = db_host.hostname
-
-                attributes = self.get_attributes(db_host, 'ansible')
-                if not attributes:
-                    if show_status:
-                        progress.advance(task1)
-                    continue
-                extra_attributes = self.get_host_data(db_host, attributes['all'])
-                if 'ignore_host' in extra_attributes:
-                    if show_status:
-                        progress.advance(task1)
-                    continue
-
-                #if self.bypass_host(attributes['all'], extra_attributes):
-                #    if show_status:
-                #        progress.advance(task1)
-                #    continue
-
-                inventory = attributes['filtered']
-                inventory.update(extra_attributes)
-                inventory = self._convert_string_booleans(inventory)
-
-                data['_meta']['hostvars'][hostname] = inventory
-                data['all']['hosts'].append(hostname)
+            # no_cache(): every host is needed once, the queryset must not
+            # keep all of them in memory until the end of the run
+            for db_host in query.no_cache():
+                inventory = self.get_host_vars(db_host)
+                if inventory:
+                    data['_meta']['hostvars'][db_host.hostname] = inventory
+                    data['all']['hosts'].append(db_host.hostname)
                 if show_status:
                     progress.advance(task1)
         for hostname, inventory in self.list_row_inventories():
@@ -146,14 +122,4 @@ class AnsibleInventory(Plugin):
         except DoesNotExist:
             return dict(self.list_row_inventories()).get(hostname, False)
 
-        attributes = self.get_attributes(db_host, 'ansible')
-        if not attributes:
-            return False
-        extra_attributes = self.get_host_data(db_host, attributes['all'])
-        if 'ignore_host' in extra_attributes:
-            return False
-
-        inventory = attributes['filtered']
-        inventory.update(extra_attributes)
-        inventory = self._convert_string_booleans(inventory)
-        return inventory
+        return self.get_host_vars(db_host)

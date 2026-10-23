@@ -12,5 +12,26 @@
   #      - always
 
 - hosts: all
+  # Facts are gathered below, only for hosts that have something to do.
+  gather_facts: false
+  vars:
+    # The steps of the cmk_host_agent role. A host without any of them
+    # switched on is dropped before Ansible connects to it.
+    cmk_agent_steps:
+      - "{{ cmk_install_agent | default(false) | bool }}"
+      - "{{ cmk_register_tls | default(false) | bool }}"
+      - "{{ cmk_register_bakery | default(false) | bool }}"
+      - "{{ cmk_register_central_bakery | default(false) | bool }}"
+      - "{{ cmk_create_host | default(false) | bool }}"
+      - "{{ cmk_discover | default(false) | bool }}"
+      - "{{ cmk_delete_manual_files | default(false) | bool }}"
+      - "{{ configure_firewall | default(false) | bool }}"
+  pre_tasks:
+    - name: "Skip host without a Checkmk agent step"
+      ansible.builtin.meta: end_host
+      when: not (cmk_agent_steps | select | list)
+
+    - name: "Gather facts"
+      ansible.builtin.setup:
   roles:
     - cmk_host_agent

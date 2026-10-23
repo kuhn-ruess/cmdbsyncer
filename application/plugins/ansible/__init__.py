@@ -72,6 +72,7 @@ def load_rules(project=None):
             AnsibleRewriteAttributesRule.objects(**rule_filter).order_by('sort_field')
 
     ansible_rules = AnsibleVariableRule()
+    ansible_rules.cache_name = f'ansible_variables{project_suffix}'
     ansible_rules.rules = \
             AnsibleCustomVariablesRule.objects(**rule_filter).order_by('sort_field')
 
@@ -79,6 +80,7 @@ def load_rules(project=None):
         'filter': attribute_filter,
         'rewrite': attribute_rewrite,
         'actions': ansible_rules,
+        'cache_key': f'ansible{project_suffix}',
     }
 #.
 #   .-- Debug Host — shared backend for CLI + HTML debug page
@@ -112,7 +114,7 @@ def get_ansible_debug_data(hostname, project_name=None):
     if not db_host:
         return None, None, None
 
-    attributes = syncer.get_attributes(db_host, 'ansible')
+    attributes = syncer.get_attributes(db_host, rules['cache_key'])
     extra_attributes = {}
     if attributes:
         hidden_fields = ('ansible_password', 'ansible_ssh_pass')
@@ -148,7 +150,7 @@ def debug_ansible_rules(hostname, project_name, debug):  # pylint: disable=unuse
     if not db_host:
         return
 
-    attributes = syncer.get_attributes(db_host, 'ansible')
+    attributes = syncer.get_attributes(db_host, rules['cache_key'])
 
     if not attributes:
         print(f"{ColorCodes.FAIL}THIS HOST IS IGNORED BY RULE{ColorCodes.ENDC}")
@@ -168,6 +170,24 @@ def debug_ansible_rules(hostname, project_name, debug):  # pylint: disable=unuse
 #.
 #   .-- Ansible Cache
 
+def clear_ansible_cache():
+    """
+    Drop every Ansible cache slot of every host: the attribute set, the
+    filter, rewrite and variable outcomes of all projects, and the custom
+    attributes they are computed from.
+    """
+    slot_names = Host.objects.aggregate([
+        {'$project': {'slot': {'$objectToArray': '$cache'}}},
+        {'$unwind': '$slot'},
+        {'$group': {'_id': '$slot.k'}},
+    ])
+    slots = [entry['_id'] for entry in slot_names
+             if entry['_id'].lower().startswith('ansible')
+             or entry['_id'] == 'CustomAttributeRule']
+    if slots:
+        Host.objects(cache__ne={}).update(
+            **{f'unset__cache__{slot}': 1 for slot in slots})
+
 def _inner_update_cache(account=False):
     """
     Update Cache of Ansible
@@ -175,14 +195,10 @@ def _inner_update_cache(account=False):
     # pylint: disable=unused-argument
     # Account Variable needed because of cronjobs
     print(f"{ColorCodes.OKGREEN}Delete current Cache{ColorCodes.ENDC}")
-    Host.objects.filter(cache__ansible__exists=True).update(unset__cache__ansible=1)
+    clear_ansible_cache()
     print(f"{ColorCodes.OKGREEN}Build new Cache{ColorCodes.ENDC}")
-    rules = load_rules()
-    syncer = AnsibleInventory()
+    syncer = _build_ansible_provider()
     syncer.name = "Rebuild Ansible Cache"
-    syncer.filter = rules['filter']
-    syncer.rewrite = rules['rewrite']
-    syncer.actions = rules['actions']
     # Do the action which triggers the caches
     syncer.get_full_inventory(show_status=True)
 
@@ -320,6 +336,7 @@ def _build_ansible_provider(project=None):
     syncer.filter = rules['filter']
     syncer.rewrite = rules['rewrite']
     syncer.actions = rules['actions']
+    syncer.cache_key = rules['cache_key']
     return syncer
 
 

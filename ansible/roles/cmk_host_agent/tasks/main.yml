@@ -19,6 +19,14 @@
   when: cmk_create_host | bool
   delegate_to: localhost
   ignore_errors: yes
+  register: cmk_create_host_result
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Create Host in Checkmk"
+    cmk_result: "{{ cmk_create_host_result }}"
+  when: cmk_create_host_result is failed
 
 - ansible.builtin.include_tasks: "{{ ansible_os_family }}-tasks.yml"
 
@@ -41,3 +49,11 @@
   when: cmk_discover | bool
   ignore_errors: yes
   delegate_to: localhost
+  register: cmk_discover_result
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Discover Services"
+    cmk_result: "{{ cmk_discover_result }}"
+  when: cmk_discover_result is failed

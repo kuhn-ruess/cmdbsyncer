@@ -16,6 +16,13 @@
   register: checkmk_agent_download_state
   ignore_errors: yes
 
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Download Checkmk Agent"
+    cmk_result: "{{ checkmk_agent_download_state }}"
+  when: checkmk_agent_download_state is failed
+
 - name: "Install Checkmk Agent"
   become: true
   ansible.builtin.apt:

@@ -11,6 +11,16 @@
       accept: "application/octet-stream"
   no_log: true
   when: cmk_install_agent | bool
+  register: cmk_agent_download_result
+  ignore_errors: yes
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Download Checkmk Agent"
+    cmk_result: "{{ cmk_agent_download_result }}"
+    cmk_error_fatal: true
+  when: cmk_agent_download_result is failed
 
 - name: "Install Checkmk Agent"
   ansible.windows.win_package:
@@ -40,6 +50,16 @@
     chdir: C:\Program Files (x86)\checkmk\service
   no_log: true
   when: cmk_register_tls | bool
+  register: cmk_register_tls_result
+  ignore_errors: yes
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Register Agent for TLS"
+    cmk_result: "{{ cmk_register_tls_result }}"
+    cmk_error_fatal: true
+  when: cmk_register_tls_result is failed
 
 # check_mk_agent.exe joins the updater arguments with plain spaces into a
 # new command line. User and secret are therefore handed over already
@@ -73,6 +93,16 @@
                            | regex_replace('(\\+)$', '\1\1')) ~ '"' }}
   no_log: true
   when: cmk_register_bakery | bool
+  register: cmk_register_bakery_result
+  ignore_errors: yes
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Register Agent on Local Bakery"
+    cmk_result: "{{ cmk_register_bakery_result }}"
+    cmk_error_fatal: true
+  when: cmk_register_bakery_result is failed
 
 - name: "Register Agent on Central Bakery."
   ansible.windows.win_command:
@@ -97,3 +127,13 @@
   vars: *cmk_updater_vars
   no_log: true
   when: cmk_register_central_bakery | bool
+  register: cmk_register_central_bakery_result
+  ignore_errors: yes
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Register Agent on Central Bakery"
+    cmk_result: "{{ cmk_register_central_bakery_result }}"
+    cmk_error_fatal: true
+  when: cmk_register_central_bakery_result is failed
