@@ -222,6 +222,10 @@ class Plugin():
     # on first use and then kept for the whole run.
     merged_attributes = None
 
+    # CMDB templates by id, loaded on first use and then kept for the
+    # whole run (see active_templates()).
+    template_cache = None
+
 
 
     name = "Undefined"
@@ -609,7 +613,7 @@ class Plugin():
         not query the config document per host.
         """
         if templates is None:
-            templates = active_templates(db_host)
+            templates = self.host_templates(db_host)
         if not templates:
             return
         if self.merged_attributes is None:
@@ -633,6 +637,15 @@ class Plugin():
                 if key in attributes:
                     value = merge_attribute_values(attributes[key], value)
                 attributes[key] = value
+
+    def host_templates(self, db_host):
+        """
+        The active CMDB templates of the host, each template loaded once
+        per plugin instance instead of once per host.
+        """
+        if self.template_cache is None:
+            self.template_cache = {}
+        return active_templates(db_host, self.template_cache)
 
     @staticmethod
     def flush_host_cache(db_host):
@@ -666,6 +679,21 @@ class Plugin():
             setattr(db_host, '_cache_dirty', True)
 
     def get_attributes(self, db_host, cache, persist_cache=True, template=None):
+        """
+        Retrieve and process host attributes with caching support, see
+        _compute_attributes().
+
+        The custom attribute, rewrite and filter engines and the attribute
+        set itself each write a cache slot. They are collected and the host
+        is saved once — unless ``persist_cache=False``, then the caller
+        flushes them itself (see flush_host_cache()).
+        """
+        attributes = self._compute_attributes(db_host, cache, template)
+        if persist_cache:
+            self.flush_host_cache(db_host)
+        return attributes
+
+    def _compute_attributes(self, db_host, cache, template=None):
         """
         Retrieve and process host attributes with caching support.
         
@@ -704,7 +732,7 @@ class Plugin():
                 # earlier run left in it goes, or it would be served again
                 # the day the timestamp leaves the rules.
                 if db_host.cache.pop(cache, None) is not None:
-                    self._persist_cache(db_host, persist_cache)
+                    self._persist_cache(db_host, False)
                 cache = False
             else:
                 db_host.cache.setdefault(cache, {})
@@ -741,7 +769,7 @@ class Plugin():
             self.custom_attributes.get_outcomes(
                 db_host,
                 attributes,
-                persist_cache=persist_cache,
+                persist_cache=False,
                 use_cache=use_cache,
             )
         )
@@ -751,7 +779,7 @@ class Plugin():
             for rewrite, value in self.rewrite.get_outcomes(
                 db_host,
                 attributes,
-                persist_cache=persist_cache,
+                persist_cache=False,
                 use_cache=use_cache,
             ).items():
                 realname = rewrite[4:]
@@ -773,18 +801,18 @@ class Plugin():
             attributes_filtered = self.filter.get_outcomes(
                 db_host,
                 attributes,
-                persist_cache=persist_cache,
+                persist_cache=False,
                 use_cache=use_cache,
             )
             data['filtered'] = attributes_filtered
             if attributes_filtered.get('ignore_host') and cache:
                 db_host.cache[cache]['attributes'] = data
-                self._persist_cache(db_host, persist_cache)
+                self._persist_cache(db_host, False)
                 return False
 
         if cache:
             db_host.cache[cache]['attributes'] = data
-            self._persist_cache(db_host, persist_cache)
+            self._persist_cache(db_host, False)
         return data
 
     def _attributes_depend_on_time(self):

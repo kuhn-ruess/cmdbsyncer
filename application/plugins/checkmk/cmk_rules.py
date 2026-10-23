@@ -14,7 +14,6 @@ from mongoengine.errors import DoesNotExist
 
 from application import app, logger
 from application.models.host import Host
-from application.models.host_templates import active_templates
 from application.plugins.checkmk.cmk2 import CmkException, CmkTimeout, CMK2
 from application.helpers.syncer_jinja import render_jinja, get_list
 from application.plugins.checkmk.helpers import make_progress, resolve_loop_list
@@ -1736,7 +1735,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         if self.template_actions is None:
             return
-        templates = active_templates(db_host)
+        templates = self.host_templates(db_host)
         if templates:
             passes = (self.get_attributes(db_host, False, persist_cache=False,
                                           template=template)
