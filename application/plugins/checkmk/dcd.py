@@ -5,6 +5,8 @@ Checkmk DCD Manager
 from jinja2.exceptions import UndefinedError
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
+from application.plugins.checkmk.cmk_rules import HOST_FOLDER, uses_host_folder
+from application.plugins.checkmk.rules import host_folder, host_folder_engine
 
 from application import logger
 from application.modules.rule.list_source import (
@@ -32,6 +34,8 @@ class CheckmkDCDRuleSync(CMK2):
         # across accounts/runs in the same process and leak stale rules
         # into later exports.
         self.all_rules = []
+        # Folder rules engine for HOST_FOLDER, built on first use.
+        self._host_folder_engine = None
 
     # Account config keys withheld from the rule template context — secrets and
     # internal ids that must never end up in a rendered rule.
@@ -220,6 +224,19 @@ class CheckmkDCDRuleSync(CMK2):
                     f"list:{rule.name}:{row_idx}", host_actions,
                     {**context, **row_context(row, row_idx)})
 
+    def add_host_folder(self, db_host, host_actions, attributes):
+        """
+        Add HOST_FOLDER, the folder the host export puts the host in, to
+        ``attributes`` when one of the host's outcomes uses it. Only then
+        the folder rules run for the host, the other hosts cost nothing.
+        """
+        if not uses_host_folder(host_actions):
+            return
+        if self._host_folder_engine is None:
+            self._host_folder_engine = host_folder_engine()
+        attributes[HOST_FOLDER] = host_folder(self._host_folder_engine,
+                                              db_host, attributes)
+
     def export_rules(self):
         """
         Export DCD Rules
@@ -249,10 +266,13 @@ class CheckmkDCDRuleSync(CMK2):
                     continue
                 attributes['all']['cmk_site'] = site
                 attributes['all']['account'] = account_ctx
+                # The site the site pool gave the host in the host export.
+                attributes['all']['HOST_POOL_SITE'] = db_host.get_pool_site() or ''
                 # pylint: disable-next=no-member
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:
                     logger.debug(' -- Got Actions')
+                    self.add_host_folder(db_host, host_actions, attributes['all'])
                     self.calculate_rules_of_host(db_host.hostname, host_actions, attributes['all'])
                 progress.advance(task1)
 

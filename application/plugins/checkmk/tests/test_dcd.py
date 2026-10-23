@@ -270,6 +270,47 @@ class TestCheckmkDCDRuleSync(unittest.TestCase):
         self.assertEqual(self.sync.all_rules, [])
 
 
+class TestDCDHostFolder(unittest.TestCase):
+    """HOST_FOLDER for the DCD rules of a host"""
+
+    def setUp(self):
+        def mock_init(self_param, account=False):
+            base_mock_init(self_param,
+                           console=Mock(), all_rules=[], debug=False)
+
+        self.init_patcher = patch(
+            'application.plugins.checkmk.dcd.CMK2.__init__', mock_init)
+        self.init_patcher.start()
+        self.sync = CheckmkDCDRuleSync()
+
+    def tearDown(self):
+        self.init_patcher.stop()
+
+    @patch('application.plugins.checkmk.dcd.host_folder', return_value='/dc1')
+    @patch('application.plugins.checkmk.dcd.host_folder_engine')
+    def test_host_folder_is_set_when_an_outcome_uses_it(self, engine, folder):
+        attributes = {'HOSTNAME': 'srv1'}
+        actions = {'default': [{'creation_rules': [
+            {'folder_path': '{{ HOST_FOLDER }}/piggy'}]}]}
+        self.sync.add_host_folder('db_host', actions, attributes)
+        self.sync.add_host_folder('db_host', actions, attributes)
+
+        self.assertEqual(attributes['HOST_FOLDER'], '/dc1')
+        # One folder rules engine for the whole run.
+        engine.assert_called_once_with()
+
+    @patch('application.plugins.checkmk.dcd.host_folder')
+    @patch('application.plugins.checkmk.dcd.host_folder_engine')
+    def test_host_folder_skipped_when_no_outcome_uses_it(self, engine, folder):
+        attributes = {'HOSTNAME': 'srv1'}
+        self.sync.add_host_folder(
+            'db_host', {'default': [{'dcd_id': 'piggy'}]}, attributes)
+
+        self.assertNotIn('HOST_FOLDER', attributes)
+        engine.assert_not_called()
+        folder.assert_not_called()
+
+
 class _Doc(dict):
     """Embedded outcome stand-in: ``to_mongo`` is all the export reads."""
     def to_mongo(self):

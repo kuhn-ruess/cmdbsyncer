@@ -2507,6 +2507,12 @@ class CheckmkDCDView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too
         ('connector_type', 'Connector Type'),
     )
     list_source_known_names = ('cmk_site', 'account')
+
+    jinja_help_fields = ('dcd_id', 'title', 'comment', 'site',
+                         'connector_type', 'folder_path')
+    jinja_help_note = ('Rendered per host, from a pasted list per row, as '
+                       'Static Rule once.')
+    jinja_help_variables = 'DCD_RULE_VARIABLES'
     list_source_placeholder = 'id;site\npiggyback_dc1;site_a\npiggyback_dc2;site_b'
 
     def __init__(self, model, **kwargs):

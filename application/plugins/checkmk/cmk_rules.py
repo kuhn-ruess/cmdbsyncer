@@ -42,6 +42,13 @@ MASKED_PASSWORD = "'******'"
 # static rule have no host, so it is not set there.
 HOST_FOLDER = 'HOST_FOLDER'
 
+
+def uses_host_folder(host_actions):
+    """True when one of the outcomes of a host references HOST_FOLDER."""
+    return any(HOST_FOLDER in str(value)
+               for outcomes in host_actions.values()
+               for outcome in outcomes for value in outcome.values())
+
 # Longest Setup Rule name written into the Checkmk rule description. Long
 # enough for real rule names, short enough to keep the rule list readable.
 DESCRIPTION_NAME_LIMIT = 60
@@ -1760,9 +1767,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         uses it. Only then the folder rules run for the host, the other
         hosts cost nothing.
         """
-        if not any(HOST_FOLDER in str(value)
-                   for outcomes in host_actions.values()
-                   for outcome in outcomes for value in outcome.values()):
+        if not uses_host_folder(host_actions):
             return attributes
         # pylint: disable-next=import-outside-toplevel
         from .rules import host_folder, host_folder_engine

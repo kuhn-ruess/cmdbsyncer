@@ -121,6 +121,25 @@ SETUP_RULE_VARIABLES = (
 )
 
 
+# The variables of a Checkmk DCD Rule.
+DCD_RULE_VARIABLES = (
+    ('HOSTNAME', "{{ HOSTNAME }}", "Name of the host."),
+    ('HOST_FOLDER', "{{ HOST_FOLDER }}",
+     "Folder the host lands in (Checkmk > Export Rules: Move to Folder or "
+     "Pool Folder), e.g. as folder of a creation rule. Per host only: a rule "
+     "from a list or a Static Rule has no host."),
+    ('HOST_POOL_SITE', "{{ HOST_POOL_SITE }}",
+     "Site the site pool assigned to the host in the host export (empty "
+     "without one), e.g. as site of the connection. Per host only."),
+    ('cmk_site', "{{ cmk_site }}",
+     "Checkmk site of the account the export runs for."),
+    ('account', "{{ account.address }}",
+     "A field or custom field of that account (passwords are left out)."),
+    ('any attribute', "{{ attribute }}",
+     "Every attribute of the host is a variable of its own name, from a "
+     "pasted list its columns."),
+)
+
 # How a password in the value of a Checkmk Setup Rule points to the Secret
 # Store. Checkmk 2.3+ holds a password as such a tuple; a stored_password
 # only names the ident the password export writes, the secret itself stays

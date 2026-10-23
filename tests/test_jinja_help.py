@@ -79,7 +79,8 @@ class JinjaHelpTest(unittest.TestCase):
         for group in (self.help.FUNCTIONS, self.help.FILTERS,
                       self.help.BASICS, self.help.RULE_VARIABLES,
                       self.help.SETUP_RULE_VARIABLES,
-                      self.help.CHECKMK_RULE_PASSWORDS):
+                      self.help.CHECKMK_RULE_PASSWORDS,
+                      self.help.DCD_RULE_VARIABLES):
             for name, snippet, _text in group:
                 self.assertNotIn('\n', snippet, name)
                 self.assertIsNone(self.jinja.check_jinja_syntax(snippet), name)
