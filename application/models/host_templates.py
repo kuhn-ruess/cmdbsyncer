@@ -26,18 +26,55 @@ def parse_cmdb_match(cmdb_match):
     return key, value
 
 
-def active_templates(host):
+def active_templates(host, cache=None):
     """
     The templates a host carries that still contribute something. An
     archived (soft-deleted) template keeps its assignment so a restore
     brings it back, but it must not feed an export or be presented as
     contributing in the meantime.
 
+    ``cache`` is a dict the caller keeps over a run of many hosts. Reading
+    ``host.cmdb_templates`` loads the template documents from the
+    database for every single host; with the cache each template is
+    loaded once.
+
     Returns:
         list: the host's non-archived templates.
     """
-    return [tmpl for tmpl in (host.cmdb_templates or [])
+    if cache is None:
+        templates = host.cmdb_templates or []
+    else:
+        templates = _cached_templates(host, cache)
+    return [tmpl for tmpl in templates
             if not getattr(tmpl, 'deleted_at', None)]
+
+
+def _cached_templates(host, cache):
+    """
+    The templates of ``host`` out of ``cache`` (template id -> template),
+    the missing ones loaded with one query. Reads the references as
+    stored, so the host does not load them itself.
+    """
+    raw = getattr(host, '_data', None)
+    if not isinstance(raw, dict):
+        return host.cmdb_templates or []
+    template_ids = []
+    for ref in raw.get('cmdb_templates') or []:
+        # A DBRef as loaded, or a template document once assigned/read
+        template_id = getattr(ref, 'pk', None) or getattr(ref, 'id', None)
+        if template_id is None:
+            return host.cmdb_templates or []
+        template_ids.append(template_id)
+    missing = [tid for tid in template_ids if tid not in cache]
+    if missing:
+        # pylint: disable-next=import-outside-toplevel,cyclic-import
+        from application.models.host import Host
+        for template in Host.objects(pk__in=missing):
+            cache[template.pk] = template
+        for template_id in missing:
+            # A deleted template: nothing to contribute
+            cache.setdefault(template_id, None)
+    return [cache[tid] for tid in template_ids if cache[tid] is not None]
 
 
 def merged_attribute_keys():

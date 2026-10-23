@@ -310,12 +310,16 @@ class Host(HostLabelsMixin, db.Document):
         Return all Hosts eligible for export. Only rows that are not
         soft-deleted and whose lifecycle_state is 'active' (or missing
         for legacy rows) are returned.
+
+        Like the other export helpers below, the queryset does not cache
+        its documents: an export walks every host once, a cached queryset
+        held all of them in memory until the run ended.
         """
         return Host.objects(
             Host.active_q()
             & Q(is_object__ne=True)
             & Q(deleted_at__exists=False)
-        )
+        ).no_cache()
 
     @staticmethod
     def objects_by_filter(object_list):
@@ -327,9 +331,9 @@ class Host(HostLabelsMixin, db.Document):
         active = Host.active_q() & Q(deleted_at__exists=False)
         if not object_list:
             logger.debug("HOST FILTER OFF")
-            return Host.objects(active & Q(is_object__ne=True))
+            return Host.objects(active & Q(is_object__ne=True)).no_cache()
         logger.debug("HOST FILTER %s", object_list)
-        return Host.objects(active & Q(object_type__in=object_list))
+        return Host.objects(active & Q(object_type__in=object_list)).no_cache()
 
     @staticmethod
     def active_non_template():
@@ -343,7 +347,7 @@ class Host(HostLabelsMixin, db.Document):
             Host.active_q()
             & Q(deleted_at__exists=False)
             & Q(object_type__ne='template')
-        )
+        ).no_cache()
 
 
     @staticmethod

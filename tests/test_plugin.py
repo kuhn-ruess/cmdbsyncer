@@ -552,10 +552,9 @@ class TestPlugin(unittest.TestCase):
 
         self.assertFalse(result)
 
-    @patch('application.modules.plugin.app')
-    def test_get_attributes_deferred_cache_save(self, mock_app):
-        mock_app.config = self.mock_app_config
-
+    @staticmethod
+    def _plugin_with_engines():
+        """A plugin with mocked rule engines and a host without cache."""
         mock_host = Mock()
         mock_host.hostname = 'test-host'
         mock_host.cache = {}
@@ -575,6 +574,24 @@ class TestPlugin(unittest.TestCase):
         # slot is cached — a bare Mock would answer yes and skip it.
         for engine in (plugin.custom_attributes, plugin.rewrite, plugin.filter):
             engine.depends_on_time.return_value = False
+        return plugin, mock_host
+
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_saves_host_once(self, mock_app):
+        mock_app.config = self.mock_app_config
+        plugin, mock_host = self._plugin_with_engines()
+
+        result = plugin.get_attributes(mock_host, 'test_cache')
+
+        self.assertEqual(result['filtered'], {'filtered': 'z'})
+        mock_host.save.assert_called_once_with()
+        for engine in (plugin.custom_attributes, plugin.rewrite, plugin.filter):
+            self.assertEqual(engine.get_outcomes.call_args.kwargs['persist_cache'], False)
+
+    @patch('application.modules.plugin.app')
+    def test_get_attributes_deferred_cache_save(self, mock_app):
+        mock_app.config = self.mock_app_config
+        plugin, mock_host = self._plugin_with_engines()
 
         result = plugin.get_attributes(mock_host, 'test_cache', persist_cache=False)
 

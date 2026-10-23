@@ -83,9 +83,7 @@ class AnsibleInventory(Plugin):
             query = Host.get_export_hosts()
             if show_status:
                 task1 = progress.add_task("Calculating Variables", total=query.count())
-            # no_cache(): every host is needed once, the queryset must not
-            # keep all of them in memory until the end of the run
-            for db_host in query.no_cache():
+            for db_host in query:
                 inventory = self.get_host_vars(db_host)
                 if inventory:
                     data['_meta']['hostvars'][db_host.hostname] = inventory
