@@ -78,7 +78,8 @@ class JinjaHelpTest(unittest.TestCase):
     def test_every_snippet_is_one_line_valid_jinja(self):
         for group in (self.help.FUNCTIONS, self.help.FILTERS,
                       self.help.BASICS, self.help.RULE_VARIABLES,
-                      self.help.SETUP_RULE_VARIABLES):
+                      self.help.SETUP_RULE_VARIABLES,
+                      self.help.CHECKMK_RULE_PASSWORDS):
             for name, snippet, _text in group:
                 self.assertNotIn('\n', snippet, name)
                 self.assertIsNone(self.jinja.check_jinja_syntax(snippet), name)
@@ -94,6 +95,17 @@ class JinjaHelpTest(unittest.TestCase):
         default = {entry['name'] for entry in self.help.jinja_help(
             ['new_value'])['entries'] if entry['group'] == 'Variables'}
         self.assertIn('FIRST_MATCHING_TAG', default)
+
+    def test_extra_groups_follow_the_variables(self):
+        query = self.lookup_table.objects.only.return_value.order_by
+        query.return_value = []
+        entries = self.help.jinja_help(
+            ['value_template'], variables=self.help.SETUP_RULE_VARIABLES,
+            extra=[('Passwords', self.help.CHECKMK_RULE_PASSWORDS)])['entries']
+        groups = [entry['group'] for entry in entries]
+        self.assertEqual(groups.index('Passwords'),
+                         len(self.help.SETUP_RULE_VARIABLES))
+        self.assertIn('host secret', {entry['name'] for entry in entries})
 
     def test_lookup_tables_list_their_key_and_columns(self):
         table = MagicMock(entries='location;datacenter;owner\nsite-a;DC1;team-a\n')

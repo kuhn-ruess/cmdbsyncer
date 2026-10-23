@@ -1038,6 +1038,7 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                        'a pasted list its columns (HOSTNAME and HOST_FOLDER '
                        'are not set there).')
     jinja_help_variables = 'SETUP_RULE_VARIABLES'
+    jinja_help_extra = (('Passwords in the value', 'CHECKMK_RULE_PASSWORDS'),)
 
     @expose('/_label_suggestions')
     def label_suggestions(self):

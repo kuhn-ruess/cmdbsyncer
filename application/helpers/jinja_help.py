@@ -121,6 +121,25 @@ SETUP_RULE_VARIABLES = (
 )
 
 
+# How a password in the value of a Checkmk Setup Rule points to the Secret
+# Store. Checkmk 2.3+ holds a password as such a tuple; a stored_password
+# only names the ident the password export writes, the secret itself stays
+# out of the rule.
+CHECKMK_RULE_PASSWORDS = (
+    ('host secret',
+     "('cmk_postprocessed', 'stored_password', ('{{ secret(\"key\") }}', ''))",
+     "Replaces the password tuple in the value with a reference to the "
+     "Secret Store entry of this host (or the global entry of that name), "
+     "e.g. one an import stored. Export the passwords to Checkmk first."),
+    ('global secret',
+     "('cmk_postprocessed', 'stored_password', ('{{ cmk_password(\"name\") }}', ''))",
+     "The same with a global Secret Store entry. An "
+     "('cmk_postprocessed', 'explicit_password', ...) tuple of a rule copied "
+     "from Checkmk is replaced like this; Checkmk shows its secret only as "
+     "******."),
+)
+
+
 def _entries(group, items):
     return [{'group': group, 'name': name, 'snippet': snippet, 'text': text}
             for name, snippet, text in items]
@@ -142,16 +161,20 @@ def lookup_tables():
     return tables
 
 
-def jinja_help(fields, note='', variables=RULE_VARIABLES):
+def jinja_help(fields, note='', variables=RULE_VARIABLES, extra=()):
     """
     What the help panel of a form needs: the fields (outcome field names)
     it is shown for, a note on when they are rendered, the entries (with
-    the variables the form's rule hands in) and the lookup tables.
+    the variables the form's rule hands in, then the ``(group, items)``
+    pairs of ``extra``) and the lookup tables.
     """
+    entries = _entries('Variables', variables)
+    for group, items in extra:
+        entries += _entries(group, items)
     return {
         'fields': list(fields),
         'note': note,
-        'entries': (_entries('Variables', variables)
+        'entries': (entries
                     + _entries('Syncer functions', FUNCTIONS)
                     + _entries('Syncer filters', FILTERS)
                     + _entries('Jinja basics', BASICS)),
