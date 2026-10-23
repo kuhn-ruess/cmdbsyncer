@@ -126,6 +126,10 @@ class CmkRoleStaticTest(unittest.TestCase):
                     continue
                 found += 1
                 where = f"{os.path.basename(path)}: {task.get('name')}"
+                if os.path.basename(path) == 'report_error.yml':
+                    # Prints the error of a no_log task, the secret masked
+                    self.assertIn('replace(cmk_secret', dumped, where)
+                    continue
                 self.assertNotIn('Bearer', dumped, where)
                 self.assertIs(task.get('no_log'), True, where)
                 self.assertFalse(_SHELL_MODULES & set(task), where)
@@ -133,6 +137,29 @@ class CmkRoleStaticTest(unittest.TestCase):
                                'win_command', 'ansible.windows.win_command'):
                     if module in task:
                         self.assertIn('argv', task[module], where)
+        self.assertGreaterEqual(found, 10)
+
+    def test_hidden_errors_are_reported(self):
+        # no_log hides the error of a failed step, the next task reports it
+        found = 0
+        tasks_dir = os.path.join(_ROLES, 'cmk_host_agent', 'tasks')
+        for path in glob.glob(os.path.join(tasks_dir, '*-tasks.yml')) + [
+                os.path.join(tasks_dir, 'main.yml')]:
+            tasks = _load(path)
+            for idx, task in enumerate(tasks):
+                if task.get('no_log') is not True:
+                    continue
+                found += 1
+                where = f"{os.path.basename(path)}: {task.get('name')}"
+                result = task.get('register')
+                self.assertTrue(result, where)
+                self.assertTrue(task.get('ignore_errors'), where)
+                report = tasks[idx + 1]
+                self.assertEqual(report.get('ansible.builtin.include_tasks'),
+                                 'report_error.yml', where)
+                self.assertEqual(report['vars']['cmk_result'],
+                                 f'{{{{ {result} }}}}', where)
+                self.assertEqual(report['when'], f'{result} is failed', where)
         self.assertGreaterEqual(found, 10)
 
     def test_uri_tasks_use_basic_auth(self):

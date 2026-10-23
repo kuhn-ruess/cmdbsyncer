@@ -21,7 +21,15 @@
       - --trust-cert
   no_log: true
   when: cmk_register_tls | bool
+  register: cmk_register_tls_result
   ignore_errors: yes
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Register Agent for TLS"
+    cmk_result: "{{ cmk_register_tls_result }}"
+  when: cmk_register_tls_result is failed
 
 - name: "Register Agent on Local Bakery."
   become: true
@@ -43,7 +51,15 @@
       - "{{ cmk_secret }}"
   no_log: true
   when: cmk_register_bakery | bool
+  register: cmk_register_bakery_result
   ignore_errors: yes
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Register Agent on Local Bakery"
+    cmk_result: "{{ cmk_register_bakery_result }}"
+  when: cmk_register_bakery_result is failed
 
 - name: "Register Agent on Central Bakery."
   become: true
@@ -65,7 +81,15 @@
       - "{{ cmk_secret }}"
   no_log: true
   when: cmk_register_central_bakery | bool
+  register: cmk_register_central_bakery_result
   ignore_errors: yes
+
+- name: "Report the error"
+  ansible.builtin.include_tasks: report_error.yml
+  vars:
+    cmk_step: "Register Agent on Central Bakery"
+    cmk_result: "{{ cmk_register_central_bakery_result }}"
+  when: cmk_register_central_bakery_result is failed
 
 - name: "Cleanup cache"
   ansible.builtin.file:

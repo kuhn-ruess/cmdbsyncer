@@ -1,0 +1,15 @@
+---
+# no_log hides the whole result of a task, its error message included.
+# This reports what went wrong, with the secret masked out.
+# Expects: cmk_step (name of the step), cmk_result (its registered result),
+# optional cmk_error_fatal (stop this host, default: carry on).
+- name: "{{ cmk_step }} failed"
+  ansible.builtin.fail:
+    msg: "{{ cmk_error_text | replace(cmk_secret, '********') if cmk_secret | default('') | length else cmk_error_text }}"
+  vars:
+    cmk_error_text: >-
+      {{ [cmk_result.msg | default(''),
+          (cmk_result.json | default({})).detail | default(''),
+          cmk_result.stderr | default(''),
+          cmk_result.stdout | default('')] | select | join('; ') }}
+  ignore_errors: "{{ not (cmk_error_fatal | default(false)) }}"
