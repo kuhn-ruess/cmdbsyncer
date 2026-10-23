@@ -1264,8 +1264,8 @@ class SyncCMK2(CMK2):
             self.existing_folders_attributes[full_foldername] = \
                 {**extra_opts, 'title': title}
         except CmkException as error:
-            logger.debug("Error creating Folder %s", error)
-            self.log_details.append(('error', f"Folder create problem {error}"))
+            # Every host of this folder fails afterwards, so say why here
+            self.log_error(f"Folder {full_foldername} not created: {error}")
 
 
     def create_folder(self, folder):
