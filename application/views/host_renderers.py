@@ -241,12 +241,9 @@ def _render_datetime(_view, _context, model, name):
         return Markup(escape(format_local(value)))
     return Markup(escape(str(value)))
 
-_LABEL_BADGE_STYLE = (
-    'display: inline-block; max-width: 280px; '
-    'overflow: hidden; text-overflow: ellipsis; '
-    'white-space: nowrap; vertical-align: middle; '
-    'margin: 2px;'
-)
+# Layout of a label badge: .cmdb-label-badge in static/css/cmdbsyncer.css.
+# The host list renders some 25 of them per row, an inline style made
+# up a third of the page.
 _LABEL_WRAPPER_STYLE = 'max-width: 600px;'
 
 
@@ -518,8 +515,7 @@ def _render_labels(_view, _context, model, _name):
         checkmk_labels.pop(key, None)
         text = f"{key}:{value}"
         html += (
-            f'<span class="badge badge-info mr-1" '
-            f'style="{_LABEL_BADGE_STYLE}" '
+            f'<span class="badge badge-info mr-1 cmdb-label-badge" '
             f'title="{escape(text)} — merged attribute, collected from: '
             f'{escape(", ".join(sources))}">'
             f'<i class="fa fa-clone mr-1" aria-hidden="true"></i>'
@@ -533,8 +529,8 @@ def _render_labels(_view, _context, model, _name):
             del checkmk_labels[key]
         text = f"{key}:{value}"
         html += (
-            f'<span class="badge badge-primary mr-1" '
-            f'style="{_LABEL_BADGE_STYLE}" title="{escape(text)}">'
+            f'<span class="badge badge-primary mr-1 cmdb-label-badge" '
+            f'title="{escape(text)}">'
             f'{escape(text)}</span>'
         )
 
@@ -542,8 +538,7 @@ def _render_labels(_view, _context, model, _name):
     for key, (value, tmpl_name) in template_labels.items():
         text = f"{key}:{value}"
         html += (
-            f'<span class="badge badge-info mr-1" '
-            f'style="{_LABEL_BADGE_STYLE}" '
+            f'<span class="badge badge-info mr-1 cmdb-label-badge" '
             f'title="{escape(text)} — from template {escape(tmpl_name)}">'
             f'<i class="fa fa-clone mr-1" aria-hidden="true"></i>'
             f'{escape(text)}</span>'
@@ -565,9 +560,7 @@ def _render_labels(_view, _context, model, _name):
             continue
         text = f"{key}:{value}"
         html += (
-            f'<span class="badge mr-1" '
-            f'style="{_LABEL_BADGE_STYLE} '
-            f'background-color: rgb(43, 181, 120);" '
+            f'<span class="badge mr-1 cmdb-label-badge cmdb-label-badge-cache" '
             f'title="{escape(text)} — {escape(cache_tooltip)}">'
             f'<i class="fa fa-cloud mr-1" aria-hidden="true"></i>'
             f'{escape(text)}</span>'
@@ -619,10 +612,10 @@ def _cmdb_template_badge(view, tmpl):
     """
     name = escape(tmpl.hostname)
     archived = bool(getattr(tmpl, 'deleted_at', None))
+    faded = ' style="opacity: 0.6;"' if archived else ''
     badge = (
-        f'<span class="badge {"badge-secondary" if archived else "badge-dark"}" '
-        f'style="{_LABEL_BADGE_STYLE}'
-        f'{" opacity: 0.6;" if archived else ""}" '
+        f'<span class="badge {"badge-secondary" if archived else "badge-dark"} '
+        f'cmdb-label-badge"{faded} '
         f'title="{name}{" (archived — contributes nothing)" if archived else ""}">'
         f'<i class="fa fa-file"></i> {name}'
         f'{" (archived)" if archived else ""}</span>'
