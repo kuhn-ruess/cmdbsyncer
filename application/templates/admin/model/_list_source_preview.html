@@ -43,7 +43,9 @@
   var condTyp = document.getElementById('condition_typ');
   var condSection = condTyp ? condTyp.closest('section') : null;
   var staticBox = document.getElementById('static_rule');
-  var staticGroup = staticBox ? (staticBox.closest('.form-check') || staticBox.closest('.form-group') || staticBox.parentNode) : null;
+  // Only the field's own form-group: the checkboxes share one
+  // .form-check wrapper, hiding that would take Enabled along.
+  var staticGroup = staticBox ? (staticBox.closest('.form-group') || staticBox.parentNode) : null;
   var switcher = document.getElementById('rule_source');
   var loadedAsList = mode() === 'list';
   var lastField = null;

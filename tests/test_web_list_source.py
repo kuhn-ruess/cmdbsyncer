@@ -25,6 +25,10 @@ for base, field in (('/admin/checkmkrulemngmt', 'value_template'),
                    'list-source-preview', 'Pasted List'):
         if needle not in form:
             fail(f'the form at {base} does not show {needle!r}')
+    # Static Rule shares one .form-check wrapper with Enabled: the switch
+    # may hide only its own form-group, or Enabled vanishes with it.
+    if "staticBox.closest('.form-check')" in form:
+        fail(f'switching {base} to a list hides the Enabled checkbox')
     token = csrf(f'{base}/new/')
     answer = check(f'{base}/_list_source_preview', 200, method='post',
                    headers={'X-CSRFToken': token},
