@@ -1920,7 +1920,7 @@ def format_site_pool_members(_view, _context, model, _name):
     parts = []
     for member in members:
         parts.append(
-            '<span class="badge bg-secondary" style="margin:1px;">'
+            '<span class="badge badge-secondary" style="margin:1px;">'
             f'{escape(member.site_id)} &middot; {member.hosts_taken} hosts'
             '</span>'
         )
