@@ -140,6 +140,24 @@ class FilterStale(BaseMongoEngineFilter):
         return "is"
 
 
+class FilterShadowData(BaseMongoEngineFilter):
+    """
+    Boolean filter: 'yes' shows only hosts with labels from a shadow
+    source, 'no' only hosts without.
+    """
+
+    def apply(self, query, value):
+        value = (value or '').strip().lower()
+        if value in ('1', 'yes', 'y', 'true'):
+            return query.filter(shadow_account_name__nin=[None, ''])
+        if value in ('0', 'no', 'n', 'false'):
+            return query.filter(shadow_account_name__in=[None, ''])
+        return query
+
+    def operation(self):
+        return "is"
+
+
 class FilterPoolFolder(BaseMongoEngineFilter):
     """
     Filter by the Checkmk Folder Pool folder a host is locked to.

@@ -19,6 +19,7 @@ from markupsafe import Markup, escape
 from application import app
 from application.helpers.timezone import format_local
 from application.models.account import CMDB_SOURCE_ACCOUNT_NAME
+from application.helpers.shadow_data import shadow_diff
 from application.views.host_inventory_grid import _value_type_name
 from application.models.host_cleanup import relation_target
 from application.models.host_templates import (active_templates,
@@ -415,6 +416,30 @@ def _label_origin_badge(origin, src_name):
         f'title="From template {escape(src_name)}">'
         f'{escape(src_name)}</span>'
     )
+
+
+def _render_shadow_labels(_view, _context, model, _name):
+    """
+    Detail view of the labels a shadow source delivered: only the keys
+    whose value differs from the live labels, side by side.
+    """
+    shadow = model.shadow_labels or {}
+    if not shadow:
+        return Markup('<em class="text-muted">No shadow source data.</em>')
+    rows = shadow_diff(model.labels or {}, shadow)
+    html = [f'<div>Source: <strong>{escape(model.shadow_account_name or "")}</strong>, '
+            f'{len(shadow)} labels, {len(rows)} differ from the live labels.</div>']
+    if rows:
+        html.append('<table class="table table-sm"><thead><tr>'
+                    '<th>Key</th><th>Live</th><th>Shadow</th></tr></thead><tbody>')
+        for key, live_value, shadow_value in rows:
+            cells = ''.join(
+                '<td><span class="text-muted">—</span></td>' if value is None
+                else f'<td>{escape(str(value))}</td>'
+                for value in (live_value, shadow_value))
+            html.append(f'<tr><td>{escape(str(key))}</td>{cells}</tr>')
+        html.append('</tbody></table>')
+    return Markup(''.join(html))
 
 
 def _render_labels_with_origin(_view, _context, model, _name):

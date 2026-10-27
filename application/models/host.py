@@ -9,6 +9,7 @@ from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
+from application.helpers.shadow_data import shadow_view_active
 from application.models.host_cleanup import HostQuerySet, relation_target
 from application.models.host_create_time import stamp_create_time
 from application.models.host_labels import HostLabelsMixin
@@ -121,6 +122,12 @@ class Host(HostLabelsMixin, db.Document):
 
     source_account_id = db.StringField()
     source_account_name = db.StringField()
+
+    # Labels a shadow source account delivered for this host. Kept apart
+    # from `labels` so a new source can be tested against the rules
+    # while the current one still feeds every export.
+    shadow_labels = db.DictField()
+    shadow_account_name = db.StringField()
 
     lifecycle_state = db.StringField(choices=LIFECYCLE_STATES, default='active')
     lifecycle_state_changed_at = db.DateTimeField()
@@ -705,6 +712,12 @@ class Host(HostLabelsMixin, db.Document):
             raise HostError(f"Account {account_name} is restricted to "
                             "inventorize and must not import hosts")
 
+        if account_dict.get('shadow_mode'):
+            # Only importers going through update_import_host() know
+            # shadow sources. Any other path would take the host over.
+            raise HostError(f"Account {account_name} is a shadow source, "
+                            "this importer does not support shadow sources")
+
         self._validate_import_name(account_dict, is_object)
 
         if account_dict['typ'] == 'from_api':
@@ -741,6 +754,54 @@ class Host(HostLabelsMixin, db.Document):
         # Owned by a master — the caller discards everything this run changed.
         report_master_skip(self.hostname, self.source_account_name)
         return False
+
+    def save(self, *args, **kwargs):
+        """
+        Save the host — unless its attributes are built from shadow labels
+        right now (see application.helpers.shadow_data). Whatever is
+        computed then, the rule cache or a pool assignment, must never
+        reach the stored host the exports read.
+        """
+        if shadow_view_active():
+            return self
+        return super().save(*args, **kwargs)
+
+    @staticmethod
+    def clear_shadow_data(**filters):
+        """
+        Remove the shadow source labels from the hosts matching
+        `filters`. Returns how many hosts carried some.
+        """
+        return Host.objects(shadow_account_name__nin=[None, ''], **filters).update(
+            unset__shadow_labels=True,
+            unset__shadow_account_name=True,
+        )
+
+    def update_shadow(self, labels, account_dict):
+        """
+        Store the labels of a shadow source account next to the labels of
+        the host. Nothing else of the host changes: owner, labels, cache
+        and lifecycle stay as the current source left them.
+
+        Hosts the syncer does not know yet are not created, a shadow
+        source must never add a host to an export.
+
+        Returns:
+            bool: True if the shadow labels were stored
+        """
+        if not self.pk:
+            print(f"Host {self.hostname} not in Syncer, shadow data ignored")
+            return False
+        label_dict = self._normalize_labels(labels)
+        # Written as an update of the two fields only, so a save of the
+        # rest of the document can not slip in by accident.
+        Host.objects(pk=self.pk).update(
+            set__shadow_labels=label_dict,
+            set__shadow_account_name=account_dict['name'],
+        )
+        self.shadow_labels = label_dict
+        self.shadow_account_name = account_dict['name']
+        return True
 
 
     def set_import_sync(self):

@@ -102,7 +102,12 @@ def update_import_host(host_obj, labels, config, **kwargs):
     the importing account. Saved only when the account may own it, a
     host of another master account stays as it is. Returns whether it
     was saved. Extra keywords go to `set_account()`.
+
+    A shadow source account only stores its labels as shadow data of
+    the host, see `Host.update_shadow()`.
     """
+    if config.get('shadow_mode'):
+        return host_obj.update_shadow(labels, config)
     host_obj.update_host(labels)
     if host_obj.set_account(account_dict=config, **kwargs):
         host_obj.save()

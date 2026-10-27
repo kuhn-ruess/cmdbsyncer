@@ -19,6 +19,7 @@ import requests
 from application import logger, app, log
 from application.models.account import pop_master_skips
 from application.helpers.syncer_jinja import render_jinja
+from application.helpers.shadow_data import shadow_view_active
 from application.models.host_templates import (active_templates,
                                                merge_attribute_values,
                                                merged_attribute_keys)
@@ -746,8 +747,8 @@ class Plugin():
         # not a label, so rules had no way to match on it. Seed it as an
         # attribute before any rule runs, so custom attribute, rewrite, filter
         # and action/export rules can all condition on the host's origin.
-        attributes['SOURCE_ACCOUNT'] = db_host.source_account_name or ''
-        attributes.update(db_host.labels.items())
+        attributes['SOURCE_ACCOUNT'], labels = self._host_source(db_host)
+        attributes.update(labels.items())
         attributes.update(db_host.inventory.items())
         # syncer_last_seen / syncer_last_sync used to reach a rule only as the
         # copy set_account() writes into the inventory on import. A host the
@@ -814,6 +815,17 @@ class Plugin():
             db_host.cache[cache]['attributes'] = data
             self._persist_cache(db_host, False)
         return data
+
+    @staticmethod
+    def _host_source(db_host):
+        """
+        The account and labels the attributes of the host are built from.
+        A debug run against a shadow source account takes its labels
+        instead, see application.helpers.shadow_data.
+        """
+        if shadow_view_active():
+            return db_host.shadow_account_name or '', db_host.shadow_labels
+        return db_host.source_account_name or '', db_host.labels
 
     def _attributes_depend_on_time(self):
         """

@@ -6,6 +6,7 @@ Unit tests for checkmk rules module
 import unittest
 from unittest.mock import Mock, patch
 
+from application.helpers.shadow_data import shadow_view
 from application.plugins.checkmk.rules import (
     CheckmkRulesetRule,
     DefaultRule,
@@ -477,6 +478,28 @@ class TestCheckmkRule(unittest.TestCase):
         mock_poolfolder.get_folder.assert_not_called()
         mock_sitepool.get_site.assert_not_called()
         self.rule.db_host.lock_to_folder.assert_not_called()
+
+    @patch('application.plugins.checkmk.rules.sitepool')
+    @patch('application.plugins.checkmk.rules.poolfolder')
+    def test_shadow_debug_run_keeps_pool_seats(self, mock_poolfolder, mock_sitepool):
+        """Shadow labels never free or take a pool seat of the live host."""
+        with shadow_view(), patch.object(self.rule, 'check_rules', return_value={}):
+            db_host = Mock()
+            db_host.get_folder.return_value = '/old_folder'
+            db_host.get_pool_site.return_value = 'site1'
+            self.rule.check_rule_match(db_host)
+            self.rule.db_host.get_folder.return_value = None
+            self.rule.db_host.get_pool_site.return_value = None
+            self.rule.add_outcomes(None, [
+                {'action': 'folder_pool', 'action_param': ''},
+                {'action': 'site_pool', 'action_param': 'pool1'},
+            ], {})
+        db_host.lock_to_folder.assert_not_called()
+        db_host.lock_to_pool_site.assert_not_called()
+        mock_poolfolder.remove_seat.assert_not_called()
+        mock_poolfolder.get_folder.assert_not_called()
+        mock_sitepool.release_site_for_site_id.assert_not_called()
+        mock_sitepool.get_site.assert_not_called()
 
     def test_read_only_engine_reads_locked_pool_folder(self):
         self.rule.assign_pools = False

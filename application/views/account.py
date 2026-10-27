@@ -2,10 +2,11 @@
 Account Model View
 """
 # pylint: disable=fixme
-from flask import redirect, request, url_for
+from flask import flash, redirect, request, url_for
 from markupsafe import Markup, escape
 from mongoengine.errors import OperationError
 from flask_login import current_user
+from flask_admin.actions import action
 from flask_admin.base import expose
 from flask_admin.form import rules
 from wtforms import StringField
@@ -14,6 +15,7 @@ from application.models.cron import CronGroup, job_account
 from application.views.default import DefaultModelView, name_and_enabled_filters
 from application.views._form_sections import modern_form, section
 from application.models.account import CustomEntry, Account
+from application.models.host import Host
 from application.helpers.plugins import custom_field_help, discover_plugins
 from application.plugins.checkmk.models import CheckmkObjectCache  # TODO: Make Plugin Compatible
 from application.docu_links import docu_links
@@ -47,6 +49,13 @@ _HELP_IS_MASTER = (
     "imported. Normally a host belongs to the first account that imported it "
     "and other accounts leave it untouched — a master account is allowed to "
     "claim it."
+)
+_HELP_SHADOW_MODE = (
+    "Test a new source before it takes over: the import only stores its "
+    "labels next to the labels of hosts the syncer already has, and changes "
+    "nothing else. Compare both on the host page and in Debug Host. To switch "
+    "over, turn this off and make the account master, then clear the shadow "
+    "data from the account list."
 )
 _HELP_IS_OBJECT = (
     "Store what this account imports as Objects instead of Hosts. Use it for "
@@ -250,6 +259,8 @@ class AccountModelView(DefaultModelView):
                      rules.Field('type'),
                      rules.Field('is_master'),
                      _field_help(_HELP_IS_MASTER),
+                     rules.Field('shadow_mode'),
+                     _field_help(_HELP_SHADOW_MODE),
                      rules.Field('enabled'),
                      rules.Field('restrict_to'),
                      _field_help(_HELP_RESTRICT_TO)]),
@@ -282,13 +293,25 @@ class AccountModelView(DefaultModelView):
         'require_fqdn': 'Require FQDN',
         'cmdb_object': 'CMDB object',
         'restrict_to': 'Restrict to',
+        'shadow_mode': 'Shadow source',
     }
 
     form_args = {
         'require_fqdn': {'label': 'Require FQDN'},
         'cmdb_object': {'label': 'CMDB object'},
         'restrict_to': {'label': 'Restrict to'},
+        'shadow_mode': {'label': 'Shadow source'},
     }
+
+    @action('clear_shadow', 'Clear Shadow Source Data',
+            'Remove the labels these accounts delivered as shadow source '
+            'from all hosts?')
+    def action_clear_shadow(self, ids):
+        """Remove the shadow labels the selected accounts delivered."""
+        names = [account.name for account in Account.objects(id__in=ids)]
+        cleared = Host.clear_shadow_data(shadow_account_name__in=names)
+        flash(f'Shadow source data removed from {cleared} host(s).', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
 
     column_formatters = {
         'password': _render_custom_data,

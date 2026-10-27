@@ -7,6 +7,7 @@ Helpers (form widgets, Mongo filters) live in sibling modules:
 """
 # pylint: disable=too-many-lines,duplicate-code
 from datetime import datetime
+from contextlib import nullcontext
 import csv
 import io
 import json
@@ -42,6 +43,7 @@ from application import app, logger
 from application.views.host_inventory_grid import _render_inventory_grid
 from application.models.account import Account
 from application.helpers.get_account import mask_account_secrets
+from application.helpers.shadow_data import shadow_view, shadow_diff
 from application.helpers.sates import add_changes
 from application.helpers.label_history import label_history_enabled
 from application.helpers.host_import_file import (
@@ -68,6 +70,7 @@ from application.views.host_filters import (
     FilterPoolFolder,
     FilterSitePool,
     FilterStale,
+    FilterShadowData,
     FilterCmdbTemplate,
     FilterHasCmdbTemplate,
     FilterLabelKeyAndValue,
@@ -90,6 +93,7 @@ from application.views.host_renderers import (
     _render_hostname_with_location,
     _render_labels,
     _render_labels_with_origin,
+    _render_shadow_labels,
     _render_lifecycle_state,
     _render_log_grid,
     _render_object_type_icon,
@@ -443,13 +447,13 @@ def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-lo
     mode = request.args.get('mode', 'checkmk_host')
     ansible_project = request.args.get('ansible_project', '').strip()
 
-
-
-    output= {}
-    output_rules = {}
+    has_shadow = bool(host and host.shadow_labels)
+    data_source = _debug_data_source(has_shadow)
+    output, output_rules, live = {}, {}, None
 
     if hostname:
-        output, output_rules = get_debug(hostname, mode, ansible_project=ansible_project)
+        output, output_rules, live = _debug_for_data_source(
+            hostname, mode, ansible_project, data_source)
 
     # Project picker for the Ansible mode — rules now live inside
     # projects, so the debug page must say which one it evaluated.
@@ -510,27 +514,9 @@ def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-lo
     for group, endpoint in per_mode.items():
         base_urls[group] = f"{bp}admin/{endpoint}/edit/?id="
 
-    new_rules = {}
-    for rule_group, rule_data in output_rules.items():
-        group = new_rules.setdefault(
-            rule_group, {'rules': [], 'outcomes': rule_data['outcomes']})
-        # "Setup Rules per Template: <name>" links like "Setup Rules"
-        url_group = rule_group.partition(' per Template')[0]
-        for rule in rule_data['rules']:
-            rule_id = rule.get('id')
-            if url_group in base_urls and rule_id:
-                rule['rule_url'] = f"{base_urls[url_group]}{rule_id}"
-            else:
-                rule['rule_url'] = ''
-            group['rules'].append(rule)
-
-    # Folder options (contact groups, title, tags) are packed into the
-    # move_folder/create_folder outcome as a Python dict after a '|'. Show
-    # the resolved per-folder attributes on the debug page — or a clear
-    # error when the dict is malformed (what the export skips silently).
-    folder_options = None
-    if mode == 'checkmk_host' and isinstance(output, dict):
-        folder_options = _checkmk_folder_options_debug(output.get("Outcomes"))
+    new_rules = _link_rules(output_rules, base_urls)
+    folder_options = _folder_options(mode, output)
+    compare = _compare_context(live, output, new_rules, base_urls, mode)
 
     if "Error" in output:
         output = f"Error: {output['Error']}"
@@ -541,8 +527,7 @@ def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-lo
     # corresponding export would emit for this host. The dropdown
     # value is encoded as ``"<rule_type>:<id>"`` so a single
     # selector can offer rules from every registered provider.
-    rule_preview = None
-    rule_preview_error = None
+    rule_preview = rule_preview_error = live_preview = None
     rule_preview_groups = []
     preview_rule_id = request.args.get('preview_rule_id', '').strip()
     if mode == 'checkmk_host' and current_user.has_right('checkmk'):
@@ -556,16 +541,11 @@ def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-lo
                 'entries': entries,
             })
         if preview_rule_id and hostname and ':' in preview_rule_id:
-            preview_type, _, raw_id = preview_rule_id.partition(':')
-            rule_preview, rule_preview_error = \
-                cmk_rule_preview(hostname, preview_type, raw_id)
-            # The preview itself only renders the outcome — it does
-            # not know whether the rule's conditions match this host.
-            # Reuse the per-rule hit info already computed for the
-            # Rules section so the preview can show a "won't match"
-            # warning when relevant.
-            if rule_preview:
-                rule_preview['match'] = _find_rule_match(new_rules, raw_id)
+            rule_preview, rule_preview_error = _rule_preview(
+                hostname, preview_rule_id, new_rules, data_source != 'live')
+            if compare['live']:
+                live_preview = _rule_preview(
+                    hostname, preview_rule_id, compare['live']['rules'], False)
 
     return view.render('debug_host.html', hostname=hostname, output=output,
                        object_label=object_label,
@@ -577,8 +557,158 @@ def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-lo
                        rule_preview_error=rule_preview_error,
                        rule_preview_groups=rule_preview_groups,
                        preview_rule_id=preview_rule_id,
+                       live_preview=live_preview,
                        ansible_projects=ansible_projects,
-                       ansible_project=ansible_project)
+                       ansible_project=ansible_project,
+                       has_shadow=has_shadow,
+                       data_source=data_source,
+                       **compare)
+
+
+def _rule_preview(hostname, preview_rule_id, rule_groups, shadow):
+    """
+    Render the outcomes of the picked rule against the host, built from
+    its shadow labels if `shadow` is set. Returns (preview, error).
+    """
+    preview_type, _, raw_id = preview_rule_id.partition(':')
+    with shadow_view() if shadow else nullcontext():
+        preview, error = cmk_rule_preview(hostname, preview_type, raw_id)
+    # The preview itself only renders the outcome — it does not know
+    # whether the rule's conditions match this host. Reuse the per-rule
+    # hit info already computed for the Rules section so the preview can
+    # show a "won't match" warning when relevant.
+    if preview:
+        preview['match'] = _find_rule_match(rule_groups, raw_id)
+    return preview, error
+
+
+def _link_rules(output_rules, base_urls):
+    """
+    The rule groups of a debug run, every rule with the link to its edit
+    page (or an empty `rule_url` where there is none).
+    """
+    new_rules = {}
+    for rule_group, rule_data in output_rules.items():
+        group = new_rules.setdefault(
+            rule_group, {'rules': [], 'outcomes': rule_data['outcomes']})
+        # "Setup Rules per Template: <name>" links like "Setup Rules"
+        url_group = rule_group.partition(' per Template')[0]
+        for rule in rule_data['rules']:
+            rule_id = rule.get('id')
+            if url_group in base_urls and rule_id:
+                rule['rule_url'] = f"{base_urls[url_group]}{rule_id}"
+            else:
+                rule['rule_url'] = ''
+            group['rules'].append(rule)
+    return new_rules
+
+
+def _folder_options(mode, output):
+    """
+    Folder options (contact groups, title, tags) are packed into the
+    move_folder/create_folder outcome as a Python dict after a '|'. Show
+    the resolved per-folder attributes on the debug page — or a clear
+    error when the dict is malformed (what the export skips silently).
+    """
+    if mode == 'checkmk_host' and isinstance(output, dict):
+        return _checkmk_folder_options_debug(output.get("Outcomes"))
+    return None
+
+
+def _compare_context(live, output, shadow_rules, base_urls, mode):
+    """
+    Template variables of the compare mode: the live evaluation, shown
+    next to the shadow one, and what differs between both. Both None
+    outside the compare mode.
+    """
+    if live is None:
+        return {'live': None, 'shadow_compare': None}
+    live_output, live_rules = live
+    live_rules = _link_rules(live_rules, base_urls)
+    shadow_compare = _shadow_compare(live_output, output, live_rules, shadow_rules)
+    folder_options = _folder_options(mode, live_output)
+    if 'Error' in live_output:
+        live_output = f"Error: {live_output['Error']}"
+    return {
+        'live': {'output': live_output, 'rules': live_rules,
+                 'folder_options': folder_options},
+        'shadow_compare': shadow_compare,
+    }
+
+
+def _debug_data_source(has_shadow):
+    """
+    Which labels the debug page evaluates. A host with labels from a
+    shadow source can be evaluated with those instead (shadow), or with
+    both side by side (compare).
+    """
+    data_source = request.args.get('data', 'live')
+    if not has_shadow or data_source not in ('shadow', 'compare'):
+        return 'live'
+    return data_source
+
+
+def _debug_for_data_source(hostname, mode, ansible_project, data_source):
+    """
+    The debug result of the host built from its live labels, from its
+    shadow labels, or from the shadow labels compared with the live ones.
+
+    Returns (output, output_rules, live): `live` is the (output, rules)
+    pair of the live labels, only set for `compare`.
+    """
+    live = None
+    if data_source == 'compare':
+        live_output, live_rules = get_debug(hostname, mode, ansible_project=ansible_project)
+        live = (live_output, live_rules)
+    with shadow_view() if data_source != 'live' else nullcontext():
+        output, output_rules = get_debug(hostname, mode, ansible_project=ansible_project)
+    return output, output_rules, live
+
+
+def _shadow_compare(live_output, shadow_output, live_rules, shadow_rules):
+    """
+    What the shadow labels change in the debug result of a host: per
+    section of the debug output the keys with a different value, and per
+    rule group the rules that match on one side only or produce another
+    outcome. Returns None when one side could not be computed.
+    """
+    if 'Error' in live_output or 'Error' in shadow_output:
+        return None
+    disabled = 'Info: Host disabled by Filter'
+    result = []
+    if (disabled in live_output) != (disabled in shadow_output):
+        result.append({'section': 'Host disabled by Filter',
+                       'rows': [('disabled', disabled in live_output,
+                                 disabled in shadow_output)]})
+    for section in ('Outcomes', 'Filtered', 'Custom Attributes'):
+        if section in live_output or section in shadow_output:
+            result.append({'section': section,
+                           'rows': shadow_diff(live_output.get(section),
+                                               shadow_output.get(section))})
+    for group in sorted(set(live_rules) | set(shadow_rules)):
+        result.append({'section': f"Rules: {group}",
+                       'rows': shadow_diff(_rule_results(live_rules.get(group)),
+                                           _rule_results(shadow_rules.get(group)))})
+    result.append({'section': 'Full Attribute List',
+                   'rows': shadow_diff(live_output.get('Full Attribute List'),
+                                       shadow_output.get('Full Attribute List'))})
+    return result
+
+
+def _rule_results(group):
+    """
+    The matching rules of one rule group as {rule name: outcome}, the
+    shape the compare table diffs. A rule that matches without changing
+    the outcome counts as "match". Rules sharing a name get their id
+    added, or one would hide the other.
+    """
+    group_rules = (group or {}).get('rules', [])
+    names = [rule['name'] for rule in group_rules]
+    return {
+        rule['name'] if names.count(rule['name']) == 1
+        else f"{rule['name']} ({rule.get('id')})": rule.get('outcome') or 'match'
+        for rule in group_rules if rule.get('hit')
+    }
 
 
 def _checkmk_folder_options_debug(actions):
@@ -1550,7 +1680,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
     column_details_list = [
         'hostname', 'folder', 'no_autodelete', 'lifecycle_state',
         'relations',
-        'labels', 'secrets', 'cmdb_templates', 'inventory', 'log',
+        'labels', 'shadow_labels', 'secrets', 'cmdb_templates', 'inventory', 'log',
         'last_import_seen', 'last_import_sync', 'create_time', 'last_import_id',
         'source_account_name', 'raw', 'cache'
     ]
@@ -1573,6 +1703,8 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         'stale_since',
         'deleted_at',
         'delete_reason',
+        'shadow_labels',
+        'shadow_account_name',
     ]
 
 
@@ -1646,6 +1778,11 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         Host,
         "Checkmk Attribute Key:Value"
        ),
+       FilterShadowData(
+           Host,
+           'Shadow Source Data',
+           options=(('yes', 'Present'), ('no', 'Absent')),
+       ),
     )
 
     column_formatters = {
@@ -1672,6 +1809,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
     column_formatters_detail = {
         'log': _render_log_grid,
         'labels': _render_labels_with_origin,
+        'shadow_labels': _render_shadow_labels,
         'secrets': render_host_secrets,
         'inventory': _render_inventory_grid,
         'cache': format_cache,
@@ -1694,6 +1832,7 @@ class HostModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-public-met
         'cmdb_templates': "CMDB Templates",
         'lifecycle_state': "Lifecycle",
         'relations': "Relations",
+        'shadow_labels': "Shadow Source Labels",
     }
 
     # Flask-Admin renders these as a "?" icon next to the column header
@@ -2574,6 +2713,14 @@ Impact Chain.
         flash(f'Cleared the Site Pool assignment on {changed} host(s); they '
               f'will be reassigned to the least-loaded site on the next '
               f'export.', 'success')
+        return redirect(request.referrer or url_for('.index_view'))
+
+    @action('clear_shadow', 'Clear Shadow Source Data',
+            'Remove the labels of the shadow source from the selected hosts?')
+    def action_clear_shadow(self, ids):
+        """Remove the shadow source labels of the selected hosts."""
+        cleared = Host.clear_shadow_data(id__in=ids)
+        flash(f'Shadow source data removed from {cleared} host(s).', 'success')
         return redirect(request.referrer or url_for('.index_view'))
 
     @action('set_account', 'Set Account', None)

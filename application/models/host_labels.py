@@ -49,6 +49,18 @@ class HostLabelsMixin():
         but checks first if needed and also sets
         set_import_sync and import_seen as needed
 
+        """
+        label_dict = self._normalize_labels(labels)
+        if self.get_labels() != label_dict:
+            self.set_import_sync()
+            self._set_labels(label_dict)
+        self.set_import_seen()
+
+    def _normalize_labels(self, labels):
+        """
+        The labels of an import as they are stored: first level dicts
+        flattened if configured, keys fixed and validated.
+
         The incoming dict is copied before it is flattened: the caller
         usually keeps using it and must not find its nested keys removed.
         """
@@ -64,10 +76,7 @@ class HostLabelsMixin():
         # chance to neutralize a `$`-prefixed key before it is rejected.
         # Dots are allowed and pass through untouched.
         validate_mongo_keys(label_dict, "label")
-        if self.get_labels() != label_dict:
-            self.set_import_sync()
-            self._set_labels(label_dict)
-        self.set_import_seen()
+        return label_dict
 
     def _fix_key(self, key):
         key = str(key)

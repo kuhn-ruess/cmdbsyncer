@@ -8,6 +8,7 @@ import ast
 import re
 from application import app
 from application.helpers.syncer_jinja import check_jinja_syntax, render_jinja
+from application.helpers.shadow_data import shadow_view_active
 from application import logger, log
 from application.modules.rule.rule import Rule
 from application.modules.debug import debug as print_debug
@@ -244,6 +245,14 @@ class CheckmkRule(Rule):
     # a host would land (see host_folder), not move it.
     assign_pools = True
 
+    def _assigns_pools(self):
+        """
+        Whether this run may take or free pool seats. Never in a debug run
+        against the labels of a shadow source: those must not move the
+        live host out of its pool folder or site.
+        """
+        return self.assign_pools and not shadow_view_active()
+
     def fix_and_format_foldername(self, folder):
         """ Format Foldername
         Remove Extra Folder Attributes
@@ -420,7 +429,7 @@ class CheckmkRule(Rule):
                     folder_name = self.db_host.get_folder()
                     outcomes['extra_folder_options'] += folder_name
                     outcomes['move_folder'] += folder_name
-                elif not self.assign_pools:
+                elif not self._assigns_pools():
                     # Not assigned yet: the next host export picks the folder.
                     pass
                 else:
@@ -456,7 +465,7 @@ class CheckmkRule(Rule):
                 # Sticky: keep the site the host was assigned before.
                 if self.db_host.get_pool_site():
                     outcomes['custom_attributes']['site'] = self.db_host.get_pool_site()
-                elif not self.assign_pools:
+                elif not self._assigns_pools():
                     pass
                 else:
                     # Assign a new, least-loaded site from the pool.
@@ -597,7 +606,7 @@ class CheckmkRule(Rule):
 
         self.db_host = db_host
         outcomes = self.check_rules(hostname)
-        if not self.assign_pools:
+        if not self._assigns_pools():
             return outcomes
         # This Host does not match to an poolfolder rule
         if not self.found_poolfolder_rule:

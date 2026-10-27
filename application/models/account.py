@@ -91,6 +91,8 @@ class Account(db.Document):
         name (str): Unique name of the account.
         type (str): Type of the account, with backward compatibility for 'typ'.
         is_master (bool): Indicates if this account is a master account.
+        shadow_mode (bool): Import only into the shadow labels of hosts
+            that already exist, to test a new source against the rules.
         is_child (bool): Indicates if this account is a child account.
         parent (Account): Reference to the parent account.
         is_object (bool): Indicates if this account represents an object.
@@ -135,6 +137,7 @@ class Account(db.Document):
         self.type = value
 
     is_master = db.BooleanField(default=False)
+    shadow_mode = db.BooleanField(default=False)
     is_child = db.BooleanField(default=False)
     parent = db.ReferenceField(document_type='Account', reverse_delete_rule=DENY)
     is_object = db.BooleanField(default=False)
@@ -225,6 +228,15 @@ class Account(db.Document):
         'strict': False,
     }
 
+
+    def clean(self):
+        """
+        A shadow source never owns a host, so it can not be master. The
+        switch to the new source is: shadow off, master on.
+        """
+        if self.shadow_mode and self.is_master:
+            raise ValidationError(
+                "An account can not be master and shadow source at once")
 
     def __str__(self):
         return f"{self.name} ({self.typ})"

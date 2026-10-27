@@ -629,6 +629,13 @@ _load_real_module(
     os.path.join("models", "host_templates.py"),
 )
 
+# The plugin module asks it whether a debug run uses shadow labels. It
+# needs nothing but the Host stub, so it is loaded for real as well.
+_load_real_module(
+    "application.helpers.shadow_data",
+    os.path.join("helpers", "shadow_data.py"),
+)
+
 # application.modules.plugin pulls in render_jinja at import time, so the
 # helpers.syncer_jinja stub must be in place before the real plugin module
 # is loaded (the duplicated stub further down stays for the checkmk loaders

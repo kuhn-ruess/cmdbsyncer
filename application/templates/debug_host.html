@@ -21,6 +21,16 @@
                  gap: 16px; margin-bottom: 1rem; }
 @media (max-width: 992px) { .debug-summary { grid-template-columns: 1fr; } }
 
+/* Compare mode: live and shadow evaluation side by side, each column
+   stacks its cards instead of the two-column summary. */
+.debug-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.debug-compare-col { min-width: 0; overflow-x: auto; }
+.debug-compare-col > h4 { margin: 0 0 0.5rem; }
+.debug-compare-col > h4 .muted { color: var(--surface-muted, #6c757d);
+    font-size: 0.9rem; font-weight: normal; }
+.debug-compare .debug-summary { grid-template-columns: 1fr; }
+@media (max-width: 992px) { .debug-compare { grid-template-columns: 1fr; } }
+
 .debug-card { border: 1px solid var(--surface-border, #e2e6ea);
               border-radius: 6px;
               background: var(--surface-bg, #fff);
@@ -186,6 +196,16 @@
       </select>
     </div>
     {% endif %}
+    {% if has_shadow %}
+    <div class="form-group">
+      <label for="dataSource">Data</label>
+      <select id="dataSource" name="data" class="form-control">
+        <option value="live" {% if data_source == 'live' %}selected{% endif %}>Live labels</option>
+        <option value="shadow" {% if data_source == 'shadow' %}selected{% endif %}>Shadow source ({{ host.shadow_account_name }})</option>
+        <option value="compare" {% if data_source == 'compare' %}selected{% endif %}>Compare live and shadow</option>
+      </select>
+    </div>
+    {% endif %}
     {% if rule_preview_groups %}
     <div class="form-group">
       <label for="previewRule">Preview Rule</label>
@@ -207,83 +227,133 @@
     <button type="submit" class="btn btn-primary btn-sm">Analyze</button>
   </form>
 
-  {% if rule_preview_error %}
-    <div class="alert alert-warning">
-      <i class="fa fa-exclamation-triangle"></i> Rule preview: {{ rule_preview_error }}
+  {% if data_source != 'live' %}
+    <div class="alert alert-info">
+      <i class="fa fa-flask"></i> Evaluated with the labels of the shadow source
+      <strong>{{ host.shadow_account_name }}</strong>. Exports still use the live labels.
     </div>
   {% endif %}
 
-  {% if rule_preview %}
-    <div class="debug-card preview-card" style="margin-bottom: 1rem;">
+  {% if shadow_compare is not none %}
+    <div class="debug-card accent-filtered" style="margin-bottom: 1rem;">
       <div class="debug-card-head">
-        <span><i class="fa fa-eye"></i> {{ rule_preview.rule_type_label }} Preview — {{ rule_preview.rule_name }}</span>
-        <span class="muted">
-          {% if rule_preview.match and rule_preview.match.hit %}
-            <span class="badge badge-success"><i class="fa fa-check"></i> Rule matches this host</span>
-          {% elif rule_preview.match and not rule_preview.match.hit %}
-            <span class="badge badge-warning"><i class="fa fa-exclamation-triangle"></i>
-              Rule would NOT match this host
-            </span>
-          {% else %}
-            What the export would render for this host
-          {% endif %}
-        </span>
+        <span><i class="fa fa-exchange"></i> Live vs. shadow source</span>
       </div>
-      {% if rule_preview.match and not rule_preview.match.hit %}
-      <div class="alert alert-warning" style="margin: 8px 12px 0; padding: 8px 12px;">
-        <i class="fa fa-exclamation-triangle"></i>
-        <strong>This rule does not match the current host</strong> — the
-        preview below is hypothetical: the export will skip this rule for
-        <code>{{ hostname }}</code>.
-        {% if rule_preview.match.no_match_reason %}
-          {% set nm = rule_preview.match.no_match_reason %}
-          <div style="margin-top: 4px; font-size: 0.85rem;">
-            First failing condition:
-            {% if nm.match_type == 'host' %}
-              hostname <code>{{ nm.hostname }}</code>
-              (<code>{{ nm.hostname_match }}</code>{% if nm.hostname_match_negate %}, negated{% endif %})
-            {% else %}
-              tag <code>{{ nm.tag }}</code> = <code>{{ nm.value }}</code>
-              (<code>{{ nm.tag_match }}</code> / <code>{{ nm.value_match }}</code>)
-            {% endif %}
-          </div>
-        {% endif %}
-      </div>
-      {% endif %}
       <div class="debug-card-body">
-        {% if not rule_preview.outcomes %}
-          <div class="debug-empty">This rule has no outcomes configured.</div>
-        {% endif %}
-        {% for o in rule_preview.outcomes %}
-          <div class="preview-outcome">
-            <div class="head">
-              <span class="ruleset">{{ o.title }}</span>
-              {% if o.meta %}<span class="meta">{{ o.meta }}</span>{% endif %}
-            </div>
-            {% if o.note %}<div class="note">{{ o.note }}</div>{% endif %}
-            {% if o.rows %}
-            <table class="preview-table">
-              {% for label, value in o.rows %}
+        {% set ns = namespace(changes=0) %}
+        {% for block in shadow_compare %}
+          {% if block.rows %}
+            {% set ns.changes = ns.changes + 1 %}
+            <h6 style="margin-top: 0.5rem;">{{ block.section }}</h6>
+            <table class="table table-sm">
+              <thead><tr><th>Key</th><th>Live</th><th>Shadow</th></tr></thead>
+              <tbody>
+              {% for key, live_value, shadow_value in block.rows %}
                 <tr>
-                  <th>{{ label }}</th>
-                  <td>{{ value }}</td>
+                  <td>{{ key }}</td>
+                  <td>{% if live_value is none %}<span class="text-muted">—</span>{% else %}{{ live_value }}{% endif %}</td>
+                  <td>{% if shadow_value is none %}<span class="text-muted">—</span>{% else %}{{ shadow_value }}{% endif %}</td>
                 </tr>
               {% endfor %}
+              </tbody>
             </table>
-            {% endif %}
-          </div>
+          {% endif %}
         {% endfor %}
+        {% if not ns.changes %}
+          <div class="debug-empty">No differences: the shadow source leads to the same result.</div>
+        {% endif %}
       </div>
     </div>
   {% endif %}
 
-  {% if output is mapping %}
+  {# The preview of the picked rule. In compare mode once for the live and
+     once for the shadow labels, side by side. #}
+  {% macro render_preview(rule_preview, rule_preview_error) %}
+    {% if rule_preview_error %}
+      <div class="alert alert-warning">
+        <i class="fa fa-exclamation-triangle"></i> Rule preview: {{ rule_preview_error }}
+      </div>
+    {% endif %}
 
-    {% set outcomes = output.get('Outcomes') %}
-    {% set filtered = output.get('Filtered') %}
-    {% set custom = output.get('Custom Attributes') %}
-    {% set full_attrs = output.get('Full Attribute List') %}
-    {% set disabled_info = output.get('Info: Host disabled by Filter', 'MISSING') %}
+    {% if rule_preview %}
+      <div class="debug-card preview-card" style="margin-bottom: 1rem;">
+        <div class="debug-card-head">
+          <span><i class="fa fa-eye"></i> {{ rule_preview.rule_type_label }} Preview — {{ rule_preview.rule_name }}</span>
+          <span class="muted">
+            {% if rule_preview.match and rule_preview.match.hit %}
+              <span class="badge badge-success"><i class="fa fa-check"></i> Rule matches this host</span>
+            {% elif rule_preview.match and not rule_preview.match.hit %}
+              <span class="badge badge-warning"><i class="fa fa-exclamation-triangle"></i>
+                Rule would NOT match this host
+              </span>
+            {% else %}
+              What the export would render for this host
+            {% endif %}
+          </span>
+        </div>
+        {% if rule_preview.match and not rule_preview.match.hit %}
+        <div class="alert alert-warning" style="margin: 8px 12px 0; padding: 8px 12px;">
+          <i class="fa fa-exclamation-triangle"></i>
+          <strong>This rule does not match the current host</strong> — the
+          preview below is hypothetical: the export will skip this rule for
+          <code>{{ hostname }}</code>.
+          {% if rule_preview.match.no_match_reason %}
+            {% set nm = rule_preview.match.no_match_reason %}
+            <div style="margin-top: 4px; font-size: 0.85rem;">
+              First failing condition:
+              {% if nm.match_type == 'host' %}
+                hostname <code>{{ nm.hostname }}</code>
+                (<code>{{ nm.hostname_match }}</code>{% if nm.hostname_match_negate %}, negated{% endif %})
+              {% else %}
+                tag <code>{{ nm.tag }}</code> = <code>{{ nm.value }}</code>
+                (<code>{{ nm.tag_match }}</code> / <code>{{ nm.value_match }}</code>)
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+        {% endif %}
+        <div class="debug-card-body">
+          {% if not rule_preview.outcomes %}
+            <div class="debug-empty">This rule has no outcomes configured.</div>
+          {% endif %}
+          {% for o in rule_preview.outcomes %}
+            <div class="preview-outcome">
+              <div class="head">
+                <span class="ruleset">{{ o.title }}</span>
+                {% if o.meta %}<span class="meta">{{ o.meta }}</span>{% endif %}
+              </div>
+              {% if o.note %}<div class="note">{{ o.note }}</div>{% endif %}
+              {% if o.rows %}
+              <table class="preview-table">
+                {% for label, value in o.rows %}
+                  <tr>
+                    <th>{{ label }}</th>
+                    <td>{{ value }}</td>
+                  </tr>
+                {% endfor %}
+              </table>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+  {% endmacro %}
+
+  {% if live_preview %}
+    <div class="debug-compare" style="margin-bottom: 1rem;">
+      <div class="debug-compare-col">
+        <h4><i class="fa fa-database"></i> Live <span class="muted">{{ host.source_account_name }}</span></h4>
+        {{ render_preview(live_preview[0], live_preview[1]) }}
+      </div>
+      <div class="debug-compare-col">
+        <h4><i class="fa fa-flask"></i> Shadow <span class="muted">{{ host.shadow_account_name }}</span></h4>
+        {{ render_preview(rule_preview, rule_preview_error) }}
+      </div>
+    </div>
+  {% else %}
+    {{ render_preview(rule_preview, rule_preview_error) }}
+  {% endif %}
 
     {% macro render_kv(items) %}
       {% if items %}
@@ -333,6 +403,17 @@
         {{ value }}
       {%- endif -%}
     {% endmacro %}
+
+  {# The result of one evaluation. Rendered once, or twice side by side
+     when live and shadow labels are compared; `prefix` keeps the ids of
+     the rule accordions apart. #}
+  {% macro render_result(output, rules, folder_options, prefix) %}
+
+    {% set outcomes = output.get('Outcomes') %}
+    {% set filtered = output.get('Filtered') %}
+    {% set custom = output.get('Custom Attributes') %}
+    {% set full_attrs = output.get('Full Attribute List') %}
+    {% set disabled_info = output.get('Info: Host disabled by Filter', 'MISSING') %}
 
     {# --- Primary summary: Outcomes + Filtered, both expanded --- #}
     <div class="debug-summary">
@@ -458,11 +539,11 @@
         <span class="muted">Per-rule match details (click a group to expand)</span>
       </div>
       <div class="debug-card-body rule-acc">
-        <div id="accordion-export">
+        <div id="{{ prefix }}accordion-export">
           <div class="rule-tabs">
             {% for rule_name, rule_raw in rules.items() %}
               {% set hit_count = rule_raw['rules'] | selectattr('hit') | list | length %}
-              {% set anchor = 'rule_' ~ rule_name | replace(' ', '_') %}
+              {% set anchor = prefix ~ 'rule_' ~ rule_name | replace(' ', '_') %}
               <a class="btn btn-outline-info" data-toggle="collapse"
                  href="#{{ anchor }}" role="button"
                  aria-expanded="false" aria-controls="{{ anchor }}">
@@ -473,9 +554,9 @@
           </div>
 
           {% for rule_name, rule_raw in rules.items() %}
-            {% set anchor = 'rule_' ~ rule_name | replace(' ', '_') %}
+            {% set anchor = prefix ~ 'rule_' ~ rule_name | replace(' ', '_') %}
             <div class="collapse" id="{{ anchor }}"
-                 data-parent="#accordion-export">
+                 data-parent="#{{ prefix }}accordion-export">
               <table class="table table-sm table-bordered rule-table" style="margin-top: 8px;">
                 <thead>
                   <tr>
@@ -590,6 +671,27 @@
       </details>
     {% endif %}
 
+  {% endmacro %}
+
+  {% if output is mapping %}
+    {% if live %}
+      <div class="debug-compare">
+        <div class="debug-compare-col">
+          <h4><i class="fa fa-database"></i> Live <span class="muted">{{ host.source_account_name }}</span></h4>
+          {% if live.output is mapping %}
+            {{ render_result(live.output, live.rules, live.folder_options, 'live_') }}
+          {% else %}
+            <div class="alert alert-danger">{{ live.output }}</div>
+          {% endif %}
+        </div>
+        <div class="debug-compare-col">
+          <h4><i class="fa fa-flask"></i> Shadow <span class="muted">{{ host.shadow_account_name }}</span></h4>
+          {{ render_result(output, rules, folder_options, 'shadow_') }}
+        </div>
+      </div>
+    {% else %}
+      {{ render_result(output, rules, folder_options, '') }}
+    {% endif %}
   {% elif hostname %}
     <div class="alert alert-danger">{{ output }}</div>
   {% endif %}
