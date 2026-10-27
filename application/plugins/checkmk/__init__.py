@@ -36,6 +36,7 @@ from .inits import (
     inventorize_hosts,
     show_missing,
     export_users,
+    export_ldap_connections,
     generate_users,
     export_tags,
     export_downtimes,
@@ -822,6 +823,23 @@ def cli_cmk_users(account):
     """
     export_users(account)
 #.
+#   .-- Command: Export LDAP Connections
+@cli_cmk.command('export_ldap_connections')
+@click.argument("account")
+@click.option("--debug", is_flag=True)
+def cli_cmk_ldap_connections(account, debug=False):
+    """
+    Export the LDAP Connections for the Checkmk Login
+
+    ### Example
+    _./cmdbsyncer checkmk export_ldap_connections SITEACCOUNT_
+
+
+    Args:
+        account (string): Name Checkmk Account Config
+    """
+    export_ldap_connections(account)
+#.
 #   .-- Command: Generate Users
 @cli_cmk.command('generate_users')
 @click.option('--search-filter', '-f', default='',
@@ -976,6 +994,7 @@ register_cronjob('Checkmk: Inventorize', inventorize_hosts)
 register_cronjob('Checkmk: Activate Changes', activate_changes)
 register_cronjob('Checkmk: Bake and Sign Agents', bake_and_sign_agents)
 register_cronjob('Checkmk: Export Users', export_users)
+register_cronjob('Checkmk: Export LDAP Connections', export_ldap_connections)
 register_cronjob('Checkmk: Generate Users', generate_users)
 register_cronjob('Checkmk: Export Tags', export_tags)
 register_cronjob('Checkmk: Export Downtimes', export_downtimes)

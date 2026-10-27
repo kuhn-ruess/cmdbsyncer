@@ -799,6 +799,10 @@ for _name in ("CheckmkUserMngmt", "CheckmkUserGenerationRule",
               "CmkUserGenerationOutcome"):
     setattr(_cmk_user_models, _name, MagicMock(name=f"stub.{_name}"))
 
+# application.plugins.checkmk.ldap_models — stubbed like user_models.
+_cmk_ldap_models = _stub_package("application.plugins.checkmk.ldap_models")
+_cmk_ldap_models.CheckmkLdapConnection = MagicMock(name="stub.CheckmkLdapConnection")
+
 # Load real plugin modules
 _try_load_real_module(
     "application.modules.rule.rule",
@@ -835,6 +839,7 @@ for _mod_name, _mod_path in [
     ("sites", "sites.py"),
     ("tags", "tags.py"),
     ("users", "users.py"),
+    ("ldap_connections", "ldap_connections.py"),
     ("user_generation", "user_generation.py"),
     ("inventorize", "inventorize.py"),
     ("import_v1", "import_v1.py"),

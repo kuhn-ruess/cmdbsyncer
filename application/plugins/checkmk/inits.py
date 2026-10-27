@@ -26,6 +26,7 @@ from application.plugins.checkmk.rule_passwords import (
 )
 from application.plugins.checkmk.groups import CheckmkGroupSync
 from application.plugins.checkmk.users import CheckmkUserSync
+from application.plugins.checkmk.ldap_connections import CheckmkLdapConnectionSync
 from application.plugins.checkmk.user_generation import CheckmkUserGeneration
 from application.plugins.checkmk.bi import BI
 from application.plugins.checkmk.sites import CheckmkSites
@@ -843,6 +844,24 @@ def export_users(account):
         else:
             log.log(f"Export Users to Account {account} not started",
                     source="cmk_user_sync",
+                    details=[('error', str(error_obj))])
+#.
+#   . Export LDAP Connections
+def export_ldap_connections(account):
+    """
+    Export the LDAP Connections for the Checkmk Login
+    """
+    syncer = None
+    try:
+        syncer = CheckmkLdapConnectionSync(account)
+        syncer.export_ldap_connections()
+    except CmkException as error_obj:
+        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            log.log(f"Export LDAP Connections to Account {account} not started",
+                    source="cmk_ldap_connection_sync",
                     details=[('error', str(error_obj))])
 #.
 #   .-- Generate Users

@@ -227,6 +227,10 @@ ENTRIES = {
             "Create and update Checkmk users together with their roles and "
             "contact groups."
         ),
+        'Manage LDAP Connections': (
+            "Configure the LDAP connections Checkmk logs its users in "
+            "with, including contact groups and roles out of the directory."
+        ),
         'Generate Checkmk Users': (
             "Turn the LDAP groups your hosts belong to into Checkmk users "
             "instead of maintaining the list by hand, each one filled with "

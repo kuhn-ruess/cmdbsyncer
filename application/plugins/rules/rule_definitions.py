@@ -26,6 +26,8 @@ rules = {
     'cmk_user': ('application.plugins.checkmk.user_models', 'CheckmkUserMngmt'),
     'cmk_user_generation': ('application.plugins.checkmk.user_models',
                            'CheckmkUserGenerationRule'),
+    'cmk_ldap_connections': ('application.plugins.checkmk.ldap_models',
+                             'CheckmkLdapConnection'),
     'cmk_rewrite': ('application.plugins.checkmk.models', 'CheckmkRewriteAttributeRule'),
     'cmk_sites': ('application.plugins.checkmk.models', 'CheckmkSite'),
     'cmk_site_settings': ('application.plugins.checkmk.models', 'CheckmkSettings'),

@@ -33,6 +33,8 @@ from .user_models import (
     CheckmkUserMngmt,
     CheckmkUserGenerationRule,
 )
+from .ldap_models import CheckmkLdapConnection
+from .ldap_views import CheckmkLdapConnectionView
 
 from .views import (
     CheckmkBiRuleView,
@@ -177,6 +179,13 @@ def register_admin_views(admin):
         category="Checkmk",
         menu_icon_type='fa',
         menu_icon_value='fa-user-plus',
+    ))
+    add(objects, CheckmkLdapConnectionView(
+        CheckmkLdapConnection,
+        name="Manage LDAP Connections",
+        category="Checkmk",
+        menu_icon_type='fa',
+        menu_icon_value='fa-address-book',
     ))
     add(objects, CheckmkDowntimeView(
         CheckmkDowntimeRule,
