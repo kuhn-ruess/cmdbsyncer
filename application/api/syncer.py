@@ -72,6 +72,8 @@ CRON_STATUS = API.model('cron_status', {
     'is_running': fields.Boolean(description='True while a run is in flight'),
     'last_message': fields.String(description='Last progress / result line'),
     'has_error': fields.Boolean(description='True iff the last run failed'),
+    'enabled': fields.Boolean(description='False if the group is disabled '
+                                          'or no longer exists'),
 })
 
 CRON_LIST_RESPONSE = API.model('cron_list_response', {
@@ -247,6 +249,8 @@ class SyncerCronApi(Resource):
         """Return the current status of every CronGroup."""
         try:
             response = []
+            enabled = {group.name: bool(group.enabled)
+                       for group in CronGroup.objects.only('name', 'enabled')}
             for entry in CronStats.objects:
                 last_start = entry.last_start
                 if last_start:
@@ -261,6 +265,7 @@ class SyncerCronApi(Resource):
                     'is_running': entry.is_running,
                     'last_message': entry.last_message,
                     'has_error': entry.failure,
+                    'enabled': enabled.get(entry.group, False),
                 })
             return {
                 'result': response,

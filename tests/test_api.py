@@ -724,16 +724,27 @@ class SyncerAPITest(unittest.TestCase):
         self.assertIn('error', resp.get_json())
 
     @_auth_patches
+    @patch('application.api.syncer.CronGroup')
     @patch('application.api.syncer.CronStats')
-    def test_cron_get_returns_statuses(self, cron_cls):
-        stat = MagicMock()
-        stat.group = 'nightly'
-        stat.last_start = datetime(2026, 1, 1, 2, 0, 0)
-        stat.next_run = datetime(2026, 1, 2, 2, 0, 0)
-        stat.is_running = False
-        stat.last_message = 'ok'
-        stat.failure = False
-        cron_cls.objects = [stat]
+    def test_cron_get_returns_statuses(self, cron_cls, group_cls):
+        stats = []
+        for name in ('nightly', 'paused', 'deleted'):
+            stat = MagicMock()
+            stat.group = name
+            stat.last_start = datetime(2026, 1, 1, 2, 0, 0)
+            stat.next_run = datetime(2026, 1, 2, 2, 0, 0)
+            stat.is_running = False
+            stat.last_message = 'ok'
+            stat.failure = False
+            stats.append(stat)
+        cron_cls.objects = stats
+        groups = []
+        for name, enabled in (('nightly', True), ('paused', False)):
+            group = MagicMock()
+            group.name = name
+            group.enabled = enabled
+            groups.append(group)
+        group_cls.objects.only.return_value = groups
 
         resp = self.client.get('/api/v1/syncer/cron/', headers=self.headers)
 
@@ -742,6 +753,7 @@ class SyncerAPITest(unittest.TestCase):
         self.assertEqual(body['result'][0]['name'], 'nightly')
         self.assertEqual(body['result'][0]['last_start'], '2026-01-01 02:00:00')
         self.assertFalse(body['result'][0]['has_error'])
+        self.assertEqual([entry['enabled'] for entry in body['result']], [True, False, False])
 
     @_auth_patches
     @patch('application.api.syncer.CronGroup')
