@@ -11,6 +11,16 @@ from syncerapi.v1 import cc as CC
 
 str_replace = Rule.replace
 
+
+def filled_entries(entries):
+    """
+    The entries of a list field without the empty ones. The form keeps
+    a row that was added but never filled in, and Checkmk rejects an
+    empty role or contact group name.
+    """
+    return [entry.strip() for entry in entries or [] if entry and entry.strip()]
+
+
 class CheckmkUserSync(CMK2):
     """
     Export Users to Checkmk
@@ -72,11 +82,11 @@ class CheckmkUserSync(CMK2):
               "idle_timeout": {
                 "option": "global"
               },
-              "roles": list(user.roles or []),
+              "roles": filled_entries(user.roles),
               #"authorized_sites": [
               #  "heute"
               #],
-              "contactgroups": list(user.contact_groups or []),
+              "contactgroups": filled_entries(user.contact_groups),
               "disable_notifications": {
                 "disable": False
               },
