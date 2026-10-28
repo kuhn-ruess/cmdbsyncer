@@ -71,6 +71,24 @@ class TestCheckmkUserSync(unittest.TestCase):
 
     @patch('application.plugins.checkmk.users.CheckmkUserMngmt')
     @patch('builtins.print')
+    def test_empty_roles_and_contact_groups_are_not_sent(self, mock_print,
+                                                         mock_mngmt):
+        # A list row added in the form but left empty is stored as ''
+        user = self._make_user(roles=['user', '', '  '],
+                               contact_groups=['', 'all'])
+        mock_mngmt.objects.return_value = [user]
+
+        with patch.object(self.sync, 'request') as mock_req:
+            mock_req.side_effect = [({}, {'status_code': 404}),
+                                    ({'id': 'testuser'}, {})]
+            self.sync.export_users()
+
+        sent = mock_req.call_args_list[1][1]['data']
+        self.assertEqual(sent['roles'], ['user'])
+        self.assertEqual(sent['contactgroups'], ['all'])
+
+    @patch('application.plugins.checkmk.users.CheckmkUserMngmt')
+    @patch('builtins.print')
     def test_an_empty_field_is_not_a_change(self, mock_print, mock_mngmt):
         # Checkmk answers with the empty value, so a None on our side used
         # to look different on every run and rewrote the user each time
