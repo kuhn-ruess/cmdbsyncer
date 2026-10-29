@@ -1,0 +1,199 @@
+# CMDBsyncer on RedHat / Rocky / Alma: MongoDB 8.0, PyPI install, Gunicorn, Apache vhost
+# Own vhost:  ansible-playbook -i <host>, -e server_name=cmdb.example.com install_redhat.yml
+# Sub-path:   ansible-playbook -i <host>, -e syncer_prefix=/cmdbsyncer install_redhat.yml
+# HTTPS uses the self-signed certificate mod_ssl generates; for an own vhost pass
+# -e ssl_cert=... -e ssl_key=... to use a real one. A sub-path uses the host's ssl.conf.
+- name: Install CMDBsyncer
+  hosts: all
+  become: true
+  vars:
+    # Platform Python; otherwise discovery picks the python3.14 installed below
+    ansible_python_interpreter: /usr/bin/python3
+    syncer_user: cmdbsyncer
+    syncer_dir: /opt/cmdbsyncer
+    syncer_version: ""
+    python: python3.14
+    server_name: "{{ inventory_hostname }}"
+    syncer_prefix: ""
+    ssl_cert: /etc/pki/tls/certs/localhost.crt
+    ssl_key: /etc/pki/tls/private/localhost.key
+
+  tasks:
+    - name: MongoDB repository
+      ansible.builtin.yum_repository:
+        name: mongodb-org-8.0
+        description: MongoDB Repository
+        baseurl: https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/8.0/x86_64/
+        enabled: true
+        gpgcheck: true
+        gpgkey: https://pgp.mongodb.com/server-8.0.asc
+
+    - name: Packages
+      ansible.builtin.dnf:
+        name:
+          - mongodb-org
+          - "{{ python }}"
+          - httpd
+          - mod_ssl
+          - acl
+        state: present
+      notify: Reload httpd
+
+    # Creates the self-signed localhost certificate, otherwise only done on httpd start
+    - name: Self-signed certificate
+      ansible.builtin.command:
+        cmd: systemctl start httpd-init
+        creates: /etc/pki/tls/certs/localhost.crt
+
+    - name: MongoDB running
+      ansible.builtin.systemd_service:
+        name: mongod
+        state: started
+        enabled: true
+
+    - name: Service user
+      ansible.builtin.user:
+        name: "{{ syncer_user }}"
+        system: true
+        home: "{{ syncer_dir }}"
+        create_home: false
+        shell: /usr/sbin/nologin
+
+    - name: Working directory
+      ansible.builtin.file:
+        path: "{{ syncer_dir }}"
+        state: directory
+        owner: "{{ syncer_user }}"
+        group: "{{ syncer_user }}"
+        mode: "0755"
+
+    - name: Install CMDBsyncer and Gunicorn
+      become_user: "{{ syncer_user }}"
+      ansible.builtin.pip:
+        name:
+          - "cmdbsyncer{{ '==' ~ syncer_version if syncer_version else '' }}"
+          - gunicorn
+        virtualenv: "{{ syncer_dir }}/venv"
+        virtualenv_command: "{{ python }} -m venv"
+      notify: Restart cmdbsyncer
+
+    - name: Initial local_config.py
+      become_user: "{{ syncer_user }}"
+      ansible.builtin.copy:
+        dest: "{{ syncer_dir }}/local_config.py"
+        content: |
+          config = {
+              'TRUSTED_PROXIES': 1,
+          {% if syncer_prefix %}
+              'BASE_PREFIX': '{{ syncer_prefix }}/',
+          {% endif %}
+          }
+        mode: "0600"
+        force: false
+
+    - name: Self configure
+      become_user: "{{ syncer_user }}"
+      ansible.builtin.command:
+        cmd: "{{ syncer_dir }}/venv/bin/cmdbsyncer sys self_configure"
+        chdir: "{{ syncer_dir }}"
+      changed_when: false
+
+    - name: Systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/cmdbsyncer.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=CMDB Syncer (Gunicorn)
+          After=network.target mongod.service
+          Requires=mongod.service
+
+          [Service]
+          Type=simple
+          User={{ syncer_user }}
+          WorkingDirectory={{ syncer_dir }}
+          Environment=config=prod
+          {% if syncer_prefix %}
+          Environment=SCRIPT_NAME={{ syncer_prefix }}
+          {% endif %}
+          ExecStart={{ syncer_dir }}/venv/bin/gunicorn \
+              --bind 127.0.0.1:9090 \
+              --workers 2 --threads 2 \
+              --access-logfile - \
+              --error-logfile - \
+              application:app
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart cmdbsyncer
+
+    - name: CMDBsyncer running
+      ansible.builtin.systemd_service:
+        name: cmdbsyncer
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Allow Apache to connect to Gunicorn
+      ansible.posix.seboolean:
+        name: httpd_can_network_connect
+        state: true
+        persistent: true
+      when: ansible_facts.selinux.status == "enabled"
+
+    - name: Apache config
+      ansible.builtin.copy:
+        dest: /etc/httpd/conf.d/cmdbsyncer.conf
+        mode: "0644"
+        content: |
+          {% if syncer_prefix %}
+          ProxyPass        {{ syncer_prefix }}  http://127.0.0.1:9090{{ syncer_prefix }}
+          ProxyPassReverse {{ syncer_prefix }}  http://127.0.0.1:9090{{ syncer_prefix }}
+          <Location {{ syncer_prefix }}>
+              ProxyPreserveHost On
+              RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
+          </Location>
+          {% else %}
+          <VirtualHost *:443>
+              ServerName {{ server_name }}
+              SSLEngine on
+              SSLCertificateFile    {{ ssl_cert }}
+              SSLCertificateKeyFile {{ ssl_key }}
+              ProxyPreserveHost On
+              RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
+              ProxyPass        /  http://127.0.0.1:9090/
+              ProxyPassReverse /  http://127.0.0.1:9090/
+          </VirtualHost>
+          {% endif %}
+      notify: Reload httpd
+
+    - name: Apache running
+      ansible.builtin.systemd_service:
+        name: httpd
+        state: started
+        enabled: true
+
+    - name: Service facts
+      ansible.builtin.service_facts:
+
+    - name: Open HTTPS in firewalld
+      ansible.posix.firewalld:
+        service: https
+        permanent: true
+        immediate: true
+        state: enabled
+      when: ansible_facts.services['firewalld.service'].state | default('') == 'running'
+
+  handlers:
+    - name: Restart cmdbsyncer
+      ansible.builtin.systemd_service:
+        name: cmdbsyncer
+        state: restarted
+        daemon_reload: true
+
+    - name: Reload httpd
+      ansible.builtin.systemd_service:
+        name: httpd
+        state: reloaded
