@@ -894,6 +894,15 @@ _try_load_real_module(
 )
 
 
+# --- OP5 Monitor plugin modules ---------------------------------------------
+# op5.py holds the host import; it only needs the plugin and inventory stubs.
+_stub_package("application.plugins.op5", path=[])
+_try_load_real_module(
+    "application.plugins.op5.op5",
+    os.path.join("plugins", "op5", "op5.py"),
+)
+
+
 # --- Rule engines rendering a row of a list rule -----------------------------
 # Plain Rule subclasses: they only need the rule engine and the Jinja stub.
 _try_load_real_module(
