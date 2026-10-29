@@ -265,6 +265,15 @@ class ImporterIntegrationTest(unittest.TestCase):
             importer.import_hosts([{'host': 'srv01,a'}])
         self.assertEqual(list(fake.hosts), ['srv01,a.example.com'])
 
+    def test_a_record_without_the_hostname_field_is_skipped(self):
+        rest = load_plugin_module('rest_under_test', 'plugins/rest/rest.py')
+        importer = rest.RestImport.__new__(rest.RestImport)
+        importer.config = {'id': 'acc1', 'name': 'sites', 'hostname_field': 'host'}
+        fake = FakeHosts()
+        with with_hosts(fake), patch('builtins.print'):
+            importer.import_hosts([{'ip': '10.1.1.9'}, {'host': 'srv01'}])
+        self.assertEqual(list(fake.hosts), ['srv01'])
+
 
 class RunInventoryTest(unittest.TestCase):
     """run_inventory lands on the hosts the import created, rewriting once"""
