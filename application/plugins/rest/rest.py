@@ -82,10 +82,9 @@ class RestImport(Plugin):
             data = data[self.config['data_key']]
 
         for entry in data:
-            hostname = entry[self.config['hostname_field']]
+            hostname = entry.pop(self.config['hostname_field'], None)
             if not hostname:
                 continue
-            del entry[self.config['hostname_field']]
             for name, host_obj in get_import_hosts(hostname, self.config, entry):
                 print(f" {ColorCodes.OKGREEN}** {ColorCodes.ENDC} Update {name}")
                 update_import_host(host_obj, entry, self.config)
