@@ -1,68 +1,78 @@
 #!/usr/bin/env python3
-"""Bump the trailing pre-release counter in ``pyproject.toml``.
+"""Set ``pyproject.toml`` to the next ``.devN`` pre-release of its version.
 
-Used by ``make release-pre`` to ship sequential test builds (`.devN`,
-`rcN`, …) without requiring the operator to hand-edit the version
-string before each upload. PEP 440 sorts the recognised pre-release
-forms below any final release, so a ``--pre`` install picks them up
-while normal ``pip install <pkg>`` ignores them.
+Used by ``make release-pre`` to ship sequential test builds from ``main``.
+``pyproject.toml`` carries the upcoming final version (``4.5.0``); this
+script asks PyPI which ``4.5.0.devN`` builds already exist and writes the
+next one (``4.5.0.dev0`` for the first). The Makefile restores the
+original file after the build, so nothing has to be committed.
 
-Recognised forms — only the trailing integer is incremented:
-    4.1.0.dev0  -> 4.1.0.dev1
-    4.1.0a1     -> 4.1.0a2
-    4.1.0b3     -> 4.1.0b4
-    4.1.0rc7    -> 4.1.0rc8
+PEP 440 sorts ``.devN`` below the final release, so ``pip install --pre``
+picks them up while a normal ``pip install`` ignores them.
 
-Plain final versions (``4.1.0``) are refused — the operator has to
-explicitly start a new pre-release line so the next dev cycle's base
-version is a conscious decision, not a side effect of running this
-script.
+A base version that is already released on PyPI is refused — bump
+``pyproject.toml`` to the next version first.
 """
+import json
 import re
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 
 _VERSION_LINE_RE = re.compile(r'^(version\s*=\s*")([^"]+)(")\s*$')
-_PRE_RELEASE_RE = re.compile(
-    r'^(?P<base>\d+\.\d+\.\d+)(?P<sep>\.dev|a|b|rc)(?P<n>\d+)$'
-)
+_NAME_LINE_RE = re.compile(r'^name\s*=\s*"([^"]+)"\s*$')
+_FINAL_RE = re.compile(r'^\d+\.\d+\.\d+$')
 
 
-def bump(version: str) -> str:
-    """Return the next pre-release counter for *version* or raise SystemExit."""
-    match = _PRE_RELEASE_RE.match(version)
-    if not match:
+def released_versions(package):
+    """Return all version strings PyPI knows for *package*."""
+    url = f"https://pypi.org/pypi/{package}/json"
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            return set(json.load(response)['releases'])
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return set()
+        raise
+
+
+def next_dev(base, existing):
+    """Return the next ``base.devN`` not yet in *existing*."""
+    if not _FINAL_RE.match(base):
         raise SystemExit(
-            f"Refusing to bump {version!r}: not a recognised pre-release "
-            f"form (expected X.Y.Z.devN / aN / bN / rcN). Hand-edit "
-            f"pyproject.toml to start a new pre-release line."
+            f"Refusing {base!r}: pyproject.toml must hold a plain X.Y.Z "
+            f"version, the .devN suffix is added here."
         )
-    return f"{match['base']}{match['sep']}{int(match['n']) + 1}"
+    if base in existing:
+        raise SystemExit(
+            f"{base} is already released on PyPI — bump pyproject.toml "
+            f"to the next version first."
+        )
+    dev_re = re.compile(rf'^{re.escape(base)}\.dev(\d+)$')
+    numbers = [int(m[1]) for m in map(dev_re.match, existing) if m]
+    return f"{base}.dev{max(numbers) + 1 if numbers else 0}"
 
 
 def main():
-    """Bump the version line in the pyproject.toml passed as argv[1]."""
+    """Rewrite the version line in the pyproject.toml passed as argv[1]."""
     path = Path(sys.argv[1] if len(sys.argv) > 1 else 'pyproject.toml')
     if not path.is_file():
         raise SystemExit(f"Not found: {path}")
 
-    new_lines = []
-    bumped_from = bumped_to = None
-    for line in path.read_text(encoding='utf-8').splitlines(keepends=True):
-        match = _VERSION_LINE_RE.match(line.rstrip('\n').rstrip('\r'))
-        if match and bumped_from is None:
-            bumped_from = match.group(2)
-            bumped_to = bump(bumped_from)
-            new_lines.append(f'{match.group(1)}{bumped_to}{match.group(3)}\n')
-        else:
-            new_lines.append(line)
+    lines = path.read_text(encoding='utf-8').splitlines(keepends=True)
+    package = next((m[1] for m in map(_NAME_LINE_RE.match, lines) if m), None)
+    index = next((i for i, line in enumerate(lines)
+                  if _VERSION_LINE_RE.match(line.rstrip('\r\n'))), None)
+    if package is None or index is None:
+        raise SystemExit(f'No name/version line found in {path}')
 
-    if bumped_from is None:
-        raise SystemExit(f'No version = "..." line found in {path}')
-
-    path.write_text(''.join(new_lines), encoding='utf-8')
-    print(f"{path}: {bumped_from} -> {bumped_to}")
+    match = _VERSION_LINE_RE.match(lines[index].rstrip('\r\n'))
+    new_version = next_dev(match[2], released_versions(package))
+    lines[index] = f'{match[1]}{new_version}{match[3]}\n'
+    path.write_text(''.join(lines), encoding='utf-8')
+    print(f"{path}: {match[2]} -> {new_version}")
 
 
 if __name__ == '__main__':

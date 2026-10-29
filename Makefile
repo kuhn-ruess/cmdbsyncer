@@ -13,8 +13,8 @@ help:
 	@echo "  make upload       - twine upload dist/* (uses ./.pypirc)"
 	@echo "  make tag          - Create and push git tag v$(VERSION)"
 	@echo "  make release      - clean + build + check + upload + tag"
-	@echo "  make release-pre  - bump pyproject pre-release counter (.devN/aN/bN/rcN),"
-	@echo "                      then clean + build + check + upload (no tag)"
+	@echo "  make release-pre  - upload the next X.Y.Z.devN pre-release to PyPI"
+	@echo "                      (N from PyPI, pyproject.toml unchanged, no tag)"
 
 version:
 	@echo $(VERSION)
@@ -40,15 +40,15 @@ release: build check upload tag
 	@v=$$($(PYTHON) -c "import runpy; print(runpy.run_path('$(VERSION_FILE)')['__version__'])"); \
 	echo "Released $$v to PyPI"
 
-# Pre-release ship-it: bumps pyproject.toml's trailing pre-release counter
-# (.devN / aN / bN / rcN) and uploads to PyPI as a pre-release. pip ignores
-# pre-releases unless invoked with --pre, so this does not affect normal
-# users. The bump is left uncommitted on purpose — the operator decides
-# whether to commit-and-push the version bump after a successful upload.
+# Pre-release ship-it for main: builds the next X.Y.Z.devN of the version
+# in pyproject.toml (N = highest .devN already on PyPI + 1) and uploads it.
+# pip ignores pre-releases unless invoked with --pre, so this does not
+# affect normal users. pyproject.toml is restored afterwards, so there is
+# nothing to commit.
 release-pre:
-	$(PYTHON) tools/bump_pre_release.py pyproject.toml
-	$(MAKE) clean build check upload
-	@v=$$(grep -E '^version\s*=' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
-	echo "Pre-release $$v uploaded to PyPI."; \
-	echo "pyproject.toml was bumped — review and commit when ready:"; \
-	echo "    git add pyproject.toml && git commit -m \"RELEASE: pre-release $$v\""
+	@cp pyproject.toml pyproject.toml.orig; \
+	trap 'mv pyproject.toml.orig pyproject.toml' EXIT; \
+	$(PYTHON) tools/bump_pre_release.py pyproject.toml && \
+	v=$$(grep -E '^version\s*=' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/') && \
+	$(MAKE) clean build check upload && \
+	echo "Pre-release $$v uploaded to PyPI (install with: pip install --pre cmdbsyncer)."
