@@ -57,7 +57,7 @@
         system: true
         home: "{{ syncer_dir }}"
         create_home: false
-        shell: /usr/sbin/nologin
+        shell: /bin/bash
 
     - name: Working directory
       ansible.builtin.file:
@@ -76,6 +76,15 @@
         virtualenv: "{{ syncer_dir }}/venv"
         virtualenv_command: "{{ python }} -m venv"
       notify: Restart cmdbsyncer
+
+    # `sudo -iu cmdbsyncer` then has the cmdbsyncer CLI on the PATH
+    - name: Activate the venv on login
+      become_user: "{{ syncer_user }}"
+      ansible.builtin.lineinfile:
+        path: "{{ syncer_dir }}/.bash_profile"
+        line: "source {{ syncer_dir }}/venv/bin/activate"
+        create: true
+        mode: "0644"
 
     - name: Initial local_config.py
       become_user: "{{ syncer_user }}"
