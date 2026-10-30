@@ -65,16 +65,23 @@
   register: server_site_version
   ignore_errors: True
 
+# Checked by the site directory, the "no such site" message of omd differs
+# between Checkmk versions
+- name: "Check if the Site exists"
+  become: True
+  ansible.builtin.stat:
+    path: "/omd/sites/{{ cmk_site }}"
+  register: site_dir
+
 - name: "Create needed Sites on Servers"
   become: True
   ansible.builtin.shell: |
-    set -o pipefail
-    omd -V {{ cmk_version }}.{{ cmk_edition }} create {{ cmk_site }}
-    echo '{{ inital_password }}' | htpasswd -i -B -C 12 /omd/sites/{{ cmk_site }}/etc/htpasswd cmkadmin
+    set -e
+    omd -V {{ cmk_version }}.{{ cmk_edition }} create {{ ('--admin-password ' ~ (inital_password | quote)) if inital_password else '' }} {{ cmk_site }}
     omd start {{ cmk_site }}
   args:
     executable: /bin/bash
-  when: server_site_version.stderr.startswith("No such site")
+  when: not site_dir.stat.exists
   register: site_just_installed
 
 - name: "Calculation downtime start"
