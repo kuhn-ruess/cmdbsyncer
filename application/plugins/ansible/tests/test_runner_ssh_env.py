@@ -3,10 +3,12 @@ The playbook runner has to work under a web user without a writable home.
 """
 # pylint: disable=missing-function-docstring,missing-class-docstring,protected-access
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from types import ModuleType
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from tests import _load_real_module
 
@@ -54,6 +56,40 @@ class SshEnvTest(unittest.TestCase):
         args = env['ANSIBLE_SSH_EXTRA_ARGS']
         self.assertLess(args.index('/etc/ansible/known_hosts'),
                         args.index('/tmp/run-2/known_hosts'))
+
+
+class AnsibleBinaryTest(unittest.TestCase):
+    """
+    Under systemd the venv's bin dir is not on PATH, so the runner has to
+    find ansible-playbook next to the running interpreter.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = _load_runner()
+
+    def setUp(self):
+        self.prefix = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.prefix)
+        patcher = patch.object(self.runner.sys, 'prefix', self.prefix)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.runner.app.config.pop('ANSIBLE_PLAYBOOK_BIN', None)
+
+    def test_the_venv_binary_is_used(self):
+        os.mkdir(os.path.join(self.prefix, 'bin'))
+        binary = os.path.join(self.prefix, 'bin', 'ansible-playbook')
+        with open(binary, 'w', encoding='utf-8'):
+            pass
+        self.assertEqual(self.runner._ansible_binary(), binary)
+
+    def test_without_venv_binary_path_decides(self):
+        self.assertEqual(self.runner._ansible_binary(), 'ansible-playbook')
+
+    def test_the_config_wins(self):
+        self.runner.app.config['ANSIBLE_PLAYBOOK_BIN'] = '/usr/bin/ansible-playbook'
+        self.addCleanup(self.runner.app.config.pop, 'ANSIBLE_PLAYBOOK_BIN', None)
+        self.assertEqual(self.runner._ansible_binary(), '/usr/bin/ansible-playbook')
 
 
 class ConnectionHintTest(unittest.TestCase):

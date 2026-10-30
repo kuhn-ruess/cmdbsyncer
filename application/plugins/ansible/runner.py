@@ -57,10 +57,20 @@ def _ansible_dir() -> Path:
 
 
 def _ansible_binary() -> str:
-    """Path to `ansible-playbook` (default: rely on $PATH)."""
-    return app.config.get('ANSIBLE_PLAYBOOK_BIN') \
-        or os.environ.get('CMDBSYNCER_ANSIBLE_PLAYBOOK_BIN') \
-        or 'ansible-playbook'
+    """
+    Path to `ansible-playbook`: explicit config / env override, then the one
+    in the running interpreter's venv, then $PATH. The venv comes first for
+    the same reason as in `_cmdbsyncer_bin` — a gunicorn worker under
+    systemd runs with a PATH that omits the venv's bin dir.
+    """
+    override = app.config.get('ANSIBLE_PLAYBOOK_BIN') \
+        or os.environ.get('CMDBSYNCER_ANSIBLE_PLAYBOOK_BIN')
+    if override:
+        return override
+    venv_bin = Path(sys.prefix) / 'bin' / 'ansible-playbook'
+    if venv_bin.is_file():
+        return str(venv_bin)
+    return 'ansible-playbook'
 
 
 def _inventory_plugin_dir() -> str | None:
