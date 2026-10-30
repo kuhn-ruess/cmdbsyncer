@@ -41,6 +41,7 @@ from application.modules.rule.views import (
 )
 from application.views._form_sections import modern_form, section
 from application.models.project import Project
+from application.plugins.ansible.runner import run_playbook
 from application.helpers.syncer_jinja import check_jinja_syntax
 from application.modules.rule.list_source import is_list_rule, rule_uses_list
 from application.modules.rule.list_source_views import (
@@ -1804,6 +1805,32 @@ class CheckmkSettingsView(DefaultModelView):
         """
         url = url_for('.set_cmk_version_form', ids=','.join(ids))
         return redirect(url)
+
+    @action('run_server_mngmt', 'Run Manage OMD Server',
+            'Install or update Checkmk on the servers of the enabled sites '
+            'that use the selected settings?')
+    def action_run_server_mngmt(self, ids):
+        """
+        Start the Manage OMD Server playbook, limited to the servers of the
+        enabled sites that use the selected settings
+        """
+        if not current_user.has_right('ansible'):
+            flash('Running playbooks needs the Ansible right', 'error')
+            return redirect(url_for('.index_view'))
+        settings = list(CheckmkSettings.objects(id__in=ids))
+        servers = sorted({site.server_address for site in
+                          CheckmkSite.objects(settings_master__in=settings, enabled=True)})
+        if not servers:
+            flash('No enabled site uses the selected settings', 'error')
+            return redirect(url_for('.index_view'))
+        stats = run_playbook(
+            'cmk_server_mngmt.yml',
+            target_host=','.join(servers),
+            source='ui',
+            triggered_by=current_user.email,
+        )
+        flash(f"Run started for {', '.join(servers)}", 'success')
+        return redirect(url_for('ansiblerunstats.details_view', id=str(stats.pk)))
 
     @expose('/set_cmk_version_form')
     def set_cmk_version_form(self):
