@@ -4,8 +4,8 @@
   A custom field is a bare name/value pair in the form, so what it
   configures is invisible. The help of a field is declared next to its
   preset in the plugin's plugin.json (and, for the fields of the plugin
-  base class, in application/helpers/plugins.py) and shown here under
-  the row it belongs to.
+  base class, in application/helpers/plugins.py) and shown here as an
+  info icon next to the name of the field, the text as its tooltip.
 #}
 <script>
     (function () {
@@ -19,9 +19,7 @@
         }
 
         function apply(nameInput) {
-            var row = nameInput.closest('.form-row');
-            if (!row) { return; }
-            var target = row.querySelector('.col-9') || row;
+            var target = nameInput.parentNode;
             var text = texts()[(nameInput.value || '').trim()] || '';
             var hint = target.querySelector('.account-field-help');
             if (!text) {
@@ -29,14 +27,14 @@
                 return;
             }
             if (!hint) {
-                hint = document.createElement('small');
-                hint.className = 'form-text text-muted account-field-help';
+                hint = document.createElement('i');
+                hint.className = 'fa fa-info-circle text-muted account-field-help';
                 target.appendChild(hint);
             }
             // Only write on a real change: the observer below watches
             // this element too, and an unconditional write would keep
             // retriggering itself
-            if (hint.textContent !== text) { hint.textContent = text; }
+            if (hint.title !== text) { hint.title = text; }
         }
 
         function render() {

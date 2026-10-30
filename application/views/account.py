@@ -96,33 +96,39 @@ class _PasswordField(StringField):
         setattr(obj, name, "")
 
 
+# Custom fields the account list shows before folding the rest away
+_LIST_FIELDS_SHOWN = 4
+
+
+def _kv_table(pairs):
+    """Key/value pairs as the small table of a list cell, long values cut"""
+    max_len = 80
+    html = '<table class="cmdb-inline-kv">'
+    for key, value in pairs:
+        value = value or ''
+        short = value[:max_len] + ("..." if len(value) > max_len else "")
+        html += f"<tr><td>{escape(key)}</td><td>{escape(short)}</td></tr>"
+    return html + "</table>"
+
+
 def _render_custom_data(_view, _context, model, _name):
     """
-    Render for detail table
+    Render for the list: only the fields with a value — a plugin seeds up
+    to 20 presets, most of them left empty — and of those only the first
+    few, the rest folded away so one account does not fill the screen
     """
-    html = '<table class="cmdb-inline-kv">'
-    for entry in model.custom_fields:
-        max_len = 80
-        value = entry.value[:max_len]
-        if len(entry.value) > max_len:
-            value += "..."
-        html += f"<tr><td>{escape(entry.name)}</td><td>{escape(value)}</td></tr>"
-    html += "</table>"
+    pairs = [(x.name, x.value) for x in model.custom_fields if x.value]
+    html = _kv_table(pairs[:_LIST_FIELDS_SHOWN])
+    if rest := pairs[_LIST_FIELDS_SHOWN:]:
+        html += (f'<details class="cmdb-inline-more"><summary>+{len(rest)} more'
+                 f'</summary>{_kv_table(rest)}</details>')
     return Markup(html)
 
 def _render_plugin_data(_view, _context, model, _name):
     """
     Render for Plugin Settings
     """
-    html = '<table class="cmdb-inline-kv">'
-    for entry in model.plugin_settings:
-        max_len = 80
-        value = entry.object_filter[:max_len]
-        if len(entry.object_filter) > max_len:
-            value += "..."
-        html += f"<tr><td>{escape(entry.plugin)}</td><td>{escape(value)}</td></tr>"
-    html += "</table>"
-    return Markup(html)
+    return Markup(_kv_table((x.plugin, x.object_filter) for x in model.plugin_settings))
 
 def _render_type(_view, _context, model, _name):
     """
@@ -230,10 +236,11 @@ class AccountModelView(DefaultModelView):
         'custom_fields': {
             'form_subdocuments' : {
                 '': {
-                'form_widget_args': {
-                    'name': { 'style': 'background-color: #81DAF5;'},
-                    'value': { 'style': 'background-color: #81DAF5;'},
-                },
+                    # One line per field: account_custom_fields.html lays
+                    # the entries out as compact rows
+                    'form_widget_args': {
+                        'value': {'rows': 1},
+                    },
                     'form_overrides' : {
                         'name': StringField,
                     },

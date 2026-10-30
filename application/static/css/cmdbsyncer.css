@@ -176,7 +176,8 @@ body { padding-top: 0; }
     background-color: transparent !important;
     color: inherit !important;
     border: none !important;
-    padding: 1px 6px;
+    /* .model-list td of the list pads every cell for a full row */
+    padding: 1px 6px !important;
     vertical-align: top;
 }
 .cmdb-inline-kv td:first-child,
@@ -184,6 +185,14 @@ body { padding-top: 0; }
     font-weight: 600;
     white-space: nowrap;
     width: 1%;
+}
+
+/* The fold for the rest of a long key/value list ("+N more"). */
+.cmdb-inline-more summary {
+    cursor: pointer;
+    padding: 1px 6px;
+    font-size: 0.85em;
+    opacity: 0.75;
 }
 
 /* Rules and other switched-off list entries, tagged with `.rule-disabled`

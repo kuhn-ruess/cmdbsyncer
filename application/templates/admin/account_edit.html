@@ -3,4 +3,7 @@
 {% block tail %}
   {{ super() }}
   {% include 'admin/account_field_help.html' %}
+  {% with collapse_unset=True %}
+    {% include 'admin/account_custom_fields.html' %}
+  {% endwith %}
 {% endblock %}

@@ -1,0 +1,104 @@
+{#
+  Compact layout for the custom fields of an account.
+
+  A plugin seeds up to 20 of them. As the stock inline cards — a heading,
+  a label above every input — they made the form scroll for screens.
+  Here every field is one row: drag handle, name, value, remove button.
+  The labels move into the placeholders.
+
+  With `collapse_unset` (the edit form) the fields without a value are
+  folded away behind a toggle. The create form keeps them open, there
+  they are what is still to be filled in.
+#}
+<style>
+    #custom_fields > .inline-field-list > .inline-field {
+        flex-direction: row;
+        align-items: center;
+        padding: 4px 44px 4px 8px;
+        margin-bottom: 4px !important;
+    }
+    #custom_fields > .inline-field-list > .inline-field > legend {
+        width: auto;
+        margin: 0 8px 0 0;
+        font-size: 0;
+    }
+    #custom_fields > .inline-field-list > .inline-field > .clearfix {
+        display: none;
+    }
+    #custom_fields > .inline-field-list > .inline-field > .inline-form-field {
+        flex: 1;
+    }
+    #custom_fields > .inline-field-list > .inline-field .form-row {
+        margin: 0;
+    }
+    #custom_fields > .inline-field-list > .inline-field .form-group {
+        margin-bottom: 0;
+    }
+    #custom_fields > .inline-field-list > .inline-field .col-3 .form-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    #custom_fields > .inline-field-list > .inline-field label {
+        display: none;
+    }
+    #custom_fields > .inline-field-list > .inline-field textarea {
+        resize: vertical;
+    }
+    #custom_fields > .inline-field-list > .inline-field > .cmdb-inline-remove {
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    #custom_fields > .inline-field-list.account-fields-folded > .account-field-unset {
+        display: none;
+    }
+    #custom_fields .account-fields-toggle {
+        display: block;
+        padding-left: 0;
+        margin-bottom: 8px;
+    }
+</style>
+<script>
+    (function () {
+        var outer = document.getElementById('custom_fields');
+        if (!outer) { return; }
+        var list = outer.querySelector(':scope > .inline-field-list');
+
+        function placeholders() {
+            outer.querySelectorAll('.inline-field .form-group').forEach(function (group) {
+                var label = group.querySelector('label');
+                var input = group.querySelector('input, textarea');
+                if (label && input && !input.placeholder) {
+                    input.placeholder = label.textContent.trim();
+                }
+            });
+        }
+        // Rows are added by the inline-form widget long after load
+        new MutationObserver(placeholders).observe(outer, {childList: true, subtree: true});
+        placeholders();
+
+        if (!{{ 'true' if collapse_unset else 'false' }} || !list) { return; }
+        var unset = Array.prototype.filter.call(list.children, function (row) {
+            var value = row.querySelector('textarea[id$="-value"], input[id$="-value"]');
+            return value && !value.value.trim();
+        });
+        if (!unset.length) { return; }
+        unset.forEach(function (row) { row.classList.add('account-field-unset'); });
+        list.classList.add('account-fields-folded');
+
+        var toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'btn btn-link btn-sm account-fields-toggle';
+        function label() {
+            var folded = list.classList.contains('account-fields-folded');
+            toggle.textContent = (folded ? 'Show ' : 'Hide ') + unset.length +
+                                 ' field(s) without a value';
+        }
+        toggle.addEventListener('click', function () {
+            list.classList.toggle('account-fields-folded');
+            label();
+        });
+        label();
+        list.parentNode.insertBefore(toggle, list.nextSibling);
+    })();
+</script>
