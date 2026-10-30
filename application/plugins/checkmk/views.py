@@ -26,6 +26,7 @@ from flask_admin.contrib.mongoengine.filters import (
 from flask import redirect, url_for, request, render_template, flash
 
 from flask_login import current_user
+from flask_wtf.csrf import generate_csrf
 from application import app
 from application.views.default import DefaultModelView
 from application.models.account import Account, CustomEntry
@@ -1634,6 +1635,20 @@ class CheckmkUserMngmtView(DefaultModelView):
 
 
 
+def _render_run_server_mngmt(_view, _context, model, _name):
+    """Button that starts Manage OMD Server for the sites of these settings"""
+    run_url = url_for('.run_server_mngmt', settings_id=model.id)
+    return Markup(
+        f'<form method="POST" action="{escape(run_url)}" style="display:inline" '
+        f"onsubmit=\"return confirm('Install or update Checkmk on the servers "
+        f"of the enabled sites that use these settings?');\">"
+        f'<input type="hidden" name="csrf_token" value="{escape(generate_csrf())}">'
+        f'<button class="btn btn-primary btn-sm" type="submit">'
+        f'<i class="fa fa-play"></i> Run Playbook</button>'
+        f'</form>'
+    )
+
+
 class CheckmkSettingsView(DefaultModelView):
     """
     Checkmk Server Settings View
@@ -1749,13 +1764,15 @@ class CheckmkSettingsView(DefaultModelView):
         ),
     ]
 
-    column_exclude_list = [
-        'inital_password',
-        'subscription_username',
-        'subscription_password',
-        'download_proxy',
-        'cmk_secret',
-    ]
+    column_list = ('name', 'documentation', 'cmk_version', 'server_user', 'run_playbook')
+
+    column_formatters = {
+        'run_playbook': _render_run_server_mngmt,
+    }
+
+    column_labels = {
+        'run_playbook': 'Manage OMD Server',
+    }
 
     # Fill-in help for version and filename, see _checkmk_download_help.html
     create_template = 'admin/checkmk_settings_create.html'
@@ -1811,8 +1828,21 @@ class CheckmkSettingsView(DefaultModelView):
             'that use the selected settings?')
     def action_run_server_mngmt(self, ids):
         """
+        Action to start Manage OMD Server for the selected Entries
+        """
+        return self._run_server_mngmt(ids)
+
+    @expose('/run/<settings_id>', methods=('POST',))
+    def run_server_mngmt(self, settings_id):
+        """
+        Run button of a single row
+        """
+        return self._run_server_mngmt([settings_id])
+
+    def _run_server_mngmt(self, ids):
+        """
         Start the Manage OMD Server playbook, limited to the servers of the
-        enabled sites that use the selected settings
+        enabled sites that use the given settings
         """
         if not current_user.has_right('ansible'):
             flash('Running playbooks needs the Ansible right', 'error')
