@@ -67,6 +67,8 @@ class ServiceNowQueryView(BaseView):
             syncer = SyncServiceNow(form['account'])
         except ValueError as error:
             raise ServiceNowError(f"Account '{form['account']}' not found") from error
+        # A failed query shows the whole request, proxy and headers
+        syncer.debug = True
         try:
             # Taken literally, not filled in from the account: an empty
             # query is what asks for every record of the table, and an

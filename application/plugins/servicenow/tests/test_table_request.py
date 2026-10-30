@@ -246,6 +246,56 @@ class TestReadPage(unittest.TestCase):
         self.assertIn('no such table', str(caught.exception))
 
 
+class TestFailedRequestDetails(unittest.TestCase):
+    """Tests for the request shown along with a failed read in debug mode"""
+
+    def _error(self, debug=True, environ=None, **config):
+        instance = syncer(username='u', password='p', **config)
+        instance.debug = debug
+        instance.verify = True
+        instance.inner_request = lambda *args, **kwargs: FakeResponse(
+            status_code=403, text='Access denied')
+        # Header and proxy values are rendered, which the bootstrap stubs
+        with patch.dict('os.environ', environ or {}, clear=True), \
+                patch('application.modules.plugin.render_jinja',
+                      side_effect=lambda value: value), \
+                self.assertRaises(ServiceNowError) as caught:
+            instance.read_page('cmdb_ci_server', {'sysparm_limit': 5})
+        return str(caught.exception)
+
+    def test_without_debug_only_the_error_is_shown(self):
+        self.assertNotIn('Request:', self._error(debug=False))
+
+    def test_url_with_parameters_and_headers_are_shown(self):
+        message = self._error(custom_headers='X-Tenant: muc | X-API-Key: abc123')
+        self.assertIn('Request: GET https://instance.service-now.com/api/now/table/'
+                      'cmdb_ci_server?sysparm_limit=5', message)
+        self.assertIn('Header: X-Tenant: muc', message)
+        self.assertIn('Header: Accept: application/json', message)
+
+    def test_secret_headers_are_masked(self):
+        message = self._error(custom_headers='X-Client-Secret: s3cr3t')
+        self.assertIn('Header: X-Client-Secret: ***REDACTED*** (6 chars)', message)
+        self.assertNotIn('s3cr3t', message)
+
+    def test_proxy_of_the_account_is_shown_without_its_password(self):
+        message = self._error(http_proxy='http://user:pw@proxy.example.com:3128')
+        self.assertIn("Proxy: http://proxy.example.com:3128 (user 'user', password set) "
+                      "from the account", message)
+        self.assertNotIn(':pw@', message)
+
+    def test_proxy_of_the_environment_is_named_as_such(self):
+        message = self._error(environ={'HTTPS_PROXY': 'http://env-proxy:8080'})
+        self.assertIn('Proxy: http://env-proxy:8080 (no credentials) from the environment',
+                      message)
+        self.assertIn('Environment: HTTPS_PROXY=http://env-proxy:8080', message)
+
+    def test_direct_account_skips_the_proxy_of_the_environment(self):
+        message = self._error(http_proxy='direct',
+                              environ={'HTTPS_PROXY': 'http://env-proxy:8080'})
+        self.assertIn("Proxy: none, the account sets 'direct'", message)
+
+
 class TestImportHosts(unittest.TestCase):
     """Tests for SyncServiceNow.import_hosts"""
 

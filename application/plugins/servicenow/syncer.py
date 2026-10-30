@@ -16,6 +16,9 @@ class ServiceNowError(Exception):
     """Raised on ServiceNow API errors."""
 
 
+# Headers of every Table API request
+REQUEST_HEADERS = {'Accept': 'application/json'}
+
 # How many records are read before the spinner says so again. A table of
 # a large instance has hundreds of thousands of them, so the update must
 # not cost anything per record.
@@ -200,13 +203,28 @@ class SyncServiceNow(Plugin):
     def read_page(self, table, params):
         """
         Records of one Table API request. Raises ServiceNowError with the
-        reason the instance gave when the table could not be read.
+        reason the instance gave when the table could not be read — in
+        debug mode together with the whole request, proxy and headers
+        included, since a refusing proxy or gateway rarely says why.
+        """
+        try:
+            return self._read_page(table, params)
+        except ServiceNowError as error:
+            if not self.debug:
+                raise
+            details = self.request_details('GET', self.table_url(table), params,
+                                           REQUEST_HEADERS)
+            raise ServiceNowError('\n'.join([str(error), *details])) from error
+
+    def _read_page(self, table, params):
+        """
+        Records of one Table API request, see read_page
         """
         auth = HTTPBasicAuth(self.config['username'], self.config['password'])
         try:
             response = self.inner_request(
                 'GET', url=self.table_url(table), params=params, auth=auth,
-                headers={'Accept': 'application/json'},
+                headers=REQUEST_HEADERS,
             )
         except RequestException as error:
             raise ServiceNowError(f"Could not reach ServiceNow: {error}") from error

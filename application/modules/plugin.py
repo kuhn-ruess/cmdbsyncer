@@ -13,9 +13,11 @@ import tempfile
 
 from pprint import pformat
 from collections import namedtuple
+from urllib.parse import urlsplit
 
 from mongoengine.errors import DoesNotExist
 import requests
+from requests.utils import select_proxy
 from application import logger, app, log
 from application.models.account import pop_master_skips
 from application.helpers.syncer_jinja import render_jinja
@@ -50,6 +52,10 @@ _SENSITIVE_HEADER_KEYS = frozenset({
     'authorization', 'x-api-key', 'x-auth-token', 'cookie',
     'proxy-authorization', 'api-token', 'x-token',
 })
+# Parts of a header name that mark its value as a secret. Custom headers
+# of an account have names no fixed list can know (X-IBM-Client-Secret).
+_SECRET_HEADER_PARTS = ('auth', 'key', 'token', 'secret', 'password', 'cookie')
+_PROXY_ENV_VARS = ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY')
 _SENSITIVE_BODY_KEYS = frozenset({
     'password', 'passwd', 'secret', 'token', 'api_key', 'apikey',
     'access_token', 'refresh_token', 'credential', 'credentials',
@@ -66,6 +72,34 @@ def _redact_proxy_url(url):
     if not isinstance(url, str):
         return url
     return re.sub(r'//[^/@]+@', f'//{_REDACTION}@', url)
+
+
+def _describe_proxy(url):
+    """
+    A proxy URL the way requests reads it, without the password. A
+    password with an unencoded @, : or / breaks the URL, and then the
+    host shown here is not the proxy that was meant.
+    """
+    parsed = urlsplit(url)
+    try:
+        port = parsed.port
+    except ValueError:
+        port = 'invalid port'
+    if parsed.username is None:
+        login = 'no credentials'
+    else:
+        login = (f"user {parsed.username!r}, password "
+                 f"{'set' if parsed.password else 'not set'}")
+    return f"{parsed.scheme}://{parsed.hostname}:{port} ({login})"
+
+
+def _display_header_value(name, value):
+    """A header value for a debug output, a secret one masked."""
+    lowered = name.lower()
+    if lowered in _SENSITIVE_HEADER_KEYS or \
+            any(part in lowered for part in _SECRET_HEADER_PARTS):
+        return f"{_REDACTION} ({len(str(value))} chars)"
+    return value
 
 
 def _redact_body(obj):
@@ -320,6 +354,42 @@ class Plugin():
             self._proxies = parse_proxy(
                 self.config.get('http_proxy'), self.config.get('name', ''))
         return self._proxies
+
+    def request_details(self, method, url, params=None, headers=None):
+        """
+        What one request of this account sends and which way it goes, as
+        lines for a debug output: the URL with its parameters, every
+        header with secrets masked, the proxy requests really uses and
+        the proxy variables of the environment. Without a proxy on the
+        account the environment decides — and that of a cron job or the
+        web server can differ from the one of a shell.
+        """
+        full_url = requests.Request(method, url, params=params).prepare().url
+        lines = [f"Request: {method.upper()} {full_url}"]
+        for name, value in {**self.account_headers(), **(headers or {})}.items():
+            lines.append(f"Header: {name}: {_display_header_value(name, value)}")
+        lines.append(f"Certificate check: {self.verify}")
+
+        configured = self.account_proxies()
+        proxies = requests.Session().merge_environment_settings(
+            full_url, dict(configured or {}), None, None, None)['proxies']
+        if proxy := select_proxy(full_url, proxies):
+            source = 'environment' if configured is None else 'account'
+            lines.append(f"Proxy: {_describe_proxy(proxy)} from the {source}")
+            if full_url.startswith('https://'):
+                lines.append("Proxy note: the proxy only sees the CONNECT, with the "
+                             "credentials of the proxy URL. The headers above travel "
+                             "inside the tunnel to the target, never to the proxy.")
+        elif configured:
+            lines.append("Proxy: none, the account sets 'direct'")
+        else:
+            lines.append("Proxy: none")
+
+        for name in _PROXY_ENV_VARS:
+            for variant in (name, name.lower()):
+                if value := os.environ.get(variant):
+                    lines.append(f"Environment: {variant}={_redact_proxy_url(value)}")
+        return lines
 
     def record_exception(self, error_obj):
         """
