@@ -1,0 +1,6 @@
+{% extends 'admin/model/create.html' %}
+
+{% block tail %}
+  {{ super() }}
+  {% include 'admin/_crongroup_interval.html' %}
+{% endblock %}

@@ -8,6 +8,7 @@ from flask_admin.form import rules
 from flask_login import current_user
 from markupsafe import Markup, escape
 from wtforms import BooleanField, HiddenField
+from wtforms.validators import ValidationError
 
 from application.models.cron import job_account, job_account_id
 from application.views.default import DefaultModelView, name_and_enabled_filters
@@ -49,6 +50,8 @@ def _render_interval(_view, _context, model, _name):
     """
     Render Interval
     """
+    if model.custom_interval_in_minutes:
+        return f"Every {model.custom_interval_in_minutes} minutes"
     if model.interval == '10min':
         return "15 Minutes"
     if model.interval == 'hour':
@@ -56,6 +59,16 @@ def _render_interval(_view, _context, model, _name):
     if model.interval == 'daily':
         return "Daily"
     return "Unknown"
+
+
+def _interval_shown(model):
+    """
+    The interval the form shows: a group with own minutes runs every that
+    many minutes whatever interval it still names, so it shows Custom.
+    """
+    if model.custom_interval_in_minutes:
+        return 'custom'
+    return model.interval
 
 _CRONJOB_TABLE_STYLE = (
     '<style>'
@@ -185,6 +198,16 @@ class CronGroupView(DefaultModelView):
         ),
     }
 
+    form_args = {
+        'custom_interval_in_minutes': {
+            'description': "Minutes between two runs. Only used with the "
+                           "interval Custom interval in minutes.",
+        },
+    }
+
+    edit_template = 'admin/crongroup_edit.html'
+    create_template = 'admin/crongroup_create.html'
+
     form_rules = modern_form(
         section('1', 'main', 'Basics',
                 'Name, evaluation order and activation.',
@@ -264,12 +287,25 @@ class CronGroupView(DefaultModelView):
             )
         return model
 
+    def on_form_prefill(self, form, id):  # pylint: disable=redefined-builtin
+        """Show the interval the group really runs with."""
+        model = self.get_one(id)
+        if model:
+            form.interval.data = _interval_shown(model)
+        return super().on_form_prefill(form, id)
+
     def on_model_change(self, form, model, is_created):
         """Allocate or rotate the webhook token. Plaintext is flashed
         once because the DB only keeps the SHA-256 hash — there is no
         way to show it again later. New groups: ensure_webhook_token
         generates on first enable. Existing groups: the operator ticks
         the `rotate_webhook_token` checkbox to force regeneration."""
+        if model.interval == 'custom':
+            if not model.custom_interval_in_minutes:
+                raise ValidationError("Enter the custom interval in minutes")
+        else:
+            # Own minutes would silently win over the chosen interval
+            model.custom_interval_in_minutes = None
         plaintext = None
         rotate = bool(getattr(form, 'rotate_webhook_token', None)
                       and form.rotate_webhook_token.data)

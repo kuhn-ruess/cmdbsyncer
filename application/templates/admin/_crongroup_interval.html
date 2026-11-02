@@ -1,0 +1,19 @@
+{# The custom minutes only count with the interval "Custom interval in
+   minutes", so the field is only shown then. #}
+<script {{ admin_csp_nonce_attribute }}>
+  (function () {
+    var interval = document.getElementById('interval');
+    var minutes = document.getElementById('custom_interval_in_minutes');
+    if (!interval || !minutes) {
+      return;
+    }
+    var group = minutes.closest('.form-group') || minutes.parentNode;
+    function update() {
+      var custom = interval.value === 'custom';
+      group.style.display = custom ? '' : 'none';
+      minutes.required = custom;
+    }
+    interval.addEventListener('change', update);
+    update();
+  })();
+</script>

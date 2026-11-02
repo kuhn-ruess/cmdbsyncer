@@ -101,6 +101,8 @@ intervals = [
     ("10min", "Every 15 minute"), # Crond runs 15min, but the 10 min makes sure it runs everytime
     ("hour", "Every hour"),
     ("daily", "Once Daily"),
+    # The minutes come from custom_interval_in_minutes
+    ("custom", "Custom interval in minutes"),
 ]
 
 hours = [
