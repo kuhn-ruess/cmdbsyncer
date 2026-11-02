@@ -1,0 +1,22 @@
+{
+    "version": "1.0.0",
+    "author": "Kuhn & Rueß GmbH",
+    "name": "Git Repository",
+    "description": "Git repository reached over HTTPS, e.g. for Rules in Git",
+    "ident": "git",
+    "account_presets" : {
+        "address": "https://git.example.com/group/repository.git"
+    },
+    "account_custom_field_presets": {
+        "branch": "main",
+        "path": "",
+        "verify_cert": "True"
+    },
+    "account_custom_field_help": {
+        "branch": "Branch that is read and written. A branch that does not exist yet is created by the first push.",
+        "path": "Folder inside the repository the files go to. Empty uses the root of the repository.",
+        "verify_cert": "False accepts a self signed certificate of the Git server.",
+        "rule_types": "Rules in Git cronjob: comma separated rule types it pulls, e.g. cmk_rules, cmk_filter. Empty pulls every rule type found in the repository.",
+        "delete_missing": "Rules in Git cronjob: True deletes the rules of a pulled type that are not in the repository, so the type matches the repository exactly."
+    }
+}

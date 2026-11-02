@@ -8,6 +8,14 @@ from application.helpers.plugins import register_cli_group
 
 from .rule_import_export import import_rules, export_rules, export_all_rules
 from .autorules import create_rules
+from .git_staging import (
+    GitStagingError,
+    format_pull_result,
+    pull_rules,
+    push_rules,
+    repo_config,
+    split_rule_types,
+)
 
 cli_rules = register_cli_group(app, 'rules', 'rules', "Syner Rules import and Export")
 
@@ -74,3 +82,67 @@ def cli_create_rules(debug):
     create_rules(None, debug)
 
 register_cronjob('Syncer: Autocreate Rules', create_rules)
+
+
+@cli_rules.command('git_push')
+@click.argument("account")
+@click.option("--type", "rule_types", multiple=True, required=True,
+              help="Rule type to push, repeat for several types.")
+@click.option("--message", default="", help="Commit message.")
+@click.option("--debug", default=False, is_flag=True)
+def cli_git_push(account, rule_types, message, debug):
+    """
+    Push the rules of the given types into the Git repository of ACCOUNT
+    """
+    try:
+        result = push_rules(account, rule_types, message)
+    except GitStagingError as error:
+        if debug:
+            raise
+        raise click.ClickException(str(error)) from error
+    if not result['commit']:
+        print("Nothing changed, no commit created")
+        return
+    print(f"Pushed commit {result['commit']}")
+    for name in result['changed']:
+        print(f"  {name}")
+
+
+@cli_rules.command('git_pull')
+@click.argument("account")
+@click.option("--type", "rule_types", multiple=True,
+              help="Rule type to pull, repeat for several types. "
+                   "Without it every type in the repository is pulled.")
+@click.option("--delete-missing", is_flag=True, default=False,
+              help="Delete rules of a pulled type which are not in the repository.")
+@click.option("--debug", default=False, is_flag=True)
+def cli_git_pull(account, rule_types, delete_missing, debug):
+    """
+    Load the rules from the Git repository of ACCOUNT
+    """
+    try:
+        result = pull_rules(account, rule_types, delete_missing)
+    except GitStagingError as error:
+        if debug:
+            raise
+        raise click.ClickException(str(error)) from error
+    for line in format_pull_result(result):
+        print(line)
+
+
+def git_pull_cronjob(account=None):
+    """
+    Pull the rules from the Git repository of the account, with the rule
+    types and the delete setting configured in the account
+    """
+    if not account:
+        raise GitStagingError("The job needs an account of type Git Repository")
+    config = repo_config(account)
+    result = pull_rules(account, split_rule_types(config['rule_types']),
+                        config['delete_missing'])
+    errors = [rule_type for rule_type, entry in result['types'].items()
+              if entry.get('error')]
+    if errors:
+        raise GitStagingError(f"Pull failed for: {', '.join(errors)}")
+
+register_cronjob('Syncer: Pull Rules from Git', git_pull_cronjob)

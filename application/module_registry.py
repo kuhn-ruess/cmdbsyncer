@@ -384,6 +384,10 @@ ENTRIES = {
             "Describe a rule once and let the syncer create and update the "
             "matching rule records of the other modules from it."
         ),
+        'Rules in Git': (
+            "Push the rules of selected types into a Git repository and "
+            "pull them into another instance — from test to production."
+        ),
     },
 }
 #.

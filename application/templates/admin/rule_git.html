@@ -1,0 +1,163 @@
+{% extends 'admin/master.html' %}
+
+{% macro rule_type_choice(prefix, selected) %}
+<div class="mb-2">
+    <a href="#" class="rule-git-toggle" data-target="{{ prefix }}" data-checked="1">Select all</a> ·
+    <a href="#" class="rule-git-toggle" data-target="{{ prefix }}" data-checked="0">Select none</a>
+</div>
+<div class="row" id="{{ prefix }}">
+    {% for rule_type in rule_types %}
+    <div class="col-md-4 col-lg-3">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="rule_types"
+                   value="{{ rule_type }}" id="{{ prefix }}_{{ rule_type }}"
+                   {% if rule_type in selected %}checked{% endif %}/>
+            <label class="form-check-label" for="{{ prefix }}_{{ rule_type }}">
+                <code>{{ rule_type }}</code>
+            </label>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro account_choice(prefix) %}
+<div class="form-group">
+    <label for="{{ prefix }}_account">Git repository account</label>
+    <select class="form-control" id="{{ prefix }}_account" name="account" required>
+        <option value="">— select account —</option>
+        {% for account in accounts %}
+        <option value="{{ account.name }}"
+                {% if account.name == form.get('account') %}selected{% endif %}>
+            {{ account.name }} — {{ account.address }}
+        </option>
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}
+
+{% block body %}
+<div class="container mt-4">
+    <h3>Rules in Git</h3>
+    <p>
+        Move rules from one Syncer to another, e.g. from test to
+        production: the test instance pushes the selected rule types into
+        a Git repository, production pulls them from there. Every rule
+        type is one JSON file in the repository, so its history shows
+        what changed. Hosts, accounts, users and the Secret Store are
+        not transferred, they belong to each instance.
+        <a href="{{ docu_link }}" target="_blank" class="badge badge-light">
+            <i class="fa fa-info-circle"></i> Documentation</a>
+    </p>
+
+    {% if not accounts %}
+    <div class="alert alert-warning">
+        No enabled account of type Git Repository found. Create one
+        with the repository URL as address, the Git user as username and
+        an access token as password.
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="fa fa-exclamation-triangle"></i>
+        <span style="white-space: pre-line;">{{ error }}</span>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="alert {% if failed %}alert-warning{% else %}alert-success{% endif %}">
+        <strong>{% if action == 'push' %}Push{% else %}Pull{% endif %}</strong>
+        <ul class="mb-0">
+            {% for line in result %}
+            <li>{{ line }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% set push_selected = form.getlist('rule_types') if action == 'push' else [] %}
+    {% set pull_selected = form.getlist('rule_types') if action == 'pull' else [] %}
+
+    <form method="POST" action="{{ url_for('.push') }}" class="card app-card mb-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="card-header"><i class="fa fa-upload"></i> Push to Git</div>
+        <div class="card-body">
+            <p class="text-muted">
+                Writes the rules of the selected types into the repository.
+                Files of other rule types in the repository stay as they are.
+            </p>
+            {{ account_choice('push') }}
+            <div class="form-group">
+                <label>Rule types</label>
+                {{ rule_type_choice('push_types', push_selected) }}
+            </div>
+            <div class="form-group">
+                <label for="message">Commit message</label>
+                <input type="text" class="form-control" id="message" name="message"
+                       value="{{ form.get('message', '') if action == 'push' else '' }}"
+                       placeholder="Rules: &lt;selected types&gt;"/>
+            </div>
+            <button type="submit" class="btn btn-primary"
+                    {% if not accounts or readonly %}disabled{% endif %}>
+                <i class="fa fa-upload"></i> Push
+            </button>
+        </div>
+    </form>
+
+    <form method="POST" action="{{ url_for('.pull') }}" class="card app-card mb-4"
+          id="rule_git_pull">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="card-header"><i class="fa fa-download"></i> Pull from Git</div>
+        <div class="card-body">
+            <p class="text-muted">
+                Loads the rules from the repository. A rule from the
+                repository replaces the rule with the same id or name.
+                Without a selection every rule type found in the
+                repository is loaded.
+            </p>
+            {{ account_choice('pull') }}
+            <div class="form-group">
+                <label>Rule types</label>
+                {{ rule_type_choice('pull_types', pull_selected) }}
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="delete_missing"
+                       value="1" id="delete_missing"/>
+                <label class="form-check-label" for="delete_missing">
+                    Delete rules which are not in the repository
+                </label>
+                <small class="form-text text-muted">
+                    Only for the loaded rule types: afterwards they match the
+                    repository exactly, rules deleted on the other instance
+                    are deleted here as well.
+                </small>
+            </div>
+            <button type="submit" class="btn btn-primary"
+                    {% if not accounts or readonly %}disabled{% endif %}>
+                <i class="fa fa-download"></i> Pull
+            </button>
+        </div>
+    </form>
+</div>
+
+<script {{ admin_csp_nonce_attribute }}>
+    (function () {
+        document.querySelectorAll('.rule-git-toggle').forEach(function (link) {
+            link.addEventListener('click', function (event) {
+                event.preventDefault();
+                var checked = link.dataset.checked === '1';
+                document.querySelectorAll('#' + link.dataset.target + ' input[type=checkbox]')
+                    .forEach(function (box) { box.checked = checked; });
+            });
+        });
+        document.getElementById('rule_git_pull').addEventListener('submit', function (event) {
+            if (document.getElementById('delete_missing').checked
+                    && !window.confirm('Delete every rule of the loaded types '
+                                       + 'which is not in the repository?')) {
+                event.preventDefault();
+            }
+        });
+    })();
+</script>
+{% endblock %}

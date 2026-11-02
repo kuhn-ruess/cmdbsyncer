@@ -4,6 +4,7 @@ Flask-Admin view registration for the Syncer Rules plugin.
 from application.views.module_overview import register_module_menu
 from .models import SyncerRuleAutomation
 from .views import SyncerRuleAutomationView
+from .git_staging_views import RuleGitView
 
 def register_admin_views(admin):
     """Register all Flask-Admin views that belong to the plugin."""
@@ -19,3 +20,7 @@ def register_admin_views(admin):
             menu_icon_value='fa-rocket',
         )
     )
+    admin.add_view(RuleGitView(name="Rules in Git", category="Syncer Rules",
+                               endpoint="rule_git",
+                               menu_icon_type='fa',
+                               menu_icon_value='fa-code-fork'))
