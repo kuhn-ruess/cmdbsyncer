@@ -29,6 +29,7 @@ from flask_login import current_user
 from flask_wtf.csrf import generate_csrf
 from application import app
 from application.views.default import DefaultModelView
+from application.views.template_select import TemplatesMultiSelectField
 from application.models.account import Account, CustomEntry
 from application.models.host import Host
 from application.docu_links import docu_links
@@ -1108,6 +1109,7 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                             'ruleset': StringField,
                             'folder': StringField,
                             'condition_host': StringField,
+                            'create_host_templates': TemplatesMultiSelectField,
                             'list_to_loop': StringField,
                             'value_template': TextAreaField,
                             'condition_label_template': StringField,
@@ -1115,6 +1117,23 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                             'condition_service': StringField,
                         },
                         'form_args': {
+                            'create_condition_hosts': {
+                                'label': 'Create missing Hosts',
+                                'description': (
+                                    'The export of the rules creates the hosts'
+                                    ' named in Condition — Host name as CMDB'
+                                    ' hosts if the Syncer does not know them yet.'
+                                    ' Regular expressions are left out.'
+                                ),
+                            },
+                            'create_host_templates': {
+                                'label': 'Templates of created Hosts',
+                                'description': (
+                                    'Optional. The CMDB Templates a created host'
+                                    ' gets its attributes from. Hosts that'
+                                    ' already exist stay as they are.'
+                                ),
+                            },
                             'keep_value': {
                                 'label': 'Keep manual Value',
                                 'description': (

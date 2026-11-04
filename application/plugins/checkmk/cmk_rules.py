@@ -74,6 +74,10 @@ def outcome_signature(outcome):
     """
     return tuple(str(outcome.get(key) or '') for key in OUTCOME_IDENTITY_KEYS)
 
+# What a host name condition may name to get the host created. Excludes the
+# regular expressions (``~pattern``) Checkmk accepts there.
+CREATABLE_HOSTNAME = re.compile(r'[\w.-]+')
+
 # Condition keys of the rule payload, per family. Both spellings are listed:
 # Checkmk 2.2 takes flat label lists, 2.3+ label groups (see
 # build_condition_and_update_rule_params).
@@ -1022,6 +1026,11 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # Host-independent rules, wired in by inits.export_rules. Evaluated
         # once in calculate_static_rules instead of per host.
         self.static_rules = []
+        # Hostnames of outcomes with ``create_condition_hosts`` and the
+        # CMDB templates to create them with. Only collected while rendering,
+        # previews render the same way; the export itself creates them,
+        # see _create_condition_hosts.
+        self._condition_hosts = {}
         # Rule engine of the rules flagged ``per_template``, wired in by
         # inits.export_rules. Evaluated once per CMDB template of a host
         # in _calculate_template_rules; None when there are none.
@@ -1435,30 +1444,43 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
 
         # Handle condition_host. It's always at the end to calculate correct
         # identification hash of entry
-        if rule_params.get('condition_host'):
-            host_condition = render_jinja(
-                rule_params['condition_host'], _ctx=context)
-            owner_hostname = context['HOSTNAME']
-
-            if host_condition:
-                if not has_hostlabel_condition and owner_hostname == host_condition:
-                    # This rule is for the current Object and there are no other
-                    # conditions; hash is built with the condition template which
-                    # does not include the hostname condition
-                    rule_hash = self.build_rule_hash(rule_params, condition_tpl)
-                    rule_params['optimize_rule_hash'] = rule_hash
-                    rule_params['optimize'] = True
-                condition_tpl["host_name"] = {
-                    "match_on": get_list(host_condition),
-                    "operator": "one_of"
-                }
-            del rule_params['condition_host']
+        self._apply_host_name_condition(
+            rule_params, condition_tpl, context, has_hostlabel_condition)
 
         rule_params['condition'] = condition_tpl
         if syncer_rule is not None:
             rule_params['_syncer_rule'] = syncer_rule
             rule_params['_syncer_outcome'] = syncer_outcome
         return rule_params
+
+    def _apply_host_name_condition(self, rule_params, condition_tpl, context,
+                                   has_hostlabel_condition):
+        """
+        Add the host name condition to ``condition_tpl`` in place and drop the
+        source keys from ``rule_params``, and note the hosts to create with
+        ``create_condition_hosts``.
+        """
+        create_hosts = rule_params.pop('create_condition_hosts', False)
+        templates = rule_params.pop('create_host_templates', None) or []
+        if not rule_params.get('condition_host'):
+            return
+        host_condition = render_jinja(rule_params['condition_host'], _ctx=context)
+        if host_condition:
+            if not has_hostlabel_condition and context['HOSTNAME'] == host_condition:
+                # This rule is for the current Object and there are no other
+                # conditions; hash is built with the condition template which
+                # does not include the hostname condition
+                rule_hash = self.build_rule_hash(rule_params, condition_tpl)
+                rule_params['optimize_rule_hash'] = rule_hash
+                rule_params['optimize'] = True
+            condition_tpl["host_name"] = {
+                "match_on": get_list(host_condition),
+                "operator": "one_of"
+            }
+            if create_hosts:
+                for name in get_list(host_condition):
+                    self._condition_hosts.setdefault(name, set()).update(templates)
+        del rule_params['condition_host']
 
     @staticmethod
     def _list_row_incomplete(rule_params, context):
@@ -1620,6 +1642,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                   "to Checkmk")
         self.calculate_rules()
         self.calculate_static_rules()
+        self._create_condition_hosts()
         self.optimize_rules()
         self._sort_rulsets_by_intent()
         self.clean_rules()
@@ -1628,6 +1651,37 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         self.sort_rules()
         if self.dry_run:
             self._report_dry_run()
+
+    def _create_condition_hosts(self):
+        """
+        Create the hosts named by outcomes with ``create_condition_hosts``
+        which the Syncer does not know yet. A regular expression or a
+        placeholder that rendered without a host is no name to create.
+        """
+        # pylint: disable-next=import-outside-toplevel
+        from .data_quality import create_internal_cmdb_hosts, missing_hostnames
+
+        creatable = []
+        for name in sorted(self._condition_hosts):
+            if CREATABLE_HOSTNAME.fullmatch(name) and name != 'None':
+                creatable.append(name)
+            else:
+                self.log_details.append(('condition_host_not_created', name))
+        created = []
+        for name in missing_hostnames(creatable):
+            templates = sorted(self._condition_hosts[name])
+            if self.dry_run:
+                self._plan('CREATE HOST', name, f"templates: {templates}")
+                continue
+            try:
+                created += create_internal_cmdb_hosts([name], templates)['created']
+            except ValueError as error:
+                self.log_error(f"Host {name} of a rule condition not created: {error}")
+        if created:
+            print(f"{CC.OKGREEN} -- {CC.ENDC} Created {len(created)} host(s) "
+                  f"from rule conditions: {', '.join(created)}")
+            self.log_details.append(
+                ('condition_hosts_created', ', '.join(created)))
 
     def _plan(self, action, target, *lines):
         """

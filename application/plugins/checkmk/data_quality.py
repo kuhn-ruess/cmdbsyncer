@@ -452,6 +452,13 @@ def apply_lowercase(hostnames, lowercase):
     return [name.lower() for name in hostnames]
 
 
+def missing_hostnames(hostnames):
+    """The given hostnames the Syncer does not know yet."""
+    # pylint: disable-next=import-outside-toplevel
+    from application.models.host import Host
+    return [name for name in hostnames if not Host.get_host(name, create=False)]
+
+
 def create_internal_cmdb_hosts(hostnames, template_names=None, domain=None,
                                template_scope=None, lowercase=False):
     """

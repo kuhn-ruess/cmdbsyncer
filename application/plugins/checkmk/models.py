@@ -422,6 +422,11 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     ### Condition Host
     It's possible to define a Host Condition. Placeholder is {{ hostname }}
 
+    ### Create missing Hosts
+    Hosts named in the Host Condition which the Syncer does not know yet are
+    created as CMDB hosts by the export of the rules, with the CMDB Templates
+    given in Templates of created Hosts.
+
     ### Keep manual Value
     When enabled the Value is only written once, on rule creation. On later
     syncs the Syncer keeps the rule but no longer overwrites its Value, so an
@@ -447,6 +452,8 @@ class RuleMngmtOutcome(db.EmbeddedDocument):
     value_template = db.StringField(required=True)
     condition_label_template = db.StringField()
     condition_host = db.StringField()
+    create_condition_hosts = db.BooleanField(default=False)
+    create_host_templates = db.ListField(field=db.StringField())
     condition_service = db.StringField()
     condition_service_label = db.StringField()
 

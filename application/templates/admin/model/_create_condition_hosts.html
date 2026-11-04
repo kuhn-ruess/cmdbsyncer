@@ -1,0 +1,9 @@
+{# The templates of created hosts only count with "Create missing Hosts", so
+   the field directly after that checkbox is only shown when it is ticked.
+   Done in CSS because outcomes are added to the form at runtime. #}
+<style>
+.form-group:has(> * input[name$="-create_condition_hosts"]:not(:checked)) + .form-group,
+.form-group:has(> input[name$="-create_condition_hosts"]:not(:checked)) + .form-group {
+  display: none;
+}
+</style>
