@@ -22,6 +22,7 @@ from application.plugins.rules.rule_import_export import (
     import_one_rule,
     import_rule_lines,
     import_json_bundle,
+    CLI_ONLY_IMPORT_TYPES,
     grouped_rules_export,
 )
 from application.plugins.rules.autorules import create_rules
@@ -183,6 +184,8 @@ class RulesByType(Resource):
                   RULE_BY_TYPE_POST_RESPONSE)
     @API.response(400, 'Body was not JSON.', ERROR)
     @API.response(401, 'Authentication failed', ERROR)
+    @API.response(403, 'This rule_type can only be imported with the CLI.',
+                  ERROR)
     @API.response(404, 'Unknown rule_type.', ERROR)
     @API.param('override',
                'Set to ``1`` to replace rules which already exist instead of '
@@ -197,6 +200,9 @@ class RulesByType(Resource):
         """
         if rule_type not in enabled_rules:
             return {'message': f"Unknown rule_type '{rule_type}'"}, 404
+        if rule_type in CLI_ONLY_IMPORT_TYPES:
+            return {'message': f"'{rule_type}' can only be imported "
+                               "with the CLI"}, 403
         payload = request.get_json(silent=True)
         if payload is None:
             return {'message': 'Request body must be JSON'}, 400
@@ -283,6 +289,9 @@ class RulesImport(Resource):
 
         Pass ``?override=1`` (or ``"override": true`` in a JSON body) to
         replace rules which already exist instead of skipping them.
+
+        Types which can only be imported with the CLI (``accounts``,
+        ``users``) are skipped and don't show up in the counts.
         """
         ctype = (request.content_type or '').split(';', 1)[0].strip().lower()
         if ctype == 'application/json':

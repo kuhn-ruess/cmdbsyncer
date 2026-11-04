@@ -183,5 +183,82 @@ class ZipExportTests(unittest.TestCase):
         self.assertTrue(os.listdir(self.tmp.name)[0].endswith('.zip'))
 
 
+class ImportCliOnlyTypesTests(unittest.TestCase):
+    """Accounts and users can only be imported without an acting user (the CLI)."""
+
+    ACTING = 'application.helpers.secret_access.acting_user'
+
+    def setUp(self):
+        FakeRule.store = []
+        registry = patch.dict(mod.enabled_rules, {
+            mod.ACCOUNTS_RULE_TYPE: mod.enabled_rules['custom_attributes'],
+            mod.USERS_RULE_TYPE: mod.enabled_rules['custom_attributes'],
+        })
+        registry.start()
+        self.addCleanup(registry.stop)
+
+    def _account(self):
+        return _rule('a' * 24, 'account1', 'old')
+
+    def test_cli_imports_accounts(self):
+        with patch(self.ACTING, return_value=None):
+            status = mod.import_one_rule(self._account(), mod.ACCOUNTS_RULE_TYPE)
+        self.assertEqual(status, 'imported')
+        self.assertEqual(len(FakeRule.store), 1)
+
+    def test_acting_user_cannot_import_one_account(self):
+        with patch(self.ACTING, return_value=object()):
+            status = mod.import_one_rule(self._account(), mod.ACCOUNTS_RULE_TYPE)
+        self.assertEqual(status, 'invalid')
+        self.assertEqual(FakeRule.store, [])
+
+    def test_acting_user_cannot_override_an_account(self):
+        with patch(self.ACTING, return_value=None):
+            mod.import_one_rule(self._account(), mod.ACCOUNTS_RULE_TYPE)
+        with patch(self.ACTING, return_value=object()):
+            mod.import_one_rule(_rule('a' * 24, 'account1', 'evil'),
+                                mod.ACCOUNTS_RULE_TYPE, override=True)
+        self.assertEqual(FakeRule.store[0]['value'], 'old')
+
+    def test_acting_user_skips_accounts_in_bundle_and_lines(self):
+        bundle = {'rules': {
+            mod.ACCOUNTS_RULE_TYPE: [self._account()],
+            'custom_attributes': [_rule('b' * 24, 'rule1', 'new')],
+        }}
+        lines = [json.dumps({'rule_type': mod.ACCOUNTS_RULE_TYPE}),
+                 json.dumps(self._account())]
+        with patch(self.ACTING, return_value=object()):
+            counts = mod.import_json_bundle(bundle)
+            line_counts = mod.import_rule_lines(lines)
+        self.assertEqual(counts, {'custom_attributes': 1})
+        self.assertEqual(line_counts, {})
+        self.assertEqual([r['name'] for r in FakeRule.store], ['rule1'])
+
+    def test_cli_imports_users(self):
+        with patch(self.ACTING, return_value=None):
+            status = mod.import_one_rule(self._account(), mod.USERS_RULE_TYPE)
+        self.assertEqual(status, 'imported')
+
+    def test_acting_user_cannot_import_or_override_a_user(self):
+        with patch(self.ACTING, return_value=None):
+            mod.import_one_rule(self._account(), mod.USERS_RULE_TYPE)
+        admin = _rule('a' * 24, 'account1', 'global_admin')
+        with patch(self.ACTING, return_value=object()):
+            one = mod.import_one_rule(admin, mod.USERS_RULE_TYPE, override=True)
+            bundle = mod.import_json_bundle(
+                {'rules': {mod.USERS_RULE_TYPE: [admin]}}, override=True)
+            lines = mod.import_rule_lines(
+                [json.dumps({'rule_type': mod.USERS_RULE_TYPE}), json.dumps(admin)],
+                override=True)
+        self.assertEqual((one, bundle, lines), ('invalid', {}, {}))
+        self.assertEqual(FakeRule.store[0]['value'], 'old')
+
+    def test_acting_user_keeps_other_rule_types(self):
+        with patch(self.ACTING, return_value=object()):
+            status = mod.import_one_rule(_rule('b' * 24, 'rule1', 'new'),
+                                         'custom_attributes')
+        self.assertEqual(status, 'imported')
+
+
 if __name__ == '__main__':
     unittest.main()
