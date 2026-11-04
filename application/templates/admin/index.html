@@ -167,6 +167,12 @@
 }
 .cron-trigger-btn:hover:not(:disabled) { border-color: #2980b9; color: #2980b9; }
 .cron-trigger-btn:disabled { opacity: 0.5; cursor: default; }
+.cron-trigger-error {
+  display: block;
+  font-size: 0.72rem;
+  color: #e74c3c;
+}
+.cron-trigger-error:empty { display: none; }
 
 /* Setup progress — only rendered while the First Steps checklist still
    has open items. Colours come from the --surface-* tokens so all four
@@ -533,6 +539,40 @@ document.addEventListener('keydown', function (event) {
   }
 });
 
+// Queue a cron group in the background: the page stays where it is, the row
+// just picks up the "queued" badge the next page load would show as well.
+document.addEventListener('submit', function (event) {
+  const form = event.target;
+  if (!form.classList.contains('cron-trigger-form')) return;
+  event.preventDefault();
+
+  const row = form.closest('tr');
+  const button = form.querySelector('button');
+  const errorBox = row.querySelector('.cron-trigger-error');
+  button.disabled = true;
+  errorBox.textContent = '';
+
+  fetch(form.getAttribute('action'), { method: 'POST', body: new FormData(form) })
+    .then(function (response) {
+      // Anything but JSON is e.g. the login page after an expired session.
+      return response.json().then(function (data) {
+        if (!response.ok) throw new Error(data.message);
+      });
+    })
+    .then(function () {
+      const badge = document.createElement('span');
+      badge.className = 'cron-badge cron-badge-queued';
+      badge.textContent = 'queued';
+      row.querySelector('.cron-badge-cell').append(' ', badge);
+    })
+    .catch(function (error) {
+      button.disabled = false;
+      errorBox.textContent = error instanceof SyntaxError
+        ? 'Could not schedule the group, please reload the page.'
+        : error.message;
+    });
+});
+
 function confirmNotice(noticeId) {
   if (!confirm('Have you checked and confirmed this notice?')) return;
   const confirmed = JSON.parse(localStorage.getItem('confirmed-notices') || '[]');
@@ -880,7 +920,7 @@ function toggleAllFilters() {
             </td>
             <td class="cron-trigger-cell">
               <form method="POST" action="{{ url_for('admin.trigger_cron') }}"
-                    style="display:inline">
+                    class="cron-trigger-form" style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="group" value="{{ job.name }}">
                 <button type="submit" class="cron-trigger-btn"
@@ -889,6 +929,7 @@ function toggleAllFilters() {
                   <i class="fa fa-play"></i> Run
                 </button>
               </form>
+              <span class="cron-trigger-error"></span>
             </td>
           </tr>
           {% if show_message %}

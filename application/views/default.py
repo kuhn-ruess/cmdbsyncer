@@ -897,7 +897,12 @@ class IndexView(AdminIndexView):
 
     @expose('/trigger_cron', methods=['POST'])
     def trigger_cron(self):
-        """Schedule a cron group to run on the next pass (dashboard button)."""
+        """
+        Schedule a cron group to run on the next pass (dashboard button).
+
+        Answers with JSON: the button posts in the background, so the
+        dashboard stays where it is.
+        """
         # pylint: disable=import-outside-toplevel
         from application.models.cron import CronGroup
         if not (current_user.is_authenticated and (
@@ -906,15 +911,12 @@ class IndexView(AdminIndexView):
         group_name = request.form.get('group', '')
         group = CronGroup.objects(name=group_name).first()
         if not group:
-            flash("Cron group not found.", 'error')
-        elif not group.enabled:
-            flash(f"Cron group '{group_name}' is disabled.", 'error')
-        else:
-            group.run_once_next = True
-            group.save()
-            flash(f"Scheduled '{group_name}' to run on the next cron pass.",
-                  'success')
-        return redirect(url_for('.index'))
+            return {'message': "Cron group not found."}, 404
+        if not group.enabled:
+            return {'message': f"Cron group '{group_name}' is disabled."}, 409
+        group.run_once_next = True
+        group.save()
+        return {'message': f"Scheduled '{group_name}' to run on the next cron pass."}
 
     @expose('/changelog/<filename>')
     def changelog_archive(self, filename):
