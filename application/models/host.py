@@ -9,7 +9,7 @@ from application import db, app, logger
 from application.modules.debug import ColorCodes as CC
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.mongo_keys import validate_mongo_key, validate_mongo_keys
-from application.helpers.shadow_data import shadow_view_active
+from application.helpers.shadow_data import report_unknown_host, shadow_view_active
 from application.models.host_cleanup import HostQuerySet, relation_target
 from application.models.host_create_time import stamp_create_time
 from application.models.host_labels import HostLabelsMixin
@@ -791,6 +791,7 @@ class Host(HostLabelsMixin, db.Document):
         """
         if not self.pk:
             print(f"Host {self.hostname} not in Syncer, shadow data ignored")
+            report_unknown_host(self.hostname, account_dict['name'])
             return False
         label_dict = self._normalize_labels(labels)
         # Written as an update of the two fields only, so a save of the
