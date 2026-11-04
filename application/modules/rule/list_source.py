@@ -177,6 +177,41 @@ def parse_list_source(text, max_rows=MAX_ROWS):
     return ParsedList(columns, rows, errors, delimiter)
 
 
+def aggregate_rows(parsed, aggregate_by):
+    """
+    Join the rows of ``parsed`` sharing a value in the column ``aggregate_by``
+    (a variable name or the header as it was pasted) into one row: that
+    column keeps its value, every other column becomes the list of its cells.
+
+    The lists stay in row order and aligned, empty cells and repeated values
+    included, so position N of every list comes from the same line. Without
+    a column the rows stay as they are.
+    """
+    column = column_name(aggregate_by or '')
+    if not column or not parsed.columns:
+        return parsed
+    if column not in parsed.columns:
+        return parsed._replace(errors=[
+            *parsed.errors,
+            f"Aggregate by: '{aggregate_by}' is not a column of the list "
+            f"({', '.join(parsed.columns)})"])
+    groups = {}
+    for row in parsed.rows:
+        group = groups.setdefault(row[column], {
+            name: row[column] if name == column else []
+            for name in parsed.columns})
+        for name in parsed.columns:
+            if name != column:
+                group[name].append(row[name])
+    return parsed._replace(rows=list(groups.values()))
+
+
+def parse_rule_list(rule):
+    """The rows a rule document with a list source is rendered from."""
+    return aggregate_rows(parse_list_source(rule.list_source),
+                          getattr(rule, 'list_aggregate_by', None))
+
+
 def _short(text, limit=40):
     """A cell shortened for an error message."""
     text = ' '.join(text.split())
@@ -219,20 +254,22 @@ def outcome_templates(data, template_fields):
             for idx, field, value in found]
 
 
-def check_list_rule(rule_source, list_text, templates, known_names=()):
+def check_list_rule(rule_source, list_text, templates, known_names=(),
+                    aggregate_by=None):
     """
     Check a rule's mode, list and outcome templates as it is saved.
 
     ``templates`` are ``(label, template)`` pairs, e.g.
     ``('Outcome 1, Value', '{{ level }}')``; ``known_names`` the Jinja
-    globals that are not columns. Returns ``(parsed, errors, warnings)``:
+    globals that are not columns, ``aggregate_by`` the column rows are joined
+    by (see ``aggregate_rows``). Returns ``(parsed, errors, warnings)``:
     errors make the list unusable, warnings name templates reading a
     variable that is no column of the list (it renders empty). A rule
     rendered per host is not checked at all.
     """
     if not rule_uses_list(rule_source, list_text):
         return ParsedList([], [], [], None), [], []
-    parsed = parse_list_source(list_text)
+    parsed = aggregate_rows(parse_list_source(list_text), aggregate_by)
     errors = [f"List: {error}" for error in parsed.errors]
     if not (list_text or '').strip():
         errors.append("List: the rule source is 'From a pasted list', but "
@@ -256,10 +293,11 @@ def row_name(row):
     The name of the object a row stands for, where the target of a rule
     needs one (an i-doit object, a Netbox device, a host in Checkmk, ...):
     the row's ``hostname`` column, else its ``name`` column. None when
-    the row has neither or leaves them empty.
+    the row has neither or leaves them empty. A column that became a list by
+    aggregating names no single object.
     """
     for column in NAME_COLUMNS:
-        if row.get(column):
+        if row.get(column) and isinstance(row[column], str):
             return row[column]
     return None
 

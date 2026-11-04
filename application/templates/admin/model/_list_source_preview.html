@@ -34,6 +34,7 @@
 <script>
 (function () {
   var field = document.getElementById('list_source');
+  var aggregate = document.getElementById('list_aggregate_by');
   var box = document.getElementById('list-source-preview');
   var help = document.getElementById('list-source-help');
   if (!field || !box || !help) { return; }
@@ -138,6 +139,7 @@
     if (mode() !== 'list') { return; }
     var body = new FormData();
     body.append('list_source', field.value);
+    if (aggregate) { body.append('list_aggregate_by', aggregate.value); }
     form.querySelectorAll('[name^="outcomes-"]').forEach(function (input) {
       if (input.type !== 'checkbox') { body.append(input.name, input.value); }
     });
@@ -177,7 +179,7 @@
     }
   });
   form.addEventListener('input', function (event) {
-    if (event.target === field ||
+    if (event.target === field || event.target === aggregate ||
         (event.target.name && event.target.name.indexOf('outcomes-') === 0)) {
       later();
     }

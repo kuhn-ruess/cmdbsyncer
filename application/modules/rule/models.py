@@ -279,6 +279,8 @@ class ListSourceMixin:
     with a ``static_rule`` flag renders host independent rules once, and
     a list rule is one of them.
     """
+    # The column whose rows are joined into one, see list_source.aggregate_rows.
+    list_aggregate_by = db.StringField()
 
     def clean(self):
         """

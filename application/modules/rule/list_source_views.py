@@ -14,7 +14,7 @@ from markupsafe import Markup
 from flask import flash, request
 from flask_admin.base import expose
 from flask_admin.form import rules
-from wtforms import TextAreaField
+from wtforms import StringField, TextAreaField
 
 from application.helpers.syncer_jinja import global_names
 from application.modules.rule.list_source import (
@@ -105,6 +105,7 @@ def list_source_rule_form(main_fields, creates, help_items, outcome,
                 'conditions do not apply.',
                 [rules.HTML(list_source_help(creates, help_items, per_outcome)),
                  rules.Field('list_source'),
+                 rules.Field('list_aggregate_by'),
                  rules.HTML('<div id="list-source-preview"></div>')]),
         section('2', 'cond', 'Conditions',
                 'When does this rule apply? '
@@ -156,7 +157,8 @@ class ListSourceViewMixin:
                 per_outcome=self.list_source_per_outcome,
             )
         self.form_overrides = {**(self.form_overrides or {}),
-                               'list_source': TextAreaField}
+                               'list_source': TextAreaField,
+                               'list_aggregate_by': StringField}
         self.form_args = {**(getattr(self, 'form_args', None) or {}),
                           'rule_source': {
             'label': 'Rule source',
@@ -169,6 +171,14 @@ class ListSourceViewMixin:
                 "paste, with its columns; host conditions and Static Rule do "
                 "not apply."
             ),
+        }, 'list_aggregate_by': {
+            'label': 'Aggregate by column',
+            'description': (
+                "Optional. Rows with the same value in this column become one "
+                "row: the column keeps its value, every other column becomes a "
+                "list of its cells, e.g. one row per hostname with "
+                "{{ domain }} as the list of its domains."
+            ),
         }}
         self.form_widget_args = {
             **(getattr(self, 'form_widget_args', None) or {}),
@@ -180,7 +190,7 @@ class ListSourceViewMixin:
         }
         # A pasted list is no table cell.
         self.column_exclude_list = [*(self.column_exclude_list or []),
-                                    'list_source']
+                                    'list_source', 'list_aggregate_by']
         super().__init__(model, **kwargs)
 
     def render(self, template, **kwargs):
@@ -202,7 +212,8 @@ class ListSourceViewMixin:
         return check_list_rule(
             data.get('rule_source'), data.get('list_source'),
             outcome_templates(data, self.list_source_template_fields),
-            known_names=global_names() | set(self.list_source_known_names))
+            known_names=global_names() | set(self.list_source_known_names),
+            aggregate_by=data.get('list_aggregate_by'))
 
     def validate_form(self, form):
         """
@@ -213,7 +224,7 @@ class ListSourceViewMixin:
         if not super().validate_form(form):
             return False
         data = {field.name: field.data for field in form
-                if field.name in ('rule_source', 'list_source')}
+                if field.name in ('rule_source', 'list_source', 'list_aggregate_by')}
         if not data:
             # Not the rule form (e.g. the delete or list edit form).
             return True

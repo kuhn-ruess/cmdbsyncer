@@ -11,7 +11,7 @@ from application.plugins.checkmk.rules import host_folder, host_folder_engine
 from application import logger
 from application.modules.rule.list_source import (
     is_list_rule,
-    parse_list_source,
+    parse_rule_list,
     row_context,
 )
 
@@ -213,7 +213,7 @@ class CheckmkDCDRuleSync(CMK2):
                 self.calculate_rules_of_host(f"static:{rule.name}",
                                              host_actions, context)
                 continue
-            parsed = parse_list_source(rule.list_source)
+            parsed = parse_rule_list(rule)
             if parsed.errors:
                 self.log_error(
                     f"List rule '{rule.name}' skipped, its list is not valid: "

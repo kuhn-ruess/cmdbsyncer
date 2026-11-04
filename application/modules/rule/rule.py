@@ -17,7 +17,7 @@ from application.modules.rule.match import match, AGE_CONDITIONS
 from application.helpers.syncer_jinja import render_jinja
 from application.modules.rule.list_source import (
     is_list_rule,
-    parse_list_source,
+    parse_rule_list,
     row_context,
     row_name,
 )
@@ -489,7 +489,7 @@ class Rule():
         for rule_obj, rule in zip(rule_objs, prepared_rules):
             if not rule['list']:
                 continue
-            parsed = parse_list_source(rule_obj.list_source)
+            parsed = parse_rule_list(rule_obj)
             if parsed.errors:
                 self.list_errors.append(
                     f"List rule '{rule['name']}' skipped, its list is not "

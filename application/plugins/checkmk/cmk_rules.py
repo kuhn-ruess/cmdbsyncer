@@ -19,7 +19,7 @@ from application.helpers.syncer_jinja import render_jinja, get_list
 from application.plugins.checkmk.helpers import make_progress, resolve_loop_list
 from application.modules.rule.list_source import (
     is_list_rule,
-    parse_list_source,
+    parse_rule_list,
     row_context,
 )
 from application.plugins.checkmk.list_source import merge_service_conditions
@@ -883,7 +883,7 @@ def preview_list_rule(rule):
         # A page view, not a run: leave no log entry behind.
         syncer.close()
     report = syncer.list_rule_report.get(rule.name) or {
-        'parsed': parse_list_source(rule.list_source), 'row_counts': []}
+        'parsed': parse_rule_list(rule), 'row_counts': []}
     return {
         'parsed': report['parsed'],
         'row_counts': report['row_counts'],
@@ -2436,7 +2436,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         into one rule (``merge_service_conditions``). A list that cannot be
         read creates no rule at all and is reported.
         """
-        parsed = parse_list_source(rule.list_source)
+        parsed = parse_rule_list(rule)
         # How many Checkmk rules each row produced, before joining. Read by
         # the list rule debug page (preview_list_rule).
         row_counts = [0] * len(parsed.rows)
