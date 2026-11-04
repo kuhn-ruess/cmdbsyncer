@@ -40,7 +40,8 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-from jinja2 import Environment, BaseLoader, select_autoescape
+from jinja2 import BaseLoader, select_autoescape
+from jinja2.sandbox import SandboxedEnvironment
 from mongoengine.errors import DoesNotExist, NotUniqueError
 
 from application.helpers import notification_channels
@@ -55,7 +56,9 @@ log = logging.getLogger(__name__)
 # short enough not to make the CLI hang on a misconfigured channel.
 EXIT_DRAIN_TIMEOUT_SECONDS = 30
 
-_jinja = Environment(
+# Sandboxed: rule templates can be written by non-admin roles, the API and
+# the Git staging repo.
+_jinja = SandboxedEnvironment(
     loader=BaseLoader(),
     autoescape=select_autoescape(disabled_extensions=('txt', 'md')),
     trim_blocks=True, lstrip_blocks=True,
