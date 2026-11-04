@@ -729,6 +729,41 @@ function toggleAllFilters() {
 <div class="row home-row">
   <!-- Left Column: what the syncer is doing right now -->
   <div class="col-md-8">
+    {% if can_see_log %}
+    <div class="home-card" id="recent-errors">
+      <h2>Recent Errors</h2>
+      {% if error_logs %}
+      <p class="error-count {{ 'error-count-hot' if error_count_24h else 'error-count-cold' }}">
+        {% if error_count_24h %}
+          {{ error_count_24h }} error{{ '' if error_count_24h == 1 else 's' }} in the last 24 hours
+        {% else %}
+          No errors in the last 24 hours — the newest ones are older than that.
+        {% endif %}
+      </p>
+      <ul class="error-log-list">
+        {% for entry in error_logs %}
+        <li>
+          <a href="{{ url_for('logentry.details_view', id=entry.id) }}">
+            <span class="error-log-time">
+              {{ entry.datetime.strftime('%Y-%m-%d %H:%M') if entry.datetime else '—' }}
+              {% if entry.age %}
+              <span class="error-log-age">· {{ entry.age }}</span>
+              {% endif %}
+            </span>
+            <span class="error-log-message">{{ entry.message }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      <a class="error-log-all" href="{{ url_for('logentry.index_view') }}">
+        Open the full log &rarr;
+      </a>
+      {% else %}
+      <p class="error-log-empty">✅ No errors in the recent log entries.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
     {% if can_see_flow %}
     <div class="home-card" id="data-flow">
       <h2>Data flow</h2>
@@ -870,40 +905,6 @@ function toggleAllFilters() {
     </div>
     {% endif %}
 
-    {% if can_see_log %}
-    <div class="home-card" id="recent-errors">
-      <h2>Recent Errors</h2>
-      {% if error_logs %}
-      <p class="error-count {{ 'error-count-hot' if error_count_24h else 'error-count-cold' }}">
-        {% if error_count_24h %}
-          {{ error_count_24h }} error{{ '' if error_count_24h == 1 else 's' }} in the last 24 hours
-        {% else %}
-          No errors in the last 24 hours — the newest ones are older than that.
-        {% endif %}
-      </p>
-      <ul class="error-log-list">
-        {% for entry in error_logs %}
-        <li>
-          <a href="{{ url_for('logentry.details_view', id=entry.id) }}">
-            <span class="error-log-time">
-              {{ entry.datetime.strftime('%Y-%m-%d %H:%M') if entry.datetime else '—' }}
-              {% if entry.age %}
-              <span class="error-log-age">· {{ entry.age }}</span>
-              {% endif %}
-            </span>
-            <span class="error-log-message">{{ entry.message }}</span>
-          </a>
-        </li>
-        {% endfor %}
-      </ul>
-      <a class="error-log-all" href="{{ url_for('logentry.index_view') }}">
-        Open the full log &rarr;
-      </a>
-      {% else %}
-      <p class="error-log-empty">✅ No errors in the recent log entries.</p>
-      {% endif %}
-    </div>
-    {% endif %}
   </div>
 
   <!-- Right Column: reference material -->
