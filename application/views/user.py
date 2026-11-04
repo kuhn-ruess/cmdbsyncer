@@ -4,6 +4,7 @@ Models for flask_admin
 from datetime import datetime
 from markupsafe import Markup, escape
 from wtforms import PasswordField
+from wtforms.validators import ValidationError as FormValidationError
 from flask import flash, redirect, request, abort, url_for
 from flask_admin.form import rules
 from flask_admin.base import expose
@@ -42,6 +43,43 @@ def _render_user_tokens(_view, _context, model, _name):
     return Markup(''.join(rows))
 
 
+# The fields limiting what a user may see and touch.
+SCOPE_FIELDS = ('restrict_to_accounts', 'restrict_to_templates')
+
+
+def _exceeds_own_rights(other):
+    """True when ``other`` may do something the acting user may not."""
+    me = current_user
+    if me.global_admin:
+        return False
+    if other.global_admin or set(other.roles or []) - set(me.roles or []):
+        return True
+    # The API role "all" stands for every API role.
+    own_api_roles = set(me.api_roles or [])
+    if 'all' not in own_api_roles and set(other.api_roles or []) - own_api_roles:
+        return True
+    for field in SCOPE_FIELDS:
+        own_scope = set(getattr(me, field) or [])
+        scope = set(getattr(other, field) or [])
+        if own_scope and (not scope or scope - own_scope):
+            return True
+    return False
+
+
+def _render_scope(_view, _context, model, name):
+    """The scope of a user, for global admins only."""
+    return ', '.join(getattr(model, name) or []) if current_user.global_admin else ''
+
+
+class _OptionalField(rules.Field):
+    """A form field that renders nothing once the view removed it."""
+
+    def __call__(self, form, form_opts=None, field_args=None):
+        if getattr(form, self.field_name, None) is None:
+            return ''
+        return super().__call__(form, form_opts, field_args)
+
+
 class UserView(DefaultModelView):
     """
     Extended Admin View for Users
@@ -55,6 +93,7 @@ class UserView(DefaultModelView):
 
     column_formatters = {
         'api_tokens': _render_user_tokens,
+        **{field: _render_scope for field in SCOPE_FIELDS},
     }
     page_size = 100
     can_set_page_size = True
@@ -93,18 +132,18 @@ class UserView(DefaultModelView):
                 'templates" works the same way on the CMDB-template side: '
                 'the user only sees hosts carrying one of the picked '
                 'templates and can only assign those templates.',
-                [rules.Field('global_admin'),
+                [_OptionalField('global_admin'),
                  rules.Field('disabled'),
                  rules.Field('readonly'),
                  rules.Field('roles'),
                  rules.Field('api_roles'),
-                 rules.Field('restrict_to_accounts'),
-                 rules.Field('restrict_to_templates')]),
+                 _OptionalField('restrict_to_accounts'),
+                 _OptionalField('restrict_to_templates')]),
         section('3', 'out', 'Credentials',
                 'Password (leave blank to keep), 2FA secret and the '
                 'force-change flag. Timestamps are read-only.',
                 [rules.Field('password'),
-                 rules.Field('tfa_secret'),
+                 _OptionalField('tfa_secret'),
                  rules.Field('force_password_change'),
                  rules.Field('date_added'),
                  rules.Field('date_changed'),
@@ -143,7 +182,43 @@ class UserView(DefaultModelView):
         form_class.password = PasswordField("Password")
         return form_class
 
+    # What only a global admin may see or set on a user.
+    GLOBAL_ADMIN_FIELDS = ('global_admin', 'tfa_secret', *SCOPE_FIELDS)
+
+    def _limit_form(self, form):
+        """Drop GLOBAL_ADMIN_FIELDS, so a posted value can't reach the model."""
+        if not current_user.global_admin:
+            for field in self.GLOBAL_ADMIN_FIELDS:
+                del form[field]
+        return form
+
+    def create_form(self, obj=None):
+        return self._limit_form(super().create_form(obj))
+
+    def edit_form(self, obj=None):
+        return self._limit_form(super().edit_form(obj))
+
+    def get_one(self, id):  # pylint: disable=redefined-builtin
+        """A user with more rights can't be reached by one with less."""
+        model = super().get_one(id)
+        if model is not None and _exceeds_own_rights(model):
+            abort(403)
+        return model
+
+    def on_model_delete(self, model):
+        if _exceeds_own_rights(model):
+            raise FormValidationError(
+                "You can't delete a user with more rights than you have")
+        return super().on_model_delete(model)
+
     def on_model_change(self, form, model, is_created):
+        if is_created and not current_user.global_admin:
+            # Or a limited user could create an unlimited one and log in.
+            for field in SCOPE_FIELDS:
+                setattr(model, field, list(getattr(current_user, field) or []))
+        if _exceeds_own_rights(model):
+            raise FormValidationError(
+                "You can only grant roles and API roles you hold yourself")
         if form.email.data:
             model.email = form.email.data.lower()
         if form.password.data:
@@ -168,6 +243,8 @@ class UserView(DefaultModelView):
         except (DoesNotExist, ValidationError):
             flash('User not found', 'danger')
             return redirect(self.get_url('.index_view'))
+        if _exceeds_own_rights(user):
+            abort(403)
         if user.revoke_api_token(token_id):
             user.save()
             flash('API token revoked.', 'success')
