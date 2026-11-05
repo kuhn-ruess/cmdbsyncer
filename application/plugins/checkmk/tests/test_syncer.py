@@ -597,6 +597,25 @@ class TestSyncCMK2(unittest.TestCase):
 
             mock_update.assert_called_once()
 
+    def test_create_or_update_host_dont_update(self):
+        """Don't Update leaves an existing host and cluster alone, without crashing"""
+        self.syncer.checkmk_hosts['existing-host'] = {
+            'extensions': {
+                'is_cluster': True,
+                'cluster_nodes': ['node1'],
+                'folder': '/old/folder',
+                'attributes': {'labels': {}}
+            }
+        }
+
+        with patch.object(self.syncer, 'update_host') as mock_update:
+            self.syncer.create_or_update_host(
+                'existing-host', '/new/folder', {}, ['node2'], {}, [], False, True, False
+            )
+
+        mock_update.assert_not_called()
+        self.assertEqual(self.syncer.cluster_updates, [])
+
     @patch('application.plugins.checkmk.syncer.multiprocessing')
     @patch('application.plugins.checkmk.syncer.Host')
     @patch('application.plugins.checkmk.syncer.Progress')

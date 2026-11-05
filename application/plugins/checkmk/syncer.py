@@ -917,15 +917,13 @@ class SyncCMK2(CMK2):
                                         cluster_nodes, additional_attributes))
                     return
 
-
-            # Update if needed
-            self.update_host(hostname, cmk_host, folder,
-                            labels, additional_attributes, remove_attributes,
-                            dont_move_host)
-            if is_cluster:
-                cmk_cluster = cmk_host['extensions']['cluster_nodes']
-                self.cluster_updates.append((hostname, cmk_cluster, cluster_nodes))
-
+                # Update if needed
+                self.update_host(hostname, cmk_host, folder,
+                                labels, additional_attributes, remove_attributes,
+                                dont_move_host)
+                if is_cluster:
+                    cmk_cluster = cmk_host['extensions']['cluster_nodes']
+                    self.cluster_updates.append((hostname, cmk_cluster, cluster_nodes))
 
             return
 
