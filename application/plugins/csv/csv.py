@@ -78,17 +78,13 @@ class CSV(Plugin):
                     )
                     print(f"Error: {error}")
 
-        num_deleted = 0
-        if extra_filter := self.config.get('delete_host_if_not_found_on_import'):
-            num_deleted = Host.delete_host_not_found_on_import(
-                self.config['name'], import_id, extra_filter
-            ) or 0
+        num_deleted = self.archive_hosts_not_imported(import_id, num_rows, num_errors)
 
         self.log_details.append(('num_rows', str(num_rows)))
         self.log_details.append(('num_saved', str(num_saved)))
         if num_errors:
             self.log_details.append(('num_errors', str(num_errors)))
-        if extra_filter:
+        if num_deleted is not None:
             self.log_details.append(('num_deleted', str(num_deleted)))
 
     def inventorize_hosts(self):

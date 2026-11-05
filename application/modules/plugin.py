@@ -415,6 +415,27 @@ class Plugin():
         print(f"{ColorCodes.FAIL} !! {message}{ColorCodes.ENDC}")
         self.log_details.append(('ERROR', message))
 
+    def archive_hosts_not_imported(self, import_id, num_seen, num_errors=0):
+        """
+        Archive the hosts this import did not see, if the account asks for it.
+
+        Only a clean run knows what is really gone: after an error the host
+        of the broken record counts as unseen, and an empty result can just
+        as well be a truncated file. Returns the number of archived hosts,
+        None when nothing was done.
+        """
+        extra_filter = self.config.get('delete_host_if_not_found_on_import')
+        if not extra_filter:
+            return None
+        if num_errors:
+            self.log_error(f"Hosts not archived: the import had {num_errors} error(s)")
+            return None
+        if not num_seen:
+            self.log_error("Hosts not archived: the import delivered no hosts")
+            return None
+        return Host.delete_host_not_found_on_import(
+            self.config['name'], import_id, extra_filter) or 0
+
     def save_log(self):
         """
         Save plugin execution details to the log system.

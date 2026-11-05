@@ -267,8 +267,7 @@ class SyncInterfaces(SyncNetbox):
                 for port in port_infos:
                     self._import_interface_host(parent_name, port, import_id)
                     progress.advance(task)
-        if extra_filter := self.config.get('delete_host_if_not_found_on_import'):
-            Host.delete_host_not_found_on_import(self.config['name'], import_id, extra_filter)
+        self.archive_hosts_not_imported(import_id, total)
 
     def _import_interface_host(self, parent_name, port, import_id):
         """Create / update a single interface as a Host object."""

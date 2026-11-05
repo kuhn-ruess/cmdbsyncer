@@ -184,11 +184,14 @@ class SyncDevices(SyncNetbox):
         device_filter = {}
         if import_filter := self.config.get('import_filter'):
             device_filter = parse_import_filter(import_filter)
+        num_seen = 0
+        num_errors = 0
         for device in self.nb.dcim.devices.filter(**device_filter):
             try:
                 hostname = device.name
                 if not hostname:
                     continue
+                num_seen += 1
                 labels = device.__dict__
                 for what in ['has_details', 'api',
                              'default_ret', 'endpoint',
@@ -203,7 +206,7 @@ class SyncDevices(SyncNetbox):
             except Exception as error:  # pylint: disable=broad-exception-caught
                 if self.debug:
                     raise
+                num_errors += 1
                 self.log_details.append((f'import_error {hostname}', str(error)))
-        if extra_filter := self.config.get('delete_host_if_not_found_on_import'):
-            Host.delete_host_not_found_on_import(self.config['name'], import_id, extra_filter)
+        self.archive_hosts_not_imported(import_id, num_seen, num_errors)
 #.
