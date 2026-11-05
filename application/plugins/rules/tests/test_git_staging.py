@@ -164,6 +164,30 @@ class TestGitStaging(unittest.TestCase):
             result = gs.pull_rules('git')
         self.assertEqual(result['types']['cmk_filter']['error'], 'broken')
 
+    def test_address_is_never_read_as_an_option(self):
+        marker = os.path.join(self.tmp.name, 'marker')
+        self.account['address'] = f'--upload-pack=touch {marker}'
+        for run in (lambda: gs.push_rules('git', ['cmk_filter']),
+                    lambda: gs.pull_rules('git', ['cmk_filter'])):
+            with self.assertRaises(gs.GitStagingError):
+                run()
+        self.assertFalse(os.path.exists(marker))
+
+    def test_checkout_ends_the_options_before_the_address(self):
+        marker = os.path.join(self.tmp.name, 'marker')
+        config = gs.repo_config('git')
+        config['url'] = f'--upload-pack=touch {marker}'
+        workdir = os.path.join(self.tmp.name, 'work')
+        with self.assertRaises(gs.GitStagingError):
+            gs._checkout(config, workdir, create_missing=False)  # pylint: disable=protected-access
+        self.assertFalse(os.path.exists(marker))
+
+    def test_checkout_still_clones_with_a_normal_address(self):
+        gs.push_rules('git', ['cmk_filter'])
+        workdir = os.path.join(self.tmp.name, 'work')
+        gs._checkout(gs.repo_config('git'), workdir, create_missing=False)  # pylint: disable=protected-access
+        self.assertTrue(os.path.exists(os.path.join(workdir, 'rules', 'cmk_filter.json')))
+
     def test_token_is_not_on_the_command_line(self):
         self.account.update(username='user', password='secret-token')
         config = gs.repo_config('git')

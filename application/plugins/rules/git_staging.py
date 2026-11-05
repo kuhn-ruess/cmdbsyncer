@@ -83,6 +83,8 @@ def repo_config(account_name):
             f"Account '{account_name}' is not of type Git Repository")
     if not account.get('address'):
         raise GitStagingError(f"Account '{account_name}' has no address")
+    if account['address'].lstrip().startswith('-'):
+        raise GitStagingError(f"Account '{account_name}' has an invalid address")
     return {
         'url': account['address'],
         'username': account.get('username') or '',
@@ -128,16 +130,17 @@ def _checkout(config, workdir, create_missing):
     Clone the branch into *workdir*. A missing branch is started fresh
     with *create_missing*, otherwise it is an error.
     """
-    heads = _git(config, 'ls-remote', '--heads', config['url'], config['branch'])
+    # "--": git must not read the address or the branch as options.
+    heads = _git(config, 'ls-remote', '--heads', '--', config['url'], config['branch'])
     if heads.strip():
         _git(config, 'clone', '--depth', '1', '--branch', config['branch'],
-             config['url'], workdir)
+             '--', config['url'], workdir)
         return
     if not create_missing:
         raise GitStagingError(
             f"Branch '{config['branch']}' not found in the repository")
     _git(config, 'init', '--initial-branch', config['branch'], workdir)
-    _git(config, 'remote', 'add', 'origin', config['url'], cwd=workdir)
+    _git(config, 'remote', 'add', '--', 'origin', config['url'], cwd=workdir)
 
 
 def _rule_sort_key(rule):
