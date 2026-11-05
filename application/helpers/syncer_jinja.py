@@ -7,6 +7,7 @@ import ast
 import datetime
 import ipaddress
 import re
+from types import SimpleNamespace
 import jinja2
 from jinja2 import StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
@@ -241,6 +242,21 @@ for _env in (JINJA_ENV, _STRICT_ENV):
     _env.filters['hash'] = syncer_hash
 
 
+# Keeps the ``datetime.datetime.now()`` spelling of the module without handing
+# out the module: up to Python 3.11 its ``sys`` attribute leads out of the
+# sandbox, to ``os`` and with that to running commands.
+_DATETIME = SimpleNamespace(
+    date=datetime.date,
+    datetime=datetime.datetime,
+    time=datetime.time,
+    timedelta=datetime.timedelta,
+    timezone=datetime.timezone,
+    tzinfo=datetime.tzinfo,
+    MINYEAR=datetime.MINYEAR,
+    MAXYEAR=datetime.MAXYEAR,
+    UTC=datetime.timezone.utc,
+)
+
 _GLOBALS = {
     'get_list': get_list,
     'hash_value': syncer_hash,
@@ -256,7 +272,7 @@ _GLOBALS = {
     'get_ip_interface': get_ip_interface,
     'eval': syncer_eval,
     'defined': syncer_defined,
-    'datetime': datetime,
+    'datetime': _DATETIME,
 }
 
 

@@ -150,5 +150,34 @@ class CheckmkSiteSyncerSandboxTest(unittest.TestCase):
         self.assertEqual(syncer.get_site_data(site)['download_proxy'], '')
 
 
+class JinjaGlobalsTest(unittest.TestCase):
+    """Template globals must not hand out modules: up to Python 3.11
+    ``datetime.sys`` led out of the sandbox."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.jinja = _load_source('application.helpers.syncer_jinja',
+                                 'application/helpers/syncer_jinja.py')
+
+    def test_no_module_among_the_globals(self):
+        modules = [name for name, value in self.jinja._GLOBALS.items()  # pylint: disable=protected-access
+                   if isinstance(value, types.ModuleType)]
+        self.assertEqual(modules, [])
+
+    def test_datetime_has_no_way_to_other_modules(self):
+        self.assertEqual(self.jinja.render_jinja("{{ datetime.sys }}"), '')
+
+    def test_documented_datetime_spellings_still_render(self):
+        for template, expected in (
+            ("{{ datetime.datetime(2026, 1, 2).strftime('%Y-%m-%d') }}", '2026-01-02'),
+            ("{{ (datetime.datetime(2026, 1, 3) - datetime.timedelta(days=1)).day }}", '2'),
+            ("{{ datetime.datetime.now(datetime.timezone.utc).tzname() }}", 'UTC'),
+            ("{{ datetime.date(2026, 1, 2).year }}", '2026'),
+            ("{{ 'yes' if datetime.datetime.utcnow().year > 2000 }}", 'yes'),
+        ):
+            with self.subTest(template=template):
+                self.assertEqual(self.jinja.render_jinja(template), expected)
+
+
 if __name__ == '__main__':
     unittest.main()
