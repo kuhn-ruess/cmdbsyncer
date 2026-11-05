@@ -153,6 +153,8 @@ class SyncCMK2(CMK2):
         self.bulk_updates = []
         self.disabled_hosts = []
         self.synced_hosts = []
+        # Hosts whose calculation failed: unknown, so never to be cleaned up
+        self.failed_hosts = []
         self.clusters = []
         self.cluster_updates = []
         self.num_created = 0
@@ -695,7 +697,7 @@ class SyncCMK2(CMK2):
             print(f"{CC.WARNING} *{CC.ENDC} Deletion of Hosts is disabled by setting")
             return
         delete_list = []
-        synced_hosts = set(self.synced_hosts)
+        synced_hosts = {*self.synced_hosts, *self.failed_hosts}
         for host, host_data in self.checkmk_hosts.items():
             host_labels = host_data['extensions']['attributes'].get('labels',{})
             if host_labels.get('cmdb_syncer') == self.account_id:
@@ -973,6 +975,12 @@ class SyncCMK2(CMK2):
             return True
         return self.host_folder_in_scope(data[0])
 
+    def _calculation_failed(self, hostname, reason):
+        """Keep a host the run knows nothing about out of the cleanup."""
+        self.failed_hosts.append(hostname)
+        self.log_details.append(
+            ('error', f"Calculation failed, {hostname} stays unchanged: {reason}"))
+
     # pylint: disable-next=too-many-locals
     def calculate_attributes_and_rules(self):
         """
@@ -1020,6 +1028,7 @@ class SyncCMK2(CMK2):
                         hostname, enabled, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
                         progress.console.print(f"- ERROR: Timeout for {host_name}")
+                        self._calculation_failed(host_name, "Timeout")
                     except Exception as error:  # pylint: disable=broad-exception-caught
                         # Not a timeout: the worker raised. Name the host and
                         # the real error — a rule with a broken condition used
@@ -1029,6 +1038,8 @@ class SyncCMK2(CMK2):
                         progress.console.print(
                             f"- ERROR in worker for {host_name}: "
                             f"{type(error).__name__}: {error}")
+                        self._calculation_failed(
+                            host_name, f"{type(error).__name__}: {error}")
                     else:
                         progress.advance(task1)
                         if self._host_result_exported(
@@ -1094,6 +1105,7 @@ class SyncCMK2(CMK2):
         self.bulk_updates = []
         self.disabled_hosts = []
         self.synced_hosts = []
+        self.failed_hosts = []
         self.clusters = []
         self.cluster_updates = []
         self.num_created = 0

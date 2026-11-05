@@ -334,6 +334,28 @@ class TestSyncCMK2(unittest.TestCase):
     @patch('application.plugins.checkmk.syncer.app')
     @patch('application.plugins.checkmk.syncer.CC')
     @patch('builtins.print')
+    def test_cleanup_hosts_keeps_failed_hosts(self, _mock_print, mock_cc, mock_app):
+        """A host whose calculation failed stays, one really gone is deleted"""
+        mock_app.config = self.mock_app_config
+        mock_cc.OKBLUE = mock_cc.ENDC = mock_cc.WARNING = ''
+
+        self.syncer.config = {}
+        self.syncer.synced_hosts = ['synced']
+        self.syncer.failed_hosts = ['failed']
+        ext = {'extensions': {'attributes':
+            {'labels': {'cmdb_syncer': 'test_account_123'}}}}
+        self.syncer.checkmk_hosts = {'synced': ext, 'failed': ext, 'gone': ext}
+
+        with patch.object(self.syncer, 'request', return_value=({}, {})) as mock_request:
+            self.syncer.cleanup_hosts()
+
+        mock_request.assert_called_once_with(
+            "/domain-types/host_config/actions/bulk-delete/invoke",
+            data={'entries': ['gone']}, method="POST")
+
+    @patch('application.plugins.checkmk.syncer.app')
+    @patch('application.plugins.checkmk.syncer.CC')
+    @patch('builtins.print')
     def test_cleanup_hosts_delete_limit_exceeded(self, mock_print, mock_cc, mock_app):
         """Test cleanup_hosts with delete limit exceeded"""
         mock_app.config = {**self.mock_app_config, 'CMK_DONT_DELETE_HOSTS': False}
@@ -574,6 +596,38 @@ class TestSyncCMK2(unittest.TestCase):
             )
 
             mock_update.assert_called_once()
+
+    @patch('application.plugins.checkmk.syncer.multiprocessing')
+    @patch('application.plugins.checkmk.syncer.Host')
+    @patch('application.plugins.checkmk.syncer.Progress')
+    def test_failed_calculation_is_remembered(self, _mock_progress, mock_host, mock_mp):
+        """Timeouts and worker errors end up in failed_hosts and in the log"""
+        mock_mp.TimeoutError = TimeoutError
+        hosts = [Mock(hostname=name) for name in ('ok', 'slow', 'broken')]
+        mock_db_objects = Mock()
+        mock_db_objects.count.return_value = len(hosts)
+        mock_db_objects.__iter__ = Mock(return_value=iter(hosts))
+        mock_host.objects_by_filter.return_value = mock_db_objects
+
+        task_ok, task_slow, task_broken = Mock(), Mock(), Mock()
+        data = ({}, {'all': {}, 'filtered': {}})
+        task_ok.get.return_value = ('ok', True, data)
+        task_slow.get.side_effect = TimeoutError()
+        task_broken.get.side_effect = ValueError('bad rule')
+        mock_pool = mock_mp.Pool.return_value.__enter__.return_value
+        mock_pool.apply_async.side_effect = [task_ok, task_slow, task_broken]
+
+        self.syncer.config = {'settings': {}}
+        self.syncer.debug = False
+        with patch.object(self.syncer, 'use_host', return_value=True):
+            result = self.syncer.calculate_attributes_and_rules()
+
+        self.assertEqual(result, {'ok': data})
+        self.assertEqual(self.syncer.failed_hosts, ['slow', 'broken'])
+        self.assertEqual(self.syncer.log_details, [
+            ('error', 'Calculation failed, slow stays unchanged: Timeout'),
+            ('error', 'Calculation failed, broken stays unchanged: ValueError: bad rule'),
+        ])
 
     @patch('application.plugins.checkmk.syncer.logger')
     def test_create_folder_single_level(self, mock_logger):
