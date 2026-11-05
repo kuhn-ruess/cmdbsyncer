@@ -994,7 +994,6 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
     """
     Export Checkmk Rules
     """
-    rulsets_by_type = {}
 
     # Which account "Plugin Setting" block holds this run's object
     # filter. None = the run's own name. The analysis sets it so it can
@@ -1003,6 +1002,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, account=False, probe_version=True):
         super().__init__(account, probe_version=probe_version)
+        # ruleset name -> rules this run wants in Checkmk. Per instance: one
+        # process exports several accounts in a row, see cron.
+        self.rulsets_by_type = {}
         # Tri-state etag probe:
         #   None  = not yet probed
         #   False = wildcard If-Match works → skip the pre-GET
@@ -2346,8 +2348,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         rules = self.rulsets_by_type.setdefault(rule_type, [])
         # The index is seeded from whatever the list already holds and
         # re-seeded whenever the list was replaced or written to from
-        # somewhere else (rulsets_by_type is a class attribute, and
-        # optimize_rules swaps whole lists), so it can never claim a rule
+        # somewhere else (optimize_rules swaps whole lists), so it can never claim a rule
         # the list does not actually contain.
         cached = self._rule_signatures.get(rule_type)
         if cached is None or cached[0] is not rules or cached[2] != len(rules):

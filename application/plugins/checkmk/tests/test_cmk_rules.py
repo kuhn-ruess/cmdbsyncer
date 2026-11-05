@@ -188,6 +188,21 @@ class TestAnalyzeValueDifferences(unittest.TestCase):
         self.assertIn('Got', result)
 
 
+class TestRulesPerAccount(unittest.TestCase):
+    """Cron exports one account after the other in the same process"""
+
+    def test_rules_stay_with_their_account(self):
+        """A second export starts without the rules of the first"""
+        with patch('application.plugins.checkmk.cmk_rules.CMK2.__init__',
+                   lambda *_args, **_kwargs: None):
+            first, second = CheckmkRuleSync(), CheckmkRuleSync()
+
+        first._collect_rule('ruleset1', {'folder': '/', 'value': 'of the first'})
+
+        self.assertEqual(len(first.rulsets_by_type['ruleset1']), 1)
+        self.assertEqual(second.rulsets_by_type, {})
+
+
 class TestCheckmkRuleSync(unittest.TestCase):
     """Tests for CheckmkRuleSync class"""
 
@@ -393,8 +408,8 @@ class TestCheckmkRuleSync(unittest.TestCase):
 
         self.assertEqual(len(self.sync.rulsets_by_type['ruleset1']), 2)
 
-        # rulsets_by_type is a class attribute and gets replaced wholesale
-        # (tests, optimize_rules): the index must notice and re-seed from
+        # rulsets_by_type gets replaced wholesale (tests, optimize_rules):
+        # the index must notice and re-seed from
         # the list that is actually there now.
         self.sync.rulsets_by_type = {'ruleset1': [_rule("{'k': 'c'}")]}
         self.sync._collect_rule('ruleset1', _rule("{'k': 'c'}"))
