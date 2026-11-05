@@ -58,6 +58,11 @@ def rewritten_group_name(template, value):
         return ''
 
 
+def rules_with_outcome():
+    """The enabled rules, without those lacking the outcome they work on."""
+    return CheckmkUserGenerationRule.objects(enabled=True, outcome__exists=True)
+
+
 def group_search(outcome, group_filter=''):
     """
     The group search of one rule, normalised.
@@ -182,7 +187,7 @@ class CheckmkUserGeneration(Plugin):
 
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and collect their Groups")
         rule_groups = []
-        for rule in CheckmkUserGenerationRule.objects(enabled=True):
+        for rule in rules_with_outcome():
             group_names = self.group_names(rule, attribute_index)
             print(f"{CC.OKBLUE} *{CC.ENDC} {rule.name}: "
                   f"{len(group_names)} group(s) found")
@@ -371,7 +376,7 @@ class CheckmkUserGeneration(Plugin):
         """
         attribute_index = collect_attribute_index(self, Host.get_export_hosts())
         rule_groups = []
-        for rule in CheckmkUserGenerationRule.objects(enabled=True):
+        for rule in rules_with_outcome():
             if rule_id and str(rule.id) != str(rule_id):
                 continue
             rule_groups.append((rule, self.group_names(rule, attribute_index)))

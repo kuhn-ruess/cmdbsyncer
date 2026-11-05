@@ -19,6 +19,11 @@ from syncerapi.v1 import render_jinja, cc as CC, Host
 
 str_replace = Rule.replace
 
+def rules_with_outcome():
+    """The enabled rules, without those lacking the outcome they work on."""
+    return CheckmkGroupRule.objects(enabled=True, outcome__exists=True)
+
+
 class CheckmkGroupSync(CMK2):
     """
     Syncronize Checkmk Groups
@@ -82,7 +87,7 @@ class CheckmkGroupSync(CMK2):
         print(f"{CC.OKGREEN} -- {CC.ENDC} Read all Rules and group them")
         groups = {}
         replace_exceptions = ['-', '_']
-        for rule in CheckmkGroupRule.objects(enabled=True):
+        for rule in rules_with_outcome():
             outcome = rule.outcome
             group_type = outcome.group_name
             groups.setdefault(group_type, [])

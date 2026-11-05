@@ -253,6 +253,8 @@ def _render_group_outcome(_view, _context, model, _name):
     Render Group Outcome
     """
     entry = model.outcome
+    if not entry:
+        return Markup('<span class="text-muted">—</span>')
     html = f'''
         <div class="card">
             <div class="card-body">
@@ -536,6 +538,8 @@ def _render_user_generation_outcome(_view, _context, model, _name):
     Render User Generation Outcome
     """
     entry = model.outcome
+    if not entry:
+        return Markup('<span class="text-muted">—</span>')
     ldap = escape(entry.ldap_account) if entry.ldap_account \
             else '— none, users get no mail address —'
     html = f'''
