@@ -219,9 +219,10 @@ class UserView(DefaultModelView):
         if _exceeds_own_rights(model):
             raise FormValidationError(
                 "You can only grant roles and API roles you hold yourself")
-        if form.email.data:
+        # Inline edit in the list only sends the edited column.
+        if 'email' in form and form.email.data:
             model.email = form.email.data.lower()
-        if form.password.data:
+        if 'password' in form and form.password.data:
             # Time of Password Change will stored by set_password
             model.set_password(form.password.data)
         if is_created:

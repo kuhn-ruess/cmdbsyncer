@@ -75,6 +75,10 @@ class SyncerRuleAutomationView(DefaultModelView):
         """
         Validation and cleanup when changing the model
         """
+        # Inline edit in the list only sends the edited column.
+        if 'rule_body' not in form:
+            super().on_model_change(form, model, is_created)
+            return
         try:
             json.loads(form.rule_body.data)
         except json.JSONDecodeError as e:
