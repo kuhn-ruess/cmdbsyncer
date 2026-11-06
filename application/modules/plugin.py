@@ -22,6 +22,7 @@ from application import logger, app, log
 from application.models.account import pop_master_skips
 from application.helpers.syncer_jinja import render_jinja
 from application.helpers.shadow_data import shadow_view_active
+from application.helpers.task_status import task_failed
 from application.models.host_templates import (active_templates,
                                                merge_attribute_values,
                                                merged_attribute_keys)
@@ -403,6 +404,7 @@ class Plugin():
         instead, so the event is reported in exactly one place.
         """
         self.log_details.append(('error', f'{error_obj}'))
+        task_failed(error_obj)
 
     def log_error(self, message):
         """

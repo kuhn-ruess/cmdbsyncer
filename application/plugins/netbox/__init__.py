@@ -7,6 +7,7 @@ from mongoengine.errors import DoesNotExist
 from application import app
 from application import log
 from application.helpers.plugins import register_cli_group
+from application.helpers.task_status import task_failed
 from application.modules.rule.rewrite import Rewrite
 from application.modules.debug import attribute_table, apply_debug_rules, \
                                     clear_host_debug_cache
@@ -190,6 +191,7 @@ def netbox_device_export(account, debug=False, debug_rules=False):
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         log.log(f"Export Devices to Account: {account} Failed",
         source="netbox_device_sync_command", details=[('error', str(error_obj))])
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
@@ -234,10 +236,12 @@ def netbox_virtual_machines_sync(account, debug=False, debug_rules=False):
     except KeyError as error_obj:
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_vms')
@@ -281,10 +285,12 @@ def netbox_cluster_sync(account, debug=False, debug_rules=False):
     except KeyError as error_obj:
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_cluster')
@@ -307,6 +313,7 @@ def netbox_device_import(account, debug=False):
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('import_devices')
@@ -347,6 +354,7 @@ def netbox_interface_import(account, debug=False):
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('import_dcim_interfaces')
@@ -367,6 +375,7 @@ def netbox_virt_interface_import(account, debug=False):
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('import_virt_interfaces')
@@ -407,6 +416,7 @@ def netbox_ip_sync(account, debug=False, debug_rules=False):
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_ips')
@@ -448,6 +458,7 @@ def netbox_prefix_sync(account, debug=False, debug_rules=False):
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_prefixes')
@@ -489,10 +500,12 @@ def netbox_interface_sync(account, debug=False, debug_rules=False):
     except KeyError as error_obj:
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_dcim_interfaces')
@@ -535,10 +548,12 @@ def netbox_virt_interface_sync(account, debug=False, debug_rules=False):
     except KeyError as error_obj:
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_virt_interfaces')
@@ -581,10 +596,12 @@ def netbox_contacts_sync(account, debug=False, debug_rules=False):
     except KeyError as error_obj:
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_contacts')
@@ -625,10 +642,12 @@ def netbox_dataflow_sync(account, debug=False, debug_rules=False):
     except KeyError as error_obj:
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Missing Field: {error_obj} {cc.ENDC}')
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
         if debug:
             raise
+        task_failed(error_obj)
         print(f'{cc.FAIL}Connection Error: {error_obj} {cc.ENDC}')
 
 @cli_netbox.command('export_dataflow')

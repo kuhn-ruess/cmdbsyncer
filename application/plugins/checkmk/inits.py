@@ -9,6 +9,7 @@ from application.models.host_templates import (
     get_template,
     assign_template_by_hostname,
 )
+from application.helpers.task_status import task_failed
 from application.helpers.get_account import account_allows
 from application.modules.rule.filter import Filter
 
@@ -56,6 +57,12 @@ from application.plugins.checkmk.models import (
 
 
 
+def _not_started(message, source, error):
+    """The job couldn't even set up its syncer: one log entry, and tell cron."""
+    log.log(message, source=source, details=[('error', str(error))])
+    task_failed(error)
+
+
 def _load_rules():
     """
     Load needed extra Rules
@@ -98,8 +105,7 @@ def export_tags(account, dry_run=False, save_requests=False, debug=False):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export Tags to Account {account} not started",
-                    source="cmk_tag_sync", details=[('error', str(error_obj))])
+            _not_started(f"Export Tags to Account {account} not started", "cmk_tag_sync", error_obj)
 
 #.
 #   .-- Export BI Rules
@@ -133,8 +139,8 @@ def export_bi_rules(account, debug):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export BI Rules to Account {account} not started",
-                    source="cmk_bi_sync", details=[('error', str(error_obj))])
+            _not_started(f"Export BI Rules to Account {account} not started",
+                         "cmk_bi_sync", error_obj)
 #.
 #   .-- Export BI Aggregations
 def export_bi_aggregations(account, debug):
@@ -167,9 +173,8 @@ def export_bi_aggregations(account, debug):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export BI Aggregations to Account {account} not started",
-                    source="cmk_bi_aggrigation_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export BI Aggregations to Account {account} not started",
+                         "cmk_bi_aggrigation_sync", error_obj)
 
 #.
 #   .-- Inventorize Hosts
@@ -196,9 +201,8 @@ def inventorize_hosts(account, debug=False):
         if inven is not None:
             inven.record_exception(error_obj)
         else:
-            log.log(f"Inventorize Hosts Account {account} not started",
-                    source="checkmk_inventorize",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Inventorize Hosts Account {account} not started",
+                         "checkmk_inventorize", error_obj)
 
 #.
 #   . -- Show missing hosts
@@ -245,6 +249,7 @@ def bake_and_sign_agents(account):
         return True
     except CmkException as errors:
         print(errors)
+        task_failed(errors)
         return False
 #.
 #   .-- Activate Changes
@@ -326,6 +331,7 @@ def activate_changes(account):
         log.log("Checkmk Activate Changes failed",
                 source="Checkmk",
                 details=[('error', str(errors))])
+        task_failed(errors)
         return False
     return True
 #.
@@ -405,9 +411,8 @@ def export_groups(account, test_run=False, debug=False):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export Groups to Account {account} not started",
-                    source="cmk_group_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export Groups to Account {account} not started",
+                         "cmk_group_sync", error_obj)
 #.
 #   .-- Export Rules
 def projects_for_account(account):
@@ -493,9 +498,8 @@ def export_rules(account, dry_run=False, debug=False):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export Rules to Account {account} not started",
-                    source="cmk_rule_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export Rules to Account {account} not started",
+                         "cmk_rule_sync", error_obj)
 #.
 #   .-- Import Project Rules from Checkmk Folder
 def import_project_rules_from_folder(project_name, account, folder,  # pylint: disable=too-many-locals
@@ -684,9 +688,8 @@ def export_notifications(account, dry_run=False, debug=False):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export Notification Rules to Account {account} not started",
-                    source="cmk_notification_rule_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export Notification Rules to Account {account} not started",
+                         "cmk_notification_rule_sync", error_obj)
 #.
 #   .-- Export Downtimes
 def export_downtimes(account, debug=False, debug_rules=False):
@@ -732,9 +735,8 @@ def export_downtimes(account, debug=False, debug_rules=False):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export Downtimes to Account {account} not started",
-                    source="cmk_downtime_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export Downtimes to Account {account} not started",
+                         "cmk_downtime_sync", error_obj)
 #.
 #   . DCD Rules
 def export_dcd_rules(account, debug=False, debug_rules=False):
@@ -791,9 +793,8 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export DCD Rules to Account {account} not started",
-                    source="cmk_dcd_rule_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export DCD Rules to Account {account} not started",
+                         "cmk_dcd_rule_sync", error_obj)
 #.
 #   . Passwords
 def export_passwords(account):
@@ -809,9 +810,8 @@ def export_passwords(account):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export Passwords to Account {account} not started",
-                    source="cmk_password_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export Passwords to Account {account} not started",
+                         "cmk_password_sync", error_obj)
 #.
 #   . Import Sites
 def import_sites(account):
@@ -825,9 +825,8 @@ def import_sites(account):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Import Sites from Account {account} not started",
-                    source="cmk_site_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Import Sites from Account {account} not started",
+                         "cmk_site_sync", error_obj)
 #   . Export Users
 def export_users(account):
     """
@@ -842,9 +841,8 @@ def export_users(account):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export Users to Account {account} not started",
-                    source="cmk_user_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export Users to Account {account} not started",
+                         "cmk_user_sync", error_obj)
 #.
 #   . Export LDAP Connections
 def export_ldap_connections(account):
@@ -860,9 +858,8 @@ def export_ldap_connections(account):
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
-            log.log(f"Export LDAP Connections to Account {account} not started",
-                    source="cmk_ldap_connection_sync",
-                    details=[('error', str(error_obj))])
+            _not_started(f"Export LDAP Connections to Account {account} not started",
+                         "cmk_ldap_connection_sync", error_obj)
 #.
 #   .-- Generate Users
 def _user_generation_syncer(debug=False, search_filter=''):

@@ -635,6 +635,11 @@ _load_real_module(
     "application.helpers.shadow_data",
     os.path.join("helpers", "shadow_data.py"),
 )
+# Reports failed jobs to cron, needs nothing at all.
+_load_real_module(
+    "application.helpers.task_status",
+    os.path.join("helpers", "task_status.py"),
+)
 
 # application.modules.plugin pulls in render_jinja at import time, so the
 # helpers.syncer_jinja stub must be in place before the real plugin module

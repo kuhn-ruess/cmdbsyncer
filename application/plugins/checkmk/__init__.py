@@ -10,6 +10,7 @@ from mongoengine.errors import DoesNotExist
 from application import log
 from .cmk2 import cli_cmk, CmkException
 from application.helpers.cron import register_cronjob
+from application.helpers.task_status import task_failed
 from application.modules.debug import ColorCodes, attribute_table
 from application.models.host_templates import active_templates
 
@@ -162,6 +163,7 @@ def _inner_export_hosts(account, limit=False, debug=False, dry_run=False, save_r
         if syncer is not None:
             syncer.record_exception(error_obj)
         else:
+            task_failed(error_obj)
             # Construction itself failed (e.g. unknown account) — there
             # is no plugin instance whose save_log will fire, so emit
             # one log entry directly.
