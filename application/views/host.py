@@ -2967,12 +2967,9 @@ Impact Chain.
                 if template.id not in existing_ids:
                     host.cmdb_templates.append(template)
 
-                # Apply the same logic as on_model_change
-                host.last_import_sync = datetime.utcnow()
-                host.last_import_seen = datetime.utcnow()
+                # The attributes depend on the templates. The host stays with
+                # its source: an import has to keep updating it.
                 host.cache = {}
-                host.source_account_id = CMDB_SOURCE_ACCOUNT_ID
-                host.source_account_name = CMDB_SOURCE_ACCOUNT_NAME
                 # Tag the label mutation so the history shows
                 # who triggered the bulk action.
                 host._label_change_source = 'manual'  # pylint: disable=protected-access
@@ -2994,7 +2991,11 @@ Impact Chain.
                     if label_key not in new_labels:
                         new_labels[label_key] = label_value
 
+                # update_host counts as a sighting, but no import saw the host:
+                # it must not look fresh to the stale detection.
+                seen, synced = host.last_import_seen, host.last_import_sync
                 host.update_host(new_labels)
+                host.last_import_seen, host.last_import_sync = seen, synced
                 host.set_inventory_attributes('cmdb')
 
                 # Add missing CMDB fields based on configuration
