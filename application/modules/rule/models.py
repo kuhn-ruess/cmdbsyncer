@@ -272,6 +272,55 @@ def list_source_fields():
     return db.StringField(choices=RULE_SOURCE_CHOICES), db.StringField()
 
 
+def condition_fields():
+    """
+    The condition fields of a rule, for its class body:
+    ``condition_typ, conditions, render_full_conditions = condition_fields()``.
+    Fields are ordered by when they are created, in the database and in the
+    forms, so a rule keeps its field order wherever it calls this.
+    ``render_full_conditions`` is the helper for the preview.
+    """
+    return (db.StringField(choices=rule_types),
+            db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition')),
+            db.StringField())
+
+
+def outcome_fields(action_type):
+    """
+    The outcomes of a rule and their preview helper, for its class body:
+    ``outcomes, render_x = outcome_fields('ActionDocument')``.
+    """
+    return (db.ListField(field=db.EmbeddedDocumentField(document_type=action_type)),
+            db.StringField())
+
+
+def rule_state_fields(enabled_default=None):
+    """
+    How a rule takes part, for its class body:
+    ``last_match, enabled, sort_field = rule_state_fields()``.
+    """
+    return (db.BooleanField(default=False),
+            db.BooleanField(default=enabled_default),
+            db.IntField(default=0))
+
+
+class RewriteRuleFields:
+    """
+    The fields of a plain rule to rewrite attributes.
+
+    Stays a plain class, like ``ListSourceMixin``. With a Document as its base
+    the rules would get a _cls and share a collection, this way the rules stay
+    exactly as they are stored. A rule which needs any other field, or another
+    field order, can't use it: its own fields would sort behind these. It has
+    to use the field functions above.
+    """
+    name = db.StringField()
+    documentation = db.StringField()
+    condition_typ, conditions, render_full_conditions = condition_fields()
+    outcomes, render_attribute_rewrite = outcome_fields('AttributeRewriteAction')
+    last_match, enabled, sort_field = rule_state_fields()
+
+
 class ListSourceMixin:
     """
     Model side of a rule with a list source (see ``list_source_fields``).

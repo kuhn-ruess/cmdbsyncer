@@ -7,7 +7,9 @@ Checkmk Rules
 from mongoengine import DENY
 from mongoengine.errors import DoesNotExist
 from application import db
-from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
+from application.modules.rule.models import (
+    ListSourceMixin, list_source_fields, condition_fields, outcome_fields, rule_state_fields,
+)
 from application.models.account import Account
 from application.models.secret import Secret
 
@@ -46,16 +48,11 @@ class CheckmkFilterRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="FilterAction"))
-    render_filter_outcome = db.StringField()
+    outcomes, render_filter_outcome = outcome_fields('FilterAction')
 
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
 
     meta = {
         'strict': False,
@@ -298,16 +295,11 @@ class CheckmkRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="CheckmkRuleOutcome"))
-    render_checkmk_outcome = db.StringField()
+    outcomes, render_checkmk_outcome = outcome_fields('CheckmkRuleOutcome')
 
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
 
     meta = {
         'strict': False,
@@ -470,9 +462,7 @@ class CheckmkRuleMngmt(ListSourceMixin, db.Document):
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
     outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="RuleMngmtOutcome"))
     # Denormalised first-outcome ruleset so the admin list can sort and
@@ -581,17 +571,11 @@ class CheckmkNotificationRule(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(
-        field=db.EmbeddedDocumentField(document_type="NotificationRuleOutcome"))
-    render_cmk_notification_rule = db.StringField()
+    outcomes, render_cmk_notification_rule = outcome_fields('NotificationRuleOutcome')
 
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
 
     meta = {
         'strict': False,
@@ -738,17 +722,10 @@ class CheckmkRewriteAttributeRule(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="AttributeRewriteAction"))
-    render_attribute_rewrite = db.StringField()
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
-    meta = {
-        'strict': False
-    }
+    condition_typ, conditions, render_full_conditions = condition_fields()
+    outcomes, render_attribute_rewrite = outcome_fields('AttributeRewriteAction')
+    last_match, enabled, sort_field = rule_state_fields()
+    meta = {'strict': False}
 #.
 #   .-- Checkmk Settings
 
@@ -854,12 +831,9 @@ class CheckmkBiAggregation(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="BiAggregationOutcome"))
-    render_cmk_bi_rule = db.StringField()
+    outcomes, render_cmk_bi_rule = outcome_fields('BiAggregationOutcome')
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     meta = {
@@ -929,12 +903,9 @@ class CheckmkDCDRule(ListSourceMixin, db.Document):
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="DCDRuleOutcome"))
-    render_cmk_dcd_rule = db.StringField()
+    outcomes, render_cmk_dcd_rule = outcome_fields('DCDRuleOutcome')
     last_match = db.BooleanField(default=False)
 
     # Host-independent DCD rule: a DCD connection rarely depends on host data, so
@@ -987,12 +958,9 @@ class CheckmkBiRule(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="BiRuleOutcome"))
-    render_cmk_bi_rule = db.StringField()
+    outcomes, render_cmk_bi_rule = outcome_fields('BiRuleOutcome')
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     meta = {
@@ -1072,12 +1040,9 @@ class CheckmkDowntimeRule(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="DowtimeRuleOutcome"))
-    render_cmk_downtime_rule = db.StringField()
+    outcomes, render_cmk_downtime_rule = outcome_fields('DowtimeRuleOutcome')
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
     meta = {
@@ -1107,15 +1072,10 @@ class CheckmkServiceLabelRule(db.Document):
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="ServiceLabelOutcome"))
-    render_service_labels = db.StringField()
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    outcomes, render_service_labels = outcome_fields('ServiceLabelOutcome')
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }

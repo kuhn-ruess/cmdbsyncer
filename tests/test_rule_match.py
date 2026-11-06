@@ -367,6 +367,9 @@ def _condition_choices():
     stub_db = SimpleNamespace(
         StringField=_Field,
         BooleanField=_Field,
+        IntField=_Field,
+        ListField=_Field,
+        EmbeddedDocumentField=_Field,
         EmbeddedDocument=object,
     )
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

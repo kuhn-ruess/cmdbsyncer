@@ -2,25 +2,18 @@
 """
 VMware Rule
 """
+# pylint: disable=too-few-public-methods
 from application import db
-from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
+from application.modules.rule.models import (
+    ListSourceMixin, RewriteRuleFields, list_source_fields,
+    condition_fields, outcome_fields, rule_state_fields,
+)
 
 #   .-- Rewrite Attribute
-class VMwareRewriteAttributes(db.Document):
+class VMwareRewriteAttributes(RewriteRuleFields, db.Document):
     """
     Rule to rewrite existing Attributes
     """
-    name = db.StringField()
-    documentation = db.StringField()
-
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='AttributeRewriteAction'))
-    render_attribute_rewrite = db.StringField()
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
     meta = {
         'strict': False
     }
@@ -47,19 +40,11 @@ class VMwareCustomAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=\
-            db.EmbeddedDocumentField(document_type='VMwareCustomAttributesOutcome'))
-    render_attribute_outcomes = db.StringField()
+    outcomes, render_attribute_outcomes = outcome_fields('VMwareCustomAttributesOutcome')
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }

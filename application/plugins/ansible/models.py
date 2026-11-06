@@ -9,7 +9,9 @@ from mongoengine.errors import ValidationError
 from application import db
 from application.helpers.retention import register_retention, retention_seconds
 from application.modules.inventory import is_reserved_provider_name
-from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
+from application.modules.rule.models import (
+    ListSourceMixin, list_source_fields, condition_fields, outcome_fields, rule_state_fields,
+)
 
 _PROJECT_NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.\-]*$')
 
@@ -175,18 +177,11 @@ class AnsibleCustomVariablesRule(ListSourceMixin, db.Document):
         default=lambda: AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first(),
     )
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="CustomAttribute"))
-    render_attribute_outcomes = db.StringField() # Helper for preview
+    outcomes, render_attribute_outcomes = outcome_fields('CustomAttribute')
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
 
 
     meta = {
@@ -205,20 +200,13 @@ class AnsibleFilterRule(db.Document):
         required=False,
         default=lambda: AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first(),
     )
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for Preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="FilterAction"))
-    render_filter_outcome = db.StringField()
+    outcomes, render_filter_outcome = outcome_fields('FilterAction')
 
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
 
-    meta = {
-        'strict': False,
-    }
+    meta = {'strict': False}
 
 #.
 #   .-- Playbook Fire Outcome
@@ -262,16 +250,11 @@ class AnsiblePlaybookFireRule(ListSourceMixin, db.Document):
         default=lambda: AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first(),
     )
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField()  # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="AnsiblePlaybookAction"))
-    render_playbook_outcomes = db.StringField()  # Helper for preview
+    outcomes, render_playbook_outcomes = outcome_fields('AnsiblePlaybookAction')
 
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
 
     meta = {
         'strict': False,
@@ -291,15 +274,8 @@ class AnsibleRewriteAttributesRule(db.Document):
         default=lambda: AnsibleProject.objects(name=DEFAULT_PROJECT_NAME).first(),
     )
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="AttributeRewriteAction"))
-    render_attribute_rewrite = db.StringField()
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
-    meta = {
-        'strict': False
-    }
+    condition_typ, conditions, render_full_conditions = condition_fields()
+    outcomes, render_attribute_rewrite = outcome_fields('AttributeRewriteAction')
+    last_match, enabled, sort_field = rule_state_fields()
+    meta = {'strict': False}
 #.

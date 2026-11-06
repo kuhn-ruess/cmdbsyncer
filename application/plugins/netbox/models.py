@@ -7,24 +7,16 @@ Netbox Rule
 # pylint: disable=too-few-public-methods
 from mongoengine import CASCADE
 from application import db
-from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
+from application.modules.rule.models import (
+    ListSourceMixin, RewriteRuleFields, list_source_fields,
+    condition_fields, outcome_fields, rule_state_fields,
+)
 
 #   .-- Rewrite Attribute
-class NetboxRewriteAttributeRule(db.Document):
+class NetboxRewriteAttributeRule(RewriteRuleFields, db.Document):
     """
     Rule to rewrite existing Attributes
     """
-    name = db.StringField()
-    documentation = db.StringField()
-
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='AttributeRewriteAction'))
-    render_attribute_rewrite = db.StringField()
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
     meta = {
         'strict': False
     }
@@ -60,18 +52,11 @@ class NetboxClusterAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxClusterOutcome'))
-    render_netbox_outcome = db.StringField() # Helper for preview
+    outcomes, render_netbox_outcome = outcome_fields('NetboxClusterOutcome')
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
@@ -112,19 +97,13 @@ class NetboxVirtualMachineAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
     outcomes = \
         db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxVirtualMachineOutcome'))
     render_netbox_outcome = db.StringField() # Helper for preview
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
@@ -170,18 +149,11 @@ class NetboxCustomAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxOutcome'))
-    render_netbox_outcome = db.StringField() # Helper for preview
+    outcomes, render_netbox_outcome = outcome_fields('NetboxOutcome')
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
@@ -225,19 +197,13 @@ class NetboxIpamIpaddressattributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
     outcomes =\
         db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxIpamIPAddressOutcome'))
     render_netbox_outcome = db.StringField() # Helper for preview
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
@@ -272,18 +238,13 @@ class NetboxIpamPrefixAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
     outcomes =\
         db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxIpamPrefixOutcome'))
     render_netbox_outcome = db.StringField() # Helper for preview
 
-    last_match = db.BooleanField(default=False)
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
@@ -328,19 +289,11 @@ class NetboxDcimInterfaceAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field= \
-            db.EmbeddedDocumentField(document_type='NetboxDcimInterfaceOutcome'))
-    render_netbox_outcome = db.StringField() # Helper for preview
+    outcomes, render_netbox_outcome = outcome_fields('NetboxDcimInterfaceOutcome')
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
@@ -384,19 +337,11 @@ class NetboxVirtualizationInterfaceAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field= \
-            db.EmbeddedDocumentField(document_type='NetboxVirtInterfaceOutcome'))
-    render_netbox_outcome = db.StringField() # Helper for preview
+    outcomes, render_netbox_outcome = outcome_fields('NetboxVirtInterfaceOutcome')
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
@@ -435,17 +380,10 @@ class NetboxContactAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxContactOutcome'))
-    render_netbox_outcome = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
+    outcomes, render_netbox_outcome = outcome_fields('NetboxContactOutcome')
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
@@ -476,18 +414,11 @@ class NetboxDataflowAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type='FullCondition'))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type='NetboxDataflowOutcome'))
-    render_netbox_dataflow = db.StringField() # Helper for preview
+    outcomes, render_netbox_dataflow = outcome_fields('NetboxDataflowOutcome')
 
-    last_match = db.BooleanField(default=False)
-
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
 
     def __str__(self):
         return self.name

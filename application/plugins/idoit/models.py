@@ -1,26 +1,19 @@
 """
 i-doit Model
 """
+# pylint: disable=too-few-public-methods
 from application import db
-from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
+from application.modules.rule.models import (
+    ListSourceMixin, RewriteRuleFields, list_source_fields,
+    condition_fields, outcome_fields, rule_state_fields,
+)
 
 #   .-- Rewrite Attribute
-class IdoitRewriteAttributeRule(db.Document):
+class IdoitRewriteAttributeRule(RewriteRuleFields, db.Document):
     """
     Rule to rewrite existing Attributes
     """
 
-    name = db.StringField()
-    documentation = db.StringField()
-
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for preview
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="AttributeRewriteAction"))
-    render_attribute_rewrite = db.StringField()
-    last_match = db.BooleanField(default=False)
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
     meta = {
         'strict': False
     }
@@ -56,17 +49,11 @@ class IdoitCustomAttributes(ListSourceMixin, db.Document):
     # Per host or from a pasted list, see ``list_source_fields``.
     rule_source, list_source = list_source_fields()
 
-    condition_typ = db.StringField(choices=rule_types)
-    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
-    render_full_conditions = db.StringField() # Helper for preview
+    condition_typ, conditions, render_full_conditions = condition_fields()
 
-    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="IdoitOutcome"))
-    render_idoit_outcome = db.StringField() # Helper for preview
+    outcomes, render_idoit_outcome = outcome_fields('IdoitOutcome')
 
-    last_match = db.BooleanField(default=False)
-
-    enabled = db.BooleanField()
-    sort_field = db.IntField(default=0)
+    last_match, enabled, sort_field = rule_state_fields()
     meta = {
         'strict': False
     }
