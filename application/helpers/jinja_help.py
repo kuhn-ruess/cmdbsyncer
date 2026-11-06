@@ -101,7 +101,7 @@ RULE_VARIABLES = (
     ('HOSTNAME', "{{ HOSTNAME }}", "Name of the host."),
     ('FIRST_MATCHING_TAG', "{{ FIRST_MATCHING_TAG }}",
      "Attribute name the first condition of the rule matched."),
-    ('FIST_MATCHING_VALUE', "{{ FIST_MATCHING_VALUE }}",
+    ('FIRST_MATCHING_VALUE', "{{ FIRST_MATCHING_VALUE }}",
      "Attribute value the first condition of the rule matched."),
     ('any attribute', "{{ attribute }}",
      "Every attribute of the host is a variable of its own name."),

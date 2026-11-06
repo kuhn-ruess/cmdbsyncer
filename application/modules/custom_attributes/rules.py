@@ -35,8 +35,7 @@ class CustomAttributeRule(Rule):
                 attribute_value = attribute_value.strip()
             else:
                 attribute_value = render_jinja(attribute_value, mode="nullify",
-                                             FIRST_MATCHING_TAG=self.first_matching_tag,
-                                             FIST_MATCHING_VALUE=self.first_matching_value,
+                                             **self.first_match_variables(),
                                              HOSTNAME=self.hostname, **self.attributes)
             outcomes[outcome['attribute_name']] = attribute_value
         return outcomes

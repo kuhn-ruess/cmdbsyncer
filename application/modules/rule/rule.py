@@ -187,6 +187,21 @@ class Rule():
             input_str = input_str.replace(needle, replacer)
         return input_str.strip()
 
+    def _remember_first_match(self, tag, value):
+        """Keep what the first matching condition of the rule matched."""
+        if self.first_matching_tag is None:
+            self.first_matching_tag = tag
+            self.first_matching_value = value
+
+    def first_match_variables(self):
+        """Template variables of the first match of the rule."""
+        return {
+            'FIRST_MATCHING_TAG': self.first_matching_tag,
+            'FIRST_MATCHING_VALUE': self.first_matching_value,
+            # Misspelled name of old, existing rules may use it
+            'FIST_MATCHING_VALUE': self.first_matching_value,
+        }
+
     def _check_attribute_match(self, condition):
         """
         Check if on of the given attributes match the rule
@@ -227,8 +242,7 @@ class Rule():
             if match(value, needed_value, value_match, value_match_negate):
                 if app.config['ADVANCED_RULE_DEBUG']:
                     logger.debug('--> HIT (fast tag lookup)')
-                    self.first_matching_tag = needed_tag
-                    self.first_matching_value = value
+                self._remember_first_match(needed_tag, value)
                 return True
             return False
 
@@ -272,8 +286,7 @@ class Rule():
                 if match(value, needed_value, value_match, value_match_negate):
                     if app.config['ADVANCED_RULE_DEBUG']:
                         logger.debug('--> HIT')
-                        self.first_matching_tag = tag
-                        self.first_matching_value = value
+                    self._remember_first_match(tag, value)
                     return True
         return False
 
@@ -361,12 +374,6 @@ class Rule():
         """
         Handle Rule Match logic
         """
-        # Reset per-host match state so a prior host's hit cannot leak
-        # into this host's FIRST_MATCHING_TAG/VALUE when the engine
-        # instance is reused across hosts (e.g. persisted CustomAttribute
-        # engine, or anyway-condition rules that never call handle_match).
-        self.first_matching_tag = None
-        self.first_matching_value = None
         debug_advanced = app.config['ADVANCED_RULE_DEBUG']
         if self.debug:
             title = f"Debug '{self.name}' Rules for {hostname}"
@@ -390,6 +397,11 @@ class Rule():
                 logger.debug('##########################')
             if rule['list']:
                 continue
+            # Reset per rule, so the hit of a prior rule or host can't leak
+            # into this rule's FIRST_MATCHING_TAG/VALUE (the engine instance
+            # is reused, and anyway-condition rules never call handle_match).
+            self.first_matching_tag = None
+            self.first_matching_value = None
             rule_hit = False
             debug_data = None
             condition_typ = rule['condition_typ']
