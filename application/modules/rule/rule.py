@@ -202,6 +202,18 @@ class Rule():
             'FIST_MATCHING_VALUE': self.first_matching_value,
         }
 
+    def _tags_equal_to(self, needed_tag):
+        """
+        Attribute names the `equal` tag match accepts, the exact spelling
+        first: it ignores the case, like every other string condition.
+        """
+        if needed_tag in self.attributes:
+            yield needed_tag
+        needed_lower = needed_tag.lower()
+        for tag in self.attributes:
+            if tag != needed_tag and str(tag).lower() == needed_lower:
+                yield tag
+
     def _check_attribute_match(self, condition):
         """
         Check if on of the given attributes match the rule
@@ -230,20 +242,20 @@ class Rule():
                 return True
             return False
 
-        # Fast path: `equal` tag match with a concrete target is a dict
-        # lookup, not a linear scan of every attribute. Skipped when the
-        # target is a custom_fields expression because that branch rewrites
-        # tag/value mid-iteration below.
+        # Fast path: `equal` tag match with a concrete target only runs the
+        # value match on the attributes of that name, not the full match on
+        # every attribute. Skipped when the target is a custom_fields
+        # expression because that branch rewrites tag/value mid-iteration
+        # below.
         if (tag_match == 'equal' and not tag_match_negate
                 and 'custom_fields' not in needed_tag):
-            if needed_tag not in self.attributes:
-                return False
-            value = self.attributes[needed_tag]
-            if match(value, needed_value, value_match, value_match_negate):
-                if app.config['ADVANCED_RULE_DEBUG']:
-                    logger.debug('--> HIT (fast tag lookup)')
-                self._remember_first_match(needed_tag, value)
-                return True
+            for tag in self._tags_equal_to(needed_tag):
+                value = self.attributes[tag]
+                if match(value, needed_value, value_match, value_match_negate):
+                    if app.config['ADVANCED_RULE_DEBUG']:
+                        logger.debug('--> HIT (fast tag lookup)')
+                    self._remember_first_match(tag, value)
+                    return True
             return False
 
         # Wee need to find out if tag AND tag value match

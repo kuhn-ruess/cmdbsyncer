@@ -565,5 +565,46 @@ class TestMultilistSkipRule(unittest.TestCase):
         self.assertEqual(self._outcomes([''], [self.NAME, self.SITE]), [])
 
 
+class TestEqualTagMatchCase(unittest.TestCase):
+    """Tag Match `equal` ignores the case like every other string match."""
+
+    def setUp(self):
+        self.rule = _RuleForTests()
+
+    def _check(self, attributes, tag, value='linux', negate=False):
+        self.rule.attributes = attributes
+        self.rule.first_matching_tag = None
+        with patch('application.modules.rule.rule.app') as mock_app:
+            mock_app.config = {'ADVANCED_RULE_DEBUG': False}
+            return self.rule._check_attribute_match({
+                'tag': tag,
+                'tag_match': 'equal',
+                'tag_match_negate': negate,
+                'value': value,
+                'value_match': 'equal',
+                'value_match_negate': False,
+            })
+
+    def test_other_spelling_of_the_tag_matches(self):
+        self.assertTrue(self._check({'OS': 'linux'}, 'os'))
+        self.assertEqual(self.rule.first_matching_tag, 'OS')
+        self.assertTrue(self._check({'os': 'linux'}, 'OS'))
+
+    def test_same_answer_as_the_negated_path(self):
+        attributes = {'OS': 'linux', 'site': 'ber'}
+        self.assertTrue(self._check(attributes, 'os'))
+        # Negated, OS counts as the excluded tag and only site is left.
+        self.assertFalse(self._check(attributes, 'os', negate=True))
+
+    def test_every_spelling_is_checked(self):
+        attributes = {'os': 'windows', 'OS': 'linux'}
+        self.assertTrue(self._check(attributes, 'os'))
+        self.assertEqual(self.rule.first_matching_tag, 'OS')
+
+    def test_value_and_missing_tag_still_decide(self):
+        self.assertFalse(self._check({'OS': 'windows'}, 'os'))
+        self.assertFalse(self._check({'site': 'linux'}, 'os'))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
