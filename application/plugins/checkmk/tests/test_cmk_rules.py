@@ -1168,6 +1168,30 @@ class TestRuleMoveePlanning(unittest.TestCase):
         self._wire_ruleset(['a', 'b'], ['b', 'a'], folder_index=0)
         self.assertEqual(self.sync._plan_rule_moves(), [])
 
+    def test_a_move_chain_never_crosses_a_folder(self):
+        # Checkmk puts a rule moved behind another one into that rule's
+        # folder, so a chain over all folders would drag rules out of theirs.
+        self.sync.rulsets_by_type = {'r1': [
+            {'_cmk_id': rid, 'folder': folder, 'folder_index': index,
+             '_skip_create': True}
+            for rid, folder, index in (
+                ('a1', '/a', 1), ('a2', '/a', 2), ('sub1', '/a/sub', 1),
+                ('b1', '/b', 1), ('b2', '/b', 2))]}
+        # As Checkmk lists them: another folder order than the sorted one.
+        self.sync._cmk_order_by_ruleset['r1'] = \
+            ['b1', 'b2', 'sub1', 'a1', 'a2']
+        self.assertEqual(self.sync._plan_rule_moves(), [])
+
+    def test_only_the_folder_out_of_order_moves(self):
+        self.sync.rulsets_by_type = {'r1': [
+            {'_cmk_id': rid, 'folder': folder, 'folder_index': index,
+             '_skip_create': True}
+            for rid, folder, index in (
+                ('a1', '/a', 1), ('a2', '/a', 2),
+                ('b1', '/b', 1), ('b2', '/b', 2))]}
+        self.sync._cmk_order_by_ruleset['r1'] = ['b2', 'b1', 'a1', 'a2']
+        self.assertEqual(self.sync._plan_rule_moves(), [('r1', 'b2', 'b1')])
+
     def test_nothing_is_sent_when_nothing_moves(self):
         self._wire_ruleset(['a', 'b'], ['a', 'b'])
         self.sync.request = MagicMock()

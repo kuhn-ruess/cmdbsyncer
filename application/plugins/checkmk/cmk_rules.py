@@ -2561,31 +2561,49 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         planned = []
         for ruleset_name, rules in self.rulsets_by_type.items():
-            if len(rules) < 2:
-                continue
             # folder_index defaults to 0; if no rule in this ruleset
             # has an explicit folder_index > 0, the admin has not
-            # configured an order — leave the Checkmk-side ordering
+            # configured an order, leave the Checkmk-side ordering
             # untouched instead of chaining a move per rule.
             if not any(r.get('folder_index', 0) for r in rules):
                 continue
-            desired_ids = self._desired_cmk_id_chain(rules)
-            if len(desired_ids) < 2:
-                continue
-            # Skip the move chain when CMK already lists the
-            # syncer-owned rules in the desired order.
-            if self._is_already_sorted(ruleset_name, rules, desired_ids):
-                continue
-            current_order = self._current_owned_order(ruleset_name,
-                                                      desired_ids)
-            if current_order is None:
-                indices = range(1, len(desired_ids))
-            else:
-                indices = self._moves_needed(desired_ids, current_order)
-            for index in indices:
-                planned.append((ruleset_name, desired_ids[index],
-                                desired_ids[index - 1]))
+            for folder_rules in self._rules_per_folder(rules):
+                planned.extend(self._plan_folder_moves(ruleset_name, folder_rules))
         return planned
+
+    @staticmethod
+    def _rules_per_folder(rules):
+        """
+        Split the rules of a ruleset by their target folder. An order only
+        exists inside one folder, and Checkmk puts a rule moved behind
+        another one into the folder of that rule, so a move chain must never
+        cross a folder.
+        """
+        folders = {}
+        for rule in rules:
+            folder = normalize_cmk_folder(rule.get('folder', '/'))
+            folders.setdefault(folder, []).append(rule)
+        return folders.values()
+
+    def _plan_folder_moves(self, ruleset_name, rules):
+        """
+        The moves ``(ruleset, rule_id, after_rule_id)`` which put the rules
+        of one folder in order.
+        """
+        desired_ids = self._desired_cmk_id_chain(rules)
+        if len(desired_ids) < 2:
+            return []
+        # Skip the move chain when CMK already lists the
+        # syncer-owned rules in the desired order.
+        if self._is_already_sorted(ruleset_name, rules, desired_ids):
+            return []
+        current_order = self._current_owned_order(ruleset_name, desired_ids)
+        if current_order is None:
+            indices = range(1, len(desired_ids))
+        else:
+            indices = self._moves_needed(desired_ids, current_order)
+        return [(ruleset_name, desired_ids[index], desired_ids[index - 1])
+                for index in indices]
 
     def sort_rules(self):
         """
@@ -2595,8 +2613,8 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         (``cmdbsyncer_{account_id}``) are moved — user-created rules
         in the same ruleset are never touched.
 
-        The chosen strategy chains ``after_specific_rule`` moves
-        anchored to the first syncer rule's current position: the
+        The chosen strategy chains ``after_specific_rule`` moves, per
+        folder, anchored to the first syncer rule's current position: the
         first rule keeps its place relative to user rules around it,
         every subsequent syncer rule is pulled to sit right after the
         previous one. This minimises disruption to user rules
