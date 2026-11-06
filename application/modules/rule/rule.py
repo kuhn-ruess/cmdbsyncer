@@ -148,6 +148,8 @@ class Rule():
     cache_name = False
     first_matching_tag = None # Is this set here, it can be accessed in Ninja currently for rewrites
     first_matching_value = None
+    # (attributes dict, its names state, spellings), see _attribute_spellings
+    _spellings_cache = None
 
 
     def __init__(self):
@@ -202,6 +204,32 @@ class Rule():
             'FIST_MATCHING_VALUE': self.first_matching_value,
         }
 
+    def _attribute_spellings(self):
+        """
+        The real attribute names per lowercased name, in dict order, so the
+        `equal` tag match needs no scan of the attributes. Values are not
+        kept, they are always read from self.attributes.
+
+        self.attributes is replaced per host and rules add to it during a
+        run, and the same dict is also changed from outside (see
+        Plugin._compute_attributes). So this is rebuilt when the dict is
+        another one or its names moved: a new name always goes to the end
+        of a dict, which the count and the last name show without a scan.
+        Names swapped behind that are covered by check_rules, which drops
+        the map before every run and after every add_outcomes.
+        """
+        attributes = self.attributes
+        names_state = (len(attributes), next(reversed(attributes), None))
+        cached = self._spellings_cache
+        if (cached is not None and cached[0] is attributes
+                and cached[1] == names_state):
+            return cached[2]
+        spellings = {}
+        for tag in attributes:
+            spellings.setdefault(str(tag).lower(), []).append(tag)
+        self._spellings_cache = (attributes, names_state, spellings)
+        return spellings
+
     def _tags_equal_to(self, needed_tag):
         """
         Attribute names the `equal` tag match accepts, the exact spelling
@@ -209,9 +237,8 @@ class Rule():
         """
         if needed_tag in self.attributes:
             yield needed_tag
-        needed_lower = needed_tag.lower()
-        for tag in self.attributes:
-            if tag != needed_tag and str(tag).lower() == needed_lower:
+        for tag in self._attribute_spellings().get(needed_tag.lower(), ()):
+            if tag != needed_tag:
                 yield tag
 
     def _check_attribute_match(self, condition):
@@ -408,6 +435,7 @@ class Rule():
             table.add_column("Deciding Condition")
 
         outcomes = {}
+        self._spellings_cache = None
         rule_objs, prepared_rules = self._iter_rule_docs()
         for rule_obj, rule in zip(rule_objs, prepared_rules):
             if debug_advanced:
@@ -491,6 +519,7 @@ class Rule():
                 # _iter_rule_docs so we don't rebuild them per host.
                 before = debug_copy(outcomes) if self.debug else None
                 outcomes = self.add_outcomes(rule, rule['outcomes'], outcomes)
+                self._spellings_cache = None
                 if self.debug and debug_data is not None:
                     debug_data['outcome'] = outcome_delta(before, outcomes)
                 # If rule has matched, and option is set, we are done

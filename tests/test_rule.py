@@ -611,6 +611,164 @@ class TestEqualTagMatchCase(unittest.TestCase):
         self.assertFalse(self._check({'OS': 'windows'}, 'os'))
         self.assertFalse(self._check({'site': 'linux'}, 'os'))
 
+    def test_keys_that_are_no_strings(self):
+        self.assertTrue(self._check({5: 'linux'}, '5'))
+        self.assertEqual(self.rule.first_matching_tag, 5)
+        self.assertTrue(self._check({None: 'linux', 'a': 'b'}, 'NONE'))
+        self.assertIsNone(self.rule.first_matching_tag)
+        self.assertFalse(self._check({5: 'linux', None: 'linux'}, 'os'))
+
+
+class _ScanCountingDict(dict):
+    """Attributes that count how often they are walked through."""
+    scans = 0
+
+    def __iter__(self):
+        self.scans += 1
+        return super().__iter__()
+
+
+class _SwappingRule(_RuleForTests):
+    """A rule whose outcome swaps a name, count and last name stay the same."""
+    def add_outcomes(self, rule, rule_outcomes, outcomes):
+        for old in ('a', 'z'):
+            self.attributes.pop(old, None)
+        self.attributes.update({'NewTag': 'linux', 'z': 'x'})
+        return super().add_outcomes(rule, rule_outcomes, outcomes)
+
+
+def _equal_condition(tag, value='linux'):
+    return {
+        'match_type': 'tag',
+        'tag': tag,
+        'tag_match': 'equal',
+        'tag_match_negate': False,
+        'value': value,
+        'value_match': 'equal',
+        'value_match_negate': False,
+    }
+
+
+def _rule_doc(name, conditions, outcomes=(), condition_typ='all'):
+    return {
+        'condition_typ': condition_typ,
+        'conditions': list(conditions),
+        'outcomes': list(outcomes),
+        'last_match': False,
+        'name': name,
+        '_id': name,
+        'list': False,
+    }
+
+
+class TestEqualTagMatchMap(unittest.TestCase):
+    """Tag Match `equal` is a lookup, and its map of names is never stale."""
+
+    def setUp(self):
+        patcher = patch('application.modules.rule.rule.app')
+        patcher.start().config = {'ADVANCED_RULE_DEBUG': False}
+        self.addCleanup(patcher.stop)
+        self.rule = _RuleForTests()
+
+    def _check(self, tag, value='linux'):
+        self.rule.first_matching_tag = None
+        return self.rule._check_attribute_match(_equal_condition(tag, value))
+
+    @staticmethod
+    def _run(engine, *rules):
+        engine._iter_rule_docs = lambda: ([Mock()] * len(rules), list(rules))
+        return engine.check_rules('srv01')
+
+    def test_hit_scans_nothing(self):
+        self.rule.attributes = _ScanCountingDict({'OS': 'linux', 'site': 'ber'})
+        for _ in range(3):
+            self.assertTrue(self._check('OS'))
+        self.assertEqual(self.rule.attributes.scans, 0)
+
+    def test_other_case_scans_once(self):
+        self.rule.attributes = _ScanCountingDict({'OS': 'linux', 'site': 'ber'})
+        for _ in range(3):
+            self.assertTrue(self._check('os'))
+            self.assertEqual(self.rule.first_matching_tag, 'OS')
+        self.assertEqual(self.rule.attributes.scans, 1)
+
+    def test_miss_scans_once(self):
+        self.rule.attributes = _ScanCountingDict({'OS': 'linux', 'site': 'ber'})
+        for _ in range(3):
+            self.assertFalse(self._check('missing'))
+        self.assertEqual(self.rule.attributes.scans, 1)
+
+    def test_attribute_added_after_the_map_was_built(self):
+        self.rule.attributes = {'site': 'ber'}
+        self.assertFalse(self._check('os'))
+        self.rule.attributes['OS'] = 'linux'
+        self.assertTrue(self._check('os'))
+
+    def test_attribute_renamed_after_the_map_was_built(self):
+        self.rule.attributes = {'site': 'ber', 'OLD': 'linux'}
+        self.assertTrue(self._check('old'))
+        del self.rule.attributes['OLD']
+        self.rule.attributes['NEW'] = 'linux'
+        self.assertFalse(self._check('old'))
+        self.assertTrue(self._check('new'))
+
+    def test_next_host(self):
+        self.rule.attributes = {'OS': 'linux'}
+        self.assertTrue(self._check('os'))
+        self.rule.attributes = {'Os': 'linux'}
+        self.assertTrue(self._check('os'))
+        self.assertEqual(self.rule.first_matching_tag, 'Os')
+        self.rule.attributes = {'site': 'ber'}
+        self.assertFalse(self._check('os'))
+
+    def test_next_host_with_the_same_count_and_last_name(self):
+        self.rule.attributes = {'OS': 'linux', 'z': 'x'}
+        self.assertTrue(self._check('os'))
+        self.rule.attributes = {'site': 'ber', 'z': 'x'}
+        self.assertFalse(self._check('os'))
+
+    def test_same_dict_refilled_for_the_next_run(self):
+        attributes = {'site': 'ber', 'z': 'x'}
+        self.rule.attributes = attributes
+        rule = _rule_doc('r1', [_equal_condition('os')])
+        self.assertEqual(self._run(self.rule, rule), {})
+        attributes.clear()
+        attributes.update({'OS': 'linux', 'z': 'x'})
+        self.assertEqual(self._run(self.rule, rule), {'hits': ['r1']})
+
+    def test_rule_swaps_a_name_during_the_run(self):
+        engine = _SwappingRule()
+        engine.attributes = {'a': '1', 'b': '2', 'z': 'x'}
+        outcomes = self._run(
+            engine,
+            _rule_doc('miss', [_equal_condition('newtag')]),
+            _rule_doc('swap', [_equal_condition('B', '2')]),
+            _rule_doc('use', [_equal_condition('newtag')]),
+        )
+        self.assertEqual(outcomes, {'hits': ['swap', 'use']})
+
+    def test_rewrite_makes_a_new_attribute_available_to_the_next_rule(self):
+        rename = {
+            'old_attribute_name': 'site',
+            'overwrite_name': 'string',
+            'overwrite_value': False,
+            'new_value': '',
+        }
+        engine = Rewrite()
+        engine.attributes = {'site': 'ber'}
+        outcomes = self._run(
+            engine,
+            _rule_doc('miss', [_equal_condition('newtag', 'ber')],
+                      [{**rename, 'new_attribute_name': 'not_added'}]),
+            _rule_doc('add', [], [{**rename, 'new_attribute_name': 'NewTag'}],
+                      condition_typ='anyway'),
+            _rule_doc('use', [_equal_condition('newtag', 'ber')],
+                      [{**rename, 'new_attribute_name': 'seen'}]),
+        )
+        self.assertNotIn('add_not_added', outcomes)
+        self.assertEqual(outcomes['add_NewTag'], 'ber')
+        self.assertEqual(outcomes['add_seen'], 'ber')
+
 
 class TestRewriteValues(unittest.TestCase):
     """Renames keep the value whatever it is, Split takes any separator."""
