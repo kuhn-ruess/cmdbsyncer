@@ -113,6 +113,52 @@ class TestGitStaging(unittest.TestCase):
         with self.assertRaises(gs.GitStagingError):
             gs.push_rules('git', ['accounts'])
 
+    def _commit_to_remote(self, change):
+        """Put what *change* creates in a checkout onto the remote branch."""
+        with tempfile.TemporaryDirectory() as tmp:
+            checkout = os.path.join(tmp, 'c')
+            subprocess.run(['git', 'clone', '-q', self.remote, checkout], check=True,
+                           capture_output=True)
+            subprocess.run(['git', '-C', checkout, 'checkout', '-q', '-B', 'main'],
+                           check=True, capture_output=True)
+            change(checkout)
+            subprocess.run(['git', '-C', checkout, 'add', '--all'], check=True)
+            subprocess.run(['git', '-C', checkout, '-c', 'user.name=x', '-c',
+                            'user.email=x@example.com', 'commit', '-q', '-m', 'evil'],
+                           check=True, capture_output=True)
+            subprocess.run(['git', '-C', checkout, 'push', '-q', 'origin', 'main'],
+                           check=True, capture_output=True)
+
+    def test_a_rule_file_that_is_a_link_is_refused(self):
+        with tempfile.NamedTemporaryFile('w', suffix='.py', delete=False) as victim:
+            victim.write('[]')
+        self.addCleanup(os.unlink, victim.name)
+        rule_type = 'cmk_filter'
+
+        def add_link(checkout):
+            os.makedirs(os.path.join(checkout, 'rules'))
+            os.symlink(victim.name, os.path.join(checkout, 'rules', f'{rule_type}.json'))
+
+        self._commit_to_remote(add_link)
+        with self.assertRaisesRegex(gs.GitStagingError, 'symbolic link'):
+            gs.push_rules('git', [rule_type])
+        with open(victim.name, encoding='utf-8') as victim_file:
+            self.assertEqual(victim_file.read(), '[]')
+        with self.assertRaisesRegex(gs.GitStagingError, 'symbolic link'):
+            gs.pull_rules('git')
+
+    def test_a_rule_folder_leading_out_is_refused(self):
+        with tempfile.TemporaryDirectory() as outside:
+            def add_link(checkout):
+                os.symlink(outside, os.path.join(checkout, 'rules'))
+
+            self._commit_to_remote(add_link)
+            with self.assertRaisesRegex(gs.GitStagingError, 'leads out'):
+                gs.push_rules('git', ['cmk_filter'])
+            self.assertEqual(os.listdir(outside), [])
+            with self.assertRaisesRegex(gs.GitStagingError, 'leads out'):
+                gs.pull_rules('git')
+
     def test_push_needs_a_rule_type(self):
         with self.assertRaises(gs.GitStagingError):
             gs.push_rules('git', [])

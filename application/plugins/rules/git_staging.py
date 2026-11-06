@@ -158,6 +158,27 @@ def rule_file_content(rule_type):
     return json.dumps(rules, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _rule_folder(workdir, path):
+    """The folder with the rule files, which must stay inside the checkout."""
+    folder = os.path.join(workdir, path)
+    root = os.path.realpath(workdir)
+    real = os.path.realpath(folder)
+    if real != root and not real.startswith(root + os.sep):
+        raise GitStagingError(f"The path '{path}' leads out of the repository")
+    return folder
+
+
+def _check_no_links(folder, rule_types):
+    """
+    Refuse a rule file that is a symlink. Whoever can push to the repository
+    decides where it points, and reading or writing would go through it to
+    a file of this server.
+    """
+    for rule_type in rule_types:
+        if os.path.islink(os.path.join(folder, f"{rule_type}.json")):
+            raise GitStagingError(f"The file of '{rule_type}' is a symbolic link")
+
+
 def push_rules(account_name, rule_types, message='', author=None):
     """
     Write the rules of *rule_types* into the repository and push them.
@@ -176,7 +197,8 @@ def push_rules(account_name, rule_types, message='', author=None):
     with tempfile.TemporaryDirectory(prefix='syncer_rules_') as tmp:
         workdir = os.path.join(tmp, 'repo')
         _checkout(config, workdir, create_missing=True)
-        folder = os.path.join(workdir, config['path'])
+        folder = _rule_folder(workdir, config['path'])
+        _check_no_links(folder, rule_types)
         os.makedirs(folder, exist_ok=True)
         for rule_type in rule_types:
             with open(os.path.join(folder, f"{rule_type}.json"), 'w',
@@ -267,9 +289,10 @@ def pull_rules(account_name, rule_types=None, delete_missing=False):
         workdir = os.path.join(tmp, 'repo')
         _checkout(config, workdir, create_missing=False)
         commit = _git(config, 'rev-parse', '--short', 'HEAD', cwd=workdir).strip()
-        folder = os.path.join(workdir, config['path'])
+        folder = _rule_folder(workdir, config['path'])
         available = repo_rule_types(folder)
         selected = [x for x in requested if x in available] if requested else available
+        _check_no_links(folder, selected)
         results = {rule_type: _load_type(folder, rule_type, delete_missing)
                    for rule_type in selected}
     result = {
