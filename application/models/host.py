@@ -922,6 +922,13 @@ class Host(HostLabelsMixin, db.Document):
             return False
         self.deleted_at = None
         self.delete_reason = None
+        # Otherwise the next stale check or maintenance run archives it again:
+        # the days until a host counts as unseen start anew from here.
+        self.is_stale = False
+        self.stale_since = None
+        if self.last_import_seen:
+            self.last_import_seen = datetime.datetime.utcnow()
+            self.refresh_cached_seen_timestamps()
         if self.lifecycle_state == 'archived':
             self.set_lifecycle_state(new_state)
         self.add_log(f"Restored to {new_state}")
