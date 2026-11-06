@@ -222,6 +222,41 @@ class TestIgnoredHost(TagSyncTestCase):
         self.assertEqual(db_host.cache, {})
 
 
+class TestGroupTexts(TagSyncTestCase):
+    """Title, topic and help of an existing group"""
+
+    tags = [{'id': 't1', 'title': 'Tag 1'}]
+
+    def _update(self, payload, extensions):
+        response = ({'value': [{'id': 'grp1', 'title': 'Title',
+                                'extensions': {'tags': self.tags, **extensions}}]},
+                    {'ETag': 'etag'})
+        with patch.object(self.sync, 'request', return_value=response):
+            etag, checkmk_ids = self.sync.get_checkmk_tags()
+        with patch.object(self.sync, 'request') as request, \
+                patch.object(self.sync, '_tag_id_field', return_value='id'), \
+                patch('application.plugins.checkmk.tags.app.config',
+                      {'CMK_DONT_DELETE_TAGS': False, 'CMK_TAG_REPAIR': False}):
+            self.sync.update_tag_group(Mock(), 'grp1', {'id': 'grp1', 'tags': self.tags, **payload},
+                                       checkmk_ids['grp1'], etag)
+        return request
+
+    def test_changed_text_is_sent(self):
+        for field, value in (('title', 'New'), ('topic', 'New'), ('help', 'New')):
+            payload = {'title': 'Title', 'topic': 'Topic', 'help': 'Help', field: value}
+            request = self._update(payload, {'topic': 'Topic', 'help': 'Help'})
+            request.assert_called_once()
+            self.assertEqual(request.call_args.kwargs['data'][field], value)
+
+    def test_same_text_sends_nothing(self):
+        payload = {'title': 'Title', 'topic': 'Topic', 'help': ''}
+        self._update(payload, {'topic': 'Topic', 'help': None}).assert_not_called()
+
+    def test_field_the_version_does_not_send_is_left_alone(self):
+        payload = {'title': 'Title', 'topic': 'Topic', 'help': 'Help'}
+        self._update(payload, {'topic': 'Topic'}).assert_not_called()
+
+
 class TestPrepareTags(TagSyncTestCase):
     """The tag payload sent to Checkmk"""
 

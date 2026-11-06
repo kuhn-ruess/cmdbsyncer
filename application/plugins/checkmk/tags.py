@@ -21,6 +21,7 @@ class CheckmkTagSync(CMK2):
     Syncronize Checkmk Tags
     """
     groups = {}
+    checkmk_group_texts = {}
 
 
     def build_caches(self, db_host, groups, multiply_expressions):
@@ -303,8 +304,14 @@ class CheckmkTagSync(CMK2):
         etag = response[1]['ETag']
 
         checkmk_ids = {}
+        self.checkmk_group_texts = {}
         for group in response[0]['value']:
             checkmk_ids[group['id']] = group['extensions']['tags']
+            # A version not sending a field can't be compared on it
+            texts = {key: group['extensions'][key] for key in ('topic', 'help')
+                     if key in group['extensions']}
+            texts['title'] = group.get('title')
+            self.checkmk_group_texts[group['id']] = texts
         return etag, checkmk_ids
 
     def prepare_tags_for_checkmk(self, config_tags):
@@ -358,6 +365,13 @@ class CheckmkTagSync(CMK2):
                              tag['title'], tag[id_field])
                 tag['title'] = f"{tag['title']} ({tag[id_field]})"
         return tags
+
+    def _group_texts_differ(self, group_id, payload):
+        """
+        Whether the title, topic or help of a group differ from Checkmk
+        """
+        texts = self.checkmk_group_texts.get(group_id, {})
+        return any((payload.get(key) or '') != (value or '') for key, value in texts.items())
 
     def _tag_id_field(self):
         """
@@ -438,7 +452,8 @@ class CheckmkTagSync(CMK2):
                 id_field)
         checkmk_tags_frozen = {frozenset(d.items()) for d in checkmk_tags_flat}
         syncer_tags_frozen = {frozenset(d.items()) for d in payload['tags']}
-        if checkmk_tags_frozen == syncer_tags_frozen:
+        if checkmk_tags_frozen == syncer_tags_frozen \
+                and not self._group_texts_differ(syncer_group_id, payload):
             progress.console.print(f" * Group {syncer_group_id} already up to date.")
             return
 
