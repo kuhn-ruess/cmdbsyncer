@@ -14,6 +14,7 @@ import re
 from datetime import datetime
 
 from flask import g, request, url_for
+from flask_login import current_user
 from markupsafe import Markup, escape
 
 from application import app
@@ -893,7 +894,8 @@ def format_cache(_v, _c, m, _p):
     cache_count = len(m.cache)
     html = f'<span class="text-muted">{cache_count} cache entrie(s)</span>'
 
-    if m.cache:
+    # Outcomes of rules using {{ACCOUNT:...}} are cached with the real secret
+    if m.cache and current_user.has_right('account'):
         cache_id = f"cache_{m.id}"
 
         html += (

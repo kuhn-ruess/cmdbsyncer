@@ -353,7 +353,8 @@ class HostViewFormattingTest(unittest.TestCase):
             },
         )
 
-        rendered = str(host_module.format_cache(None, None, model, None))
+        with patch.object(sys.modules[host_module.format_cache.__module__], 'current_user'):
+            rendered = str(host_module.format_cache(None, None, model, None))
 
         self.assertIn('&lt;svg onload=alert(1)&gt;', rendered)
         self.assertIn('&lt;img&gt;', rendered)

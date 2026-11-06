@@ -16,7 +16,7 @@ from application.models.account import Account
 # resolving them during a sync — outbound plugins legitimately build
 # credentials that way — but anything that renders rule outcomes back to
 # a browser has to mask them, see `mask_account_secrets`.
-SECRET_ACCOUNT_FIELDS = ('password', 'password_crypted')
+SECRET_ACCOUNT_FIELDS = ('password', 'password_crypted', 'api_token', 'bakery_passphrase')
 
 SECRET_PLACEHOLDER = '********'
 
