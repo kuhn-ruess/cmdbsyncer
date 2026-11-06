@@ -33,6 +33,7 @@ from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 from application.api.objects import API as OBJECTS_API
 from application.api.syncer import API as SYNCER_API
 from application.helpers.get_account import AccountNotFoundError
+from application.models.host import HostError
 
 
 def _load_source_module(module_name, relative_path):
@@ -1458,6 +1459,56 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         self.assertEqual(body['start'], 0)
         self.assertEqual(len(body['results']), 3)
         queryset.order_by.assert_called_once_with('id')
+
+    @_auth_patches
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    def test_update_rejected_by_the_account_is_a_400(self, host_cls, get_account):
+        get_account.return_value = {'id': 'acc', 'name': 'acc'}
+        host = MagicMock(id=None)
+        host.set_account.side_effect = HostError('restricted')
+        host_cls.get_host.return_value = host
+        resp = self.client.post('/api/v1/objects/web01',
+                                json={'account': 'acc', 'labels': {}},
+                                headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+        host.save.assert_not_called()
+
+    @_auth_patches
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    def test_update_with_a_blank_hostname_is_a_400(self, host_cls, get_account):
+        get_account.return_value = {'id': 'acc', 'name': 'acc'}
+        host_cls.get_host.return_value = False
+        resp = self.client.post('/api/v1/objects/%20',
+                                json={'account': 'acc', 'labels': {}},
+                                headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
+    @patch('application.api.objects.get_account_by_name')
+    @patch('application.api.objects.Host')
+    def test_bulk_reports_a_rejected_host_and_goes_on(self, host_cls, get_account):
+        get_account.return_value = {'id': 'acc', 'name': 'acc'}
+        bad = MagicMock(id=None)
+        bad.set_account.side_effect = HostError('not a valid hostname')
+        good = MagicMock(id=None)
+        good.set_account.return_value = True
+        hosts = {'bad': bad, 'good': good, ' ': False}
+        host_cls.get_host.side_effect = hosts.get
+        resp = self.client.post(
+            '/api/v1/objects/bulk',
+            json={'account': 'acc', 'objects': [
+                {'hostname': 'bad', 'labels': {}},
+                {'hostname': ' ', 'labels': {}},
+                {'hostname': 'good', 'labels': {}},
+            ]},
+            headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json(),
+                         {'status': 'saved 1', 'not-saved': ['bad', ' ']})
+        good.save.assert_called_once()
+        bad.save.assert_not_called()
 
     @_auth_patches
     def test_list_all_rejects_a_page_of_nothing(self):

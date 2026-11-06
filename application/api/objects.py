@@ -207,6 +207,17 @@ def _require_cmdb_mode():
         abort(404, 'CMDB_MODE is disabled on this install.')
 
 
+def _get_import_host(hostname):
+    """
+    The host an API import writes to. ``Host.get_host`` answers False for a
+    name that is only whitespace, raise for it the way it does for a non string.
+    """
+    host_obj = Host.get_host(hostname)
+    if not host_obj:
+        raise HostError("Hostname is empty")
+    return host_obj
+
+
 def _write_blocked_by_scope(host_obj, scope):
     """True when a restricted API user must not write to *host_obj*.
 
@@ -286,14 +297,17 @@ class HostDetailApi(Resource):
         except AccountNotFoundError:
             abort(400, "Account not found")
         labels = req_json['labels']
-        host_obj = Host.get_host(hostname)
+        try:
+            host_obj = _get_import_host(hostname)
+        except HostError as exc:
+            abort(400, str(exc))
         if _write_blocked_by_scope(host_obj, scope):
             return {'status': 'account_conflict'}, 403
         try:
             host_obj.update_host(labels)
-        except ValueError as exc:
+            do_save = host_obj.set_account(account_dict=account_dict)
+        except (ValueError, HostError) as exc:
             abort(400, str(exc))
-        do_save = host_obj.set_account(account_dict=account_dict)
 
         if not do_save:
             return {'status': 'account_conflict'}, 403
@@ -362,7 +376,11 @@ class HostDetailBulkApi(Resource):
         for api_host in req_json['objects']:
             hostname = api_host['hostname']
             labels = api_host['labels']
-            host_obj = Host.get_host(hostname)
+            try:
+                host_obj = _get_import_host(hostname)
+            except HostError:
+                not_save.append(hostname)
+                continue
             # Skip hosts the user is not allowed to write (see
             # _write_blocked_by_scope).
             if _write_blocked_by_scope(host_obj, scope):
@@ -372,7 +390,11 @@ class HostDetailBulkApi(Resource):
                 host_obj.update_host(labels)
             except ValueError as exc:
                 abort(400, str(exc))
-            do_save = host_obj.set_account(account_dict=account_dict)
+            try:
+                do_save = host_obj.set_account(account_dict=account_dict)
+            except HostError:
+                # One rejected host must not take the rest of the list along.
+                do_save = False
 
             if do_save:
                 host_obj.save()
