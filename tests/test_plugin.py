@@ -10,7 +10,8 @@ import time
 import requests
 from mongoengine.errors import DoesNotExist
 
-from application.modules.plugin import Plugin, parse_custom_headers, parse_proxy
+from application.modules.plugin import (Plugin, _redact_proxy_url, parse_custom_headers,
+                                        parse_proxy)
 
 from tests.plugin_helpers import plain_plugin
 
@@ -209,6 +210,25 @@ class TestPlugin(unittest.TestCase):
     def test_proxy_without_scheme_is_ignored(self, _render, mock_logger):
         self.assertIsNone(parse_proxy('proxy.example.com:3128'))
         mock_logger.warning.assert_called_once()
+
+    @patch('application.modules.plugin.logger')
+    @patch('application.modules.plugin.render_jinja', side_effect=lambda value: value)
+    def test_proxy_without_scheme_keeps_its_password_out_of_the_log(self, _render, mock_logger):
+        self.assertIsNone(parse_proxy('user:hunter2@proxy.example.com:3128', 'acc'))
+        message = mock_logger.warning.call_args[0][0]
+        self.assertNotIn('hunter2', message)
+        self.assertIn('acc', message)
+
+    def test_proxy_url_redaction_covers_special_characters_in_the_password(self):
+        # A password with an unencoded / or @ still counts as the password
+        for url in ('http://user:hunter2@proxy.example.com:3128',
+                    'http://user:hun/ter2@proxy.example.com:3128',
+                    'http://user:hun@ter2@proxy.example.com:3128'):
+            redacted = _redact_proxy_url(url)
+            self.assertNotIn('ter2', redacted, url)
+            self.assertIn('proxy.example.com:3128', redacted, url)
+        self.assertEqual(_redact_proxy_url('http://proxy.example.com:3128/'),
+                         'http://proxy.example.com:3128/')
 
     def test_no_proxy_configured(self):
         self.assertIsNone(parse_proxy(None))

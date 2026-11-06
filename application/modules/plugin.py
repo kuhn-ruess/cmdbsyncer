@@ -69,10 +69,13 @@ _UNSET = object()
 
 
 def _redact_proxy_url(url):
-    """A proxy URL without its credentials, host and port kept readable."""
+    """
+    A proxy URL without its credentials, host and port kept readable.
+    Up to the last @: a password may hold an unencoded / or @.
+    """
     if not isinstance(url, str):
         return url
-    return re.sub(r'//[^/@]+@', f'//{_REDACTION}@', url)
+    return re.sub(r'//.*@', f'//{_REDACTION}@', url)
 
 
 def _describe_proxy(url):
@@ -193,7 +196,8 @@ def parse_proxy(value, account_name=''):
     if proxy.lower() == 'direct':
         return {'http': None, 'https': None}
     if '://' not in proxy:
-        logger.warning(f"Ignoring proxy {proxy!r} of account {account_name!r}: "
+        # Without the value: a rendered one can hold the proxy password
+        logger.warning(f"Ignoring the proxy of account {account_name!r}: "
                        f"expected a URL like 'http://proxy.example.com:3128'")
         return None
     return {'http': proxy, 'https': proxy}
