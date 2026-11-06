@@ -66,6 +66,7 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         self.found_hosts = set()
         self.status_inventory = {}
         self.hw_sw_inventory = {}
+        self.hw_sw_failed_hosts = set()
         self.service_label_inventory = {}
         self.per_service_label_inventory = {}
         self.config_inventory = {}
@@ -110,7 +111,12 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
             "columns": ['host_mk_inventory'],
         }
         api_response = self.request(url, params=params, method="GET")
-        rows = api_response[0].get('value') or []
+        if 'value' not in api_response[0]:
+            # A broken connection or an error Checkmk tolerates comes back
+            # empty, which is something else than a host without inventory.
+            reason = api_response[1].get('error', 'empty answer')
+            raise CmkException(f"Inventory of {hostname} not readable: {reason}")
+        rows = api_response[0]['value']
         if not rows:
             return hostname, None
         raw = rows[0].get('extensions', {}).get('host_mk_inventory') or {}
@@ -217,6 +223,7 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                     try:
                         _host, data = task.get(timeout=process_timeout)
                     except multiprocessing.TimeoutError:
+                        self.hw_sw_failed_hosts.add(hostname)
                         progress.console.print(
                             f"- {ColorCodes.FAIL}TIMEOUT{ColorCodes.ENDC} "
                             f"after {process_timeout}s for {hostname}"
@@ -229,6 +236,7 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                         # the run for interactive inspection.
                         if self.debug:
                             raise
+                        self.hw_sw_failed_hosts.add(hostname)
                         progress.console.print(
                             f"- {ColorCodes.FAIL}ERROR{ColorCodes.ENDC} "
                             f"in worker for {hostname}: "
@@ -444,7 +452,11 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                 per_service = self.per_service_label_inventory.get(hostname)
                 db_host.update_inventory(PER_SERVICE_LABELS_KEY,
                                          {'services': per_service} if per_service else {})
-                db_host.update_inventory('cmk_hw_sw_inv', self.hw_sw_inventory.get(hostname, {}))
+                # Nothing is known about a host whose query failed: what it
+                # has stays until a run gets an answer.
+                if hostname not in self.hw_sw_failed_hosts:
+                    db_host.update_inventory('cmk_hw_sw_inv',
+                                             self.hw_sw_inventory.get(hostname, {}))
                 db_host.save()
                 print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")
             else:

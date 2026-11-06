@@ -5,8 +5,9 @@ Unit tests for checkmk inventorize module
 import base64
 import hashlib
 import json
+import multiprocessing
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from application.plugins.checkmk.inventorize import (
     InventorizeHosts,
@@ -27,6 +28,7 @@ class TestInventorizeHosts(unittest.TestCase):
                            config={'settings': {}},
                            fields={}, found_hosts=set(),
                            status_inventory={}, hw_sw_inventory={},
+                           hw_sw_failed_hosts=set(),
                            service_label_inventory={}, config_inventory={},
                            per_service_label_inventory={},
                            label_inventory={}, checkmk_hosts={})
@@ -249,6 +251,62 @@ class TestInventorizeHosts(unittest.TestCase):
 
         # Raises ValueError on any dotted / $-prefixed / empty key.
         validate_mongo_keys(self.inv.config_inventory['host1'], 'inventory')
+
+    def test_get_hw_sw_inventory_data_broken_answer_raises(self):
+        # A broken connection comes back as an empty body, a host without
+        # inventory has an empty list: only the first one is a failure.
+        self.inv.fields = {'cmk_inventory': ['model']}
+        answer = ({}, {'error': 'Checkmk Connections broken'})
+        with patch.object(self.inv, 'request', return_value=answer):
+            with self.assertRaises(CmkException):
+                self.inv.get_hw_sw_inventory_data('host1')
+
+        with patch.object(self.inv, 'request', return_value=({'value': []}, {})):
+            self.assertEqual(self.inv.get_hw_sw_inventory_data('host1'), ('host1', None))
+
+    @patch('application.plugins.checkmk.inventorize.app')
+    @patch('application.plugins.checkmk.inventorize.multiprocessing.Pool')
+    @patch('application.plugins.checkmk.inventorize.Progress', MagicMock())
+    @patch('builtins.print')
+    def test_failed_hosts_are_remembered(self, _print, pool_class, mock_app):
+        mock_app.config = {'PROCESS_TIMEOUT': 1}
+        self.inv.fields = {'cmk_inventory': ['model']}
+        results = {
+            'host_ok': Mock(**{'get.return_value': ('host_ok', {'model': 'x'})}),
+            'host_empty': Mock(**{'get.return_value': ('host_empty', None)}),
+            'host_timeout': Mock(**{'get.side_effect': multiprocessing.TimeoutError()}),
+            'host_error': Mock(**{'get.side_effect': CmkException('boom')}),
+        }
+        pool = pool_class.return_value.__enter__.return_value
+        pool.apply_async.side_effect = lambda _func, args: results[args[0]]
+        listing = {'value': [{'extensions': {'host_name': name}} for name in results]}
+
+        with patch.object(self.inv, 'request', return_value=(listing, {})):
+            self.inv.get_hw_sw_inventory()
+
+        self.assertEqual(self.inv.hw_sw_failed_hosts, {'host_timeout', 'host_error'})
+        self.assertEqual(self.inv.hw_sw_inventory, {'host_ok': {'model': 'x'}})
+
+    @patch('application.plugins.checkmk.inventorize.Host')
+    @patch('application.plugins.checkmk.inventorize.app')
+    @patch('builtins.print')
+    def test_run_keeps_inventory_of_failed_hosts(self, _print, mock_app, mock_host):
+        mock_app.config = {'CMK_GET_HOST_BY_FOLDER': False}
+        self.inv.fields = {'cmk_inventory': ['model']}
+        self.inv.found_hosts = {'host_failed', 'host_empty'}
+        self.inv.hw_sw_failed_hosts = {'host_failed'}
+        hosts = {name: Mock(hostname=name) for name in self.inv.found_hosts}
+        mock_host.objects.return_value = list(hosts.values())
+
+        with patch.object(self.inv, 'get_hw_sw_inventory'):
+            self.inv.run()
+
+        written = [args.args[0]
+                   for args in hosts['host_failed'].update_inventory.call_args_list]
+        self.assertNotIn('cmk_hw_sw_inv', written)
+        hosts['host_failed'].save.assert_called_once()
+        # Checkmk answered that this one has no inventory: old values have to go.
+        hosts['host_empty'].update_inventory.assert_any_call('cmk_hw_sw_inv', {})
 
     def test_get_hw_sw_inventory_data_empty(self):
         # Host known but no inventory column populated yet — empty value
