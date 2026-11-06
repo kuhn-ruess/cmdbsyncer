@@ -37,7 +37,10 @@ class Rewrite(Rule):
         old_value = self.attributes.get(attribute_name, "")
         # The old Value stays the new Value, if not overwritten
         new_value = old_value
-        if value_mode := outcome['overwrite_value']:
+        value_mode = outcome['overwrite_value']
+        # 'None' is the model default of a rule that chose no operation. Only
+        # a value given with it replaces the old one.
+        if value_mode and (value_mode != 'None' or outcome.get('new_value')):
             # Default in case of String
             if  new_value := outcome.get('new_value'):
                 if value_mode == 'split':

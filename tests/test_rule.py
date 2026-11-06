@@ -628,6 +628,17 @@ class TestRewriteValues(unittest.TestCase):
                 self.assertEqual(self._outcomes({'old': value}),
                                  {'del_old': True, 'add_new': value})
 
+    def test_rename_with_the_model_default_keeps_the_value(self):
+        for value in ('x', 0, ''):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self._outcomes({'old': value}, overwrite_value='None'),
+                    {'del_old': True, 'add_new': value})
+
+    def test_model_default_with_a_value_still_writes_it(self):
+        result = self._outcomes({'old': 'x'}, overwrite_value='None', new_value='y')
+        self.assertEqual(result['add_new'], 'y')
+
     def test_rename_of_a_missing_attribute_creates_nothing(self):
         self.assertEqual(self._outcomes({'site': 'ber'}), {'del_old': True})
 
