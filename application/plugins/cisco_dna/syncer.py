@@ -13,6 +13,8 @@ from application.modules.debug import ColorCodes
 # Default HTTP timeout for Cisco DNA calls; without it the importer
 # can hang forever on an unresponsive DNA Center.
 _HTTP_TIMEOUT = 60
+# Largest limit the device list of Cisco DNA accepts
+_PAGE_SIZE = 500
 
 
 class CiscoDNAError(Exception):
@@ -150,6 +152,33 @@ class CiscoDNA():
 
 
 #.
+#   .-- get_devices
+    def get_devices(self, headers):
+        """
+        All devices, page by page: one answer holds 500 at most and offset
+        starts at 1. A version which ignores offset repeats its devices, a
+        repeated page ends the loop. An error on a later page keeps what was
+        read, it may just be the answer to an offset past the end.
+        """
+        url = f"{self.address}/dna/intent/api/v1/network-device?hostname=.*"
+        devices = {}
+        while True:
+            response = requests.request(
+                "GET", f"{url}&offset={len(devices) + 1}&limit={_PAGE_SIZE}",
+                headers=headers, verify=self.verify, timeout=_HTTP_TIMEOUT
+            )
+            if devices and response.status_code >= 400:
+                print(f"{ColorCodes.WARNING} *{ColorCodes.ENDC} Stopped after "
+                      f"{len(devices)} devices: status {response.status_code}")
+                break
+            page = response.json()['response']
+            before = len(devices)
+            devices.update((device['id'], device) for device in page)
+            if len(page) < _PAGE_SIZE or len(devices) == before:
+                break
+        return list(devices.values())
+
+#.
 #   .-- Command: get_hosts
     # pylint: disable-next=too-many-locals
     def get_hosts(self):
@@ -221,12 +250,7 @@ class CiscoDNA():
         ]
         token = self.get_auth_token()
         print(f"\n{ColorCodes.OKGREEN} -- {ColorCodes.ENDC}Start Sync")
-        url = f"{self.address}/dna/intent/api/v1/network-device?hostname=.*"
-        headers = {"x-auth-token": token}
-        response = requests.request(
-            "GET", url, headers=headers, verify=self.verify, timeout=_HTTP_TIMEOUT
-        )
-        response_json = response.json()['response']
+        response_json = self.get_devices({"x-auth-token": token})
         total = len(response_json)
         counter = 0
         for device in response_json:

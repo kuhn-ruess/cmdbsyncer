@@ -114,14 +114,15 @@ class JiraCloud(Plugin):
                 return
             yield from values
 
-            if body.get('isLast'):
+            # isLast decides. Since September 2024 total stops at 1000 even
+            # when more objects match, and a short page alone does not mean
+            # the end.
+            is_last = body.get('isLast')
+            if is_last is None:
+                is_last = len(values) < page_size
+            if is_last:
                 return
-            total = body.get('total')
             start_at += len(values)
-            if total is not None and start_at >= total:
-                return
-            if len(values) < page_size:
-                return
 
     def import_objects(self):
         """
