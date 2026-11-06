@@ -1697,7 +1697,9 @@ class SyncCMK2(CMK2):
                                      data=update_body,
                                      additional_header=update_headers)
         except CmkException as exp:
+            self.console(f" * Host Move Problem: {exp}")
             self.log_details.append(('error', f'Move exception: {hostname} {exp}'))
+            return False, False
         if 'error' in header:
             self.console(f" * Host Move Problem: {header['error']}")
             self.log_details.append(('error', f"Move Error: {hostname} {header['error']}"))

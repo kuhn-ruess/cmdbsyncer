@@ -1337,6 +1337,26 @@ class TestSyncCMK2UpdateHost(unittest.TestCase):
         self.assertEqual(mock_req.call_count, 1)
 
 
+class TestMoveHostFailure(unittest.TestCase):
+    """A failed move is reported as failed"""
+
+    def test_exception_ends_the_update_of_the_host(self):
+        syncer = SyncCMK2.__new__(SyncCMK2)
+        syncer.checkmk_version = '2.3.0'
+        syncer.log_details = []
+        syncer.console = Mock()
+        syncer.get_etag = Mock(return_value='etag')
+        syncer.request = Mock(side_effect=CmkException('locked'))
+
+        # pylint: disable-next=protected-access
+        result = syncer._move_host_if_needed('srv01', '/old', '/new', False)
+
+        self.assertEqual(result, (False, False))
+        self.assertEqual(syncer.log_details[0][0], 'error')
+        printed = ' '.join(str(call) for call in syncer.console.call_args_list)
+        self.assertNotIn('Host Moved', printed)
+
+
 class TestSyncCMK2Misc(unittest.TestCase):
     """Tests for methods missing from the primary coverage class."""
 
