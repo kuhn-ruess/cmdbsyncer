@@ -163,8 +163,16 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
         self.container_view = container.view
         data = []
         for vm in self.container_view:
+            try:
+                raw_attributes = reader(vm, content)
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                # A VM deleted during the walk answers with a vSphere fault,
+                # that must not cost the data of all the others.
+                self.log_details.append(('error', f'Skipped a VM: {error}'))
+                logger.debug("VM skipped: %s", error)
+                continue
             attributes = {key: value if isinstance(value, (str, list)) else str(value)
-                          for key, value in reader(vm, content).items()}
+                          for key, value in raw_attributes.items()}
             if all(str(attributes.get(key)) in values
                    for key, values in inventory_filter.items()):
                 data.append(attributes)

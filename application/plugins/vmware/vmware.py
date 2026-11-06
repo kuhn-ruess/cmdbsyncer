@@ -1,13 +1,14 @@
 """
 Base VMware Class
 """
+import atexit
 import ssl
 from syncerapi.v1.core import Plugin
 
 
 from application import logger
 try:
-    from pyVim.connect import SmartConnect
+    from pyVim.connect import Disconnect, SmartConnect
 except ImportError:
     logger.info("Info: VMware Plugin was not able to load required modules")
 
@@ -49,3 +50,5 @@ class VMWareVcenterPlugin(Plugin):
 
         if not self.vcenter:
             raise Exception("Cannot connect to vcenter")  # pylint: disable=broad-exception-raised
+        # Else every run leaves a session open on vCenter until it times out
+        atexit.register(Disconnect, self.vcenter)
