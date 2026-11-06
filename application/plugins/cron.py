@@ -217,6 +217,7 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
         print(f"{CC.HEADER} Running Group {job.name} {CC.ENDC}")
         stats.is_running = True
         stats.last_start = now
+        was_failing = stats.failure
         stats.failure = False
         stats.pid = os.getpid()
         stats.last_message = f"{now}: Started Job: {job.name} (PID: {os.getpid()})"
@@ -259,7 +260,6 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
             raise
         finally:
             stats.last_ended = datetime.now()
-            previously_failing = stats.failure and not group_failure
             if not group_failure:
                 stats.last_success_at = stats.last_ended
             if not force_run:
@@ -278,7 +278,7 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
                     source='cron',
                     details=[('error', stats.last_message or '')],
                 )
-            elif previously_failing:
+            elif was_failing:
                 log.log(
                     f"Cron group '{job.name}' recovered",
                     source='cron',

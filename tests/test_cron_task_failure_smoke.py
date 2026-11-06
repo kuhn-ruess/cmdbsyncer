@@ -13,6 +13,7 @@ from tests.web_smoke_helpers import HAVE_MONGOMOCK, SKIP_REASON, run_against_app
 SNIPPET = '''
 from application import app, cron_register
 from application.models.cron import CronGroup, CronStats, GroupEntry
+from application.modules.log.models import LogEntry
 from application.modules.plugin import Plugin
 from application.plugins.cron import jobs
 
@@ -64,6 +65,15 @@ stats = run_group('clean', ['t: follows'])
 eq(stats.failure, False, 'a failure of an earlier group does not stick')
 if not stats.last_success_at:
     fail('a clean group has no last success')
+
+recovered = "Cron group 'turns' recovered"
+stats = run_group('turns', ['t: raises'])
+eq(stats.failure, True, 'failure before the recovery')
+eq(LogEntry.objects(message=recovered).count(), 0, 'no recovery while it fails')
+run_group('turns', ['t: follows'])
+eq(LogEntry.objects(message=recovered).count(), 1, 'the first clean run recovers')
+run_group('turns', ['t: follows'])
+eq(LogEntry.objects(message=recovered).count(), 1, 'a second clean run recovers nothing')
 
 stats = run_group('raises', ['t: raises', 't: follows'])
 eq(ran, [], 'a raising task stops the group')
