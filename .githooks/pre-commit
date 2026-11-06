@@ -57,7 +57,10 @@ fi
 echo "Running unit tests before commit..."
 PRETEST_LOG="$(mktemp -t cmdbsyncer_pretest.XXXXXX)"
 trap 'rm -f "$PRETEST_LOG"' EXIT
-if ! "$PYTHON_BIN" run_tests.py > "$PRETEST_LOG" 2>&1; then
+# Git exports these to hooks. Tests that run git themselves would otherwise act on
+# this repository instead of their own temp repos (git init --bare sets core.bare here).
+if ! env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE -u GIT_PREFIX \
+        "$PYTHON_BIN" run_tests.py > "$PRETEST_LOG" 2>&1; then
     echo
     echo "Unit tests failed — commit aborted."
     echo "Full output:"
