@@ -2,8 +2,9 @@
 Unit tests for checkmk tags module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
+import multiprocessing
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from application.plugins.checkmk.tags import CheckmkTagSync
 from tests import base_mock_init
@@ -255,6 +256,92 @@ class TestGroupTexts(TagSyncTestCase):
     def test_field_the_version_does_not_send_is_left_alone(self):
         payload = {'title': 'Title', 'topic': 'Topic', 'help': 'Help'}
         self._update(payload, {'topic': 'Topic'}).assert_not_called()
+
+
+class TestHangingWorkers(TagSyncTestCase):
+    """A worker which gives no result must not remove tags or block the run"""
+
+    def setUp(self):
+        super().setUp()
+        self.sync.log_details = []
+        self.sync.debug = False
+        print_patcher = patch('builtins.print')
+        print_patcher.start()
+        self.addCleanup(print_patcher.stop)
+
+    @patch('application.plugins.checkmk.tags.app')
+    def test_timeout_ends_the_pool_and_marks_the_tags_incomplete(self, mock_app):
+        mock_app.config = {'PROCESS_TIMEOUT': 1}
+        pool = Mock()
+        tasks = [('srv01', Mock()),
+                 ('srv02', Mock(**{'get.side_effect': multiprocessing.TimeoutError()}))]
+
+        self.sync._collect_workers(pool, tasks)
+
+        self.assertTrue(self.sync.tags_incomplete)
+        self.assertIn('srv02', self.sync.log_details[0][1])
+        pool.terminate.assert_called_once()
+        pool.close.assert_not_called()
+
+    @patch('application.plugins.checkmk.tags.app')
+    def test_healthy_workers_change_nothing(self, mock_app):
+        mock_app.config = {'PROCESS_TIMEOUT': 1}
+        pool = Mock()
+
+        self.sync._collect_workers(pool, [('srv01', Mock())])
+
+        self.assertFalse(self.sync.tags_incomplete)
+        self.assertEqual(self.sync.log_details, [])
+        pool.close.assert_called_once()
+
+    @patch('application.plugins.checkmk.tags.app')
+    @patch('application.plugins.checkmk.tags.multiprocessing.cpu_count', return_value=2)
+    @patch('application.plugins.checkmk.tags.multiprocessing.Pool')
+    def test_all_workers_hang_stops_the_one_by_one_run(self, pool_class, _cpus, mock_app):
+        mock_app.config = {'PROCESS_TIMEOUT': 1}
+        pool = pool_class.return_value.__enter__.return_value
+        pool.apply_async.side_effect = lambda *args, **kwargs: Mock(**{
+            'ready.return_value': False,
+            'get.side_effect': multiprocessing.TimeoutError()})
+        hosts = MagicMock()
+        hosts.__iter__.return_value = iter(Mock(hostname=f'srv{nr}') for nr in range(5))
+        hosts.count.return_value = 5
+
+        self.sync._build_caches_one_by_one(hosts, {}, [], None)
+
+        self.assertEqual(pool.apply_async.call_count, 2)
+        self.assertIn('3 remaining hosts', self.sync.log_details[-1][1])
+        self.assertTrue(self.sync.tags_incomplete)
+        pool.terminate.assert_called_once()
+
+    @patch('application.plugins.checkmk.tags.app')
+    @patch('application.plugins.checkmk.tags.multiprocessing.cpu_count', return_value=1)
+    @patch('application.plugins.checkmk.tags.multiprocessing.Pool')
+    def test_worker_which_came_back_counts_as_free(self, pool_class, _cpus, mock_app):
+        mock_app.config = {'PROCESS_TIMEOUT': 1}
+        pool = pool_class.return_value.__enter__.return_value
+        pool.apply_async.side_effect = lambda *args, **kwargs: Mock(**{
+            'ready.return_value': True,
+            'get.side_effect': multiprocessing.TimeoutError()})
+        hosts = MagicMock()
+        hosts.__iter__.return_value = iter(Mock(hostname=f'srv{nr}') for nr in range(3))
+
+        self.sync._build_caches_one_by_one(hosts, {}, [], None)
+
+        self.assertEqual(pool.apply_async.call_count, 3)
+
+    def test_tag_only_in_checkmk_stays_while_incomplete(self):
+        self.sync.tags_incomplete = True
+        kept = {'id': 'only_checkmk', 'title': 'Only Checkmk'}
+        with patch.object(self.sync, 'request') as request, \
+                patch.object(self.sync, '_tag_id_field', return_value='id'), \
+                patch('application.plugins.checkmk.tags.app.config',
+                      {'CMK_DONT_DELETE_TAGS': False, 'CMK_TAG_REPAIR': False}):
+            self.sync.update_tag_group(
+                Mock(), 'grp1', {'id': 'grp1', 'tags': [{'id': 'ours', 'title': 'Ours'}]},
+                [kept], 'etag')
+
+        self.assertIn(kept, request.call_args.kwargs['data']['tags'])
 
 
 class TestPrepareTags(TagSyncTestCase):

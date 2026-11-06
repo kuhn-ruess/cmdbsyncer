@@ -525,6 +525,23 @@ class Plugin():
 
 
 
+    def _http_request_timeout(self):
+        """
+        Per-account override: a `request_timeout` custom field on the
+        account wins over the global HTTP_REQUEST_TIMEOUT. Slow target
+        systems (e.g. large distributed Checkmk setups, where every
+        downtime read/write fans out to all sites) need more than the
+        default 30 seconds without raising it deployment-wide.
+        """
+        if account_timeout := self.config.get('request_timeout'):
+            try:
+                return float(account_timeout)
+            except (TypeError, ValueError):
+                logger.warning(
+                    f"Ignoring invalid request_timeout {account_timeout!r} "
+                    f"on account {self.config.get('name')!r}")
+        return app.config['HTTP_REQUEST_TIMEOUT']
+
     def inner_request(self, method, url, data=None, json=None,  # pylint: disable=too-many-branches,too-many-statements
                       headers=None, auth=None, params=None, cert=None, read_only=False):
         """
@@ -559,22 +576,9 @@ class Plugin():
         logger.debug(f"Request ({method.upper()}) to {url}")
 
         method = method.lower()
-        timeout = app.config['HTTP_REQUEST_TIMEOUT']
-        # Per-account override: a `request_timeout` custom field on the
-        # account wins over the global HTTP_REQUEST_TIMEOUT. Slow target
-        # systems (e.g. large distributed Checkmk setups, where every
-        # downtime read/write fans out to all sites) need more than the
-        # default 30 seconds without raising it deployment-wide.
-        if account_timeout := self.config.get('request_timeout'):
-            try:
-                timeout = float(account_timeout)
-            except (TypeError, ValueError):
-                logger.warning(
-                    f"Ignoring invalid request_timeout {account_timeout!r} "
-                    f"on account {self.config.get('name')!r}")
         payload = {
             'verify': self.verify,
-            'timeout': timeout,
+            'timeout': self._http_request_timeout(),
         }
 
         # Headers of the account first, so a header the plugin sets

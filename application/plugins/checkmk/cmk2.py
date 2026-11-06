@@ -5,6 +5,7 @@ import multiprocessing
 import requests
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application import app
+from application.modules.debug import ColorCodes as CC
 from application.modules.plugin import Plugin
 from application.helpers.plugins import register_cli_group
 
@@ -44,6 +45,8 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
     two attribute rule engines every export needs — one more than pylint's
     default attribute budget allows.
     """
+    # Set when the hosts of a folder could not be fetched
+    host_list_incomplete = False
 
     @staticmethod
     def _compact_host_data(host):
@@ -118,6 +121,40 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
         else:
             pool.close()
         pool.join()
+
+
+    def wait_for_tasks(self, tasks, timeout):
+        """
+        Walk (name, async result) pairs in order, waiting up to timeout for each.
+        task.get(timeout=0) then tells whether it finished or was given up on.
+
+        A worker which hangs never takes another task. When all of them hang,
+        the tasks still in the queue would cost one timeout each for nothing.
+        So if a whole timeout passes between two given up tasks without any
+        task finishing, the rest is given up on at once.
+        """
+        finished = None
+        stalled = False
+        for position, (name, task) in enumerate(tasks):
+            if not stalled:
+                task.wait(timeout)
+                if not task.ready():
+                    finished_now = sum(1 for _, other in tasks if other.ready())
+                    stalled = finished_now == finished
+                    finished = finished_now
+                    if stalled:
+                        self._report_stalled_workers(tasks[position + 1:], timeout)
+            yield name, task
+
+
+    def _report_stalled_workers(self, remaining, timeout):
+        """Say that the run stops waiting for its workers"""
+        given_up = sum(1 for _, task in remaining if not task.ready())
+        if given_up:
+            message = f"All workers hang, no result for {timeout}s: " \
+                      f"not waiting for the {given_up} remaining tasks"
+            print(f"{CC.FAIL} *{CC.ENDC} {message}")
+            self.log_details.append(('error', message))
 
 
     def _load_attribute_rules(self):
@@ -374,10 +411,28 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
                 tasks = []
                 for folder in self.existing_folders:
                     task = pool.apply_async(self.get_hosts_of_folder, args=(folder, extra_params,))
-                    tasks.append(task)
+                    tasks.append((folder, task))
 
-                for task in tasks:
-                    self.checkmk_hosts.update(task.get())
-                    progress.advance(task1)
-                pool.close()
-                pool.join()
+                worker_timed_out = False
+                for folder, task in self.wait_for_tasks(tasks, self._folder_fetch_timeout()):
+                    try:
+                        self.checkmk_hosts.update(task.get(timeout=0))
+                    except multiprocessing.TimeoutError:
+                        worker_timed_out = True
+                        self.host_list_incomplete = True
+                        progress.console.print(f"- ERROR: Timeout for folder {folder}")
+                        self.log_details.append(
+                            ('error', f"Timeout fetching the hosts of folder {folder}"))
+                    else:
+                        progress.advance(task1)
+                self.finish_pool(pool, worker_timed_out)
+
+    def _folder_fetch_timeout(self):
+        """
+        The longest a healthy fetch of one folder can take. PROCESS_TIMEOUT
+        alone is shorter than the HTTP request inside, so a big folder which
+        is just slow would count as hanging.
+        """
+        attempts = app.config['HTTP_MAX_RETRIES']
+        per_attempt = self._http_request_timeout() + app.config['HTTP_REPEAT_TIMEOUT']
+        return app.config['PROCESS_TIMEOUT'] + attempts * per_attempt

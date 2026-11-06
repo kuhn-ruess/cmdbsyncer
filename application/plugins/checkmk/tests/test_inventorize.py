@@ -2,6 +2,7 @@
 Unit tests for checkmk inventorize module
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument,no-value-for-parameter
+# pylint: disable=too-many-public-methods
 import base64
 import hashlib
 import json
@@ -310,6 +311,27 @@ class TestInventorizeHosts(unittest.TestCase):
         hosts['host_failed'].save.assert_called_once()
         # Checkmk answered that this one has no inventory: old values have to go.
         hosts['host_empty'].update_inventory.assert_any_call('cmk_hw_sw_inv', {})
+
+    @patch('application.plugins.checkmk.inventorize.Host')
+    @patch('application.plugins.checkmk.inventorize.app')
+    @patch('builtins.print')
+    def test_run_keeps_attributes_when_a_folder_could_not_be_fetched(
+            self, _print, mock_app, mock_host):
+        mock_app.config = {'CMK_GET_HOST_BY_FOLDER': False}
+        self.inv.fields = {'cmk_inventory': ['model']}
+        self.inv.found_hosts = {'host_unseen', 'host_seen'}
+        self.inv.config_inventory = {'host_seen': {'ipaddress': '192.0.2.1'}}
+        self.inv.host_list_incomplete = True
+        hosts = {name: Mock(hostname=name) for name in self.inv.found_hosts}
+        mock_host.objects.return_value = list(hosts.values())
+
+        with patch.object(self.inv, 'get_hw_sw_inventory'):
+            self.inv.run()
+
+        written = [args.args[0]
+                   for args in hosts['host_unseen'].update_inventory.call_args_list]
+        self.assertNotIn('cmk', written)
+        hosts['host_seen'].update_inventory.assert_any_call('cmk', {'ipaddress': '192.0.2.1'})
 
     def test_get_hw_sw_inventory_data_empty(self):
         # Host known but no inventory column populated yet — empty value

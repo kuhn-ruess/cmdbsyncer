@@ -979,6 +979,18 @@ class SyncCMK2(CMK2):
         self.log_details.append(
             ('error', f"Calculation failed, {hostname} stays unchanged: {reason}"))
 
+    def _host_state_unknown(self, hostname):
+        """
+        A host not in the list while a folder could not be fetched may well
+        exist there. Neither creating nor updating is safe, it is left alone.
+        """
+        if not self.host_list_incomplete or hostname in self.checkmk_hosts:
+            return False
+        self.failed_hosts.append(hostname)
+        self.log_details.append(
+            ('error', f"Not all folders could be fetched, {hostname} stays unchanged"))
+        return True
+
     # pylint: disable-next=too-many-locals
     def calculate_attributes_and_rules(self):
         """
@@ -1022,9 +1034,9 @@ class SyncCMK2(CMK2):
 
                 progress.console.print("Waiting for Calculation to finish")
                 worker_timed_out = False
-                for host_name, task in tasks:
+                for host_name, task in self.wait_for_tasks(tasks, app.config['PROCESS_TIMEOUT']):
                     try:
-                        hostname, enabled, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
+                        hostname, enabled, data = task.get(timeout=0)
                     except multiprocessing.TimeoutError:
                         worker_timed_out = True
                         progress.console.print(f"- ERROR: Timeout for {host_name}")
@@ -1114,6 +1126,7 @@ class SyncCMK2(CMK2):
         self.bulk_fallback_stopped = False
         self.dropped_folder_values = {}
         self.folder_listing_failed = False
+        self.host_list_incomplete = False
 
         self.name=f"Sync Hosts to Account: {self.account_name}"
         self.source="checkmk_host_export"
@@ -1144,6 +1157,10 @@ class SyncCMK2(CMK2):
             for hostname, data in host_actions.items():
                 export_details = []
                 progress.console.print(f"* {hostname}")
+                if self._host_state_unknown(hostname):
+                    progress.console.print(f"- ERROR: {hostname} stays unchanged")
+                    progress.advance(task1)
+                    continue
 
                 next_actions = data[0]
                 attributes = data[1]

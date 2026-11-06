@@ -651,6 +651,16 @@ class TestSyncCMK2(unittest.TestCase):
             ('error', 'Calculation failed, broken stays unchanged: ValueError: bad rule'),
         ])
 
+    def test_host_missing_from_an_incomplete_list_stays_unchanged(self):
+        self.syncer.checkmk_hosts = {'known': {}}
+        self.assertFalse(self.syncer._host_state_unknown('new'))
+
+        self.syncer.host_list_incomplete = True
+        self.assertFalse(self.syncer._host_state_unknown('known'))
+        self.assertTrue(self.syncer._host_state_unknown('new'))
+        self.assertEqual(self.syncer.failed_hosts, ['new'])
+        self.assertIn('new stays unchanged', self.syncer.log_details[-1][1])
+
     @patch('application.plugins.checkmk.syncer.logger')
     def test_create_folder_single_level(self, mock_logger):
         """Test _create_folder method"""

@@ -618,5 +618,92 @@ class TestFinishPool(unittest.TestCase):
         pool.join.assert_called_once()
 
 
+def _work(hang):
+    """A pool worker which hangs when told so"""
+    if hang:
+        _hang()
+    return 'done'
+
+
+class TestWaitForTasks(unittest.TestCase):
+    """Waiting for really hanging workers"""
+
+    def setUp(self):
+        self.cmk = CMK2.__new__(CMK2)
+        self.cmk.log_details = []
+        self.pool = multiprocessing.get_context('fork').Pool(2)
+        self.addCleanup(self.pool.terminate)
+
+    def _walk(self, hangs, timeout):
+        tasks = [(str(nr), self.pool.apply_async(_work, (hang,)))
+                 for nr, hang in enumerate(hangs)]
+        start = time.monotonic()
+        with patch('builtins.print'):
+            walked = list(self.cmk.wait_for_tasks(tasks, timeout))
+        return walked, time.monotonic() - start
+
+    def test_all_workers_hang_costs_no_timeout_per_task(self):
+        walked, duration = self._walk([True] * 12, 0.5)
+
+        self.assertEqual([name for name, _ in walked], [str(nr) for nr in range(12)])
+        self.assertFalse(any(task.ready() for _, task in walked))
+        # Two timeouts until it is clear, not twelve
+        self.assertLess(duration, 3)
+        self.assertEqual(len(self.cmk.log_details), 1)
+        self.assertIn('All workers hang', self.cmk.log_details[0][1])
+        self.assertIn('10 remaining', self.cmk.log_details[0][1])
+
+    def test_one_hanging_worker_lets_the_others_finish(self):
+        hangs = [False, True, False, False, False, False]
+        walked, _duration = self._walk(hangs, 1)
+
+        ready = [task.ready() for _, task in walked]
+        self.assertEqual(ready, [not hang for hang in hangs])
+        self.assertEqual(walked[0][1].get(timeout=0), 'done')
+        self.assertEqual(self.cmk.log_details, [])
+
+    def test_healthy_run_waits_for_nothing(self):
+        walked, duration = self._walk([False] * 6, 30)
+
+        self.assertTrue(all(task.ready() for _, task in walked))
+        self.assertLess(duration, 15)
+        self.assertEqual(self.cmk.log_details, [])
+
+
+class TestFetchHostsByFolderTimeout(unittest.TestCase):
+    """The per folder host fetch when a worker hangs"""
+
+    def setUp(self):
+        self.cmk = CMK2.__new__(CMK2)
+        self.cmk.log_details = []
+        self.cmk.config = {'request_timeout': '60'}
+        self.cmk.checkmk_hosts = {}
+        self.cmk.existing_folders = ['/a', '/b']
+
+    @patch('application.plugins.checkmk.cmk2.app')
+    @patch('application.plugins.checkmk.cmk2.multiprocessing.Pool')
+    @patch('application.plugins.checkmk.cmk2.Progress', MagicMock())
+    def test_other_folders_go_on_and_the_list_counts_as_incomplete(self, pool_class, mock_app):
+        mock_app.config = {'PROCESS_TIMEOUT': 1, 'HTTP_MAX_RETRIES': 1, 'HTTP_REPEAT_TIMEOUT': 1}
+        found = {'host_b': {'extensions': {}}}
+        pool = pool_class.return_value.__enter__.return_value
+        pool.apply_async.side_effect = [
+            Mock(**{'get.side_effect': multiprocessing.TimeoutError()}),
+            Mock(**{'get.return_value': found}),
+        ]
+
+        self.cmk._fetch_checkmk_host_by_folder()
+
+        self.assertEqual(self.cmk.checkmk_hosts, found)
+        self.assertTrue(self.cmk.host_list_incomplete)
+        self.assertIn('/a', self.cmk.log_details[0][1])
+        pool.terminate.assert_called_once()
+
+    @patch('application.plugins.checkmk.cmk2.app')
+    def test_slow_request_does_not_count_as_hanging(self, mock_app):
+        mock_app.config = {'PROCESS_TIMEOUT': 15, 'HTTP_MAX_RETRIES': 2, 'HTTP_REPEAT_TIMEOUT': 3}
+        self.assertEqual(self.cmk._folder_fetch_timeout(), 15 + 2 * (60 + 3))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

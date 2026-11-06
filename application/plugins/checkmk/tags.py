@@ -22,7 +22,58 @@ class CheckmkTagSync(CMK2):
     """
     groups = {}
     checkmk_group_texts = {}
+    # Some hosts gave no tags in this run: a tag missing from the list then
+    # says nothing, so none gets removed from Checkmk.
+    tags_incomplete = False
 
+
+    def _tag_worker_failed(self, name, reason):
+        """A worker gave no result. Its host or rule is just left out."""
+        self.tags_incomplete = True
+        message = f"No tags of {name}, none gets removed in this run: {reason}"
+        print(f"- ERROR: {message}")
+        self.log_details.append(('error', message))
+
+    def _collect_workers(self, pool, tasks):
+        """Wait for all (name, async result) pairs and end the pool"""
+        worker_timed_out = False
+        for name, task in self.wait_for_tasks(tasks, app.config['PROCESS_TIMEOUT']):
+            try:
+                task.get(timeout=0)
+            except multiprocessing.TimeoutError:
+                worker_timed_out = True
+                self._tag_worker_failed(name, "Timeout")
+            except Exception as error:  # pylint: disable=broad-exception-caught
+                if self.debug:
+                    raise
+                self._tag_worker_failed(name, f"{type(error).__name__}: {error}")
+        self.finish_pool(pool, worker_timed_out)
+
+    def _build_caches_one_by_one(self, db_objects, groups, mlt_expressions, advance):
+        """
+        Hosts run one after the other, what one host adds to the groups is
+        seen by the next. A hanging worker is lost to the pool, so with
+        all of them gone the remaining hosts could only wait for nothing.
+        """
+        process_timeout = app.config['PROCESS_TIMEOUT']
+        workers = multiprocessing.cpu_count()
+        with multiprocessing.Pool(workers, initializer=init_db) as pool:
+            timed_out = []
+            for position, entry in enumerate(db_objects):
+                if sum(1 for task in timed_out if not task.ready()) >= workers:
+                    self._tag_worker_failed(
+                        f"the {db_objects.count() - position} remaining hosts",
+                        f"All workers hang, no result for {process_timeout}s")
+                    break
+                task = pool.apply_async(self.build_caches,
+                                        args=(entry, groups, mlt_expressions),
+                                        callback=advance)
+                try:
+                    task.get(timeout=process_timeout)
+                except multiprocessing.TimeoutError:
+                    timed_out.append(task)
+                    self._tag_worker_failed(entry.hostname, "Timeout")
+            self.finish_pool(pool, bool(timed_out))
 
     def build_caches(self, db_host, groups, multiply_expressions):
         """
@@ -77,12 +128,13 @@ class CheckmkTagSync(CMK2):
             base_groups = manager.dict()
             multiply_expressions = manager.list()
             with multiprocessing.Pool(initializer=init_db) as pool:
+                tasks = []
                 for rule in db_objects:
-                    pool.apply_async(self.create_inital_groups,
-                                     args=(rule, base_groups, multiply_expressions),
-                                     callback=lambda x: progress.advance(task1))
-                pool.close()
-                pool.join()
+                    tasks.append((rule.group_id, pool.apply_async(
+                        self.create_inital_groups,
+                        args=(rule, base_groups, multiply_expressions),
+                        callback=lambda x: progress.advance(task1))))
+                self._collect_workers(pool, tasks)
         return dict(base_groups), list(multiply_expressions)
 
 
@@ -91,6 +143,7 @@ class CheckmkTagSync(CMK2):
         Export Tags to Checkmk
         """
         # pylint: disable=too-many-locals
+        self.tags_incomplete = False
         base_groups, multiply_expressions = self.calculate_rules()
 
         object_filter = self.config['settings'].get(self.name, {}).get('filter')
@@ -105,25 +158,20 @@ class CheckmkTagSync(CMK2):
             mlt_expressions += multiply_expressions
 
             task1 = progress.add_task("Calculating Caches", total=total)
-            with multiprocessing.Pool(initializer=init_db) as pool:
-                for entry in db_objects:
-                    x = pool.apply_async(self.build_caches,
-                                     args=(entry, groups, mlt_expressions),
-                                     callback=lambda x: progress.advance(task1))
-                    x.get()
-                pool.close()
-                pool.join()
+            self._build_caches_one_by_one(db_objects, groups, mlt_expressions,
+                                          lambda x: progress.advance(task1))
 
             progress.console.print("Waiting for Calculation to finish")
             task2 = progress.add_task("Apply Hosttags to objects", total=total)
             with multiprocessing.Pool(initializer=init_db) as pool:
                 tags = manager.list()
+                tasks = []
                 for entry in db_objects:
-                    pool.apply_async(self.update_hosts_tags,
-                                     args=(entry, tags),
-                                     callback=lambda x: progress.advance(task2))
-                pool.close()
-                pool.join()
+                    tasks.append((entry.hostname, pool.apply_async(
+                        self.update_hosts_tags,
+                        args=(entry, tags),
+                        callback=lambda x: progress.advance(task2))))
+                self._collect_workers(pool, tasks)
 
             progress.console.print("Waiting for Calculation to finish")
         groups = dict(groups)
@@ -443,7 +491,7 @@ class CheckmkTagSync(CMK2):
                 [{id_field: x['id'], 'title': x['title']} \
                 for x in checkmk_tags if x['title'].strip()]
 
-        if app.config['CMK_DONT_DELETE_TAGS']:
+        if app.config['CMK_DONT_DELETE_TAGS'] or self.tags_incomplete:
             # In this case, we merge only the new dicts into the existing ones.
             # A tag which only exists in Checkmk can carry the title of one of
             # ours, so the titles have to be checked again after the merge.

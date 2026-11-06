@@ -220,9 +220,9 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
 
                 process_timeout = app.config['PROCESS_TIMEOUT']
                 worker_timed_out = False
-                for hostname, task in tasks:
+                for hostname, task in self.wait_for_tasks(tasks, process_timeout):
                     try:
-                        _host, data = task.get(timeout=process_timeout)
+                        _host, data = task.get(timeout=0)
                     except multiprocessing.TimeoutError:
                         worker_timed_out = True
                         self.hw_sw_failed_hosts.add(hostname)
@@ -446,7 +446,9 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         for hostname in self.found_hosts:
             db_host = db_hosts.get(hostname)
             if db_host:
-                db_host.update_inventory('cmk', self.config_inventory.get(hostname, {}))
+                # Same for a host in a folder whose hosts could not be fetched
+                if not self.host_list_incomplete or hostname in self.config_inventory:
+                    db_host.update_inventory('cmk', self.config_inventory.get(hostname, {}))
                 db_host.update_inventory('cmk_svc', self.status_inventory.get(hostname, {}))
                 db_host.update_inventory('cmk_svc_labels',
                                          self.service_label_inventory.get(hostname, {}))
