@@ -9,8 +9,10 @@ Authentication
 --------------
 Same model as the REST API: a syncer ``User`` with the ``mcp`` (or
 ``all``) ``api_role`` authenticates via HTTP Basic. A user without that
-role is rejected at the boundary, so per-tool role checks are not
-needed inside the tool bodies.
+role is rejected at the boundary. Inside the tools the same limits apply
+as elsewhere: a read-only user can't write, a user limited to accounts or
+templates only reaches those hosts and none of the global data, and only
+an unlimited global admin gets the cleartext of an account.
 
 stdio transport
     Credentials are passed at startup via ``--user``/``--password`` or
@@ -65,7 +67,7 @@ from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
 
 import application  # pylint: disable=unused-import  # noqa: F401 — boot side effect
 from application import app
-from application.models.user import User
+from application.models.user import User, is_readonly
 from application.models.host import Host
 from application.models.account import Account
 from application.models.cron import CronStats, CronGroup
@@ -74,7 +76,12 @@ from application.helpers.get_account import (
     get_account_by_name,
     AccountNotFoundError,
 )
-from application.helpers.secret_access import set_acting_user
+from application.helpers.secret_access import (
+    host_in_scope,
+    is_scoped,
+    scoped_hosts,
+    set_acting_user,
+)
 from application.plugins.rules.rule_definitions import rules as enabled_rules
 from application.plugins.rules.rule_import_export import (
     iter_rules_of_type,
@@ -104,7 +111,8 @@ class MCPAuthError(Exception):
 def _user_has_mcp_access(user):
     """``mcp`` (or ``all``) in api_roles is the umbrella grant for the
     server. Per-tool role checks are intentionally *not* layered on top —
-    the role explicitly opts a user in to MCP."""
+    the role explicitly opts a user in to MCP. Read only and the limits to
+    accounts or templates still apply, see _writing_user and _global_user."""
     roles = user.api_roles or []
     return 'all' in roles or 'mcp' in roles
 
@@ -160,6 +168,32 @@ def _current_user():
     return user
 
 
+def _writing_user():
+    """The user of a call that changes something, never a read-only one."""
+    user = _current_user()
+    if is_readonly(user):
+        raise PermissionError("This user is read only")
+    return user
+
+
+def _global_user(write=False):
+    """The user of a call about data that belongs to no host, which a user
+    limited to accounts or templates has no business with."""
+    user = _writing_user() if write else _current_user()
+    if is_scoped(user):
+        raise PermissionError("Not available for a user limited to accounts or templates")
+    return user
+
+
+def _reachable_host(user, hostname):
+    """The existing host, None when it doesn't exist or is out of scope, so
+    that a limited user can't tell the difference."""
+    host_obj = Host.get_host(hostname, create=False)
+    if not host_obj or not host_in_scope(user, host_obj):
+        return None
+    return host_obj
+
+
 # ---------------------------------------------------------------------------
 # Helpers shared with the REST API
 # ---------------------------------------------------------------------------
@@ -207,10 +241,10 @@ def list_hosts(start: int = 0, limit: int = 100) -> dict:
     of ``{hostname, labels, inventory, last_seen, last_update}`` dicts.
     Excludes non-host objects (``is_object=True``).
     """
-    _current_user()
+    user = _current_user()
     if start < 0 or limit < 0:
         raise ValueError("start and limit must be non-negative")
-    queryset = Host.objects(is_object__ne=True)
+    queryset = scoped_hosts(user).filter(is_object__ne=True)
     total = queryset.count()
     end = start + limit
     return {
@@ -224,11 +258,9 @@ def list_hosts(start: int = 0, limit: int = 100) -> dict:
 @mcp.tool()
 def get_host(hostname: str) -> dict:
     """Return labels, inventory and timestamps for *hostname*."""
-    _current_user()
-    try:
-        host = Host.objects.get(hostname=hostname)
-    except DoesNotExist as exc:
-        raise ValueError(f"Host '{hostname}' not found") from exc
+    host = _reachable_host(_current_user(), hostname)
+    if not host:
+        raise ValueError(f"Host '{hostname}' not found")
     return _host_to_dict(host)
 
 
@@ -240,12 +272,18 @@ def upsert_host(hostname: str, account: str, labels: dict) -> dict:
     call returns ``{"status": "account_conflict"}`` instead. To re-bind
     a host, edit it from the admin UI.
     """
-    _current_user()
+    user = _writing_user()
+    accounts = user.account_scope()
+    if accounts is not None and account not in accounts:
+        raise PermissionError(f"Account '{account}' is not permitted for this user")
     try:
         account_dict = get_account_by_name(account)
     except AccountNotFoundError as exc:
         raise ValueError(f"Account '{account}' not found") from exc
     host_obj = Host.get_host(hostname)
+    # Only an existing host can be out of scope, a new one belongs to nobody
+    if host_obj.id and not host_in_scope(user, host_obj):
+        return {'status': 'account_conflict', 'hostname': hostname}
     try:
         host_obj.update_host(labels)
     except ValueError as exc:
@@ -259,8 +297,7 @@ def upsert_host(hostname: str, account: str, labels: dict) -> dict:
 @mcp.tool()
 def delete_host(hostname: str) -> dict:
     """Delete *hostname*. Frees a Checkmk folder pool seat if held."""
-    _current_user()
-    host_obj = Host.get_host(hostname, create=False)
+    host_obj = _reachable_host(_writing_user(), hostname)
     if not host_obj:
         return {'status': 'not_found', 'hostname': hostname}
     folder = host_obj.folder
@@ -283,8 +320,7 @@ def update_host_inventory(hostname: str, key: str, inventory: dict) -> dict:
     Inventory writes never auto-create a host — *hostname* must already
     exist (use ``upsert_host`` first).
     """
-    _current_user()
-    host_obj = Host.get_host(hostname, create=False)
+    host_obj = _reachable_host(_writing_user(), hostname)
     if not host_obj:
         return {'status': 'not_found', 'hostname': hostname}
     try:
@@ -301,7 +337,7 @@ def update_host_inventory(hostname: str, key: str, inventory: dict) -> dict:
 @mcp.tool()
 def list_accounts() -> dict:
     """List all accounts with name, type and enabled flag."""
-    _current_user()
+    _global_user()
     out = []
     for acc in Account.objects.only('name', 'type', 'enabled', 'is_master',
                                     'is_child'):
@@ -319,8 +355,10 @@ def list_accounts() -> dict:
 def get_account(name: str) -> dict:
     """Return the resolved account record (custom_fields flattened, child
     inheriting from parent). Includes the cleartext password — handle with
-    care; only callers with the ``mcp`` (or ``all``) api_role can call."""
-    _current_user()
+    care; only for a global admin who is neither read only nor limited to
+    accounts or templates."""
+    if not _global_user(write=True).global_admin:
+        raise PermissionError("Only a global admin can read an account")
     try:
         return _serialize(get_account_by_name(name))
     except AccountNotFoundError as exc:
@@ -340,7 +378,7 @@ def list_rule_types() -> dict:
 @mcp.tool()
 def export_rules(rule_type: str) -> dict:
     """Export every rule of *rule_type* as a list of dicts."""
-    _current_user()
+    _global_user()
     if rule_type not in enabled_rules:
         raise ValueError(f"Unknown rule_type '{rule_type}'")
     rules = []
@@ -365,7 +403,7 @@ def export_all_rules(include_hosts: bool = False,
     CMDB templates come along as their own ``cmdb_templates`` type, no
     flag needed.
     """
-    _current_user()
+    _global_user()
     return grouped_rules_export(
         include_hosts=include_hosts,
         include_accounts=include_accounts,
@@ -381,7 +419,7 @@ def create_rule(rule_type: str, rule: dict, override: bool = False) -> dict:
 
     With ``override`` an existing rule with the same id or name is
     replaced instead of reported as duplicate."""
-    _current_user()
+    _global_user(write=True)
     if rule_type not in enabled_rules:
         raise ValueError(f"Unknown rule_type '{rule_type}'")
     status = import_one_rule(rule, rule_type, override=override)
@@ -401,7 +439,7 @@ def import_rules_bulk(payload: dict, override: bool = False) -> dict:
     With ``override`` rules which already exist are replaced instead of
     skipped.
     """
-    _current_user()
+    _global_user(write=True)
     counts = import_json_bundle(payload, override=override)
     if not counts and not isinstance(payload.get('rules'), (list, dict)):
         raise ValueError("Payload must contain a 'rules' list or dict")
@@ -411,7 +449,7 @@ def import_rules_bulk(payload: dict, override: bool = False) -> dict:
 @mcp.tool()
 def run_autorules(debug: bool = False) -> dict:
     """Run the autorules pass that builds rules from current host data."""
-    _current_user()
+    _global_user(write=True)
     create_rules(account=False, debug=debug)
     return {'status': 'ok'}
 
@@ -422,7 +460,7 @@ def run_autorules(debug: bool = False) -> dict:
 @mcp.tool()
 def get_recent_logs(limit: int = 100) -> dict:
     """Return the latest *limit* log entries, newest first."""
-    _current_user()
+    _global_user()
     if limit < 1 or limit > 1000:
         raise ValueError("limit must be between 1 and 1000")
     out = []
@@ -442,7 +480,7 @@ def get_recent_logs(limit: int = 100) -> dict:
 @mcp.tool()
 def get_cron_status() -> dict:
     """Return status of every CronGroup."""
-    _current_user()
+    _global_user()
     out = []
     for entry in CronStats.objects:
         out.append({
@@ -461,7 +499,7 @@ def get_cron_status() -> dict:
 @mcp.tool()
 def trigger_cron_group(group_name: str) -> dict:
     """Schedule the named CronGroup to run on the next cron pass."""
-    _current_user()
+    _global_user(write=True)
     try:
         group = CronGroup.objects.get(name=group_name)
     except DoesNotExist as exc:
@@ -476,13 +514,13 @@ def trigger_cron_group(group_name: str) -> dict:
 @mcp.tool()
 def host_stats() -> dict:
     """Aggregate host counters: total, objects, stale (no import seen in 24h)."""
-    _current_user()
+    hosts = scoped_hosts(_current_user())
     ago_24h = datetime.utcnow() - timedelta(hours=24)
     return {
         '24h_checkpoint': ago_24h.strftime('%Y-%m-%dT%H:%M:%SZ'),
-        'num_hosts': Host.objects(is_object=False).count(),
-        'num_objects': Host.objects(is_object=True).count(),
-        'not_updated_last_24h': Host.objects(
+        'num_hosts': hosts.filter(is_object=False).count(),
+        'num_objects': hosts.filter(is_object=True).count(),
+        'not_updated_last_24h': hosts.filter(
             is_object=False, last_import_seen__lt=ago_24h,
         ).count(),
     }
@@ -494,10 +532,8 @@ def host_stats() -> dict:
 @mcp.resource("cmdbsyncer://hosts/{hostname}")
 def host_resource(hostname: str) -> str:
     """Single host record as JSON."""
-    _current_user()
-    try:
-        host = Host.objects.get(hostname=hostname)
-    except DoesNotExist:
+    host = _reachable_host(_current_user(), hostname)
+    if not host:
         return json.dumps({'error': f"Host '{hostname}' not found"})
     return json.dumps(_host_to_dict(host), indent=2)
 
@@ -505,7 +541,7 @@ def host_resource(hostname: str) -> str:
 @mcp.resource("cmdbsyncer://rules/{rule_type}")
 def rules_resource(rule_type: str) -> str:
     """Every rule of *rule_type* as a JSON list."""
-    _current_user()
+    _global_user()
     if rule_type not in enabled_rules:
         return json.dumps({'error': f"Unknown rule_type '{rule_type}'"})
     rules = []
@@ -520,7 +556,6 @@ def rules_resource(rule_type: str) -> str:
 @mcp.resource("cmdbsyncer://cron/status")
 def cron_status_resource() -> str:
     """Cron-group status snapshot as JSON."""
-    _current_user()
     return json.dumps(get_cron_status(), indent=2)
 
 
