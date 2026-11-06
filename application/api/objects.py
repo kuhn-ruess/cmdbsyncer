@@ -487,7 +487,7 @@ MAX_PAGE_LIMIT = 10000
 
 
 @API.route('/all')
-@API.param('start', 'Zero-based page offset. Default ``1``.', type='integer')
+@API.param('start', 'Zero-based page offset. Default ``0``.', type='integer')
 @API.param('limit', 'Page size, max items returned per call. Default ``100``,'
                     f' max ``{MAX_PAGE_LIMIT}``.',
            type='integer')
@@ -497,8 +497,8 @@ class HostDetailListApi(Resource):
     @API.doc(security=['basicAuth', 'apiToken'])
     @API.response(200, 'A page of host objects plus pagination links.',
                   LIST_RESPONSE)
-    @API.response(400, 'Pagination params not numeric, negative, or limit '
-                       f'above {MAX_PAGE_LIMIT}.', ERROR)
+    @API.response(400, 'Pagination params not numeric, negative, limit zero '
+                       f'or limit above {MAX_PAGE_LIMIT}.', ERROR)
     @API.response(401, 'Authentication failed', ERROR)
     @require_token
     def get(self):
@@ -509,17 +509,20 @@ class HostDetailListApi(Resource):
         """
         results = []
         try:
-            start = int(request.args.get('start', 1))
+            start = int(request.args.get('start', 0))
             limit = int(request.args.get('limit', 100))
         except (TypeError, ValueError):
             abort(400, "start and limit must be integers")
         if start < 0 or limit < 0:
             abort(400, "start and limit must be non-negative")
+        if limit == 0:
+            # A page of nothing would hand out a next link to itself forever.
+            abort(400, "limit must be at least 1")
         if limit > MAX_PAGE_LIMIT:
             abort(400, f"limit must be <= {MAX_PAGE_LIMIT}")
         end = start+limit
 
-        db_objecs = scope_host_query(Host.objects(is_object__ne=True))
+        db_objecs = scope_host_query(Host.objects(is_object__ne=True)).order_by('id')
         total = db_objecs.count()
         for host in db_objecs[start:end]:
             results.append(build_host_dict(host))

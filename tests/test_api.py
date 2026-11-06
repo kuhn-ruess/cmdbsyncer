@@ -1387,6 +1387,9 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
             def count(self):
                 return len(self._items)
 
+            def order_by(self, *_fields):
+                return self
+
             def __getitem__(self, item):
                 return self._items[item]
 
@@ -1413,6 +1416,36 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         self.assertEqual(resp.status_code, 400)
 
     @_auth_patches
+    @patch('application.api.objects.Host')
+    def test_list_all_starts_at_the_first_host_by_default(self, host_cls):
+        hosts = [MagicMock(
+            hostname=f'h{idx}',
+            get_labels=MagicMock(return_value={}),
+            get_inventory=MagicMock(return_value={}),
+            last_import_seen=None,
+            last_import_sync=None,
+        ) for idx in range(3)]
+        queryset = MagicMock()
+        queryset.count.return_value = 3
+        queryset.__getitem__.side_effect = lambda item: hosts[item]
+        queryset.order_by.return_value = queryset
+        host_cls.objects.return_value = queryset
+
+        resp = self.client.get('/api/v1/objects/all', headers=self.headers)
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.get_json()
+        self.assertEqual(body['start'], 0)
+        self.assertEqual(len(body['results']), 3)
+        queryset.order_by.assert_called_once_with('id')
+
+    @_auth_patches
+    def test_list_all_rejects_a_page_of_nothing(self):
+        # Its next link would point at itself.
+        resp = self.client.get('/api/v1/objects/all?limit=0', headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
+    @_auth_patches
     def test_list_all_rejects_negative_params(self):
         resp = self.client.get('/api/v1/objects/all?limit=-1', headers=self.headers)
         self.assertEqual(resp.status_code, 400)
@@ -1436,6 +1469,9 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
 
             def count(self):
                 return len(self._items)
+
+            def order_by(self, *_fields):
+                return self
 
             def __getitem__(self, item):
                 return self._items[item]
@@ -1574,6 +1610,9 @@ class ObjectsAPIScopingTest(unittest.TestCase):
             def count(self):
                 return len(self._items)
 
+            def order_by(self, *_fields):
+                return self
+
             def __getitem__(self, item):
                 return self._items[item]
 
@@ -1654,6 +1693,9 @@ class ObjectsAPIScopingTest(unittest.TestCase):
 
             def count(self):
                 return len(self._items)
+
+            def order_by(self, *_fields):
+                return self
 
             def __getitem__(self, item):
                 return self._items[item]
