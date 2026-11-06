@@ -652,6 +652,38 @@ class TestPlugin(unittest.TestCase):
         self.assertNotIn('test_cache_hostattribute', mock_host.cache)
 
     @patch('application.modules.plugin.app')
+    @patch('application.modules.plugin.logger')
+    def test_an_ignored_host_stays_ignored_without_cache(self, _logger, mock_app):
+        """No cache to write, neither by the caller's wish nor because of a
+        rule working with a timestamp, changes nothing about ignore_host."""
+        mock_app.config = self.mock_app_config
+
+        for cache, depends_on_time in ((False, False), ('test_cache', True)):
+            with self.subTest(cache=cache):
+                mock_host = Mock()
+                mock_host.hostname = 'test-host'
+                mock_host.cache = {}
+                mock_host.labels = {}
+                mock_host.inventory = {}
+                mock_host.cmdb_templates = []
+                mock_host.last_import_seen = None
+                mock_host.last_import_sync = None
+
+                plugin = Plugin()
+                plugin.custom_attributes = Mock()
+                plugin.custom_attributes.depends_on_time.return_value = depends_on_time
+                plugin.custom_attributes.get_outcomes.return_value = {}
+                plugin.init_custom_attributes = Mock()
+                plugin.rewrite = None
+                plugin.filter = Mock()
+                plugin.filter.depends_on_time.return_value = False
+                plugin.filter.get_outcomes.return_value = {'ignore_host': True}
+                plugin.merged_attributes = set()
+
+                self.assertFalse(plugin.get_attributes(mock_host, cache))
+                self.assertEqual(mock_host.cache, {})
+
+    @patch('application.modules.plugin.app')
     def test_get_attributes_exposes_source_account(self, mock_app):
         """The importing account must be matchable by every rule type."""
         mock_app.config = self.mock_app_config

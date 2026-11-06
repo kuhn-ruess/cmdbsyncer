@@ -899,9 +899,10 @@ class Plugin():
                 use_cache=use_cache,
             )
             data['filtered'] = attributes_filtered
-            if attributes_filtered.get('ignore_host') and cache:
-                db_host.cache[cache]['attributes'] = data
-                self._persist_cache(db_host, False)
+            if attributes_filtered.get('ignore_host'):
+                if cache:
+                    db_host.cache[cache]['attributes'] = data
+                    self._persist_cache(db_host, False)
                 return False
 
         if cache:
