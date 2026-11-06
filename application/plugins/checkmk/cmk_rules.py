@@ -582,26 +582,6 @@ def cmk_rule_to_outcome(cmk_rule):
     return outcome
 
 
-def render_jinja_in_value(value, context):
-    """
-    Walk a debug-output value (dict / list / string) and Jinja-render
-    every string that contains a ``{{ }}`` placeholder, against the
-    given host attribute context. Used so the host-debug GUI shows the
-    actually-rendered outcome values instead of the raw templates an
-    admin configured.
-    """
-    if isinstance(value, dict):
-        return {k: render_jinja_in_value(v, context) for k, v in value.items()}
-    if isinstance(value, list):
-        return [render_jinja_in_value(v, context) for v in value]
-    if isinstance(value, str) and '{{' in value:
-        try:
-            return render_jinja(value, **context)
-        except Exception:  # pylint: disable=broad-except
-            return value
-    return value
-
-
 def preview_rule_for_attributes(rule, attributes):
     """
     Render every outcome of a ``CheckmkRuleMngmt`` against the given

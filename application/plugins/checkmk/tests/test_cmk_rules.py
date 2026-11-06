@@ -22,7 +22,6 @@ from application.plugins.checkmk.cmk_rules import (
     analyze_value_differences,
     preview_rule_for_attributes,
     preview_group_rule_for_attributes,
-    render_jinja_in_value,
     normalize_cmk_folder,
     folder_in_scope,
     folder_within_scope,
@@ -2816,18 +2815,6 @@ class TestPreviewRuleForAttributes(unittest.TestCase):
                          ["'svc_web'", "'svc_db'"])
         self.assertIn('loop[0] = web', result[0]['meta'])
         self.assertIn('loop[1] = db', result[1]['meta'])
-
-    def test_renders_jinja_in_nested_dict(self):
-        data = {
-            'host_alias': '{{ HOSTNAME }}',
-            'tags': ['static', '{{ env }}'],
-            'plain': 'no jinja here',
-        }
-        result = render_jinja_in_value(
-            data, {'HOSTNAME': 'srv01', 'env': 'prod'})
-        self.assertEqual(result['host_alias'], 'srv01')
-        self.assertEqual(result['tags'], ['static', 'prod'])
-        self.assertEqual(result['plain'], 'no jinja here')
 
     def test_loop_over_empty_list_emits_note(self):
         rule = SimpleNamespace(outcomes=[_outcome(

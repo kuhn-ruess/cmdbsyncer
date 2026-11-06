@@ -326,14 +326,11 @@ def get_host_debug_data(hostname):
     attributes = syncer.get_attributes(db_host, 'checkmk')
 
     if attributes:
-        actions = syncer.get_host_actions(db_host, attributes['all'])
-        # Render Jinja in outcome values so the debug page shows the
-        # values that would actually be exported, not raw templates
-        # (the export pipeline renders these later — without this,
-        # admins debugging a host see `{{ var }}` instead of the
-        # resolved value).
-        from .cmk_rules import render_jinja_in_value
-        actions = render_jinja_in_value(actions, attributes['all'])
+        # The rule engine has rendered the outcome values. Rendering them
+        # again here would evaluate an attribute value as a template, and
+        # with that hand out account passwords through {{ACCOUNT:...}}.
+        # A copy: the original is the cached outcome of the export.
+        actions = dict(syncer.get_host_actions(db_host, attributes['all']))
         # Pool assignments are sticky. Without saying so here, a folder or
         # site that no longer fits the current pools/rules looks like a
         # wrong rule outcome instead of an old assignment being kept.
