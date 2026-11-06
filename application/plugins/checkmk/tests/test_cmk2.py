@@ -120,6 +120,15 @@ class TestCMK2Request(unittest.TestCase):
             with self.assertRaises(CmkException):
                 self.cmk.request('endpoint')
 
+    def test_connection_error_of_requests_becomes_cmk_exception(self):
+        for error in (requests.exceptions.ConnectionError('refused'),
+                      requests.exceptions.SSLError('bad certificate')):
+            with patch.object(self.cmk, 'inner_request', side_effect=error):
+                with self.assertRaises(CmkException) as caught:
+                    self.cmk.request('endpoint')
+            self.assertIn("Can't connect to Checkmk", str(caught.exception))
+            self.assertIn(str(error), str(caught.exception))
+
     def test_error_without_fields_has_no_trailing_none(self):
         """A missing `fields` must not append a literal "None" to the message"""
         mock_response = Mock()

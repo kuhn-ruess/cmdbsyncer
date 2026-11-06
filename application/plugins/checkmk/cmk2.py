@@ -4,7 +4,6 @@ Central Request Modul to CMK 2.x
 import multiprocessing
 import requests
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
-#from requests.exceptions import ConnectionError
 from application import app
 from application.modules.plugin import Plugin
 from application.helpers.plugins import register_cli_group
@@ -290,8 +289,9 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
             if response:
                 return {}, {'status_code': response.status_code}
             return {}, {"error": "Checkmk Connections broken"}
-        except ConnectionError as exc:
-            raise CmkException("Can't connect to Checkmk") from exc
+        except (requests.exceptions.ConnectionError, ConnectionError) as exc:
+            # The one from requests is no subclass of the builtin one
+            raise CmkException(f"Can't connect to Checkmk: {exc}") from exc
 
     def fetch_checkmk_folders(self):
         """
