@@ -317,7 +317,7 @@ We welcome contributions! Please follow these steps:
 
 The repository ships a `pre-commit` hook in `.githooks/` that refreshes
 `application/buildinfo.txt`, runs pylint on staged Python files, and executes
-the unit-test suite before each commit. Activate it once per clone:
+the unit-test suite before each commit. Pylint comes with `requirements-dev.txt`, without it the hook skips the lint. Activate the hook once per clone:
 
 ```bash
 git config core.hooksPath .githooks
