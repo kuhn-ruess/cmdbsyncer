@@ -106,7 +106,7 @@ def resolve_loop_list(list_to_loop, attributes):
     return [x for x in get_list(rendered) if x], None
 
 
-def collect_attribute_index(plugin, db_hosts, cache='cmk_conf'):
+def collect_attribute_index(plugin, db_hosts, cache='cmk_conf', persist_cache=True):
     """
     Index the attributes of every given host twice: once by attribute
     name (``key -> [values]``) and once by attribute value
@@ -115,12 +115,13 @@ def collect_attribute_index(plugin, db_hosts, cache='cmk_conf'):
     Both directions are needed because a "Foreach" selection can name
     either side: `service:Firewall` is found by value, `Firewall:service`
     by name. Shared by every export that turns host attributes into
-    objects of their own (groups, users).
+    objects of their own (groups, users). ``persist_cache=False`` leaves
+    the hosts as they are, for a run that is no export.
     """
     collection_keys = {}
     collection_values = {}
     for db_host in db_hosts:
-        if attributes := plugin.get_attributes(db_host, cache):
+        if attributes := plugin.get_attributes(db_host, cache, persist_cache=persist_cache):
             for key, value in attributes['all'].items():
                 key, value = str(key), str(value)
                 # Add the Keys

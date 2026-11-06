@@ -46,6 +46,7 @@ from application.modules.rule.views import (
 from application.views._form_sections import modern_form, section
 from application.models.project import Project
 from application.plugins.ansible.runner import run_playbook
+from application.helpers.get_account import mask_account_secrets
 from application.helpers.syncer_jinja import check_jinja_syntax
 from application.modules.rule.list_source import is_list_rule, rule_uses_list
 from application.modules.rule.list_source_views import (
@@ -1390,7 +1391,10 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
                           f"?mode=checkmk_host&preview_rule_id=setup_rule:{rule.id}")
         preview = None
         if is_list_rule(rule):
-            preview = preview_list_rule(rule)
+            # Shown on the page: the {{ACCOUNT:...}} macro stays masked, as
+            # on the host debug
+            with mask_account_secrets():
+                preview = preview_list_rule(rule)
         return self.render('admin/checkmk_list_rule_debug.html', rule=rule,
                            preview=preview, host_debug_url=host_debug_url,
                            edit_url=self.get_url('.edit_view', id=rule.id))
@@ -3058,7 +3062,8 @@ class CheckmkUserGenerationPreviewView(BaseView):
 
         if request.args.get('preview'):
             try:
-                rows, errors = preview_generated_users(rule_id or None, search_filter)
+                with mask_account_secrets():
+                    rows, errors = preview_generated_users(rule_id or None, search_filter)
             except LdapSearchError as exp:
                 error = str(exp)
             except Exception as exp:  # pylint: disable=broad-exception-caught
@@ -3121,10 +3126,11 @@ class CheckmkFolderView(BaseView):
         if account and account not in self._accounts():
             return None, None, f"Unknown Checkmk account: {account}"
         try:
-            calculation = FolderCalculation(account)
-            calculation.run()
-            folders = scope_folders(calculation.folders(),
-                                    visible_hostnames(current_user))
+            with mask_account_secrets():
+                calculation = FolderCalculation(account)
+                calculation.run()
+                folders = scope_folders(calculation.folders(),
+                                        visible_hostnames(current_user))
         except Exception as exp:  # pylint: disable=broad-exception-caught
             return None, None, f"{type(exp).__name__}: {exp}"
         return calculation, folders, None
@@ -3165,7 +3171,8 @@ class CheckmkFolderView(BaseView):
             if folder is None:
                 error = f"No folder {path} for this account and your scope"
             else:
-                calculation.attribute_rules(folder)
+                with mask_account_secrets():
+                    calculation.attribute_rules(folder)
         rule_url = f"{app.config['BASE_PREFIX']}admin/checkmkrule/edit/?id="
         return self.render(
             'admin/checkmk_folder_debug.html',

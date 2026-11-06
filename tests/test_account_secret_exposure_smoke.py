@@ -66,6 +66,58 @@ login('accounts@example.com', ['host', 'account'])
 body = check(url, 200).get_data(as_text=True)
 eq(SECRET in body, True, 'the value with the account role')
 
+# --- the other pages rendering rules: the plugin role alone sees no secret
+# pylint: disable=wrong-import-position
+from application.plugins.checkmk.models import (
+    CheckmkRule, CheckmkRuleMngmt, CheckmkRuleOutcome, RuleMngmtOutcome)
+from application.plugins.checkmk.user_models import (
+    CheckmkUserGenerationRule, CmkUserGenerationOutcome)
+
+MACRO = '{{ACCOUNT:acc:api_token}}'
+
+list_rule = CheckmkRuleMngmt(
+    name='secret-list-rule', enabled=True, condition_typ='anyway', rule_source='list',
+    list_source='Service;Level\\nsrv01;10\\n',
+    outcomes=[RuleMngmtOutcome(ruleset='r', folder='/', value_template="'" + MACRO + "'",
+                               condition_service='{{ service }}$')])
+list_rule.save()
+
+generation = CheckmkUserGenerationRule(name='secret-generation', enabled=True)
+generation.outcome = CmkUserGenerationOutcome(
+    foreach_type='label', foreach='ldap_group', rewrite_group_name='{{name}}',
+    rewrite_user_id='{{name}}', rewrite_full_name=MACRO, roles=['user'])
+generation.save()
+
+folder_host = Host.get_host('secret-folder-host')
+folder_host.update_host({'ldap_group': 'grp-dba'})
+folder_host.save()
+CheckmkRule(name='secret-folder-rule', enabled=True, condition_typ='anyway',
+            outcomes=[CheckmkRuleOutcome(
+                action='move_folder',
+                action_param="shared|{'contactgroups': {'groups': ['" + MACRO
+                             + "'], 'use': True}}")]).save()
+# What a real run cached holds the real value, the preview must not read it
+cached_host = Host(hostname='secret-cached-host', source_account_name='acc',
+                   source_account_id='acc', labels={'ldap_group': 'grp-dba'},
+                   cache={'cmk_conf_hostattribute': {'attributes': {
+                       'all': {'ldap_group': SECRET}, 'filtered': {}}}})
+cached_host.save()
+caches_before = {x.hostname: x.cache for x in Host.objects()}
+
+login('checkmk@example.com', ['checkmk'])
+for page in (f'/admin/checkmkrulemngmt/list_rule_debug?id={list_rule.id}',
+             '/admin/checkmk_user_generation_preview/?preview=1',
+             '/admin/checkmk_folders/?calculate=1',
+             '/admin/checkmk_folders/debug?folder=/shared'):
+    body = check(page, 200).get_data(as_text=True)
+    eq(SECRET in body, False, f'the secret on {page}')
+eq(SECRET_PLACEHOLDER in check('/admin/checkmk_folders/debug?folder=/shared', 200)
+   .get_data(as_text=True), True, 'the placeholder on the folder debug')
+eq({x.hostname: x.cache for x in Host.objects()}, caches_before,
+   'the host caches after these pages')
+# A run still gets the real value
+eq(render_jinja(MACRO), SECRET, 'the macro after these pages')
+
 print('SECRET_EXPOSURE_OK')
 '''
 

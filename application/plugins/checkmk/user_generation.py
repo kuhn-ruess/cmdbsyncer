@@ -58,6 +58,16 @@ def rewritten_group_name(template, value):
         return ''
 
 
+def _without_cache(db_hosts):
+    """
+    The hosts without their cache, in memory only. What a run cached there
+    holds real secrets, and a preview is shown in the browser.
+    """
+    for db_host in db_hosts:
+        db_host.cache = {}
+        yield db_host
+
+
 def rules_with_outcome():
     """The enabled rules, without those lacking the outcome they work on."""
     return CheckmkUserGenerationRule.objects(enabled=True, outcome__exists=True)
@@ -374,7 +384,8 @@ class CheckmkUserGeneration(Plugin):
         not what the rule looks like on paper. `rule_id` limits it to one
         rule. Returns (rows, errors).
         """
-        attribute_index = collect_attribute_index(self, Host.get_export_hosts())
+        attribute_index = collect_attribute_index(
+            self, _without_cache(Host.get_export_hosts()), cache=False, persist_cache=False)
         rule_groups = []
         for rule in rules_with_outcome():
             if rule_id and str(rule.id) != str(rule_id):
