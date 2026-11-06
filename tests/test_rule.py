@@ -493,5 +493,39 @@ class TestGetOutcomesCache(unittest.TestCase):
         self.db_host.save.assert_not_called()
 
 
+class TestHostnameRegex(unittest.TestCase):
+    """A hostname regex keeps its meaning and stays case-insensitive."""
+
+    @staticmethod
+    def _matches(pattern, hostname, negate=False, condition='regex'):
+        return Rule._check_hostname_match({
+            'hostname': pattern,
+            'hostname_match': condition,
+            'hostname_match_negate': negate,
+        }, hostname)
+
+    def test_upper_case_classes_are_not_inverted(self):
+        self.assertFalse(self._matches(r'^srv\D', 'srv01'))
+        self.assertTrue(self._matches(r'^srv\D', 'srvab'))
+        self.assertFalse(self._matches(r'^srv\S', 'srv 1'))
+        self.assertTrue(self._matches(r'^srv\S', 'srv01'))
+        self.assertFalse(self._matches(r'^srv\W', 'srv01'))
+        self.assertTrue(self._matches(r'^srv\W', 'srv-01'))
+
+    def test_end_of_string_anchor_stays_valid(self):
+        self.assertTrue(self._matches(r'^srv01\Z', 'srv01'))
+
+    def test_regex_stays_case_insensitive(self):
+        self.assertTrue(self._matches(r'^SRV\d+$', 'srv01'))
+        self.assertTrue(self._matches(r'^srv\d+$', 'SRV01'))
+        self.assertTrue(self._matches(r'^[A-Z]+\d+$', 'srv01'))
+        self.assertFalse(self._matches(r'^[^A-Z]+$', 'srv'))
+
+    def test_negate_and_other_conditions(self):
+        self.assertTrue(self._matches(r'^srv\D', 'srv01', negate=True))
+        self.assertTrue(self._matches('SRV01', 'srv01', condition='equal'))
+        self.assertTrue(self._matches('srv', 'SRV01', condition='swith'))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

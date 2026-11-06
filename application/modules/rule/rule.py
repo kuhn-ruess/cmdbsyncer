@@ -295,9 +295,16 @@ class Rule():
         """
         Check if Condition Matchs to Hostname
         """
-        needed = condition['hostname'].lower()
+        needed = condition['hostname']
         host_match = condition['hostname_match'].lower()
         negate = condition['hostname_match_negate']
+
+        if host_match == 'regex':
+            # Lowercasing a pattern changes its meaning (\D becomes \d),
+            # so the regex ignores the case instead.
+            needed = f'(?i){needed}'
+        else:
+            needed = needed.lower()
 
         if match(hostname.lower(), needed, host_match, negate):
             return True
