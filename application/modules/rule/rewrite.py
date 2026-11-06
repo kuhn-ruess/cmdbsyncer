@@ -41,11 +41,12 @@ class Rewrite(Rule):
             # Default in case of String
             if  new_value := outcome.get('new_value'):
                 if value_mode == 'split':
-                    what, index = new_value.split(':')
+                    # The index follows the last colon, the separator may be one
+                    what, _, index = new_value.rpartition(':')
                     try:
                         splited = old_value.split(what)
                         new_value = splited[int(index)]
-                    except (IndexError, TypeError):
+                    except (IndexError, TypeError, ValueError, AttributeError):
                         logger.debug("Cant Split Value, old one returned")
                         return old_value
                 elif value_mode == 'jinja':
@@ -90,7 +91,11 @@ class Rewrite(Rule):
 
             # We pass the old name, since the attributes store of the host hast the value
             # stilles stored under this old name
-            if new_value := self.get_new_attribute_value(outcome, old_name):
+            new_value = self.get_new_attribute_value(outcome, old_name)
+            # An empty result only counts when it is the attribute's own value:
+            # a rename must keep 0, False or '', a missing attribute stays missing.
+            if new_value or (old_name in self.attributes
+                             and new_value == self.attributes[old_name]):
                 for name in attributes:
                     outcomes[f'add_{name}'] = new_value
                     # Make new Attribute also available to be used in

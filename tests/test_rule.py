@@ -8,6 +8,7 @@ import pathlib
 import unittest
 from unittest.mock import Mock, patch
 
+from application.modules.rule.rewrite import Rewrite
 from application.modules.rule.rule import Rule, outcome_delta
 
 
@@ -604,6 +605,63 @@ class TestEqualTagMatchCase(unittest.TestCase):
     def test_value_and_missing_tag_still_decide(self):
         self.assertFalse(self._check({'OS': 'windows'}, 'os'))
         self.assertFalse(self._check({'site': 'linux'}, 'os'))
+
+
+class TestRewriteValues(unittest.TestCase):
+    """Renames keep the value whatever it is, Split takes any separator."""
+
+    def _outcomes(self, attributes, **outcome):
+        rule = Rewrite()
+        rule.attributes = attributes
+        rule.hostname = 'srv01'
+        return rule.add_outcomes(None, [{
+            'old_attribute_name': 'old',
+            'overwrite_name': 'string',
+            'new_attribute_name': 'new',
+            'overwrite_value': '',
+            **outcome,
+        }], {})
+
+    def test_rename_keeps_empty_values(self):
+        for value in (0, False, ''):
+            with self.subTest(value=value):
+                self.assertEqual(self._outcomes({'old': value}),
+                                 {'del_old': True, 'add_new': value})
+
+    def test_rename_of_a_missing_attribute_creates_nothing(self):
+        self.assertEqual(self._outcomes({'site': 'ber'}), {'del_old': True})
+
+    def test_rename_keeps_a_value_split_can_not_handle(self):
+        self.assertEqual(
+            self._outcomes({'old': 0}, overwrite_value='split', new_value='/:0'),
+            {'del_old': True, 'add_new': 0})
+
+    def test_split_at_a_colon(self):
+        result = self._outcomes({'old': '192.0.2.1:8080'},
+                                overwrite_value='split', new_value='::1')
+        self.assertEqual(result['add_new'], '8080')
+
+    def test_separator_containing_a_colon(self):
+        result = self._outcomes({'old': 'a=:b'},
+                                overwrite_value='split', new_value='=::1')
+        self.assertEqual(result['add_new'], 'b')
+
+    def test_unusable_split_returns_the_old_value(self):
+        for pattern in ('nocolon', ':0', '/:x', '/:7'):
+            with self.subTest(pattern=pattern):
+                result = self._outcomes({'old': 'a/b'},
+                                        overwrite_value='split', new_value=pattern)
+                self.assertEqual(result['add_new'], 'a/b')
+
+    def test_split_of_a_number_returns_the_old_value(self):
+        result = self._outcomes({'old': 5}, overwrite_value='split', new_value='/:0')
+        self.assertEqual(result['add_new'], 5)
+
+    def test_empty_template_result_still_writes_nothing(self):
+        with patch('application.modules.rule.rewrite.render_jinja', return_value=''):
+            result = self._outcomes({'old': 'x'}, overwrite_value='jinja',
+                                    new_value='{{ nothing }}')
+        self.assertEqual(result, {'del_old': True})
 
 
 if __name__ == '__main__':
