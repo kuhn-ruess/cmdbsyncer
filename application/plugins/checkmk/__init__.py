@@ -41,6 +41,7 @@ from .inits import (
     generate_users,
     export_tags,
     export_downtimes,
+    export_service_labels,
     export_dcd_rules,
     export_passwords,
     export_notifications,
@@ -262,6 +263,30 @@ def _debug_template_rules(syncer, db_host, attributes):
     return sections
 
 
+def _debug_service_label_rules(db_host, attributes):
+    """
+    The Service Label rules on the host debug page, and what the matching ones
+    put out for this host. A host debug without such rules shows nothing.
+    """
+    from .models import CheckmkServiceLabelRule
+    from .rules import ServiceLabelRule
+    from .service_labels import CheckmkServiceLabelSync
+    rules = CheckmkServiceLabelRule.objects(enabled=True).order_by('sort_field')
+    result = _debug_extra_engine('Service Label Rules', ServiceLabelRule(), rules,
+                                 db_host, attributes)
+    if not rules:
+        return result
+    errors = [line['error'] for line in result['rules'] if line.get('error')]
+    try:
+        syncer = CheckmkServiceLabelSync(False, probe_version=False)
+        outcomes = result['outcomes'].get('default', [])
+        result['service_labels'] = {'errors': errors, 'matched': bool(outcomes),
+                                    'rows': syncer.debug_host(outcomes, db_host, attributes)}
+    except Exception as exp:  # pylint: disable=broad-exception-caught
+        result['service_labels'] = {'rows': [], 'errors': errors + [str(exp)]}
+    return result
+
+
 def get_host_debug_data(hostname):
     """
     Returns Debug Data
@@ -358,6 +383,7 @@ def get_host_debug_data(hostname):
             'Downtime Rules', downtime_rules,
             CheckmkDowntimeRule.objects(enabled=True),
             db_host, attributes)
+        rule_logs['Service Label Rules'] = _debug_service_label_rules(db_host, attributes)
 
     # We need to save the host,
     # Otherwise, if a rule with folder pools is executed at first time here,
@@ -497,6 +523,27 @@ def cli_export_downtimes(account, debug, debug_rules):
         account (string): Name Checkmk Account Config
     """
     export_downtimes(account, debug, debug_rules)
+
+
+#.
+#   .-- Command: Export Service Labels
+@cli_cmk.command('export_service_labels')
+@click.option("--dry-run", default=False, is_flag=True)
+@click.option("--debug", is_flag=True)
+@click.option("--debug-rules", default="")
+@click.argument('account')
+def cli_export_service_labels(account, dry_run, debug, debug_rules):
+    """
+    Export the Service Label rules to Checkmk
+
+    ### Example
+    _./cmdbsyncer checkmk export_service_labels SITEACCOUNT --dry-run_
+
+    Args:
+        account (string): Name Checkmk Account Config
+        dry_run (bool): Only show what would change in Checkmk
+    """
+    export_service_labels(account, dry_run, debug, debug_rules)
 
 
 
@@ -1000,6 +1047,7 @@ register_cronjob('Checkmk: Export LDAP Connections', export_ldap_connections)
 register_cronjob('Checkmk: Generate Users', generate_users)
 register_cronjob('Checkmk: Export Tags', export_tags)
 register_cronjob('Checkmk: Export Downtimes', export_downtimes)
+register_cronjob('Checkmk: Export Service Labels', export_service_labels)
 register_cronjob('Checkmk: Export DCD Rules', export_dcd_rules)
 register_cronjob('Checkmk: Export Passwords', export_passwords)
 register_cronjob('Checkmk: Import Hosts (V2)', import_hosts)

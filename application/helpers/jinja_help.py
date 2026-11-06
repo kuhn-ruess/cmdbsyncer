@@ -144,6 +144,24 @@ DCD_RULE_VARIABLES = (
 # Store. Checkmk 2.3+ holds a password as such a tuple; a stored_password
 # only names the ident the password export writes, the secret itself stays
 # out of the rule.
+SERVICE_LABEL_VARIABLES = (
+    ('HOSTNAME', "{{ HOSTNAME }}", "Name of the host."),
+    ('SERVICE', "{{ SERVICE }}", "Name of the service the label is set on."),
+    ('MATCH', "{{ MATCH[1] }}",
+     "What the Service Pattern matched: MATCH[0] all of it, MATCH[1] its "
+     "first group."),
+    ('LABELS', "{{ LABELS.my_label }}",
+     "The labels of the service, as of the last Inventorize, empty if the "
+     "service doesn't have it or isn't known from it. Once a rule "
+     "sets a label, this is the value of the rule, so a repair has to leave "
+     "an already repaired value as it is."),
+    ('HOST_FOLDER', "{{ HOST_FOLDER }}",
+     "Folder the host lands in (Checkmk > Export Rules: Move to Folder or "
+     "Pool Folder), e.g. as folder of the rule."),
+    ('any attribute', "{{ attribute }}",
+     "Every attribute of the host is a variable of its own name."),
+)
+
 CHECKMK_RULE_PASSWORDS = (
     ('host secret',
      "('cmk_postprocessed', 'stored_password', ('{{ secret(\"key\") }}', ''))",

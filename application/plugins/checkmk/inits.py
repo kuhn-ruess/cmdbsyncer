@@ -16,7 +16,12 @@ from application.modules.rule.filter import Filter
 from application.plugins.checkmk.tags import CheckmkTagSync
 from application.plugins.checkmk.cmk_rules import CheckmkRuleSync
 from application.plugins.checkmk.downtimes import CheckmkDowntimeSync
-from application.plugins.checkmk.rules import CheckmkRulesetRule, DefaultRule
+from application.plugins.checkmk.service_labels import CheckmkServiceLabelSync
+from application.plugins.checkmk.rules import (
+    CheckmkRulesetRule,
+    DefaultRule,
+    ServiceLabelRule,
+)
 from application.plugins.checkmk.inventorize import InventorizeHosts
 from application.plugins.checkmk.dcd import CheckmkDCDRuleSync
 from application.plugins.checkmk.passwords import CheckmkPasswordSync
@@ -47,6 +52,7 @@ from application.plugins.checkmk.models import (
    CheckmkBiRule,
    CheckmkBiAggregation,
    CheckmkDowntimeRule,
+   CheckmkServiceLabelRule,
    CheckmkRewriteAttributeRule,
    CheckmkFilterRule,
    CheckmkDCDRule,
@@ -737,6 +743,38 @@ def export_downtimes(account, debug=False, debug_rules=False):
         else:
             _not_started(f"Export Downtimes to Account {account} not started",
                          "cmk_downtime_sync", error_obj)
+#.
+#   .-- Export Service Labels
+def export_service_labels(account, dry_run=False, debug=False, debug_rules=False):
+    """
+    Create the Service Label rules in Checkmk
+    """
+    syncer = None
+    try:
+        rules = _load_rules()
+        actions = ServiceLabelRule()
+        actions.rules = CheckmkServiceLabelRule.objects(enabled=True).order_by('sort_field')
+        syncer = CheckmkServiceLabelSync(False if debug_rules else account)
+        syncer.rewrite = rules['rewrite']
+        syncer.filter = rules['filter']
+        syncer.actions = actions
+        if debug_rules:
+            syncer.debug_rules(debug_rules, "Checkmk")
+            return
+        syncer.debug = debug
+        syncer.dry_run = dry_run
+        syncer.name = 'Checkmk: Export Service Labels'
+        syncer.source = "cmk_service_label_sync"
+        syncer.export_cmk_rules()
+    except Exception as error_obj:  # pylint: disable=broad-exception-caught
+        if debug:
+            raise
+        print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
+        if syncer is not None:
+            syncer.record_exception(error_obj)
+        else:
+            _not_started(f"Export Service Labels to Account {account} not started",
+                         "cmk_service_label_sync", error_obj)
 #.
 #   . DCD Rules
 def export_dcd_rules(account, debug=False, debug_rules=False):

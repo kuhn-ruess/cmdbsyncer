@@ -1340,6 +1340,15 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                 progress.advance(task1)
         return collected
 
+    def _condition_template(self):
+        """
+        The condition keys Checkmk always returns, by version.
+        """
+        if self.checkmk_version.startswith('2.2'):
+            return {"host_tags": [], "service_labels": []}
+        return {"host_tags": [], "service_label_groups": [],
+                "host_label_groups": []}
+
     # pylint: disable=too-many-locals,too-many-branches
     def build_condition_and_update_rule_params(
         self, rule_params, attributes, loop_value=None, loop_idx=None
@@ -1364,12 +1373,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         # Setup Rule it came from.
         rule_params['description'] = self._rule_description(rule_params)
 
-        # Setup condition template based on Checkmk version
-        if self.checkmk_version.startswith('2.2'):
-            condition_tpl = {"host_tags": [], "service_labels": []}
-        else:
-            condition_tpl = {"host_tags": [], "service_label_groups": [],
-                             "host_label_groups": []}
+        condition_tpl = self._condition_template()
         # Keys the template always carries. Checkmk returns those empty
         # instead of omitting them, which decides how an unsupported
         # condition has to be cleared (see drop_unsupported_conditions).
@@ -1722,17 +1726,22 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         print(f"{CC.WARNING}  ** {CC.ENDC}{len(self.dry_run_plan)} "
               f"change(s) pending: {summary}")
 
-    def _export_hosts(self):
+    def _object_filter(self):
         """
-        The hosts this run generates rules for. Honors the account's
-        object filter, and otherwise stays on the host-only default.
+        The object filter of the account for this export, if it has one.
         """
         # The analysis logs under its own name but has to read the object
         # filter the export is configured with. And .get all the way
         # down: without an account there is no settings block at all.
         settings_key = self.settings_name or self.name
-        object_filter = self.config.get(
-            'settings', {}).get(settings_key, {}).get('filter')
+        return self.config.get('settings', {}).get(settings_key, {}).get('filter')
+
+    def _export_hosts(self):
+        """
+        The hosts this run generates rules for. Honors the account's
+        object filter, and otherwise stays on the host-only default.
+        """
+        object_filter = self._object_filter()
         if not object_filter:
             # Default/ Legacy Behavior. Exclude CMDB template objects:
             # they are label vehicles for real hosts (applied via
@@ -1777,12 +1786,18 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                     db_host, attributes['all'], persist_cache=False,
                     use_cache=use_cache)
                 self.flush_host_cache(db_host)
-                if host_actions:
-                    self.calculate_rules_of_host(
-                        host_actions,
-                        self._with_host_folder(db_host, host_actions, attributes))
+                self._calculate_host(db_host, host_actions, attributes)
                 self._calculate_template_rules(db_host, attributes)
                 progress.advance(task1)
+
+    def _calculate_host(self, db_host, host_actions, attributes):
+        """
+        Render the rules of one host from the outcomes its conditions gave
+        """
+        if host_actions:
+            self.calculate_rules_of_host(
+                host_actions,
+                self._with_host_folder(db_host, host_actions, attributes))
 
     def _calculate_template_rules(self, db_host, attributes):
         """

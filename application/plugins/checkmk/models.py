@@ -3,7 +3,7 @@ Checkmk Rules
 """
 # Mongoengine Document classes are data carriers; they don't need
 # additional public methods to satisfy pylint.
-# pylint: disable=too-few-public-methods
+# pylint: disable=too-few-public-methods,too-many-lines
 from mongoengine import DENY
 from application import db
 from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
@@ -18,6 +18,7 @@ attriubte_sources = [
     ("cmk_attributes", "Attributes of Host"),
     ("cmk_labels", "Labels of Host"),
     ("cmk_service_labels", "Labels of Service"),
+    ("cmk_service_labels_per_service", "Labels per Service"),
 ]
 
 
@@ -1065,6 +1066,42 @@ class CheckmkDowntimeRule(ListSourceMixin, db.Document):
     render_cmk_downtime_rule = db.StringField()
     last_match = db.BooleanField(default=False)
     enabled = db.BooleanField()
+    meta = {
+        'strict': False
+    }
+#.
+#   .-- Checkmk Service Labels
+
+class ServiceLabelOutcome(db.EmbeddedDocument):
+    """
+    One service label to set on the services a pattern matches
+    """
+    service_pattern = db.StringField(required=True)
+    label_name = db.StringField(required=True)
+    label_value = db.StringField(required=True)
+    folder = db.StringField(default='/')
+
+    meta = {
+        'strict': False
+    }
+
+
+class CheckmkServiceLabelRule(db.Document):
+    """
+    Service Label Rule
+    """
+    name = db.StringField(required=True, unique=True)
+    documentation = db.StringField()
+
+    condition_typ = db.StringField(choices=rule_types)
+    conditions = db.ListField(field=db.EmbeddedDocumentField(document_type="FullCondition"))
+    render_full_conditions = db.StringField() # Helper for Preview
+
+    outcomes = db.ListField(field=db.EmbeddedDocumentField(document_type="ServiceLabelOutcome"))
+    render_service_labels = db.StringField()
+    last_match = db.BooleanField(default=False)
+    enabled = db.BooleanField()
+    sort_field = db.IntField(default=0)
     meta = {
         'strict': False
     }

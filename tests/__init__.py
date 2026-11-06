@@ -757,6 +757,7 @@ for _name in (
     "CheckmkInventorizeAttributes", "CheckmkRuleMngmt",
     "RuleMngmtOutcome",
     "CheckmkBiRule", "CheckmkBiAggregation", "CheckmkDowntimeRule",
+    "CheckmkServiceLabelRule",
     "CheckmkRewriteAttributeRule", "CheckmkFilterRule", "CheckmkDCDRule",
     "CheckmkNotificationRule",
     "CheckmkSite", "CheckmkSettings",
@@ -847,6 +848,8 @@ for _mod_name, _mod_path in [
     ("ldap_connections", "ldap_connections.py"),
     ("user_generation", "user_generation.py"),
     ("inventorize", "inventorize.py"),
+    # service_labels needs cmk_rules and inventorize.
+    ("service_labels", "service_labels.py"),
     ("import_v1", "import_v1.py"),
     ("import_v2", "import_v2.py"),
     ("notification_rules", "notification_rules.py"),

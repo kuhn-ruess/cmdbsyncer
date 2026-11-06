@@ -230,6 +230,14 @@ class DefaultRule(Rule):
             outcomes['default'].append(outcome)
         return outcomes
 
+class ServiceLabelRule(DefaultRule):
+    """
+    Rule engine of the Service Label rules. Its own class, because the
+    outcome cache of a host is keyed by it.
+    """
+    name = "Checkmk -> Service Labels"
+
+
 class CheckmkRule(Rule):
     """
     Class to get actions for rule

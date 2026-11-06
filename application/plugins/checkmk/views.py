@@ -3,6 +3,8 @@ Checkmk Rule Views
 """
 # pylint: disable=too-many-lines
 # pylint: disable=duplicate-code
+import re
+
 import requests
 from markupsafe import Markup, escape
 
@@ -171,6 +173,29 @@ def _render_dw_rule(_view, _context, model, _name):
             </div>
             '''
 
+    return Markup(html)
+
+
+def _render_service_label_rule(_view, _context, model, _name):
+    """
+    Render Service Label Rule
+    """
+    html = ""
+    for entry in model.outcomes:
+        lines = ""
+        for what, value in (("Service", entry.service_pattern),
+                            ("Label", entry.label_name),
+                            ("Value", entry.label_value)):
+            if value:
+                lines += f"{what}: " + highlight(value, DjangoLexer(),
+                                                 HtmlFormatter(sytle='colorfull'))
+        html += f'''
+            <div class="card">
+              <div class="card-body">
+                  {lines}
+              </div>
+            </div>
+            '''
     return Markup(html)
 
 
@@ -2123,6 +2148,80 @@ class CheckmkDowntimeView(ListSourceViewMixin, RuleModelView):  # pylint: disabl
     def is_accessible(self):
         """ Overwrite """
         return current_user.is_authenticated and current_user.has_right('checkmk')
+
+class CheckmkServiceLabelView(RuleModelView):  # pylint: disable=too-many-ancestors
+    """
+    Checkmk Service Labels
+    """
+    column_labels = {
+        'render_service_labels': "Service Labels",
+        'render_full_conditions': "Conditions",
+    }
+
+    jinja_help_fields = ('label_value', 'label_name', 'folder')
+    jinja_help_note = 'Rendered per service of the host.'
+    jinja_help_variables = 'SERVICE_LABEL_VARIABLES'
+
+    form_rules = [
+        rules.HTML(f'<a href="{docu_links["cmk_service_labels"]}" '
+                   f'target="_blank" class="badge badge-light" '
+                   f'style="margin-bottom: 8px;">'
+                   f'<i class="fa fa-info-circle"></i> Documentation</a>'),
+        *RuleModelView.form_rules,
+    ]
+
+    def __init__(self, model, **kwargs):
+        """
+        Update elements
+        """
+        self.column_formatters.update({
+            'render_service_labels': _render_service_label_rule,
+        })
+        self.form_overrides.update({
+            'render_service_labels': HiddenField,
+        })
+
+        widgets = {
+            'service_pattern': {'placeholder': r'^Port (\d+)$'},
+            'label_value': {'placeholder': '{{ HOSTNAME }}-{{ MATCH[1] }}'},
+        }
+        self.form_subdocuments = {
+            **(getattr(self, 'form_subdocuments', None) or {}),
+            'outcomes': {'form_subdocuments': {'': {
+                'form_widget_args': widgets,
+                'form_args': {
+                    'service_pattern': {'description': (
+                        "Regular expression on the service name. Services known "
+                        "from the source Labels per Service in Inventorize get a "
+                        "rule each, any other pattern goes to Checkmk as it is.")},
+                    'label_value': {'description': (
+                        "Jinja. An empty result sets nothing, and the next "
+                        "rule can set this label.")},
+                    'folder': {'description': "Checkmk folder of the rule (Jinja)."},
+                },
+            }}},
+        }
+        super().__init__(model, **kwargs)
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Refuse what could only fail later during the export
+        """
+        for outcome in model.outcomes:
+            try:
+                re.compile(outcome.service_pattern)
+            except re.error as error:
+                raise ValidationError(
+                    f"Service Pattern '{outcome.service_pattern}': {error}") from error
+            for template in (outcome.label_name, outcome.label_value, outcome.folder):
+                if defect := check_jinja_syntax(template or ''):
+                    raise ValidationError(f"Jinja in '{template}': {defect}")
+        super().on_model_change(form, model, is_created)
+
+    def is_accessible(self):
+        """ Overwrite """
+        return current_user.is_authenticated and current_user.has_right('checkmk')
+
 
 _NOTIFICATION_LIST_LABELS = [
     ('match_contact_groups', 'Filter Contact Groups'),

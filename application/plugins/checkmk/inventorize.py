@@ -30,6 +30,11 @@ from application.modules.debug import ColorCodes
 # tree share the same name.
 HW_SW_TREE_SOURCE = "cmk_hw_sw_inv"
 
+# Inventory key of the source "Labels per Service". The full attribute name,
+# which the service label export reads, adds the ``__services`` of its one entry.
+PER_SERVICE_LABELS_KEY = "cmk_svc_label_list"
+PER_SERVICE_LABELS_ATTRIBUTE = f"{PER_SERVICE_LABELS_KEY}__services"
+
 
 #@TODO Refactor into class with small methods
 
@@ -62,6 +67,7 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         self.status_inventory = {}
         self.hw_sw_inventory = {}
         self.service_label_inventory = {}
+        self.per_service_label_inventory = {}
         self.config_inventory = {}
         self.label_inventory = {}
 
@@ -281,20 +287,7 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Service Labels")
         columns = ['host_name','label_names', 'label_values']
-        expr = []
-        for field in self.fields['cmk_service_labels']:
-            expr.append({"op": "~", "left": "description", "right": field})
-        query = {
-            "op": "or",
-            "expr": expr,
-        }
-        params={
-            "query": str(json.dumps(query)),
-            "columns": columns
-        }
-        url = "domain-types/service/collections/all"
-        api_response = self.request(url, params=params, method="GET")
-        for service in api_response[0]['value']:
+        for service in self._query_services('cmk_service_labels', columns):
             names = service['extensions']['label_names']
             values = service['extensions']['label_values']
             if not names:
@@ -304,6 +297,40 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
             self.service_label_inventory.setdefault(hostname, {})
             for name, value in zip(names, values):
                 self.service_label_inventory[hostname][name] = value
+
+    def get_service_labels_per_service(self):
+        """
+        Get the labels of every service on its own, instead of one value per
+        label name and host: ``[{'service': name, 'labels': {...}}, ...]``.
+        A service without any label is listed too, a rule can still set one.
+        """
+        print(f"{ColorCodes.OKBLUE} *{ColorCodes.ENDC} Collecting Labels per Service")
+        columns = ['host_name', 'description', 'label_names', 'label_values']
+        rows = self._query_services('cmk_service_labels_per_service', columns)
+        for service in rows:
+            extensions = service['extensions']
+            hostname = extensions['host_name']
+            self.add_host(hostname)
+            labels = {name.replace('.', '_'): value for name, value
+                      in zip(extensions['label_names'], extensions['label_values'])}
+            self.per_service_label_inventory.setdefault(hostname, []).append(
+                {'service': extensions['description'], 'labels': labels})
+        # Same order every run, so an unchanged host keeps its cache.
+        for entries in self.per_service_label_inventory.values():
+            entries.sort(key=lambda entry: entry['service'])
+
+    def _query_services(self, source, columns):
+        """
+        The services matching the regexes of an attribute source
+        """
+        expr = [{"op": "~", "left": "description", "right": field}
+                for field in self.fields[source]]
+        params = {
+            "query": str(json.dumps({"op": "or", "expr": expr})),
+            "columns": columns,
+        }
+        url = "domain-types/service/collections/all"
+        return self.request(url, params=params, method="GET")[0]['value']
 
 
     def get_attr_labels(self):
@@ -389,6 +416,9 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
         if self.fields.get('cmk_service_labels'):
             self.get_service_labels()
 
+        if self.fields.get('cmk_service_labels_per_service'):
+            self.get_service_labels_per_service()
+
         if self.fields.get('cmk_attributes') or self.fields.get('cmk_labels'):
             self.get_attr_labels()
 
@@ -411,6 +441,9 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                 db_host.update_inventory('cmk_svc', self.status_inventory.get(hostname, {}))
                 db_host.update_inventory('cmk_svc_labels',
                                          self.service_label_inventory.get(hostname, {}))
+                per_service = self.per_service_label_inventory.get(hostname)
+                db_host.update_inventory(PER_SERVICE_LABELS_KEY,
+                                         {'services': per_service} if per_service else {})
                 db_host.update_inventory('cmk_hw_sw_inv', self.hw_sw_inventory.get(hostname, {}))
                 db_host.save()
                 print(f" {ColorCodes.OKGREEN}* {ColorCodes.ENDC} Updated {hostname}")

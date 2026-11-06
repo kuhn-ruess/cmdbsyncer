@@ -13,6 +13,7 @@ docu_links = {
     'lookup_tables': 'https://docs.cmdbsyncer.de/basics/lookup_tables/',
     'jinja_functions': 'https://docs.cmdbsyncer.de/advanced/jinja_functions/',
     'cmk_inventory_attributes': 'https://docs.cmdbsyncer.de/checkmk/inventorize/',
+    'cmk_service_labels': 'https://docs.cmdbsyncer.de/checkmk/service_labels/',
     'cmk_groups': 'https://docs.cmdbsyncer.de/checkmk/groups_management/',
     'cmk_user_generation': 'https://docs.cmdbsyncer.de/checkmk/user_generation/',
     'cmk_setup_rules': 'https://docs.cmdbsyncer.de/checkmk/rules_management/',

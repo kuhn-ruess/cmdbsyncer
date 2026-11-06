@@ -28,6 +28,7 @@ class TestInventorizeHosts(unittest.TestCase):
                            fields={}, found_hosts=set(),
                            status_inventory={}, hw_sw_inventory={},
                            service_label_inventory={}, config_inventory={},
+                           per_service_label_inventory={},
                            label_inventory={}, checkmk_hosts={})
 
         self.init_patcher = patch.object(InventorizeHosts, '__init__', mock_init)
@@ -96,6 +97,63 @@ class TestInventorizeHosts(unittest.TestCase):
             self.inv.run()
 
         mock_host.objects.assert_called_once_with(hostname__in=['unknown_host'])
+
+    @patch('builtins.print')
+    def test_labels_of_service_keeps_one_value_per_host(self, _print):
+        self.inv.fields = {'cmk_service_labels': ['^Port']}
+        rows = [{'extensions': {'host_name': 'host1', 'label_names': ['name'],
+                                'label_values': [value]}}
+                for value in ('one', 'two')]
+        with patch.object(self.inv, 'request', return_value=({'value': rows}, {})) as request:
+            self.inv.get_service_labels()
+        self.assertEqual(self.inv.service_label_inventory, {'host1': {'name': 'two'}})
+        self.assertEqual(request.call_args.kwargs['params']['columns'],
+                         ['host_name', 'label_names', 'label_values'])
+
+    @patch('builtins.print')
+    def test_labels_per_service_keeps_every_service(self, _print):
+        self.inv.fields = {'cmk_service_labels_per_service': ['^Port', '^Sensor']}
+        rows = [
+            {'extensions': {'host_name': 'host1', 'description': 'Port 2',
+                            'label_names': ['name', 'a.b'],
+                            'label_values': ['two', 'x']}},
+            {'extensions': {'host_name': 'host1', 'description': 'Port 1',
+                            'label_names': ['name'], 'label_values': ['one']}},
+            {'extensions': {'host_name': 'host1', 'description': 'Sensor',
+                            'label_names': [], 'label_values': []}},
+        ]
+        with patch.object(self.inv, 'request', return_value=({'value': rows}, {})) as request:
+            self.inv.get_service_labels_per_service()
+        self.assertEqual(self.inv.per_service_label_inventory, {'host1': [
+            {'service': 'Port 1', 'labels': {'name': 'one'}},
+            {'service': 'Port 2', 'labels': {'name': 'two', 'a_b': 'x'}},
+            {'service': 'Sensor', 'labels': {}},
+        ]})
+        self.assertIn('host1', self.inv.found_hosts)
+        query = json.loads(request.call_args.kwargs['params']['query'])
+        self.assertEqual([entry['right'] for entry in query['expr']], ['^Port', '^Sensor'])
+        self.assertTrue(all(entry['op'] == '~' for entry in query['expr']))
+
+    @patch('application.plugins.checkmk.inventorize.Host')
+    @patch('application.plugins.checkmk.inventorize.app')
+    @patch('builtins.print')
+    def test_run_writes_labels_per_service(self, _print, mock_app, mock_host):
+        mock_app.config = {'CMK_GET_HOST_BY_FOLDER': False}
+        self.inv.fields = {'cmk_service_labels_per_service': ['^Port']}
+        self.inv.found_hosts = {'host1', 'host2'}
+        entries = [{'service': 'Port 1', 'labels': {}}]
+        self.inv.per_service_label_inventory = {'host1': entries}
+        hosts = {name: Mock(hostname=name) for name in ('host1', 'host2')}
+        mock_host.objects.return_value = list(hosts.values())
+
+        with patch.object(self.inv, 'get_service_labels_per_service') as getter:
+            self.inv.run()
+
+        getter.assert_called_once_with()
+        hosts['host1'].update_inventory.assert_any_call(
+            'cmk_svc_label_list', {'services': entries})
+        # A host without any: an old list has to go.
+        hosts['host2'].update_inventory.assert_any_call('cmk_svc_label_list', {})
 
     def test_get_hw_sw_inventory_data_success(self):
         inventory_tree = {

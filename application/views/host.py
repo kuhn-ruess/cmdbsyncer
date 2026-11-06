@@ -352,6 +352,7 @@ def _normalize_rule_log(data):
     """
     if isinstance(data, dict):
         return {
+            **data,
             'rules': data.get('rules') or [],
             'outcomes': data.get('outcomes') or {},
         }
@@ -485,6 +486,7 @@ def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-lo
             'rewrite':     'checkmkrewriteattributerule',
             'actions':     'checkmkrule',
             'Setup Rules': 'checkmkrulemngmt',
+            'Service Label Rules': 'checkmkservicelabelrule',
         },
         'netbox_device': {
             'rewrite':            'netboxrewriteattributerule',
@@ -598,8 +600,7 @@ def _link_rules(output_rules, base_urls):
     """
     new_rules = {}
     for rule_group, rule_data in output_rules.items():
-        group = new_rules.setdefault(
-            rule_group, {'rules': [], 'outcomes': rule_data['outcomes']})
+        group = new_rules.setdefault(rule_group, {**rule_data, 'rules': []})
         # "Setup Rules per Template: <name>" links like "Setup Rules"
         url_group = rule_group.partition(' per Template')[0]
         for rule in rule_data['rules']:

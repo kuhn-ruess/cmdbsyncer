@@ -511,6 +511,47 @@
       </div>
     {% endif %}
 
+    {# --- Service Labels: the output of the rules matching this host --- #}
+    {% set service_labels = (rules or {}).get('Service Label Rules', {}).get('service_labels') %}
+    {% if service_labels %}
+      <div class="debug-card accent-outcomes" style="margin-bottom: 1rem;">
+        <div class="debug-card-head">
+          <span><i class="fa fa-tags"></i> Service Labels</span>
+        </div>
+        <div class="debug-card-body">
+          {% for error in service_labels.errors %}
+            <div class="alert alert-danger mb-2"><code>{{ error }}</code></div>
+          {% endfor %}
+          {% if service_labels.rows %}
+            <div class="table-scroll">
+            <table class="table table-sm table-bordered rule-table">
+              <thead>
+                <tr>
+                  <th>Service or regex</th>
+                  <th>Label</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for row in service_labels.rows %}
+                <tr>
+                  <td><code>{{ row.service }}</code></td>
+                  <td><code>{{ row.name }}</code></td>
+                  <td><code>{{ row.value }}</code></td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+            </div>
+          {% elif service_labels.matched %}
+            <div class="debug-empty">The Service Label rules matching this host send no label.</div>
+          {% elif not service_labels.errors %}
+            <div class="debug-empty">No Service Label rule matches this host.</div>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
     {# --- Custom Attributes, only when present --- #}
     {% if custom %}
       <div class="debug-card accent-custom" style="margin-bottom: 1rem;">

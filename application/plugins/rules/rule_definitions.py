@@ -34,6 +34,7 @@ rules = {
     'cmk_bi_aggregation': ('application.plugins.checkmk.models', 'CheckmkBiAggregation'),
     'cmk_bi_rule': ('application.plugins.checkmk.models', 'CheckmkBiRule'),
     'cmk_downtimes': ('application.plugins.checkmk.models', 'CheckmkDowntimeRule'),
+    'cmk_service_labels': ('application.plugins.checkmk.models', 'CheckmkServiceLabelRule'),
     'cmk_dcd_rules': ('application.plugins.checkmk.models', 'CheckmkDCDRule'),
     'cmk_notification_rules': ('application.plugins.checkmk.models',
                               'CheckmkNotificationRule'),

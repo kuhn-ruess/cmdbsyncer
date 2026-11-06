@@ -14,6 +14,7 @@ from .models import (
     CheckmkBiRule,
     CheckmkDCDRule,
     CheckmkDowntimeRule,
+    CheckmkServiceLabelRule,
     CheckmkFilterRule,
     CheckmkFolderPool,
     CheckmkInventorizeAttributes,
@@ -45,6 +46,7 @@ from .views import (
     CheckmkRuleOptimizationView,
     CheckmkDCDView,
     CheckmkDowntimeView,
+    CheckmkServiceLabelView,
     CheckmkFolderPoolView,
     CheckmkInventorizeAttributesView,
     CheckmkMngmtRuleView,
@@ -193,6 +195,13 @@ def register_admin_views(admin):
         category="Checkmk",
         menu_icon_type='fa',
         menu_icon_value='fa-calendar-times-o',
+    ))
+    add(objects, CheckmkServiceLabelView(
+        CheckmkServiceLabelRule,
+        name="Manage Service Labels",
+        category="Checkmk",
+        menu_icon_type='fa',
+        menu_icon_value='fa-tags',
     ))
     add(objects, CheckmkNotificationRuleView(
         CheckmkNotificationRule,
