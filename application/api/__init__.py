@@ -110,7 +110,7 @@ def _authenticate_user():
             abort(401, "HTTPS is required for API authentication")
         user_result, token_obj = find_user_by_api_token(token)
         if not user_result:
-            _abort_unauthorized("Invalid or expired API token")
+            _abort_unauthorized("Invalid, expired or revoked API token")
         _touch_api_token(user_result, token_obj)
         return user_result, user_result.name
 

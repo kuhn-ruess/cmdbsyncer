@@ -93,7 +93,13 @@
                 <tbody>
                 {% for token in tokens %}
                     <tr>
-                        <td>{{ token.label }}</td>
+                        <td>
+                            {{ token.label }}
+                            {% if token.revoked_at %}
+                                <span class="label label-danger"
+                                      title="Ended by a new password. Create a new token for the clients using it.">revoked</span>
+                            {% endif %}
+                        </td>
                         <td><code>{{ token.prefix }}…</code></td>
                         <td>{{ token.created_at|localtime('%Y-%m-%d %H:%M') if token.created_at else '—' }}</td>
                         <td>{{ token.last_used_at|localtime('%Y-%m-%d %H:%M') if token.last_used_at else 'never' }}</td>

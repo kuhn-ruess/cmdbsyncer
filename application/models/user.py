@@ -93,6 +93,9 @@ class ApiToken(db.EmbeddedDocument):  # pylint: disable=too-few-public-methods
     last_used_at = db.DateTimeField()
     # Optional — a token without an expiry never expires on its own.
     expires_at = db.DateTimeField()
+    # Set when a new password of the owner ended this token. The record stays
+    # so the owner can see which client needs a new one.
+    revoked_at = db.DateTimeField()
 
     def is_expired(self):
         """True if the token carries an expiry that has passed."""
@@ -154,10 +157,15 @@ class User(db.Document, UserMixin):
 
     def set_password(self, password):
         """
-        Password seter
+        Password seter. A new password also ends the personal API tokens:
+        whoever had the old one could have made one of them.
         """
         self.date_password = datetime.now()
         self.pwdhash = generate_password_hash(password)
+        now = datetime.utcnow()
+        for token in self.api_tokens:
+            if not token.revoked_at:
+                token.revoked_at = now
 
     def check_password(self, password):
         """
@@ -311,8 +319,8 @@ def find_user_by_api_token(plaintext):
     """
     Resolve a personal API token plaintext to its owner.
 
-    Returns ``(user, token)`` for a valid, non-expired token on an enabled
-    user, otherwise ``(None, None)``. The lookup is an exact hash match, so
+    Returns ``(user, token)`` for a valid token, neither expired nor revoked,
+    on an enabled user, otherwise ``(None, None)``. The lookup is an exact hash match, so
     a single indexed query finds the token without scanning every user.
     """
     if not plaintext or not plaintext.startswith(API_TOKEN_PREFIX):
@@ -325,7 +333,7 @@ def find_user_by_api_token(plaintext):
         return None, None
     for token in user.api_tokens:
         if hmac.compare_digest(token.token_hash, token_hash):
-            if token.is_expired():
+            if token.is_expired() or token.revoked_at:
                 return None, None
             return user, token
     return None, None

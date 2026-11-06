@@ -30,6 +30,8 @@ def _render_user_tokens(_view, _context, model, _name):
                              user_id=model.id, token_id=token.token_id)
         expired = ' <span class="label label-danger">expired</span>' \
             if token.is_expired() else ''
+        revoked = ' <span class="label label-danger">revoked</span>' \
+            if token.revoked_at else ''
         meta = escape(f"{token.label or 'API token'} ({token.prefix or ''}…)")
         form = (
             f'<form method="POST" action="{escape(revoke_url)}" '
@@ -39,7 +41,7 @@ def _render_user_tokens(_view, _context, model, _name):
             f'<button class="btn btn-danger btn-xs" type="submit">Revoke</button>'
             f'</form>'
         )
-        rows.append(f'<div>{meta}{expired}{form}</div>')
+        rows.append(f'<div>{meta}{expired}{revoked}{form}</div>')
     return Markup(''.join(rows))
 
 
