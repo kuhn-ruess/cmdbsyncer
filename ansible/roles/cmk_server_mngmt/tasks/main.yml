@@ -84,15 +84,12 @@
   when: not site_dir.stat.exists
   register: site_just_installed
 
-- name: "Calculation downtime start"
-  command: "date +'%Y-%m-%dT%H:%M:%S%:z'"
-  register: checkmk_downtime_start
-  delegate_to: localhost
-
-- name: "Calculation downtime end +{{ cmk_downtime_range }} hours"
-  command: "date +'%Y-%m-%dT%H:%M:%S%:z' --date '+{{ cmk_downtime_range }} hours'"
-  register: checkmk_downtime_end
-  delegate_to: localhost
+# Calculated by Ansible itself: the date command of the container image
+# (BusyBox) knows neither --date '+2 hours' nor the %:z format.
+- name: "Calculation downtime start and end +{{ cmk_downtime_range }} hours"
+  ansible.builtin.set_fact:
+    checkmk_downtime_start: "{{ '%Y-%m-%dT%H:%M:%S+00:00' | strftime(now().timestamp(), utc=True) }}"
+    checkmk_downtime_end: "{{ '%Y-%m-%dT%H:%M:%S+00:00' | strftime(now().timestamp() + (cmk_downtime_range | float) * 3600, utc=True) }}"
 
 - name: "Set host to downtime before site update"
   ansible.builtin.uri:
@@ -107,8 +104,8 @@
       Content-Type: "application/json"
     body_format: json
     body:
-      start_time: "{{ checkmk_downtime_start.stdout }}"
-      end_time: "{{ checkmk_downtime_end.stdout }}"
+      start_time: "{{ checkmk_downtime_start }}"
+      end_time: "{{ checkmk_downtime_end }}"
       comment: "Site update in progress"
       downtime_type: "host"
       host_name: "{{ cmk_agent_host_name }}"

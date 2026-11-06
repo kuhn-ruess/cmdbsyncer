@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 
 import yaml
 
@@ -317,6 +318,52 @@ class CmkRoleRenderTest(unittest.TestCase):
                 stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
                 timeout=300, check=False)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+
+@unittest.skipUnless(_ansible_playbook(), 'ansible-playbook not installed')
+class CmkDowntimeWindowTest(unittest.TestCase):
+    """The downtime window of the site update, with no date command at all."""
+
+    TASK = 'Calculation downtime start and end +{{ cmk_downtime_range }} hours'
+
+    def _window(self, downtime_range):
+        task = _role_task('cmk_server_mngmt', 'main.yml', self.TASK)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, 'window.json')
+            play = [{'hosts': 'all', 'gather_facts': False, 'tasks': [
+                task,
+                {'ansible.builtin.copy': {
+                    'dest': target,
+                    'content': '{{ [checkmk_downtime_start, checkmk_downtime_end] | to_json }}',
+                }},
+            ]}]
+            path = os.path.join(tmp, 'play.yml')
+            with open(path, 'w', encoding='utf-8') as handle:
+                yaml.safe_dump(play, handle)
+            env = dict(os.environ, ANSIBLE_LOCAL_TEMP=os.path.join(tmp, 'local'),
+                       ANSIBLE_REMOTE_TEMP=os.path.join(tmp, 'remote'))
+            proc = subprocess.run(
+                [_ansible_playbook(), '-i', 'localhost,', '-c', 'local',
+                 '-e', f'ansible_python_interpreter={sys.executable}',
+                 '-e', f'cmk_downtime_range={downtime_range}', path],
+                stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+                timeout=300, check=False)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            with open(target, encoding='utf-8') as handle:
+                return [datetime.fromisoformat(x) for x in json.load(handle)]
+
+    def test_window_has_time_zone_and_range(self):
+        for downtime_range, hours in (('2', 2), ('1.5', 1.5)):
+            start, end = self._window(downtime_range)
+            self.assertEqual(start.utcoffset(), timedelta(0))
+            self.assertAlmostEqual((end - start).total_seconds(), hours * 3600, delta=2)
+            self.assertLess(abs(datetime.now(timezone.utc) - start), timedelta(minutes=5))
+
+    def test_no_date_command_on_the_controller(self):
+        # BusyBox date in the container image fails on --date '+2 hours'
+        for task in _tasks(os.path.join(_ROLES, 'cmk_server_mngmt', 'tasks', 'main.yml')):
+            command = task.get('command') or task.get('ansible.builtin.command') or ''
+            self.assertFalse(str(command).startswith('date'), task.get('name'))
 
 
 if __name__ == '__main__':
