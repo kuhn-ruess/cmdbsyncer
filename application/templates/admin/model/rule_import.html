@@ -1,0 +1,163 @@
+{% extends 'admin/master.html' %}
+
+{% macro name_list(title, names, css) %}
+    {% if names %}
+    <p class="mb-1"><span class="badge badge-{{ css }}">{{ title }}: {{ names|length }}</span>
+        {{ names|join(', ') }}</p>
+    {% endif %}
+{% endmacro %}
+
+{% block body %}
+<div class="container-fluid mt-3">
+    <h3>Import {{ admin_view.name }}</h3>
+    <p>
+        Takes what the Export of this page writes, as well as rules written by
+        hand. Only rules of <code>{{ rule_type }}</code> are accepted.
+        <a href="{{ return_url }}">Back to the list</a>
+        <a href="{{ docu_link }}" target="_blank" class="badge badge-light">
+            <i class="fa fa-info-circle"></i> Documentation</a>
+    </p>
+
+    {% if error %}
+    <div class="alert alert-danger" id="rule_import_error">
+        <i class="fa fa-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="alert {% if result.failed %}alert-danger{% else %}alert-success{% endif %}"
+         id="rule_import_result">
+        <strong>Import finished</strong>
+        {{ name_list('Imported', result.imported, 'success') }}
+        {{ name_list('Replaced', result.replaced, 'warning') }}
+        {{ name_list('Skipped, already exists', result.skipped, 'secondary') }}
+        {{ name_list('Failed, not imported', result.failed, 'danger') }}
+    </div>
+    {% elif plan %}
+    <div class="alert {% if plan.ok %}alert-info{% else %}alert-danger{% endif %}"
+         id="rule_import_plan_summary">
+        {% if plan.ok %}
+            Check passed, nothing was written yet.
+            {% set existing = plan.rows|selectattr('status', 'equalto', 'exists')|list|length %}
+            {{ plan.rows|length }} rule(s), {{ existing }} of them already exist.
+        {% else %}
+            Nothing was imported. Correct the problems below and try again.
+        {% endif %}
+        {% for message in plan.errors %}
+        <div>{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if plan and not result %}
+    {% for note in plan.notes %}
+    <div class="alert alert-warning">{{ note }}</div>
+    {% endfor %}
+    {% if plan.rows %}
+    {% set override = form_data.get('override') %}
+    <div class="card app-card mb-3">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" id="rule_import_rows">
+                <thead>
+                    <tr><th>Position</th><th>Rule</th><th>Enabled</th><th>What happens</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in plan.rows %}
+                    <tr>
+                        <td>{{ row.where }}</td>
+                        <td>{{ row.name }}</td>
+                        <td>{% if row.status != 'error' %}{{ 'yes' if row.enabled else 'no' }}{% endif %}</td>
+                        <td>
+                            {% if row.status == 'error' %}
+                                <span class="badge badge-danger">Error</span>
+                                {% for message in row.errors %}<div>{{ message }}</div>{% endfor %}
+                            {% elif row.status == 'exists' and override %}
+                                <span class="badge badge-warning">Replaces</span>
+                                {{ row.existing|join(', ') }}
+                            {% elif row.status == 'exists' %}
+                                <span class="badge badge-secondary">Skipped, already exists</span>
+                                {{ row.existing|join(', ') }}
+                            {% else %}
+                                <span class="badge badge-success">New</span>
+                            {% endif %}
+                            {% for message in row.warnings %}
+                            <div class="text-muted"><i class="fa fa-exclamation-triangle"></i> {{ message }}</div>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <form method="POST" class="card app-card mb-4" id="rule_import_form"
+          enctype="multipart/form-data" data-max-paste="{{ max_paste_bytes }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="card-body">
+            <div class="form-group">
+                <label for="rules_text">Paste the rules</label>
+                <textarea class="form-control" id="rules_text" name="rules_text" rows="12"
+                          spellcheck="false"
+                          style="font-family: monospace;">{{ form_data.get('rules_text', '') }}</textarea>
+                <small class="form-text text-muted">
+                    One JSON object per line or a JSON list. A rule without
+                    <code>_id</code> gets a new one.
+                </small>
+            </div>
+            {% if path_allowed %}
+            <div class="form-group">
+                <label for="rules_path">Or give the path of a file in the Files folder</label>
+                <input type="text" class="form-control" id="rules_path" name="rules_path"
+                       value="{{ form_data.get('rules_path', '') }}"/>
+                <small class="form-text text-muted">
+                    Relative to the Files folder. Files ending in .syncer_json,
+                    .jsonl or .json up to {{ max_file_mb }} MB, no symbolic links.
+                </small>
+            </div>
+            {% endif %}
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="override" value="1"
+                       id="override" {% if form_data.get('override') %}checked{% endif %}/>
+                <label class="form-check-label" for="override">
+                    Replace existing rules
+                </label>
+                <small class="form-text text-muted">
+                    A rule exists if it has the same id or name. Without this
+                    option it stays as it is and the record is skipped.
+                </small>
+            </div>
+            <div class="alert alert-danger d-none" id="rule_import_too_large">
+                This is too much text to paste. Put the file into the Files
+                folder and give its path.
+            </div>
+            <button type="submit" class="btn btn-secondary" name="action" value="check">
+                <i class="fa fa-search"></i> Check
+            </button>
+            <button type="submit" class="btn btn-primary" name="action" value="import">
+                <i class="fa fa-upload"></i> Import
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block tail %}
+{{ super() }}
+<script {{ admin_csp_nonce_attribute }}>
+    (function () {
+        var form = document.getElementById('rule_import_form');
+        form.addEventListener('submit', function (event) {
+            var limit = parseInt(form.dataset.maxPaste, 10);
+            var size = new Blob([document.getElementById('rules_text').value]).size;
+            var tooLarge = limit > 0 && size > limit;
+            document.getElementById('rule_import_too_large').classList.toggle('d-none', !tooLarge);
+            if (tooLarge) {
+                event.preventDefault();
+            }
+        });
+    }());
+</script>
+{% endblock %}

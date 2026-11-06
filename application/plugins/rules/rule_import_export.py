@@ -63,6 +63,17 @@ def _model_class_for(rule_type):
     return getattr(module, class_name, None)
 
 
+def rule_type_of_model(model_class):
+    """The rule type stored in *model_class*, None without a clear answer:
+    the model is not registered or only a part of its collection is one
+    rule type (Host holds hosts, objects and templates)."""
+    found = [(rule_type, entry) for rule_type, entry in enabled_rules.items()
+             if entry[1] == model_class.__name__]
+    if len(found) != 1 or len(found[0][1]) > 2:
+        return None
+    return found[0][0]
+
+
 def rule_type_allowed(rule_type, user=False):
     """
     True when *user* may export or import *rule_type*.
@@ -140,42 +151,57 @@ def iter_all_rules(include_hosts=False, include_accounts=False,
             yield rule_type, rule
 
 
-def _delete_conflicting(json_dict, model_class):
-    """Remove the documents *json_dict* would collide with.
+def conflict_filters(json_dict, model_class, match_name=False):
+    """Queryset filters of the documents *json_dict* would collide with.
 
     A rule from an export collides either on its own id or on one of the
-    model's unique fields (usually ``name``), so both are cleared before
-    the import writes the new version.
+    model's unique fields (usually ``name``). With *match_name* the name
+    also counts on a model without any unique field, which would otherwise
+    take a pasted rule as a second one with the same name.
     """
+    filters = []
     doc_id = json_dict.get('_id')
     if isinstance(doc_id, dict):
         doc_id = doc_id.get('$oid')
     if doc_id:
-        model_class.objects(id=doc_id).delete()
+        filters.append({'id': doc_id})
+    has_unique = False
     for field_name, field in model_class._fields.items():  # pylint: disable=protected-access
         if not getattr(field, 'unique', False):
             continue
+        has_unique = True
         value = json_dict.get(field.db_field or field_name)
-        if value in (None, ''):
-            continue
+        if value not in (None, ''):
+            filters.append({field_name: value})
+    if match_name and not has_unique and json_dict.get('name') \
+            and 'name' in model_class._fields:  # pylint: disable=protected-access
+        filters.append({'name': json_dict['name']})
+    return filters
+
+
+def _delete_conflicting(json_dict, model_class, match_name=False):
+    """Remove the documents *json_dict* would collide with, so the import
+    can write the new version."""
+    for conflict in conflict_filters(json_dict, model_class, match_name):
         try:
-            model_class.objects(**{field_name: value}).delete()
+            model_class.objects(**conflict).delete()
         except (ValidationError, TypeError):
             continue
 
 
-def _save_rule(json_dict, model_class, override=False):
+def _save_rule(json_dict, model_class, override=False, match_name=False):
     """Persist a rule from a parsed JSON dict.
 
     With *override* an already existing rule with the same id or the same
-    unique field (e.g. the name) is replaced instead of skipped.
+    unique field (e.g. the name) is replaced instead of skipped; for
+    *match_name* see ``conflict_filters``.
 
     Returns one of ``'imported'``, ``'duplicate'``, ``'invalid'``.
     """
     db_ref = model_class()
     new = db_ref.from_json(json.dumps(json_dict))
     if override:
-        _delete_conflicting(json_dict, model_class)
+        _delete_conflicting(json_dict, model_class, match_name)
     try:
         new.save(force_insert=True)
     except NotUniqueError:

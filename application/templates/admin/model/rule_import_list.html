@@ -1,0 +1,10 @@
+{#- Whatever list template the view uses, with the rule import next to Export. -#}
+{% extends rule_import_base %}
+
+{% block model_menu_bar_before_filters %}
+    {{ super() }}
+    <li class="nav-item">
+        <a class="nav-link" href="{{ get_url('.rule_import_view') }}"
+           title="Import a rules file">Import</a>
+    </li>
+{% endblock %}

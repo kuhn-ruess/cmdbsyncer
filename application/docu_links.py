@@ -23,6 +23,7 @@ docu_links = {
     'cmk_ldap_connections': 'https://docs.cmdbsyncer.de/checkmk/ldap_connections/',
     'cmk_folders': 'https://docs.cmdbsyncer.de/checkmk/folders/',
     'rules_in_git': 'https://docs.cmdbsyncer.de/basics/rules_in_git/',
+    'rule_import_export': 'https://docs.cmdbsyncer.de/basics/rule_import_export/',
 
     # Enterprise features — referenced from cmdbsyncer_enterprise views.
     'ent_overview': 'https://docs.cmdbsyncer.de/enterprise/',

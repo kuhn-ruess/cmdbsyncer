@@ -8,7 +8,7 @@ import html
 import time
 from copy import deepcopy
 from datetime import datetime, timedelta
-from flask import url_for, redirect, flash, request, abort, current_app
+from flask import url_for, redirect, flash, request, abort, current_app, g
 from flask_login import current_user
 from flask_admin import AdminIndexView
 from flask_admin import expose
@@ -24,6 +24,7 @@ from wtforms.validators import ValidationError
 from mongoengine.errors import NotUniqueError
 
 from application._version import __version__
+from application.docu_links import docu_links
 from application.helpers.sates import add_changes
 from application.models.user import is_readonly
 
@@ -355,6 +356,128 @@ class DefaultModelView(ModelView):
     def action_disable(self, ids):
         """Switch the selected entries off."""
         return self._bulk_set_enabled(ids, False)
+    #.
+
+    #   .-- Rule import
+    # Every view with the rules export gets the import next to it, and with
+    # it the permissions of that view: who can't reach it can't import.
+    @property
+    def rule_file_type(self):
+        """The rule type this view exports, None if it has no rules export."""
+        if not self.can_export or 'syncer_rules' not in (self.export_types or ()):
+            return None
+        # pylint: disable-next=import-outside-toplevel
+        from application.plugins.rules.rule_import_export import rule_type_of_model
+        return rule_type_of_model(self.model)
+
+    @property
+    def can_import_rules(self):
+        """Importing creates and replaces rules, so it needs both rights."""
+        # pylint: disable-next=import-outside-toplevel
+        from application.plugins.rules.rule_import_export import rule_type_allowed
+        rule_type = self.rule_file_type
+        return bool(rule_type and self.can_create and self.can_edit
+                    and rule_type_allowed(rule_type))
+
+    def rule_import_problems(self, model):  # pylint: disable=unused-argument
+        """
+        What keeps an imported rule from being saved. The counterpart of the
+        checks a view does on its form, which an import never passes.
+        """
+        return []
+
+    def render(self, template, **kwargs):
+        """Offer the rule import in the menu bar of the list."""
+        if template == self.list_template and self.can_import_rules:
+            kwargs['rule_import_base'] = template
+            template = 'admin/model/rule_import_list.html'
+        return super().render(template, **kwargs)
+
+    def get_export_name(self, export_type='csv'):
+        """A rules export is called after its model, whatever the view's name."""
+        if export_type != 'syncer_rules':
+            return super().get_export_name(export_type)
+        return f"{self.model.__name__}_{datetime.now():%Y%m%d%H%M}.syncer_json"
+
+    def _export_tablib(self, export_type, return_url):
+        """Have the rules export name its rule type, see ``ExportObjects``."""
+        if export_type == 'syncer_rules':
+            g.rule_export_type = self.rule_file_type
+        return super()._export_tablib(export_type, return_url)
+
+    def _rule_import_text(self):
+        """
+        ``(text, file name or None)`` from the submitted form. A path needs
+        the right for the Files folder as well, as it reads from there.
+        """
+        # pylint: disable-next=import-outside-toplevel
+        from application.plugins.rules.rule_file_import import RuleImportError, read_rule_file
+        text = request.form.get('rules_text', '')
+        path = request.form.get('rules_path', '').strip()
+        if text.strip() and path:
+            raise RuleImportError("Either paste the rules or give a path, not both")
+        if not path:
+            return text, None
+        if not current_user.has_right('fileadmin'):
+            raise RuleImportError("A path needs the permission for the Files folder")
+        return read_rule_file(path, current_app.config['FILEADMIN_PATH']), path
+
+    def _rule_import_write(self, plan, rule_type, override):
+        """Write the checked rules and do what a save does after that."""
+        # pylint: disable=import-outside-toplevel
+        from application import log
+        from application.modules.rule.views import invalidate_host_rule_caches
+        from application.plugins.rules.rule_file_import import run_import
+        result = run_import(plan, rule_type, override)
+        if result['imported'] or result['replaced']:
+            add_changes()
+            invalidate_host_rule_caches()
+            self.on_bulk_change()
+        details = [('user', current_user.email)]
+        for outcome, names in result.items():
+            details += [(outcome, name) for name in names]
+        log.log(f"Rules imported: {rule_type}", source="rules_import", details=details)
+        return result
+
+    @expose('/rule_import/', methods=('GET', 'POST'))
+    def rule_import_view(self):
+        """
+        Paste a rules file or give its path. Check only shows what would
+        happen, Import writes, and only if no record of the file is bad.
+        """
+        # pylint: disable-next=import-outside-toplevel
+        from application.plugins.rules.rule_file_import import (
+            MAX_FILE_BYTES, RuleImportError, plan_import)
+        rule_type = self.rule_file_type
+        if not rule_type:
+            abort(404)
+        if not self.can_import_rules:
+            abort(403)
+        context = {'error': None, 'plan': None, 'result': None}
+        if request.method == 'POST':
+            override = bool(request.form.get('override'))
+            try:
+                text, source_name = self._rule_import_text()
+            except RuleImportError as error:
+                context['error'] = str(error)
+            else:
+                context['plan'] = plan = plan_import(
+                    text, rule_type, source_name, detail=not source_name,
+                    check=self.rule_import_problems)
+                if request.form.get('action') == 'import' and plan['ok']:
+                    context['result'] = self._rule_import_write(plan, rule_type, override)
+        return self.render(
+            'admin/model/rule_import.html',
+            rule_type=rule_type,
+            return_url=self.get_url('.index_view'),
+            form_data=request.form,
+            path_allowed=current_user.has_right('fileadmin')
+            and os.path.isdir(current_app.config.get('FILEADMIN_PATH') or ''),
+            max_file_mb=MAX_FILE_BYTES // (1024 * 1024),
+            max_paste_bytes=current_app.config.get('MAX_FORM_MEMORY_SIZE') or 0,
+            docu_link=docu_links['rule_import_export'],
+            **context,
+        )
     #.
 
     def _run_view(self, fn, *args, **kwargs):

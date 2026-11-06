@@ -366,6 +366,17 @@ class CheckmkRuleView(RuleModelView):
 
         super().__init__(model, **kwargs)
 
+    def rule_import_problems(self, model):
+        """Malformed folder options, see ``validate_form``."""
+        # pylint: disable-next=import-outside-toplevel
+        from .rules import validate_folder_option_param
+        problems = super().rule_import_problems(model)
+        for outcome in model.outcomes:
+            if outcome.action in ('move_folder', 'create_folder'):
+                if error := validate_folder_option_param(outcome.action_param or ''):
+                    problems.append(error)
+        return problems
+
     def validate_form(self, form):
         """
         Reject saves whose move_folder/create_folder outcome carries malformed
@@ -1318,6 +1329,13 @@ class CheckmkMngmtRuleView(ListSourceViewMixin, RuleModelView):  # pylint: disab
             outcomes_field.kwargs['min_entries'] = 0
         return form_class
 
+    def rule_import_problems(self, model):
+        """Outcomes of one rule target one ruleset, see ``validate_form``."""
+        problems = super().rule_import_problems(model)
+        if len({(outcome.ruleset or '').strip() for outcome in model.outcomes}) > 1:
+            problems.append("All outcomes on a rule must use the same Ruleset")
+        return problems
+
     def validate_form(self, form):
         """
         Reject saves where outcomes target different rulesets. Doing
@@ -2203,19 +2221,28 @@ class CheckmkServiceLabelView(RuleModelView):  # pylint: disable=too-many-ancest
         }
         super().__init__(model, **kwargs)
 
-    def on_model_change(self, form, model, is_created):
+    def rule_import_problems(self, model):
         """
-        Refuse what could only fail later during the export
+        What could only fail later during the export
         """
+        problems = super().rule_import_problems(model)
         for outcome in model.outcomes:
             try:
                 re.compile(outcome.service_pattern)
             except re.error as error:
-                raise ValidationError(
-                    f"Service Pattern '{outcome.service_pattern}': {error}") from error
+                problems.append(f"Service Pattern '{outcome.service_pattern}': {error}")
             for template in (outcome.label_name, outcome.label_value, outcome.folder):
                 if defect := check_jinja_syntax(template or ''):
-                    raise ValidationError(f"Jinja in '{template}': {defect}")
+                    problems.append(f"Jinja in '{template}': {defect}")
+        return problems
+
+    def on_model_change(self, form, model, is_created):
+        """
+        Refuse what could only fail later during the export
+        """
+        problems = self.rule_import_problems(model)
+        if problems:
+            raise ValidationError(problems[0])
         super().on_model_change(form, model, is_created)
 
     def is_accessible(self):
@@ -2598,6 +2625,15 @@ class CheckmkNotificationRuleView(ListSourceViewMixin, RuleModelView):  # pylint
         self.form_subdocuments = base_config
 
         super().__init__(model, **kwargs)
+
+    def rule_import_problems(self, model):
+        """Jinja which does not compile, see ``validate_form``."""
+        problems = super().rule_import_problems(model)
+        for outcome in model.outcomes:
+            values = {name: getattr(outcome, name, None) for name in JINJA_FIELDS}
+            problems += [f"{name}: the Jinja is not valid, {error}"
+                         for name, error in validate_outcome_jinja(values)]
+        return problems
 
     def validate_form(self, form):
         """

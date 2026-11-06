@@ -215,6 +215,18 @@ class ListSourceViewMixin:
             known_names=global_names() | set(self.list_source_known_names),
             aggregate_by=data.get('list_aggregate_by'))
 
+    def rule_import_problems(self, model):
+        """What ``validate_form`` refuses on a rule with a list source."""
+        problems = super().rule_import_problems(model)
+        if 'rule_source' not in model._fields:  # pylint: disable=protected-access
+            return problems
+        data = {name: getattr(model, name, None)
+                for name in ('rule_source', 'list_source', 'list_aggregate_by')}
+        for index, outcome in enumerate(model.outcomes):
+            for field, _label in self.list_source_template_fields:
+                data[f'outcomes-{index}-{field}'] = getattr(outcome, field, None)
+        return problems + self._check_list_rule(data)[1]
+
     def validate_form(self, form):
         """
         Refuse a list rule the export could not use: an unreadable list

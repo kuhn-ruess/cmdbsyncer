@@ -10,7 +10,7 @@ from wtforms import StringField, TextAreaField
 from application.docu_links import docu_links
 from application.helpers.lookup_table import clear_cache, parse_lookup_table
 from application.helpers.sates import add_changes
-from application.modules.rule.views import invalidate_host_rule_caches
+from application.modules.rule.views import get_rule_json, invalidate_host_rule_caches
 from application.views.default import DefaultModelView
 from application.views._form_sections import modern_form, section
 
@@ -45,6 +45,13 @@ class LookupTableView(DefaultModelView):
     """
     Lookup Tables
     """
+    can_export = True
+    export_types = ['syncer_rules', ]
+    column_export_list = ('name', )
+    column_formatters_export = {
+        'name': get_rule_json
+    }
+
     column_list = ('name', 'documentation', 'entries')
     column_sortable_list = ('name',)
     column_filters = ('name',)
@@ -103,6 +110,16 @@ class LookupTableView(DefaultModelView):
         for message in errors:
             flash(f"Table: {message}", 'danger')
         return not errors
+
+    def rule_import_problems(self, model):
+        """A table that cannot be read, see ``validate_form``."""
+        problems = super().rule_import_problems(model)
+        return problems + [f"Table: {message}"
+                           for message in parse_lookup_table(model.entries)[2]]
+
+    def on_bulk_change(self):
+        """An import wrote tables past the form hooks."""
+        clear_cache()
 
     def on_model_change(self, form, model, is_created):
         """
