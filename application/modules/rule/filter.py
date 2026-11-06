@@ -11,21 +11,27 @@ class Filter(Rule):
 
     name = "Filter"
 
+    def _whitelist_attribute(self, attribute_name, outcomes):
+        """
+        Keep one attribute by its name, or all starting with it for name*
+        """
+        if not attribute_name.endswith('*'):
+            # 0 and False are values, only "no value" stays out
+            if self.attributes.get(attribute_name) not in (None, ''):
+                outcomes[attribute_name] = self.attributes[attribute_name]
+            return
+        real_name = attribute_name[:-1]
+        for attribute in self.attributes:
+            if attribute.startswith(real_name):
+                outcomes[attribute] = self.attributes[attribute]
+
     def add_outcomes(self, _rule, rule_outcomes, outcomes):
         """
         Filter if attributes match to a rule
         """
         for outcome in rule_outcomes:
             if outcome['action'] == 'whitelist_attribute':
-                attribute_name = outcome['attribute_name']
-                if not attribute_name.endswith('*'):
-                    if self.attributes.get(attribute_name):
-                        outcomes[attribute_name] = self.attributes[attribute_name]
-                else:
-                    real_name = attribute_name[:-1]
-                    for attribute in self.attributes:
-                        if attribute.startswith(real_name):
-                            outcomes[attribute] = self.attributes[attribute]
+                self._whitelist_attribute(outcome['attribute_name'], outcomes)
 
             if outcome['action'] == 'whitelist_attribute_value':
                 search_value = outcome['attribute_name']
