@@ -28,6 +28,6 @@
   ansible.builtin.apt:
     deb: "{{ cmk_linux_tmp }}/cmk_agent.deb"
     state: present
-  when: cmk_install_agent and checkmk_agent_download_state.status == 200
+  when: (cmk_install_agent | bool) and checkmk_agent_download_state.status == 200
 
 - ansible.builtin.include_tasks: "Linux-tasks.yml"

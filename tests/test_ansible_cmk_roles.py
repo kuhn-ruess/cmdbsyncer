@@ -16,6 +16,7 @@ import base64
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -116,6 +117,19 @@ class CmkRoleStaticTest(unittest.TestCase):
         for path in _task_files():
             with open(path, encoding='utf-8') as handle:
                 self.assertNotIn('inventory_hostname', handle.read(), path)
+
+    def test_step_flags_in_conditions_are_booleans(self):
+        # Extra Vars like cmk_register_bakery=true arrive as strings, and
+        # Ansible since core 2.19 refuses a condition with a string result.
+        defaults = _load(os.path.join(_ROLES, 'cmk_host_agent', 'defaults', 'main.yml'))
+        flags = [name for name, value in defaults.items() if value is False]
+        for path in _task_files():
+            for task in _tasks(path):
+                when = task.get('when')
+                for condition in when if isinstance(when, list) else [when]:
+                    for flag in flags:
+                        if re.search(rf'\b{flag}\b(?! \| bool)', str(condition)):
+                            self.fail(f'{path}: {flag} without bool in {condition!r}')
 
     def test_secret_tasks(self):
         found = 0

@@ -4,7 +4,7 @@
 # require system Kerberos libraries to build — those are split out into
 # requirements-ansible-windows.txt so a Linux-only deployment does not have to
 # install them.
-ansible==10.5.0
+ansible==14.6.0
 # The `mode: local` / `provider` support the UI playbook runner relies on
 # landed in 0.2.0; the old HTTP-only 0.1.4 breaks UI runs. Pinned with a
 # floor (not left bare) because a bare requirement never changes, so
