@@ -874,11 +874,11 @@ def sync_folderpools(_account=False, _debug=False):
             pool_usage.setdefault(host.folder, 0)
             pool_usage[host.folder] += 1
 
-    for pool_folder, usage in pool_usage.items():
-        folder = CheckmkFolderPool.objects(folder_name=pool_folder).first()
-        if not folder:
-            # Host sits in a regular (non-pool) folder — nothing to recount here.
-            continue
+    # Walk the pools, not the hosts: a pool nobody sits in anymore has to
+    # fall back to zero as well. Hosts in regular folders are of no interest.
+    for folder in CheckmkFolderPool.objects():
+        pool_folder = folder.folder_name
+        usage = pool_usage.get(pool_folder, 0)
         print(f"Folder {pool_folder} uses {usage} seats")
         if folder.folder_seats_taken != usage:
             print(f" - Changed seats from {folder.folder_seats_taken} to {usage}")

@@ -6,8 +6,42 @@ import unittest
 from unittest.mock import Mock, patch
 
 from mongoengine.errors import DoesNotExist
-from application.plugins.checkmk.inits import reset_folderpool, reset_folderpools
+from application.plugins.checkmk.inits import (
+    reset_folderpool, reset_folderpools, sync_folderpools,
+)
 from application.plugins.checkmk.poolfolder import get_folder, remove_seat, _get_folders
+
+
+class TestSyncFolderpools(unittest.TestCase):
+    """sync_folderpools recounts the seats"""
+
+    @patch('application.plugins.checkmk.inits.CheckmkFolderPool')
+    @patch('application.plugins.checkmk.inits.Host')
+    def test_counts_and_resets_an_empty_pool(self, host_cls, pool_cls):
+        used = Mock(folder_name='/used', folder_seats_taken=5)
+        empty = Mock(folder_name='/empty', folder_seats_taken=3)
+        pool_cls.objects.return_value = [used, empty]
+        host_cls.get_export_hosts.return_value = [
+            Mock(folder='/used'), Mock(folder='/used'), Mock(folder='/regular'), Mock(folder=None),
+        ]
+
+        sync_folderpools()
+
+        self.assertEqual(used.folder_seats_taken, 2)
+        used.save.assert_called_once()
+        self.assertEqual(empty.folder_seats_taken, 0)
+        empty.save.assert_called_once()
+
+    @patch('application.plugins.checkmk.inits.CheckmkFolderPool')
+    @patch('application.plugins.checkmk.inits.Host')
+    def test_right_count_is_not_saved(self, host_cls, pool_cls):
+        pool = Mock(folder_name='/used', folder_seats_taken=1)
+        pool_cls.objects.return_value = [pool]
+        host_cls.get_export_hosts.return_value = [Mock(folder='/used')]
+
+        sync_folderpools()
+
+        pool.save.assert_not_called()
 
 
 class TestGetFolders(unittest.TestCase):
