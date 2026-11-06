@@ -47,6 +47,16 @@ details = []
 eq(_archive_unseen_hosts(30, False, False, str(unseen - 1), details), 0, 'more than the limit')
 eq(_archive_unseen_hosts(30, False, False, str(unseen), details), unseen, 'exactly the limit')
 
+for name in ('srv1', 'srv1.example.com', 'testsrv1'):
+    Host(hostname=name).save()
+Host(hostname='a.srv1').save()
+config = {'inventorize_match_by_domain': True, 'inventorize_key': 'by_domain',
+          'name': 'domain-account'}
+run_inventory(config, [('srv1', {'seen': 'yes'})])
+inventoried = sorted(x.hostname for x in Host.objects(hostname__contains='srv1')
+                     if x.get_inventory().get('by_domain__seen'))
+eq(inventoried, ['a.srv1', 'srv1'], 'only whole name parts match')
+
 print('MAINTENANCE_OK')
 '''
 

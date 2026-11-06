@@ -2,6 +2,8 @@
 """
 Inventory Helpers
 """
+from mongoengine import Q
+
 from application.models.host import Host
 from application.helpers.get_account import account_allows
 from application.helpers.import_hostnames import import_hostnames
@@ -51,7 +53,9 @@ def _inventorize_name(hostname, labels, inv_key, config, collected_by_key):
                 collected_by_key[value].append(hostname)
 
     if config.get('inventorize_match_by_domain'):
-        for host_obj in Host.objects(hostname__endswith=hostname):
+        # Only a whole name part counts: srv1 must not hit testsrv1.
+        for host_obj in Host.objects(Q(hostname=hostname)
+                                     | Q(hostname__endswith=f".{hostname}")):
             inventorize_host(host_obj, labels, inv_key, config)
     else:
         host_obj = Host.get_host(hostname, create=False)
