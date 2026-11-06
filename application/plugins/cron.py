@@ -185,6 +185,11 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
             stats.next_run = calc_next_run(job, stats.last_start)
             stats.save()
 
+        # Checked before run_once_next is taken: a run requested while the
+        # group is busy has to stay set for a later pass.
+        if stats.is_running:
+            continue
+
         next_run = stats.next_run
 
         if job.run_once_next:
@@ -194,7 +199,7 @@ def jobs():  # pylint: disable=too-many-branches,too-many-statements
             job.run_once_next = False
             job.save()
 
-        if stats.is_running or next_run > now + timedelta(minutes=1):
+        if next_run > now + timedelta(minutes=1):
             continue
         if not force_run and not in_timerange(job):
             stats.next_run = calc_next_run(job, stats.last_start, was_outdated=True)
