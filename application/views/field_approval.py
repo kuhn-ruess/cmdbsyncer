@@ -15,6 +15,7 @@ from flask_login import current_user
 from mongoengine.errors import DoesNotExist
 
 from application import app
+from application.helpers.secret_access import is_scoped, scoped_hosts
 from application.models.field_approval import FieldApproval
 from application.models.host import Host
 
@@ -52,6 +53,18 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
             or current_user.has_right('approval')
         )
 
+    def get_query(self):
+        """A user limited to accounts or templates only gets their hosts."""
+        query = FieldApproval.objects
+        if is_scoped(current_user):
+            hosts = scoped_hosts(current_user).scalar('id')
+            query = query.filter(host_id__in=[str(host_id) for host_id in hosts])
+        return query
+
+    def get_one(self, id):  # pylint: disable=redefined-builtin
+        """The details only reach what the list shows."""
+        return self.get_query().filter(pk=id).first()
+
     def _can_decide(self):
         return current_user.global_admin or current_user.has_right('approval')
 
@@ -63,7 +76,7 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
                   'critical-label changes" role.', 'error')
             return redirect(request.referrer or url_for('.index_view'))
         applied, skipped = 0, 0
-        for approval in FieldApproval.objects(id__in=ids, status='pending'):
+        for approval in self.get_query().filter(id__in=ids, status='pending'):
             host = Host.objects(id=approval.host_id).first()
             if host is None:
                 approval.status = 'rejected'
@@ -102,7 +115,7 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
                   'critical-label changes" role.', 'error')
             return redirect(request.referrer or url_for('.index_view'))
         rejected = 0
-        for approval in FieldApproval.objects(id__in=ids, status='pending'):
+        for approval in self.get_query().filter(id__in=ids, status='pending'):
             approval.status = 'rejected'
             approval.decided_by_email = current_user.email
             approval.decided_at = datetime.datetime.utcnow()

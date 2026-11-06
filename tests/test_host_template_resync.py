@@ -193,6 +193,7 @@ class TemplateOpenChangesTest(unittest.TestCase):
         template.set_lifecycle_state.return_value = state_changed
         with patch.object(mod, 'add_changes') as add_changes, \
              patch.object(mod, 'Host') as host_cls, \
+             patch.object(mod, '_scope_hosts_to_user', side_effect=lambda query: query), \
              patch.object(mod, 'flash'), \
              patch.object(mod, 'redirect'), \
              patch.object(mod, 'url_for'), \

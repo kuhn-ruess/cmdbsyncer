@@ -54,7 +54,7 @@ from application.helpers.host_import_file import (
 )
 from application.views.host_secrets import render_host_secrets
 from application.helpers.secret_access import (
-    can_manage as can_manage_secrets, host_in_scope,
+    can_manage as can_manage_secrets, host_in_scope, is_scoped,
 )
 from application.views.default import DefaultModelView, row_action_target
 from application.views.host_widgets import (
@@ -136,6 +136,11 @@ def _scope_hosts_to_user(queryset):
     if scope is not None:
         queryset = queryset.filter(source_account_name__in=list(scope))
     return scope_hosts_to_templates(queryset, _allowed_template_names())
+
+
+def _host_in_user_scope(host_id):
+    """The host with this id, None when missing or out of the user's scope."""
+    return _scope_hosts_to_user(Host.objects(id=host_id)).first() if host_id else None
 
 
 def _allowed_template_names():
@@ -439,12 +444,15 @@ def render_debug_page(view, object_label='Host'):  # pylint: disable=too-many-lo
     """
     host = None
     if obj_id := request.args.get('obj_id'):
-        host = Host.objects.get(id=obj_id)
-        hostname = host.hostname
+        host = _host_in_user_scope(obj_id)
+        hostname = host.hostname if host else ''
     else:
         hostname = request.args.get('hostname', '').strip()
         if hostname:
-            host = Host.objects(hostname=hostname).first()
+            host = _scope_hosts_to_user(Host.objects(hostname=hostname)).first()
+            # The debug below goes by the name: keep it from a foreign host
+            if not host and is_scoped(current_user):
+                hostname = ''
     mode = request.args.get('mode', 'checkmk_host')
     ansible_project = request.args.get('ansible_project', '').strip()
 
@@ -795,7 +803,7 @@ def _render_copy_as_new_form(view, label):
     same for every view.
     """
     source_id = request.args.get('source_id', '')
-    source = Host.objects(id=source_id).first() if source_id else None
+    source = _host_in_user_scope(source_id)
     if not source:
         flash(f'{label} not found.', 'error')
         return redirect(url_for('.index_view'))
@@ -822,7 +830,7 @@ def _process_copy_as_new(label):
     if Host.objects(hostname=new_name).first():
         flash(f'{label} {new_name!r} already exists.', 'error')
         return redirect(url_for('.index_view'))
-    source = Host.objects(id=source_id).first()
+    source = _host_in_user_scope(source_id)
     if not source:
         flash(f'{label} not found.', 'error')
         return redirect(url_for('.index_view'))
@@ -1003,7 +1011,7 @@ class _LifecycleBulkActionsMixin:
 
     def _bulk_set_lifecycle(self, ids, new_state):
         changed = 0
-        for host in Host.objects(id__in=ids):
+        for host in _scope_hosts_to_user(Host.objects(id__in=ids)):
             if host.set_lifecycle_state(new_state):
                 host.save()
                 changed += 1
@@ -1406,6 +1414,10 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
             Host.objects(is_object=True, object_type__ne='template',
                          deleted_at__exists=False))
 
+    def get_one(self, id):  # pylint: disable=redefined-builtin
+        """Edit, details and delete only reach what the list shows."""
+        return self.get_query().filter(pk=id).first()
+
     # Subclasses (e.g. TemplateModelView) set this so on_model_change
     # stamps the right object_type. None = "leave whatever the form had".
     _force_object_type = None
@@ -1471,7 +1483,7 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
     def timeline(self):
         """Reuse HostModelView's timeline renderer for CMDB objects."""
         obj_id = request.args.get('obj_id', '').strip()
-        host = Host.objects(id=obj_id).first() if obj_id else None
+        host = _host_in_user_scope(obj_id)
         if not host:
             flash('Object not found.', 'error')
             return redirect(url_for('.index_view'))
@@ -1500,10 +1512,8 @@ class ObjectModelView(_SoftDeleteHostMixin,  # pylint: disable=too-many-ancestor
         normalise ``object_type`` to ``host`` so they leave the Objects list
         and appear under Hosts. Source account and labels are kept.
         """
-        query = Host.objects(id__in=ids, is_object=True, object_type__ne='template')
-        scope = current_user.account_scope() if current_user.is_authenticated else None
-        if scope is not None:
-            query = query.filter(source_account_name__in=list(scope))
+        query = _scope_hosts_to_user(
+            Host.objects(id__in=ids, is_object=True, object_type__ne='template'))
         updated = query.update(set__is_object=False, set__object_type='host')
         flash(f'Converted {updated} object(s) to host(s).', 'success')
         return redirect(request.referrer or url_for('.index_view'))
@@ -1542,6 +1552,10 @@ class TemplateModelView(ObjectModelView):  # pylint: disable=too-many-ancestors
         trigger for it. Templates without a `cmdb_match` pattern are only
         ever assigned by hand and are therefore skipped.
         """
+        if is_scoped(current_user):
+            # Goes over all hosts matching the template, not just their own
+            flash('Not available for a user limited to accounts or templates.', 'error')
+            return redirect(request.referrer or url_for('.index_view'))
         added, removed = 0, 0
         skipped = []
         for template in Host.objects(id__in=ids, object_type='template',
@@ -2155,7 +2169,7 @@ Impact Chain.
         every recorded label-change event, newest first, grouped by day.
         """
         obj_id = request.args.get('obj_id', '').strip()
-        host = Host.objects(id=obj_id).first() if obj_id else None
+        host = _host_in_user_scope(obj_id)
         if not host:
             flash('Host not found.', 'error')
             return redirect(url_for('.index_view'))
@@ -2184,7 +2198,7 @@ Impact Chain.
         # pylint: disable=import-outside-toplevel
         from application.models.host_inventory_tree import HostInventoryTree
         obj_id = request.args.get('obj_id', '').strip()
-        host = Host.objects(id=obj_id).first() if obj_id else None
+        host = _host_in_user_scope(obj_id)
         if not host:
             flash('Host not found.', 'error')
             return redirect(url_for('.index_view'))
@@ -2206,7 +2220,7 @@ Impact Chain.
             flash('Relations graph is only available in CMDB mode.', 'error')
             return redirect(url_for('.index_view'))
         obj_id = request.args.get('obj_id', '').strip()
-        host = Host.objects(id=obj_id).first() if obj_id else None
+        host = _host_in_user_scope(obj_id)
         if not host:
             flash('Host not found.', 'error')
             return redirect(url_for('.index_view'))
@@ -2232,7 +2246,7 @@ Impact Chain.
         if not app.config.get('CMDB_MODE'):
             return jsonify({'nodes': [], 'edges': []}), 403
         obj_id = request.args.get('obj_id', '').strip()
-        focus = Host.objects(id=obj_id).first() if obj_id else None
+        focus = _host_in_user_scope(obj_id)
         if not focus:
             return jsonify({'nodes': [], 'edges': []})
         type_label = dict(RELATION_TYPES)
@@ -2249,7 +2263,7 @@ Impact Chain.
         edges = []
         for rel in (focus.relations or []):
             tgt = relation_target(rel)
-            if not tgt:
+            if not tgt or not host_in_scope(current_user, tgt):
                 continue
             tgt_id = str(tgt.pk)
             nodes.setdefault(tgt_id, _node(tgt))
@@ -2258,9 +2272,9 @@ Impact Chain.
                 'label': type_label.get(rel.type, rel.type),
                 'arrows': 'to',
             })
-        inbound = Host.objects(
+        inbound = _scope_hosts_to_user(Host.objects(
             __raw__={'relations.target_host': focus.pk}
-        ).only('hostname', 'object_type', 'relations')
+        )).only('hostname', 'object_type', 'relations')
         for src in inbound:
             src_id = str(src.pk)
             if src_id == str(focus.pk):
@@ -2282,9 +2296,9 @@ Impact Chain.
         # template points back at the hosts that consume it.
         if request.args.get('include_templates') == '1':
             if focus.object_type == 'template':
-                consumers = Host.objects(cmdb_templates=focus.pk).only(
-                    'hostname', 'object_type'
-                )
+                consumers = _scope_hosts_to_user(
+                    Host.objects(cmdb_templates=focus.pk)
+                ).only('hostname', 'object_type')
                 for c in consumers:
                     cid = str(c.pk)
                     nodes.setdefault(cid, _node(c))
@@ -2687,7 +2701,7 @@ Impact Chain.
             flash(f"Project '{project_name}' not found", 'error')
             return redirect(return_to)
 
-        updated = Host.objects(id__in=host_ids).update(
+        updated = _scope_hosts_to_user(Host.objects(id__in=host_ids)).update(
             project=project_name or None)
         if project_name:
             flash(f"Assigned project '{project_name}' to {updated} host(s)",
@@ -2708,7 +2722,7 @@ Impact Chain.
         site of its pool. Hosts without a Site Pool assignment are skipped.
         """
         changed = 0
-        for host in Host.objects(id__in=ids):
+        for host in _scope_hosts_to_user(Host.objects(id__in=ids)):
             if release_host_site(host):
                 changed += 1
         flash(f'Cleared the Site Pool assignment on {changed} host(s); they '
@@ -2720,7 +2734,8 @@ Impact Chain.
             'Remove the labels of the shadow source from the selected hosts?')
     def action_clear_shadow(self, ids):
         """Remove the shadow source labels of the selected hosts."""
-        cleared = Host.clear_shadow_data(id__in=ids)
+        cleared = Host.clear_shadow_data(
+            id__in=list(_scope_hosts_to_user(Host.objects(id__in=ids)).scalar('id')))
         flash(f'Shadow source data removed from {cleared} host(s).', 'success')
         return redirect(request.referrer or url_for('.index_view'))
 
@@ -2761,10 +2776,7 @@ Impact Chain.
         # keeps any import from overwriting them — and they are always
         # protected from autodelete, same as picking "cmdb" in the edit form.
         if account_name == CMDB_SOURCE_ACCOUNT_NAME:
-            query = Host.objects(id__in=host_ids)
-            scope = current_user.account_scope() if current_user.is_authenticated else None
-            if scope is not None:
-                query = query.filter(source_account_name__in=list(scope))
+            query = _scope_hosts_to_user(Host.objects(id__in=host_ids))
             # `SOURCE_ACCOUNT` is part of the cached export attributes,
             # so the cache has to go with the account change.
             updated = query.update(
@@ -2786,10 +2798,7 @@ Impact Chain.
             flash(f"Account '{account_name}' not found", 'error')
             return redirect(return_to)
 
-        query = Host.objects(id__in=host_ids)
-        scope = current_user.account_scope() if current_user.is_authenticated else None
-        if scope is not None:
-            query = query.filter(source_account_name__in=list(scope))
+        query = _scope_hosts_to_user(Host.objects(id__in=host_ids))
         updated = query.update(
             set__source_account_name=account.name,
             set__source_account_id=str(account.id),
@@ -2868,7 +2877,7 @@ Impact Chain.
         # Fetch all selected hosts in one query instead of one round-trip
         # per id. Per-doc .save() stays — label-history signal handling
         # and update_host's import_seen/sync bumps need it.
-        hosts = Host.objects(id__in=host_ids)
+        hosts = _scope_hosts_to_user(Host.objects(id__in=host_ids))
         for host in hosts:
             labels = dict(host.labels or {})
             before = dict(labels)
@@ -2950,7 +2959,7 @@ Impact Chain.
 
         try:
             # Get the template
-            template = Host.objects(id=template_id).first()
+            template = _template_field_queryset().filter(id=template_id).first()
             if not template:
                 flash('Template not found', 'error')
                 return redirect(return_to)
@@ -2959,7 +2968,7 @@ Impact Chain.
             # .save() is kept because mongoengine signals + update_host
             # side-effects need it.
             valid_ids = [hid for hid in host_ids if hid.strip()]
-            hosts = list(Host.objects(id__in=valid_ids))
+            hosts = list(_scope_hosts_to_user(Host.objects(id__in=valid_ids)))
             updated_count = 0
             actor_email = getattr(current_user, 'email', None)
             for host in hosts:
@@ -3045,9 +3054,7 @@ Impact Chain.
     def get_template_list(self):
         """Get available CMDB templates for the action form"""
         try:
-            templates = Host.objects(is_object=True, object_type='template') \
-                .order_by('hostname')
-            return list(templates)
+            return list(_template_field_queryset().order_by('hostname'))
         except Exception:  # pylint: disable=broad-exception-caught
             return []
 
