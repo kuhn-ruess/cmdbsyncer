@@ -571,6 +571,7 @@ class Rule():
         #hostname = self.db_host.hostname
 
         ignore_list = []
+        skip_rule = False
 
         for outcome in rule_outcomes:
             action_param = outcome['param']
@@ -617,7 +618,9 @@ class Rule():
                 new_value  = render_jinja(action_param, mode="nullify", **self.attributes)
                 new_value = new_value.strip()
                 new_value = self.handle_fields(action, new_value)
-                if new_value != 'SKIP_FIELD':
+                if new_value == 'SKIP_RULE':
+                    skip_rule = True
+                elif new_value != 'SKIP_FIELD':
                     defaults_for_list[action] = new_value
                 #else:
                 #    defaults_for_list[action] = False
@@ -626,6 +629,10 @@ class Rule():
                 ignore_list += [x.strip() for x in new_value.split(',')]
                 continue
 
+
+        if skip_rule:
+            # A field shared by all entries asked for it, so none is left
+            return outcome_selection, ignore_list
 
         if defaults_by_id:
             for collection_data in defaults_by_id.values():

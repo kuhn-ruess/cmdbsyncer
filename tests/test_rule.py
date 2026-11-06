@@ -562,6 +562,11 @@ class TestMultilistSkipRule(unittest.TestCase):
         self.assertEqual(self._outcomes(['', 'eth1'], [self.MTU, self.NAME]),
                          [{'mtu': '1500', 'name': 'eth1'}])
 
+    def test_skip_without_a_list_variable_gives_nothing(self):
+        empty_name = {'param': '', 'action': 'name', 'list_variable_name': ''}
+        self.assertEqual(self._outcomes([], [empty_name, self.SITE]), [])
+        self.assertEqual(self._outcomes(['eth0'], [self.MTU, empty_name]), [])
+
     def test_all_entries_skipped_gives_nothing(self):
         self.assertEqual(self._outcomes([''], [self.NAME, self.SITE]), [])
 
