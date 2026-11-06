@@ -138,7 +138,7 @@ def _archive_unseen_hosts(days, account_filter, account_filter_name,
         db_filter['source_account_id'] = str(account_filter['id'])
     objects = Host.objects(**db_filter)
 
-    if dont_delete_if_more and len(objects) >= int(dont_delete_if_more):
+    if dont_delete_if_more and len(objects) > int(dont_delete_if_more):
         details.append((
             'error',
             "Hosts were not deleted because their number "

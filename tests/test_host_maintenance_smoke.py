@@ -38,6 +38,15 @@ eq(old.is_stale, True, 'old host is stale')
 if (utcnow() - old.stale_since).days != 0:
     fail(f'stale_since should be the day it was found stale: {old.stale_since}')
 
+for index in range(3):
+    Host(hostname=f'unseen{index}.example.com',
+         last_import_seen=utcnow() - timedelta(days=40)).save()
+unseen = Host.objects(last_import_seen__lte=utcnow() - timedelta(days=30),
+                      deleted_at__exists=False).count()
+details = []
+eq(_archive_unseen_hosts(30, False, False, str(unseen - 1), details), 0, 'more than the limit')
+eq(_archive_unseen_hosts(30, False, False, str(unseen), details), unseen, 'exactly the limit')
+
 print('MAINTENANCE_OK')
 '''
 
