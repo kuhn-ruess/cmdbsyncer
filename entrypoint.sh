@@ -29,6 +29,11 @@ fi
 # is the same information from a side that can be parsed.
 crond -L /proc/1/fd/2
 
+# PID 1 is about to become 'app', and a cron job can't reach its streams
+# then, see deploy_configs/run_cron.sh. This root process keeps them open.
+tail -f /dev/null &
+echo $! > /run/cmdbsyncer_streams.pid
+
 # A published image is replaced on every upgrade, and /srv goes with it. A
 # deployment that keeps its configuration across upgrades points
 # CMDBSYNCER_CONFIG_DIR at a mounted directory instead; self_configure then
