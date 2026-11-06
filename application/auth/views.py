@@ -14,7 +14,7 @@ from joserfc.jwk import OctKey
 from joserfc.errors import JoseError
 from mongoengine.errors import DoesNotExist
 
-from application import login_manager, app, log, limiter
+from application import login_manager, app, log, limiter, logger
 from application.enterprise import has_feature, run_hook
 from application.helpers.audit import audit
 from application.models.user import User
@@ -76,8 +76,9 @@ def load_user(user_id):
     """
     Flask Login: Load User
     """
+    # A disabled user loses a running session right away
     try:
-        return User.objects.get(id=user_id)
+        return User.objects.get(id=user_id, disabled__ne=True)
     except DoesNotExist:
         return None
 
@@ -415,18 +416,32 @@ def request_password():
     form = RequestPasswordForm(request.form)
     if form.validate_on_submit():
         email = form.request_email.data.lower()
-        user_result = User.objects(email=email)
+        user_result = User.objects(email=email, disabled__ne=True)
         if user_result:
             existing_user = user_result[0]
             token = existing_user.generate_token(purpose='pw_reset')
             send_email(existing_user.email, "New Password", 'email/resetpassword',
-                       user=existing_user, token=token)
+                       user=existing_user, reset_url=_reset_url(token))
         else:
             _decoy_token()
         flash("New Password will be sent", 'info')
         return redirect(url_for("admin.index"))
 
     return render_template('request_password.html', form=form)
+
+def _reset_url(token):
+    """
+    The link of the reset mail. Without PUBLIC_URL it is built from the Host
+    header of the request, which whoever asks for the mail controls unless a
+    proxy in front of the syncer sets it.
+    """
+    public_url = current_app.config.get('PUBLIC_URL')
+    if public_url:
+        return public_url.rstrip('/') + url_for('auth.reset_password', token=token)
+    logger.warning("Password reset link built from the Host header of the "
+                   "request, set PUBLIC_URL to prevent that")
+    return url_for('auth.reset_password', token=token, _external=True)
+
 
 def get_userid(token, purpose):
     """
@@ -454,7 +469,7 @@ def get_userid(token, purpose):
         return None
 
     try:
-        existing_user = User.objects.get(id=user_id)
+        existing_user = User.objects.get(id=user_id, disabled__ne=True)
     except DoesNotExist:
         return None
 
@@ -489,17 +504,11 @@ def reset_password(token):
     if form.validate_on_submit():
         password = request.form.get('password')
         existing_user.set_password(password)
-        existing_user.last_login = datetime.utcnow()
         existing_user.save()
+        # No login here: the mail alone must not replace the second factor
         session.clear()
-        login_user(
-            existing_user,
-            duration=timedelta(
-                hours=(current_app.config['ADMIN_SESSION_HOURS'] or 8)
-            )
-        )
         flash("Password Changed", 'success')
-        return redirect(url_for("admin.index"))
+        return redirect(url_for("auth.login"))
     if form.errors:
         for _, message in form.errors.items():
             flash(message[0], 'danger')

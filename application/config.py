@@ -21,6 +21,8 @@ class BaseConfig():
     HOST_LOG_LENGTH = 30
     ADMIN_SESSION_HOURS = 2
     BASE_PREFIX = '/'
+    # Scheme and host the syncer is reached at, for the links in mails
+    PUBLIC_URL = ''
 
     # Admin pages use the full window width instead of Bootstrap's
     # 1140px container — the host and object lists carry wide columns
