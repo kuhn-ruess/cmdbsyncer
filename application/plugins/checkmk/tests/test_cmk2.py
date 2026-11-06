@@ -2,6 +2,8 @@
 Unit tests for the CMK2 base class
 """
 # pylint: disable=missing-function-docstring,protected-access,unused-argument
+import multiprocessing
+import time
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 
@@ -587,6 +589,33 @@ class TestCMK2AttributeRules(unittest.TestCase):
         mock_load.assert_called_once_with()
         mock_super.assert_called_once_with('db_host', 'checkmk', persist_cache=True,
                                            template=None)
+
+
+def _hang():
+    """A pool worker that does not come back in the run of a test"""
+    time.sleep(60)
+
+
+class TestFinishPool(unittest.TestCase):
+    """Ending a pool with a really hanging worker"""
+
+    def test_hanging_worker_does_not_block(self):
+        pool = multiprocessing.get_context('fork').Pool(1)
+        result = pool.apply_async(_hang)
+        with self.assertRaises(multiprocessing.TimeoutError):
+            result.get(timeout=0.2)
+
+        start = time.monotonic()
+        CMK2.finish_pool(pool, True)
+
+        self.assertLess(time.monotonic() - start, 30)
+
+    def test_healthy_pool_lets_the_workers_finish(self):
+        pool = Mock()
+        CMK2.finish_pool(pool, False)
+        pool.close.assert_called_once()
+        pool.terminate.assert_not_called()
+        pool.join.assert_called_once()
 
 
 if __name__ == '__main__':

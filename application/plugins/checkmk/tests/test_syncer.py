@@ -643,6 +643,9 @@ class TestSyncCMK2(unittest.TestCase):
 
         self.assertEqual(result, {'ok': data})
         self.assertEqual(self.syncer.failed_hosts, ['slow', 'broken'])
+        # A worker that may hang must not be waited for
+        mock_pool.terminate.assert_called_once()
+        mock_pool.close.assert_not_called()
         self.assertEqual(self.syncer.log_details, [
             ('error', 'Calculation failed, slow stays unchanged: Timeout'),
             ('error', 'Calculation failed, broken stays unchanged: ValueError: bad rule'),

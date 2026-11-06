@@ -219,10 +219,12 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                     tasks.append((hostname, async_result))
 
                 process_timeout = app.config['PROCESS_TIMEOUT']
+                worker_timed_out = False
                 for hostname, task in tasks:
                     try:
                         _host, data = task.get(timeout=process_timeout)
                     except multiprocessing.TimeoutError:
+                        worker_timed_out = True
                         self.hw_sw_failed_hosts.add(hostname)
                         progress.console.print(
                             f"- {ColorCodes.FAIL}TIMEOUT{ColorCodes.ENDC} "
@@ -247,8 +249,7 @@ class InventorizeHosts(CMK2):  # pylint: disable=too-many-instance-attributes
                         progress.advance(task1)
                         if data is not None:
                             self.hw_sw_inventory[hostname] = data
-                pool.close()
-                pool.join()
+                self.finish_pool(pool, worker_timed_out)
 
     def get_cmk_services(self):
         """ Get CMK Services"""

@@ -286,6 +286,9 @@ class TestInventorizeHosts(unittest.TestCase):
 
         self.assertEqual(self.inv.hw_sw_failed_hosts, {'host_timeout', 'host_error'})
         self.assertEqual(self.inv.hw_sw_inventory, {'host_ok': {'model': 'x'}})
+        # A worker that may hang must not be waited for
+        pool.terminate.assert_called_once()
+        pool.close.assert_not_called()
 
     @patch('application.plugins.checkmk.inventorize.Host')
     @patch('application.plugins.checkmk.inventorize.app')

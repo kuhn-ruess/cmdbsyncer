@@ -106,6 +106,20 @@ class CMK2(Plugin):  # pylint: disable=too-many-instance-attributes
         self._init_complete = True
 
 
+    @staticmethod
+    def finish_pool(pool, worker_timed_out):
+        """
+        End a worker pool once all its results were collected or given up on.
+        A worker which hangs never ends, so after a timeout join() alone would
+        block the run for good. All results that came in are in by then.
+        """
+        if worker_timed_out:
+            pool.terminate()
+        else:
+            pool.close()
+        pool.join()
+
+
     def _load_attribute_rules(self):
         """
         Load the Checkmk filter and rewrite engines when nobody set them.

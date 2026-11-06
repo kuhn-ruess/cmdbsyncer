@@ -1021,10 +1021,12 @@ class SyncCMK2(CMK2):
                     tasks.append((db_host.hostname, task))
 
                 progress.console.print("Waiting for Calculation to finish")
+                worker_timed_out = False
                 for host_name, task in tasks:
                     try:
                         hostname, enabled, data = task.get(timeout=app.config['PROCESS_TIMEOUT'])
                     except multiprocessing.TimeoutError:
+                        worker_timed_out = True
                         progress.console.print(f"- ERROR: Timeout for {host_name}")
                         self._calculation_failed(host_name, "Timeout")
                     except Exception as error:  # pylint: disable=broad-exception-caught
@@ -1045,8 +1047,7 @@ class SyncCMK2(CMK2):
                             host_actions[hostname] = data
                         else:
                             disabled_hosts.append(hostname)
-                pool.close()
-                pool.join()
+                self.finish_pool(pool, worker_timed_out)
 
 
                 if self.config.get('list_disabled_hosts'):
