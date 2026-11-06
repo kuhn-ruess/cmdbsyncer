@@ -99,7 +99,10 @@ class ODBC(Plugin):
             for row in rows:
                 logger.debug("Found row: %s", row)
                 labels=dict(zip(columns,row))
-                hostname = labels[self.config['hostname_field']].strip()
+                # One row without a name must not end the import of the others
+                hostname = (labels[self.config['hostname_field']] or '').strip()
+                if not hostname:
+                    continue
                 if app_config['LOWERCASE_HOSTNAMES']:
                     hostname = hostname.lower()
                 found_hosts += 1

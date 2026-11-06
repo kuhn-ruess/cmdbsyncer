@@ -48,7 +48,7 @@ class JiraOnPrem(Plugin):
 
     def _collect_meta(self):
         """Load meta tables (environments etc.) that hosts reference by id."""
-        page_size = self.config['page_size']
+        page_size = int(self.config['page_size'])
         meta = {}
         meta_config = [
             {
@@ -68,7 +68,7 @@ class JiraOnPrem(Plugin):
     # pylint: disable-next=too-many-locals
     def import_hosts(self):
         """Import hosts from the classic Jira Insight /servers endpoint."""
-        page_size = self.config['page_size']
+        page_size = int(self.config['page_size'])
         meta, meta_config = self._collect_meta()
         meta_names = [x['name'] for x in meta_config]
 

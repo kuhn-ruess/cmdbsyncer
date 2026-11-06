@@ -34,7 +34,7 @@ class YMLSyncer(Plugin):
         for _data_key, values in data.items():
             if not values.get(host_key):
                 continue
-            variables = values[variables_key]
+            variables = values.get(variables_key) or {}
             for hostname in values[host_key]:
                 if not hostname:
                     continue
