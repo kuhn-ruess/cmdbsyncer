@@ -53,6 +53,11 @@ class SavedSearchView(ModelView):  # pylint: disable=too-many-public-methods,too
         )
 
     def on_model_change(self, form, model, is_created):
+        # Shared means everybody can use it, not change it. Flask-Admin
+        # surfaces ValueError as a flash, like in on_model_delete.
+        if not is_created and not current_user.global_admin and \
+                model.owner_email != current_user.email:
+            raise ValueError("Only the owner of a saved search can change it.")
         # Editing: keep ownership intact even if a future form change
         # exposed the field.
         super().on_model_change(form, model, is_created)

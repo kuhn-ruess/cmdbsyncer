@@ -92,7 +92,7 @@
                             {% elif csrf_token is defined and csrf_token %}
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                             {% endif %}
-                            <button onclick="return confirm('{{ _gettext('Are you sure you want to delete \\\'%(name)s\\\' recursively?', name=name) }}')">
+                            <button onclick='return confirm({{ _gettext("Are you sure you want to delete \"%(name)s\" recursively?", name=name)|tojson }})'>
                                 <i class="fa fa-times glyphicon glyphicon-remove"></i>
                             </button>
                         </form>
@@ -105,7 +105,7 @@
                         {% elif csrf_token is defined and csrf_token %}
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         {% endif %}
-                        <button onclick="return confirm('{{ _gettext('Are you sure you want to delete \\\'%(name)s\\\'?', name=name) }}')">
+                        <button onclick='return confirm({{ _gettext("Are you sure you want to delete \"%(name)s\"?", name=name)|tojson }})'>
                             <i class="fa fa-trash glyphicon glyphicon-trash"></i>
                         </button>
                     </form>

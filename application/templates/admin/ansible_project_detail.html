@@ -256,7 +256,7 @@
           </a>
           <form method="POST" style="display:inline;"
                 action="{{ url_for(section.endpoint ~ '.delete_view') }}"
-                onsubmit="return confirm('Delete rule &quot;{{ rule.name }}&quot;? This cannot be undone.');">
+                onsubmit='return confirm({{ ("Delete rule \"" ~ rule.name ~ "\"? This cannot be undone.")|tojson }});'>
             <input type="hidden" name="id" value="{{ rule.pk }}">
             <input type="hidden" name="url" value="{{ return_url }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

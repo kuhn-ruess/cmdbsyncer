@@ -17,7 +17,7 @@
         {% if preset.owner_email == current_user.email or current_user.global_admin %}
         <form method="POST" action="{{ url_for('.delete_preset', preset_id=preset.id) }}"
               style="display:inline; margin:0;"
-              onsubmit="return confirm('Delete preset &quot;{{ preset.name }}&quot;?');">
+              onsubmit='return confirm({{ ("Delete preset \"" ~ preset.name ~ "\"?")|tojson }});'>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-sm btn-outline-danger"
                   title="Delete this preset"

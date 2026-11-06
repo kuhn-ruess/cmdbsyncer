@@ -787,7 +787,8 @@ def _safe_return_to(candidate, fallback_endpoint='.index_view'):
     candidate = str(candidate).strip()
     # Reject scheme/netloc-bearing URLs and protocol-relative URLs —
     # only same-app relative paths are accepted.
-    if candidate.startswith('//') or '://' in candidate:
+    # Browsers read a backslash like a slash, so a path of /\ is another host.
+    if candidate.startswith(('//', '/\\')) or '://' in candidate:
         return url_for(fallback_endpoint)
     if not candidate.startswith('/'):
         return url_for(fallback_endpoint)
@@ -2682,7 +2683,7 @@ Impact Chain.
         projects = [p.name for p in Project.objects().order_by('name')]
         return render_template('admin/assign_project_form.html', ids=ids,
                                projects=projects,
-                               return_to=request.args.get('return_to', ''))
+                               return_to=_safe_return_to(request.args.get('return_to')))
 
     @expose('/process_project_assignment', methods=['POST'])
     def process_project_assignment(self):
@@ -2752,10 +2753,10 @@ Impact Chain.
     def set_account_form(self):
         """Render the account picker (scoped to the user's allowed accounts)."""
         ids = [str(escape(i)) for i in request.args.get('ids', '').split(',') if i]
-        return render_template('admin/set_account_form.html', ids=ids,
-                               accounts=_allowed_account_names(),
-                               cmdb_account_name=CMDB_SOURCE_ACCOUNT_NAME,
-                               return_to=request.args.get('return_to', ''))
+        return self.render('admin/set_account_form.html', ids=ids,
+                           accounts=_allowed_account_names(),
+                           cmdb_account_name=CMDB_SOURCE_ACCOUNT_NAME,
+                           return_to=_safe_return_to(request.args.get('return_to')))
 
     @expose('/process_set_account', methods=['POST'])
     def process_set_account(self):
@@ -2843,7 +2844,7 @@ Impact Chain.
         """Render the bulk label editor for the ids passed in the URL."""
         ids = [str(escape(i)) for i in request.args.get('ids', '').split(',') if i]
         return render_template('admin/bulk_label_form.html', ids=ids,
-                               return_to=request.args.get('return_to', ''))
+                               return_to=_safe_return_to(request.args.get('return_to')))
 
     @expose('/bulk_label_process', methods=['POST'])
     def bulk_label_process(self):  # pylint: disable=too-many-branches
@@ -2942,7 +2943,7 @@ Impact Chain.
 
         return render_template('admin/set_template_form.html', ids=ids,
                                templates=templates,
-                               return_to=request.args.get('return_to', ''))
+                               return_to=_safe_return_to(request.args.get('return_to')))
 
     @expose('/process_template_assignment', methods=['POST'])
     def process_template_assignment(self):  # pylint: disable=too-many-locals

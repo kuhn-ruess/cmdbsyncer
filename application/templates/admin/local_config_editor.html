@@ -34,7 +34,7 @@
         <h3 style="margin:0;">{{ group.name }}</h3>
         {% if group.ident != '_other' %}
         <form method="POST" action="{{ url_for('.local_config_editor') }}" style="margin:0;"
-              onsubmit="return confirm('Remove every {{ group.name }} key from local_config.py? Protected keys are kept; the BaseConfig defaults apply on next restart for the rest.');">
+              onsubmit='return confirm({{ ("Remove every " ~ group.name ~ " key from local_config.py? Protected keys are kept; the BaseConfig defaults apply on next restart for the rest.")|tojson }});'>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="_action" value="delete_group">
           <input type="hidden" name="group" value="{{ group.ident }}">
@@ -109,7 +109,7 @@
               <span class="text-muted" style="font-size: 12px;">no delete</span>
               {% else %}
               <form method="POST" action="{{ url_for('.local_config_editor') }}" style="display:inline;"
-                    onsubmit="return confirm('Remove {{ row.key }} from local_config.py? The BaseConfig default will apply on next restart.');">
+                    onsubmit='return confirm({{ ("Remove " ~ row.key ~ " from local_config.py? The BaseConfig default will apply on next restart.")|tojson }});'>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="_action" value="delete">
                 <input type="hidden" name="key" value="{{ row.key }}">

@@ -3,7 +3,7 @@
 {% macro action_button(action, label, css, icon, confirm='') %}
 <form method="POST" action="{{ url_for('.action_view') }}"
       style="display:inline;"
-      {% if confirm %}onsubmit="return confirm('{{ confirm }}');"{% endif %}>
+      {% if confirm %}onsubmit='return confirm({{ confirm|tojson }});'{% endif %}>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <input type="hidden" name="action" value="{{ action }}"/>
     <input type="hidden" name="rowid" value="{{ project.id }}"/>

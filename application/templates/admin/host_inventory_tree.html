@@ -276,7 +276,7 @@
 
         <input type="text" class="tree-search"
                placeholder="Filter paths…"
-               oninput="filterTree(this, '{{ view.source }}')" />
+               oninput='filterTree(this, {{ view.source|tojson }})' />
         <table class="tree-table" data-source="{{ view.source }}">
             <thead>
                 <tr><th style="width: 35%;">Path</th><th>Value</th></tr>
