@@ -2853,7 +2853,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         try:
             local_value = ast.literal_eval(rule['value'])
             remote_value = ast.literal_eval(cmk['value'])
-        except (SyntaxError, KeyError):
+        except (SyntaxError, ValueError, TypeError, KeyError):
             return None
         value_match = deep_compare(local_value, remote_value,
                                    strict=bool(rule.get('enforce_value')))
@@ -2881,6 +2881,17 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
             'folder': cmk['folder'].lower() ==
                       normalize_cmk_folder(rule['folder']).lower(),
         }
+
+    @staticmethod
+    def _same_apart_from_value(rule, cmk):
+        """
+        Whether a generated rule and a Checkmk rule are the same rule, leaving
+        out the value and the coalesced host list.
+        """
+        return condition_without_hosts(rule['condition']) == \
+            condition_without_hosts(cmk['condition']) and \
+            rule.get('comment', '') == cmk['comment'] and \
+            cmk['folder'].lower() == normalize_cmk_folder(rule['folder']).lower()
 
     def _sync_description(self, cmk_rule, rule, ruleset_name):
         """
@@ -3119,6 +3130,20 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
                         comparison = self._compare_rule(rule, cmk_facts)
                         if comparison is None:
                             logger.debug("Invalid Value: '%s' or '%s'", rule['value'], value)
+                            if self._same_apart_from_value(rule, cmk_facts):
+                                # Without a value to compare the rule would
+                                # be deleted, and Checkmk refuses to create
+                                # it again with this value.
+                                self.log_error(
+                                    f"Rule in {ruleset_name}, folder "
+                                    f"{rule['folder']}, comment "
+                                    f"'{rule.get('comment', '')}': the value is "
+                                    "no valid Python literal. The existing "
+                                    "rule stays unchanged, fix the Value "
+                                    "Template.")
+                                rule_found = self._keep_after_failed_update(
+                                    rule, cmk_rule['id'])
+                                break
                             continue
                         condition_match = comparison['condition']
                         comment_match = comparison['comment']

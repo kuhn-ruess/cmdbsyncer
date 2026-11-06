@@ -1216,6 +1216,64 @@ class TestRuleMoveePlanning(unittest.TestCase):
         self.assertEqual(self.sync.request.call_count, 2)
 
 
+class TestUnparsableRuleValue(unittest.TestCase):
+    """
+    A Value Template can render to something that is no Python literal, like
+    an unquoted word. That must neither abort the export nor cost the
+    Checkmk rule that is already there.
+    """
+
+    def setUp(self):
+        self.sync = make_checkmk_rule_sync()
+        self.sync.account_id = 'acc'
+        self.sync.config = {}
+        self.sync.debug = False
+        self.sync.dry_run = False
+        self.sync.log_details = []
+        self.sync.log_error = MagicMock()
+        self.sync._cmk_order_by_ruleset = {}
+        self.sync._failed_rulesets = set()
+
+    @staticmethod
+    def _rule(value):
+        return {'folder': '/a', 'comment': 'c', 'value': value, 'condition': {}}
+
+    @staticmethod
+    def _cmk_rule(value, comment='c'):
+        return {'id': 'id1', 'extensions': {
+            'conditions': {}, 'folder': '/a', 'value_raw': value,
+            'properties': {'description': 'cmdbsyncer_acc', 'comment': comment}}}
+
+    def _clean(self, rule, cmk_rule):
+        self.sync.rulsets_by_type = {'r1': [rule]}
+        self.sync.request = MagicMock(return_value=({'value': [cmk_rule]}, {}))
+        with patch('application.plugins.checkmk.cmk_rules.make_progress',
+                   _FakeCleanProgress()), patch('builtins.print'):
+            self.sync.clean_rules()
+
+    def test_every_error_of_literal_eval_is_unparsable(self):
+        cmk = {'condition': {}, 'comment': 'c', 'value': '1', 'folder': '/a'}
+        for value in ('webops', 'foo()', '{[]: 1}', 'not python'):
+            with self.subTest(value=value):
+                self.assertIsNone(
+                    self.sync._compare_rule(self._rule(value), cmk))
+
+    def test_the_existing_rule_stays_and_the_error_is_reported(self):
+        rule = self._rule('webops')
+        self._clean(rule, self._cmk_rule('1'))
+        self.assertEqual(
+            [call for call in self.sync.request.call_args_list
+             if call.kwargs.get('method') != 'GET'], [])
+        self.assertTrue(rule['_skip_create'])
+        self.sync.log_error.assert_called_once()
+
+    def test_another_rule_is_still_removed(self):
+        self._clean(self._rule('webops'), self._cmk_rule('1', comment='other'))
+        self.assertEqual(self.sync.request.call_args.kwargs.get('method'),
+                         'DELETE')
+        self.sync.log_error.assert_not_called()
+
+
 class TestFindingStorage(unittest.TestCase):
     """
     The findings the web interface stores and applies. The analysis walks
