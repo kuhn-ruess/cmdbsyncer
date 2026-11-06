@@ -18,9 +18,10 @@ from flask_admin.model.template import EndpointLinkRowAction, LinkRowAction
 from flask_admin.form import rules
 from flask_admin.actions import action
 from flask_admin.base import expose
+from flask_wtf.csrf import generate_csrf
 from wtforms import HiddenField, StringField, BooleanField, SelectField
 from wtforms.validators import Optional
-from markupsafe import escape
+from markupsafe import Markup, escape
 from mongoengine.errors import DoesNotExist
 
 # pylint: disable=import-error
@@ -3608,6 +3609,19 @@ Impact Chain.
         return redirect(return_to)
 
 
+class _PostRowAction(EndpointLinkRowAction):
+    """A row action that changes data: a form with CSRF token, not a link."""
+
+    def render(self, context, row_id, row):
+        url = self._resolve_symbol(context, 'get_url')(self.endpoint)
+        return Markup(
+            f'<form class="icon" method="POST" action="{escape(url)}">'
+            f'<input type="hidden" name="id" value="{escape(row_id)}">'
+            f'<input type="hidden" name="csrf_token" value="{escape(generate_csrf())}">'
+            f'<button type="submit" title="{escape(self.title or "")}">'
+            f'<span class="{escape(self.icon_class)}"></span></button></form>')
+
+
 class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     # pylint: disable=too-many-ancestors
     """
@@ -3625,7 +3639,7 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     # makes no sense) and offer a per-row Restore instead. Hard-Delete stays
     # a bulk action.
     column_extra_row_actions = [
-        EndpointLinkRowAction("fa fa-undo", ".restore_row", title="Restore"),
+        _PostRowAction("fa fa-undo", ".restore_row", title="Restore"),
     ]
     # Reachable in every mode: the host list's delete is a soft-delete
     # regardless of CMDB mode, so users always need the Archive to
@@ -3683,12 +3697,19 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
         # users still narrow down to plain hosts when they want to.
         return _scope_hosts_to_user(Host.objects(deleted_at__exists=True))
 
-    @expose('/restore_row')
+    def get_one(self, id):  # pylint: disable=redefined-builtin
+        """The details of an archived host, within the scope of the user."""
+        return self.get_query().filter(pk=id).first()
+
+    def is_accessible(self):
+        """Holds both hosts and objects, and the role to delete them for good."""
+        return current_user.is_authenticated and any(
+            current_user.has_right(role) for role in ('host', 'objects', 'hard_delete'))
+
+    @expose('/restore_row', methods=['POST'])
     def restore_row(self):
         """Restore a single archived host back to active (per-row action)."""
-        host_id = request.args.get('id')
-        host = _scope_hosts_to_user(
-            Host.objects(id=host_id, deleted_at__exists=True)).first()
+        host = self.get_query().filter(id=request.form.get('id')).first()
         if host and host.restore():
             host.save()
             flash(f"Restored {host.hostname} to active.", 'success')
@@ -3702,7 +3723,7 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
     def action_restore(self, ids):
         """Bring archived hosts back as active."""
         restored = 0
-        for host in Host.objects(id__in=ids):
+        for host in self.get_query().filter(id__in=ids):
             if host.restore():
                 host.save()
                 restored += 1
@@ -3721,6 +3742,6 @@ class HostArchiveView(HostnameAndLabelSearchMixin, DefaultModelView):
         # Inventory trees, field approvals and inbound relations are
         # cleaned up by HostQuerySet.delete() — see
         # application/models/host_cleanup.py.
-        deleted = Host.objects(id__in=ids, deleted_at__exists=True).delete()
+        deleted = self.get_query().filter(id__in=ids).delete()
         flash(f'Hard-deleted {deleted} host(s).', 'success')
         return redirect(request.referrer or url_for('.index_view'))
