@@ -1,8 +1,8 @@
-python-ldap==3.4.4
+python-ldap==3.4.5
 pypyodbc==1.3.6
 sqlserverport==1.0.1
 mysql-connector-python==9.1.0
 pyvim==3.0.3
 pyvmomi==8.0.3.0.1
-mcp==1.10.1
+mcp==1.30.0
 fpdf2==2.8.9
