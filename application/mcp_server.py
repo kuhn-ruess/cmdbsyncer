@@ -597,9 +597,14 @@ def _build_auth_middleware():
                 return _challenge()
             token = _request_user.set(user)
             try:
-                return await call_next(request)
+                response = await call_next(request)
             finally:
                 _request_user.reset(token)
+            if response.status_code in (403, 421):
+                print(f"Refused Host {request.headers.get('host')!r}, Origin "
+                      f"{request.headers.get('origin')!r}: list the name in "
+                      f"MCP_ALLOWED_HOSTS in local_config.py", file=sys.stderr)
+            return response
 
     return BasicAuthMiddleware
 
@@ -609,13 +614,50 @@ def _build_auth_middleware():
 # ---------------------------------------------------------------------------
 
 
+def _allowed_hosts_and_origins(extra_hosts):
+    """Host and Origin patterns of the SDK: localhost plus ``extra_hosts``.
+
+    The SDK compares the headers literally, ``name:*`` only matches with a
+    port, so a name without a port needs both forms. Browsers send an Origin
+    and the SDK checks it too; the name of this server is its own origin.
+    """
+    hosts = ['127.0.0.1:*', 'localhost:*', '[::1]:*']
+    origins = ['http://127.0.0.1:*', 'http://localhost:*', 'http://[::1]:*']
+    if isinstance(extra_hosts, str):
+        extra_hosts = [extra_hosts]
+    for entry in extra_hosts:
+        name = entry.strip().removesuffix(':*')
+        # The part behind a closing bracket, so an IPv6 address has no port
+        has_port = ':' in name.rsplit(']', 1)[-1]
+        patterns = [name] if has_port else [name, f'{name}:*']
+        hosts += patterns
+        origins += [f'{scheme}://{pattern}' for scheme in ('http', 'https')
+                    for pattern in patterns]
+    return hosts, origins
+
+
+def _build_sse_app():
+    """The SSE Starlette app with its Host check and the auth middleware."""
+    # pylint: disable=import-outside-toplevel,import-error
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    hosts, origins = _allowed_hosts_and_origins(app.config.get('MCP_ALLOWED_HOSTS', []))
+    mcp.settings.transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+    )
+    asgi_app = mcp.sse_app()
+    asgi_app.add_middleware(_build_auth_middleware())
+    return asgi_app
+
+
 def _run_sse(host, port):
-    """Build the SSE Starlette app, wrap with auth middleware, run uvicorn."""
+    """Build the SSE app and run it with uvicorn."""
     # pylint: disable=import-outside-toplevel,import-error
     import uvicorn
 
-    asgi_app = mcp.sse_app()
-    asgi_app.add_middleware(_build_auth_middleware())
+    asgi_app = _build_sse_app()
     print(f"cmdbsyncer-mcp listening on http://{host}:{port}/sse "
           f"(per-request Basic Auth)", file=sys.stderr)
     uvicorn.run(asgi_app, host=host, port=port, log_level='warning')

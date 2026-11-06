@@ -23,6 +23,9 @@ class BaseConfig():
     BASE_PREFIX = '/'
     # Scheme and host the syncer is reached at, for the links in mails
     PUBLIC_URL = ''
+    # Host names the MCP server answers to over SSE, beside localhost, e.g.
+    # ['syncer.example.com']. Any other Host header gets a 421.
+    MCP_ALLOWED_HOSTS = []
 
     # Admin pages use the full window width instead of Bootstrap's
     # 1140px container — the host and object lists carry wide columns
