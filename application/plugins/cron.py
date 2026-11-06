@@ -90,6 +90,16 @@ def get_stats(group):
         return new
 
 
+def _hour_in_window(t_from, t_to, hour):
+    """
+    Whether hour lies in the window of a group. A start after the end
+    means the window runs over midnight: 22 to 4 is 22:00 until 03:59.
+    """
+    if t_from <= t_to:
+        return t_from <= hour < t_to
+    return hour >= t_from or hour < t_to
+
+
 def calc_next_run(job, last_start, was_outdated=False):
     """
     Calculate next run of Job
@@ -101,12 +111,14 @@ def calc_next_run(job, last_start, was_outdated=False):
     t_to = int(job.timerange_to)
 
 
-    if not last_start and  t_from <= current_hour < t_to:
+    in_window = _hour_in_window(t_from, t_to, current_hour)
+
+    if not last_start and in_window:
         # Job is currently and range, but was never started
         return now - timedelta(minutes=1)
 
 
-    if t_from <= current_hour < t_to:
+    if in_window:
         # We are in Timerange, but job was running already,
         # so add minutes to the next interval
         minutes = False
@@ -130,12 +142,11 @@ def calc_next_run(job, last_start, was_outdated=False):
         if hours:
             return last_start + timedelta(hours=hours)
     else:
-        # We are not in Timerange, set the  next run
-        # For tomorrow
-        next_run = now
-        if not was_outdated:
+        # We are not in Timerange, set the next run to the next start of it.
+        # A window over midnight ends in the morning and starts again today.
+        next_run = now.replace(hour=t_from, minute=0)
+        if not was_outdated and next_run <= now:
             next_run += timedelta(days=1)
-        next_run = next_run.replace(hour=t_from, minute=0)
         return next_run
     return now
 
@@ -144,12 +155,7 @@ def in_timerange(job):
     Check if Job is in timerange to run
     """
     now = datetime.now()
-    current_hour = now.hour
-    t_from = int(job.timerange_from)
-    t_to = int(job.timerange_to)
-    if t_from <= current_hour < t_to:
-        return True
-    return False
+    return _hour_in_window(int(job.timerange_from), int(job.timerange_to), now.hour)
 
 
 @_cli_cron.command('force_run_group')
