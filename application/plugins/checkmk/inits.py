@@ -63,10 +63,21 @@ from application.plugins.checkmk.models import (
 
 
 
-def _not_started(message, source, error):
-    """The job couldn't even set up its syncer: one log entry, and tell cron."""
-    log.log(message, source=source, details=[('error', str(error))])
-    task_failed(error)
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
+def _job_failed(error, syncer, not_started, source, debug=False, label='CMK Connection Error'):
+    """
+    A job failed: with debug the traceback, otherwise one line on the console and
+    the syncer records it. Without a syncer the job couldn't even set up, then
+    ``not_started`` is the one log entry, and cron is told.
+    """
+    if debug:
+        raise error
+    print(f'{ColorCodes.FAIL}{label}: {error} {ColorCodes.ENDC}')
+    if syncer is not None:
+        syncer.record_exception(error)
+    else:
+        log.log(not_started, source=source, details=[('error', str(error))])
+        task_failed(error)
 
 
 def _load_rules():
@@ -105,13 +116,8 @@ def export_tags(account, dry_run=False, save_requests=False, debug=False):
         syncer.source = "cmk_tag_sync"
         syncer.export_tags()
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
-        if debug:
-            raise
-        print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export Tags to Account {account} not started", "cmk_tag_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export Tags to Account {account} not started",
+                    "cmk_tag_sync", debug, label='Error')
 
 #.
 #   .-- Export BI Rules
@@ -139,14 +145,8 @@ def export_bi_rules(account, debug):
         syncer.source = "cmk_bi_sync"
         syncer.export_bi_rules()
     except CmkException as error_obj:
-        if debug:
-            raise
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export BI Rules to Account {account} not started",
-                         "cmk_bi_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export BI Rules to Account {account} not started",
+                    "cmk_bi_sync", debug)
 #.
 #   .-- Export BI Aggregations
 def export_bi_aggregations(account, debug):
@@ -173,14 +173,8 @@ def export_bi_aggregations(account, debug):
         syncer.actions = actions
         syncer.export_bi_aggregations()
     except CmkException as error_obj:
-        if debug:
-            raise
-        print(f'{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export BI Aggregations to Account {account} not started",
-                         "cmk_bi_aggrigation_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export BI Aggregations to Account {account} not started",
+                    "cmk_bi_aggrigation_sync", debug)
 
 #.
 #   .-- Inventorize Hosts
@@ -201,14 +195,8 @@ def inventorize_hosts(account, debug=False):
         inven.debug = debug
         inven.run()
     except CmkException as error_obj:
-        if debug:
-            raise
-        print(f'{ColorCodes.FAIL} Error: {error_obj} {ColorCodes.ENDC}')
-        if inven is not None:
-            inven.record_exception(error_obj)
-        else:
-            _not_started(f"Inventorize Hosts Account {account} not started",
-                         "checkmk_inventorize", error_obj)
+        _job_failed(error_obj, inven, f"Inventorize Hosts Account {account} not started",
+                    "checkmk_inventorize", debug, label='Error')
 
 #.
 #   . -- Show missing hosts
@@ -411,14 +399,8 @@ def export_groups(account, test_run=False, debug=False):
         syncer.source = "cmk_group_sync"
         syncer.export_cmk_groups(test_run)
     except CmkException as error_obj:
-        if debug:
-            raise
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export Groups to Account {account} not started",
-                         "cmk_group_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export Groups to Account {account} not started",
+                    "cmk_group_sync", debug)
 #.
 #   .-- Export Rules
 def projects_for_account(account):
@@ -498,14 +480,8 @@ def export_rules(account, dry_run=False, debug=False):
         # Same contract as the other export commands: --debug gives the
         # traceback instead of the one-line message, so a failing export
         # can be debugged without editing code.
-        if debug:
-            raise
-        print(f'{ColorCodes.FAIL}CMK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export Rules to Account {account} not started",
-                         "cmk_rule_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export Rules to Account {account} not started",
+                    "cmk_rule_sync", debug)
 #.
 #   .-- Import Project Rules from Checkmk Folder
 def import_project_rules_from_folder(project_name, account, folder,  # pylint: disable=too-many-locals
@@ -688,14 +664,9 @@ def export_notifications(account, dry_run=False, debug=False):
         syncer.source = "cmk_notification_rule_sync"
         syncer.export_notification_rules()
     except CmkException as error_obj:
-        if debug:
-            raise
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export Notification Rules to Account {account} not started",
-                         "cmk_notification_rule_sync", error_obj)
+        _job_failed(error_obj, syncer,
+                    f"Export Notification Rules to Account {account} not started",
+                    "cmk_notification_rule_sync", debug)
 #.
 #   .-- Export Downtimes
 def export_downtimes(account, debug=False, debug_rules=False):
@@ -735,14 +706,8 @@ def export_downtimes(account, debug=False, debug_rules=False):
         # the old CmkException-only catch those escaped uncaught, so the
         # run left only a detail-less "Checkmk: Export Downtimes" log entry
         # and `--debug` never surfaced the real cause.
-        if debug:
-            raise
-        print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export Downtimes to Account {account} not started",
-                         "cmk_downtime_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export Downtimes to Account {account} not started",
+                    "cmk_downtime_sync", debug, label='Error')
 #.
 #   .-- Export Service Labels
 def export_service_labels(account, dry_run=False, debug=False, debug_rules=False):
@@ -767,14 +732,8 @@ def export_service_labels(account, dry_run=False, debug=False, debug_rules=False
         syncer.source = "cmk_service_label_sync"
         syncer.export_cmk_rules()
     except Exception as error_obj:  # pylint: disable=broad-exception-caught
-        if debug:
-            raise
-        print(f'{ColorCodes.FAIL}Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export Service Labels to Account {account} not started",
-                         "cmk_service_label_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export Service Labels to Account {account} not started",
+                    "cmk_service_label_sync", debug, label='Error')
 #.
 #   . DCD Rules
 def export_dcd_rules(account, debug=False, debug_rules=False):
@@ -825,14 +784,8 @@ def export_dcd_rules(account, debug=False, debug_rules=False):
             syncer.debug_rules(debug_rules, "Checkmk")
 
     except CmkException as error_obj:
-        if debug:
-            raise
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export DCD Rules to Account {account} not started",
-                         "cmk_dcd_rule_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export DCD Rules to Account {account} not started",
+                    "cmk_dcd_rule_sync", debug)
 #.
 #   . Passwords
 def export_passwords(account):
@@ -844,12 +797,8 @@ def export_passwords(account):
         syncer = CheckmkPasswordSync(account)
         syncer.export_passwords()
     except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export Passwords to Account {account} not started",
-                         "cmk_password_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export Passwords to Account {account} not started",
+                    "cmk_password_sync")
 #.
 #   . Import Sites
 def import_sites(account):
@@ -859,12 +808,8 @@ def import_sites(account):
         syncer = CheckmkSites(account)
         syncer.import_sites()
     except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Import Sites from Account {account} not started",
-                         "cmk_site_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Import Sites from Account {account} not started",
+                    "cmk_site_sync")
 #   . Export Users
 def export_users(account):
     """
@@ -875,12 +820,8 @@ def export_users(account):
         syncer = CheckmkUserSync(account)
         syncer.export_users()
     except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export Users to Account {account} not started",
-                         "cmk_user_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export Users to Account {account} not started",
+                    "cmk_user_sync")
 #.
 #   . Export LDAP Connections
 def export_ldap_connections(account):
@@ -892,12 +833,8 @@ def export_ldap_connections(account):
         syncer = CheckmkLdapConnectionSync(account)
         syncer.export_ldap_connections()
     except CmkException as error_obj:
-        print(f'C{ColorCodes.FAIL}MK Connection Error: {error_obj} {ColorCodes.ENDC}')
-        if syncer is not None:
-            syncer.record_exception(error_obj)
-        else:
-            _not_started(f"Export LDAP Connections to Account {account} not started",
-                         "cmk_ldap_connection_sync", error_obj)
+        _job_failed(error_obj, syncer, f"Export LDAP Connections to Account {account} not started",
+                    "cmk_ldap_connection_sync")
 #.
 #   .-- Generate Users
 def _user_generation_syncer(debug=False, search_filter=''):
