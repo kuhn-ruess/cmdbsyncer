@@ -17,7 +17,7 @@
 services:
 
   mongo:
-    image: mongo:8.0.4
+    image: mongo:8.0.34
     restart: unless-stopped
     volumes:
       - data_db:/data/db
