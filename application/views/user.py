@@ -9,7 +9,7 @@ from flask import flash, redirect, request, abort, url_for
 from flask_admin.form import rules
 from flask_admin.base import expose
 from flask_wtf.csrf import generate_csrf
-from flask_login import current_user
+from flask_login import current_user, login_user
 from mongoengine.errors import DoesNotExist, ValidationError
 
 from application.models.user import User
@@ -230,6 +230,13 @@ class UserView(DefaultModelView):
         else:
             model.date_changed = datetime.now()
         return super().on_model_change(form, model, is_created)
+
+    def after_model_change(self, form, model, is_created):
+        # A new password ends all sessions of that user, not the one setting it
+        if 'password' in form and form.password.data \
+                and str(model.id) == str(current_user.id):
+            login_user(model)
+        super().after_model_change(form, model, is_created)
 
     def is_accessible(self):
         return current_user.is_authenticated and current_user.has_right('user')

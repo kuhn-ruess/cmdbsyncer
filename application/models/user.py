@@ -263,8 +263,18 @@ class User(db.Document, UserMixin):
         return False
 
     def get_id(self):
-        """ User Mixin overwrite """
-        return str(self.id)
+        """
+        What Flask-Login keeps in the session. The second part ties the
+        session to the current password: a new one changes it, so every
+        session from before no longer matches in ``load_user``. A user
+        without a local password has nothing to tie it to.
+        """
+        if not self.pwdhash:
+            return str(self.id)
+        # The session cookie is signed, not encrypted, so never the hash itself
+        key = str(current_app.config['SECRET_KEY']).encode('utf-8')
+        binding = hmac.new(key, self.pwdhash.encode('utf-8'), hashlib.sha256)
+        return f"{self.id}|{binding.hexdigest()[:32]}"
 
     def __str__(self):
         """

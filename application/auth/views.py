@@ -1,6 +1,7 @@
 """
 Login Routes
 """
+import hmac
 import time
 import uuid
 from datetime import datetime
@@ -78,9 +79,13 @@ def load_user(user_id):
     """
     # A disabled user loses a running session right away
     try:
-        return User.objects.get(id=user_id, disabled__ne=True)
+        user = User.objects.get(id=user_id.partition('|')[0], disabled__ne=True)
     except DoesNotExist:
         return None
+    # And so does a session from before the last password change
+    if not hmac.compare_digest(user.get_id().encode(), user_id.encode()):
+        return None
+    return user
 
 @AUTH.route('/login', methods=['GET', 'POST'])
 @limiter.limit(AUTH_RATE_LIMIT, methods=['POST'])
@@ -378,6 +383,9 @@ def change_password():
         current_user.last_login = datetime.utcnow()
         current_user.force_password_change = False
         current_user.save()
+        # The new password ended all sessions, this one goes on
+        # pylint: disable-next=protected-access
+        login_user(current_user._get_current_object())
         return redirect(url_for("admin.index"))
     if form.errors:
         for _, message in form.errors.items():
