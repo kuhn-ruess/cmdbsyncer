@@ -123,14 +123,14 @@ class APIAuthTest(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 401)
 
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_unknown_user_returns_401(self, user_cls):
         user_cls.objects.get.side_effect = DoesNotExist
         resp = self.client.get('/api/v1/syncer/hosts', headers=_basic_auth())
         self.assertEqual(resp.status_code, 401)
 
     @patch('application.api.syncer.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_valid_basic_auth_passes(self, user_cls, host_cls):
         user_cls.objects.get.return_value = _FakeUser(api_roles=['all'])
         host_cls.objects.return_value.count.return_value = 0
@@ -138,7 +138,7 @@ class APIAuthTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
 
     @patch('application.api.syncer.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_x_login_user_header_passes(self, user_cls, host_cls):
         user_cls.objects.get.return_value = _FakeUser(api_roles=['all'])
         host_cls.objects.return_value.count.return_value = 0
@@ -148,20 +148,20 @@ class APIAuthTest(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
 
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_wrong_password_returns_401(self, user_cls):
         user_cls.objects.get.return_value = _FakeUser(password_ok=False)
         resp = self.client.get('/api/v1/syncer/hosts', headers=_basic_auth())
         self.assertEqual(resp.status_code, 401)
 
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_role_restriction_blocks_other_namespace(self, user_cls):
         # A user with only 'syncer' role must not reach /objects/*.
         user_cls.objects.get.return_value = _FakeUser(api_roles=['syncer'])
         resp = self.client.get('/api/v1/objects/some-host', headers=_basic_auth())
         self.assertEqual(resp.status_code, 401)
 
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_empty_api_roles_denies_access(self, user_cls):
         # Empty api_roles must NOT grant allow-all. Pentest finding 2026-04-20.
         user_cls.objects.get.return_value = _FakeUser(api_roles=[])
@@ -169,7 +169,7 @@ class APIAuthTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 401)
 
     @patch('application.api.syncer.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_duplicate_names_auth_matches_password(self, user_cls, host_cls):
         # Pentest finding 2026-04-20: duplicate names crashed with 500.
         # Auth must still succeed when one candidate's password matches.
@@ -181,7 +181,7 @@ class APIAuthTest(unittest.TestCase):
         resp = self.client.get('/api/v1/syncer/hosts', headers=_basic_auth())
         self.assertEqual(resp.status_code, 200)
 
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_duplicate_names_auth_fails_when_no_password_matches(self, user_cls):
         a = _FakeUser(api_roles=['all'], password_ok=False)
         b = _FakeUser(api_roles=['all'], password_ok=False)
@@ -191,14 +191,34 @@ class APIAuthTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 401)
 
     @patch('application.api.syncer.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.audit')
+    @patch('application.helpers.login.User')
+    def test_duplicate_names_check_every_candidate(self, user_cls, audit, host_cls):
+        # A match on the first must not end the walk: timing would tell which.
+        right = _FakeUser(api_roles=['all'], password_ok=True)
+        wrong = _FakeUser(api_roles=['all'], password_ok=False)
+        user_cls.objects.get.side_effect = MultipleObjectsReturned
+        user_cls.objects.return_value = [right, wrong]
+        host_cls.objects.return_value.count.return_value = 0
+        real_check = _FakeUser.check_password
+        with patch.object(_FakeUser, 'check_password', autospec=True,
+                          side_effect=real_check) as check:
+            resp = self.client.get('/api/v1/syncer/hosts', headers=_basic_auth())
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([call.args[0] for call in check.call_args_list], [right, wrong])
+        audit.assert_called_once()
+        self.assertEqual(audit.call_args.args[0], 'user.login.collision')
+        self.assertEqual(audit.call_args.kwargs['outcome'], 'success')
+
+    @patch('application.api.syncer.Host')
+    @patch('application.helpers.login.User')
     def test_role_matching_path_prefix_allowed(self, user_cls, host_cls):
         user_cls.objects.get.return_value = _FakeUser(api_roles=['syncer'])
         host_cls.objects.return_value.count.return_value = 0
         resp = self.client.get('/api/v1/syncer/hosts', headers=_basic_auth())
         self.assertEqual(resp.status_code, 200)
 
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_https_required_when_insecure_flag_off(self, user_cls):
         user_cls.objects.get.return_value = _FakeUser()
         # Drop the flag and force a non-loopback, non-localhost request.
@@ -210,7 +230,7 @@ class APIAuthTest(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 401)
 
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_spoofed_localhost_host_header_does_not_bypass_https_requirement(self, user_cls):
         user_cls.objects.get.return_value = _FakeUser()
         self.app.config['ALLOW_INSECURE_API_AUTH'] = False
@@ -644,7 +664,7 @@ class PluginViewFormattingTest(unittest.TestCase):
 
 def _auth_patches(test_fn):
     """Decorator: inject a valid user so auth always passes."""
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def wrapper(self, user_cls, *args, **kwargs):
         user_cls.objects.get.return_value = _FakeUser(api_roles=['all'])
         return test_fn(self, *args, **kwargs)
@@ -862,7 +882,7 @@ class SyncerEdaAPITest(unittest.TestCase):
             self.assertEqual(resp.status_code, 400, query)
         collect.assert_not_called()
 
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_syncer_role_is_enough(self, user_cls):
         user_cls.objects.get.return_value = _FakeUser(api_roles=['syncer'])
         with patch('application.api.syncer.collect_summary', return_value={}):
@@ -879,7 +899,7 @@ class APIReadOnlyUserTest(unittest.TestCase):
         self.headers = _basic_auth()
 
     @patch('application.api.syncer.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_read_only_user_may_read(self, user_cls, host_cls):
         user_cls.objects.get.return_value = _readonly_user(api_roles=['all'])
         host_cls.objects.return_value.count.return_value = 0
@@ -888,7 +908,7 @@ class APIReadOnlyUserTest(unittest.TestCase):
 
     @patch('application.api.objects.get_account_by_name')
     @patch('application.api.objects.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_read_only_user_cannot_post(self, user_cls, host_cls, get_account):
         user_cls.objects.get.return_value = _readonly_user(api_roles=['all'])
         resp = self.client.post(
@@ -903,7 +923,7 @@ class APIReadOnlyUserTest(unittest.TestCase):
         get_account.assert_not_called()
 
     @patch('application.api.objects.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_read_only_user_cannot_delete(self, user_cls, host_cls):
         user_cls.objects.get.return_value = _readonly_user(api_roles=['all'])
         resp = self.client.delete('/api/v1/objects/web01', headers=self.headers)
@@ -912,7 +932,7 @@ class APIReadOnlyUserTest(unittest.TestCase):
 
     @patch('application.api.objects.get_account_by_name')
     @patch('application.api.objects.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     def test_normal_user_still_writes(self, user_cls, host_cls, get_account):
         # Control: the gate must not be refusing everybody.
         user_cls.objects.get.return_value = _FakeUser(api_roles=['all'])
@@ -928,7 +948,7 @@ class APIReadOnlyUserTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
 
     @patch('application.api.objects.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     @patch('application.api.find_user_by_api_token')
     def test_api_token_of_read_only_owner_cannot_write(self, find_token,
                                                        _user_cls, host_cls):
@@ -1489,7 +1509,7 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
 def _scoped_auth_patches(accounts):
     """Decorator: inject a valid user restricted to *accounts* (account scope)."""
     def deco(test_fn):
-        @patch('application.api.User')
+        @patch('application.helpers.login.User')
         def wrapper(self, user_cls, *args, **kwargs):
             user_cls.objects.get.return_value = _FakeUser(
                 api_roles=['all'], scopes={'accounts': accounts})
@@ -1502,7 +1522,7 @@ def _scoped_auth_patches(accounts):
 def _template_scoped_auth_patches(templates):
     """Decorator: inject a valid user restricted to *templates*."""
     def deco(test_fn):
-        @patch('application.api.User')
+        @patch('application.helpers.login.User')
         def wrapper(self, user_cls, *args, **kwargs):
             user_cls.objects.get.return_value = _FakeUser(
                 api_roles=['all'], scopes={'templates': templates})
@@ -1774,7 +1794,7 @@ class ApiTokenAuthTest(unittest.TestCase):
         self.client = self.app.test_client()
 
     @patch('application.api.syncer.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     @patch('application.api.find_user_by_api_token')
     def test_bearer_token_authenticates(self, find_token, _user_cls, host_cls):
         user = _FakeUser(api_roles=['all'])
@@ -1788,7 +1808,7 @@ class ApiTokenAuthTest(unittest.TestCase):
         find_token.assert_called_once_with('cmdb_pat_secret')
 
     @patch('application.api.syncer.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     @patch('application.api.find_user_by_api_token')
     def test_bare_token_without_bearer_prefix_authenticates(self, find_token,
                                                             _user_cls, host_cls):
@@ -1805,7 +1825,7 @@ class ApiTokenAuthTest(unittest.TestCase):
         find_token.assert_called_once_with('cmdb_pat_rawtokenvalue')
 
     @patch('application.api.syncer.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     @patch('application.api.find_user_by_api_token')
     def test_x_login_token_header_authenticates(self, find_token, _user_cls, host_cls):
         find_token.return_value = (_FakeUser(api_roles=['all']),
@@ -1834,7 +1854,7 @@ class ApiTokenAuthTest(unittest.TestCase):
         self.assertEqual(resp.status_code, 401)
 
     @patch('application.api.objects.Host')
-    @patch('application.api.User')
+    @patch('application.helpers.login.User')
     @patch('application.api.find_user_by_api_token')
     def test_token_carries_account_scope(self, find_token, _user_cls, host_cls):
         # Token owner is restricted to acct-a → out-of-scope host hidden.

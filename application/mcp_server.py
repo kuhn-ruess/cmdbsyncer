@@ -63,15 +63,16 @@ except ImportError:
 # pylint: disable=wrong-import-position
 from datetime import datetime, timedelta
 
-from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
+from mongoengine.errors import DoesNotExist
 
 import application  # pylint: disable=unused-import  # noqa: F401 — boot side effect
 from application import app
-from application.models.user import User, is_readonly
+from application.models.user import is_readonly
 from application.models.host import Host
 from application.models.account import Account
 from application.models.cron import CronStats, CronGroup
 from application.modules.log.models import LogEntry
+from application.helpers.login import authenticate_login
 from application.helpers.get_account import (
     get_account_by_name,
     AccountNotFoundError,
@@ -118,36 +119,10 @@ def _user_has_mcp_access(user):
     return 'all' in roles or 'mcp' in roles
 
 
-def _resolve_user(name, password):
-    """Look up an enabled User by name/email + password. Returns the User
-    on success or ``None`` on any failure (no logging, no abort)."""
-    try:
-        candidate = User.objects.get(
-            disabled__ne=True,
-            __raw__={'$or': [{'name': name}, {'email': name}]},
-        )
-    except DoesNotExist:
-        return None
-    except MultipleObjectsReturned:
-        # Historical duplicate names: pick the first that authenticates.
-        candidate = next(
-            (c for c in User.objects(
-                disabled__ne=True,
-                __raw__={'$or': [{'name': name}, {'email': name}]},
-            ) if c.check_password(password)),
-            None,
-        )
-        if candidate is None:
-            return None
-    if not candidate.check_password(password):
-        return None
-    return candidate
-
-
 def _login_stdio(username, password):
     """stdio mode startup login. Aborts on failure or missing role."""
     global _AUTH_USER  # pylint: disable=global-statement
-    user = _resolve_user(username, password)
+    user = authenticate_login(username, password)
     if user is None:
         _abort(f"Authentication failed for user '{username}'")
     if not _user_has_mcp_access(user):
@@ -617,7 +592,7 @@ def _build_auth_middleware():
                 username, password = decoded.split(':', 1)
             except (ValueError, UnicodeDecodeError):
                 return _challenge()
-            user = _resolve_user(username, password)
+            user = authenticate_login(username, password)
             if user is None or not _user_has_mcp_access(user):
                 return _challenge()
             token = _request_user.set(user)

@@ -980,6 +980,10 @@ _try_load_real_module(
     "application.helpers.mongo_keys",
     os.path.join("helpers", "mongo_keys.py"),
 )
+_try_load_real_module(
+    "application.helpers.login",
+    os.path.join("helpers", "login.py"),
+)
 _stub_package("application.api", path=[os.path.join(_APP_ROOT, "api")])
 _try_load_real_module(
     "application.api",

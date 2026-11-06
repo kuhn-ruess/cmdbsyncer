@@ -5,8 +5,7 @@ API
 from functools import wraps
 from datetime import datetime, timedelta
 from flask import abort, request, current_app, g
-from mongoengine.errors import DoesNotExist, MultipleObjectsReturned
-from application.helpers.audit import audit
+from application.helpers.login import authenticate_login
 from application.models.account import Account
 from application.models.user import (
     User, find_user_by_api_token, is_readonly, API_TOKEN_PREFIX,
@@ -126,47 +125,8 @@ def _authenticate_user():
         ]
         log.log("API Login failed", details=details, source="API")
         abort(401, "HTTPS is required for password-based API authentication")
-    try:
-        user_result = User.objects.get(
-            disabled__ne=True,
-            __raw__={'$or': [{'name': username}, {'email': username}]}
-        )
-    except DoesNotExist:
-        _abort_unauthorized("Invalid credentials")
-    except MultipleObjectsReturned:
-        # Several users match the same login string. Historically this
-        # happens when the `name` field (added later, sparse) accidentally
-        # matches another account's `email`. We can't drop the branch —
-        # purging or unique-indexing the existing duplicates breaks logins
-        # for users whose `name` was empty when the field was introduced.
-        # So: walk every candidate (constant-time, no early exit) and
-        # surface the collision as an audit event so it can be cleaned up.
-        candidates = list(User.objects(
-            disabled__ne=True,
-            __raw__={'$or': [{'name': username}, {'email': username}]}
-        ))
-        # Constant-time match: check every candidate so a wrong password
-        # against the first colliding user takes the same time as the
-        # last, which keeps timing from leaking *which* duplicate exists.
-        match = None
-        for candidate in candidates:
-            if candidate.check_password(user_password) and match is None:
-                match = candidate
-        audit('user.login.collision',
-              outcome='success' if match else 'failure',
-              actor_type='user',
-              actor_id=str(match.id) if match else None,
-              actor_name=username,
-              metadata={
-                  'reason': 'multiple users matched login string',
-                  'candidate_count': len(candidates),
-                  'candidate_ids': [str(c.id) for c in candidates],
-                  'matched_id': str(match.id) if match else None,
-              })
-        if match is None:
-            _abort_unauthorized("Invalid credentials")
-        return match, username
-    if not user_result.check_password(user_password):
+    user_result = authenticate_login(username, user_password)
+    if user_result is None:
         _abort_unauthorized("Invalid credentials")
     return user_result, username
 
