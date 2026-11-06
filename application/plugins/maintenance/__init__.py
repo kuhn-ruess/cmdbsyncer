@@ -359,7 +359,8 @@ def mark_stale(account):
         return
     auto_archive = bool(acc.get('auto_archive_when_stale'))
 
-    cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=days)
+    now = datetime.datetime.utcnow()
+    cutoff = now - datetime.timedelta(days=days)
     base = {
         'source_account_id': str(acc['id']),
         'no_autodelete__ne': True,
@@ -369,7 +370,7 @@ def mark_stale(account):
 
     stale_q = Host.objects(last_import_seen__lte=cutoff, is_stale__ne=True, **base)
     fresh_q = Host.objects(last_import_seen__gt=cutoff, is_stale=True, **base)
-    marked = stale_q.update(set__is_stale=True, set__stale_since=cutoff)
+    marked = stale_q.update(set__is_stale=True, set__stale_since=now)
     cleared = fresh_q.update(set__is_stale=False, set__stale_since=None)
     details.append(('hosts_marked_stale', marked))
     details.append(('hosts_cleared_stale', cleared))
