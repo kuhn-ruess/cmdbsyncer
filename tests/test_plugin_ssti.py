@@ -92,7 +92,7 @@ class IdoitRulesSandboxTest(unittest.TestCase):
             [{'action': 'id_object_description', 'param': 'host-{{ HOSTNAME }}'}],
             outcomes,
         )
-        self.assertEqual(outcomes['description'], 'host-web01')
+        self.assertEqual(outcomes['id_object_description'], 'host-web01')
 
 
 class CheckmkSiteSyncerSandboxTest(unittest.TestCase):

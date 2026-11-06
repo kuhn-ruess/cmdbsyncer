@@ -108,12 +108,8 @@ class SyncIdoit(Plugin):
             cache_name = f"{obj_id}__{category}"
             name = category.split("_")[-1].lower()
 
-            if len(response) == 1:
-                counter = ""
-            else:
-                counter = "_1"
-
-            for item in response:
+            for index, item in enumerate(response, 1):
+                counter = f"_{index}" if len(response) > 1 else ""
                 data = {}
 
                 for key, values in item.items():
@@ -125,25 +121,14 @@ class SyncIdoit(Plugin):
 
                     elif isinstance(values, list):
 
-                        if len(values) == 1:
-                            item_counter = ""
-
-                        else:
-                            item_counter = "_1"
-
-                        for entry in values:
+                        for entry_index, entry in enumerate(values, 1):
+                            item_counter = f"_{entry_index}" if len(values) > 1 else ""
 
                             for item, value in entry.items():
                                 data[f"{name}{counter}_{key}_{item}{item_counter}"] = value
 
-                            if item_counter:
-                                item_counter = f"_{int(item_counter[-1]) +1}"
-
                     else:
                         data[f"{name}{counter}_{key}"] = values
-
-                if counter:
-                    counter = f"_{int(counter[-1]) + 1}"
 
                 if cache_name not in self.category_cache:
                     self.category_cache[cache_name] = data

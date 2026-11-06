@@ -43,7 +43,7 @@ class IdoitVariableRule(Rule):
                     replace_newlines=False,
                     **{'HOSTNAME': hostname, **self.attributes},
                 )
-                outcomes['description'] = new_value
+                outcomes['id_object_description'] = new_value
             elif action == "ignore_host":
                 outcomes['ignore_host'] = True
             else:

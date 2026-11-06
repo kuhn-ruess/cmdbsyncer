@@ -109,7 +109,7 @@ class TestRuleTypes(unittest.TestCase):
             {'action': 'id_category', 'param': "{'C__CATG__LOCATION': {'room': '{{ room }}'}}"},
         ], 'list', 'name;room\nsrv01;R1\n')]
         row = next(engine.list_rows())
-        self.assertEqual(row.outcomes['description'], 'srv01 in R1')
+        self.assertEqual(row.outcomes['id_object_description'], 'srv01 in R1')
         self.assertEqual(row.outcomes['id_category'],
                          {'C__CATG__LOCATION': {'room': 'R1'}})
 
