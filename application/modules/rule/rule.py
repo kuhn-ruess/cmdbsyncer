@@ -596,7 +596,8 @@ class Rule():
 
                         if new_value == 'SKIP_RULE':
                             defaults_by_id[idx] = False
-                        elif new_value != 'SKIP_FIELD':
+                        elif (new_value != 'SKIP_FIELD'
+                              and defaults_by_id[idx] is not False):
                             defaults_by_id[idx][action] = new_value
                         #else:
                         #    defaults_by_id[idx][action] = False
@@ -616,6 +617,8 @@ class Rule():
 
         if defaults_by_id:
             for collection_data in defaults_by_id.values():
+                if collection_data is False:
+                    continue
                 collection_data.update(defaults_for_list)
                 outcome_selection.append(collection_data)
         else:

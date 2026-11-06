@@ -527,5 +527,43 @@ class TestHostnameRegex(unittest.TestCase):
         self.assertTrue(self._matches('srv', 'SRV01', condition='swith'))
 
 
+class _SkippingRule(_RuleForTests):
+    """Treats an empty name like the Netbox interface rules do."""
+
+    def handle_fields(self, field_name, field_value):
+        if field_name == 'name' and not field_value:
+            return 'SKIP_RULE'
+        return field_value
+
+
+class TestMultilistSkipRule(unittest.TestCase):
+    """SKIP_RULE drops the one entry of the list, not the whole run."""
+
+    NAME = {'param': '{{ LIST_VAR }}', 'action': 'name', 'list_variable_name': 'nics'}
+    MTU = {'param': '1500', 'action': 'mtu', 'list_variable_name': 'nics'}
+    SITE = {'param': 'ber', 'action': 'site', 'list_variable_name': ''}
+
+    def _outcomes(self, nics, outcomes):
+        rule = _SkippingRule()
+        rule.attributes = {'nics': nics}
+        def render(value, **kwargs):
+            return kwargs.get('LIST_VAR', '') if 'LIST_VAR' in value else value
+        with patch('application.modules.rule.rule.render_jinja', side_effect=render):
+            return rule.get_multilist_outcomes(outcomes, False)[0]
+
+    def test_skipped_entry_is_left_out(self):
+        self.assertEqual(
+            self._outcomes(['eth0', '', 'eth1'], [self.NAME, self.MTU, self.SITE]),
+            [{'name': 'eth0', 'mtu': '1500', 'site': 'ber'},
+             {'name': 'eth1', 'mtu': '1500', 'site': 'ber'}])
+
+    def test_skip_after_other_fields_drops_them_too(self):
+        self.assertEqual(self._outcomes(['', 'eth1'], [self.MTU, self.NAME]),
+                         [{'mtu': '1500', 'name': 'eth1'}])
+
+    def test_all_entries_skipped_gives_nothing(self):
+        self.assertEqual(self._outcomes([''], [self.NAME, self.SITE]), [])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
