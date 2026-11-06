@@ -92,6 +92,10 @@ class SyncVirtualMachines(SyncNetbox):
         Create or update the Netbox virtual machine of one host or list
         row. Returns the virtual machine.
         """
+        # Noted before the first API call: an object whose call fails is
+        # unknown to this run, not gone, so cleanup has to leave it alone.
+        found_hosts.append(object_name)
+
         cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip4')
         cfg = self.get_ip_id(cfg, all_attributes, 'primary_ip6')
 
@@ -113,10 +117,6 @@ class SyncVirtualMachines(SyncNetbox):
             payload['name'] = object_name
             logger.debug("Create Payload: %r", payload)
             current_obj = self.nb.virtualization.virtual_machines.create(payload)
-        # Mark as successfully synced only after create/update
-        # returned without raising, so cleanup decommissions
-        # objects whose API call failed.
-        found_hosts.append(object_name)
         return current_obj
 
 #   .--- Sync Virtual Machines
@@ -158,6 +158,8 @@ class SyncVirtualMachines(SyncNetbox):
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
                     print(f" Error in process: {error}")
+                    # Failed before export_virtualmachine: unknown, not gone
+                    found_hosts.append(hostname)
                 if current_obj:
                     attr_name = f"{self.config['name']}_virtualmachine_id"
                     db_object.set_inventory_attribute(attr_name, current_obj.id)

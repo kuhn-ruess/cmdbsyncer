@@ -122,6 +122,8 @@ class SyncDevices(SyncNetbox):
                         raise
                     self.log_details.append((f'export_error {hostname}', str(error)))
                     self.console(f" Error in process: {error}")
+                    # Failed before export_device: unknown, not gone
+                    found_hosts.append(hostname)
                 progress.advance(task1)
 
                 if device:
@@ -152,6 +154,10 @@ class SyncDevices(SyncNetbox):
         if custom_rules.get('ignore_host'):
             return None
 
+        # Noted before the first API call: a device whose call fails is
+        # unknown to this run, not gone, so cleanup has to leave it alone.
+        found_hosts.append(hostname)
+
         custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip4')
         custom_rules = self.get_ip_id(custom_rules, all_attributes, 'primary_ip6')
 
@@ -169,10 +175,6 @@ class SyncDevices(SyncNetbox):
             payload = self.get_update_keys(False, custom_rules)
             payload['name'] = hostname
             device = self.nb.dcim.devices.create(payload)
-        # Mark as successfully synced only after create/update
-        # returned without raising, so cleanup decommissions
-        # devices whose API call failed.
-        found_hosts.append(hostname)
         return device
 #.
 #   .--- Import Devices
