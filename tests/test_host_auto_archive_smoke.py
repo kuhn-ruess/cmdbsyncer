@@ -61,6 +61,23 @@ eq(manual.last_import_seen, None, 'last seen of a never imported host')
 print('RESTORE_OK')
 '''
 
+NOT_FOUND_ON_IMPORT = COMMON + '''
+def imported(name, **fields):
+    return Host(hostname=name, object_type='host', source_account_name='source',
+                last_import_id='old', **fields).save()
+
+
+imported('gone.example.com')
+imported('protected.example.com', no_autodelete=True)
+imported('seen.example.com').update(set__last_import_id='run1')
+
+eq(Host.delete_host_not_found_on_import('source', 'run1'), 1, 'archived hosts')
+eq(archived('gone.example.com'), True, 'host the import did not see')
+eq(archived('protected.example.com'), False, 'protected host')
+eq(archived('seen.example.com'), False, 'host the import saw')
+print('NOT_FOUND_OK')
+'''
+
 
 @unittest.skipUnless(HAVE_MONGOMOCK, SKIP_REASON)
 class TestHostAutoArchive(unittest.TestCase):
@@ -74,3 +91,7 @@ class TestHostAutoArchive(unittest.TestCase):
     def test_restored_host_is_not_archived_again(self):
         """The next maintenance run leaves a restored host alone"""
         self._run(RESTORE, 'RESTORE_OK')
+
+    def test_not_found_on_import_spares_protected_hosts(self):
+        """An import doesn't archive a host with no_autodelete"""
+        self._run(NOT_FOUND_ON_IMPORT, 'NOT_FOUND_OK')

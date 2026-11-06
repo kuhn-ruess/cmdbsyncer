@@ -258,13 +258,15 @@ class Host(HostLabelsMixin, db.Document):
         review and restore them from the Archive view.
 
         Returns the number of rows that were marked. Already-archived
-        hosts are skipped so a re-run does not bump their timestamp.
+        hosts are skipped so a re-run does not bump their timestamp, and
+        protected (`no_autodelete`) hosts are left alone.
         """
 
         db_filter = (
             Q(source_account_name=account)
             & Q(last_import_id__ne=import_id)
             & Q(deleted_at__exists=False)
+            & Q(no_autodelete__ne=True)
         )
         user_filters = (raw_filter or '').split('||')
         extra_filter = False
