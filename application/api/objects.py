@@ -19,6 +19,7 @@ from application.api import (
 from application.models.host import (
     Host, HostError, RELATION_TYPES, RELATION_INVERSE_LABEL,
 )
+from application.models.host_cleanup import relation_target
 from application.models.host_templates import host_in_template_scope
 # @TODO pre_deletion method for Host so no import needed
 from application.plugins.checkmk.models import CheckmkFolderPool
@@ -581,7 +582,7 @@ class HostRelationsApi(Resource):
         type_label = dict(RELATION_TYPES)
         out = []
         for rel in (host.relations or []):
-            target = rel.target_host
+            target = relation_target(rel)
             if not target:
                 continue
             out.append({
@@ -602,7 +603,8 @@ class HostRelationsApi(Resource):
         )
         for src in sources:
             for rel in (src.relations or []):
-                if rel.target_host and rel.target_host.pk == host.pk:
+                target = relation_target(rel)
+                if target and target.pk == host.pk:
                     out.append({
                         'type': rel.type,
                         'type_label': RELATION_INVERSE_LABEL.get(rel.type,

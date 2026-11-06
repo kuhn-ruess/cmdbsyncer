@@ -1510,6 +1510,23 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         good.save.assert_called_once()
         bad.save.assert_not_called()
 
+    def test_relations_skip_a_reference_to_a_deleted_host(self):
+        class _Dangling:  # pylint: disable=too-few-public-methods
+            type = 'depends_on'
+            source = ''
+
+            @property
+            def target_host(self):
+                raise DoesNotExist('gone')
+
+        host = MagicMock(pk='h1', relations=[_Dangling()])
+        api = importlib.import_module('application.api.objects').HostRelationsApi
+        self.assertEqual(api._serialize_outgoing(host), [])  # pylint: disable=protected-access
+        with patch('application.api.objects.Host') as host_cls:
+            only = host_cls.objects.return_value.only
+            only.return_value = [MagicMock(hostname='src', relations=[_Dangling()])]
+            self.assertEqual(api._serialize_inbound(host), [])  # pylint: disable=protected-access
+
     @_auth_patches
     def test_list_all_rejects_a_page_of_nothing(self):
         # Its next link would point at itself.
