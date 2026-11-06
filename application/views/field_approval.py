@@ -75,8 +75,13 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
             flash('Approval requires the "Approve or reject pending '
                   'critical-label changes" role.', 'error')
             return redirect(request.referrer or url_for('.index_view'))
-        applied, skipped = 0, 0
+        applied, skipped, own = 0, 0, 0
         for approval in self.get_query().filter(id__in=ids, status='pending'):
+            # The second pair of eyes has to be somebody else's
+            if approval.requested_by_email == current_user.email \
+                    and not current_user.global_admin:
+                own += 1
+                continue
             host = Host.objects(id=approval.host_id).first()
             if host is None:
                 approval.status = 'rejected'
@@ -101,6 +106,8 @@ class FieldApprovalView(ModelView):  # pylint: disable=too-many-public-methods,t
             approval.decided_at = datetime.datetime.utcnow()
             approval.save()
             applied += 1
+        if own:
+            flash(f"{own} change(s) not approved: you can't approve your own.", 'warning')
         flash(f'Approved {applied} change(s)' +
               (f', {skipped} skipped' if skipped else ''),
               'success' if applied else 'warning')

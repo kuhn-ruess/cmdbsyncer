@@ -2847,7 +2847,8 @@ Impact Chain.
                                return_to=_safe_return_to(request.args.get('return_to')))
 
     @expose('/bulk_label_process', methods=['POST'])
-    def bulk_label_process(self):  # pylint: disable=too-many-branches
+    # pylint: disable-next=too-many-branches,too-many-locals,too-many-statements
+    def bulk_label_process(self):
         """
         Apply an add / remove / rename label operation to every host in
         `host_ids`. Uses `update_host` so existing side-effects (log entry,
@@ -2874,6 +2875,7 @@ Impact Chain.
 
         changed = 0
         skipped = 0
+        queued = 0
         user_email = getattr(current_user, 'email', None)
         # Fetch all selected hosts in one query instead of one round-trip
         # per id. Per-doc .save() stays — label-history signal handling
@@ -2915,6 +2917,11 @@ Impact Chain.
                 skipped += 1
                 continue
 
+            # Protected labels wait for a second operator, as in the form
+            # pylint: disable-next=import-outside-toplevel
+            from application.views.field_approval import enqueue_critical_label_changes
+            queued += enqueue_critical_label_changes(host, labels, before)
+
             if labels != before:
                 # Tag the change so the history shows "manual"
                 # + the acting user in the Timeline, not "import".
@@ -2930,6 +2937,9 @@ Impact Chain.
             + (f', {skipped} skipped (key not present)' if skipped else ''),
             'success' if changed else 'warning',
         )
+        if queued:
+            flash(f'{queued} change(s) on protected fields are pending '
+                  'approval and were not applied yet.', 'warning')
         return redirect(_safe_return_to(request.form.get('return_to')))
 
 
