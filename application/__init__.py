@@ -361,6 +361,36 @@ if not CLI_MODE:
         abort(403, description="This account is read only and may not change data.")
         return None
 
+    # What a user who has to change the password can still reach: the way
+    # out, the form itself and the 2FA setup.
+    _OPEN_WITH_FORCED_PASSWORD_CHANGE = {
+        'auth.login', 'auth.logout', 'auth.change_password', 'auth.set_2fa',
+        'themes.serve',
+    }
+
+    @app.before_request
+    def _enforce_password_change():
+        """
+        Send a user with ``force_password_change`` to the password form,
+        from every page and not only the start page.
+
+        Web only: the REST API has no way to clear the flag, so service
+        users and tokens would be locked out for good. A browser session
+        calling it is let through for the same reason.
+
+        Checked in this order so that static files don't load the user.
+        """
+        # pylint: disable=import-outside-toplevel
+        from flask_login import current_user as _user
+        endpoint = _flask_request.endpoint
+        if (not endpoint or endpoint == 'static' or endpoint.endswith('.static')
+                or endpoint in _OPEN_WITH_FORCED_PASSWORD_CHANGE
+                or _flask_request.blueprint == 'api'):
+            return None
+        if _user.is_authenticated and _user.force_password_change:
+            return redirect(url_for('auth.change_password'))
+        return None
+
     @app.errorhandler(CSRFError)
     def _handle_csrf_error(error):
         """
