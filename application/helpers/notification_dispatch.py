@@ -37,7 +37,6 @@ import logging
 import queue
 import re
 import threading
-import time
 from datetime import datetime, timedelta
 
 from jinja2 import BaseLoader, select_autoescape
@@ -45,6 +44,7 @@ from jinja2.sandbox import SandboxedEnvironment
 from mongoengine.errors import DoesNotExist, NotUniqueError
 
 from application.helpers import notification_channels
+from application.helpers.queue_worker import QueueWorker
 from application.models.notification_channel import NotificationChannel
 from application.models.notification_rule import NotificationRule
 from application.models.notification_state import NotificationState
@@ -65,8 +65,7 @@ _jinja = SandboxedEnvironment(
 )
 
 _queue = queue.Queue(maxsize=1000)
-_worker_started = threading.Lock()
-_worker_running = False  # pylint: disable=invalid-name
+_worker = QueueWorker(_queue, 'notification-dispatcher', EXIT_DRAIN_TIMEOUT_SECONDS)
 
 # Set on the worker thread while it is executing a dispatch. Channel
 # senders that emit their own log.log() entry must not loop back into
@@ -76,18 +75,6 @@ _in_dispatch = threading.local()
 
 def _is_dispatching():
     return getattr(_in_dispatch, 'active', False)
-
-
-def _start_worker():
-    global _worker_running  # pylint: disable=global-statement
-    with _worker_started:
-        if _worker_running:
-            return
-        thread = threading.Thread(
-            target=_worker_loop, name='notification-dispatcher', daemon=True,
-        )
-        thread.start()
-        _worker_running = True
 
 
 def _worker_loop():
@@ -216,7 +203,7 @@ def _dispatch(source_type, event):
 
 
 def _enqueue(source_type, event):
-    _start_worker()
+    _worker.start(_worker_loop)
     try:
         _queue.put_nowait((source_type, event))
     except queue.Full:
@@ -259,17 +246,4 @@ def dispatch_log_entry(message, source, has_error, details, affected_hosts):
     })
 
 
-def _drain_on_exit():
-    """Block until the dispatch queue is empty or the timeout hits.
-
-    Without this, daemon-thread workers are killed when the CLI process
-    exits, and notifications enqueued by the run never leave the box.
-    """
-    if not _worker_running or _queue.unfinished_tasks == 0:
-        return
-    deadline = time.monotonic() + EXIT_DRAIN_TIMEOUT_SECONDS
-    while _queue.unfinished_tasks > 0 and time.monotonic() < deadline:
-        time.sleep(0.05)
-
-
-atexit.register(_drain_on_exit)
+atexit.register(_worker.drain)

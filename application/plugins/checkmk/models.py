@@ -5,6 +5,7 @@ Checkmk Rules
 # additional public methods to satisfy pylint.
 # pylint: disable=too-few-public-methods,too-many-lines
 from mongoengine import DENY
+from mongoengine.errors import DoesNotExist
 from application import db
 from application.modules.rule.models import rule_types, ListSourceMixin, list_source_fields
 from application.models.account import Account
@@ -654,6 +655,19 @@ class CheckmkFolderPool(db.Document):
         if self.folder_seats_taken < self.folder_seats:
             return True
         return False
+
+    @classmethod
+    def free_seat_of_folder(cls, folder):
+        """
+        A host left ``folder``: give its seat back, if the folder has a pool
+        """
+        try:
+            pool = cls.objects.get(folder_name__iexact=folder)
+        except DoesNotExist:
+            return
+        if pool.folder_seats_taken > 0:
+            pool.folder_seats_taken -= 1
+            pool.save()
 #.
 #   .-- Site Pools
 class CheckmkSitePoolMember(db.EmbeddedDocument):

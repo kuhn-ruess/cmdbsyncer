@@ -652,6 +652,14 @@ _syncer_jinja_early.check_jinja_syntax = _check_jinja_syntax
 _syncer_jinja_early.global_names = set
 
 _try_load_real_module(
+    "application.helpers.queue_worker",
+    os.path.join("helpers", "queue_worker.py"),
+)
+_try_load_real_module(
+    "application.helpers.progress",
+    os.path.join("helpers", "progress.py"),
+)
+_try_load_real_module(
     "application.modules.plugin",
     os.path.join("modules", "plugin.py"),
 )

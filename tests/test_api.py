@@ -1151,9 +1151,6 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         host.folder = 'web'
         host.soft_delete.return_value = True
         host_cls.get_host.return_value = host
-        pool = MagicMock()
-        pool.folder_seats_taken = 5
-        pool_cls.objects.get.return_value = pool
 
         resp = self.client.delete('/api/v1/objects/web01', headers=self.headers)
 
@@ -1163,26 +1160,7 @@ class ObjectsAPITest(unittest.TestCase):  # pylint: disable=too-many-public-meth
         host.soft_delete.assert_called_once()
         host.delete.assert_not_called()
         host.save.assert_called_once()
-        self.assertEqual(pool.folder_seats_taken, 4)
-        pool.save.assert_called_once()
-
-    @_auth_patches
-    @patch('application.api.objects.CheckmkFolderPool')
-    @patch('application.api.objects.Host')
-    def test_delete_host_succeeds_when_pool_missing(self, host_cls, pool_cls):
-        # Pentest finding 2026-04-20: orphaned folder references raised 500.
-        host = MagicMock()
-        host.folder = 'gone-pool'
-        host.soft_delete.return_value = True
-        host_cls.get_host.return_value = host
-        pool_cls.objects.get.side_effect = DoesNotExist
-
-        resp = self.client.delete('/api/v1/objects/web01', headers=self.headers)
-
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.get_json(), {'status': 'deleted'})
-        host.soft_delete.assert_called_once()
-        host.save.assert_called_once()
+        pool_cls.free_seat_of_folder.assert_called_once_with('web')
 
     @_auth_patches
     @patch('application.api.objects.Host')

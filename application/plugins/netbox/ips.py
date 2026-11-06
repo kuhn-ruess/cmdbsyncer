@@ -1,10 +1,10 @@
 """
 IPAM Syncronisation
 """
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 from application import logger
 from application.models.host import Host
+from application.helpers.progress import make_progress
 from .netbox import SyncNetbox
 
 
@@ -30,13 +30,9 @@ class SyncIPS(SyncNetbox):
         """
         Sync IP Addresses
         """
-        object_filter = self.config['settings'].get(self.name, {}).get('filter')
-        db_objects = Host.objects_by_filter(object_filter)
+        db_objects = Host.objects_by_filter(self._export_filter())
         total = db_objects.count()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             self.console = progress.console.print
             task1 = progress.add_task("Updating IPs", total=total)
             for db_object in db_objects:

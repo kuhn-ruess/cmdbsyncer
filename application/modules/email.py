@@ -14,32 +14,18 @@ mail enqueued just before exit.
 import atexit
 import logging
 import queue
-import threading
-import time
 
 from flask import current_app, render_template
 from flask_mail import Message
 from application import mail
+from application.helpers.queue_worker import QueueWorker
 
 _logger = logging.getLogger(__name__)
 
 EXIT_DRAIN_TIMEOUT_SECONDS = 30
 
 _queue = queue.Queue(maxsize=1000)
-_worker_started = threading.Lock()
-_worker_running = False  # pylint: disable=invalid-name
-
-
-def _start_worker():
-    global _worker_running  # pylint: disable=global-statement
-    with _worker_started:
-        if _worker_running:
-            return
-        thread = threading.Thread(
-            target=_worker_loop, name='email-sender', daemon=True,
-        )
-        thread.start()
-        _worker_running = True
+_worker = QueueWorker(_queue, 'email-sender', EXIT_DRAIN_TIMEOUT_SECONDS)
 
 
 def _worker_loop():
@@ -63,15 +49,7 @@ def _worker_loop():
             _queue.task_done()
 
 
-def _drain_on_exit():
-    if not _worker_running or _queue.unfinished_tasks == 0:
-        return
-    deadline = time.monotonic() + EXIT_DRAIN_TIMEOUT_SECONDS
-    while _queue.unfinished_tasks > 0 and time.monotonic() < deadline:
-        time.sleep(0.05)
-
-
-atexit.register(_drain_on_exit)
+atexit.register(_worker.drain)
 
 
 def send_email(to, subject, template, **kwargs):
@@ -111,7 +89,7 @@ def send_email_inner(to, subject, template, app, **kwargs):
                     attachment.read()
                 )
 
-        _start_worker()
+        _worker.start(_worker_loop)
         try:
             _queue.put_nowait((app, msg, to))
         except queue.Full:

@@ -5,10 +5,11 @@ from collections import defaultdict
 
 from application import logger
 from application.models.host import Host
+from application.helpers.progress import make_progress
 from application.helpers.import_hostnames import get_import_hosts, update_import_host
 
 from .netbox import SyncNetbox
-from .utils import make_progress, parse_import_filter
+from .utils import parse_import_filter
 
 
 class SyncInterfaces(SyncNetbox):
@@ -35,8 +36,7 @@ class SyncInterfaces(SyncNetbox):
         """
         Iterarte over objects and sync them to Netbox
         """
-        object_filter = self.config['settings'].get(self.name, {}).get('filter')
-        db_objects = Host.objects_by_filter(object_filter)
+        db_objects = Host.objects_by_filter(self._export_filter())
         total = db_objects.count()
         with make_progress() as progress:
             self.console = progress.console.print
@@ -59,10 +59,7 @@ class SyncInterfaces(SyncNetbox):
                         continue
                     self.export_interfaces(hostname, cfg_interfaces, mode, port_infos)
                 except Exception as error:  # pylint: disable=broad-exception-caught
-                    if self.debug:
-                        raise
-                    self.log_details.append((f'export_error {hostname}', str(error)))
-                    self.console(f" Error in process: {error}")
+                    self.record_export_error(hostname, error)
 
                 progress.advance(task1)
                 attr_name = f"{self.config['name']}_{mode}_interfaces"

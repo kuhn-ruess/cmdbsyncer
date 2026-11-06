@@ -240,6 +240,7 @@ class Plugin():
 
     config = {}
     log_details = None
+    console = print
     _http_session = None
 
 
@@ -405,6 +406,20 @@ class Plugin():
         """
         self.log_details.append(('error', f'{error_obj}'))
         task_failed(error_obj)
+
+    def _export_filter(self):
+        """The object filter configured for this export."""
+        return self.config['settings'].get(self.name, {}).get('filter')
+
+    def record_export_error(self, hostname, error):
+        """
+        One host failed in an export loop: note it and carry on with the
+        next one, with debug stop there.
+        """
+        if self.debug:
+            raise error
+        self.log_details.append((f'export_error {hostname}', str(error)))
+        self.console(f" Error in process: {error}")
 
     def log_error(self, message):
         """

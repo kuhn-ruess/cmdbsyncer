@@ -331,13 +331,7 @@ class HostDetailApi(Resource):
 
         newly_archived = host_obj.soft_delete(reason='Deleted via API')
         if newly_archived and (folder := host_obj.folder):
-            try:
-                pool = CheckmkFolderPool.objects.get(folder_name__iexact=folder)
-            except DoesNotExist:
-                pool = None
-            if pool and pool.folder_seats_taken > 0:
-                pool.folder_seats_taken -= 1
-                pool.save()
+            CheckmkFolderPool.free_seat_of_folder(folder)
         host_obj.save()
 
         return {'status': "deleted"}, 200

@@ -278,13 +278,7 @@ def delete_host(hostname: str) -> dict:
         return {'status': 'not_found', 'hostname': hostname}
     folder = host_obj.folder
     if folder:
-        try:
-            pool = CheckmkFolderPool.objects.get(folder_name__iexact=folder)
-        except DoesNotExist:
-            pool = None
-        if pool and pool.folder_seats_taken > 0:
-            pool.folder_seats_taken -= 1
-            pool.save()
+        CheckmkFolderPool.free_seat_of_folder(folder)
     host_obj.delete()
     return {'status': 'deleted', 'hostname': hostname}
 

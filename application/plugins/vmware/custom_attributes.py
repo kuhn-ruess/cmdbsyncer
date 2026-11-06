@@ -2,7 +2,6 @@
 """Sync VMware Vsphere Custom Attributes"""
 from collections import defaultdict
 
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 try:
     from pyVmomi import vim
@@ -18,6 +17,7 @@ from syncerapi.v1.inventory import (
 )
 
 from application import logger
+from application.helpers.progress import make_progress
 from .vmware import VMWareVcenterPlugin
 
 
@@ -209,13 +209,9 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
         current_vms = {x.name:x for x in self.container_view
                        if x.name in current_attributes}
 
-        object_filter = self.config['settings'].get(self.name, {}).get('filter')
-        db_objects = Host.objects_by_filter(object_filter)
+        db_objects = Host.objects_by_filter(self._export_filter())
         total = db_objects.count()
-        with Progress(SpinnerColumn(),
-                      MofNCompleteColumn(),
-                      *Progress.get_default_columns(),
-                      TimeElapsedColumn()) as progress:
+        with make_progress() as progress:
             self.console = progress.console.print
             task1 = progress.add_task("Updating Attributes", total=total)
             hostname = None
@@ -234,10 +230,7 @@ class VMwareCustomAttributesPlugin(VMWareVcenterPlugin):
                     self.export_vm(hostname, custom_rules, current_attributes, current_vms)
 
                 except Exception as error:  # pylint: disable=broad-exception-caught
-                    if self.debug:
-                        raise
-                    self.log_details.append((f'export_error {hostname}', str(error)))
-                    self.console(f" Error in process: {error}")
+                    self.record_export_error(hostname, error)
                 progress.advance(task1)
 
             # A row of a list rule writes to the virtual machine it names.
