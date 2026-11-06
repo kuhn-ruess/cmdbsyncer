@@ -22,7 +22,7 @@ from application.plugins.rules.rule_import_export import (
     import_one_rule,
     import_rule_lines,
     import_json_bundle,
-    CLI_ONLY_IMPORT_TYPES,
+    CLI_ONLY_TYPES,
     grouped_rules_export,
 )
 from application.plugins.rules.autorules import create_rules
@@ -165,12 +165,17 @@ class RulesByType(Resource):
     @API.response(200, 'Every rule of this type as a JSON list.',
                   RULES_BY_TYPE_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
+    @API.response(403, 'This rule_type can only be exported with the CLI.',
+                  ERROR)
     @API.response(404, 'Unknown rule_type.', ERROR)
     @require_token
     def get(self, rule_type):
         """Export every rule of *rule_type* as a JSON list."""
         if rule_type not in enabled_rules:
             return {'message': f"Unknown rule_type '{rule_type}'"}, 404
+        if rule_type in CLI_ONLY_TYPES:
+            return {'message': f"'{rule_type}' can only be exported "
+                               "with the CLI"}, 403
         return {
             'rule_type': rule_type,
             'rules': list(_decode_rule_lines(iter_rules_of_type(rule_type))),
@@ -200,7 +205,7 @@ class RulesByType(Resource):
         """
         if rule_type not in enabled_rules:
             return {'message': f"Unknown rule_type '{rule_type}'"}, 404
-        if rule_type in CLI_ONLY_IMPORT_TYPES:
+        if rule_type in CLI_ONLY_TYPES:
             return {'message': f"'{rule_type}' can only be imported "
                                "with the CLI"}, 403
         payload = request.get_json(silent=True)
@@ -234,12 +239,6 @@ class RulesExport(Resource):
                'Skipped by default — usually not what you want in a rule '
                'backup. CMDB templates are always exported as their own '
                '``cmdb_templates`` type.')
-    @API.param('include_accounts',
-               'Set to ``1`` to also export accounts. Skipped by default.')
-    @API.param('include_users',
-               'Set to ``1`` to also export users. The output contains hashed '
-               'passwords and role assignments — treat as secret. Skipped by '
-               'default.')
     @API.param('include_passwords',
                'Set to ``1`` to also export the Secret Store '
                '(``cmk_passwords``). The entries stay encrypted with this '
@@ -247,15 +246,20 @@ class RulesExport(Resource):
     @API.response(200, 'Every rule, grouped by ``rule_type``.',
                   RULES_EXPORT_RESPONSE)
     @API.response(401, 'Authentication failed', ERROR)
+    @API.response(403, 'Accounts and users can only be exported with the CLI.',
+                  ERROR)
     @require_token
     def get(self):
         """Return every enabled rule type, grouped by type."""
         def _flag(name):
             return request.args.get(name, '').lower() in ('1', 'true', 'yes')
+        # Refused rather than ignored: a backup script asking for them must
+        # not end up with a backup silently lacking them.
+        if _flag('include_accounts') or _flag('include_users'):
+            return {'message': 'Accounts and users can only be exported '
+                               'with the CLI'}, 403
         return grouped_rules_export(
             include_hosts=_flag('include_hosts'),
-            include_accounts=_flag('include_accounts'),
-            include_users=_flag('include_users'),
             include_passwords=_flag('include_passwords'),
         )
 

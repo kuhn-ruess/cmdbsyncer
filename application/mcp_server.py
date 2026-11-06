@@ -84,6 +84,7 @@ from application.helpers.secret_access import (
 )
 from application.plugins.rules.rule_definitions import rules as enabled_rules
 from application.plugins.rules.rule_import_export import (
+    CLI_ONLY_TYPES,
     iter_rules_of_type,
     import_one_rule,
     import_json_bundle,
@@ -377,10 +378,13 @@ def list_rule_types() -> dict:
 
 @mcp.tool()
 def export_rules(rule_type: str) -> dict:
-    """Export every rule of *rule_type* as a list of dicts."""
+    """Export every rule of *rule_type* as a list of dicts. Accounts and
+    users can only be exported with the command line."""
     _global_user()
     if rule_type not in enabled_rules:
         raise ValueError(f"Unknown rule_type '{rule_type}'")
+    if rule_type in CLI_ONLY_TYPES:
+        raise PermissionError(f"'{rule_type}' can only be exported with the command line")
     rules = []
     for raw in iter_rules_of_type(rule_type):
         try:
@@ -392,22 +396,18 @@ def export_rules(rule_type: str) -> dict:
 
 @mcp.tool()
 def export_all_rules(include_hosts: bool = False,
-                     include_accounts: bool = False,
-                     include_users: bool = False,
                      include_passwords: bool = False) -> dict:
     """Export every enabled rule type, grouped by type.
 
-    ``host_objects``, ``accounts``, ``users`` and ``cmk_passwords`` are
-    skipped by default — pass the matching flag to opt in. The user and
-    password exports contain secrets; treat the response accordingly.
-    CMDB templates come along as their own ``cmdb_templates`` type, no
-    flag needed.
+    ``host_objects`` and ``cmk_passwords`` are skipped by default — pass
+    the matching flag to opt in. The password export contains secrets;
+    treat the response accordingly. ``accounts`` and ``users`` can only be
+    exported with the command line. CMDB templates come along as their own
+    ``cmdb_templates`` type, no flag needed.
     """
     _global_user()
     return grouped_rules_export(
         include_hosts=include_hosts,
-        include_accounts=include_accounts,
-        include_users=include_users,
         include_passwords=include_passwords,
     )
 
@@ -544,6 +544,9 @@ def rules_resource(rule_type: str) -> str:
     _global_user()
     if rule_type not in enabled_rules:
         return json.dumps({'error': f"Unknown rule_type '{rule_type}'"})
+    if rule_type in CLI_ONLY_TYPES:
+        return json.dumps({'error': f"'{rule_type}' can only be exported with "
+                                    "the command line"})
     rules = []
     for raw in iter_rules_of_type(rule_type):
         try:

@@ -28,10 +28,11 @@ ACCOUNTS_RULE_TYPE = 'accounts'
 USERS_RULE_TYPE = 'users'
 PASSWORDS_RULE_TYPE = 'cmk_passwords'
 
-# Rule types only a trusted CLI run may import. Accounts hold the address
-# outbound credentials are sent to, and a user document can grant global
-# admin, so neither must be writable over the REST API or MCP.
-CLI_ONLY_IMPORT_TYPES = {ACCOUNTS_RULE_TYPE, USERS_RULE_TYPE}
+# Rule types only a trusted CLI run may export or import. Accounts hold
+# outbound credentials and the address they are sent to, a user document
+# holds the password hash and can grant global admin, so neither must be
+# readable or writable over the REST API or MCP.
+CLI_ONLY_TYPES = {ACCOUNTS_RULE_TYPE, USERS_RULE_TYPE}
 
 
 def get_ruletype_by_filename(filename):
@@ -68,30 +69,20 @@ def rule_type_allowed(rule_type, user=False):
 
     The Secret Store (``cmk_passwords``) holds host-bound secrets, so a
     user limited to accounts or CMDB templates must neither read it out in
-    bulk nor write entries into it through a rule import. *user* defaults
-    to the user of the running request (none outside a request: the CLI).
+    bulk nor write entries into it through a rule import. Types in
+    ``CLI_ONLY_TYPES`` are refused whenever a user is acting, that is on
+    every REST API and MCP call. *user* defaults to the user of the running
+    request (none outside a request: the CLI).
     """
-    if rule_type != PASSWORDS_RULE_TYPE:
+    if rule_type not in CLI_ONLY_TYPES and rule_type != PASSWORDS_RULE_TYPE:
         return True
     # pylint: disable=import-outside-toplevel
     from application.helpers.secret_access import acting_user, is_scoped
     if user is False:
         user = acting_user()
+    if rule_type in CLI_ONLY_TYPES:
+        return user is None
     return not is_scoped(user)
-
-
-def rule_type_importable(rule_type):
-    """
-    True when the running context may import *rule_type*: on top of
-    ``rule_type_allowed``, types in ``CLI_ONLY_IMPORT_TYPES`` are refused
-    whenever a user is acting, that is on every REST API and MCP call.
-    """
-    if rule_type in CLI_ONLY_IMPORT_TYPES:
-        # pylint: disable=import-outside-toplevel
-        from application.helpers.secret_access import acting_user
-        if acting_user() is not None:
-            return False
-    return rule_type_allowed(rule_type)
 
 
 def _queryset_filter_for(rule_type):
@@ -203,7 +194,7 @@ def import_one_rule(json_dict, rule_type, override=False):
     model_class = _model_class_for(rule_type)
     if model_class is None:
         return 'unknown_type'
-    if not rule_type_importable(rule_type):
+    if not rule_type_allowed(rule_type):
         return 'invalid'
     return _save_rule(json_dict, model_class, override=override)
 
@@ -219,7 +210,7 @@ def import_rule_lines(lines, default_rule_type=None, override=False):
     """
     rule_type = default_rule_type
     model_class = _model_class_for(rule_type) \
-        if rule_type and rule_type_importable(rule_type) else None
+        if rule_type and rule_type_allowed(rule_type) else None
     counts = {}
     for line in lines:
         if isinstance(line, str):
@@ -236,7 +227,7 @@ def import_rule_lines(lines, default_rule_type=None, override=False):
                 and len(json_dict) == 1 and 'rule_type' in json_dict):
             rule_type = json_dict['rule_type']
             model_class = _model_class_for(rule_type) \
-                if rule_type_importable(rule_type) else None
+                if rule_type_allowed(rule_type) else None
             continue
         if model_class is None:
             continue
