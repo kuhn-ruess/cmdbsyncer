@@ -13,6 +13,21 @@ from .models import SyncerRuleAutomation
 from .rule_definitions import rules
 
 
+def _json_safe(value):
+    """
+    An attribute value as it can stand inside a JSON string of the rule body.
+    Without this a quote in the value of a source system ends the string and
+    what follows becomes a field of the rule.
+    """
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)[1:-1]
+    if isinstance(value, dict):
+        return {key: _json_safe(entry) for key, entry in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(entry) for entry in value]
+    return value
+
+
 class RuleCreation(Plugin):
     """
     Build and persist syncer rules from configured SyncerRuleAutomation
@@ -149,8 +164,10 @@ class RuleCreation(Plugin):
                 if object_filter not in self.found_objects:
                     self.found_objects[object_filter] = []
                     for host_obj in Host.objects_by_filter([object_filter]):
-                        attributes = self.get_attributes(host_obj, 'syncer_rules')['all']
-                        self.found_objects[object_filter].append(attributes)
+                        attributes = self.get_attributes(host_obj, 'syncer_rules')
+                        # False: the host is ignored by a filter rule
+                        if attributes:
+                            self.found_objects[object_filter].append(attributes['all'])
                         progress.advance(task1)
                 else:
                     progress.advance(task1, advance=len(self.found_objects[object_filter]))
@@ -160,7 +177,7 @@ class RuleCreation(Plugin):
                     total=len(self.found_objects[object_filter]),
                 )
                 for attribute_set in self.found_objects[object_filter]:
-                    rule_body = render_jinja(rule.rule_body, **attribute_set)
+                    rule_body = render_jinja(rule.rule_body, **_json_safe(attribute_set))
                     rule_body_json = json.loads(rule_body)
 
                     name = rule_body_json.get('name', 'Unnamed')
