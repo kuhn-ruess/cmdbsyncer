@@ -203,6 +203,27 @@ class SyncIdoit(Plugin):
 
         return servers.items()
 
+    def get_object_titles(self):
+        """
+        Titles of all objects, whatever their type or CMDB status. The export
+        decides with them if an object exists; the filters of get_objects
+        are meant for the import and would hide objects, which then get
+        created again in every run.
+        """
+        json_data = {
+            "version": "2.0",
+            "method": "cmdb.objects.read",
+            "params": {
+                "filter": {
+                    "status": "C__RECORD_STATUS__NORMAL"
+                },
+                "apikey": self.config["api_token"],
+                "language": self.config["language"]
+            },
+            "id": 1
+        }
+        return {obj["title"] for obj in self.request(json_data)["result"]}
+
 #.
 #   .--- Get object payload
     def get_object_payload(self, hostname, rules):
@@ -240,7 +261,7 @@ class SyncIdoit(Plugin):
 
 
         print(f"{CC.OKGREEN} -- {CC.ENDC}CACHE: Read all objects from i-doit")
-        current_idoit_objects = dict(self.get_objects())
+        current_idoit_objects = self.get_object_titles()
 
         print(f"\n{CC.OKGREEN} -- {CC.ENDC}Start Sync")
         db_objects = Host.get_export_hosts()
@@ -281,6 +302,7 @@ class SyncIdoit(Plugin):
             payload = self.get_object_payload(objectname, custom_rules)
             print(f"{CC.OKBLUE} *{CC.ENDC} Create Host {objectname}")
             self.request(payload)
+            current_idoit_objects.add(objectname)
         else:
             print(f"{CC.WARNING} *{CC.ENDC}  Host already existed")
 
