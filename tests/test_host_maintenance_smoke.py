@@ -57,6 +57,27 @@ inventoried = sorted(x.hostname for x in Host.objects(hostname__contains='srv1')
                      if x.get_inventory().get('by_domain__seen'))
 eq(inventoried, ['a.srv1', 'srv1'], 'only whole name parts match')
 
+host = Host(hostname='UPPER01.example.com', cache={'x': {'HOSTNAME': 'UPPER01.example.com'}})
+host.save()
+HostInventoryTree(hostname='UPPER01.example.com', source='s').save()
+FieldApproval(host_id=str(host.id), hostname='UPPER01.example.com', field_name='os',
+              requested_by_email='a@example.com', status='pending').save()
+Host(hostname='UPPER02.example.com').save()
+HostInventoryTree(hostname='UPPER02.example.com', source='s').save()
+HostInventoryTree(hostname='upper02.example.com', source='s').save()
+
+result = lowercase_all_hostnames(apply=True)
+eq(len(result['renamed']), 2, 'renamed hosts')
+host.reload()
+eq(host.hostname, 'upper01.example.com', 'host renamed')
+eq(host.cache, {}, 'cache of the old name dropped')
+eq(HostInventoryTree.objects(hostname='upper01.example.com').count(), 1, 'tree follows')
+eq(HostInventoryTree.objects(hostname='UPPER01.example.com').count(), 0, 'no tree left')
+eq(FieldApproval.objects(hostname='upper01.example.com', status='pending').count(), 1,
+   'approval follows')
+eq(HostInventoryTree.objects(hostname='upper02.example.com').count(), 1,
+   'a tree already there stays')
+
 print('MAINTENANCE_OK')
 '''
 

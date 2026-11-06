@@ -7,7 +7,21 @@ already large Host model module.
 """
 from mongoengine.errors import NotUniqueError
 
+from application.models.field_approval import FieldApproval
 from application.models.host import Host
+from application.models.host_inventory_tree import HostInventoryTree
+
+
+def _rename_inventory_trees(old, new):
+    """
+    Move the inventory trees of a renamed host. A tree the new name already
+    has for that source stays, the old one is then an orphan like any other.
+    """
+    for tree in HostInventoryTree.objects(hostname=old).only('source'):
+        try:
+            HostInventoryTree.objects(id=tree.id).update(set__hostname=new)
+        except NotUniqueError:
+            pass
 
 
 def lowercase_all_hostnames(apply=False):
@@ -59,8 +73,9 @@ def lowercase_all_hostnames(apply=False):
     if apply:
         for pair in list(renamed):
             try:
+                # The cached rule results still carry the old HOSTNAME.
                 Host.objects(hostname=pair['old']).update(
-                    set__hostname=pair['new'])
+                    set__hostname=pair['new'], set__cache={})
             except NotUniqueError:
                 # Lost a race against a concurrent create/rename.
                 renamed.remove(pair)
@@ -70,6 +85,12 @@ def lowercase_all_hostnames(apply=False):
                     'archived': pair['archived'],
                     'target_archived': archived_by_name.get(pair['new'], False),
                 })
+                continue
+            # Both are keyed by hostname: left behind they count as orphans,
+            # and the next maintenance removes the tree and rejects the approval.
+            _rename_inventory_trees(pair['old'], pair['new'])
+            FieldApproval.objects(hostname=pair['old']).update(
+                set__hostname=pair['new'])
 
     return {
         'renamed': renamed,
