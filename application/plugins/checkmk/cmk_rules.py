@@ -3049,12 +3049,13 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         """
         Clean not longer needed Rules from Checkmk
         """
-        print(f"{CC.OKGREEN} -- {CC.ENDC} Clean existing CMK configuration")
+        print(f"{CC.OKGREEN} -- {CC.ENDC} Compare with Checkmk, changes are listed: "
+              f"{', '.join(sorted(self.rulsets_by_type))}")
         with make_progress() as progress:
 
             total_rules = sum(len(r) for r in self.rulsets_by_type.values())
             task1 = progress.add_task(
-                f"Cleanup across {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
+                f"Compare {len(self.rulsets_by_type)} rulesets ({total_rules} rules)",
                 total=len(self.rulsets_by_type),
             )
             delete_reasons = {}
