@@ -36,6 +36,9 @@ KEEP_VALUE_HINT = "Value managed manually in Checkmk - Syncer will not overwrite
 KEEP_VALUE_MARK = "(Value editable)"
 # Checkmk returns every explicit password of a rule value masked like this.
 MASKED_PASSWORD = "'******'"
+# Checkmk 2.5 masks the second part of a stored password reference too. It
+# holds no secret: the rule works with it left empty.
+MASKED_STORED_PASSWORD = re.compile(r"('stored_password', \('[^']*', )'\*{6}'")
 
 # Jinja variable of a per host Setup Rule: the folder the host export puts
 # the host in (see rules.host_folder). Rules rendered from a list or as
@@ -876,7 +879,7 @@ def preview_list_rule(rule):
 
 def clean_postproccessed(data):
     """
-    Normalize Checkmk's explicit_password tuples before rule comparison.
+    Normalize Checkmk's password tuples, at any depth, before rule comparison.
     """
     # Intentional: Checkmk re-encrypts the stored explicit_password tuple
     # (id, password) on every GET, so the ciphertext differs across reads
@@ -885,16 +888,20 @@ def clean_postproccessed(data):
     # on every sync. The trade-off — that a real password change is not
     # detected here — is accepted; password rotation is managed by the
     # Checkmk password store, not by rule diffs.
-    output = {}
-    for key, value in data.items():
-        if isinstance(value, tuple):
-            if value[0] == 'cmk_postprocessed' and \
-                    value[1] == 'explicit_password':
-                new_tuple = (None, None)
-                new_value = (value[0], value[1], new_tuple)
-                value = new_value
-        output[key] = value
-    return output
+    # A stored_password only references the store: Checkmk 2.5 returns its
+    # second part masked, so only the ident is compared.
+    if isinstance(data, dict):
+        return {key: clean_postproccessed(value) for key, value in data.items()}
+    if isinstance(data, list):
+        return [clean_postproccessed(value) for value in data]
+    if not isinstance(data, tuple):
+        return data
+    if len(data) == 3 and data[0] == 'cmk_postprocessed':
+        if data[1] == 'explicit_password':
+            return (data[0], data[1], (None, None))
+        if data[1] == 'stored_password':
+            return (data[0], data[1], (data[2][0], ''))
+    return tuple(clean_postproccessed(value) for value in data)
 
 def deep_compare(ours, stored, strict=False):
     """
@@ -916,9 +923,9 @@ def deep_compare(ours, stored, strict=False):
     Nested dicts inside lists are still compared structurally via each
     element's ``==``.
     """
+    ours = clean_postproccessed(ours)
+    stored = clean_postproccessed(stored)
     if isinstance(ours, dict) and isinstance(stored, dict):
-        ours = clean_postproccessed(ours)
-        stored = clean_postproccessed(stored)
         if strict:
             if set(ours.keys()) != set(stored.keys()):
                 return False
@@ -2887,7 +2894,9 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         current = properties.get('description', '')
         if current == wanted:
             return
-        if MASKED_PASSWORD in cmk_rule['extensions']['value_raw']:
+        value_raw = MASKED_STORED_PASSWORD.sub(
+            r"\1''", cmk_rule['extensions']['value_raw'])
+        if MASKED_PASSWORD in value_raw:
             # The value as read holds the password masked. Sending it back
             # would replace the real password with the mask, so the
             # description stays as it is.
@@ -2897,7 +2906,7 @@ class CheckmkRuleSync(CMK2):  # pylint: disable=too-many-instance-attributes
         payload = {
             "properties": properties,
             "conditions": cmk_rule['extensions']['conditions'],
-            "value_raw": cmk_rule['extensions']['value_raw'],
+            "value_raw": value_raw,
         }
         if self.dry_run:
             self._plan('UPDATE', f"{ruleset_name} {rule_id}",

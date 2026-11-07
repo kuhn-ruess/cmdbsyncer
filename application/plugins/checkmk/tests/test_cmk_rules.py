@@ -74,6 +74,11 @@ class TestCleanPostprocessed(unittest.TestCase):
         }
         self.assertEqual(result, expected)
 
+    def test_stored_password_keeps_ident_only(self):
+        data = {'token': ('cmk_postprocessed', 'stored_password', ('id', '******'))}
+        expected = {'token': ('cmk_postprocessed', 'stored_password', ('id', ''))}
+        self.assertEqual(clean_postproccessed(data), expected)
+
     def test_non_password_tuple_unchanged(self):
         data = {'other': ('something', 'else', 'data')}
         result = clean_postproccessed(data)
@@ -150,6 +155,31 @@ class TestDeepCompare(unittest.TestCase):
         a = {'password': ('cmk_postprocessed', 'explicit_password', ('id1', 'pw1'))}
         b = {'password': ('cmk_postprocessed', 'explicit_password', ('id2', 'pw2'))}
         self.assertTrue(deep_compare(a, b))
+
+    def test_masked_stored_password_is_no_drift(self):
+        # Sent with an empty second part, Checkmk 2.5 returns it masked.
+        ours = {'token': ('cmk_postprocessed', 'stored_password', ('pw1', ''))}
+        stored = {'token': ('cmk_postprocessed', 'stored_password', ('pw1', '******'))}
+        self.assertTrue(deep_compare(ours, stored))
+        self.assertTrue(deep_compare(ours, stored, strict=True))
+
+    def test_other_stored_password_is_drift(self):
+        ours = {'token': ('cmk_postprocessed', 'stored_password', ('pw1', ''))}
+        stored = {'token': ('cmk_postprocessed', 'stored_password', ('pw2', '******'))}
+        self.assertFalse(deep_compare(ours, stored))
+
+    def test_nested_stored_password_is_no_drift(self):
+        def value(secret):
+            password = ('cmk_postprocessed', 'stored_password', ('pw1', secret))
+            return {'auth': ('user_auth', {'password': password}),
+                    'endpoints': [{'password': password}]}
+        self.assertTrue(deep_compare(value(''), value('******')))
+
+    def test_nested_explicit_password_is_no_drift(self):
+        def value(ident):
+            password = ('cmk_postprocessed', 'explicit_password', (ident, '******'))
+            return {'auth': ('user_auth', {'password': password})}
+        self.assertTrue(deep_compare(value('a'), value('b')))
 
 
 class TestAnalyzeValueDifferences(unittest.TestCase):
@@ -3449,6 +3479,32 @@ class TestSyncDescription(unittest.TestCase):
         # The operator's value and the rule's comment stay as they are.
         self.assertEqual(data['value_raw'], "{'levels': (99, 99)}")
         self.assertEqual(data['properties']['comment'], 'c')
+
+    def test_stale_description_with_stored_password_is_rewritten(self):
+        puts = self._wire()
+        cmk_rule = self._cmk_rule('cmdbsyncer_test_account')
+        cmk_rule['extensions']['value_raw'] = (
+            "{'token': ('cmk_postprocessed', 'stored_password', ('pw1', '******'))}")
+        local = {'description': 'cmdbsyncer_test_account - Kube'}
+
+        self.sync._sync_description(cmk_rule, local, 'a_ruleset')
+
+        self.assertEqual(len(puts), 1)
+        self.assertEqual(
+            puts[0][2]['value_raw'],
+            "{'token': ('cmk_postprocessed', 'stored_password', ('pw1', ''))}")
+
+    def test_stale_description_with_explicit_password_writes_nothing(self):
+        puts = self._wire()
+        cmk_rule = self._cmk_rule('cmdbsyncer_test_account')
+        cmk_rule['extensions']['value_raw'] = (
+            "{'stored': ('cmk_postprocessed', 'stored_password', ('pw1', '******')), "
+            "'token': ('cmk_postprocessed', 'explicit_password', ('id', '******'))}")
+        local = {'description': 'cmdbsyncer_test_account - Kube'}
+
+        self.sync._sync_description(cmk_rule, local, 'a_ruleset')
+
+        self.assertEqual(puts, [])
 
     def test_matching_description_writes_nothing(self):
         puts = self._wire()
