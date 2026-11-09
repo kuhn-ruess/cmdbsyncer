@@ -2763,8 +2763,8 @@ class CheckmkDCDView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too
             "reference no host attributes."
         )
 
-        # Hint the {{ cmk_site }} macro in the outcome's Site field so users see
-        # they can target the exporting account's own Checkmk site (test/prod).
+        # Hint HOST_SITE in the outcome's Site field: the host's own site,
+        # the exporting account's site as fallback.
         base_subdocs = dict(getattr(self, 'form_subdocuments', None) or {})
         base_subdocs['outcomes'] = {
             'form_subdocuments': {
@@ -2772,7 +2772,8 @@ class CheckmkDCDView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too
                     'form_widget_args': {
                         'site': {
                             'placeholder':
-                                '{{ cmk_site }} — the exporting account\'s site',
+                                '{{ HOST_SITE }}: the site of the host, '
+                                'else the account\'s site',
                         },
                     },
                 },

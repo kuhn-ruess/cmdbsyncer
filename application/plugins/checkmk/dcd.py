@@ -5,8 +5,8 @@ Checkmk DCD Manager
 from jinja2.exceptions import UndefinedError
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 from application.plugins.checkmk.cmk2 import CMK2, CmkException
-from application.plugins.checkmk.cmk_rules import HOST_FOLDER, uses_host_folder
-from application.plugins.checkmk.rules import host_folder, host_folder_engine
+from application.plugins.checkmk.cmk_rules import HOST_FOLDER
+from application.plugins.checkmk.rules import host_folder_engine, host_site
 
 from application import logger
 from application.modules.rule.list_source import (
@@ -16,6 +16,11 @@ from application.modules.rule.list_source import (
 )
 
 from syncerapi.v1 import Host, render_jinja
+
+
+# Jinja variable of a DCD rule: the site the host export gives the host,
+# else the account's site (see add_host_context).
+HOST_SITE = 'HOST_SITE'
 
 
 class CheckmkDCDRuleSync(CMK2):
@@ -224,18 +229,27 @@ class CheckmkDCDRuleSync(CMK2):
                     f"list:{rule.name}:{row_idx}", host_actions,
                     {**context, **row_context(row, row_idx)})
 
-    def add_host_folder(self, db_host, host_actions, attributes):
+    def add_host_context(self, db_host, host_actions, attributes):
         """
-        Add HOST_FOLDER, the folder the host export puts the host in, to
-        ``attributes`` when one of the host's outcomes uses it. Only then
-        the folder rules run for the host, the other hosts cost nothing.
+        Add HOST_FOLDER, the folder the host export puts the host in, and
+        HOST_SITE, the site it gives the host (else the account's), to
+        ``attributes`` when one of the host's outcomes uses them. Only then
+        the export rules run for the host, the other hosts cost nothing.
         """
-        if not uses_host_folder(host_actions):
+        used = str(host_actions)
+        wants_folder = HOST_FOLDER in used
+        wants_site = HOST_SITE in used
+        if not wants_folder and not wants_site:
             return
         if self._host_folder_engine is None:
             self._host_folder_engine = host_folder_engine()
-        attributes[HOST_FOLDER] = host_folder(self._host_folder_engine,
-                                              db_host, attributes)
+        outcomes = self._host_folder_engine.get_outcomes(
+            db_host, attributes, persist_cache=False, use_cache=False)
+        if wants_folder:
+            attributes[HOST_FOLDER] = outcomes.get('move_folder') or '/'
+        if wants_site:
+            attributes[HOST_SITE] = host_site(outcomes, attributes) or \
+                attributes.get('cmk_site', '')
 
     def export_rules(self):
         """
@@ -272,11 +286,13 @@ class CheckmkDCDRuleSync(CMK2):
                 host_actions = self.actions.get_outcomes(db_host, attributes['all'])
                 if host_actions:
                     logger.debug(' -- Got Actions')
-                    self.add_host_folder(db_host, host_actions, attributes['all'])
+                    self.add_host_context(db_host, host_actions, attributes['all'])
                     self.calculate_rules_of_host(db_host.hostname, host_actions, attributes['all'])
                 progress.advance(task1)
 
-            self.calculate_static_rules({'cmk_site': site, 'account': account_ctx})
+            # No host: HOST_SITE is the account's site, there is no pool.
+            self.calculate_static_rules({'cmk_site': site, 'account': account_ctx,
+                                         HOST_SITE: site, 'HOST_POOL_SITE': ''})
 
             task2 = progress.add_task("Send Rules to Checkmk", total=len(self.all_rules))
             self.send_rules(lambda: progress.advance(task2))

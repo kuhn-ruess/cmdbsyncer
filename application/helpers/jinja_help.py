@@ -128,9 +128,13 @@ DCD_RULE_VARIABLES = (
      "Folder the host lands in (Checkmk > Export Rules: Move to Folder or "
      "Pool Folder), e.g. as folder of a creation rule. Per host only: a rule "
      "from a list or a Static Rule has no host."),
+    ('HOST_SITE', "{{ HOST_SITE }}",
+     "Site the host export gives the host: a site attribute, a Site Pool or "
+     "the site in its folder options. Without one, and in a Static Rule or "
+     "a list, the site of the account. A site only set on the folder in "
+     "Checkmk is not known."),
     ('HOST_POOL_SITE', "{{ HOST_POOL_SITE }}",
-     "Site the site pool assigned to the host in the host export (empty "
-     "without one), e.g. as site of the connection. Per host only."),
+     "Only the site a Site Pool assigned to the host (empty without one)."),
     ('cmk_site', "{{ cmk_site }}",
      "Checkmk site of the account the export runs for."),
     ('account', "{{ account.address }}",

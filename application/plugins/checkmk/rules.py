@@ -654,6 +654,29 @@ def host_folder(engine, db_host, attributes):
     return outcomes.get('move_folder') or '/'
 
 
+def host_site(outcomes, attributes):
+    """
+    The site the host export gives the host by its ``outcomes``, in the
+    order ``handle_attributes`` applies them: a ``site`` attribute sent as
+    it is, a ``site`` custom attribute (also from a Site Pool), else the
+    site in the options of its folder, the deepest level first. Empty when
+    none of them sets one: the host then stays on the site its folder has
+    in Checkmk, which the Syncer does not know.
+    """
+    if 'site' in (outcomes.get('attributes') or []) and attributes.get('site'):
+        return str(attributes['site'])
+    if 'site' not in (outcomes.get('remove_attributes') or []):
+        site = (outcomes.get('custom_attributes') or {}).get('site')
+        if site:
+            return str(site)
+    for level in reversed(folder_options_tree(
+            outcomes.get('extra_folder_options') or '')):
+        options = level['attributes']
+        if isinstance(options, dict) and options.get('site'):
+            return str(options['site'])
+    return ''
+
+
 def with_host_folder(db_host, attributes):
     """
     A copy of ``attributes`` with HOST_FOLDER, the folder the host export

@@ -286,29 +286,41 @@ class TestDCDHostFolder(unittest.TestCase):
     def tearDown(self):
         self.init_patcher.stop()
 
-    @patch('application.plugins.checkmk.dcd.host_folder', return_value='/dc1')
     @patch('application.plugins.checkmk.dcd.host_folder_engine')
-    def test_host_folder_is_set_when_an_outcome_uses_it(self, engine, folder):
-        attributes = {'HOSTNAME': 'srv1'}
-        actions = {'default': [{'creation_rules': [
+    def test_folder_and_site_from_one_rule_run(self, engine):
+        engine.return_value.get_outcomes.return_value = {
+            'move_folder': '/dc1', 'custom_attributes': {'site': 'remote1'}}
+        attributes = {'HOSTNAME': 'srv01', 'cmk_site': 'central'}
+        actions = {'default': [{'site': '{{ HOST_SITE }}', 'creation_rules': [
             {'folder_path': '{{ HOST_FOLDER }}/piggy'}]}]}
-        self.sync.add_host_folder('db_host', actions, attributes)
-        self.sync.add_host_folder('db_host', actions, attributes)
+        self.sync.add_host_context('db_host', actions, attributes)
+        self.sync.add_host_context('db_host', actions, attributes)
 
         self.assertEqual(attributes['HOST_FOLDER'], '/dc1')
-        # One folder rules engine for the whole run.
+        self.assertEqual(attributes['HOST_SITE'], 'remote1')
+        # One engine for the whole run, one rule run per host.
         engine.assert_called_once_with()
+        self.assertEqual(engine.return_value.get_outcomes.call_count, 2)
 
-    @patch('application.plugins.checkmk.dcd.host_folder')
     @patch('application.plugins.checkmk.dcd.host_folder_engine')
-    def test_host_folder_skipped_when_no_outcome_uses_it(self, engine, folder):
-        attributes = {'HOSTNAME': 'srv1'}
-        self.sync.add_host_folder(
+    def test_host_without_site_gets_the_account_site(self, engine):
+        engine.return_value.get_outcomes.return_value = {}
+        attributes = {'HOSTNAME': 'srv01', 'cmk_site': 'central'}
+        self.sync.add_host_context(
+            'db_host', {'default': [{'site': '{{ HOST_SITE }}'}]}, attributes)
+
+        self.assertEqual(attributes['HOST_SITE'], 'central')
+        self.assertNotIn('HOST_FOLDER', attributes)
+
+    @patch('application.plugins.checkmk.dcd.host_folder_engine')
+    def test_nothing_runs_when_no_outcome_uses_them(self, engine):
+        attributes = {'HOSTNAME': 'srv01'}
+        self.sync.add_host_context(
             'db_host', {'default': [{'dcd_id': 'piggy'}]}, attributes)
 
         self.assertNotIn('HOST_FOLDER', attributes)
+        self.assertNotIn('HOST_SITE', attributes)
         engine.assert_not_called()
-        folder.assert_not_called()
 
 
 class _Doc(dict):
@@ -364,6 +376,14 @@ class TestDCDListRule(unittest.TestCase):
         # The repeated row creates its connection once
         self.assertEqual(self._ids(), [('dc1', 'Piggyback dc1', 'site_a'),
                                        ('dc2', 'Piggyback dc2', 'site_a')])
+
+    def test_static_rule_gets_the_account_site(self, _render):
+        self.sync.static_rules = [_dcd_rule(
+            "id\ndc1\n", source='hosts', dcd_id='static_dc',
+            site='{{ HOST_SITE }}')]
+        self.sync.calculate_static_rules(
+            {'cmk_site': 'site_a', 'account': {}, 'HOST_SITE': 'site_a'})
+        self.assertEqual(self.sync.all_rules[0]['site'], 'site_a')
 
     def test_columns_override_nothing_but_add_variables(self, _render):
         self.sync.static_rules = [_dcd_rule(

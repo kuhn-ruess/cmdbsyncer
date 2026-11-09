@@ -16,6 +16,7 @@ from application.plugins.checkmk.rules import (
     parse_folder_options_debug,
     host_folder,
     with_host_folder,
+    host_site,
 )
 from tests import real_render_jinja
 
@@ -533,6 +534,34 @@ class TestHostFolder(unittest.TestCase):
         self.assertEqual(with_host_folder(Mock(), attributes),
                          {'HOSTNAME': 'srv01', 'HOST_FOLDER': '/web'})
         self.assertNotIn('HOST_FOLDER', attributes)
+
+
+class TestHostSite(unittest.TestCase):
+    """host_site: the site the host export gives a host"""
+
+    def test_site_attribute_wins(self):
+        outcomes = {'attributes': ['site'],
+                    'custom_attributes': {'site': 'pool1'},
+                    'extra_folder_options': "/dc|{'site': 'folder1'}"}
+        self.assertEqual(host_site(outcomes, {'site': 'attr1'}), 'attr1')
+
+    def test_custom_attribute_before_folder(self):
+        outcomes = {'custom_attributes': {'site': 'pool1'},
+                    'extra_folder_options': "/dc|{'site': 'folder1'}"}
+        self.assertEqual(host_site(outcomes, {}), 'pool1')
+
+    def test_removed_custom_attribute_does_not_count(self):
+        outcomes = {'custom_attributes': {'site': 'pool1'},
+                    'remove_attributes': ['site']}
+        self.assertEqual(host_site(outcomes, {}), '')
+
+    def test_deepest_folder_option(self):
+        outcomes = {'extra_folder_options':
+                    "/dc|{'site': 'outer'}/rack|{'site': 'inner'}/row"}
+        self.assertEqual(host_site(outcomes, {}), 'inner')
+
+    def test_nothing_set(self):
+        self.assertEqual(host_site({}, {'site': 'ignored'}), '')
 
 
 class TestFolderOptionValidation(unittest.TestCase):
