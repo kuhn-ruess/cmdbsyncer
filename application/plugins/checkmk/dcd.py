@@ -41,6 +41,8 @@ class CheckmkDCDRuleSync(CMK2):
         self.all_rules = []
         # Folder rules engine for HOST_FOLDER, built on first use.
         self._host_folder_engine = None
+        # Site ids of the target Checkmk, see known_sites.
+        self._known_sites = None
 
     # Account config keys withheld from the rule template context — secrets and
     # internal ids that must never end up in a rendered rule.
@@ -68,17 +70,6 @@ class CheckmkDCDRuleSync(CMK2):
         """
         return {key: value for key, value in (self.config or {}).items()
                 if key not in self._ACCOUNT_HIDDEN_KEYS}
-
-    def does_rule_exist(self, rule_id):
-        """
-        Check if Rule is existing
-        """
-        url = f"/objects/dcd/{rule_id}"
-        response = self.request(url, method="GET")
-        if response[0]:
-            return True
-        return False
-
 
     def build_timeranges(self, rule):
         """
@@ -299,26 +290,114 @@ class CheckmkDCDRuleSync(CMK2):
 
     def send_rules(self, advance):
         """
-        Create the collected connections Checkmk does not have yet.
+        Create the collected connections Checkmk does not have yet, and
+        replace those whose site, title, comment, disabled state or
+        restricted source hosts differ.
         ``advance`` is called once per connection.
         """
         count_new = 0
         count_existing = 0
+        count_replaced = 0
+        sent = {}
         for rule in self.all_rules:
-            if not self.does_rule_exist(rule['dcd_id']):
-                # One connection Checkmk refuses must not keep the others
-                # from being created.
-                try:
-                    self.create_rule_in_cmk(rule)
-                    count_new += 1
-                except CmkException as error:
-                    if self.debug:
-                        raise
+            # Hosts rendering one DCD ID differently would replace the
+            # connection back and forth: the first rendering wins.
+            if rule['dcd_id'] in sent:
+                if sent[rule['dcd_id']] is not None:
                     self.log_error(
-                        f"DCD connection {rule['dcd_id']} not created: {error}")
-            else:
+                        f"DCD connection {rule['dcd_id']} renders differently "
+                        "for several hosts, the first one is used. Put what "
+                        "differs (site, host) into the DCD ID.")
+                    sent[rule['dcd_id']] = None
+                advance()
+                continue
+            sent[rule['dcd_id']] = rule
+            existing = self.get_rule(rule['dcd_id'])
+            changed = changed_fields(rule, existing) if existing else []
+            if existing and not changed:
                 count_existing += 1
+                advance()
+                continue
+            if changed and rule['site'] not in self.known_sites():
+                # Deleting first would leave no connection at all: Checkmk
+                # refuses to create one on a site it does not know.
+                self.log_error(
+                    f"DCD connection {rule['dcd_id']} kept as it is: the rule "
+                    f"wants site '{rule['site']}', Checkmk has no such site")
+                count_existing += 1
+                advance()
+                continue
+            # One connection Checkmk refuses must not keep the others
+            # from being created.
+            try:
+                if changed:
+                    # Checkmk can not update a connection, only delete it.
+                    # Its hosts stay, only the connection is replaced.
+                    self.console(f" * Replace Rule {rule['dcd_id']}, changed: "
+                                 f"{', '.join(changed)}")
+                    self.request(f"/objects/dcd/{rule['dcd_id']}", method="DELETE")
+                    self.log_details.append(
+                        ('INFO', f"Replaced DCD connection {rule['dcd_id']}, "
+                                 f"changed: {', '.join(changed)}"))
+                    count_replaced += 1
+                self.create_rule_in_cmk(rule)
+                count_new += 0 if changed else 1
+            except CmkException as error:
+                if self.debug:
+                    raise
+                self.log_error(
+                    f"DCD connection {rule['dcd_id']} not created: {error}")
             advance()
 
         self.log_details.append(('new_rules', count_new))
+        self.log_details.append(('replaced_rules', count_replaced))
         self.log_details.append(('existing_rules', count_existing))
+
+    def known_sites(self):
+        """
+        Ids of the sites Checkmk knows, read once per run. Empty when the
+        list can not be read, then no connection is replaced.
+        """
+        if self._known_sites is None:
+            try:
+                response = self.request(
+                    "domain-types/site_connection/collections/all",
+                    method="GET")[0]
+                self._known_sites = {site.get('id') for site
+                                     in response.get('value', [])}
+            except CmkException as error:
+                self.log_error(f"Could not read the sites from Checkmk: {error}")
+                self._known_sites = set()
+        return self._known_sites
+
+    def get_rule(self, rule_id):
+        """
+        The connection ``rule_id`` as Checkmk has it (title, site, connector
+        and so on), or None when there is none.
+        """
+        response = self.request(f"/objects/dcd/{rule_id}", method="GET")[0]
+        if not response:
+            return None
+        return response.get('extensions') or {}
+
+
+# Fields of a DCD connection the export keeps in line with the rule. The
+# rest of the connector is left out: Checkmk returns it in another shape
+# than it takes it (types, key names, defaults), comparing it would replace
+# the connection on every run.
+COMPARED_FIELDS = ('site', 'title', 'comment', 'disabled')
+
+
+def changed_fields(rule, existing):
+    """
+    The fields of ``COMPARED_FIELDS`` and the restricted source hosts in
+    which the connection Checkmk has differs from the one the rule renders.
+    """
+    changed = [field for field in COMPARED_FIELDS
+               if str(rule.get(field) or '') != str(existing.get(field) or '')]
+    # Checkmk leaves the key out when the list is empty.
+    ours = (rule.get('connector') or {}).get('restrict_source_hosts') or []
+    theirs = (existing.get('connector') or {}).get('restrict_source_hosts') or []
+    if sorted(ours) != sorted(theirs):
+        changed.append('restrict_source_hosts')
+    return changed

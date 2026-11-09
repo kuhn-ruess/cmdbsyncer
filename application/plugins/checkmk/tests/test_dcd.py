@@ -29,14 +29,14 @@ class TestCheckmkDCDRuleSync(unittest.TestCase):
     def tearDown(self):
         self.init_patcher.stop()
 
-    def test_does_rule_exist_true(self):
-        with patch.object(self.sync, 'request',
-                          return_value=({'id': 'rule1'}, {})):
-            self.assertTrue(self.sync.does_rule_exist('rule1'))
+    def test_get_rule_returns_the_connection(self):
+        with patch.object(self.sync, 'request', return_value=(
+                {'id': 'rule1', 'extensions': {'site': 'a'}}, {})):
+            self.assertEqual(self.sync.get_rule('rule1'), {'site': 'a'})
 
-    def test_does_rule_exist_false(self):
+    def test_get_rule_without_connection(self):
         with patch.object(self.sync, 'request', return_value=({}, {})):
-            self.assertFalse(self.sync.does_rule_exist('rule1'))
+            self.assertIsNone(self.sync.get_rule('rule1'))
 
     def test_build_timeranges(self):
         rule = {
@@ -432,7 +432,7 @@ class TestDCDListRule(unittest.TestCase):
             created.append(payload['dcd_id'])
 
         self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
-        with patch.object(self.sync, 'does_rule_exist', return_value=False), \
+        with patch.object(self.sync, 'get_rule', return_value=None), \
                 patch.object(self.sync, 'create_rule_in_cmk', side_effect=create), \
                 patch('builtins.print'):
             self.sync.send_rules(Mock())
@@ -440,6 +440,80 @@ class TestDCDListRule(unittest.TestCase):
         self.assertIn(('new_rules', 1), self.sync.log_details)
         self.assertTrue(any('dc1 not created' in str(detail)
                             for detail in self.sync.log_details))
+
+    def _send(self, existing):
+        """Send one connection dc1 rendered for site_b, Checkmk has ``existing``."""
+        self.sync.static_rules = [_dcd_rule("id;site\ndc1;site_b\n",
+                                            site='{{ site }}')]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        calls = []
+        self.sync.request = Mock(side_effect=lambda url, method='GET', **_kw:
+                                 calls.append((method, url)) or ({}, {}))
+        self.sync._known_sites = {'site_a', 'site_b'}
+        with patch.object(self.sync, 'get_rule', return_value=existing), \
+                patch.object(self.sync, 'create_rule_in_cmk',
+                             side_effect=lambda rule: calls.append(('POST', rule['site']))):
+            self.sync.send_rules(Mock())
+        return calls
+
+    def test_connection_on_another_site_is_replaced(self, _render):
+        calls = self._send({'site': 'site_a', 'title': 'Piggyback dc1',
+                            'comment': '', 'disabled': False})
+        self.assertEqual(calls, [('DELETE', '/objects/dcd/dc1'), ('POST', 'site_b')])
+        self.assertIn(('replaced_rules', 1), self.sync.log_details)
+        self.assertIn(('new_rules', 0), self.sync.log_details)
+
+    def test_connection_stays_when_the_site_is_unknown(self, _render):
+        self.sync.static_rules = [_dcd_rule("id;site\ndc1;site_x\n",
+                                            site='{{ site }}')]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        self.sync._known_sites = {'site_a'}
+        self.sync.request = Mock(return_value=({}, {}))
+        with patch.object(self.sync, 'get_rule', return_value={'site': 'site_a'}), \
+                patch.object(self.sync, 'create_rule_in_cmk') as create, \
+                patch('builtins.print'):
+            self.sync.send_rules(Mock())
+        self.sync.request.assert_not_called()
+        create.assert_not_called()
+        self.assertTrue(any("no such site" in str(detail)
+                            for detail in self.sync.log_details))
+
+    def test_changed_restrict_source_hosts_replace_the_connection(self, _render):
+        self.sync.static_rules = [_dcd_rule(
+            "id\ndc1\n", site='site_a', restricted_source_hosts=['srv01'])]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        self.sync._known_sites = {'site_a'}
+        self.sync.request = Mock(return_value=({}, {}))
+        existing = {'site': 'site_a', 'title': 'Piggyback dc1', 'comment': '',
+                    'disabled': False,
+                    'connector': {'restrict_source_hosts': ['{{ HOSTNAME }}']}}
+        with patch.object(self.sync, 'get_rule', return_value=existing), \
+                patch.object(self.sync, 'create_rule_in_cmk') as create:
+            self.sync.send_rules(Mock())
+        create.assert_called_once()
+        self.assertIn(('replaced_rules', 1), self.sync.log_details)
+
+    def test_one_id_rendered_twice_uses_the_first(self, _render):
+        self.sync.all_rules = [
+            {'dcd_id': 'dc1', 'site': 'site_a', 'title': 't', 'comment': '',
+             'disabled': False, 'connector': {}},
+            {'dcd_id': 'dc1', 'site': 'site_b', 'title': 't', 'comment': '',
+             'disabled': False, 'connector': {}},
+        ]
+        with patch.object(self.sync, 'get_rule', return_value=None), \
+                patch.object(self.sync, 'create_rule_in_cmk') as create:
+            self.sync.send_rules(Mock())
+        create.assert_called_once()
+        self.assertEqual(create.call_args[0][0]['site'], 'site_a')
+        self.assertTrue(any('renders differently' in str(detail)
+                            for detail in self.sync.log_details))
+
+    def test_unchanged_connection_is_left_alone(self, _render):
+        calls = self._send({'site': 'site_b', 'title': 'Piggyback dc1',
+                            'comment': '', 'disabled': False,
+                            'connector': {'interval': 60}})
+        self.assertEqual(calls, [])
+        self.assertIn(('existing_rules', 1), self.sync.log_details)
 
 
 if __name__ == '__main__':
