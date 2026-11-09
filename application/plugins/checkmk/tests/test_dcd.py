@@ -380,6 +380,14 @@ class TestDCDListRule(unittest.TestCase):
         self.assertTrue(any('dc1 not created' in str(detail)
                             for detail in self.sync.log_details))
 
+    def test_restrict_source_hosts_are_rendered(self, _render):
+        self.sync.static_rules = [_dcd_rule(
+            "id;host\ndc1;srv01\n",
+            restricted_source_hosts=['{{ host }}', '{{ missing | default("") }}'])]
+        self.sync.calculate_static_rules({'cmk_site': 'site_a', 'account': {}})
+        self.assertEqual(
+            self.sync.all_rules[0]['connector']['restrict_source_hosts'], ['srv01'])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
