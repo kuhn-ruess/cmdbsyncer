@@ -72,7 +72,8 @@
 <script type="text/javascript">
 (function() {
   var HELP = JSON.parse(document.getElementById('jinja-help-data').textContent);
-  var NAME_RE = new RegExp('(^|-)(' + HELP.fields.join('|') + ')$');
+  // A list field names its entries <field>-<n>.
+  var NAME_RE = new RegExp('(^|-)(' + HELP.fields.join('|') + ')(-\\d+)?$');
 
   function el(tag, cls, text) {
     var node = document.createElement(tag);

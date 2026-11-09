@@ -2728,7 +2728,8 @@ class CheckmkDCDView(ListSourceViewMixin, RuleModelView):  # pylint: disable=too
     list_source_known_names = ('cmk_site', 'account')
 
     jinja_help_fields = ('dcd_id', 'title', 'comment', 'site',
-                         'connector_type', 'folder_path')
+                         'connector_type', 'restricted_source_hosts',
+                         'folder_path')
     jinja_help_note = ('Rendered per host, from a pasted list per row, as '
                        'Static Rule once.')
     jinja_help_variables = 'DCD_RULE_VARIABLES'

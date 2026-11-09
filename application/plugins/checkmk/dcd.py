@@ -128,7 +128,11 @@ class CheckmkDCDRuleSync(CMK2):
         Return Payload as Dict
         """
         try:
-            restricted_hosts = rule['restricted_source_hosts']
+            # A line rendering empty (an attribute the host lacks) is left out.
+            restricted_hosts = [
+                host for host in (render_jinja(entry, mode='raise', **attributes).strip()
+                                  for entry in rule['restricted_source_hosts'])
+                if host]
             creation_rules = self.build_creation_rules(rule, attributes)
             exclude_time_ranges = self.build_timeranges(rule)
 
