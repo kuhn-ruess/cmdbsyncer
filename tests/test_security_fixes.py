@@ -122,6 +122,29 @@ class AccountSecretMaskingTest(unittest.TestCase):
         self.assertEqual(self._resolve('{{ACCOUNT:mon:password}}'), 'sup3rs3cret')
 
 
+class AccountCacheTest(unittest.TestCase):
+    """
+    The save signal only clears the cache of the process that saved, so
+    the other web workers have to read an account again after a while.
+    """
+
+    def setUp(self):
+        get_account.clear_account_cache()
+
+    def test_account_is_read_again_after_the_cache_time(self):
+        now = [1000.0]
+        with patch.object(get_account, '_build_account_dict',
+                          side_effect=[{'is_master': False}, {'is_master': True}]) as build, \
+             patch.object(get_account.time, 'monotonic', side_effect=lambda: now[0]):
+            self.assertFalse(get_account.get_account_by_name('mon')['is_master'])
+            now[0] += get_account.ACCOUNT_CACHE_SECONDS - 1
+            self.assertFalse(get_account.get_account_by_name('mon')['is_master'])
+            self.assertEqual(build.call_count, 1)
+            now[0] += 2
+            self.assertTrue(get_account.get_account_by_name('mon')['is_master'])
+        self.assertEqual(build.call_count, 2)
+
+
 class RuleRoleTest(unittest.TestCase):
     """
     The generic rule views check has_right('rule'); the role has to exist
