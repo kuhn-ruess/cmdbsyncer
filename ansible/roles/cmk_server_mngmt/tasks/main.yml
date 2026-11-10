@@ -95,6 +95,8 @@
   ansible.builtin.uri:
     url: "{{ cmk_main_server_full }}/check_mk/api/1.0/domain-types/downtime/collections/host"
     method: POST
+    # Checkmk answers a created downtime with 204 No Content
+    status_code: [200, 204]
     validate_certs: no
     url_username: "{{ cmk_user }}"
     url_password: "{{ cmk_secret }}"
