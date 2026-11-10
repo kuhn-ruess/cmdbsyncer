@@ -3,4 +3,4 @@
 # published image always carries the add-on that was tested against it.
 # Without a license the add-on stays inert, so this affects nobody who has not
 # bought one. Build with --build-arg ENTERPRISE_VERSION=none to leave it out.
-0.4.3
+0.4.4
