@@ -50,20 +50,50 @@ def _pid_alive(pid):
     return True
 
 
+def _process_start(pid):
+    """
+    Local start time of the process ``pid``, from /proc. None where /proc
+    is missing (not Linux) or the process is gone.
+    """
+    try:
+        with open(f"/proc/{int(pid)}/stat", encoding="ascii") as handle:
+            # The name in brackets may hold spaces, the fields after it don't
+            ticks = int(handle.read().rsplit(")", 1)[1].split()[19])
+        with open("/proc/stat", encoding="ascii") as handle:
+            boot = next(int(line.split()[1]) for line in handle
+                        if line.startswith("btime "))
+        return datetime.fromtimestamp(boot + ticks / os.sysconf("SC_CLK_TCK"))
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None
+
+
+def _pid_reused(stats):
+    """
+    Whether the PID of the lock now belongs to a process that started after
+    the run, as after a container restart, where PIDs count up from 1 again.
+    The runner itself starts before it writes last_start.
+    """
+    if not stats.last_start:
+        return False
+    started = _process_start(stats.pid)
+    return started is not None and started > stats.last_start + timedelta(seconds=2)
+
+
 def _reset_stale_lock(stats):
     """
     A previous run crashed (OOM, kill -9, container restart) before it could
     release `is_running`. Reset the lock when the recorded PID no longer
-    exists on this host (the runner is always local).
+    exists on this host (the runner is always local), or belongs to a
+    process started after the run.
     """
     if not stats.is_running:
         return
-    if _pid_alive(stats.pid):
+    if _pid_alive(stats.pid) and not _pid_reused(stats):
         return
     stats.is_running = False
     stats.failure = True
     message = (f"{datetime.now()}: Stale lock cleared "
-               f"(pid {stats.pid} no longer running)")
+               f"(pid {stats.pid} no longer running the group)")
     stats.last_message = message
     stats.all_messages = f"{stats.all_messages or ''}{message}\n"
     stats.last_ended = datetime.now()
