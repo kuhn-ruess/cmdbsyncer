@@ -1,6 +1,8 @@
 """
 Account
 """
+import time
+
 from bson.errors import InvalidId
 from mongoengine import DENY
 from mongoengine.errors import ValidationError
@@ -242,6 +244,7 @@ class Account(db.Document):
         return f"{self.name} ({self.typ})"
 
 
+IS_MASTER_CACHE_SECONDS = 60
 _IS_MASTER_CACHE = {}
 
 # Hosts an import had to leave alone because a master account owns them.
@@ -285,13 +288,17 @@ def account_is_master(account_id):
     Whether the account with *account_id* is flagged as master.
 
     An import asks this once per host it does not own, so the answer is
-    cached for the lifetime of the process. Unknown or malformed ids
-    (legacy data) count as "not master".
+    cached for IS_MASTER_CACHE_SECONDS; a change of the flag reaches a
+    running process (web workers) within that time. Unknown or malformed
+    ids (legacy data) count as "not master".
     """
-    if account_id not in _IS_MASTER_CACHE:
-        try:
-            account = Account.objects(id=account_id).only('is_master').first()
-        except (ValidationError, InvalidId):
-            account = None
-        _IS_MASTER_CACHE[account_id] = bool(account and account.is_master)
-    return _IS_MASTER_CACHE[account_id]
+    entry = _IS_MASTER_CACHE.get(account_id)
+    if entry and time.monotonic() - entry[0] < IS_MASTER_CACHE_SECONDS:
+        return entry[1]
+    try:
+        account = Account.objects(id=account_id).only('is_master').first()
+    except (ValidationError, InvalidId):
+        account = None
+    is_master = bool(account and account.is_master)
+    _IS_MASTER_CACHE[account_id] = (time.monotonic(), is_master)
+    return is_master

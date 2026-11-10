@@ -2,6 +2,7 @@
 Helper to get Account
 """
 import copy
+import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -67,11 +68,13 @@ _CHILD_OWNED_FIELDS = ('typ', 'username', 'password', 'address', 'object_type')
 # Internal serialisation artefacts that never leave this layer.
 _INTERNAL_FIELDS = ('custom_fields', 'password_crypted', 'plugin_settings')
 
-# In-process cache: ``{(lookup_key, is_id): account_dict}``. Sync runs read
-# the same handful of accounts for every host/rule, so caching keeps Mongo
-# and the secrets-manager hook off the hot path. Invalidated on Account
-# save/delete via mongoengine signals so the web app picks up edits
-# without a process restart.
+# In-process cache: ``{(lookup_key, is_id): (loaded_at, account_dict)}``.
+# Sync runs read the same handful of accounts for every host/rule, so
+# caching keeps Mongo and the secrets-manager hook off the hot path.
+# Account save/delete clears it through mongoengine signals, but only in
+# the process that saved; the other web workers read the account again
+# after ACCOUNT_CACHE_SECONDS.
+ACCOUNT_CACHE_SECONDS = 60
 _account_cache = {}
 
 
@@ -177,10 +180,12 @@ def get_account_by_name(name, is_id=False):
     Get Account by Name or Return False
     """
     cache_key = (str(name), is_id)
-    cached = _account_cache.get(cache_key)
-    if cached is None:
+    entry = _account_cache.get(cache_key)
+    if entry and time.monotonic() - entry[0] < ACCOUNT_CACHE_SECONDS:
+        cached = entry[1]
+    else:
         cached = _build_account_dict(name, is_id)
-        _account_cache[cache_key] = cached
+        _account_cache[cache_key] = (time.monotonic(), cached)
     # Defensive copy — callers must not mutate the cached entry.
     return copy.deepcopy(cached)
 
