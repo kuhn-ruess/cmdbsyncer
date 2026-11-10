@@ -2,6 +2,8 @@
 Shared helpers for the Netbox plugin.
 """
 from collections import defaultdict
+from urllib.parse import urlsplit, urlunsplit
+
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, MofNCompleteColumn
 
 
@@ -29,3 +31,14 @@ def parse_import_filter(import_filter):
             parsed_filter[key].append(value)
     return {key: values if len(values) > 1 else values[0]
             for key, values in parsed_filter.items()}
+
+
+def same_host_url(url, address):
+    """
+    The page link of an answer, with scheme and host of the account.
+    The link comes from the server and carries the token on the next
+    request, so it must not lead to another host.
+    """
+    page = urlsplit(url)
+    base = urlsplit(address)
+    return urlunsplit((base.scheme, base.netloc, page.path, page.query, ''))

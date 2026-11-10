@@ -9,6 +9,7 @@ from application.models.host import Host
 
 from .netbox import SyncNetbox
 from .models import NetboxDataflowModels
+from .utils import same_host_url
 
 
 class DictObj:  # pylint: disable=too-few-public-methods
@@ -160,7 +161,7 @@ class SyncDataFlow(SyncNetbox):
             resp_data = resp.json()
             result_collection += resp_data['results']
             while resp_data.get('next'):
-                next_url = resp_data['next']
+                next_url = same_host_url(resp_data['next'], self.config['address'])
                 resp = self.inner_request("GET", next_url, headers=self.headers)
                 resp_data = resp.json()
                 result_collection += resp_data['results']
