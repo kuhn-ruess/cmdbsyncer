@@ -1201,6 +1201,9 @@ class SyncCMK2(CMK2):
         # skipping it left every already-existing folder unchanged whenever a
         # run was limited to single hosts (the usual way to test folder rules).
         self.handle_folders()
+        # Clusters only hold hosts of this run. A host that turned into a
+        # cluster was already deleted above and has to come back now.
+        self.handle_clusters()
 
         if self.limit:
             log.log(f"Finished Sync to Checkmk Account: {self.account_name} because LIMIT",
@@ -1208,7 +1211,6 @@ class SyncCMK2(CMK2):
             print(f"\n{CC.OKCYAN} -- {CC.ENDC}Stop processing in limit mode")
             return
 
-        self.handle_clusters()
         self.cleanup_hosts()
 
 

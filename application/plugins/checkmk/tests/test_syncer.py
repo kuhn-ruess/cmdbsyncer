@@ -963,10 +963,11 @@ class TestSyncCMK2(unittest.TestCase):
 
             self.syncer.run()
 
-            # Folders applied for the processed hosts ...
+            # Folders and clusters applied for the processed hosts, a host
+            # turned cluster was deleted and has to come back ...
             mock_folders.assert_called_once()
-            # ... but cluster/cleanup passes are skipped in limit mode.
-            mock_clusters.assert_not_called()
+            mock_clusters.assert_called_once()
+            # ... but the cleanup is skipped in limit mode.
             mock_cleanup.assert_not_called()
 
 
