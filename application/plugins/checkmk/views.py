@@ -1847,13 +1847,18 @@ class CheckmkSettingsView(DefaultModelView):
     column_list = ('name', 'documentation', 'enabled', 'cmk_version', 'server_user',
                    'run_playbook')
 
-    column_editable_list = ('enabled',)
+    column_editable_list = ('enabled', 'cmk_version')
 
     column_formatters = {
         'run_playbook': _render_run_server_mngmt,
     }
 
     form_excluded_columns = ('server_ssh_key_crypted',)
+
+    # One line, also for the inline edit of the list
+    form_overrides = {
+        'cmk_version': StringField,
+    }
 
     def scaffold_form(self):
         form_class = super().scaffold_form()

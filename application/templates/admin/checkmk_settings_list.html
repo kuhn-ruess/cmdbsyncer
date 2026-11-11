@@ -65,5 +65,90 @@
     return false;
   };
 })();
+
+// Newest patch release of the major version each row uses, from
+// checkmk.com and only on click: the Syncer often has no internet access.
+// Loaded per row, so the download proxy of that settings entry is used.
+(function() {
+  var cells = document.querySelectorAll('a#cmk_version[data-pk]');
+  var toolbar = document.querySelector('.actions-nav') ||
+                document.querySelector('.nav-tabs');
+  if (!cells.length || !toolbar) return;
+  var catalogUrl = "{{ get_url('.download_catalog') }}";
+
+  var button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn btn-sm btn-secondary ml-2 mt-1 mb-2';
+  button.innerHTML = '<i class="fa fa-refresh"></i> Check checkmk.com for updates';
+  toolbar.parentNode.insertBefore(button, toolbar.nextSibling);
+
+  function majorOf(version) {
+    var match = /^(\d+\.\d+\.\d+)/.exec(version || '');
+    return match ? match[1] : null;
+  }
+  function note(cell, html) {
+    var box = cell.parentNode.querySelector('.cmk-version-update');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'cmk-version-update small';
+      cell.parentNode.appendChild(box);
+    }
+    box.innerHTML = html;
+    return box;
+  }
+  function apply(cell, version) {
+    var body = new FormData();
+    body.append('list_form_pk', cell.dataset.pk);
+    body.append('cmk_version', version);
+    body.append('csrf_token', cell.dataset.csrf || "{{ csrf_token() }}");
+    fetch(cell.dataset.url, {method: 'POST', body: body, credentials: 'same-origin'})
+      .then(function(response) {
+        if (!response.ok) {
+          return response.text().then(function(text) { throw new Error(text); });
+        }
+        $(cell).editable('setValue', version);
+        note(cell, '<span class="text-success">Set to ' + version + '</span>');
+      })
+      .catch(function(exp) {
+        note(cell, '').textContent = 'Could not save: ' + exp.message;
+      });
+  }
+
+  button.addEventListener('click', function() {
+    cells.forEach(function(cell) {
+      var current = cell.dataset.value || cell.textContent.trim();
+      var major = majorOf(current);
+      if (!major) { note(cell, '<span class="text-muted">No version to compare</span>'); return; }
+      note(cell, '<span class="text-muted">Loading…</span>');
+      var url = catalogUrl + (catalogUrl.indexOf('?') < 0 ? '?' : '&') +
+                'id=' + encodeURIComponent(cell.dataset.pk);
+      fetch(url, {credentials: 'same-origin'})
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+          if (data.error) { note(cell, '').textContent = data.error; return; }
+          var found = (data.majors || []).filter(function(entry) {
+            return entry.major === major;
+          })[0];
+          if (!found) {
+            note(cell, '<span class="text-muted">' + major + ' is not offered anymore</span>');
+          } else if (found.version === current) {
+            note(cell, '<span class="text-muted">Up to date</span>');
+          } else {
+            var box = note(cell, '');
+            var link = document.createElement('a');
+            link.href = '#';
+            link.className = 'badge badge-primary';
+            link.textContent = 'Set ' + found.version;
+            link.addEventListener('click', function(event) {
+              event.preventDefault();
+              apply(cell, found.version);
+            });
+            box.appendChild(link);
+          }
+        })
+        .catch(function(exp) { note(cell, '').textContent = 'Could not load: ' + exp; });
+    });
+  });
+})();
 </script>
 {% endblock %}
