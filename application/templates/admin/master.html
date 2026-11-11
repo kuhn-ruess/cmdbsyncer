@@ -532,6 +532,10 @@
                         <li><a class="dropdown-item"
                                href="{{ config['BASE_PREFIX'] }}api-tokens">
                           <i class="fa fa-terminal"></i> API Tokens</a></li>
+                        {# Swagger UI of the REST API, the public docs when it is switched off #}
+                        <li><a class="dropdown-item" target="_blank" rel="noopener"
+                               href="{{ url_for('api.doc') if config.get('SWAGGER_ENABLED') else 'https://docs.cmdbsyncer.de/internal_restapi/' }}">
+                          <i class="fa fa-book"></i> API Docs</a></li>
                         <li><a class="dropdown-item"
                                href="{{ url_for('saved_searches.index_view') }}">
                           <i class="fa fa-bookmark"></i> Saved Searches</a></li>
