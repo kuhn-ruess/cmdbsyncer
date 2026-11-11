@@ -40,9 +40,10 @@ _spec.loader.exec_module(mod)
 
 
 class _FakeField:
-    def __init__(self, unique=False, db_field=None):
-        self.unique = unique
+    def __init__(self, unique=False, db_field=None, unique_with=None):
+        self.unique = unique or bool(unique_with)
         self.db_field = db_field
+        self.unique_with = unique_with
 
 
 class _FakeQuerySet:
@@ -152,6 +153,31 @@ class ImportOverrideTests(unittest.TestCase):
         self.assertEqual(counts, {'custom_attributes': 1})
         self.assertEqual(FakeRule.store[0]['value'], 'new')
 
+
+
+class ConflictFilterUniqueWithTests(unittest.TestCase):
+    """A name unique per server collides only with the same server."""
+
+    class Site:
+        _fields = {
+            'id': _FakeField(db_field='_id'),
+            'name': _FakeField(db_field='name', unique_with='server_address'),
+            'server_address': _FakeField(db_field='server_address'),
+        }
+
+    def test_filter_carries_the_unique_with_field(self):
+        filters = mod.conflict_filters(
+            {'name': 'cmk', 'server_address': 'srv01'}, self.Site)
+        self.assertEqual(filters, [{'name': 'cmk', 'server_address': 'srv01'}])
+
+    def test_reference_id_is_unpacked(self):
+        site = type('Site', (), {'_fields': {
+            'name': _FakeField(db_field='name', unique_with=['settings_master']),
+            'settings_master': _FakeField(db_field='settings_master'),
+        }})
+        filters = mod.conflict_filters(
+            {'name': 'cmk', 'settings_master': {'$oid': 'c' * 24}}, site)
+        self.assertEqual(filters, [{'name': 'cmk', 'settings_master': 'c' * 24}])
 
 
 class ZipExportTests(unittest.TestCase):

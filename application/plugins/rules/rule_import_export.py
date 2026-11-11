@@ -155,7 +155,8 @@ def conflict_filters(json_dict, model_class, match_name=False):
     """Queryset filters of the documents *json_dict* would collide with.
 
     A rule from an export collides either on its own id or on one of the
-    model's unique fields (usually ``name``). With *match_name* the name
+    model's unique fields (usually ``name``), together with the fields
+    a unique field is only unique with. With *match_name* the name
     also counts on a model without any unique field, which would otherwise
     take a pasted rule as a second one with the same name.
     """
@@ -171,8 +172,20 @@ def conflict_filters(json_dict, model_class, match_name=False):
             continue
         has_unique = True
         value = json_dict.get(field.db_field or field_name)
-        if value not in (None, ''):
-            filters.append({field_name: value})
+        if value in (None, ''):
+            continue
+        conflict = {field_name: value}
+        # unique_with: only the same combination collides
+        unique_with = getattr(field, 'unique_with', None) or []
+        if isinstance(unique_with, str):
+            unique_with = [unique_with]
+        for other_name in unique_with:
+            other = model_class._fields[other_name]  # pylint: disable=protected-access
+            other_value = json_dict.get(other.db_field or other_name)
+            if isinstance(other_value, dict):
+                other_value = other_value.get('$oid', other_value)
+            conflict[other_name] = other_value
+        filters.append(conflict)
     if match_name and not has_unique and json_dict.get('name') \
             and 'name' in model_class._fields:  # pylint: disable=protected-access
         filters.append({'name': json_dict['name']})

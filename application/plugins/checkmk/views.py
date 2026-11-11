@@ -1917,19 +1917,35 @@ class CheckmkSettingsView(DefaultModelView):
         if not current_user.has_right('ansible'):
             flash('Running playbooks needs the Ansible right', 'error')
             return redirect(url_for('.index_view'))
-        settings = list(CheckmkSettings.objects(id__in=ids))
-        servers = sorted({site.server_address for site in
-                          CheckmkSite.objects(settings_master__in=settings, enabled=True)})
-        if not servers:
+        # One run per settings, each with an inventory of only its sites:
+        # a server may have a site per settings (production and test).
+        jobs = []
+        for setting in CheckmkSettings.objects(id__in=ids).order_by('name'):
+            servers = sorted({site.server_address for site in
+                              CheckmkSite.objects(settings_master=setting, enabled=True)})
+            if servers:
+                jobs.append((setting, servers))
+        if not jobs:
             flash('No enabled site uses the selected settings', 'error')
             return redirect(url_for('.index_view'))
-        stats = run_playbook(
-            'cmk_server_mngmt.yml',
-            target_host=','.join(servers),
-            source='ui',
-            triggered_by=current_user.email,
-        )
-        flash(f"Run started for {', '.join(servers)}", 'success')
+        all_servers = [server for _, servers in jobs for server in servers]
+        shared = sorted({server for server in all_servers if all_servers.count(server) > 1})
+        if shared:
+            flash(f"{', '.join(shared)} have sites of several selected settings. "
+                  "Start one settings at a time, so the installations do not "
+                  "run on the same server at once", 'error')
+            return redirect(url_for('.index_view'))
+        for setting, servers in jobs:
+            stats = run_playbook(
+                'cmk_server_mngmt.yml',
+                target_host=','.join(servers),
+                provider=f'cmk_sites:{setting.name}',
+                source='ui',
+                triggered_by=current_user.email,
+            )
+            flash(f"Run for {setting.name} started for {', '.join(servers)}", 'success')
+        if len(jobs) > 1:
+            return redirect(url_for('ansiblerunstats.index_view'))
         return redirect(url_for('ansiblerunstats.details_view', id=str(stats.pk)))
 
     @expose('/set_cmk_version_form')

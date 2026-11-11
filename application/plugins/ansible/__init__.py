@@ -19,6 +19,7 @@ from application.modules.rule.filter import Filter
 from application.modules.rule.rewrite import Rewrite
 from application.helpers.cron import register_cronjob
 from application.helpers.plugins import register_cli_group
+from application.plugins.checkmk.models import CheckmkSettings
 from application.modules.inventory import (
     list_inventory_providers,
     register_inventory_provider,
@@ -347,6 +348,31 @@ def _build_cmk_sites_provider():
 
 register_inventory_provider('ansible', _build_ansible_provider)
 register_inventory_provider('cmk_sites', _build_cmk_sites_provider)
+
+CMK_SITES_PREFIX = 'cmk_sites:'
+
+
+class _CmkSitesSettingsResolver:
+    """
+    `cmk_sites:<settings name>` serves only the sites of one Checkmk
+    Settings entry, so a server can have a site per settings.
+    """
+
+    def __call__(self, name):
+        """Return a factory for `name` if it names known settings, else None."""
+        if not name.startswith(CMK_SITES_PREFIX):
+            return None
+        settings = CheckmkSettings.objects(name=name[len(CMK_SITES_PREFIX):]).first()
+        if settings is None:
+            return None
+        return lambda s=settings: SyncSites(settings=s)
+
+    def list_names(self):
+        """One provider name per Checkmk Settings entry"""
+        return [CMK_SITES_PREFIX + s.name for s in CheckmkSettings.objects().only('name')]
+
+
+register_inventory_provider_resolver(_CmkSitesSettingsResolver())
 
 
 class _AnsibleProjectResolver:

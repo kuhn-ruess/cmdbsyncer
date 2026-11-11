@@ -2,7 +2,6 @@
 """
 Ansible Checkmk Modul
 """
-from mongoengine.errors import DoesNotExist
 from application.plugins.checkmk.models import CheckmkSite
 from application.modules.plugin import Plugin
 from application.helpers.syncer_jinja import render_jinja
@@ -10,7 +9,21 @@ from application.helpers.syncer_jinja import render_jinja
 class SyncSites(Plugin):
     """
     Class for the Checkmk Site Actions
+
+    With `settings` only the sites of that Checkmk Settings entry are in
+    the inventory, so a server may carry one site per settings
+    (for example a production and a test site).
     """
+
+    def __init__(self, settings=None):
+        super().__init__()
+        self.settings = settings
+
+    def _sites(self, **filters):
+        """Enabled sites, limited to the settings when given"""
+        if self.settings is not None:
+            filters['settings_master'] = self.settings
+        return CheckmkSite.objects(enabled=True, **filters)
 
 
     def get_site_data(self, site):
@@ -76,7 +89,7 @@ class SyncSites(Plugin):
                 'hosts' : []
             },
         }
-        for site in CheckmkSite.objects(enabled=True):
+        for site in self._sites():
             hostname = site.server_address
             data['_meta']['hostvars'][hostname] = self.get_site_data(site)
             data['all']['hosts'].append(hostname)
@@ -87,10 +100,11 @@ class SyncSites(Plugin):
         """
         Get Inventory for single host
         """
-        # CheckmkSite has no `available` field; filter by `enabled` to
-        # stay consistent with the full-inventory path above.
-        try:
-            site = CheckmkSite.objects.get(server_address=hostname, enabled=True)
-        except DoesNotExist:
+        # Without settings a server with several sites keeps the last one,
+        # as in the full inventory above.
+        site = None
+        for site in self._sites(server_address=hostname):
+            pass
+        if site is None:
             return False
         return self.get_site_data(site)

@@ -5,13 +5,14 @@ Checkmk Rules
 # additional public methods to satisfy pylint.
 # pylint: disable=too-few-public-methods,too-many-lines
 from mongoengine import DENY
-from mongoengine.errors import DoesNotExist
+from mongoengine.errors import DoesNotExist, ValidationError
 from application import db
 from application.modules.rule.models import (
     ListSourceMixin, list_source_fields, condition_fields, outcome_fields, rule_state_fields,
 )
 from application.models.account import Account
 from application.models.secret import Secret
+from application.helpers.stale_indexes import register_stale_index
 
 
 
@@ -793,7 +794,8 @@ class CheckmkSite(db.Document):
     """
     Checkmk Site
     """
-    name = db.StringField(required=True, unique=True)
+    # omd knows a site name once per server
+    name = db.StringField(required=True, unique_with='server_address')
     documentation = db.StringField()
     server_address = db.StringField(required=True)
     settings_master = db.ReferenceField(document_type="CheckmkSettings", required=True)
@@ -809,6 +811,25 @@ class CheckmkSite(db.Document):
     meta = {
         'strict': False,
     }
+
+    def clean(self):
+        """
+        A server has one site per settings: the inventory of a settings
+        entry carries one site per server.
+        """
+        others = CheckmkSite.objects(server_address=self.server_address,
+                                     settings_master=self.settings_master)
+        if self.pk:
+            others = others.filter(pk__ne=self.pk)
+        other = others.first()
+        if other:
+            raise ValidationError(
+                f"Server {self.server_address} already has the site {other.name} "
+                f"with these settings, use other settings for a second site")
+
+
+# Superseded by the (name, server_address) unique index.
+register_stale_index('checkmk_site', 'name_1')
 #.
 #   .-- Checkmk BI Aggregations
 
