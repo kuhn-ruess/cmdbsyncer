@@ -18,7 +18,10 @@ class FileAdminView(FileAdmin):
     mkdir_modal = True
     edit_modal = True
 
-    allowed_extensions = ('md', 'txt', 'csv', 'yml', 'json', 'pem', 'cert')
+    # deb, rpm and cma: Checkmk installation packages for the Manage OMD
+    # Server playbook (Debian/Ubuntu, RHEL/SLES, Checkmk Appliance)
+    allowed_extensions = ('md', 'txt', 'csv', 'yml', 'json', 'pem', 'cert',
+                          'deb', 'rpm', 'cma')
     editable_extensions = ('md', 'txt', 'csv', 'yml', 'json', 'pem')
 
 
