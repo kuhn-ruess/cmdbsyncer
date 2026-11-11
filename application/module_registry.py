@@ -48,6 +48,15 @@ MODULES = {
         ),
         'docs': _docs('checkmk'),
     },
+    'Checkmk Server': {
+        'icon': ('fa', 'fa-building'),
+        'intro': (
+            "Administration of the Checkmk servers themselves: install "
+            "Checkmk versions, create and update sites, run by the bundled "
+            "Ansible playbook."
+        ),
+        'docs': _docs('ansible/cmk_sites'),
+    },
     'Netbox': {
         'icon': ('image', 'vendor/netbox.svg'),
         'intro': (
@@ -144,10 +153,6 @@ SUB_CATEGORIES = {
     'Pools': (
         "Distribute hosts over a set of folders or sites instead of "
         "pinning every host individually."
-    ),
-    'Checkmk Server': (
-        "Administration of the Checkmk server itself — its sites and their "
-        "creation, update and configuration."
     ),
     'Rules': (
         "All rule types that decide what Ansible receives and when a "
@@ -279,6 +284,8 @@ ENTRIES = {
             "Spread hosts over several Checkmk sites, each with its own "
             "capacity."
         ),
+    },
+    'Checkmk Server': {
         'Checkmk Site Updates and Creation': (
             "Create sites on a Checkmk server, update them and manage their "
             "version."

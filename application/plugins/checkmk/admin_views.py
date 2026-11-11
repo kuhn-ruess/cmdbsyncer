@@ -234,24 +234,9 @@ def register_admin_views(admin):
     ))
     above += objects
     #.
-    #   .-- Sites and the way back
+    #   .-- The way back
     sites = []
     _add_divider(admin, list(above), sites)
-    admin.add_sub_category(name="Checkmk Server", parent_name="Checkmk")
-    add(sites, CheckmkSettingsView(
-        CheckmkSettings,
-        name="Checkmk Site Updates and Creation",
-        category="Checkmk Server",
-        menu_icon_type='fa',
-        menu_icon_value='fa-cogs',
-    ))
-    add(sites, CheckmkSiteView(
-        CheckmkSite,
-        name="Site Settings",
-        category="Checkmk Server",
-        menu_icon_type='fa',
-        menu_icon_value='fa-building',
-    ))
     add(sites, CheckmkInventorizeAttributesView(
         CheckmkInventorizeAttributes,
         name="Inventorize from Checkmk Settings",
@@ -296,6 +281,24 @@ def register_admin_views(admin):
     add(checks, CheckmkCacheView(
         CheckmkObjectCache, name="Cache", category="Checkmk",
         menu_icon_type='fa', menu_icon_value='fa-th',
+    ))
+    #.
+    #   .-- Checkmk Server, a module of its own below Checkmk
+    admin.add_sub_category(name="Checkmk Server", parent_name="Modules")
+    register_module_menu(admin, "Checkmk Server")
+    admin.add_view(CheckmkSettingsView(
+        CheckmkSettings,
+        name="Checkmk Site Updates and Creation",
+        category="Checkmk Server",
+        menu_icon_type='fa',
+        menu_icon_value='fa-cogs',
+    ))
+    admin.add_view(CheckmkSiteView(
+        CheckmkSite,
+        name="Site Settings",
+        category="Checkmk Server",
+        menu_icon_type='fa',
+        menu_icon_value='fa-building',
     ))
     #.
     # Reachable from the Setup Rules list, not from the menu: it is a

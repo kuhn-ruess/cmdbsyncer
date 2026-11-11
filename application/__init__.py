@@ -732,7 +732,6 @@ def _register_web_layer():  # pylint: disable=too-many-locals,too-many-statement
                       'Accounts': 'fa fa-users',
                       'Ansible': 'fa fa-cogs',
                       'Checkmk': 'fa fa-heartbeat',
-                      'Checkmk Server': 'fa fa-building',
                       'Cronjobs': 'fa fa-clock-o',
                       'i-doit': 'fa fa-sitemap',
                       'Manage Business Intelligence': 'fa fa-sitemap',
