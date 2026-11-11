@@ -120,3 +120,36 @@ class ConnectionHintTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PrivateKeyTest(unittest.TestCase):
+    """The SSH key goes into a 0600 file of the run, never onto the argv"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = _load_runner()
+
+    def setUp(self):
+        self.run_tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.run_tmp)
+
+    def test_key_file_and_argument(self):
+        params = {'playbook': 'site.yml', 'check_mode': False, 'target_host': None,
+                  'extra_vars': None, 'ssh_user': 'srv01',
+                  'ssh_private_key': 'KEYDATA'}
+        files = self.runner._login_files(self.run_tmp, params)
+        with patch.object(self.runner, '_ansible_dir', return_value=self.runner.Path('/a')), \
+                patch.object(self.runner, '_ansible_binary', return_value='ansible-playbook'):
+            cmd = self.runner._build_command('inv.yml', params, **files)
+        key_file = files['key_file']
+        self.assertEqual(cmd[cmd.index('--private-key') + 1], key_file)
+        self.assertNotIn('KEYDATA', ' '.join(cmd))
+        self.assertEqual(os.stat(key_file).st_mode & 0o777, 0o600)
+        with open(key_file, encoding='utf-8') as handle:
+            self.assertEqual(handle.read(), 'KEYDATA\n')
+
+    def test_no_key_no_argument(self):
+        params = {'playbook': 'site.yml', 'check_mode': False, 'target_host': None,
+                  'extra_vars': None}
+        files = self.runner._login_files(self.run_tmp, params)
+        self.assertEqual(files, {'vars_file': None, 'key_file': None})

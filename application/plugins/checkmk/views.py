@@ -13,7 +13,7 @@ from pygments.formatters import HtmlFormatter  # pylint: disable=no-name-in-modu
 from pygments.lexers import DjangoLexer  # pylint: disable=no-name-in-module
 
 from wtforms import HiddenField, StringField, SelectMultipleField, SelectField, \
-    TextAreaField
+    TextAreaField, BooleanField
 from wtforms.validators import ValidationError
 from flask_admin import BaseView
 from flask_admin.form import rules
@@ -73,6 +73,7 @@ from .cmk_rules import (
 )
 from .list_source import OUTCOME_TEMPLATE_FIELDS
 from . import download_catalog
+from .ssh_key import check_ssh_private_key
 from .notification_rules import JINJA_FIELDS, validate_outcome_jinja
 
 
@@ -1755,6 +1756,10 @@ class CheckmkSettingsView(DefaultModelView):
         'server_user': {
             'placeholder': "User to connect to server where the site is running",
         },
+        'server_ssh_key': {
+            'rows': 4,
+            'placeholder': "-----BEGIN OPENSSH PRIVATE KEY-----",
+        },
         'inital_password': {
             'placeholder': "Initial Passwort if we need to create the site",
         },
@@ -1809,7 +1814,9 @@ class CheckmkSettingsView(DefaultModelView):
                     [rules.Field('name'),
                      rules.Field('documentation'),
                      rules.Field('enabled'),
-                     rules.Field('server_user')]),
+                     rules.Field('server_user'),
+                     rules.Field('server_ssh_key'),
+                     rules.Field('remove_server_ssh_key')]),
             section('2', 'cond', 'Checkmk Site',
                     'Edition, version, filename and initial password — used '
                     'when rolling out a fresh site.',
@@ -1845,6 +1852,38 @@ class CheckmkSettingsView(DefaultModelView):
     column_formatters = {
         'run_playbook': _render_run_server_mngmt,
     }
+
+    form_excluded_columns = ('server_ssh_key_crypted',)
+
+    def scaffold_form(self):
+        form_class = super().scaffold_form()
+        form_class.server_ssh_key = TextAreaField(
+            "Server SSH Private Key",
+            description="Used to log in as the Server User. Stored encrypted and "
+                        "never shown again: leave empty to keep the stored key. "
+                        "Without a key, the SSH setup of the Syncer host applies.")
+        form_class.remove_server_ssh_key = BooleanField("Remove stored SSH Private Key")
+        return form_class
+
+    def on_form_prefill(self, form, id):  # pylint: disable=redefined-builtin
+        """Tell whether a key is stored, without showing it"""
+        model = self.get_one(id)
+        if model and model.server_ssh_key_crypted:
+            form.server_ssh_key.description = \
+                "A key is stored. " + form.server_ssh_key.description
+
+    def on_model_change(self, form, model, is_created):
+        """Encrypt a new SSH key; the inline edits of the list carry none"""
+        if hasattr(form, 'server_ssh_key'):
+            if form.remove_server_ssh_key.data:
+                model.set_server_ssh_key(None)
+            elif form.server_ssh_key.data and form.server_ssh_key.data.strip():
+                try:
+                    key = check_ssh_private_key(form.server_ssh_key.data)
+                except ValueError as exp:
+                    raise ValidationError(str(exp)) from exp
+                model.set_server_ssh_key(key)
+        return super().on_model_change(form, model, is_created)
 
     column_labels = {
         'run_playbook': 'Manage OMD Server',
@@ -1946,6 +1985,7 @@ class CheckmkSettingsView(DefaultModelView):
                 'cmk_server_mngmt.yml',
                 target_host=','.join(servers),
                 provider=f'cmk_sites:{setting.name}',
+                ssh_private_key=setting.get_server_ssh_key(),
                 source='ui',
                 triggered_by=current_user.email,
             )

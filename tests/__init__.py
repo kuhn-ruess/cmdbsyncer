@@ -711,6 +711,11 @@ _try_load_real_module(
     "application.plugins.checkmk.download_catalog",
     os.path.join("plugins", "checkmk", "download_catalog.py"),
 )
+# ssh_key only needs cryptography; the Checkmk Settings view checks with it.
+_try_load_real_module(
+    "application.plugins.checkmk.ssh_key",
+    os.path.join("plugins", "checkmk", "ssh_key.py"),
+)
 
 
 def _load_real_package(package_name, relative_dir):

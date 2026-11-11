@@ -198,7 +198,8 @@ def playbook_inventory_provider(playbook: str) -> str:
 
 
 def _build_command(inventory_path: str, run_params: dict,
-                   vars_file: str | None = None) -> list[str]:
+                   vars_file: str | None = None,
+                   key_file: str | None = None) -> list[str]:
     """
     Assemble the ansible-playbook argv against `inventory_path` — a
     per-run cmdbsyncer-inventory spec that pins the provider for this run
@@ -212,6 +213,7 @@ def _build_command(inventory_path: str, run_params: dict,
     with a password the user goes into that file too. `vars_file` is added
     as `-e @<file>` and carries the SSH login credentials, kept in a file
     rather than on the argv so the password never shows up in `ps` output.
+    `key_file` is the SSH private key for the login, as `--private-key`.
     """
     base = _ansible_dir()
     cmd = [
@@ -225,6 +227,8 @@ def _build_command(inventory_path: str, run_params: dict,
         cmd += ['--limit', run_params['target_host']]
     if not vars_file and run_params.get('ssh_user'):
         cmd += ['--user', run_params['ssh_user']]
+    if key_file:
+        cmd += ['--private-key', key_file]
     if run_params['extra_vars']:
         cmd += ['-e', run_params['extra_vars']]
     if vars_file:
@@ -248,6 +252,35 @@ def _write_credentials_file(directory: str, ssh_user: str | None,
     with os.fdopen(fd, 'w', encoding='utf-8') as file_handle:
         yaml.safe_dump(data, file_handle, default_flow_style=False)
     return path
+
+
+def _write_private_key_file(directory: str, key: str) -> str:
+    """
+    Write the SSH private key (mode 0600, ssh refuses other modes) into the
+    run's temp dir and return its path. The temp dir is removed after the
+    run, the key is never stored on the run record.
+    """
+    path = os.path.join(directory, 'ssh_private_key')
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as file_handle:
+        # ssh rejects a key without the final newline
+        file_handle.write(key.strip() + '\n')
+    return path
+
+
+def _login_files(directory: str, run_params: dict) -> dict:
+    """
+    The files with the SSH login of the run, as keyword arguments of
+    `_build_command`: the password as vars file, the private key as file.
+    """
+    files = {'vars_file': None, 'key_file': None}
+    if run_params.get('ssh_password'):
+        files['vars_file'] = _write_credentials_file(
+            directory, run_params.get('ssh_user'), run_params['ssh_password'],
+        )
+    if run_params.get('ssh_private_key'):
+        files['key_file'] = _write_private_key_file(directory, run_params['ssh_private_key'])
+    return files
 
 
 def _write_run_inventory_spec(directory: str, provider: str, mode: str,
@@ -436,12 +469,8 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
             run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
             cmdbsyncer_bin=_cmdbsyncer_bin(),
         )
-        vars_file = None
-        if run_params.get('ssh_password'):
-            vars_file = _write_credentials_file(
-                run_tmp, run_params.get('ssh_user'), run_params['ssh_password'],
-            )
-        cmd = _build_command(inventory_path, run_params, vars_file=vars_file)
+        cmd = _build_command(inventory_path, run_params,
+                             **_login_files(run_tmp, run_params))
         try:
             proc = subprocess.Popen(  # pylint: disable=consider-using-with
                 cmd,
@@ -491,6 +520,7 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
                  provider: str | None = None,
                  ssh_user: str | None = None,
                  ssh_password: str | None = None,
+                 ssh_private_key: str | None = None,
                  source: str = 'ui',
                  triggered_by: str | None = None) -> AnsibleRunStats:
     """
@@ -504,7 +534,8 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
     `ssh_user` / `ssh_password` set the SSH login for the connection.
     The password is written to a mode-0600 vars file for the run (never
     the command line) and is not stored on the run record; password auth
-    needs `sshpass` on the host.
+    needs `sshpass` on the host. `ssh_private_key` is the key itself (not a
+    path), written to a mode-0600 file for the run only.
 
     Caller responsibility: validate `playbook` against available_playbooks()
     before invoking — this function does no whitelist check, so passing
@@ -533,6 +564,7 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
         'check_mode': check_mode,
         'ssh_user': ssh_user,
         'ssh_password': ssh_password,
+        'ssh_private_key': ssh_private_key,
     }
     thread = threading.Thread(
         target=_execute,

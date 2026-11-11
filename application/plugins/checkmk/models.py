@@ -4,9 +4,10 @@ Checkmk Rules
 # Mongoengine Document classes are data carriers; they don't need
 # additional public methods to satisfy pylint.
 # pylint: disable=too-few-public-methods,too-many-lines
+from cryptography.fernet import Fernet
 from mongoengine import DENY
 from mongoengine.errors import DoesNotExist, ValidationError
-from application import db
+from application import db, app
 from application.modules.rule.models import (
     ListSourceMixin, list_source_fields, condition_fields, outcome_fields, rule_state_fields,
 )
@@ -751,6 +752,8 @@ class CheckmkSettings(db.Document):
     # Disabled settings take their sites out of the inventory and runs
     enabled = db.BooleanField(default=True)
     server_user = db.StringField()
+    # SSH private key for the connection to the servers, Fernet encrypted
+    server_ssh_key_crypted = db.StringField()
     cmk_version = db.StringField()
     cmk_edition = db.StringField(choices=editions)
     cmk_version_filename = db.StringField()
@@ -775,6 +778,21 @@ class CheckmkSettings(db.Document):
     meta = {
         'strict': False
     }
+
+    def set_server_ssh_key(self, key):
+        """Store the SSH private key encrypted, an empty key removes it"""
+        if not key:
+            self.server_ssh_key_crypted = None
+            return
+        fernet = Fernet(app.config['CRYPTOGRAPHY_KEY'])
+        self.server_ssh_key_crypted = fernet.encrypt(key.encode()).decode('utf-8')
+
+    def get_server_ssh_key(self):
+        """The SSH private key in plain text, None when none is stored"""
+        if not self.server_ssh_key_crypted:
+            return None
+        fernet = Fernet(app.config['CRYPTOGRAPHY_KEY'])
+        return fernet.decrypt(self.server_ssh_key_crypted.encode()).decode('utf-8')
 
     def __str__(self):
         """
