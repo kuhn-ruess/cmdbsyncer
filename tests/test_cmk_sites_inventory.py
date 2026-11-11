@@ -39,18 +39,33 @@ class SitesOfSettingsTest(unittest.TestCase):
         self.assertEqual(inventory['all']['hosts'], ['srv01'])
         self.assertEqual(inventory['_meta']['hostvars']['srv01'], {'cmk_site': 'test'})
 
-    def test_without_settings_all_enabled_sites(self):
-        with patch.object(site_syncer, 'CheckmkSite') as model:
+    def test_without_settings_sites_of_enabled_settings(self):
+        enabled = [MagicMock()]
+        with patch.object(site_syncer, 'CheckmkSite') as model, \
+                patch.object(site_syncer, 'CheckmkSettings') as settings_model:
+            settings_model.objects.return_value = enabled
             model.objects.return_value = []
             self._syncer().get_full_inventory()
-        model.objects.assert_called_once_with(enabled=True)
+        settings_model.objects.assert_called_once_with(enabled__ne=False)
+        model.objects.assert_called_once_with(enabled=True, settings_master__in=enabled)
+
+    def test_disabled_settings_have_no_sites(self):
+        settings = MagicMock(enabled=False)
+        with patch.object(site_syncer, 'CheckmkSite') as model:
+            inventory = self._syncer(settings).get_full_inventory()
+            self.assertFalse(self._syncer(settings).get_host_inventory('srv01'))
+        model.objects.assert_not_called()
+        self.assertEqual(inventory['all']['hosts'], [])
 
     def test_host_with_two_sites_does_not_crash(self):
-        with patch.object(site_syncer, 'CheckmkSite') as model:
+        with patch.object(site_syncer, 'CheckmkSite') as model, \
+                patch.object(site_syncer, 'CheckmkSettings') as settings_model:
+            settings_model.objects.return_value = []
             model.objects.return_value = [self._site('prod', 'srv01'),
                                           self._site('test', 'srv01')]
             result = self._syncer().get_host_inventory('srv01')
-        model.objects.assert_called_once_with(enabled=True, server_address='srv01')
+        model.objects.assert_called_once_with(enabled=True, server_address='srv01',
+                                              settings_master__in=[])
         self.assertEqual(result, {'cmk_site': 'test'})
 
     def test_unknown_host(self):

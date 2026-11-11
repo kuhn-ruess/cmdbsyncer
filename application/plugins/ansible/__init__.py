@@ -368,8 +368,9 @@ class _CmkSitesSettingsResolver:
         return lambda s=settings: SyncSites(settings=s)
 
     def list_names(self):
-        """One provider name per Checkmk Settings entry"""
-        return [CMK_SITES_PREFIX + s.name for s in CheckmkSettings.objects().only('name')]
+        """One provider name per enabled Checkmk Settings entry"""
+        return [CMK_SITES_PREFIX + s.name
+                for s in CheckmkSettings.objects(enabled__ne=False).only('name')]
 
 
 register_inventory_provider_resolver(_CmkSitesSettingsResolver())

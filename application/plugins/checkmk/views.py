@@ -1707,6 +1707,8 @@ class CheckmkUserMngmtView(DefaultModelView):
 
 def _render_run_server_mngmt(_view, _context, model, _name):
     """Button that starts Manage OMD Server for the sites of these settings"""
+    if model.enabled is False:
+        return Markup('<span class="text-muted">Disabled</span>')
     run_url = url_for('.run_server_mngmt', settings_id=model.id)
     return Markup(
         f'<form method="POST" action="{escape(run_url)}" style="display:inline" '
@@ -1806,6 +1808,7 @@ class CheckmkSettingsView(DefaultModelView):
                     'Name, documentation and the Ansible user for site ops.',
                     [rules.Field('name'),
                      rules.Field('documentation'),
+                     rules.Field('enabled'),
                      rules.Field('server_user')]),
             section('2', 'cond', 'Checkmk Site',
                     'Edition, version, filename and initial password — used '
@@ -1834,7 +1837,10 @@ class CheckmkSettingsView(DefaultModelView):
         ),
     ]
 
-    column_list = ('name', 'documentation', 'cmk_version', 'server_user', 'run_playbook')
+    column_list = ('name', 'documentation', 'enabled', 'cmk_version', 'server_user',
+                   'run_playbook')
+
+    column_editable_list = ('enabled',)
 
     column_formatters = {
         'run_playbook': _render_run_server_mngmt,
@@ -1920,13 +1926,13 @@ class CheckmkSettingsView(DefaultModelView):
         # One run per settings, each with an inventory of only its sites:
         # a server may have a site per settings (production and test).
         jobs = []
-        for setting in CheckmkSettings.objects(id__in=ids).order_by('name'):
+        for setting in CheckmkSettings.objects(id__in=ids, enabled__ne=False).order_by('name'):
             servers = sorted({site.server_address for site in
                               CheckmkSite.objects(settings_master=setting, enabled=True)})
             if servers:
                 jobs.append((setting, servers))
         if not jobs:
-            flash('No enabled site uses the selected settings', 'error')
+            flash('No enabled site uses the selected enabled settings', 'error')
             return redirect(url_for('.index_view'))
         all_servers = [server for _, servers in jobs for server in servers]
         shared = sorted({server for server in all_servers if all_servers.count(server) > 1})

@@ -2,7 +2,7 @@
 """
 Ansible Checkmk Modul
 """
-from application.plugins.checkmk.models import CheckmkSite
+from application.plugins.checkmk.models import CheckmkSite, CheckmkSettings
 from application.modules.plugin import Plugin
 from application.helpers.syncer_jinja import render_jinja
 
@@ -20,9 +20,13 @@ class SyncSites(Plugin):
         self.settings = settings
 
     def _sites(self, **filters):
-        """Enabled sites, limited to the settings when given"""
+        """Enabled sites of enabled settings, limited to the settings when given"""
         if self.settings is not None:
+            if self.settings.enabled is False:
+                return []
             filters['settings_master'] = self.settings
+        else:
+            filters['settings_master__in'] = list(CheckmkSettings.objects(enabled__ne=False))
         return CheckmkSite.objects(enabled=True, **filters)
 
 

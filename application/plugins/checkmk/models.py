@@ -748,6 +748,8 @@ class CheckmkSettings(db.Document):
     """
     name = db.StringField(required=True, unique=True)
     documentation = db.StringField()
+    # Disabled settings take their sites out of the inventory and runs
+    enabled = db.BooleanField(default=True)
     server_user = db.StringField()
     cmk_version = db.StringField()
     cmk_edition = db.StringField(choices=editions)
