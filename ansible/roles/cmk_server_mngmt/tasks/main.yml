@@ -21,6 +21,16 @@
   register: installation_file
   delegate_to: localhost
 
+# The file is looked for on the controller, whose user, working directory
+# and /tmp differ between a pip installation, the container and a run from
+# the web interface, so name the full path.
+- name: "Show where the Installation File is looked for"
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'Found' if installation_file.stat.exists else 'Not found, downloading to' }}
+      {{ (cmk_local_staging ~ '/' ~ cmk_version_filename) | realpath }}
+      on the Ansible controller {{ lookup('pipe', 'hostname') }}
+
 - name: "Download Installation File from Checkmk Server"
   ansible.builtin.uri:
     url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_version_filename}}"
