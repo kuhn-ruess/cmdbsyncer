@@ -25,7 +25,8 @@ SEVERITY_FILL = {SEVERITY_WARNING: (255, 193, 7)}
 INFO_FILL = (23, 162, 184)
 OK_FILL = (40, 167, 69)
 STATE_FILL = {'WARN': (255, 193, 7), 'CRIT': (220, 53, 69),
-              'UNKNOWN': (253, 126, 20)}
+              'UNKNOWN': (253, 126, 20), 'DOWN': (220, 53, 69),
+              'UNREACHABLE': (253, 126, 20)}
 # Relative column widths by column kind.
 KIND_WIDTH = {'items': 3.2, 'text': 2.2, 'code': 2.0, 'state': 0.9}
 _REPLACE = {
@@ -192,7 +193,7 @@ def _section(pdf, section):
                 if column.kind == 'state':
                     style = FontFace(
                         emphasis='BOLD', fill_color=STATE_FILL.get(text),
-                        color=(255, 255, 255) if text == 'CRIT' else TEXT)
+                        color=(255, 255, 255) if text in ('CRIT', 'DOWN') else TEXT)
                 elif column.kind == 'code':
                     style = FontFace(family='Courier')
                 row.cell(text, style=style)

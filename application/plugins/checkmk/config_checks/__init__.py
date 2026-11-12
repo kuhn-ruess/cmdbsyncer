@@ -68,6 +68,7 @@ def run_checks(account_name, names):
 # Built-in checks register themselves on import.
 # pylint: disable=wrong-import-position,cyclic-import
 from . import httpv2  # noqa: E402,F401
+from . import unhandled  # noqa: E402,F401
 
 __all__ = ['Column', 'ConfigCheck', 'Finding', 'Topic', 'fetch_rules', 'describe_conditions',
            'register_check', 'get_checks', 'get_check', 'run_checks',
