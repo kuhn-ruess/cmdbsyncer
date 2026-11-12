@@ -100,6 +100,7 @@ run_sources = [
     ('ui', 'UI'),
     ('rule', 'Rule'),
     ('cli', 'CLI'),
+    ('cron', 'Cron'),
 ]
 
 run_statuses = [

@@ -1048,6 +1048,9 @@ register_cronjob('Checkmk: Export Service Labels', export_service_labels)
 register_cronjob('Checkmk: Export DCD Rules', export_dcd_rules)
 register_cronjob('Checkmk: Export Passwords', export_passwords)
 register_cronjob('Checkmk: Import Hosts (V2)', import_hosts)
+
+from .server_schedule import run_scheduled_updates
+register_cronjob('Checkmk Server: Scheduled Updates', run_scheduled_updates)
 register_cronjob('Checkmk: Import Sites', import_sites)
 register_cronjob('Checkmk: Sync Folder Pools', sync_folderpools)
 register_cronjob('Checkmk: Sync Site Pools', sync_sitepools)

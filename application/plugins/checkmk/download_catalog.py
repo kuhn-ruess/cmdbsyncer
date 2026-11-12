@@ -2,6 +2,8 @@
 The Checkmk versions and installation files checkmk.com offers, for the
 fill-in help of the Checkmk Settings form.
 """
+import re
+
 import requests
 
 from application.modules.plugin import parse_proxy
@@ -69,3 +71,24 @@ def fetch(proxy=None):
                             proxies=parse_proxy(proxy, 'Checkmk Settings'))
     response.raise_for_status()
     return simplify(response.json())
+
+
+def major_of(version):
+    """The major release of ``version``, 2.4.0 of 2.4.0p12, None without"""
+    match = re.match(r'(\d+\.\d+\.\d+)', version or '')
+    return match.group(1) if match else None
+
+
+def newest_patch(majors, current):
+    """
+    The newest patch release of the major version ``current`` belongs to,
+    from the simplified catalog. Raises ValueError when ``current`` has no
+    major version or checkmk.com offers that major no longer.
+    """
+    major = major_of(current)
+    if not major:
+        raise ValueError(f"No version to compare: {current or 'empty'}")
+    for entry in majors:
+        if entry['major'] == major:
+            return entry['version']
+    raise ValueError(f"{major} is not offered anymore")

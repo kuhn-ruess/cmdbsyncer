@@ -743,6 +743,25 @@ editions = [
     ('ultimate', "Checkmk Ultimate (2.5 and later)"),
     ('ultimatemt', "Checkmk Ultimate with Multi-Tenancy (2.5 and later)"),
 ]
+schedule_weekdays = [
+    ('mon', 'Monday'),
+    ('tue', 'Tuesday'),
+    ('wed', 'Wednesday'),
+    ('thu', 'Thursday'),
+    ('fri', 'Friday'),
+    ('sat', 'Saturday'),
+    ('sun', 'Sunday'),
+]
+
+schedule_hours = [(str(hour), f'{hour:02d}:00') for hour in range(24)]
+
+schedule_statuses = [
+    ('success', 'Success'),
+    ('failure', 'Failure'),
+    ('skipped', 'Skipped'),
+]
+
+
 class CheckmkSettings(db.Document):
     """
     Checkmk Settings
@@ -774,6 +793,18 @@ class CheckmkSettings(db.Document):
     webserver_certificate_private_key = db.StringField()
     webserver_certificate_intermediate = db.StringField()
 
+    # Weekly run on its own weekday and hour, see server_schedule.py
+    schedule_weekday = db.StringField(choices=schedule_weekdays)
+    schedule_hour = db.StringField(choices=schedule_hours, default='0')
+    schedule_update_version = db.BooleanField(default=False)
+    schedule_run_playbook = db.BooleanField(default=False)
+    # Runs only after a success of these settings, with their version
+    schedule_depends_on = db.ReferenceField(document_type='CheckmkSettings')
+    schedule_last_run = db.DateTimeField()
+    schedule_last_status = db.StringField(choices=schedule_statuses)
+    schedule_last_message = db.StringField()
+    # The CMK Version the last successful run ended with
+    schedule_last_version = db.StringField()
 
     meta = {
         'strict': False

@@ -777,6 +777,9 @@ for _name in (
     "CheckmkSitePool", "CheckmkSitePoolMember",
 ):
     setattr(_cmk_models, _name, MagicMock(name=f"stub.{_name}"))
+# Real value for the weekly schedule of the Checkmk Settings
+_cmk_models.schedule_weekdays = [(_day[:3].lower(), _day) for _day in (
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')]
 
 # Real value so rules.py can map built-in convenience actions to attributes.
 _cmk_models.BUILTIN_ATTRIBUTE_ACTIONS = {
@@ -962,6 +965,11 @@ _try_load_real_module(
 _try_load_real_module(
     "application.plugins.ansible.playbook_rules",
     os.path.join("plugins", "ansible", "playbook_rules.py"),
+)
+# Weekly runs of the Checkmk Settings, needs the runner above
+_try_load_real_module(
+    "application.plugins.checkmk.server_schedule",
+    os.path.join("plugins", "checkmk", "server_schedule.py"),
 )
 # Event Driven Ansible: the rule engine and the sender are real, the
 # models stay stubs (the tests patch what they use).

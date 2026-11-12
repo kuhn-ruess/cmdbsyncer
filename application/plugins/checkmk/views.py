@@ -63,6 +63,7 @@ from .models import (
     CheckmkRuleMngmt,
     CheckmkFolderPool,
     CheckmkSitePool,
+    schedule_weekdays,
 )
 from .folder_attributes import CONTACTGROUP_FLAGS, FOLDER_ATTRIBUTE_CATALOG
 from .cmk_rules import (
@@ -74,6 +75,9 @@ from .cmk_rules import (
 from .list_source import OUTCOME_TEMPLATE_FIELDS
 from . import download_catalog
 from .ssh_key import check_ssh_private_key
+from .server_schedule import (
+    PLAYBOOK, SkipRun, site_servers, depends_on, dependency_chain,
+)
 from .notification_rules import JINJA_FIELDS, validate_outcome_jinja
 
 
@@ -1722,6 +1726,32 @@ def _render_run_server_mngmt(_view, _context, model, _name):
     )
 
 
+def _render_schedule(_view, _context, model, _name):
+    """Weekday, hour and what the weekly run of the settings does"""
+    doing = [text for flag, text in ((model.schedule_update_version, 'Version check'),
+                                      (model.schedule_run_playbook, 'Install'))
+             if flag]
+    if not model.schedule_weekday or not doing:
+        return Markup('<span class="text-muted">None</span>')
+    day = dict(schedule_weekdays)[model.schedule_weekday][:3]
+    hour = int(model.schedule_hour or 0)
+    html = f"{escape(day)} {hour:02d}:00: {escape(', '.join(doing))}"
+    try:
+        dependency = depends_on(model)
+        dependency = dependency.name if dependency else None
+    except SkipRun:
+        dependency = 'missing settings'
+    if dependency:
+        html += f"<br><small>after success of {escape(dependency)}</small>"
+    if model.schedule_last_status:
+        css = {'success': 'text-success', 'failure': 'text-danger'}.get(
+            model.schedule_last_status, 'text-warning')
+        html += (f'<br><small class="{css}" title="{escape(model.schedule_last_message or "")}">'
+                 f"Last: {escape(model.schedule_last_status)} "
+                 f"{model.schedule_last_run:%Y-%m-%d %H:%M}</small>")
+    return Markup(html)
+
+
 class CheckmkSettingsView(DefaultModelView):
     """
     Checkmk Server Settings View
@@ -1841,23 +1871,37 @@ class CheckmkSettingsView(DefaultModelView):
                      rules.Field('webserver_certificate'),
                      rules.Field('webserver_certificate_private_key'),
                      rules.Field('webserver_certificate_intermediate')]),
+            section('5', 'aux', 'Weekly Schedule',
+                    'Optional: what to do once a week on this day and hour. '
+                    'Needs the cron job Checkmk Server: Scheduled Updates in '
+                    'a cron group that runs every 15 minutes.',
+                    [rules.Field('schedule_weekday'),
+                     rules.Field('schedule_hour'),
+                     rules.Field('schedule_update_version'),
+                     rules.Field('schedule_run_playbook'),
+                     rules.Field('schedule_depends_on')]),
         ),
     ]
 
     column_list = ('name', 'documentation', 'enabled', 'cmk_version', 'server_user',
-                   'run_playbook')
+                   'schedule_weekday', 'run_playbook')
 
     column_editable_list = ('enabled', 'cmk_version')
 
     column_formatters = {
         'run_playbook': _render_run_server_mngmt,
+        'schedule_weekday': _render_schedule,
     }
 
-    form_excluded_columns = ('server_ssh_key_crypted',)
+    form_excluded_columns = ('server_ssh_key_crypted', 'schedule_last_run',
+                             'schedule_last_status', 'schedule_last_message',
+                             'schedule_last_version')
 
-    # One line, also for the inline edit of the list
+    # One line, also for the inline edit of the list. The weekday gets a
+    # choice for no schedule.
     form_overrides = {
         'cmk_version': StringField,
+        'schedule_weekday': SelectField,
     }
 
     def scaffold_form(self):
@@ -1879,6 +1923,14 @@ class CheckmkSettingsView(DefaultModelView):
 
     def on_model_change(self, form, model, is_created):
         """Encrypt a new SSH key; the inline edits of the list carry none"""
+        model.schedule_weekday = model.schedule_weekday or None
+        if model.schedule_depends_on is not None:
+            if model.id and model.schedule_depends_on.id == model.id:
+                raise ValidationError("Settings can't depend on themselves")
+            try:
+                dependency_chain(model)
+            except ValueError as exp:
+                raise ValidationError(str(exp)) from exp
         if hasattr(form, 'server_ssh_key'):
             if form.remove_server_ssh_key.data:
                 model.set_server_ssh_key(None)
@@ -1892,6 +1944,38 @@ class CheckmkSettingsView(DefaultModelView):
 
     column_labels = {
         'run_playbook': 'Manage OMD Server',
+        'schedule_weekday': 'Weekly Schedule',
+    }
+
+    form_args = {
+        'schedule_weekday': {
+            'label': 'Weekday',
+            'choices': [('', 'No schedule')] + schedule_weekdays,
+            'description': 'Day of the weekly run. No schedule: only by hand.',
+        },
+        'schedule_hour': {
+            'label': 'Hour',
+        },
+        'schedule_update_version': {
+            'label': 'Check for new version',
+            'description': 'Look up the newest patch release of the major '
+                           'release of CMK Version on checkmk.com and set it '
+                           'as CMK Version.',
+        },
+        'schedule_run_playbook': {
+            'label': 'Install and update the sites',
+            'description': 'Run Manage OMD Server, like the Run Playbook '
+                           'button: installs CMK Version on the servers and '
+                           'updates the enabled sites of these settings to it.',
+        },
+        'schedule_depends_on': {
+            'label': 'Only after success of',
+            'description': 'For example the test settings for production: '
+                           'runs only if their weekly run succeeded within '
+                           'the last 7 days, and takes the version they ended '
+                           'with instead of the newest one. Otherwise the run '
+                           'is skipped and logged as an error.',
+        },
     }
 
     # Fill-in help for version and filename, see _checkmk_download_help.html
@@ -1924,6 +2008,9 @@ class CheckmkSettingsView(DefaultModelView):
         for site in CheckmkSite.objects():
             if site.settings_master == model:
                 raise ValidationError(f"Can't delete: Still used by a Siteconfig {site.name}")
+        other = CheckmkSettings.objects(schedule_depends_on=model).first()
+        if other:
+            raise ValidationError(f"Can't delete: {other.name} runs only after these settings")
 
     def is_accessible(self):
         """ Overwrite """
@@ -1971,8 +2058,7 @@ class CheckmkSettingsView(DefaultModelView):
         # a server may have a site per settings (production and test).
         jobs = []
         for setting in CheckmkSettings.objects(id__in=ids, enabled__ne=False).order_by('name'):
-            servers = sorted({site.server_address for site in
-                              CheckmkSite.objects(settings_master=setting, enabled=True)})
+            servers = site_servers(setting)
             if servers:
                 jobs.append((setting, servers))
         if not jobs:
@@ -1987,7 +2073,7 @@ class CheckmkSettingsView(DefaultModelView):
             return redirect(url_for('.index_view'))
         for setting, servers in jobs:
             stats = run_playbook(
-                'cmk_server_mngmt.yml',
+                PLAYBOOK,
                 target_host=','.join(servers),
                 provider=f'cmk_sites:{setting.name}',
                 ssh_private_key=setting.get_server_ssh_key(),

@@ -116,6 +116,10 @@ def fill(document, unique_text):
     for name, field in document._fields.items():
         if name == 'id':
             continue
+        # A reference to its own type would fill without end
+        if isinstance(field, mongo_fields.ReferenceField) \
+                and field.document_type is type(document):
+            continue
         value = sample(field, unique_text)
         if value is not None:
             setattr(document, name, value)
