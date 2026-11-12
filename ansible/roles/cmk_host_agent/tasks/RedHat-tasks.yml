@@ -34,12 +34,13 @@
     cmk_result: "{{ checkmk_agent_download_state }}"
   when: checkmk_agent_download_state is failed
 
+# The dnf command, not the dnf module: the module has to run with the Python
+# of the system's dnf bindings, which is 3.6 on RHEL 8 and too old for the
+# Ansible of the Syncer on the targets ("future feature annotations").
 - name: "Install Checkmk Agent"
   become: true
-  ansible.builtin.dnf:
-    name: "{{ cmk_linux_tmp }}/cmk_agent.rpm"
-    state: present
-    disable_gpg_check: true
+  ansible.builtin.command:
+    argv: [dnf, install, -y, --nogpgcheck, "{{ cmk_linux_tmp }}/cmk_agent.rpm"]
   when: (cmk_install_agent | bool) and checkmk_agent_download_state.status == 200
 
 - name: "Set Firewall to allow Access to {{ cmk_agent_port }}"

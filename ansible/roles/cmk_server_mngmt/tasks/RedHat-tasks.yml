@@ -1,8 +1,9 @@
 ---
+# The dnf command, not the dnf module: the module has to run with the Python
+# of the system's dnf bindings, which is 3.6 on RHEL 8 and too old for the
+# Ansible of the Syncer on the targets ("future feature annotations").
 - name: Install Checkmk Version
   become: true
-  ansible.builtin.dnf:
-    name: "/tmp/{{ cmk_version_filename }}"
-    state: present
-    disable_gpg_check: true
+  ansible.builtin.command:
+    argv: [dnf, install, -y, --nogpgcheck, "/tmp/{{ cmk_version_filename }}"]
   when: checkmk_version_installed.stdout != cmk_version

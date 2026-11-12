@@ -383,5 +383,22 @@ class CmkPlaybookTempTest(unittest.TestCase):
                     self.assertEqual(play.get('vars', {}).get('ansible_remote_tmp'), '/tmp')
 
 
+
+class RhelEightPackagesTest(unittest.TestCase):
+    """The bundled roles install RPMs with the dnf command: the dnf module
+    needs the Python of the system's dnf bindings, 3.6 on RHEL 8, which the
+    Ansible of the Syncer no longer runs on the targets."""
+
+    def test_no_dnf_module(self):
+        for path in glob.glob(os.path.join(_REPO_ROOT, 'ansible', 'roles', '*', 'tasks', '*.yml')):
+            with open(path, encoding='utf-8') as handle:
+                tasks = yaml.safe_load(handle) or []
+            role = os.path.basename(os.path.dirname(os.path.dirname(path)))
+            for task in tasks:
+                with self.subTest(task=f"{role}: {task.get('name')}"):
+                    self.assertFalse({'dnf', 'ansible.builtin.dnf', 'yum',
+                                      'ansible.builtin.yum'} & set(task))
+
+
 if __name__ == '__main__':
     unittest.main()
