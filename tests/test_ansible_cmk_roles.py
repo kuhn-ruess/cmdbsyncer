@@ -366,5 +366,22 @@ class CmkDowntimeWindowTest(unittest.TestCase):
             self.assertFalse(str(command).startswith('date'), task.get('name'))
 
 
+
+class CmkPlaybookTempTest(unittest.TestCase):
+    """The Checkmk server playbooks keep their temp files in /tmp, also on
+    the command line, so nothing lands in the home that AIDE watches."""
+
+    def test_remote_tmp_is_tmp(self):
+        for name in ('cmk_server_mngmt.yml', 'cmk_appliance_mngmt.yml',
+                     'cmk_omd_cleanup.yml'):
+            with open(os.path.join(_REPO_ROOT, 'ansible', name), encoding='utf-8') as handle:
+                plays = yaml.safe_load(handle)
+            working = [play for play in plays if play.get('roles') or play.get('tasks')]
+            with self.subTest(playbook=name):
+                self.assertTrue(working)
+                for play in working:
+                    self.assertEqual(play.get('vars', {}).get('ansible_remote_tmp'), '/tmp')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -14,6 +14,11 @@
 
 
 - hosts: all
+  # Temp files on the server in /tmp, not in the home of the login user,
+  # also when the playbook runs on the command line (file integrity checks
+  # like AIDE watch the home)
+  vars:
+    ansible_remote_tmp: /tmp
 
   roles:
     - cmk_server_mngmt

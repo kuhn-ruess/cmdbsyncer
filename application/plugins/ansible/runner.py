@@ -459,11 +459,13 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         # ``~/.ansible/tmp`` — and that ``~`` is expanded via the passwd
         # database (the web user's non-writable home, e.g.
         # ``/usr/share/httpd``), ignoring $HOME. That makes such tasks abort
-        # "Failed to create temporary directory". Pin remote_tmp to the
-        # writable per-run dir (a literal /tmp path, no ``~`` to expand) so
-        # local-delegated tasks work; real SSH hosts just create this path
-        # under their own /tmp.
-        env['ANSIBLE_REMOTE_TEMP'] = run_tmp
+        # "Failed to create temporary directory". Pin remote_tmp to /tmp (a
+        # literal path, no ``~`` to expand) so local-delegated tasks work.
+        # /tmp itself rather than a directory of the run: Ansible removes
+        # its ansible-tmp-* directories again, but would leave the base
+        # directory behind on every host. Nothing lands in the home of the
+        # login user, which file integrity checks like AIDE watch.
+        env['ANSIBLE_REMOTE_TEMP'] = '/tmp'
         _apply_ssh_env(env, run_tmp)
         inventory_path = _write_run_inventory_spec(
             run_tmp, provider, env['CMDBSYNCER_INVENTORY_MODE'],
