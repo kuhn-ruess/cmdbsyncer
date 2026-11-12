@@ -23,6 +23,7 @@ import yaml
 
 from application import app, logger
 from .models import AnsibleRunStats
+from .run_log import log_end, log_start
 
 MANIFEST_FILENAME = 'playbooks.yml'
 LOCAL_MANIFEST_FILENAME = 'playbooks.local.yml'
@@ -480,6 +481,8 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
         )
         cmd = _build_command(inventory_path, run_params,
                              **_login_files(run_tmp, run_params))
+        log_start(stats, provider)
+        hint = ''
         try:
             proc = subprocess.Popen(  # pylint: disable=consider-using-with
                 cmd,
@@ -497,7 +500,8 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
             stats.pid = proc.pid
             stats.save()
             captured = _stream_output(proc, stats)
-            stats.log = captured + _connection_hint(captured)
+            hint = _connection_hint(captured)
+            stats.log = captured + hint
             stats.exit_code = proc.returncode
             # A negative return code means the process was killed by a signal
             # — that is how cancel_run() stops a run, so report it as
@@ -520,6 +524,7 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
             shutil.rmtree(run_tmp, ignore_errors=True)
             stats.ended_at = datetime.now()
             stats.save()
+            log_end(stats, hint)
 
 
 # The SSH login a run can get, see run_playbook
