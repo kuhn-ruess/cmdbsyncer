@@ -170,10 +170,25 @@
                aria-labelledby="preset-head-{{ preset.ident }}"
                data-parent="#presetAccordion">
             <div class="card-body">
-              <form method="POST" action="{{ url_for('.local_config_editor') }}">
+              <form method="POST" action="{{ url_for('.local_config_editor') }}"
+                    id="preset-form-{{ preset.ident }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="_action" value="apply_preset">
                 <input type="hidden" name="preset" value="{{ preset.ident }}">
+
+                {% if preset.fills %}
+                <div style="margin-bottom: 0.75rem;">
+                  {% for fill in preset.fills %}
+                  <button type="button" class="btn btn-secondary btn-sm preset-fill"
+                          data-values='{{ fill['values'] | tojson }}'>
+                    Fill for {{ fill.label }}
+                  </button>
+                  {% endfor %}
+                  <small style="margin-left: 8px; color: #888;">
+                    Sets how users are found; server, service account and base stay.
+                  </small>
+                </div>
+                {% endif %}
 
                 <table class="table table-sm" style="margin-bottom: 0.75rem;">
                   <thead>
@@ -201,13 +216,14 @@
                         {% if entry.type == 'bool' %}
                         <select name="value__{{ entry.key }}"
                                 class="form-control form-control-sm">
-                          <option value="true" {% if entry.default %}selected{% endif %}>true</option>
-                          <option value="false" {% if not entry.default %}selected{% endif %}>false</option>
+                          <option value="true" {% if entry.value %}selected{% endif %}>true</option>
+                          <option value="false" {% if not entry.value %}selected{% endif %}>false</option>
                         </select>
                         {% else %}
                         <input type="text"
                                name="value__{{ entry.key }}"
-                               value="{{ entry.default }}"
+                               value="{{ entry.value }}"
+                               {% if entry.default %}placeholder="Example: {{ entry.default }}"{% endif %}
                                class="form-control form-control-sm">
                         {% endif %}
                         {% if entry.hint %}
@@ -238,9 +254,29 @@
                   Apply preset
                 </button>
                 <small style="margin-left: 8px; color: #888;">
-                  Empty <code>str</code> values are skipped — only filled fields are written.
+                  An emptied field goes back to its default; an empty protected field keeps its value.
                 </small>
               </form>
+              {% if preset.ident == 'ldap' and ldap_check %}
+              <div class="ldap-check" data-form="preset-form-{{ preset.ident }}"
+                   data-url="{{ url_for('.ldap_check') }}"
+                   style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--surface-divider, #eef0f3);">
+                <strong>Test login</strong>
+                <small style="color: #888; display:block; margin-bottom: 0.5rem;">
+                  Tries the login of a directory user with the values above,
+                  before they are applied. Nothing is saved; the test is logged
+                  under Settings, Log.
+                </small>
+                <div style="display:grid; grid-template-columns: 1fr 1fr auto; gap: 8px;">
+                  <input type="text" class="form-control form-control-sm ldap-check-login"
+                         placeholder="Login, as typed on the login page" autocomplete="off">
+                  <input type="password" class="form-control form-control-sm ldap-check-password"
+                         placeholder="Password" autocomplete="new-password">
+                  <button type="button" class="btn btn-primary btn-sm ldap-check-run">Test login</button>
+                </div>
+                <ol class="ldap-check-result" style="margin: 0.75rem 0 0; padding-left: 1.2rem;"></ol>
+              </div>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -288,4 +324,61 @@
 
   </div>
 </div>
+<script>
+// Fill buttons of a preset: set the fields of a directory type
+document.querySelectorAll('.preset-fill').forEach(function(button) {
+  button.addEventListener('click', function() {
+    var form = button.closest('form');
+    var values = JSON.parse(button.dataset.values);
+    Object.keys(values).forEach(function(key) {
+      var field = form.querySelector('[name="value__' + key + '"]');
+      if (field) { field.value = values[key]; }
+    });
+  });
+});
+
+// Test login of the LDAP card, with the values of its form
+document.querySelectorAll('.ldap-check').forEach(function(box) {
+  var result = box.querySelector('.ldap-check-result');
+  function line(step) {
+    var item = document.createElement('li');
+    var mark = step.ok === false ? '\u2717 ' : (step.ok ? '\u2713 ' : '');
+    var title = document.createElement('span');
+    title.className = step.ok === false ? 'text-danger' : (step.ok ? 'text-success' : 'text-muted');
+    title.textContent = mark + step.text;
+    item.appendChild(title);
+    Object.keys(step.details || {}).forEach(function(key) {
+      var detail = document.createElement('small');
+      detail.style.display = 'block';
+      detail.textContent = key + ': ' + step.details[key];
+      item.appendChild(detail);
+    });
+    if (step.hint) {
+      var hint = document.createElement('div');
+      hint.className = 'alert alert-warning';
+      hint.style.cssText = 'margin: 4px 0 0; padding: 4px 8px; font-size: 13px;';
+      hint.textContent = step.hint;
+      item.appendChild(hint);
+    }
+    result.appendChild(item);
+  }
+  box.querySelector('.ldap-check-run').addEventListener('click', function() {
+    var body = new FormData(document.getElementById(box.dataset.form));
+    body.append('check_login', box.querySelector('.ldap-check-login').value);
+    body.append('check_password', box.querySelector('.ldap-check-password').value);
+    result.innerHTML = '<li class="text-muted">Testing\u2026</li>';
+    fetch(box.dataset.url, {method: 'POST', body: body, credentials: 'same-origin'})
+      .then(function(response) { return response.json(); })
+      .then(function(data) {
+        result.innerHTML = '';
+        data.steps.forEach(line);
+        line({ok: data.ok, text: data.ok ? 'The login works' : 'The login fails'});
+      })
+      .catch(function(exp) {
+        result.innerHTML = '';
+        line({ok: false, text: 'The test could not run: ' + exp});
+      });
+  });
+});
+</script>
 {% endblock %}

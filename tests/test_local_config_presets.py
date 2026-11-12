@@ -98,5 +98,15 @@ class TestLocalConfigPresets(unittest.TestCase):
         })
 
 
+    def test_fills_only_set_keys_of_their_preset(self):
+        # A fill button finds its fields by key; a key outside the card
+        # would silently do nothing.
+        for preset in PRESETS:
+            keys = {entry['key'] for entry in preset['keys']}
+            for fill in preset.get('fills', []):
+                with self.subTest(preset=preset['ident'], fill=fill['label']):
+                    self.assertLessEqual(set(fill['values']), keys)
+
+
 if __name__ == '__main__':
     unittest.main()

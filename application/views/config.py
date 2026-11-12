@@ -8,8 +8,9 @@ from flask import flash, redirect, request, url_for
 from flask_admin import expose
 from flask_login import current_user
 
-from application import app
+from application import app, log
 from application.config import BaseConfig
+from application.enterprise import has_feature, run_hook
 from application.docu_links import docu_links
 from application.helpers.local_config_file import (
     LocalConfigError, delete_key, is_writable, load, set_key,
@@ -124,6 +125,75 @@ def _preset_extra_note(ident):
     else:
         callback = request.url_root.rstrip('/') + '/oidc/callback'
     return f'Redirect URI to register at your identity provider: {callback}'
+
+
+def _presets_view(entries):
+    """
+    The presets for their cards, each key marked whether local_config.py
+    already sets it.
+    """
+    # Annotate each preset key so the template knows whether the
+    # value already exists in local_config.py — admins can spot at a
+    # glance which fields the snippet would overwrite.
+    existing_keys = set(entries)
+    presets_view = []
+    for preset in PRESETS:
+        preset_keys = []
+        overlap = 0
+        # Once a preset is in use, a key it does not set shows its real
+        # default, not the example: applying must not switch it on.
+        in_use = any(entry['key'] in existing_keys for entry in preset['keys'])
+        for entry in preset['keys']:
+            exists = entry['key'] in existing_keys
+            # The stored value where there is one, so the card shows
+            # what is set; a protected one never reaches the browser.
+            if entry['key'] in PROTECTED_KEYS:
+                value = ''
+            elif exists:
+                value = entries[entry['key']]
+            elif in_use and _baseconfig_default(entry['key']) is not _MISSING:
+                value = _baseconfig_default(entry['key'])
+            else:
+                value = entry['default']
+            preset_keys.append({**entry, 'exists': exists, 'value': value})
+            if exists:
+                overlap += 1
+        presets_view.append({
+            **preset,
+            'keys': preset_keys,
+            'overlap': overlap,
+            'total': len(preset['keys']),
+            'extra_note': _preset_extra_note(preset['ident']),
+            'doc_url': docu_links.get(preset.get('doc')),
+        })
+
+    return presets_view
+
+
+def _ldap_check_config():
+    """
+    The LDAP settings as the LDAP card shows them, for a login test. The
+    saved file counts for what the card leaves out, the running
+    configuration only waits for a restart.
+    """
+    try:
+        stored = load(_local_config_path())
+    except LocalConfigError:
+        stored = {}
+    config = {**app.config, **stored}
+    for entry in get_preset('ldap')['keys']:
+        key = entry['key']
+        field = f'value__{key}'
+        if field not in request.form:
+            continue
+        raw_value = request.form.get(field, '')
+        if entry['type'] == 'str' and not raw_value.strip():
+            if key not in PROTECTED_KEYS:
+                default = _baseconfig_default(key)
+                config[key] = '' if default is _MISSING else default
+            continue
+        config[key] = _coerce(raw_value, entry['type'])
+    return config
 
 
 def _coerce(raw_value, value_type):
@@ -296,27 +366,7 @@ class ConfigModelView(DefaultModelView):
             for ident, bucket in grouped_buckets.items() if bucket['rows']
         ]
 
-        # Annotate each preset key so the template knows whether the
-        # value already exists in local_config.py — admins can spot at a
-        # glance which fields the snippet would overwrite.
-        existing_keys = set(entries)
-        presets_view = []
-        for preset in PRESETS:
-            preset_keys = []
-            overlap = 0
-            for entry in preset['keys']:
-                exists = entry['key'] in existing_keys
-                preset_keys.append({**entry, 'exists': exists})
-                if exists:
-                    overlap += 1
-            presets_view.append({
-                **preset,
-                'keys': preset_keys,
-                'overlap': overlap,
-                'total': len(preset['keys']),
-                'extra_note': _preset_extra_note(preset['ident']),
-                'doc_url': docu_links.get(preset.get('doc')),
-            })
+        presets_view = _presets_view(entries)
 
         return self.render(
             'admin/local_config_editor.html',
@@ -324,6 +374,7 @@ class ConfigModelView(DefaultModelView):
             path=path,
             writable=writable,
             presets=presets_view,
+            ldap_check=has_feature('ldap_check_login'),
         )
 
     # ---------- action handlers -----------------------------------------
@@ -425,6 +476,7 @@ class ConfigModelView(DefaultModelView):
         applied = []
         skipped_default = []
         restart_only = False
+        existing = load(path)
         for entry in preset['keys']:
             key = entry['key']
             value_type = entry['type']
@@ -437,6 +489,13 @@ class ConfigModelView(DefaultModelView):
             # value is never pre-filled, so the form arrives empty by
             # design unless the admin types something new.
             if value_type == 'str' and not raw_value.strip():
+                # A field the card showed filled and the admin emptied:
+                # back to the default.
+                if key in existing and key not in PROTECTED_KEYS:
+                    delete_key(path, key)
+                    _restore_runtime_default(key)
+                    applied.append(f'{key} (removed)')
+                    restart_only = restart_only or key in RESTART_ONLY_KEYS
                 continue
             coerced = _coerce(raw_value, value_type)
             # Don't pollute local_config.py with values that match the
@@ -461,6 +520,30 @@ class ConfigModelView(DefaultModelView):
                 f"Skipped (already at default): {', '.join(skipped_default)}",
                 'info',
             )
+
+    @expose('/local_config/ldap_check', methods=('POST',))
+    def ldap_check(self):
+        """
+        Try the LDAP login of a directory user with the values of the LDAP
+        card, before they are saved. Nothing is written but a log entry.
+        """
+        if not has_feature('ldap_check_login'):
+            return {'ok': False, 'steps': [{
+                'ok': False, 'text': 'The LDAP login is not available',
+                'hint': 'It needs the enterprise feature ldap_login.'}]}
+        login = (request.form.get('check_login') or '').strip().lower()
+        result = run_hook('ldap_check_login', _ldap_check_config(),
+                          login, request.form.get('check_password') or '')
+        last = result['steps'][-1] if result['steps'] else {}
+        details = [('tested_by', current_user.email), ('login', login),
+                   ('result', last.get('text', ''))]
+        if not result['ok']:
+            details.append(('error', last.get('details', {}).get('error')
+                            or last.get('hint') or last.get('text', '')))
+        log.log(f"LDAP login test for {login}: "
+                f"{'success' if result['ok'] else 'failed'}",
+                source='AUTH', details=details)
+        return result
 
     # ---------- helpers ------------------------------------------------
 

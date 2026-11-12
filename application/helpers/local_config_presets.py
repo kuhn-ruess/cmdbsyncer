@@ -341,12 +341,28 @@ PRESETS = [
         'description': (
             "Enterprise LDAP/AD login. When enabled, the login view "
             "tries an LDAP bind before falling back to the local "
-            "password. Pick **direct-bind** (set "
-            "``LDAP_USER_DN_TEMPLATE``) or **search-bind** (set "
-            "``LDAP_BIND_USER`` + ``LDAP_BIND_PASSWORD`` + "
-            "``LDAP_SEARCH_BASE``). ``LDAP_ROLE_MAPPING`` is a nested "
+            "password. Start with **Fill for Active Directory** or "
+            "**Fill for OpenLDAP**, enter server, service account and "
+            "search base, then **Test login** with a directory user "
+            "before you apply. ``LDAP_ROLE_MAPPING`` is a nested "
             "dict and stays in ``local_config.py`` on disk."
         ),
+        # Buttons on the card that fill the fields of a directory type.
+        # Server, service account and base differ per site and stay.
+        'fills': [
+            {'label': 'Active Directory', 'values': {
+                'LDAP_USER_DN_TEMPLATE': '',
+                'LDAP_SEARCH_FILTER': (
+                    '(&(objectClass=user)(|(userPrincipalName={email})'
+                    '(mail={email})(sAMAccountName={username})))'),
+                'LDAP_NAME_ATTR': 'displayName',
+            }},
+            {'label': 'OpenLDAP', 'values': {
+                'LDAP_USER_DN_TEMPLATE': '',
+                'LDAP_SEARCH_FILTER': '(|(mail={email})(uid={username}))',
+                'LDAP_NAME_ATTR': 'cn',
+            }},
+        ],
         'note': (
             "``LDAP_BIND_PASSWORD`` is on the protected list — its "
             "current value is never echoed back. Type a new value to "
@@ -362,21 +378,25 @@ PRESETS = [
              'hint': 'LDAP URL. Prefer ldaps:// for TLS.'},
             {'key': 'LDAP_USER_DN_TEMPLATE', 'type': 'str',
              'default': 'uid={username},ou=people,dc=example,dc=com',
-             'hint': 'Direct-bind template with {username}. Leave empty '
-                     'to use search-bind mode below instead.'},
+             'hint': 'Only for logins without a service account: the DN '
+                     'of the user, with {username}. Leave empty to search '
+                     'the user with the service account below, which most '
+                     'directories need.'},
             {'key': 'LDAP_BIND_USER', 'type': 'str',
              'default': 'cn=syncer,ou=services,dc=example,dc=com',
-             'hint': 'Search-bind: service-account DN. Required when '
-                     'LDAP_USER_DN_TEMPLATE is empty.'},
+             'hint': 'Service account that searches the users: its full '
+                     'DN, or user@domain for Active Directory.'},
             {'key': 'LDAP_BIND_PASSWORD', 'type': 'str', 'default': '',
-             'hint': 'Search-bind: service-account password. Leave '
-                     'blank to keep the current value.'},
+             'hint': 'Password of the service account. Leave blank to '
+                     'keep the stored one.'},
             {'key': 'LDAP_SEARCH_BASE', 'type': 'str',
              'default': 'ou=people,dc=example,dc=com',
-             'hint': 'Search-bind: base DN to look up users under.'},
+             'hint': 'Where the users are searched, for example '
+                     'dc=example,dc=com for the whole directory.'},
             {'key': 'LDAP_SEARCH_FILTER', 'type': 'str',
              'default': '(mail={email})',
-             'hint': 'Filter with {email} or {username}.'},
+             'hint': 'Finds the user: {email} is the login as typed, '
+                     '{username} the part before the @.'},
             {'key': 'LDAP_REQUIRED_GROUP', 'type': 'str', 'default': '',
              'hint': 'Optional: require this group DN in the user’s '
                      'memberOf attribute. Empty = any bind succeeds.'},
