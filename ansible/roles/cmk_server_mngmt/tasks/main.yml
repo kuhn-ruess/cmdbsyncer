@@ -127,20 +127,52 @@
   delegate_to: localhost
   register: downtime_result
 
+# no_log hides the answer of the failed request above; the status and the
+# reason of Checkmk carry no credentials, so the run says why
+- name: "Downtime not set, the update goes on"
+  ansible.builtin.debug:
+    msg: >-
+      Checkmk did not set the downtime of {{ cmk_agent_host_name }} on
+      {{ cmk_main_server_full }}: HTTP {{ downtime_result.status | default('no answer') }}
+      {{ (downtime_result.json | default({})).get('title', '') }}
+      {{ (downtime_result.json | default({})).get('detail', '') }}
+      {{ '' if downtime_result.json is defined else (downtime_result.msg | default('') | truncate(300)) }}
+  when: downtime_result is failed
+
 # Checkmk 2.5 asks for the new version and edition and runs a pre-flight
-# check (licensing) during the update. Confirm the questions, and abort
-# instead of continuing past a failed pre-flight check, which can leave the
-# site broken. Older versions only know --conflict.
+# check (incompatible local files, licensing) during the update. Confirm the
+# questions, and abort instead of continuing past a failed pre-flight check,
+# which can leave the site broken. Older versions only know --conflict.
+# The site is started again either way; a failed update fails the next task
+# with the reasons omd printed, instead of passing as changed.
 - name: "Update Sites to {{ cmk_version }}.{{ cmk_edition }}"
   become: True
   ansible.builtin.shell: |
     omd stop {{ cmk_site }}
+    rc=0
     {% if cmk_version is version('2.5.0', '>=') %}
-    omd -V {{ cmk_version }}.{{ cmk_edition }} update --pre-flight=abort --skeleton=install --confirm-version --confirm-edition {{ cmk_site }}
+    omd -V {{ cmk_version }}.{{ cmk_edition }} update --pre-flight=abort --skeleton=install --confirm-version --confirm-edition {{ cmk_site }} || rc=$?
     {% else %}
-    omd -f -V {{ cmk_version }}.{{ cmk_edition }} update --conflict=install {{ cmk_site }}
+    omd -f -V {{ cmk_version }}.{{ cmk_edition }} update --conflict=install {{ cmk_site }} || rc=$?
     {% endif %}
     omd start {{ cmk_site }}
+    exit $rc
   args:
     executable: /bin/bash
+  register: site_update
+  failed_when: false
   when: server_site_version.stdout != cmk_version+"."+cmk_edition and not site_just_installed.changed
+
+- name: "Site update of {{ cmk_site }} failed"
+  vars:
+    update_output: "{{ (site_update.stdout_lines | default([])) + (site_update.stderr_lines | default([])) }}"
+    update_reasons: >-
+      {{ update_output | map('regex_replace', '^-[|] *', '')
+         | select('search', '(?i)error|incompatible|license|failed')
+         | unique | list }}
+  ansible.builtin.fail:
+    msg: >-
+      omd update of {{ cmk_site }} to {{ cmk_version }}.{{ cmk_edition }} failed
+      (exit code {{ site_update.rc }}), the site runs on its old version again:
+      {{ (update_reasons[-8:] if update_reasons else update_output[-5:]) | join(' / ') }}
+  when: site_update is not skipped and site_update.rc != 0

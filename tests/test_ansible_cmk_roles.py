@@ -400,5 +400,75 @@ class RhelEightPackagesTest(unittest.TestCase):
                                       'ansible.builtin.yum'} & set(task))
 
 
+
+_FAKE_OMD = """#!/bin/bash
+echo "omd $*" >> "$OMD_CALLS"
+case "$*" in
+  *update*)
+    [ "$OMD_UPDATE_OK" = 1 ] && exit 0
+    echo "-| Incompatible local file '/omd/sites/mysite/local/share/check_mk/web/plugins/pages/x.py'."
+    echo "-| WARNING: A valid and non expired license is needed before updating."
+    echo "-| Abort the update process? [A/c]"
+    exit 1;;
+esac
+"""
+
+
+@unittest.skipUnless(_ansible_playbook(), 'ansible-playbook not installed')
+class SiteUpdateResultTest(unittest.TestCase):
+    """A failed omd update fails the run with its reasons, and the site is
+    started again; before, the run passed and the site kept its version."""
+
+    def _run(self, update_ok):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        os.mkdir(os.path.join(tmp, 'bin'))
+        omd = os.path.join(tmp, 'bin', 'omd')
+        with open(omd, 'w', encoding='utf-8') as handle:
+            handle.write(_FAKE_OMD)
+        os.chmod(omd, 0o755)
+        role_tasks = _load(os.path.join(_ROLES, 'cmk_server_mngmt', 'tasks', 'main.yml'))
+        tasks = [task for task in role_tasks
+                 if task.get('name', '').startswith(('Update Sites', 'Site update of'))]
+        self.assertEqual(len(tasks), 2)
+        for task in tasks:
+            task.pop('become', None)
+        play = [{'hosts': 'all', 'gather_facts': False, 'tasks': tasks, 'vars': {
+            'cmk_site': 'mysite', 'cmk_version': '2.5.0p19', 'cmk_edition': 'pro',
+            'server_site_version': {'stdout': '2.4.0p20.pro'},
+            'site_just_installed': {'changed': False}}}]
+        with open(os.path.join(tmp, 'play.yml'), 'w', encoding='utf-8') as handle:
+            yaml.safe_dump(play, handle)
+        calls = os.path.join(tmp, 'calls')
+        env = dict(os.environ, ANSIBLE_NOCOLOR='1', OMD_CALLS=calls,
+                   OMD_UPDATE_OK='1' if update_ok else '0',
+                   PATH=os.path.join(tmp, 'bin') + os.pathsep + os.environ['PATH'],
+                   ANSIBLE_LOCAL_TEMP=os.path.join(tmp, 'local'),
+                   ANSIBLE_REMOTE_TEMP=os.path.join(tmp, 'remote'))
+        proc = subprocess.run(
+            [_ansible_playbook(), '-i', 'srv01,', '-c', 'local',
+             '-e', f'ansible_python_interpreter={sys.executable}',
+             os.path.join(tmp, 'play.yml')],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+            timeout=300, check=False)
+        with open(calls, encoding='utf-8') as handle:
+            return proc, handle.read().splitlines()
+
+    def test_failed_update_fails_with_reasons_and_starts_the_site(self):
+        proc, calls = self._run(update_ok=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn('failed (exit code 1), the site runs on its old version again: '
+                      "Incompatible local file '/omd/sites/mysite/local/share/check_mk/"
+                      "web/plugins/pages/x.py'. / WARNING: A valid and non expired license "
+                      'is needed before updating.', proc.stdout)
+        self.assertEqual(calls[-1], 'omd start mysite')
+
+    def test_update_passes(self):
+        proc, calls = self._run(update_ok=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout[-2000:])
+        self.assertIn('--pre-flight=abort', calls[1])
+        self.assertEqual(calls[-1], 'omd start mysite')
+
+
 if __name__ == '__main__':
     unittest.main()
