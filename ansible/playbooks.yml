@@ -31,6 +31,10 @@ playbooks:
     name: "Checkmk: Manage OMD Server"
     inventory: cmk_sites
     description: "Install/update the Checkmk server package and create the site."
+  - file: cmk_appliance_mngmt.yml
+    name: "Checkmk: Update Checkmk Appliance"
+    inventory: cmk_sites
+    description: "Install the CMA package and update the site on a standalone appliance (root SSH)."
   - file: cmk_omd_cleanup.yml
     name: "Checkmk: OMD Cleanup"
     inventory: cmk_sites

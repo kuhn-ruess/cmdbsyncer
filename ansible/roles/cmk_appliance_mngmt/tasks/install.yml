@@ -1,0 +1,42 @@
+# Install a .cma package the way the appliance web interface does
+# (webconf/pages/cmk_versions.py): unpack below /omd/versions, make it the
+# default version and run its post-install. No package manager involved.
+- name: "Read the top directory of the CMA package"
+  # No pipefail: head ends tar early with SIGPIPE, the result is checked below
+  ansible.builtin.shell: |
+    tar -tf /tmp/{{ cmk_version_filename | quote }} | head -1 | cut -d/ -f1
+  args:
+    executable: /bin/bash
+  register: cma_package_dir
+  changed_when: false
+
+- name: "Read the minimal firmware version of the CMA package"
+  ansible.builtin.shell: |
+    set -o pipefail
+    tar -xOf /tmp/{{ cmk_version_filename | quote }} {{ cma_package_dir.stdout | quote }}/cma.info | sed -n 's/^MIN_VERSION=//p'
+  args:
+    executable: /bin/bash
+  register: cma_min_version
+  changed_when: false
+
+- name: "Check the CMA package against the appliance"
+  ansible.builtin.assert:
+    that:
+      - cma_package_dir.stdout == cmk_version ~ '.' ~ cmk_edition
+      - cma_min_version.stdout | length > 0
+      - cma_firmware_version is version(cma_min_version.stdout, '>=')
+    fail_msg: >-
+      The package contains {{ cma_package_dir.stdout }} and needs at least
+      firmware {{ cma_min_version.stdout or '(no cma.info found)' }}; expected
+      {{ cmk_version }}.{{ cmk_edition }} for firmware {{ cma_firmware_version }}
+
+- name: "Install Checkmk Version from the CMA package"
+  ansible.builtin.shell: |
+    set -e
+    tar -xf /tmp/{{ cmk_version_filename | quote }} -C /omd/versions
+    ln -sfn {{ cma_package_dir.stdout | quote }} /omd/versions/default
+    cd /omd/versions/{{ cma_package_dir.stdout | quote }}
+    lib/cma/post-install
+    rm -f /tmp/{{ cmk_version_filename | quote }}
+  args:
+    executable: /bin/bash

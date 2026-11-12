@@ -1,0 +1,9 @@
+---
+# Checkmk Appliance: install the Checkmk version of the CMK Server Settings
+# from its CMA package and update the existing site. Needs root over SSH and
+# a standalone appliance, see the documentation of the Syncer.
+
+- hosts: all
+
+  roles:
+    - cmk_appliance_mngmt

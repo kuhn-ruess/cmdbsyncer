@@ -1,6 +1,7 @@
 """
 The Checkmk Settings keep an SSH private key: stored encrypted, kept on an
-edit with an empty field, removed on request, a key with passphrase refused.
+edit with an empty field, removed on request, a key with passphrase refused,
+used by a run from the playbook page for the provider of these settings.
 
 See ``tests/web_smoke_helpers.py`` for why this needs a subprocess.
 """
@@ -58,6 +59,24 @@ if 'passphrase' not in body:
     fail('key with passphrase not refused')
 if CheckmkSettings.objects(name='Prod').first().get_server_ssh_key() != key:
     fail('refused key replaced the stored one')
+
+# A run from the playbook page with the provider of these settings logs in
+# with their key, like the Run Playbook button of the settings.
+from unittest.mock import patch
+import application.plugins.ansible.views as ansible_views
+calls = []
+def fake_run(playbook, **kwargs):
+    calls.append(kwargs)
+    return type('Stats', (), {'pk': '0' * 24})()
+with patch.object(ansible_views, 'run_playbook', fake_run):
+    run_token = csrf('/admin/ansibleplaybookrun/')
+    for provider in ('cmk_sites:Prod', 'cmk_sites'):
+        client.post('/admin/ansibleplaybookrun/run', data={
+            'playbook': 'cmk_appliance_mngmt.yml', 'provider': provider,
+            'mode': 'check', 'csrf_token': run_token})
+if [c.get('ssh_private_key') for c in calls] != [key, None]:
+    fail('playbook page runs got the keys ' + repr(
+        [bool(c.get('ssh_private_key')) for c in calls]))
 
 save(edit_url, remove_server_ssh_key='y')
 if CheckmkSettings.objects(name='Prod').first().server_ssh_key_crypted:

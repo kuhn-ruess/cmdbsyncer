@@ -1,0 +1,5 @@
+---
+# Host name of this server in Checkmk, used for the downtime during the
+# site update. Override it per host with an Ansible custom variable when
+# the Checkmk host name differs from the inventory name.
+cmk_agent_host_name: "{{ inventory_hostname }}"

@@ -38,6 +38,7 @@ from .models import (
     AnsibleRewriteAttributesRule,
     AnsibleRunStats,
 )
+from . import cmk_sites_ssh_key
 from .seed import SEED_TEMPLATES, seed_project
 from .runner import (
     _ansible_dir,
@@ -759,6 +760,7 @@ class AnsiblePlaybookRunView(BaseView):
             provider=provider,
             ssh_user=ssh_user,
             ssh_password=ssh_password,
+            ssh_private_key=cmk_sites_ssh_key(provider),
             source='ui',
             triggered_by=current_user.email if current_user.is_authenticated else None,
         )

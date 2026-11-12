@@ -1,0 +1,166 @@
+
+# Checkmk Appliance: install a Checkmk version from its CMA package and
+# update an existing site, with the steps of the appliance web interface.
+# Needs root over SSH (device settings of the appliance) and a standalone
+# appliance; a cluster and new sites are left to its web interface.
+- name: "Read the appliance details"
+  ansible.builtin.shell: |
+    if [ ! -f /usr/share/cma/version ]; then
+      echo "Not a Checkmk Appliance, use Manage OMD Server for this server" >&2
+      exit 1
+    fi
+    cat /usr/share/cma/version /usr/share/cma/os-version
+    cut -d' ' -f1 /var/lib/cma/cluster.state 2>/dev/null || echo 0
+  register: cma_info
+  changed_when: false
+  failed_when: cma_info.rc != 0 or cma_info.stdout_lines | length != 3
+
+- name: "Remember the appliance details"
+  ansible.builtin.set_fact:
+    cma_firmware_version: "{{ cma_info.stdout_lines[0] }}"
+    cma_os_version: "{{ cma_info.stdout_lines[1] }}"
+    cma_cluster_state: "{{ cma_info.stdout_lines[2] }}"
+
+- name: "Check the appliance can be managed"
+  ansible.builtin.assert:
+    that:
+      - ansible_user_id == 'root'
+      - cma_cluster_state | float == 0
+      - cmk_version_filename is match('.+-' ~ cma_os_version ~ '-x86_64\\.cma$')
+      - cmk_edition not in ['cre', 'community']
+    fail_msg: >-
+      Checkmk Appliance with firmware {{ cma_firmware_version }}: the playbook
+      logs in as root (here: {{ ansible_user_id }}), needs a CMA package for its
+      platform ({{ cma_os_version }}), like
+      check-mk-pro-{{ '{{' }}CMK_VERSION{{ '}}' }}-{{ cma_os_version }}-x86_64.cma,
+      of a commercial edition, and the appliance must not be part of a cluster
+      (cluster state {{ cma_cluster_state }}). Got {{ cmk_version_filename }}.
+
+# Staged on the controller like in Manage OMD Server, /tmp by default.
+- name: "Determine the local staging directory for the installer"
+  ansible.builtin.set_fact:
+    cmk_local_staging: "{{ installation_staging_path | default('/tmp', true) }}"
+
+- name: "Ensure the local staging directory exists"
+  ansible.builtin.file:
+    path: "{{ cmk_local_staging }}"
+    state: directory
+  delegate_to: localhost
+
+- name: "Check if we have the Installation File local"
+  ansible.builtin.stat:
+    path: "{{ cmk_local_staging }}/{{ cmk_version_filename }}"
+  register: installation_file
+  delegate_to: localhost
+
+- name: "Show where the Installation File is looked for"
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'Found' if installation_file.stat.exists else 'Not found, downloading to' }}
+      {{ (cmk_local_staging ~ '/' ~ cmk_version_filename) | realpath }}
+      on the Ansible controller {{ lookup('pipe', 'hostname') }}
+
+- name: "Download Installation File from Checkmk Server"
+  ansible.builtin.uri:
+    url: "https://download.checkmk.com/checkmk/{{ cmk_version }}/{{ cmk_version_filename }}"
+    dest: "{{ cmk_local_staging }}/{{ cmk_version_filename }}"
+    method: GET
+    user: "{{ subscription_username }}"
+    password: "{{ subscription_password }}"
+    force_basic_auth: True
+  environment: "{{ {'https_proxy': download_proxy, 'http_proxy': download_proxy} if (download_proxy | default('') | trim) else {} }}"
+  when: not installation_file.stat.exists
+  delegate_to: localhost
+
+- name: "Check if the Version is already installed"
+  ansible.builtin.stat:
+    path: "/omd/versions/{{ cmk_version }}.{{ cmk_edition }}"
+  register: version_dir
+
+- name: "Copy Installation File to the appliance"
+  ansible.builtin.copy:
+    src: "{{ cmk_local_staging }}/{{ cmk_version_filename }}"
+    dest: "/tmp/{{ cmk_version_filename }}"
+  when: not version_dir.stat.exists
+
+- ansible.builtin.include_tasks: install.yml
+  when: not version_dir.stat.exists
+
+- name: "Check if the Site exists"
+  ansible.builtin.stat:
+    path: "/omd/sites/{{ cmk_site }}"
+  register: site_dir
+
+# The appliance web interface does more than omd create (groups, admin
+# user, cluster sync), so a new site is created there.
+- name: "Refuse to create a site"
+  ansible.builtin.fail:
+    msg: >-
+      The site {{ cmk_site }} does not exist on the Checkmk Appliance. Create
+      it in the web interface of the appliance, the playbook only updates
+      sites there.
+  when: not site_dir.stat.exists
+
+- name: "Check Site version"
+  ansible.builtin.shell: |
+    set -o pipefail
+    omd version {{ cmk_site | quote }} | egrep -o '[^ ]+$'
+  args:
+    executable: /bin/bash
+  register: server_site_version
+  changed_when: false
+
+- name: "Calculation downtime start and end +{{ cmk_downtime_range }} hours"
+  ansible.builtin.set_fact:
+    checkmk_downtime_start: "{{ '%Y-%m-%dT%H:%M:%S+00:00' | strftime(now().timestamp(), utc=True) }}"
+    checkmk_downtime_end: "{{ '%Y-%m-%dT%H:%M:%S+00:00' | strftime(now().timestamp() + (cmk_downtime_range | float) * 3600, utc=True) }}"
+
+- name: "Set host to downtime before site update"
+  ansible.builtin.uri:
+    url: "{{ cmk_main_server_full }}/check_mk/api/1.0/domain-types/downtime/collections/host"
+    method: POST
+    status_code: [200, 204]
+    validate_certs: no
+    url_username: "{{ cmk_user }}"
+    url_password: "{{ cmk_secret }}"
+    force_basic_auth: true
+    headers:
+      Accept: "application/json"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      start_time: "{{ checkmk_downtime_start }}"
+      end_time: "{{ checkmk_downtime_end }}"
+      comment: "Site update in progress"
+      downtime_type: "host"
+      host_name: "{{ cmk_agent_host_name }}"
+  no_log: true
+  when: server_site_version.stdout != cmk_version+"."+cmk_edition and (cmk_user | default('') | trim) != '' and (cmk_secret | default('') | trim) != ''
+  ignore_errors: yes
+  delegate_to: localhost
+
+# Same steps as the appliance web interface (webconf/pages/site_update.py):
+# free the site's resources, keep autostart off during the update, refresh
+# the apache config, and start through systemd for the memory limits.
+- name: "Update Site to {{ cmk_version }}.{{ cmk_edition }}"
+  ansible.builtin.shell: |
+    set -e
+    target={{ (cmk_version ~ '.' ~ cmk_edition) | quote }}
+    site={{ cmk_site | quote }}
+    autostart=$(omd config "$site" show AUTOSTART)
+    omd stop "$site" || true
+    omd umount --kill "$site"
+    if [ "$autostart" = on ]; then omd config "$site" set AUTOSTART off; fi
+    {% if cmk_version is version('2.5.0', '>=') %}
+    omd -V "$target" update --pre-flight=abort --skeleton=install --confirm-version --confirm-edition "$site"
+    {% else %}
+    omd -f -V "$target" update --conflict=install "$site"
+    {% endif %}
+    if [ "$autostart" = on ]; then omd config "$site" set AUTOSTART on; fi
+    if omd -V "$target" help 2>&1 | grep -q update-apache-config; then
+      omd -V "$target" update-apache-config "$site"
+    fi
+    systemctl start "omd@$site.service"
+  args:
+    executable: /bin/bash
+  when: server_site_version.stdout != cmk_version+"."+cmk_edition

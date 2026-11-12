@@ -376,6 +376,18 @@ class _CmkSitesSettingsResolver:
 register_inventory_provider_resolver(_CmkSitesSettingsResolver())
 
 
+def cmk_sites_ssh_key(provider):
+    """
+    The SSH private key of the Checkmk Settings a `cmk_sites:<settings
+    name>` provider names, so a run from the playbook page logs in like the
+    Run Playbook button of the settings. None for any other provider.
+    """
+    if not provider or not provider.startswith(CMK_SITES_PREFIX):
+        return None
+    settings = CheckmkSettings.objects(name=provider[len(CMK_SITES_PREFIX):]).first()
+    return settings.get_server_ssh_key() if settings else None
+
+
 class _AnsibleProjectResolver:
     """
     Resolve dynamic provider names to per-project AnsibleInventory
