@@ -15,11 +15,12 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 import re
 
-from flask import Response, request, url_for, flash, redirect
+from flask import Response, request, url_for, flash, redirect, abort
 from flask_admin import BaseView, expose
 from flask_login import current_user
 
 from application import app
+from application.docu_links import docu_links
 from application.models.account import Account
 from application.models.host import Host
 
@@ -280,15 +281,15 @@ class DataQualityView(BaseView):
     """
 
     def is_accessible(self):
-        # CMDB-only dashboard: hide menu link and block direct access
-        # when the install is running in plain syncer mode.
-        if not app.config.get('CMDB_MODE'):
-            return False
         return current_user.is_authenticated and current_user.has_right('data_quality')
 
     @expose('/')
     def index(self):
         """Render the dashboard or stream a section as CSV."""
+        # The dashboard counts CMDB data (lifecycle, stale, CMDB fields), so
+        # in plain syncer mode the area opens with the attribute values.
+        if not app.config.get('CMDB_MODE'):
+            return redirect(url_for('.attributes'))
         now = datetime.utcnow()
         data = _collect(now)
 
@@ -330,6 +331,39 @@ class DataQualityView(BaseView):
             **data,
         )
 
+    @expose('/attributes')
+    def attributes(self):
+        """Values of the attributes across the live hosts, or their CSV."""
+        # pylint: disable=import-outside-toplevel
+        from application.views import data_quality_attributes as dqa
+        field = request.args.get('field', 'labels')
+        if field not in dqa.FIELDS:
+            field = 'labels'
+        mode = request.args.get('mode', 'prefix')
+        if mode not in dqa.MODES:
+            mode = 'prefix'
+        name = request.args.get('name', '').strip()
+        export = bool(request.args.get('export'))
+        overview, attributes = dqa.collect(field, name, mode,
+                                           limit=None if export else dqa.VALUE_LIMIT)
+        if export and attributes is not None:
+            return _csv_response(
+                'attribute_values.csv', ['attribute', 'value', 'hosts'],
+                [(attr['name'], value['display'], value['hosts'])
+                 for attr in attributes for value in attr['values']])
+        idx = _host_filter_indices()
+        filter_idx = idx.get('Label Key:Value' if field == 'labels'
+                             else 'Inventory Key:Value')
+        return self.render(
+            'admin/data_quality_attributes.html',
+            fields=dqa.FIELDS, modes=dqa.MODES, field=field, mode=mode,
+            name=name, overview=overview, attributes=attributes,
+            live=dqa.live_host_count(), value_limit=dqa.VALUE_LIMIT,
+            host_list_url=url_for('host.index_view'), filter_idx=filter_idx,
+            cmdb_mode=app.config.get('CMDB_MODE'),
+            docu_link=docu_links['attribute_values'],
+        )
+
     @expose('/lowercase_hostnames_preview')
     def lowercase_hostnames_preview(self):
         """
@@ -339,6 +373,8 @@ class DataQualityView(BaseView):
         planning walks every hostname, too slow to do on each dashboard
         render.
         """
+        if not app.config.get('CMDB_MODE'):
+            abort(404)
         # pylint: disable=import-outside-toplevel
         from application.helpers.host_maintenance import lowercase_all_hostnames
         result = lowercase_all_hostnames(apply=False)
@@ -361,6 +397,8 @@ class DataQualityView(BaseView):
         Normalise every stored hostname to lowercase. Write action, so it
         needs the Hosts right on top of viewing the dashboard.
         """
+        if not app.config.get('CMDB_MODE'):
+            abort(404)
         if not current_user.has_right('host'):
             flash('You need the Hosts right to change hostnames.', 'error')
             return redirect(url_for('.index'))

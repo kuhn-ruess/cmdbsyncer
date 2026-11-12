@@ -1,0 +1,134 @@
+{% extends 'admin/master.html' %}
+
+{#
+  Data Quality: Attribute Values. Without a name every attribute with its
+  number of hosts and values; with a name the values of each matching
+  attribute, linked to the host list.
+#}
+{% macro hosts_link(filter, count) -%}
+    {%- if filter and filter_idx is not none -%}
+    <a href="{{ host_list_url }}?flt0_{{ filter_idx }}={{ filter | urlencode }}"
+       title="Show these hosts (the host list filter ignores upper and lower case)">{{ count }}</a>
+    {%- else -%}
+    {{ count }}
+    {%- endif -%}
+{%- endmacro %}
+
+{% block head %}
+    {{ super() }}
+    <style>
+        .dqa-card.app-card { padding: 0.25rem 0.75rem; margin-bottom: 1rem; }
+        .dqa-card .table { margin-bottom: 0; }
+        .dqa-count { text-align: right; white-space: nowrap; width: 8rem; }
+        .dqa-value { word-break: break-all; }
+        .dqa-head { display: flex; align-items: baseline; gap: 1rem;
+                    justify-content: space-between; flex-wrap: wrap;
+                    margin-top: 1.5rem; margin-bottom: 0.5rem; }
+        .dqa-head h2 { font-size: 1.1rem; font-weight: 600; margin: 0; }
+    </style>
+{% endblock %}
+
+{% block body %}
+<div class="container-fluid" style="margin-top: 1rem;">
+    <h1 style="margin-bottom: 0.25rem;">
+        <i class="fa fa-list-ul"></i> Attribute Values
+    </h1>
+    <p class="text-muted">
+        Which values an attribute has across the {{ live }} live hosts (no
+        objects, nothing archived) and on how many hosts each one appears.
+        Leave the name empty to see every attribute.
+        {% if cmdb_mode %}<a href="{{ url_for('.index') }}">Back to the Data Quality dashboard</a>{% endif %}
+        <a href="{{ docu_link }}" target="_blank" class="badge badge-light">
+            <i class="fa fa-info-circle"></i> Documentation</a>
+    </p>
+
+    <form method="GET" action="{{ url_for('.attributes') }}" class="form-inline app-card"
+          style="padding: 0.75rem 1rem; gap: 0.5rem; margin-bottom: 1rem;">
+        <select class="form-control" name="field" aria-label="Attributes">
+            {% for key, label in fields.items() %}
+            <option value="{{ key }}" {% if key == field %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <span>name</span>
+        <select class="form-control" name="mode" aria-label="Match">
+            {% for key, label in modes.items() %}
+            <option value="{{ key }}" {% if key == mode %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <input class="form-control" type="text" name="name" value="{{ name }}"
+               placeholder="e.g. os or cmdb_" aria-label="Attribute name">
+        <button type="submit" class="btn btn-primary"><i class="fa fa-search"></i> Show</button>
+    </form>
+
+    {% if overview is not none %}
+    <div class="dqa-head"><h2>{{ overview | length }} attributes</h2></div>
+    <div class="app-card dqa-card">
+        <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr>
+                <th>Attribute</th>
+                <th class="dqa-count">Hosts</th>
+                <th class="dqa-count">Values</th>
+            </tr></thead>
+            <tbody>
+            {% for row in overview %}
+            <tr>
+                <td><a href="{{ url_for('.attributes', field=field, mode='exact', name=row.name) }}"><code>{{ row.name }}</code></a></td>
+                <td class="dqa-count">{{ row.hosts }}</td>
+                <td class="dqa-count">{{ row.distinct }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-muted">No attributes found.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="dqa-head">
+        <h2>{{ attributes | length }} attribute(s) whose name {{ modes[mode] }} "{{ name }}"</h2>
+        {% if attributes %}
+        <a href="{{ url_for('.attributes', field=field, mode=mode, name=name, export=1) }}">⬇ CSV</a>
+        {% endif %}
+    </div>
+    {% for attr in attributes %}
+    <div class="dqa-head">
+        <h2><code>{{ attr.name }}</code></h2>
+        <span class="text-muted">
+            on {{ attr.hosts }} of {{ live }} hosts,
+            missing on {{ live - attr.hosts }},
+            {{ attr.distinct }} value(s)
+        </span>
+    </div>
+    <div class="app-card dqa-card">
+        <div class="table-responsive">
+        <table class="table table-sm">
+            <thead><tr><th>Value</th><th class="dqa-count">Hosts</th></tr></thead>
+            <tbody>
+            {% for value in attr['values'] %}
+            <tr>
+                <td class="dqa-value">
+                    {% if value.empty %}<span class="text-muted">(empty)</span>{% else %}<code>{{ value.display }}</code>{% endif %}
+                    {% if value.variant %}
+                    <span class="badge badge-warning"
+                          title="Another value differs only in upper and lower case, white space or type (5 and &quot;5&quot;)">variant</span>
+                    {% endif %}
+                </td>
+                <td class="dqa-count">{{ hosts_link(value.filter, value.hosts) }}</td>
+            </tr>
+            {% endfor %}
+            {% if attr.hidden %}
+            <tr><td colspan="2" class="text-muted">
+                {{ attr.hidden }} more value(s) not shown, only the {{ value_limit }} most frequent ones are listed. The CSV has all of them.
+            </td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-muted">No attribute matches.</p>
+    {% endfor %}
+    {% endif %}
+</div>
+{% endblock %}

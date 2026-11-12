@@ -65,6 +65,8 @@
         Snapshot generated {{ now|localtime('%Y-%m-%d %H:%M') }}.
         Counts cover non-template, non-object hosts; archived rows are
         listed separately so they don't inflate the live counts.
+        <a href="{{ url_for('.attributes') }}"><i class="fa fa-list-ul"></i> Attribute Values</a>
+        shows which values each attribute has.
     </p>
 
     {% if current_user.has_right('host') and uppercase_count %}
