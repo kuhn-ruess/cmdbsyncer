@@ -773,6 +773,8 @@ class CheckmkSettings(db.Document):
     server_user = db.StringField()
     # SSH private key for the connection to the servers, Fernet encrypted
     server_ssh_key_crypted = db.StringField()
+    # Run Playbook asks for the SSH password of the Server User
+    ask_ssh_password = db.BooleanField(default=False)
     cmk_version = db.StringField()
     cmk_edition = db.StringField(choices=editions)
     cmk_version_filename = db.StringField()

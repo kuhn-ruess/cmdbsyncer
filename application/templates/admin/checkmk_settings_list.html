@@ -37,6 +37,58 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="runMngmtModal" tabindex="-1" role="dialog"
+     aria-labelledby="runMngmtModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <form method="POST" action="" id="runMngmtForm" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="modal-header">
+          <h5 class="modal-title" id="runMngmtModalLabel">
+            Run Manage OMD Server: <span id="runMngmtName"></span>
+          </h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <p>Install or update Checkmk on the servers of the enabled sites
+             that use these settings?</p>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="ask_password"
+                   value="1" id="runMngmtAsk">
+            <label class="form-check-label" for="runMngmtAsk">Ask for passwords</label>
+          </div>
+          <div id="runMngmtPasswords" style="display: none;" class="mt-2">
+            <div class="form-group">
+              <label for="runMngmtSsh">SSH password of the Server User</label>
+              <input type="password" class="form-control" id="runMngmtSsh"
+                     name="ssh_password" autocomplete="new-password">
+              <small class="form-text text-muted"><span id="runMngmtSshEmpty">Empty:
+                log in with the SSH key.</span> A password needs sshpass on the
+                Syncer host.</small>
+            </div>
+            <div class="form-group mb-0">
+              <label for="runMngmtBecome">sudo password</label>
+              <input type="password" class="form-control" id="runMngmtBecome"
+                     name="become_password" autocomplete="new-password">
+              <small class="form-text text-muted">Empty: the SSH password.
+                Both are used for this run only and never stored.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa fa-play"></i> Run</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block tail %}
@@ -64,6 +116,38 @@
     $('#setCmkVersionModal').modal('show');
     return false;
   };
+})();
+
+// Run button of a row: the dialog asks before the run, and for the
+// passwords when ticked. The fields are emptied each time it opens.
+(function() {
+  var form = document.getElementById('runMngmtForm');
+  if (!form) return;
+  var ask = document.getElementById('runMngmtAsk');
+  var fields = document.getElementById('runMngmtPasswords');
+  ask.addEventListener('change', function() {
+    fields.style.display = ask.checked ? '' : 'none';
+    if (ask.checked) document.getElementById('runMngmtSsh').focus();
+  });
+  document.querySelectorAll('.cmk-run-mngmt').forEach(function(button) {
+    button.addEventListener('click', function() {
+      form.action = button.dataset.url;
+      document.getElementById('runMngmtName').textContent = button.dataset.name;
+      // Settings that ask for the SSH password open with it as must
+      var must = button.dataset.ask === '1';
+      ask.checked = must;
+      fields.style.display = must ? '' : 'none';
+      form.querySelectorAll('input[type=password]').forEach(function(f) { f.value = ''; });
+      document.getElementById('runMngmtSsh').required = must;
+      document.getElementById('runMngmtSshEmpty').style.display = must ? 'none' : '';
+      $('#runMngmtModal').modal('show');
+      if (must) {
+        $('#runMngmtModal').one('shown.bs.modal', function() {
+          document.getElementById('runMngmtSsh').focus();
+        });
+      }
+    });
+  });
 })();
 
 // Newest patch release of the major version each row uses, from

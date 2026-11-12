@@ -237,14 +237,20 @@ def _build_command(inventory_path: str, run_params: dict,
 
 
 def _write_credentials_file(directory: str, ssh_user: str | None,
-                            ssh_password: str) -> str:
+                            ssh_password: str | None,
+                            become_password: str | None = None) -> str:
     """
     Write the SSH login credentials as an ansible vars file (mode 0600) in
     the run's temp dir and return its path. Passing the password via a file
     (`-e @file`) instead of the command line keeps it out of the process
-    list; `ansible_ssh_pass` needs `sshpass` installed on the host.
+    list; `ansible_ssh_pass` needs `sshpass` installed on the host. The
+    become (sudo) password goes into the same file.
     """
-    data = {'ansible_ssh_pass': ssh_password}
+    data = {}
+    if ssh_password:
+        data['ansible_ssh_pass'] = ssh_password
+    if become_password:
+        data['ansible_become_password'] = become_password
     if ssh_user:
         data['ansible_user'] = ssh_user
     path = os.path.join(directory, 'credentials.yml')
@@ -274,9 +280,10 @@ def _login_files(directory: str, run_params: dict) -> dict:
     `_build_command`: the password as vars file, the private key as file.
     """
     files = {'vars_file': None, 'key_file': None}
-    if run_params.get('ssh_password'):
+    if run_params.get('ssh_password') or run_params.get('become_password'):
         files['vars_file'] = _write_credentials_file(
-            directory, run_params.get('ssh_user'), run_params['ssh_password'],
+            directory, run_params.get('ssh_user'), run_params.get('ssh_password'),
+            run_params.get('become_password'),
         )
     if run_params.get('ssh_private_key'):
         files['key_file'] = _write_private_key_file(directory, run_params['ssh_private_key'])
@@ -515,17 +522,20 @@ def _execute(stats_id, run_params: dict, cwd: Path, provider: str):
             stats.save()
 
 
+# The SSH login a run can get, see run_playbook
+LOGIN_KEYS = frozenset({'ssh_user', 'ssh_password', 'ssh_private_key',
+                        'become_password'})
+
+
 def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
                  target_host: str | None = None,
                  extra_vars: str | None = None,
                  check_mode: bool = False,
                  provider: str | None = None,
-                 ssh_user: str | None = None,
-                 ssh_password: str | None = None,
-                 ssh_private_key: str | None = None,
                  source: str = 'ui',
                  triggered_by: str | None = None,
-                 wait: bool = False) -> AnsibleRunStats:
+                 wait: bool = False,
+                 **login) -> AnsibleRunStats:
     """
     Kick off a playbook run in a background daemon thread and return the
     AnsibleRunStats record so callers can redirect to its detail page.
@@ -534,11 +544,13 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
     the manifest's `inventory:` field for this run; pass None to use the
     manifest default.
 
+    `login` takes the keyword arguments of the SSH login, each optional:
     `ssh_user` / `ssh_password` set the SSH login for the connection.
     The password is written to a mode-0600 vars file for the run (never
     the command line) and is not stored on the run record; password auth
     needs `sshpass` on the host. `ssh_private_key` is the key itself (not a
-    path), written to a mode-0600 file for the run only.
+    path), written to a mode-0600 file for the run only. `become_password`
+    is the sudo password, kept in the same file as the SSH password.
     `wait=True` returns only when the run has ended, for callers like a
     cron job whose process would end the daemon thread with it.
 
@@ -547,6 +559,9 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
     untrusted input would let users run arbitrary YAML files in the ansible
     directory.
     """
+    unknown = set(login) - LOGIN_KEYS
+    if unknown:
+        raise TypeError(f"run_playbook: unknown login arguments {sorted(unknown)}")
     base = _ansible_dir()
     if not provider:
         provider = playbook_inventory_provider(playbook)
@@ -567,9 +582,7 @@ def run_playbook(playbook: str, *,  # pylint: disable=too-many-arguments
         'target_host': target_host,
         'extra_vars': extra_vars,
         'check_mode': check_mode,
-        'ssh_user': ssh_user,
-        'ssh_password': ssh_password,
-        'ssh_private_key': ssh_private_key,
+        **{key: login.get(key) for key in LOGIN_KEYS},
     }
     thread = threading.Thread(
         target=_execute,

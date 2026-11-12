@@ -153,3 +153,43 @@ class PrivateKeyTest(unittest.TestCase):
                   'extra_vars': None}
         files = self.runner._login_files(self.run_tmp, params)
         self.assertEqual(files, {'vars_file': None, 'key_file': None})
+
+
+class BecomePasswordTest(unittest.TestCase):
+    """The sudo password goes into the 0600 vars file, never onto the argv"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = _load_runner()
+
+    def setUp(self):
+        self.run_tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.run_tmp)
+
+    def _vars(self, **login):
+        params = {'playbook': 'site.yml', 'check_mode': False, 'target_host': None,
+                  'extra_vars': None, **login}
+        files = self.runner._login_files(self.run_tmp, params)
+        with patch.object(self.runner, '_ansible_dir', return_value=self.runner.Path('/a')), \
+                patch.object(self.runner, '_ansible_binary', return_value='ansible-playbook'):
+            cmd = self.runner._build_command('inv.yml', params, **files)
+        self.assertNotIn('secret', ' '.join(cmd))
+        self.assertEqual(cmd[-1], f"@{files['vars_file']}")
+        self.assertEqual(os.stat(files['vars_file']).st_mode & 0o777, 0o600)
+        with open(files['vars_file'], encoding='utf-8') as handle:
+            return self.runner.yaml.safe_load(handle)
+
+    def test_become_password_alone(self):
+        self.assertEqual(self._vars(become_password='sudo-secret'),
+                         {'ansible_become_password': 'sudo-secret'})
+
+    def test_ssh_and_become_password(self):
+        self.assertEqual(
+            self._vars(ssh_user='srv01', ssh_password='ssh-secret',
+                       become_password='sudo-secret'),
+            {'ansible_ssh_pass': 'ssh-secret', 'ansible_become_password': 'sudo-secret',
+             'ansible_user': 'srv01'})
+
+    def test_unknown_login_argument_is_refused(self):
+        with self.assertRaisesRegex(TypeError, 'ssh_pasword'):
+            self.runner.run_playbook('site.yml', ssh_pasword='typo')

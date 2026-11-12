@@ -130,6 +130,9 @@ def _version_of_dependency(setting, version):
 
 def _run_playbook(setting, details):
     """Manage OMD Server for the sites of ``setting``, raises RuntimeError"""
+    if setting.ask_ssh_password:
+        raise RuntimeError("the settings ask for the SSH password, which a "
+                           "scheduled run can't do; start it with Run Playbook")
     servers = site_servers(setting)
     if not servers:
         print(f"{CC.WARNING} *{CC.ENDC} {setting.name}: no enabled site uses it")

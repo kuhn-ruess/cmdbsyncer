@@ -28,7 +28,6 @@ from flask_admin.contrib.mongoengine.filters import (
 from flask import redirect, url_for, request, render_template, flash
 
 from flask_login import current_user
-from flask_wtf.csrf import generate_csrf
 from application import app
 from application.views.default import DefaultModelView
 from application.views.template_select import TemplatesMultiSelectField
@@ -1714,15 +1713,13 @@ def _render_run_server_mngmt(_view, _context, model, _name):
     """Button that starts Manage OMD Server for the sites of these settings"""
     if model.enabled is False:
         return Markup('<span class="text-muted">Disabled</span>')
+    # Opens the run dialog of the list, which can ask for the passwords
     run_url = url_for('.run_server_mngmt', settings_id=model.id)
     return Markup(
-        f'<form method="POST" action="{escape(run_url)}" style="display:inline" '
-        f"onsubmit=\"return confirm('Install or update Checkmk on the servers "
-        f"of the enabled sites that use these settings?');\">"
-        f'<input type="hidden" name="csrf_token" value="{escape(generate_csrf())}">'
-        f'<button class="btn btn-primary btn-sm" type="submit">'
+        f'<button class="btn btn-primary btn-sm cmk-run-mngmt" type="button" '
+        f'data-url="{escape(run_url)}" data-name="{escape(model.name)}" '
+        f'data-ask="{1 if model.ask_ssh_password else 0}">'
         f'<i class="fa fa-play"></i> Run Playbook</button>'
-        f'</form>'
     )
 
 
@@ -1846,7 +1843,8 @@ class CheckmkSettingsView(DefaultModelView):
                      rules.Field('enabled'),
                      rules.Field('server_user'),
                      rules.Field('server_ssh_key'),
-                     rules.Field('remove_server_ssh_key')]),
+                     rules.Field('remove_server_ssh_key'),
+                     rules.Field('ask_ssh_password')]),
             section('2', 'cond', 'Checkmk Site',
                     'Edition, version, filename and initial password — used '
                     'when rolling out a fresh site.',
@@ -1948,6 +1946,13 @@ class CheckmkSettingsView(DefaultModelView):
     }
 
     form_args = {
+        'ask_ssh_password': {
+            'label': 'Ask for the SSH password on Run',
+            'description': 'Run Playbook asks for the password of the Server '
+                           'User, for this run only, never stored. Needs '
+                           'sshpass on the Syncer host. The weekly schedule '
+                           'skips these settings: nobody is there to ask.',
+        },
         'schedule_weekday': {
             'label': 'Weekday',
             'choices': [('', 'No schedule')] + schedule_weekdays,
@@ -2042,11 +2047,22 @@ class CheckmkSettingsView(DefaultModelView):
     @expose('/run/<settings_id>', methods=('POST',))
     def run_server_mngmt(self, settings_id):
         """
-        Run button of a single row
+        Run button of a single row. With "Ask for passwords" ticked, the
+        dialog sends the SSH and the sudo password for this run; an empty
+        sudo password is the SSH password, as with ansible-playbook -k -K.
         """
-        return self._run_server_mngmt([settings_id])
+        login = {}
+        if request.form.get('ask_password'):
+            ssh_password = request.form.get('ssh_password') or None
+            become_password = request.form.get('become_password') or ssh_password
+            if not ssh_password and not become_password:
+                flash('Enter the SSH or the sudo password, or untick Ask for passwords',
+                      'error')
+                return redirect(url_for('.index_view'))
+            login = {'ssh_password': ssh_password, 'become_password': become_password}
+        return self._run_server_mngmt([settings_id], **login)
 
-    def _run_server_mngmt(self, ids):
+    def _run_server_mngmt(self, ids, **login):
         """
         Start the Manage OMD Server playbook, limited to the servers of the
         enabled sites that use the given settings
@@ -2057,12 +2073,19 @@ class CheckmkSettingsView(DefaultModelView):
         # One run per settings, each with an inventory of only its sites:
         # a server may have a site per settings (production and test).
         jobs = []
+        asked = False
         for setting in CheckmkSettings.objects(id__in=ids, enabled__ne=False).order_by('name'):
+            if setting.ask_ssh_password and not login.get('ssh_password'):
+                flash(f"{setting.name} asks for the SSH password: start it with its "
+                      "Run Playbook button and enter it", 'error')
+                asked = True
+                continue
             servers = site_servers(setting)
             if servers:
                 jobs.append((setting, servers))
         if not jobs:
-            flash('No enabled site uses the selected enabled settings', 'error')
+            if not asked:
+                flash('No enabled site uses the selected enabled settings', 'error')
             return redirect(url_for('.index_view'))
         all_servers = [server for _, servers in jobs for server in servers]
         shared = sorted({server for server in all_servers if all_servers.count(server) > 1})
@@ -2079,6 +2102,7 @@ class CheckmkSettingsView(DefaultModelView):
                 ssh_private_key=setting.get_server_ssh_key(),
                 source='ui',
                 triggered_by=current_user.email,
+                **login,
             )
             flash(f"Run for {setting.name} started for {', '.join(servers)}", 'success')
         if len(jobs) > 1:

@@ -28,6 +28,7 @@ def _setting(**kwargs):
               'schedule_run_playbook': True, 'schedule_last_run': None,
               'schedule_depends_on': None, 'schedule_last_status': None,
               'schedule_last_message': None, 'schedule_last_version': None,
+              'ask_ssh_password': False,
               'get_server_ssh_key': lambda: None}
     values.update(kwargs)
     return SimpleNamespace(**values)
@@ -129,6 +130,13 @@ class RunScheduledTest(unittest.TestCase):
         self.assertEqual(kwargs['target_host'], 'srv01,srv02')
         self.assertEqual(kwargs['provider'], 'cmk_sites:prod')
         self.assertTrue(kwargs['wait'])
+
+    def test_settings_that_ask_for_the_password_set_the_version_only(self):
+        setting = _setting(ask_ssh_password=True)
+        failure = self._run(setting)
+        self.assertIn('ask for the SSH password', str(failure))
+        self.assertEqual(setting.cmk_version, '2.4.0p15')
+        self.run.assert_not_called()
 
     def test_settings_not_due_are_left_alone(self):
         self.assertIsNone(self._run(_setting(schedule_weekday='mon')))
